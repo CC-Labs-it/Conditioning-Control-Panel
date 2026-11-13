@@ -242,7 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.ApplyBoon(boon);
                 ChaosMeta.MarkDiscovered("boon:" + boon.Id);
-                ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             ChaosRunEffects.ApplyLifetimeBoons(_state);
             ChaosSkiaFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:412, idle run-start prewarm
@@ -1010,7 +1010,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
                     ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Temptation, artKey: boon.Id);   // WPF prefixes a skull; IconGuard keeps emoji out, the Temptation colour carries it
                 }
-                else ChaosAnnouncerOverlay.Announce($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                else ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             _state.WaveIndex = _pendingWave;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);

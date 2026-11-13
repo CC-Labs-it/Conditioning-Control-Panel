@@ -1226,6 +1226,7 @@ public sealed partial class GameWindowTests
         var oldIntro = ChaosMeta.State.SeenIntroGuide;
         ChaosMeta.State.RunsCompleted = completed;
         ChaosMeta.State.SeenIntroGuide = true;
+        ChaosMeta.Save();   // the fallback routes from the loaded save, as WPF App.xaml.cs:2827 does
         ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
         void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -1238,6 +1239,7 @@ public sealed partial class GameWindowTests
             Assert.True(web.IsVisible);
             web.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
             Assert.False(web.IsVisible);
+            Dispatcher.UIThread.RunJobs();   // the classic door is queued behind the teardown (WPF BeginInvoke)
             if (completed == 1)
             {
                 Assert.NotNull(hub);
