@@ -84,6 +84,32 @@ public sealed class BubblePayloadHostTests
         finally { CoreSubliminal.BambiFreezeProvider = previousFreeze; BubbleOverlay.Stop(); }
     });
 
+    private sealed class FeedHost : IMandatoryVideoHost
+    {
+        public bool FeedOwnsTheScreen => true;
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    // Restack b174 (#3942): WPF VideoService.cs:2311 plays a bubble-earned video over a visible feed.
+    [Fact]
+    public void PoppedVideoBubblePlaysOverAVisibleFeed() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var previous = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new FeedHost(), TimeProvider.System, () => new[] { "/v/popped.mp4" });
+        CoreEngine.Video = video;
+        try
+        {
+            BubblePayloadHost.Fire(new VideoPayload());
+            Assert.True(video.IsPlaying); // pre-roll started, not held behind the feed
+            video.ForceCleanup();
+            Assert.True(video.Trigger(silentIfEmpty: true)); // a non-earned request is held
+            Assert.False(video.IsPlaying);
+        }
+        finally { video.Stop(); CoreEngine.Video = previous; }
+    });
+
     [Fact]
     public void TimedEffectsKeepSettingsAndStopCancelsQueuedWork() => AvaloniaTestDispatcher.Run(() =>
     {
