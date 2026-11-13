@@ -37,6 +37,19 @@ public sealed class MindWipeTests
         finally { global::ConditioningControlPanel.Avalonia.App.FeatureUsed -= uses.Add; }
     });
 
+    // Restack b84 (#3811): the bug report's recent sounds name a mind wipe clip, one-shot and loop.
+    [Fact]
+    public void PlayedClipsReachTheRecentSoundsRing() => Run((player, voices, clock) =>
+    {
+        player.TriggerOnce();
+        player.StartLoop(0.5);
+        var noted = global::ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Snapshot()
+            .Where(e => e.Player is "mindwipe" or "mindwipe-loop").Select(e => e.Player).ToList();
+        Assert.Contains("mindwipe", noted);
+        Assert.Contains("mindwipe-loop", noted);
+        player.StopLoop();
+    });
+
     private sealed class Voice : MindWipePlayer.IVoice
     {
         public bool Loop, Disposed;

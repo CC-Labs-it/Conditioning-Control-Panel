@@ -194,7 +194,7 @@ namespace ConditioningControlPanel.Avalonia
                     try
                     {
                         var playing = PlayAudioClip(path, CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100),
-                            _ => started.TrySetResult(true), Finished);
+                            _ => { ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning, false, DateTime.Now); started.TrySetResult(true); }, Finished);   // WPF AudioService.cs:863
                         if (done) playing?.Dispose(); else clip = playing;
                         if (clip == null) Finished(); else ApplyGain();
                     }

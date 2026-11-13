@@ -30,6 +30,14 @@ namespace ConditioningControlPanel.Avalonia
             setenv(name, value, 0);
         }
 
+        /// <summary>Remembers the log file the sink has open, for the bug report.</summary>
+        internal sealed class ReportLogFile : Serilog.Sinks.File.FileLifecycleHooks
+        {
+            internal volatile string? CurrentFile;
+            public override System.IO.Stream OnFileOpened(string path, System.IO.Stream stream, System.Text.Encoding encoding)
+            { CurrentFile = path; return stream; }
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
@@ -47,12 +55,16 @@ namespace ConditioningControlPanel.Avalonia
             }
             // WPF logs to a file under UserData/logs (App.xaml.cs:1967, LogPipeline.cs); stderr stays for CI and kc.
             // ponytail: WPF's path redaction, flight recorder and per-run naming come with the bug-report port.
+            // The bug report attaches the current log file (#3811): WPF names it session-*.log, this head
+            // ccp-avalonia-*.log, so the file sink reports what it opened, rollovers included.
+            var reportLog = new ReportLogFile();
+            ConditioningControlPanel.Services.BugReportService.SessionLogFile = () => reportLog.CurrentFile;
             Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information()
                 .WriteTo.Sink(new StderrSink())
                 .WriteTo.File(System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "logs", "ccp-avalonia-.log"),
                     rollingInterval: Serilog.RollingInterval.Day, retainedFileCountLimit: 14,
                     fileSizeLimitBytes: 10_000_000, rollOnFileSizeLimit: true,
-                    flushToDiskInterval: TimeSpan.FromSeconds(1))
+                    flushToDiskInterval: TimeSpan.FromSeconds(1), hooks: reportLog)
                 .CreateLogger();
             // The session's hold on the phrase pools (#906); WPF seeds the same three in App.xaml.cs:324.
             ConditioningControlPanel.Services.PhrasePoolCustody.Seed();

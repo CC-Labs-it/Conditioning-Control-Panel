@@ -1722,6 +1722,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopBrainDrainQuestMinutes(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
+            try { ConditioningControlPanel.CoreMindWipe.Stop(); } catch { } // WPF App.xaml.cs:6543: the mind wipe timer and voices go before libvlc
             try { Platform.AudioSyncHost.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
