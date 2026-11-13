@@ -70,6 +70,20 @@ public sealed class WindowsCaptureTests
         Assert.All(handles, h => Assert.True(h.Disposed));
     }
 
+    /// <summary>WPF WebcamTrackingService.cs:1512-1516 (restack b163, #4038): every backend attempt after
+    /// the first reports its number, so the startup splash can say the camera is slow.</summary>
+    [Fact]
+    public void EachAttemptAfterTheFirstReportsItsNumber()
+    {
+        var calls = new List<(int, int)>();
+        using var source = new OpenCvFrameSource { Create = (_, _) => new Capture("closed"), Retrying = (a, t) => calls.Add((a, t)) };
+        Assert.False(source.Open(0, false, true));
+        Assert.Equal(new[] { (2, 4), (3, 4), (4, 4) }, calls);
+        calls.Clear();
+        Assert.False(source.Open(0, true, false));
+        Assert.Empty(calls);
+    }
+
     [Theory]
     [InlineData("motion", true, 200)]
     [InlineData("warm", true, 1400)]

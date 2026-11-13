@@ -8457,5 +8457,7 @@
   "chaos_expiry_name_pink": "filtre rose",
   "chaos_expiry_name_spiral": "spirale",
   "chaos_expiry_name_braindrain": "brain drain",
-  "chaos_expiry_name_gif": "cascade de GIF"
+  "chaos_expiry_name_gif": "cascade de GIF",
+  "webcam_camera_unavailable_detail": "Caméra indisponible. Une autre application l’utilise peut-être ou les paramètres de confidentialité la bloquent.",
+  "webcam_capture_retry_fmt": "La caméra répond lentement. Essai d’une autre méthode ({0}/{1})."
 }

@@ -8962,5 +8962,7 @@
   "chaos_expiry_name_pink": "粉色滤镜",
   "chaos_expiry_name_spiral": "螺旋",
   "chaos_expiry_name_braindrain": "脑力消耗",
-  "chaos_expiry_name_gif": "GIF 瀑布"
+  "chaos_expiry_name_gif": "GIF 瀑布",
+  "webcam_camera_unavailable_detail": "摄像头不可用。它可能正被其他应用使用，或被摄像头隐私设置阻止。",
+  "webcam_capture_retry_fmt": "摄像头响应缓慢。正在尝试其他方法（{0}/{1}）。"
 }

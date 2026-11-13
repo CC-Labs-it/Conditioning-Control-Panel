@@ -8457,5 +8457,7 @@
   "chaos_expiry_name_pink": "ピンクフィルター",
   "chaos_expiry_name_spiral": "スパイラル",
   "chaos_expiry_name_braindrain": "ブレインドレイン",
-  "chaos_expiry_name_gif": "GIFの連続表示"
+  "chaos_expiry_name_gif": "GIFの連続表示",
+  "webcam_camera_unavailable_detail": "カメラを使用できません。別のアプリが使用中か、カメラのプライバシー設定でブロックされている可能性があります。",
+  "webcam_capture_retry_fmt": "カメラの応答が遅いため、別の方法を試しています（{0}/{1}）。"
 }

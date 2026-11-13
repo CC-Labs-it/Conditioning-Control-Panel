@@ -8457,5 +8457,7 @@
   "chaos_expiry_name_pink": "Pinkfilter",
   "chaos_expiry_name_spiral": "Spirale",
   "chaos_expiry_name_braindrain": "Brain Drain",
-  "chaos_expiry_name_gif": "GIF-Kaskade"
+  "chaos_expiry_name_gif": "GIF-Kaskade",
+  "webcam_camera_unavailable_detail": "Kamera nicht verfügbar. Sie wird möglicherweise von einer anderen App verwendet oder durch die Kamera-Datenschutzeinstellungen blockiert.",
+  "webcam_capture_retry_fmt": "Die Kamera reagiert langsam. Eine andere Methode wird versucht ({0}/{1})."
 }
