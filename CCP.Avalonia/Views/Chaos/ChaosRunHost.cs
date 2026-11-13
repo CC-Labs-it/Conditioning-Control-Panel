@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
-    /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
+    /// (Echo/Chaperone/Bound) - SpawnTick spawns treats and plain live variants; every
     /// motion other than FloatUp and RainDown, treat rot, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
@@ -192,8 +192,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Tick += (_, _) => Tick();
             _runTimer.Start();
 
-            _spawnSerial = _ordinarySpawns = 0;
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse);
+            _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -209,6 +209,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
+                // WPF :1301: a Tease replaces the ordinary slot, never the scripted first run.
+                if (TrySpawnTease(cfg, effIntensity))
+                {
+                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
+                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                    return;
+                }
                 // Treats and plain lives; the freeze pickup waits for its lane (see the ponytail note).
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
                     .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id
@@ -243,6 +250,75 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_spawnTimer != null)
                 _spawnTimer.Interval = TimeSpan.FromMilliseconds(
                     ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+        }
+
+        internal static bool TrySpawnTease(ChaosRunConfig cfg, double intensity)
+        {
+            if (_state == null || cfg.ScriptedFirstRun || !ChaosMeta.AtLeast(ChaosRank.Slipping)
+                || Rng.NextDouble() >= ChaosTuning.TEASE_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0)) return false;
+            if (!ChaosMeta.State.SeenTease)
+            {
+                ChaosMeta.State.SeenTease = true;
+                ChaosMeta.Save();
+                ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_tease_debut"), ChaosAnnounceKind.Temptation, artKey: "tease");
+                TeaseBark("ChaosTeaseDebut", null);
+            }
+            ChaosMeta.MarkDiscovered("bubble:tease");
+            BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildTease(intensity, cfg.EffectIntensity, _state.BubbleScale));
+            return true;
+        }
+
+        // WPF ChaosModeService.cs:1329: resistance absorbs only the payload, never the streak cost.
+        internal static void OnTeaseTouched(AmbientBubble b)
+        {
+            var spec = b.Spec;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            _state.Detonated++;
+            ChaosRunLessons.OnDetonation();
+            Label(b, "✖", Color.FromRgb(0xFF, 0x3D, 0x5A));
+            if (_state.Shields > 0)
+            {
+                _state.Shields--;
+                _state.Heat = Math.Max(0, _state.Heat - 0.2);
+                ChaosOverlayWindow.ChaosSfx.Play(_state.Shields == 0 ? "resist_crumble" : "resist_absorb", 0.6f);
+            }
+            else
+            {
+                FirePayloadForDetonation(spec);
+                _state.EffectsFired++;
+                ChaosOverlayWindow.ChaosSfx.Play("trigger", 0.55f);
+                Shake(0.3 + spec.Strength / 100.0 * 0.4, 320);
+                _hud?.FlashShields(false);
+            }
+            _state.Combo = _state.Combo > 1 ? _state.Combo / 2 : 0;
+            _lastComboBigFired = 0;
+            Pulse(Color.FromRgb(0xFF, 0x3D, 0x5A), 0.38);
+            TeaseBark("ChaosTeaseClicked", null);
+        }
+
+        // WPF BarkService.cs:554-562 through the Core engine the head seeds.
+        internal static Action<string, int?> TeaseBark = (t, n) => BarkHead.Engine?.Raise(t, n is int d ? c => c.Set("denied_count", (double)d) : null);
+        private static int _teaseDenied;
+        private static bool _teaseStreakBarked;
+
+        // WPF ChaosModeService.cs:1403: restraint pays gold, score and focus once.
+        internal static void OnTeaseDenied(AmbientBubble b)
+        {
+            if (_state == null || _manualPaused || _lessonCardPaused) return;
+            int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(ChaosTuning.TEASE_GOLD_MIN, ChaosTuning.TEASE_GOLD_MAX + 1));
+            BankGold(gold);
+            if (ChaosMeta.State.BubbleHintsLearned.Add("tease")) ChaosMeta.Save();
+            string announcement = Loc.GetF("chaos_tease_denied_gold", gold);
+            ChaosAnnouncerOverlay.Announce(announcement, ChaosAnnounceKind.PowerUp, artKey: "denied", subText: announcement);
+            double pts = ChaosTuning.TEASE_DENIED_SCORE * _state.TotalMult * _state.BlindfoldPayMult;
+            _state.Score += pts;
+            _state.Focus += ChaosTuning.FOCUS_PER_DENIED;
+            Label(b, Loc.Get("chaos_tease_denied"), Color.FromRgb(0xFF, 0xD7, 0));
+            ShowPopScore(pts);
+            Pulse(Color.FromRgb(0xFF, 0xD7, 0), 0.25);
+            TeaseBark("ChaosTeaseDenied", ++_teaseDenied);   // WPF :1416-1421
+            if (_teaseDenied >= ChaosTuning.TEASE_DENIED_STREAK_COUNT && !_teaseStreakBarked)
+            { _teaseStreakBarked = true; TeaseBark("ChaosTeaseDeniedStreak", _teaseDenied); }
         }
 
         /// <summary>WPF OnBenignPopped (:1767): the prism and ordinary-treat branches.</summary>

@@ -65,6 +65,7 @@
   "chaos_lesson_intrusive_thoughts_text": "속삭이는 보상 50개 터뜨리기", "chaos_lesson_intrusive_thoughts_detail": "속삭임 보상(♥ 잠재의식 거품)을 누적 50개 터뜨린다.",
   "chaos_lesson_surrender_text": "죄 5개 받아들이기", "chaos_lesson_surrender_detail": "카드 선택에서 죄를 누적 5개 받아들인다. 첫 무료 체험도 포함된다.",
   "chaos_lesson_slow_fuses_text": "총 1분 동안 누르기", "chaos_lesson_slow_fuses_detail": "해제를 누적 60초 동안 길게 누른다. 활성 거품 위에서 버튼을 누르는 동안만 시간이 흐른다. 한 번의 완전한 누르기는 약 1초다.",
+  "chaos_tease_denied_gold": "참기 성공. 골드 +{0}", "chaos_tease_debut": "Tease: 만지지 마세요", "chaos_tease_denied": "참기 성공", "chaos_hint_tease": "만지지 마. 사라지게 둬",
   "chaos_lesson_silk_touch_text": "폭발 없이 한 주기 끝내기", "chaos_lesson_silk_touch_detail": "폭발 없이 한 주기를 완주한다. Tease 거품을 건드려도 실패한다. 마지막 주기는 시간이 끝날 때 포함된다.",
   "chaos_lesson_popup_notification_text": "저항을 남기고 하강 3회 끝내기", "chaos_lesson_popup_notification_detail": "저항을 1 이상 남긴 채 신호까지 하강 3회를 완주한다. 일찍 깨어나면 제외된다.",
   "chaos_lesson_draft4_text": "만트라 15개 고르기", "chaos_lesson_draft4_detail": "카드 선택에서 누적 15장을 고른다. 만트라와 죄는 포함되지만 건너뛰기는 제외된다.",

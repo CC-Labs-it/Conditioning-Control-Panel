@@ -65,6 +65,7 @@
   "chaos_lesson_intrusive_thoughts_text": "revienta 50 premios susurrantes", "chaos_lesson_intrusive_thoughts_detail": "Revienta 50 premios de susurro (burbuja subliminal ♥) en total.",
   "chaos_lesson_surrender_text": "acepta 5 pecados", "chaos_lesson_surrender_detail": "Acepta 5 pecados en las selecciones de cartas en total. La primera prueba gratuita también cuenta.",
   "chaos_lesson_slow_fuses_text": "aguanta durante un minuto", "chaos_lesson_slow_fuses_detail": "Mantén desactivaciones durante 60 segundos en total. Solo cuenta mientras mantienes pulsado sobre una burbuja activa. Una pulsación completa dura cerca de 1 segundo.",
+  "chaos_tease_denied_gold": "Resistido. +{0} de oro", "chaos_tease_debut": "Tease: no tocar", "chaos_tease_denied": "RESISTIDO", "chaos_hint_tease": "no lo toques. déjalo ir",
   "chaos_lesson_silk_touch_text": "termina una ronda sin detonaciones", "chaos_lesson_silk_touch_detail": "Termina una ronda completa sin detonaciones. Tocar una burbuja Tease también la estropea. La última ronda cuenta cuando se acaba el tiempo.",
   "chaos_lesson_popup_notification_text": "termina 3 descensos con resistencia restante", "chaos_lesson_popup_notification_detail": "Termina 3 descensos hasta la señal con al menos 1 de resistencia. Despertar antes no cuenta.",
   "chaos_lesson_draft4_text": "elige 15 mantras", "chaos_lesson_draft4_detail": "Elige 15 cartas en las selecciones en total. Cuentan mantras y pecados, no los saltos.",

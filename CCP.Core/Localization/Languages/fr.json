@@ -65,6 +65,7 @@
   "chaos_lesson_intrusive_thoughts_text": "éclater 50 friandises murmurantes", "chaos_lesson_intrusive_thoughts_detail": "Éclate 50 friandises murmurantes (bulle subliminale ♥) au total.",
   "chaos_lesson_surrender_text": "accepter 5 péchés", "chaos_lesson_surrender_detail": "Accepte 5 péchés lors des choix de cartes au total. Le premier essai gratuit compte aussi.",
   "chaos_lesson_slow_fuses_text": "tenir pendant une minute", "chaos_lesson_slow_fuses_detail": "Maintiens des désamorçages pendant 60 secondes au total. Le temps ne compte que bouton enfoncé sur une bulle active. Un maintien complet dure environ 1 seconde.",
+  "chaos_tease_denied_gold": "Résisté. +{0} or", "chaos_tease_debut": "Tease : ne pas toucher", "chaos_tease_denied": "RÉSISTÉ", "chaos_hint_tease": "ne touche pas. laisse-la partir",
   "chaos_lesson_silk_touch_text": "terminer une boucle sans détonation", "chaos_lesson_silk_touch_detail": "Termine une boucle entière sans détonation. Toucher une bulle Tease la gâche aussi. La dernière boucle compte à la fin du temps.",
   "chaos_lesson_popup_notification_text": "terminer 3 descentes avec de la résistance restante", "chaos_lesson_popup_notification_detail": "Termine 3 descentes jusqu’au signal avec au moins 1 point de résistance. Un réveil anticipé ne compte pas.",
   "chaos_lesson_draft4_text": "prendre 15 mantras", "chaos_lesson_draft4_detail": "Prends 15 cartes lors des choix au total. Mantras et péchés comptent, pas les choix passés.",
