@@ -464,6 +464,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ApplyPoolsToManifest(manifest);
             ApplyPersonalitiesToManifest(manifest);
             ApplyAdvancedToManifest(manifest);
+            manifest.ArtFraming = ModArtFramingRules.BuildManifestSection(_artFraming, _imageSlots);
         }
 
         private void PopulatePanelSectionsFromManifest(ModManifest manifest)
@@ -471,6 +472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PopulatePoolsFromManifest(manifest);
             PopulatePersonalitiesFromManifest(manifest);
             PopulateAdvancedFromManifest(manifest);
+            PopulateArtFramingFromManifest(manifest);
         }
 
         private void ClearPanelSections()
@@ -478,6 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ClearPoolsSection();
             ClearPersonalitiesSection();
             ClearAdvancedSection();
+            _artFraming.Clear();
         }
 
         private Border CreateSectionPanel(string key)
@@ -1983,19 +1986,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.Get("mod_art_large_title"), Loc.GetF("mod_art_large",
                     Path.GetFileName(filePath), ModImageSlotRules.FormatSize(size)), okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
         }
-
-        /// <summary>
-        /// WPF drops the crop stored for a slot whose image just changed or was cleared - left
-        /// behind, it silently re-attaches to whatever the author picks next, and to a manifest that
-        /// no longer ships the file it was measured against.
-        ///
-        /// <para>ponytail: correctly empty TODAY rather than blocked. The framing dictionary lives in
-        /// ConditioningControlPanel/Windows/ModCreatorWindow.ArtFraming.cs and there is no port of it
-        /// here, so nothing in this window holds a crop to drop - ApplyPanelSectionsToManifest never
-        /// writes ModManifest.ArtFraming either. The body arrives with that panel; the call sites
-        /// (SetImageSlot, ClearImageSlot) are already in the WPF places.</para>
-        /// </summary>
-        private void DropArtFraming(string key) { }
 
         private void ClearImageSlot(string key)
         {
