@@ -23,7 +23,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// The frame subscription drops when the last logo retires; windows live until CloseActive.
     /// <para>The Porn DVD toy is launched by ChaosRunHost and pops chaos bubbles on contact.
     /// Intrusive Thoughts logos come from ChaosRunHost.LaunchThought; a capstone thought splits on a rabbit.
-    /// Missing: Spanker input and re-stacking above mandatory video.</para>
+    /// With the Spanker capstone worn, a logo gets its own click-taking (never focus-taking) window and a
+    /// left click smacks it (WPF ChaosDvdOverlay.cs:204-206,305-319). Re-stacking above mandatory video
+    /// rides ChaosRunHost.RaiseGameLayerAboveVideo.</para>
     /// </summary>
     internal static class ChaosDvdOverlay
     {
@@ -36,6 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests swap in a stepped source; live: the host window's own frame source.</summary>
         internal static Func<TopLevel, IFrameSource> FrameSourceFor = top => TopLevelFrameSource.For(top);
         internal static Action<string, float> PlaySfx = (k, v) => ChaosOverlayWindow.ChaosSfx.Play(k, v);
+        /// <summary>WPF ChaosModeService.cs:407-408: the Spanker worn at its capstone. Sampled once per
+        /// launch, never per click (WPF ChaosDvdOverlay.cs:204-206).</summary>
+        internal static Func<bool> SpankerRedirect = () => ChaosRunHost.State is { SpankerActive: true } s
+            && s.MaxedBoons.Contains("the_spanker");
+        /// <summary>A Spanker logo's window takes clicks but never focus (passive, WPF ChaosWindowZ.cs:35,50).</summary>
+        internal static Func<Window, PixelRect, bool> PrepareClickableWindow = (w, bounds) =>
+            X11Overlay.SetClickThrough(w, false) && X11Overlay.SetOverrideRedirect(w, bounds, passive: true, topmost: w.Topmost);
 
         private static bool _initialized, _sharedHost;
         private static PixelRect _stage;
@@ -166,7 +175,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             t.Opacity = l.Opacity;
             Canvas.SetLeft(t, l.X);
             Canvas.SetTop(t, l.Y);
-            if (_sharedHost) _canvas!.Children.Add(t);
+            bool clickable = SpankerRedirect();
+            if (_sharedHost && !clickable) _canvas!.Children.Add(t);
             else
             {
                 // WPF ChaosDvdOverlay :115-122, :244-255, :435-448: reuse hidden windows.
@@ -174,8 +184,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 w.Topmost = ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
                 w.Width = l.W;
                 w.Height = l.H;
-                w.Content = t;
-                if (!PrepareWindow(w, LogoBounds(l)))
+                w.IsHitTestVisible = clickable;
+                if (clickable)
+                {
+                    w.Content = null;   // a new window was built around the label: free it for the panel
+                    // A near-transparent fill so the whole box takes the click, as WPF's hit-test brush.
+                    var panel = new Border { Child = t, Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+                                             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand) };
+                    panel.PointerPressed += (_, e) =>
+                    {
+                        if (e.GetCurrentPoint(panel).Properties.IsLeftButtonPressed && Smack(l)) e.Handled = true;
+                    };
+                    w.Content = panel;
+                }
+                else w.Content = t;
+                if (!(clickable ? PrepareClickableWindow(w, LogoBounds(l)) : PrepareWindow(w, LogoBounds(l))))
                 {
                     Pool.Push(w);
                     CloseActive(); // refusal must never leave an input-blocking overlay
@@ -185,6 +208,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 LogoWindows[l] = w;
             }
             Labels[l] = t;
+        }
+
+        /// <summary>WPF ChaosDvdOverlay.cs:305-319: a Spanker logo's click turns it, one hue step and the cue.</summary>
+        internal static bool Smack(ChaosDvdLogo l)
+        {
+            if (!LogoWindows.TryGetValue(l, out var w) || !w.IsHitTestVisible || !Flock.Redirect(l)) return false;
+            if (Labels.TryGetValue(l, out var t)) Recolor(t, l);
+            PlaySfx("dvd_bounce", 0.4f);
+            return true;
         }
 
         private static void Recolor(OutlinedTextBlock t, ChaosDvdLogo l)

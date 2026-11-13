@@ -35,7 +35,8 @@ public readonly record struct ChaosDvdFrame(
 /// Thoughts logo maths, head-free. Launch (:94), Begin (:180), StepAll (:274), StepOne (:327) and
 /// FadeOutAndRetire (:405), minus drawing: a DVD-screensaver label drifts across the area, bounces
 /// off the edges with one hue step per bounce, and Casting Couch splits it on wall hits.
-/// The Spanker smack (Redirect) and the rabbit split (SplitInTwo) are not here: their inputs (the
+/// The Spanker smack is <see cref="Redirect"/>; the head decides when a click counts.
+/// The rabbit split (SplitInTwo) is not here: its inputs (the
 /// Spanker boon, chaos bubble darters) are not ported.
 /// </summary>
 public sealed class ChaosDvdFlock
@@ -189,4 +190,19 @@ public sealed class ChaosDvdFlock
 
     /// <summary>Run teardown (WPF CloseActive): every logo gone at once.</summary>
     public void Clear() => _active.Clear();
+
+    /// <summary>WPF ChaosDvdOverlay.cs:305-319 (the Spanker smack): a fresh random heading, 18% faster
+    /// up to 2.5x the base speed, one hue step. Fading logos still answer; a retired one does not.</summary>
+    public bool Redirect(ChaosDvdLogo l)
+    {
+        if (!_active.Contains(l)) return false;
+        double speed = Math.Sqrt(l.Vx * l.Vx + l.Vy * l.Vy);
+        if (speed < 1) speed = BaseSpeed;
+        speed = Math.Min(speed * 1.18, BaseSpeed * 2.5);
+        double angle = _rng.NextDouble() * Math.PI * 2;
+        l.Vx = Math.Cos(angle) * speed;
+        l.Vy = Math.Sin(angle) * speed;
+        l.HueIndex = (l.HueIndex + 1) % Hues.Length;
+        return true;
+    }
 }
