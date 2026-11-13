@@ -173,6 +173,47 @@ public sealed class RemoteRelayTests
     private static void Poll(FakeRelay f, string json) =>
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
 
+    [Fact]
+    public async Task StatusReportsActiveOverlaysAndMindWipe()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldMindWipe = CoreMindWipe.IsRunningProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var mindWipeRunning = true;
+        CoreMindWipe.IsRunningProvider = () => mindWipeRunning;
+        settings.Current.PinkFilterEnabled = true;
+        settings.Current.SpiralEnabled = true;
+        var fake = new FakeRelay();
+        using var relay = Relay(fake);
+        try
+        {
+            await relay.StartAsync("free");
+            Poll(fake, "{\"controller_connected\":true}");
+            await relay.PollOnceAsync();
+            var active = fake.Seen.Last(x => x.Path == "/v2/remote/status").Body["active_services"]!.Values<string>().ToArray();
+            Assert.Contains("pink_filter", active);
+            Assert.Contains("spiral", active);
+            Assert.Contains("mind_wipe", active);
+            settings.Current.PinkFilterEnabled = false;
+            settings.Current.SpiralEnabled = false;
+            mindWipeRunning = false;
+            var later = DateTime.UtcNow.AddSeconds(16);
+            relay.Now = () => later;
+            await relay.PollOnceAsync();
+            active = fake.Seen.Last(x => x.Path == "/v2/remote/status").Body["active_services"]!.Values<string>().ToArray();
+            Assert.DoesNotContain("pink_filter", active);
+            Assert.DoesNotContain("spiral", active);
+            Assert.DoesNotContain("mind_wipe", active);
+        }
+        finally
+        {
+            await relay.StopAsync();
+            CoreSettings.ServiceProvider = oldSettings;
+            CoreMindWipe.IsRunningProvider = oldMindWipe;
+        }
+    }
+
     [Theory]
     [InlineData("show_pink_filter", true, true)]
     [InlineData("stop_pink_filter", true, false)]
