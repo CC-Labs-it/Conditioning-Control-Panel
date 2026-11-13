@@ -50,7 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 OnlineMeterHead.Start();
-                OnlineMeterHead.Refresh += RefreshOnlineMeter;
+                // The static event holds the tab (and its window) only while it is on screen: a view built and never
+                // attached, or one whose window closed, must not stay subscribed (31 closed shells were kept this way).
+                if (global::Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(this)) OnlineMeterHead.Refresh += RefreshOnlineMeter;
                 DetachedFromVisualTree += (_, _) => OnlineMeterHead.Refresh -= RefreshOnlineMeter;
                 AttachedToVisualTree += (_, _) => { OnlineMeterHead.Refresh -= RefreshOnlineMeter; OnlineMeterHead.Refresh += RefreshOnlineMeter; };
                 BtnOnlineOfficialNice.Click += (_, _) => OnlineOfficialNice();
