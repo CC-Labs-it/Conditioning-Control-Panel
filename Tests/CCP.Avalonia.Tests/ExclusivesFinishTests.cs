@@ -94,11 +94,16 @@ public sealed class ExclusivesFinishTests
     {
         EnsureAvalonia();
         var old = (CoreMods.ActiveModIdProvider, CoreModArt.OverridePathProvider);
+        Window? host = null;
         try
         {
             CoreModArt.OverridePathProvider = null;
             CoreMods.ActiveModIdProvider = null; // CCP default
             var view = new ExclusivesTabView();
+            // #3785: a hidden vault builds on its first visible load, not in the constructor.
+            host = new Window { Width = 1400, Height = 900, Content = view };
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
             var hero = Assert.IsType<ImageBrush>(view.FindControl<Border>("VaultHero")!.Background);
             Assert.Equal(AlignmentX.Right, hero.AlignmentX); // WPF crops from the right edge
             Assert.NotNull(view.FindControl<Image>("TierPlate1Art")?.Source);
@@ -117,6 +122,7 @@ public sealed class ExclusivesFinishTests
         }
         finally
         {
+            host?.Close();
             (CoreMods.ActiveModIdProvider, CoreModArt.OverridePathProvider) = old;
         }
         return Task.CompletedTask;

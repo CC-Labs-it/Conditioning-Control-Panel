@@ -139,13 +139,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void ShowTab(string? tab)
         {
             tab = (tab ?? string.Empty).ToLowerInvariant();
+            using var timing = TabSwitchTiming.Start(tab, TabSwitchMeasured);
             // WPF :228 TryRedirectSilentTab, at the door before anything counts the old key.
             if (Array.IndexOf(SilentRedirectKeys, tab) >= 0
                 && Services.UI.NavSections.Redirects.TryGetValue(tab, out var moved)) { ShowTab(moved.Tab); return; }
             if (TryRedirectMovedTab(tab)) return;   // WPF :229, "together" -> Social > Lobby with the note
             // The dashboard's RECENT rail, at the door before the intercepts (WPF :121), so a
             // window key counts as an open like any tab (MainShellWindow.FavoritesRail.cs).
-            NoteDestinationOpened(tab);
+            NoteDestinationOpened(tab, deferRail: TabPanels.ContainsKey(tab));
+            timing?.Mark("recent");
             // WPF ShowTab("patreon") -> ShowAppInfoPopup -> ShowAccountSettings (MainWindow.TabNavigation.cs:126,
             // MainWindow.AccountShell.cs:73): Settings, scrolled to Account. Before the bark, as there.
             if (tab == "patreon") { OpenAppSettingsSection("account"); return; }
@@ -168,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
 
             EmiDesk.EmiTargets.NoteTabOpened(tab); // WPF counts after the bark hook (TabNavigation.cs:298).
+            timing?.Mark("bark-and-routing");
 
             FadeLeavingTab(target);
             foreach (var name in new HashSet<string>(TabPanels.Values))
@@ -175,39 +178,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
+            timing?.Mark("visibility");
             // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
             AnimateTabIn(this.FindControl<Control>(target), tab);
             StartLeavingTabFade();
+            timing?.Mark("tab-transition");
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
+            timing?.Mark("history");
             RefreshSectionRail(tab); // the lit rail row (MainShellWindow.NavRail.cs)
+            timing?.Mark("nav-rail");
             SwitchTabFx(tab);
+            timing?.Mark("ambient-fx");
             SyncSectionChrome(tab); // the pill strip + breadcrumb (MainShellWindow.SectionChrome.cs)
+            timing?.Mark("section-chrome");
             // A tooltip opened by a stationary pointer outlives the tab it belongs to, because
             // nothing ever moved the pointer off its owner. Same call, same place, as WPF's
             // MainWindow.TabNavigation.cs:186 (MainShellWindow.ToolTipHygiene.cs).
             CloseStaleToolTip();
-            OnTabShown(tab);
+            timing?.Mark("tooltip");
+            OnTabShown(tab, timing);
+            timing?.Mark("tab-hooks");
         }
 
         /// <summary>
         /// The per-tab side effects that resolve on this head. Guarded as a whole: an entry-time
         /// repaint must never cost the navigation that asked for it.
         /// </summary>
-        private void OnTabShown(string tab)
+        private void OnTabShown(string tab, TabSwitchTiming? timing)
         {
             try
             {
                 RefreshEntitlementVeils();
+                timing?.Mark("entitlements");
                 switch (tab)
                 {
                     // WPF re-derives the session feature lock on the way into each of these
                     // three (MainWindow.TabNavigation.cs:260/476/501): the Dashboard and the rack
                     // both host real dose dials, so a lock that was latched rather than re-derived
                     // could survive a crash, an abort or an out-of-order session event.
-                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); RefreshIntakePassTile(); MaybeShowFeatureIntro("daily-free", "settings"); break;
-                    case "progression": RefreshFavoritesRail(); break; // WPF TabNavigation.cs:308 (RefreshDashboardRail)
+                    case "settings":
+                        RefreshFavoritesRail(reuseChips: true);
+                        timing?.Mark("settings-favorites");
+                        // Re-derive on entry, but do not sweep the off-screen rack and tabs
+                        // again when the last complete paint was already unlocked. Active
+                        // locks still repaint so their reason/dose changes remain visible.
+                        RefreshSessionFeatureLock(force: IsSessionFeatureLockActive);
+                        timing?.Mark("settings-session-lock");
+                        RefreshIntakePassTile();
+                        timing?.Mark("settings-intake");
+                        MaybeShowFeatureIntro("daily-free", "settings");
+                        timing?.Mark("settings-intro");
+                        break;
+                    case "progression": RefreshFavoritesRail(reuseChips: true); break; // WPF TabNavigation.cs:308 (RefreshDashboardRail)
                     case "studio": StudioRack?.OnTabShown(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("studio-rack", "studio"); break;
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;
                     // WPF :666, the "Scheduler & Ramp" zone pill: the rack's scheduler module.
