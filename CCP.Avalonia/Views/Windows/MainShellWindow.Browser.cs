@@ -40,6 +40,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
         }
 
+        /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
+        internal void EndWebVideoTakeover()
+        {
+            if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
+        }
+
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
         /// WPF, including the "both deselected after an external link" case.</summary>
         private string SiteHomeUrl() =>
