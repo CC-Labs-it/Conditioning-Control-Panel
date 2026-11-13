@@ -8,7 +8,7 @@ using ConditioningControlPanel.Services.Video.Browser;
 namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class BrowserVideoSurface : IDisposable
 {
-    private static object? _owner;
+    private static volatile object? _owner;
     internal static bool StoodDown;
     internal static bool SessionActive => _owner != null;
     internal static Func<BrowserVideoSurface?> Create = () => {
