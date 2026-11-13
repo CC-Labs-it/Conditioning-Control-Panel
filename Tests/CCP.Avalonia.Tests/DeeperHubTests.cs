@@ -376,6 +376,37 @@ public sealed class DeeperHubTests
     private static void Click(Button b) { b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [Fact]
+    public Task PreviewLoadsUnsavedChangesAndReusesPlayer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var shell = new MainShellWindow();
+        shell.Show();
+        var enh = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "/tmp/preview.mp3" };
+        enh.Regions.Add(new Region { Id = "region", Start = 0, End = 10 });
+        var trigger = new RegionEnteredTrigger();
+        enh.Rules.Add(new EnhancementRule { Trigger = trigger, RegionConstraint = "region" });
+        try
+        {
+            shell.OpenDeeperEditor(enh, null);
+            var editor = shell.OwnedWindows.OfType<DeeperEditorWindow>().Single();
+            shell.BtnDeeperOpenPlayer_Click();
+            var player = shell.OwnedWindows.OfType<EnhancementPlayerWindow>().Single();
+            enh.Metadata.Name = "Unsaved preview";
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            Assert.Same(player, shell.OwnedWindows.OfType<EnhancementPlayerWindow>().Single());
+            Assert.Equal("region", trigger.RegionId);
+            Assert.Equal("Unsaved preview", player.FindControl<TextBlock>("TxtEnhName")!.Text);
+            Assert.Null(player.LoadedFilePath);
+        }
+        finally
+        {
+            foreach (var window in shell.OwnedWindows.ToList()) window.Close();
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task LibraryRowsSelectOpenPlayAndDeleteWithUndo() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
