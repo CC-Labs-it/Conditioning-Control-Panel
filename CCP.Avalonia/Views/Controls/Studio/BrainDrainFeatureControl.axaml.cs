@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.IO;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -6,13 +7,15 @@ using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
-    // WPF BrainDrainFeatureControl.xaml.cs:37-48,121-198,417-429.
-    // Clip library and art are live. Audio playback and desktop visuals remain unported.
+    // WPF BrainDrainFeatureControl.xaml.cs:37-48,121-198,207-301,358-377,417-429.
+    // Clip library, art and the audio rows are live. Desktop visuals (blur, melt) remain unported;
+    // their dials are saved preferences only.
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
@@ -36,8 +39,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             // WPF SliderIntensity_Changed (.xaml.cs:246-262): saves the clip rate BrainDrainPlayer.Tick reads.
             _intensity = SliderLabel.Wire(this, "SliderIntensity", "TxtIntensity", v => $"{(int)v}%");
             _intensity.ValueChanged += (_, e) =>
-            { if (!_loadingVolume && CoreSettings.Current.BrainDrainIntensity != (int)e.NewValue) { CoreSettings.Current.BrainDrainIntensity = (int)e.NewValue; CoreSettings.Save(); } };
-            SliderLabel.Wire(this, "SliderBlurStrength", "TxtBlurStrength", v => $"{(int)v}%");
+            {
+                if (_loadingVolume || CoreSettings.Current.BrainDrainIntensity == (int)e.NewValue) return;
+                CoreSettings.Current.BrainDrainIntensity = (int)e.NewValue;
+                // WPF .xaml.cs:252-256: a running player reads the saved rate live (BrainDrainPlayer.Tick).
+                CoreSettings.Save();
+            };
+            // WPF SliderBlurStrength_Changed (.xaml.cs:287-301): the visual half's dial, a saved preference here.
+            _blur = SliderLabel.Wire(this, "SliderBlurStrength", "TxtBlurStrength", v => $"{(int)v}%");
+            _blur.ValueChanged += (_, e) =>
+            {
+                if (_loadingVolume || CoreSettings.Current.BrainDrainBlurStrength == (int)e.NewValue) return;
+                CoreSettings.Current.BrainDrainBlurStrength = (int)e.NewValue;
+                CoreSettings.Save();
+            };
+
+            // WPF ChkEnable_Changed (.xaml.cs:221-241): the switch starts or stops the player only while the engine runs.
+            _enable = this.FindControl<CheckBox>("ChkEnable")!;
+            _enable.IsCheckedChanged += (_, _) =>
+            {
+                var on = _enable.IsChecked == true;
+                if (_loadingVolume || CoreSettings.Current.BrainDrainEnabled == on) return;
+                CoreSettings.Current.BrainDrainEnabled = on;
+                CoreEngine.ApplyLive("braindrain", on);
+                CoreSettings.Save();
+            };
+            // WPF ChkHighRefresh_Changed (.xaml.cs:358-377): the cadence is read at Start, so a running player is bounced.
+            _highRefresh = this.FindControl<CheckBox>("ChkHighRefresh")!;
+            _highRefresh.IsCheckedChanged += (_, _) =>
+            {
+                var on = _highRefresh.IsChecked == true;
+                if (_loadingVolume || CoreSettings.Current.BrainDrainHighRefresh == on) return;
+                CoreSettings.Current.BrainDrainHighRefresh = on;
+                if (CoreEngine.IsRunning && BrainDrainPlayer.Instance is { IsRunning: true } player) { player.Stop(); player.Start(); }
+                CoreSettings.Save();
+            };
 
             RefreshClipCount();
 
@@ -74,8 +110,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             };
         }
 
-        private readonly CheckBox _keepClear;
-        private readonly Slider _volume, _intensity;
+        private readonly CheckBox _keepClear, _enable, _highRefresh;
+        private readonly Slider _volume, _intensity, _blur;
         private readonly TextBlock _volumeText;
         private bool _loadingVolume;
 
@@ -87,6 +123,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             {
                 _volume.Value = v;
                 _intensity.Value = CoreSettings.Current.BrainDrainIntensity; // WPF .xaml.cs:96-97
+                _blur.Value = CoreSettings.Current.BrainDrainBlurStrength;
+                _enable.IsChecked = CoreSettings.Current.BrainDrainEnabled;
+                _highRefresh.IsChecked = CoreSettings.Current.BrainDrainHighRefresh;
                 _volumeText.Text = $"{v}%";
                 if (v != 100) this.FindControl<MoreFold>("FoldMore")!.IsOpen = true; // never hide a changed setting
             }
@@ -98,7 +137,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
-            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced += LoadKeepClear; svc.CurrentReplaced += LoadVolume; }
+            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced += Observe; svc.CurrentReplaced += LoadKeepClear; svc.CurrentReplaced += LoadVolume; }
+            Observe();
             LoadKeepClear();
             LoadVolume();
             RefreshClipCount(); // WPF .xaml.cs:40-43: re-scan whenever the rack is shown.
@@ -106,8 +146,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
-            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced -= LoadKeepClear; svc.CurrentReplaced -= LoadVolume; }
+            if (CoreSettings.Service is { } svc) { svc.CurrentReplaced -= Observe; svc.CurrentReplaced -= LoadKeepClear; svc.CurrentReplaced -= LoadVolume; }
+            if (_observed != null) _observed.PropertyChanged -= OnSettingChanged;
+            _observed = null;
             base.OnDetachedFromVisualTree(e);
+        }
+
+        // WPF OnSettingsPropertyChanged (.xaml.cs:207-219): a session, a preset, the rack or a voice
+        // command that writes these rows repaints them here; the load guard keeps it from saving again.
+        private ConditioningControlPanel.Models.AppSettings? _observed;
+        private void Observe()
+        {
+            if (_observed != null) _observed.PropertyChanged -= OnSettingChanged;
+            _observed = CoreSettings.Current;
+            _observed.PropertyChanged += OnSettingChanged;
+        }
+
+        private void OnSettingChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is not (nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainEnabled)
+                or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainIntensity)
+                or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainVolume)
+                or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainHighRefresh)
+                or nameof(ConditioningControlPanel.Models.AppSettings.BrainDrainBlurStrength))) return;
+            void Paint() { if (_observed != null && ReferenceEquals(sender, _observed)) LoadVolume(); }
+            if (Dispatcher.UIThread.CheckAccess()) Paint(); else Dispatcher.UIThread.Post(Paint);
         }
 
         private void LoadKeepClear() => _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
