@@ -108,7 +108,9 @@ internal sealed class LeashHolderIntro : Window
     {
         if (_played) return;
         _played = true;
-        if (!AmbientFxCanvas.Env.AllowTransitions) return;
+        // Gentle visuals: the 220 ms panel rise and the snip burst sit under the 300 ms floor, so the
+        // finished drawings show at once instead.
+        if (!AmbientFxCanvas.Env.AllowTransitions || CoreSettings.Current.GentleVisuals) return;
         MotionFrame(0); _watch.Restart();
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _timer.Tick += (_, _) =>

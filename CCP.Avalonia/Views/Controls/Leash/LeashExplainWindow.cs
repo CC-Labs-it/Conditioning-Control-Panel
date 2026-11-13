@@ -1,6 +1,6 @@
 // PORTED from WPF ConditioningControlPanel/Controls/Leash/Explain/LeashExplainer.cs Show/Build/Present
 // (the "?" door: title, close X, the four-step card in a row, "Got it") and LeashLook.Help (the 22px
-// lilac "?" pill). Leashed side only: the holder variant and BeforeOffer land with the holder card unit.
+// lilac "?" pill). Leashed side only: the holder variant and BeforeOffer are LeashHolderIntro.cs (friend card offer chip).
 // Flat on this head (P82): the WPF DropShadowEffect is a BoxShadow; the drawn step art is the
 // ask card's Fluent glyphs (LeashAskCard.Explainer).
 using System;

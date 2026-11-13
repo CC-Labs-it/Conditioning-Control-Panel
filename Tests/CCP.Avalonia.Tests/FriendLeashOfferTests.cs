@@ -211,7 +211,7 @@ public sealed class FriendLeashOfferTests
     [Fact]
     public void IntroMotionUsesPreferenceAndAnimatesTheActualParts() => AvaloniaTestDispatcher.Run(() =>
     {
-        Setup(); var settings = CoreSettings.Current; var prior = settings.MotionLevel;
+        Setup(); var settings = CoreSettings.Current; var prior = settings.MotionLevel; var priorGentle = settings.GentleVisuals;
         try
         {
             settings.MotionLevel = MotionLevel.Off;
@@ -237,8 +237,11 @@ public sealed class FriendLeashOfferTests
             Assert.All(moving.GetLogicalDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>(), bit => Assert.Equal(ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowParticles, bit.IsVisible));
             moving.MotionFrame(2000); Assert.Equal(1, Transform<ScaleTransform>("leash-bar:0").ScaleY, 3); Assert.Equal(1, Transform<ScaleTransform>("leash-eye").ScaleY, 3); Assert.Equal(0, Transform<RotateTransform>("leash-blade-a").Angle, 3);
             moving.Close(); Assert.False(moving.MotionActive);
+            // Gentle visuals: the sub-300 ms rise never plays, even at Full motion.
+            settings.GentleVisuals = true;
+            var gentle = new LeashHolderIntro("Mia", null); gentle.Show(); Assert.False(gentle.MotionActive); gentle.Close();
         }
-        finally { settings.MotionLevel = prior; }
+        finally { settings.MotionLevel = prior; settings.GentleVisuals = priorGentle; }
     });
 
     [Fact]
