@@ -50,6 +50,9 @@ function fail(message) {
 }
 
 function main() {
+  // A host can tell a replay-capable build by this; window.PBP_REPLAY (game/cup-replay.js) is read once, here.
+  window.PBP_CAPS = { replay: 1 };
+  const replayAsk = window.PBP_REPLAY || null;
   // The panel keeps a first Escape as the game's pause and hands it over as pbp:escape: with this page out
   // of keyboard focus the real key never lands here (ui/host-escape.js). Made first, so it hears every real
   // Escape before any part of the page keeps one for itself (the promotion picker, the door).
@@ -277,7 +280,7 @@ function main() {
     const record = game.record;
     game.record = (...a) => { const r = record.apply(game, a); const fall = iq.record(); return fall ? { ...r, iq: fall } : r; };
     bus.on('gameover', () => {
-      if (mode === 'watch') return;
+      if (mode === 'watch' || mode === 'replay') return;
       const plies = game.plies(), last = game.rules.chess.history().pop(), epoch = iq.epoch();
       iq.settled().then(() => {
         // a rematch or the menu before the last grade came in: the trackers belong to the next game now
@@ -405,6 +408,8 @@ function main() {
     // the niche manager is one tap away on the pause card, wherever a host keeps a picture choice
     const fx = watch ? presentation().watchEffects !== false : presentation().experience !== 'classic';
     pauseCard.querySelector('[data-pause="pictures"]').hidden = !(p && pictureChoice.available() && fx);
+    // a host-handed replay (net/replay-seat.js): nothing carries on without the viewer, and the frame is the host's to close
+    if (window.PBP.game?.isReplay) { note.hidden = true; pauseCard.querySelector('[data-pause="leave"]').hidden = true; }
     if (p) pauseCard.querySelector('[data-pause="resume"]').focus();
   }
   const pauseHush = createPauseHush({ board, ramp: () => window.PBP.ramp, isPaused: () => pausedGame });
@@ -501,7 +506,10 @@ function main() {
     bus.emit('local', { sides: ['w', 'b'], mode, match });
     game.start();
   }
-  const doorReady = attachEffects(bus, board, params).then(async () => {
+  const doorReady = attachEffects(bus, board, replayAsk ? new URLSearchParams('media=none') : params).then(async () => {
+    // A finished game handed in by the host page: straight onto the board, no door, no lobby, no network.
+    // An ask that does not read as a record falls through to the door, as if it was never there.
+    if (replayAsk && await startHostReplay(replayAsk, { bus, board, game })) return null;
     if (dealAtOnce) { startGame({ mode: 'hotseat' }); return null; }
     let lobby = null;
     try {
@@ -530,8 +538,41 @@ function main() {
   // --- end O ---
 }
 
+/** window.PBP_REPLAY (or a promise of it) onto the board. False when it is not a replay after all. */
+async function startHostReplay(ask, { bus, board, game }) {
+  try {
+    const [{ readHostReplay }, { createReplaySeat }, { createReplayBar }] = await Promise.all([
+      import('./game/cup-replay.js'), import('./net/replay-seat.js'), import('./ui/replay-bar.js')]);
+    const host = readHostReplay(await ask);
+    if (!host) return false;
+    let bar = null;
+    const seat = createReplaySeat({
+      bus, board, record: host.record,
+      held: () => !!window.PBP.isPaused?.(),
+      reduced: () => presentation().reducedMotion,
+      onChange: (s) => bar?.paint(s),
+      onDone: (match_id) => window.dispatchEvent(new CustomEvent('pbp:replay-done', { detail: { match_id } })),
+    });
+    document.body.classList.add('pbp-cup-replay');
+    document.body.classList.toggle('pbp-cup-reel', host.reel);
+    bar = createReplayBar({ seat, record: host.record, reel: host.reel });
+    game.switchTo(seat);
+    board.anim?.setClock?.(() => game.clock);
+    bus.emit('newgame', { ply: 0 });
+    seat.deal();
+    seat.start();
+    if (host.reel) seat.startReel(); else seat.play();
+    window.PBP.replay = seat;
+    return true;
+  } catch (e) {
+    console.warn('[pbp] the replay did not start; opening the door', e);
+    return false;
+  }
+}
+
 function startOpenIntro() {
   const q = new URLSearchParams(location.search);
+  if (window.PBP_REPLAY) return Promise.resolve(null);   // an embedded replay opens on the board
   const holdAt = q.has('introAt') ? Math.max(0, Number(q.get('introAt')) || 0) : null;
   const harness = q.has('hotseat') || Number(q.get('auto')) > 0 || q.get('door') === '0' || q.get('intro') === '0';
   if (harness && holdAt == null) return Promise.resolve(null);
