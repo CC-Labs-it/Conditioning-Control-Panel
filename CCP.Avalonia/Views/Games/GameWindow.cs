@@ -248,10 +248,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
         /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
-        /// use its last completed top-level URL, as Intake does.</summary>
+        /// use its last completed top-level URL, as Intake does. Before the first completion only
+        /// host Escape can use an accepted in-flight navigation, not a page business message.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null) return;
+            if (PageUrl == null) return;
+            if (Web.CurrentUrl == null)
+            {
+                // The listener runs at document start. Before the first completion, accept only
+                // host Escape for an allowed Just Drop navigation, never a page business frame.
+                if (Spec.Id != JustDropId || !JustDropHandoff.IsSite(Web.ActiveNavigation)) return;
+                try
+                {
+                    var early = JObject.Parse(Unwrap(json));
+                    if ((string?)early["type"] == "ccp-host-escape") HandleJustDrop(early);
+                }
+                catch (Exception ex) { Log.Debug("[Game] unreadable early message: {E}", ex.Message); }
+                return;
+            }
             if (Spec.Id == JustDropId
                 ? !JustDropHandoff.IsSite(Web.CurrentUrl)
                 : !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(Web.CurrentUrl, PageUrl)) return;
