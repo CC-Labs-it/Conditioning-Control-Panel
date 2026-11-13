@@ -23,6 +23,44 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class FeatureCardFxTests
 {
+    // Restack b117 (#3551): the wall follows ownership changes and drops its hook when detached.
+    [Fact]
+    public void WallBadgesFollowOwnershipChangesAndReattach() => WithCard((window, host, card) =>
+    {
+        var saved = PrizeOwnership.IsGranted;
+        var owned = new System.Collections.Generic.HashSet<string>();
+        PrizeOwnership.IsGranted = owned.Contains;
+        var wall = new ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView();
+        try
+        {
+            host.Children.Add(wall);
+            Dispatcher.UIThread.RunJobs();
+            var flash = wall.FindControl<FeatureCard>("CardFlash")!;
+            var bubble = wall.FindControl<FeatureCard>("CardBubblePop")!;
+            Assert.False(flash.ShowV2Badge || bubble.ShowV2Badge);
+            owned.Add(PrizeOwnership.BubbleRain);
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(bubble.ShowV2Badge);
+            Assert.False(flash.ShowV2Badge);
+            owned.Clear(); owned.Add(PrizeOwnership.FlashPendulum);
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(flash.ShowV2Badge);
+            Assert.False(bubble.ShowV2Badge);
+            host.Children.Remove(wall);
+            Dispatcher.UIThread.RunJobs();
+            owned.Clear();
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(flash.ShowV2Badge); // detached view unsubscribed
+            host.Children.Add(wall);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(flash.ShowV2Badge || bubble.ShowV2Badge);
+        }
+        finally { host.Children.Remove(wall); PrizeOwnership.IsGranted = saved; }
+    });
+
     [Fact]
     public void QuickReleaseRetargetsFromAnimatedPressAndOvershootsOnePixel() => WithCard((window, host, card) =>
     {

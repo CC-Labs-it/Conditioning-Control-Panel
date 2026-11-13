@@ -54,7 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
-        private static bool _running;
+        private static bool _running, _oneShotWindows;
+        internal static bool SkipPlatformChecksForTests;
         private static TimeSpan? _lastStep;
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
@@ -145,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     TeaseFaces.Remove(entry.Key);
                 }
         }
+        internal static int WindowCount => Windows.Count;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
@@ -170,7 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var window in Windows) if (window.IsVisible) raise(window);
         }
 
-        public static bool IsRunning => _running && !_chaosOpenedWindows;
+        public static bool IsRunning => _running && !_chaosOpenedWindows && !_oneShotWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 
         /// <summary><paramref name="frequency"/> per minute overrides the setting (WPF Start's).</summary>
@@ -179,14 +181,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <param name="ambient">False opens the windows for a Chaos run only: no ambient spawn timer.</param>
         private static void Start(Visual host, int? frequency, bool ambient)
         {
-            if (_running && ambient && _chaosOpenedWindows)
+            if (_running && ambient && (_chaosOpenedWindows || _oneShotWindows))
             {
+                _oneShotWindows = false;
                 _chaosOpenedWindows = false;   // the ambient game starts mid-run: it owns the windows now
                 StartSpawning(frequency);
                 return;
             }
             if (_running) return;
-            if (!X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             var s = CoreSettings.Current;
@@ -197,7 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var sc = screens[i];
                 var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
-                if (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds))
+                if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds)))
                 {
                     Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
                     w.Close();
@@ -243,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _chaosOpenedWindows = false;
             ChaosRipples.Clear();
+            _oneShotWindows = false;
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -253,6 +257,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows.Clear();
             Targets.Clear();
             if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:827 (WPF Stop returns early when idle)
+        }
+
+        /// <summary>WPF Services/BubbleService.cs:1018-1054: a capped, display-gated one-shot
+        /// works with the ambient service stopped, without starting its spawn schedule.</summary>
+        internal static void SpawnOnce(Visual host)
+        {
+            if (DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(CoreSettings.Current)) return;
+            if (!_running)
+            {
+                Start(host, null, ambient: false);
+                if (!_running) return;
+                _oneShotWindows = true;
+            }
+            Spawn();
         }
 
         public static void RefreshFrequency()
@@ -566,7 +584,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PlayerRipples.Clear();
             Field.Bubbles.RemoveAll(b => b.Spec != null && !b.AmbientTrigger);
             PruneTeaseFaces();
-            if (_chaosOpenedWindows) { Stop(); return; }
+            // WPF BubbleService.cs:2031, :1388: ending Chaos also retires an idle one-shot driver.
+            if (_chaosOpenedWindows || (_oneShotWindows && Field.Bubbles.Count == 0)) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
 
@@ -823,7 +842,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ChaosRunHost.RefreshRippleInput();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0 && PlayerRipples.Count == 0) { _lastStep = null; return; }   // idle until the next spawn
+                if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0 && PlayerRipples.Count == 0)
+                {
+                    _lastStep = null;
+                    if (_oneShotWindows && _chaosPopped == null) Stop();
+                    return;
+                }   // idle until the next spawn
             }
             RequestFrame();
         }
