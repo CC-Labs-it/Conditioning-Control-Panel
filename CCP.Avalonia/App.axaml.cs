@@ -1066,6 +1066,7 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 catch (Exception ex) { Serilog.Log.Error(ex, "Failed to initialize ContentPackStore - content packs unavailable this session"); }
                 await step(0.3, "Initializing audio...");
+                WireBrainDrainQuestMinutes();
                 // Real audio through LibVLC, seeded only if libvlc loads. If it is missing,
                 // CoreAudio stays unseeded: every clip "finishes" at once and nothing plays.
                 // Console as well as Serilog: this head configures no Serilog sink yet.
@@ -1075,7 +1076,6 @@ namespace ConditioningControlPanel.Avalonia
                     vlc.Seed();
                     Platform.BrainDrainPlayer.Instance = new Platform.BrainDrainPlayer(vlc.PrepareVoice);
                     CoreEngine.StartBrainDrain = Platform.BrainDrainPlayer.Instance.Start;
-                    CoreEngine.StopBrainDrain = Platform.BrainDrainPlayer.Instance.Stop;
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
                     vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
@@ -1652,6 +1652,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
             try { Platform.KeywordTriggerHead.Stop(); } catch { }
+            try { StopBrainDrainQuestMinutes(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
