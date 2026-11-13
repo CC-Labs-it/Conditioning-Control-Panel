@@ -274,6 +274,7 @@ public class TestIsolationTests
     [Theory]
     [InlineData(typeof(ConditioningControlPanel.Services.V2AuthService), nameof(ConditioningControlPanel.Services.V2AuthService.MergedRecovery))]
     [InlineData(typeof(ConditioningControlPanel.Services.MergedAccountRecovery), nameof(ConditioningControlPanel.Services.MergedAccountRecovery.ReloadProfile))]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay), "_refused")]
     [InlineData(typeof(CoreSettings), nameof(CoreSettings.ServiceProvider))]
     [InlineData(typeof(CoreEntitlement), nameof(CoreEntitlement.HasPremiumProvider))]
     [InlineData(typeof(CoreSecrets), nameof(CoreSecrets.RetrieveProvider))]
