@@ -544,7 +544,9 @@ public sealed class ModChoiceTests
 
     private static async Task WaitFor(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        // A hang guard, not a tolerance: it returns on completion. The pack service itself retries a
+        // download after 3 s and an install after 5 s, so one transient retry on a loaded runner outlasts 10 s.
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!condition() && DateTime.UtcNow < deadline)
         {
             Dispatcher.UIThread.RunJobs();

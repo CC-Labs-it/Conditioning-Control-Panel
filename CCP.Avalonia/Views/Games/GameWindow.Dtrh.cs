@@ -353,7 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.Claim(SparklesHead.Service, "dtrh", "solo",
                         ConditioningControlPanel.Services.Sparkles.Claims.SparklesResult.ForMedal(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.RatioMedal(booking.Score, 250.0 * (booking.DurationSec / 60.0) * booking.DiffMult)),
                         TimeSpan.FromSeconds(booking.DurationSec), new JObject { ["difficulty"] = booking.Difficulty }));
-                double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
+                double skillMult = global::ConditioningControlPanel.Models.SkillTreeRules.GetTotalXpMultiplier(CoreSettings.Current, DateTime.Now.Hour, 0.0);
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);

@@ -33,6 +33,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class SubliminalOverlay
     {
         private static readonly List<SubliminalOverlayWindow> Active = new();
+        private static object? _drawingOwner, _visibleOwner;
+        internal static void WithOwner(object owner, Action draw)
+        {
+            var previous = _drawingOwner;
+            try { _drawingOwner = owner; draw(); } finally { _drawingOwner = previous; }
+        }
+        internal static void CloseOwned(object owner) { if (ReferenceEquals(_visibleOwner, owner)) CloseAll(); }
         // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
         internal static event Action? Displayed;
         private static bool _warnedUnavailable;
@@ -92,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var retire in RetireHosted) retire();
             RetireHosted.Clear();
+            _visibleOwner = null;
             foreach (var w in Active.ToList()) w.Close();
         }
 
@@ -115,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (screens.Count == 0) return;
 
             ClearCards();
+            _visibleOwner = _drawingOwner;
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
@@ -176,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// visual envelope or its Stop lifecycle.</summary>
         internal static void Present(Window card, bool raiseBark = true)
         {
+            _visibleOwner = _drawingOwner;
             var stealsFocus = CoreSettings.Current.SubliminalStealsFocus;
             if (card is SubliminalOverlayWindow overlay)
             {
