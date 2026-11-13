@@ -13,6 +13,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -83,6 +84,14 @@ public partial class PresetsTabView
     {
         DetachCardSheen();
         DetachRowSweep();
+        if (VisualRoot is null) return;
+        RefreshPresetsList();
+        RepaintSessionRack();
+        if (_selectedPreset is { } preset && PresetDetailScroller.IsVisible)
+        {
+            TxtDetailTitle.Text = PresetNaming.DisplayName(preset);
+            TxtDetailSubtitle.Text = CoreMods.MakeModAware(preset.Description);
+        }
         RefreshCardSheen();
     });
 
