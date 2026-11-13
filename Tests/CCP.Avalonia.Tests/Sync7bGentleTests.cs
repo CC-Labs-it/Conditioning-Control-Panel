@@ -128,8 +128,10 @@ public sealed class Sync7bGentleTests
     {
         using var saved = new SettingsScope();
         EnsureApp();
-        CoreSettings.Current.GentleVisuals = gentle;
-        CoreSettings.Current.GentleFadeSeconds = 3;
+        var service = new SettingsService();   // GentleVisuals.On reads CoreSettings.Service
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.GentleVisuals = gentle;
+        service.Current.GentleFadeSeconds = 3;
         var w = new FlashOverlayWindow();
         try
         {
