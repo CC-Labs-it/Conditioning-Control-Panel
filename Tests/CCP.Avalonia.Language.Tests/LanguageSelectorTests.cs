@@ -481,6 +481,12 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        // A returning profile accepted the age gate. WPF App.xaml.cs:3412-3414 (the ladder's "age-gate" modal
+        // here) asks a Welcomed-but-unaccepted install: left unset, the gate came up mid-test once the ladder
+        // pumped and its default Cancel shut the app down under the Enter press. Accepted, WPF boots to the
+        // launcher unless Skip to panel is ticked (LauncherBoot.Decide); this test drives the panel.
+        settings.Current.HasAcceptedAgeVerification = true;
+        settings.Current.LauncherSkipToPanel = true;
         // This is a returning profile, so the one-time install-date repair has already run.
         settings.Current.InstallDate = "2021-01-01";
         // A current-version profile has no upgrade bookkeeping (WPF MainWindow.Marquee.cs:311-325).

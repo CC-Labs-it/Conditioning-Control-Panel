@@ -102,6 +102,8 @@
          Ship the overlay's promoted art at the same paths, including in single-file publishes. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\menu.png;..\ConditioningControlPanel\assets\Chaos\menu_1.png;..\ConditioningControlPanel\assets\Chaos\menu_2.png;..\ConditioningControlPanel\assets\Chaos\menu_3.png;..\ConditioningControlPanel\assets\Chaos\menu_4.png;..\ConditioningControlPanel\assets\Chaos\menu_5.png;..\ConditioningControlPanel\assets\Chaos\menu_6.png;..\ConditioningControlPanel\assets\Chaos\banner.png"
              Link="assets\Chaos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_logo_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_logo_fx.json" Link="assets\Chaos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_logo.png" Link="assets\Chaos\menu_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\recap.png" Link="assets\Chaos\recap.png"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
