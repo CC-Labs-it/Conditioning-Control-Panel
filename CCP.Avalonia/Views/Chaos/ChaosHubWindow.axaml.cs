@@ -2004,7 +2004,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// on this head: <c>SetChaosRunActive</c> on
         /// CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs (it has no such member yet) and
         /// an owner holding the live instance.</para></summary>
-        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) => FallIn();
+        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) { StopMenuMusic(); FallIn(); }
 
         private void Menu_Dollhouse_Click(object? sender, RoutedEventArgs e)
         {
@@ -2191,13 +2191,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // ============================ menu music ============================
 
-        /// <summary>WPF drove a NAudio loop with fades and a master-volume hook. There is still
-        /// no looping-audio capability on this head — <c>CoreAudio</c> is one-shot only — so the
-        /// track does not play. The MUTE STATE is real: read from and written to
-        /// <c>AppSettings.ChaosMenuMusicMuted</c>, so the icon is right the moment the hub opens
-        /// and the choice outlives the window, exactly as in WPF.
-        /// ponytail: needs a looping/fading audio seam for the track itself.</summary>
-        private void UpdateMuteIcon(bool muted) => _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
+        private void UpdateMuteIcon(bool muted)
+        {
+            _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
+            InitializeMenuMusic();
+        }
 
         private void BtnMenuMute_Click(object? sender, RoutedEventArgs e)
         {
@@ -2205,6 +2203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CoreSettings.Current.ChaosMenuMusicMuted = muted;
             CoreSettings.Save();
             UpdateMuteIcon(muted);
+            FadeMenuMusic(muted ? 0 : 0.5, 12);
         }
 
         // ============================ window chrome (move / fullscreen) ============================
