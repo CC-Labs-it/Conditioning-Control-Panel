@@ -92,6 +92,17 @@ test('panic pauses page audio and video and exits active fullscreen', async () =
     assert.equal(p.window._ccpTakeoverStopped, true);
 });
 
+test('panic exits a prefixed WebKit fullscreen too', () => {
+    let exits = 0;
+    const document = {
+        querySelectorAll: () => [],
+        webkitFullscreenElement: {},
+        webkitExitFullscreen: () => { exits++; },
+    };
+    runInNewContext(stopScript, { document, window: {} });
+    assert.equal(exits, 1);
+});
+
 test('panic prevents a late play promise or a later user play event from reopening fullscreen', async () => {
     let resolvePlay;
     const p = page({ deferredPlay: new Promise(resolve => { resolvePlay = resolve; }) });
