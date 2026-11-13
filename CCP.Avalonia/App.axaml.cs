@@ -150,6 +150,11 @@ namespace ConditioningControlPanel.Avalonia
             Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
+        internal static void WireRecoveredProfileRefresh(SyncPush sync, Func<Views.Windows.MainShellWindow?> shell)
+        {
+            sync.RecoveredProgressionChanged = () => Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -846,6 +851,7 @@ namespace ConditioningControlPanel.Avalonia
                     // MainWindow OnLevelUp -> sync, ProfileSyncService.AttachXpNudge outside sessions).
                     var sync = Platform.AccountSeed.Sync = Platform.AccountSeed.NewSync(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
+                    WireRecoveredProfileRefresh(sync, () => desktop.MainWindow as Views.Windows.MainShellWindow);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
                     sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
                         Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
