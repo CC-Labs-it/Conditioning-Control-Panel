@@ -1,6 +1,7 @@
 // Adapted from parity/trunk 447dfd0b10827ae3588c31c7ef53dd20c89adc10; reuse this head's VlcFrameSink.
 using System;
 using System.IO;
+using System.Collections.Generic;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Safety;
@@ -26,9 +27,9 @@ internal static partial class SpiralOverlay
     internal static Func<string, Action<Bitmap>, IDisposable?> VideoStart = (path, show) =>
         LibVlcAudio.Shared is { } vlc ? new VideoPlayer(vlc, path, show) : null;
 
-    private static void ShowVideoFrame(Bitmap frame)
+    private static void ShowVideoFrame(IReadOnlyList<SpiralOverlayWindow> windows, Bitmap frame)
     {
-        foreach (var window in Windows)
+        foreach (var window in windows)
         {
             window.Spiral.Source = frame;
             window.Spiral.InvalidateVisual();
@@ -39,8 +40,13 @@ internal static partial class SpiralOverlay
     {
         var player = _videoPlayer;
         _videoPlayer = null;
+        StopVideo(player, Windows);
+    }
+
+    private static void StopVideo(IDisposable? player, IEnumerable<SpiralOverlayWindow> windows)
+    {
         // Drop the UI references before freeing the sink's bitmap.
-        foreach (var window in Windows) window.Spiral.Source = null;
+        foreach (var window in windows) window.Spiral.Source = null;
         try { player?.Dispose(); }
         catch (Exception ex) { Log.Debug(ex, "Spiral: video stop failed"); }
     }
