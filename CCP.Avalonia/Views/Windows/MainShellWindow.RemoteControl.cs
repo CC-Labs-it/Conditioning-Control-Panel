@@ -4,7 +4,7 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session start, resume and stop, the directory opt-in chain, tray minimise
+// ponytail: still missing here - remote-driven session start and stop, the directory opt-in chain, tray minimise
 // for remote, the RemoteHud pill and remote
 // browser video playback and reveal.
 
@@ -55,6 +55,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
             r.SessionRunnerProvider = () => App.Sessions;
+            string? ResumeRemoteSession(Func<bool> stillCurrent)
+            {
+                if (LocalPanicHoldsSession) return "panic";
+                ResumeSessionFromRemote(stillCurrent);
+                return null;
+            }
+            r.ResumeSession = ResumeRemoteSession;
             EventHandler connected = (_, _) =>
             {
                 bool restore = r.IsActive && !r.ControllerConnected && CoreSettings.Current.StopEffectsOnRemoteDisconnect;
@@ -71,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 r.SessionsProvider = null;
                 r.SessionRunnerProvider = null;
+                if (r.ResumeSession == ResumeRemoteSession) r.ResumeSession = null;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;

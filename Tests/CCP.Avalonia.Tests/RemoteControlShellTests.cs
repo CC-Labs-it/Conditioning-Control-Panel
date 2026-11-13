@@ -198,6 +198,60 @@ public sealed class RemoteControlShellTests
         }
     });
 
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("leave")]
+    [InlineData("end")]
+    [InlineData("none")]
+    public Task Queued_remote_resume_waits_for_portal_and_is_cancelled(string interruption) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldRelay = RemoteControlTabView.Relay;
+        var oldSessions = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var oldPanic = CoreSettings.Current.PanicKeyEnabled;
+        var fake = new FakeRelay();
+        using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, fake) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        var shell = new MainShellWindow();
+        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+        var bind = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            runner.Start(new Session { Id = "delayed_remote", DurationMinutes = 30 });
+            runner.Pause();
+            CoreSettings.Current.PanicKeyEnabled = true;
+            global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.BindForTests = (_, _) => bind.Task;
+            Assert.Equal("ABC123", await relay.StartAsync("full"));
+            fake.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"resume_session\"}]}";
+            await relay.PollOnceAsync();
+            Assert.True(runner.IsPaused);
+            Assert.False(bind.Task.IsCompleted);
+            if (interruption == "panic") RemoteCommands.Execute("trigger_panic", null);
+            if (interruption == "leave")
+            {
+                fake.Poll = "{\"controller_connected\":false}";
+                await relay.PollOnceAsync();
+            }
+            if (interruption == "end") relay.EndSessionNow();
+            bind.SetResult("F8");
+            // Both BindPortalAsync and StartEffect post to the UI dispatcher.
+            await Task.Delay(150);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(interruption != "none", runner.IsPaused);
+        }
+        finally
+        {
+            bind.TrySetResult("F8");
+            global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.BindForTests = null;
+            runner.Stop(); CoreEngine.Stop();
+            global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
+            MainShellWindow.ReleasePortalWhenUnused();
+            CoreSettings.Current.PanicKeyEnabled = oldPanic;
+            global::ConditioningControlPanel.Avalonia.App.Sessions = oldSessions;
+            shell.Close();
+            RemoteControlTabView.Relay = oldRelay;
+        }
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now = 1_000_000;

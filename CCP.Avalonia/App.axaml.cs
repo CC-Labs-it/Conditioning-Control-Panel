@@ -917,7 +917,7 @@ namespace ConditioningControlPanel.Avalonia
                     SkillPurchase.Current.SkillUnlocked += (_, id) =>
                     {
                         Platform.BarkHead.Engine?.Raise("SkillUnlocked", c => c.Set("skill", id));
-                        if (id == Models.PinkRushRules.SkillId) Dispatcher.UIThread.Post(Views.Windows.PinkRushHost.Start);
+                        if (id == Models.PinkRushRules.SkillId) Dispatcher.UIThread.Post(Views.Windows.PinkRushHost.Arm);
                     };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");

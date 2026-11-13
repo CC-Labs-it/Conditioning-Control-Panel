@@ -65,7 +65,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ---- SUB-TABS (view-only, ported for real) --------------------------------
 
         private void OnJournalModChanged(object? sender, Models.ModPackage mod) =>
-            global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyBimboJournalModVisibility);
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                ApplyBimboJournalModVisibility();
+                RepaintQuestIfVisible();
+            });
 
         internal void ApplyBimboJournalModVisibility()
         {
