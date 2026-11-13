@@ -306,6 +306,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
             {
                 LibVlcAudio.ApplyPreferredDevice(live);
+                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("video", path, CoreEngine.IsRunning, false, DateTime.Now);   // WPF VideoService.cs:1697
                 live.SetRate(ConditioningControlPanel.Services.Video.MandatoryVideoPlaybackRules.PlaybackRate(
                     s.GentleVisuals, s.GentleSpeed));
                 _refreshFloating?.Invoke();
