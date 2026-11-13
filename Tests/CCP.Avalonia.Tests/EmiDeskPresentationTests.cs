@@ -72,7 +72,8 @@ public sealed class EmiDeskPresentationTests
         // Releasing the old press after the hand-off cannot count as a drop or a pat.
         desk.MouseUp(point, MouseButton.Left);
         Assert.False(moved);
-        Assert.Null(Field<ITimer?>(desk, "_landFace"));
+        // The trunk's land face is the "land" chain (EmiDeskWindow.Toss.cs LandChain), not a timer: no chain may run.
+        Assert.False(desk.ChainPlayer.IsLive);
         Assert.Null(Field<CancellationTokenSource?>(desk, "_squashAnim"));
         Assert.Equal(saved, (EmiState.Current.WinLeftPx, EmiState.Current.WinTopPx));
         await Task.CompletedTask;
@@ -149,8 +150,12 @@ public sealed class EmiDeskPresentationTests
         Clock.Advance(379);
         Assert.False(desk.FindControl<Grid>("BodyRoot")!.IsVisible);   // still the smoke lead
         Clock.Advance(850);
-        Assert.False(desk.PresentationArriving);
         Assert.False(desk.InputLocked);
+        // The wake chain runs on the real chain player clock (EmiDeskWindow.axaml.cs _player), not FxClock;
+        // ending it the way the chain's own completion does closes the arrival.
+        Assert.True(desk.ChainPlayer.IsLive);
+        desk.FinishSummon();
+        Assert.False(desk.PresentationArriving);
         Assert.True(desk.FindControl<Grid>("BodyRoot")!.IsVisible);
         // The CRT power-on tween itself runs on real dispatcher ticks, so its end size is not asserted here.
         desk.PresentAt(new Point(500, 400), 5, 8, "celebration", "^w^");
