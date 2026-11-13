@@ -69,7 +69,7 @@ public class ChaosBodyBuzzTests
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
             BubbleOverlay.Field.Bubbles.Add(outside);
             ChaosRunHost.BodyBuzz(source);
-            Assert.Equal("⚡ Körperkribbeln: der Strom breitet sich aus", state.RecentEvents[0]);
+            Assert.Equal("Körperkribbeln: der Strom breitet sich aus", state.RecentEvents[0]);
             Assert.Equal(8, ChaosRunHost.BodyBuzzHopCount);
             if (skia) Assert.Equal(1, ChaosSkiaFxOverlay.Active!.Fx.RippleCount);
             else Assert.Equal(1, ChaosFieldFxOverlay.Active!.Model.TransientCount);

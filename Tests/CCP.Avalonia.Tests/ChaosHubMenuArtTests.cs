@@ -40,8 +40,7 @@ public class ChaosHubMenuArtTests
             var brush = (global::Avalonia.Media.ImageBrush)Field("_menuBase");
             var transforms = (global::Avalonia.Media.TransformGroup)brush.Transform!;
             Assert.InRange(((global::Avalonia.Media.ScaleTransform)transforms.Children[0]).ScaleX, 1.034, 1.036);
-            var panel = (global::Avalonia.Controls.Border)Field("_menuArtPanel");
-            Assert.InRange(((global::Avalonia.Media.DropShadowEffect)panel.Effect!).BlurRadius, 29, 32);
+            // The WPF glow pulse is not ported (it animated a DropShadowEffect every frame, P82).
             hub.AdvanceMenuClick(10000);
             SetField("_menuFadeStart", Environment.TickCount64 - 275);
             Invoke("StepMenuMotion");

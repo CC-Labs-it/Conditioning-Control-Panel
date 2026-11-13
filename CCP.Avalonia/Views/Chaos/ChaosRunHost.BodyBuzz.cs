@@ -44,7 +44,9 @@ internal static partial class ChaosRunHost
         }
         if (bolts.Length > 0)
         {
-            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Strike(bolts);
+            // Gentle Visuals: the Skia bolt re-jitters every frame (flicker); the overlay path fades.
+            if (ChaosSkiaFxOverlay.Enabled && ConditioningControlPanel.Services.Safety.GentleVisuals.AllowFlicker)
+                ChaosSkiaFxOverlay.Strike(bolts);
             else ChaosEStimOverlay.Strike(bolts.Select(x => (new PixelPoint((int)x.From.X, (int)x.From.Y), new PixelPoint((int)x.To.X, (int)x.To.Y))).ToArray());
             var now = DateTime.UtcNow;
             if ((now - _lastBodyBuzzZap).TotalMilliseconds >= 140)
@@ -54,7 +56,7 @@ internal static partial class ChaosRunHost
             }
         }
         Pulse(Color.FromRgb(0x7A, 0xE0, 0xFF), 0.25);
-        _state.PushEvent($"⚡ {Loc.Get("chaos_body_buzz_spreads")}");
+        _state.PushEvent(Loc.Get("chaos_body_buzz_spreads"));   // no icon in code (IconEmojiRatchet)
     }
 
     internal static void ClearBodyBuzzHops()
