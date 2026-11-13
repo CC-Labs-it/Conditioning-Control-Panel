@@ -304,6 +304,56 @@ public sealed class SubliminalWhisperShowTests
         }
     });
 
+    [Fact]
+    public void Enhancement_custom_subliminal_passes_duration_and_suppresses_haptic() => With(true, 0.5, run =>
+    {
+        var old = (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, CoreProgression.AddXPProvider,
+            SubliminalWhisperShow.DrawWithDuration);
+        var settings = new ConditioningControlPanel.Models.HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        settings.V2.Provider("mock").Enabled = true;
+        settings.V2.Provider("buttplug").Enabled = false;
+        settings.V2.Provider("lovense").Enabled = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        using var haptics = new HapticService(settings);
+        CoreHaptics.Service = haptics;
+        Assert.True(haptics.ConnectAsync().GetAwaiter().GetResult());
+        var triggered = 0;
+        haptics.HapticTriggered += (_, _) => triggered++;
+        CoreProgression.AddXPProvider = (_, _) => { };
+        SubliminalWhisperShow.DrawWithDuration = (text, opacity, duration) => run.Log.Add($"{text}:{duration}");
+        try
+        {
+            using var source = new ConditioningControlPanel.Avalonia.Platform.Deeper.WebHostVideoTimeSource(new ConditioningControlPanel.Avalonia.Views.Controls.WebHost());
+            var dispatcher = new ConditioningControlPanel.Avalonia.Platform.Deeper.BrowserEnhancementDispatcher();
+            var ctx = new ConditioningControlPanel.Services.Deeper.EnhancementDispatchContext(new ConditioningControlPanel.Models.Deeper.Enhancement(), source, 0, null);
+            var effect = new ConditioningControlPanel.Models.Deeper.TriggerEffectAction { EffectType = ConditioningControlPanel.Models.Deeper.EffectTypes.Subliminal, Text = "Relax", DurationMs = 2400, SuppressHaptic = true };
+            dispatcher.DispatchAsync(effect, ctx).GetAwaiter().GetResult();
+            Assert.Equal("Relax:2400", Assert.Single(run.Log));
+            Assert.Equal(0, triggered);
+            Assert.Empty(run.Timers);
+            effect.SuppressHaptic = false;
+            dispatcher.DispatchAsync(effect, ctx).GetAwaiter().GetResult();
+            Assert.Equal(1, triggered);
+            Fire(run, haptics.SubliminalAnticipationMs);
+            Assert.Equal(2, run.Log.Count);
+        }
+        finally
+        {
+            haptics.PanicStop();
+            (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, CoreProgression.AddXPProvider,
+                SubliminalWhisperShow.DrawWithDuration) = old;
+        }
+    });
+
+    [Fact]
+    public void Subliminal_hold_uses_override_and_wpf_minimum()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(2400), SubliminalOverlay.Hold(85, 2400));
+        Assert.Equal(TimeSpan.FromMilliseconds(100), SubliminalOverlay.Hold(85, 30));
+        Assert.Equal(TimeSpan.FromMilliseconds(1445), SubliminalOverlay.Hold(85, null));
+    }
+
     /// <summary>A Stop that lands while the whisper is starting still silences it and drops its card.</summary>
     [Fact]
     public void Stop_racing_the_whisper_start_still_silences_it() => With(audible: true, roll: 0.5, run =>

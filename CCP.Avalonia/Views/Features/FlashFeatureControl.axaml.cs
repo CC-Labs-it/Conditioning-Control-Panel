@@ -46,6 +46,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkClickable.IsCheckedChanged += ChkClickable_Changed;
             ChkStayUntilPopped.IsCheckedChanged += ChkStayUntilPopped_Changed;
             ChkFlashShatter.IsCheckedChanged += ChkFlashShatter_Changed;
+            ChkJackpotRemix.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.JackpotRemixEnabled = ChkJackpotRemix.IsChecked == true;
+                CoreSettings.Save();
+            };
             CmbExit.SelectionChanged += CmbExit_Changed;
             ChkCorruption.IsCheckedChanged += ChkCorruption_Changed;
             ChkHydraLinked.IsCheckedChanged += ChkHydraLinked_Changed;
@@ -137,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkStayUntilPopped.IsChecked = s.FlashStayUntilPopped;
                 BuildExitPicker(s.FlashExitStyle);
                 ChkFlashShatter.IsChecked = s.FlashShatterEnabled;
+                ChkJackpotRemix.IsChecked = s.JackpotRemixEnabled;
                 RefreshExitRow();
                 ChkCorruption.IsChecked = s.CorruptionMode;
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
@@ -176,9 +183,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// no motion, rounded corners, draggable, Shatter or Get it row is left.</summary>
         private void RefreshV2Box()
         {
+            RowJackpotRemix.IsVisible = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.JackpotRemix);
             RowRoundedCorners.IsVisible = RowMotion.IsVisible;
             RowDraggable.IsVisible = RowMotion.IsVisible;
-            BoxFlashV2.IsVisible = RowMotion.IsVisible || RowShatter.IsVisible || !RowGetFlashesV2.IsRowHidden;
+            BoxFlashV2.IsVisible = RowMotion.IsVisible || RowShatter.IsVisible || RowJackpotRemix.IsVisible || !RowGetFlashesV2.IsRowHidden;
         }
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
@@ -270,6 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.FlashStayUntilPopped) ||
                 e.PropertyName == nameof(AppSettings.FlashExitStyle) ||
                 e.PropertyName == nameof(AppSettings.FlashShatterEnabled) ||
+                e.PropertyName == nameof(AppSettings.JackpotRemixEnabled) ||
                 e.PropertyName == nameof(AppSettings.CorruptionMode) ||
                 e.PropertyName == nameof(AppSettings.HydraLinkedTiming) ||
                 e.PropertyName == nameof(AppSettings.FlashGlowEnabled) ||

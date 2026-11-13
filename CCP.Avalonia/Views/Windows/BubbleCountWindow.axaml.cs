@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             // Register window
-            _allWindows.Add(this);
+            _allWindows.Add(this); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
 
             // Start when opened
             Opened += OnOpened;
@@ -245,13 +245,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _isCleaningUp = false;
             }
             var orphanWindows = _allWindows.ToList();
-            _allWindows.Clear();
+            StopPlayer();
+            _allWindows.Clear(); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
             _sharedBubbleCount = 0;
             _sharedTargetCount = 0;
 
             // Only reachable when a previous game threw partway through its show/teardown;
             // normally the list is already empty.
-            StopPlayer();
             foreach (var window in orphanWindows)
             {
                 try
@@ -323,7 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 StopPlayer();
                 var windowsCopy = _allWindows.ToList();
-                _allWindows.Clear();
+                _allWindows.Clear(); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
                 foreach (var window in windowsCopy)
                 {
                     try
@@ -348,6 +348,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// Check if any bubble count window is currently open
         /// </summary>
+        private static int _videoWindowCount;
+        internal static bool VideoSessionActive => System.Threading.Volatile.Read(ref _videoWindowCount) > 0;
         public static bool IsAnyOpen() => _allWindows.Count > 0;
         internal static IReadOnlyList<BubbleCountWindow> OpenWindows => _allWindows;
         internal Image VideoImage => _videoImage;
@@ -828,7 +830,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 StopPlayer();
                 var windowsCopy = _allWindows.ToList();
-                _allWindows.Clear();
+                _allWindows.Clear(); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
                 foreach (var window in windowsCopy)
                 {
                     try
@@ -855,10 +857,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         protected override void OnClosed(EventArgs e)
         {
             _allWindows.Remove(this);
-            if (_isPrimary && !_gameCompleted && !_isCleaningUp) CloseAllWindows(false);
             _closed = true;
             _browser?.Dispose();
             _browser = null;
+            if (_isPrimary && !_gameCompleted && !_isCleaningUp) CloseAllWindows(false);
             _safetyTimer?.Stop();
             _safetyTimer = null;
             _bubbleSpawnTimer?.Stop();
@@ -874,7 +876,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             _activeBubbles.Clear();
 
-            _allWindows.Remove(this);
+            _allWindows.Remove(this); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
 
             base.OnClosed(e);
         }
