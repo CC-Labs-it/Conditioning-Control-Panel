@@ -17,7 +17,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         {
             var fill = this.FindControl<Border>("ProgressFill");
             var text = this.FindControl<TextBlock>("TxtProgress");
-            if (fill is not null) fill.Width = System.Math.Clamp(fraction, 0, 1) * trackWidth;
+            // The caller passes the inner Grid width (track minus its 2 px padding each side). WPF
+            // UpdateProgressDialog.xaml.cs:23-28 fills the track's ActualWidth - 6, so 2 px less than that,
+            // and paints nothing while there is no room.
+            if (fill is not null && trackWidth > 2)
+                fill.Width = System.Math.Clamp(fraction, 0, 1) * (trackWidth - 2);
             if (text is not null) text.Text = $"{System.Math.Clamp(fraction, 0, 1) * 100:0}%";
         }
     }
