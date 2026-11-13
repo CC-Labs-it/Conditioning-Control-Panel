@@ -4,6 +4,7 @@ using System.IO;
 using System.Text.Json;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using OpenCvSharp;
 using Xunit;
 
@@ -102,6 +103,50 @@ public sealed class WindowsCaptureTests
         Assert.False(source.Open(0, false, true));
         Assert.Equal(1, creates);
         Assert.True(handle.Disposed);
+    }
+
+    // WPF WebcamTrackingService.cs:1540-1556: an exhausted ladder that opened the device but never
+    // got a usable frame is "in use"; one where no backend opened it is "denied".
+    [Theory]
+    [InlineData("closed", false, WebcamTrackingState.CameraDenied)]
+    [InlineData("flat", true, WebcamTrackingState.CameraInUse)]
+    [InlineData("empty", true, WebcamTrackingState.CameraInUse)]
+    public void ExhaustedLadderTellsDeniedFromUnusableFeed(string mode, bool anyOpened, WebcamTrackingState expected)
+    {
+        long ms = 0;
+        using var source = new OpenCvFrameSource
+        {
+            Now = () => DateTime.UnixEpoch.AddMilliseconds(ms), Delay = n => ms += n,
+            Create = (_, _) => new Capture(mode)
+        };
+        Assert.False(source.Open(0, false, true));
+        Assert.Equal(anyOpened, source.AnyOpened);
+        Assert.Equal(expected, WebcamTracker.FailedOpenState(source));
+    }
+
+    [Fact]
+    public void EachOpenStartsAFreshInUseReading()
+    {
+        long ms = 0;
+        string mode = "flat";
+        using var source = new OpenCvFrameSource
+        {
+            Now = () => DateTime.UnixEpoch.AddMilliseconds(ms), Delay = n => ms += n,
+            Create = (_, _) => new Capture(mode)
+        };
+        Assert.False(source.Open(0, false, true));
+        Assert.True(source.AnyOpened);
+        mode = "closed";
+        Assert.False(source.Open(0, false, true));
+        Assert.False(source.AnyOpened);
+        Assert.Equal(WebcamTrackingState.CameraDenied, WebcamTracker.FailedOpenState(new ClosedOnly()));
+    }
+
+    private sealed class ClosedOnly : IFrameSource
+    {
+        public bool Open() => false;
+        public bool Read(Mat bgr) => false;
+        public void Dispose() { }
     }
 
     [Fact]
