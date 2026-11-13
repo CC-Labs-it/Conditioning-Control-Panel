@@ -229,6 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public EnhancementPlayerWindow(Enhancement? enhancement, string? sourceTag)
         {
             AvaloniaXamlLoader.Load(this);
+            InitializeWindowBounds();
 
             // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
             // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
