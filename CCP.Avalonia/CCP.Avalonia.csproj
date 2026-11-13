@@ -39,26 +39,26 @@
     <Compile Include="..\ConditioningControlPanel\Services\Subliminal\SubliminalOverVideo.cs" Link="Services\Subliminal\SubliminalOverVideo.cs" />
     <!-- The audio player's order rules (list, loop, shuffle): no UI, no audio, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\AudioPlayer\AudioPlaylistRules.cs" Link="Services\AudioPlayer\AudioPlaylistRules.cs" />
-    <PackageReference Include="Avalonia" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
     <!-- Renders the real window offscreen so CI can prove the Linux head DRAWS, not just boots.
          A desktop screenshot cannot run on a headless runner; this can. -->
-    <PackageReference Include="Avalonia.Headless" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Skia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.6" />
     <!-- The Linux/Windows web view. Wraps WebKitGTK on Linux and WebView2 on Windows, so the
          WPF head's Microsoft.Web.WebView2 dependency does not follow us across. Only Views/Controls/WebHost
          touches it, and that control draws a fallback panel wherever no web view exists. -->
     <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.1" />
     <!-- ColorView, the inline colour panel behind ColorPickerDialog. WPF opened
          System.Windows.Forms.ColorDialog; this is the cross-platform twin. PINNED to the same
-         12.1.5 as Avalonia itself - a control package built against a different Avalonia minor
+         12.1.6 as Avalonia itself - a control package built against a different Avalonia minor
          throws at attach, which no compiler catches. -->
-    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.6" />
     <!-- Fluent UI System Icons (docs/avalonia-decisions.html, 2026-10-10). Only Controls/Icons/* may
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
-         IconGlyphRenderTests proves it draws on 12.1.5 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
+         IconGlyphRenderTests proves it draws on 12.1.6 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the

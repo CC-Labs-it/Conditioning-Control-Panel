@@ -12,6 +12,10 @@ public sealed class RainTypeIsolationTests
     [InlineData("RainLookHash")]
     [InlineData("RainPackSink")]
     [InlineData("RainStripFrames")]
+    [InlineData("RainLookSync")]
+    [InlineData("RainLookClamp")]
+    [InlineData("RainItemAccess")]
+    [InlineData("RainItemManifest")]
     public void CoreDoesNotShadowTheWpfRainContract(string typeName)
         => Assert.Null(typeof(CoreSettings).Assembly.GetType(
             "ConditioningControlPanel.Services.Companion." + typeName));
