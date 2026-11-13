@@ -114,6 +114,34 @@ public sealed class PossessionRuntimeTests
     });
 
     [Fact]
+    public Task TaggedLockdownTimerWobblesWithoutChangingItsValue() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var timer = new TextBlock { Name = "TxtLockdownTimer", Text = "09:59", Width = 80, Height = 30 };
+        var card = new Border { Name = "LockdownCardBorder", Child = timer };
+        var win = Host(card);
+        try
+        {
+            var frames = new FakeFrames();
+            var rt = new PossessionRuntime(frames, rng: new Random(3));
+            var target = new PossessionHeadTarget(timer, PossessionRole.Timer, "timer");
+            Assert.True(rt.TryApply(new WobbleHeadEffect(), target));
+            frames.Frame(TimeSpan.FromMilliseconds(1000));
+            frames.Frame(TimeSpan.FromMilliseconds(1200));
+            Assert.NotEqual(Matrix.Identity, timer.RenderTransform!.Value);
+            Assert.Equal("09:59", timer.Text);
+            rt.UndoAll();
+            PossessionTree.SetExclude(card, true);
+            Assert.False(rt.TryApply(new WobbleHeadEffect(), target));
+            PossessionTree.SetExclude(card, false);
+            card.IsVisible = false;
+            Assert.False(rt.TryApply(new WobbleHeadEffect(), target));
+            Assert.Equal("09:59", timer.Text);
+        }
+        finally { win.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PanicRestoresEveryTouchedControlAtOnce() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
