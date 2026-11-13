@@ -2014,6 +2014,7 @@
   "setting_auto_connect_on_startup": "시작 시 자동 연결",
   "tooltip_automatically_connect_to_your_haptic_device_w": "앱 시작 시 햅틱 장치에 자동으로 연결해요",
   "label_status": "상태:",
+  "label_browser_crashed_restart": "브라우저가 중단됨 - 사이트를 선택하여 다시 시작",
   "label_disconnected": "연결 해제됨",
   "label_no_devices": "장치 없음",
   "label_intensity": "강도:",

@@ -22,6 +22,22 @@ public sealed class PanicLeftoversTests
     private static readonly DateTime T0 = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
+    public Task EmergencyTeardownStopsAudioPlaylist() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var slot = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("AudioPlaylist")!;
+        var previous = slot.GetValue(null);
+        var playlist = new AudioPlaylistCardModelTests.FakePlaylist { IsPlaying = true };
+        slot.SetValue(null, playlist);
+        try
+        {
+            await Task.Run(PanicWatchdog.Teardown);
+            await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { });
+            Assert.False(playlist.IsPlaying);
+        }
+        finally { slot.SetValue(null, previous); }
+    });
+
+    [Fact]
     public async Task WatchdogLeavesAThrownHandlerAlone()
     {
         // WPF's watchdog only observes a fault, and the fallback is for a UI thread that never answered.
