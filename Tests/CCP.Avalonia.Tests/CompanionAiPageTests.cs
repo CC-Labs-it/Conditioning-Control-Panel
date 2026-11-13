@@ -2,6 +2,9 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -57,7 +60,11 @@ public sealed class CompanionAiPageTests
             var engine = room.FindControl<EngineRoomDrawer>("EngineZone")!;
             var diary = room.FindControl<MemoryDiaryView>("MemoryZone")!;
             Control[] zones = { engine, workshop.Parts.Behavior, workshop.Parts.Triggers, diary };
-            shell.ShowTab("companionai");
+            // WPF MainWindow.CompanionTabs.cs:20 and SectionTabStrip.xaml.cs:228, :629:
+            // the visible AI pill has a leading glyph and opens the registered page.
+            var aiPill = shell.PageStrip!.PillFor("companionai")!;
+            Assert.Single(aiPill.GetLogicalDescendants().OfType<IconGlyph>());
+            aiPill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.True(page.IsVisible);
             Assert.Equal("companionai", shell.CurrentTab);
@@ -68,6 +75,16 @@ public sealed class CompanionAiPageTests
             // The section strip draws the pill (it only draws pages this head can open).
             var strip = shell.PageStrip!;
             Assert.Contains(strip.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("label_ai_badge"));
+
+            // WPF AiPage.xaml:30-32 and AiPage.xaml.cs:26-28: name, recap, then diary;
+            // every visit rebuilds the first two so an account change cannot leave stale editors.
+            var nameHost = page.FindControl<ContentControl>("NameHost")!;
+            var recapHost = page.FindControl<ContentControl>("RecapHost")!;
+            var memoryHost = page.FindControl<ContentControl>("MemoryHost")!;
+            var name = Assert.IsType<PreferredNameEditor>(nameHost.Content);
+            var recap = Assert.IsType<ConversationRecap>(recapHost.Content);
+            var memoryStack = Assert.IsType<StackPanel>(nameHost.Parent);
+            Assert.Equal(new Control[] { nameHost, recapHost, memoryHost }, memoryStack.Children.Skip(2));
 
             // Leaving keeps them (the room is collapsed) and disarms an armed forget (WPF OnHidden).
             typeof(DiaryForgetConfirm).GetProperty(nameof(DiaryForgetConfirm.IsArmed))!.SetValue(diary.ForgetConfirm, true);
@@ -84,6 +101,10 @@ public sealed class CompanionAiPageTests
             Dispatcher.UIThread.RunJobs();
             Assert.All(zones, z => Assert.True(page.IsVisualAncestorOf(z)));
             Assert.True(((EngineRoomVm)engine.DataContext!).IsExpanded);
+            Assert.IsType<PreferredNameEditor>(nameHost.Content);
+            Assert.IsType<ConversationRecap>(recapHost.Content);
+            Assert.NotSame(name, nameHost.Content);
+            Assert.NotSame(recap, recapHost.Content);
             await System.Threading.Tasks.Task.CompletedTask;
         }
         finally

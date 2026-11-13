@@ -77,6 +77,25 @@ public sealed class LobbyPollTests {
         await round; Assert.Equal(LobbySnapshot.Empty, lobby.Snapshot);
         lobby.Dispose(); timer.Fire(); await lobby.RefreshAsync(); Assert.Equal(1, changed);
     }
+    [Fact]
+    public async Task RaceRoomsJoinTheRoundAndAnsweringRaceKeepsTheRoundOk() {
+        var timer = new Timer(); var raceCalls = 0;
+        using var lobby = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+            () => throw new Exception(), () => throw new Exception(),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)),
+            () => { raceCalls++; return Task.FromResult(new RaceOpenReply(new[] { new RaceOpenRoom("room1", "threshold", "Host", 4, 1, 3, false, null, false) }, true)); });
+        await lobby.RefreshAsync();
+        Assert.Equal(1, raceCalls);
+        Assert.True(lobby.LastRoundOk);
+        var row = Assert.Single(lobby.Snapshot.Open);
+        Assert.Equal(LobbyGame.Race, row.Game); Assert.Equal("room1", row.Key);
+        using var faulty = new LobbyPoll(new Timer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)),
+            () => throw new Exception());
+        await faulty.RefreshAsync();
+        Assert.False(faulty.LastRoundOk); Assert.True(faulty.Snapshot.IsEmpty);
+    }
     private sealed class DirectoryHandler : HttpMessageHandler {
         public bool Fail;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
