@@ -8445,6 +8445,7 @@
   "chaos_expiry_label": "VERBLASST",
   "chaos_expiry_halved": "💨 {0} verblasst… Serie halbiert auf x{1}",
   "chaos_expiry_gone": "💨 {0} ist verblasst",
+  "chaos_aftermath_event": "⚡ Nachwirkung: die Luft knistert noch",
   "chaos_expiry_name_lucky": "Glücksblase",
   "chaos_expiry_name_flash": "Blitz",
   "chaos_expiry_name_subliminal": "Subliminal",

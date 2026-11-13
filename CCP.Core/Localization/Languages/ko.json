@@ -8445,6 +8445,7 @@
   "chaos_expiry_label": "사라짐",
   "chaos_expiry_halved": "💨 {0}이 사라짐… 연속 기록이 x{1}로 절반 감소",
   "chaos_expiry_gone": "💨 {0}이 사라짐",
+  "chaos_aftermath_event": "⚡ 여파: 공기가 아직 찌릿하다",
   "chaos_expiry_name_lucky": "행운의 방울",
   "chaos_expiry_name_flash": "플래시",
   "chaos_expiry_name_subliminal": "서브리미널",

@@ -246,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _chaosOpenedWindows = false;
             ChaosRipples.Clear();
+            ChaosResidues.Clear();
             _oneShotWindows = false;
             _running = false;
             _pending = false;
@@ -365,6 +366,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 if (age >= 550) ChaosRipples.RemoveAt(i);
                 else ChaosRipples[i] = (center, age);
+            }
+        }
+
+        // WPF BubbleService.cs:1680-1685, 1729-1737, 1786-1802 (hand-ported from #3502): Aftermath
+        // residue, a 2 s zone where treats drifting through pop and lives snap, with a small strike
+        // from the zone to each victim. Expiry is wall time; a held field neither pops nor ages it.
+        internal const double ResidueRadiusPx = 170, ResidueLifeMs = 2000;
+        private static readonly List<(Point Center, DateTime Until)> ChaosResidues = new();
+        internal static int ChaosResidueCount => ChaosResidues.Count;
+
+        internal static void AddChaosResidue(AmbientBubble b)
+        {
+            if (_chaosPopped == null) return;
+            var center = CenterPx(b);
+            ChaosResidues.Add((center, Field.Clock().AddMilliseconds(ResidueLifeMs)));
+            ChaosFieldFxOverlay.Residue(center, ResidueRadiusPx, ResidueLifeMs);
+            RequestFrame();
+        }
+
+        internal static void TickChaosResidues()
+        {
+            if (Field.HoldChaos || _chaosPopped == null) return;
+            var now = Field.Clock();
+            for (int i = ChaosResidues.Count - 1; i >= 0; i--)
+            {
+                if (i >= ChaosResidues.Count) continue;   // a pop callback cleared the field
+                var (center, until) = ChaosResidues[i];
+                if (now >= until) { ChaosResidues.RemoveAt(i); continue; }
+                foreach (var b in Field.Bubbles.ToArray())
+                {
+                    // WPF :1794 skips darters and freeze pickups; Pop() itself keeps Tease/Brittle immune.
+                    if (b.Popping || b.AmbientTrigger || b.Spec is not { } spec || spec.IsDarter || spec.IsFreeze
+                        || spec.IsTease || spec.IsBrittle || !Field.Bubbles.Contains(b)) continue;
+                    var point = CenterPx(b);
+                    double dx = point.X - center.X, dy = point.Y - center.Y;
+                    if (dx * dx + dy * dy > ResidueRadiusPx * ResidueRadiusPx) continue;
+                    if (IsShielded(b)) { BounceShield(b); continue; }
+                    if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Strike(new[] { (center, point) });
+                    else ChaosEStimOverlay.Strike(new[] { (new PixelPoint((int)center.X, (int)center.Y),
+                        new PixelPoint((int)point.X, (int)point.Y)) });
+                    if (b.IsLiveThreat) { if (b.Snap()) Field.ChaosDefused?.Invoke(b); }
+                    else PopChaos(b);
+                    if (_chaosPopped == null) return;   // the callback ended the run
+                }
             }
         }
 
@@ -560,6 +605,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Held = false;
             Field.Bubbles.Clear();
             ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
+            ChaosResidues.Clear();
             _hoverScreen = -1;
             foreach (var w in Windows) w.Sync();
             RequestFrame();
@@ -573,6 +619,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.FreezeChaos = false;
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
+            ChaosResidues.Clear();   // WPF EndChaosMode :2069
             ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -839,10 +886,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 PruneTeaseFaces();
                 TickChaosRipples();
                 StepPlayerRipples();
+                TickChaosResidues();
                 ChaosRunHost.RefreshRippleInput();
                 foreach (var w in Windows) w.Sync();
                 if (Stats) Sample(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
-                if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0 && PlayerRipples.Count == 0)
+                if (Field.Bubbles.Count == 0 && ChaosRipples.Count == 0 && PlayerRipples.Count == 0
+                    && ChaosResidues.Count == 0)
                 {
                     _lastStep = null;
                     if (_oneShotWindows && _chaosPopped == null) Stop();

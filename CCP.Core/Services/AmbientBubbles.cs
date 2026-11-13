@@ -152,7 +152,7 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping || !IsLiveThreat) return false;
             Channeling = false;
-            Popping = Deflating = true;
+            Popping = true;   // WPF BubbleService.cs:4672,3786: a swept Pop bursts; only a held defuse deflates (#3502).
             return true;
         }
 

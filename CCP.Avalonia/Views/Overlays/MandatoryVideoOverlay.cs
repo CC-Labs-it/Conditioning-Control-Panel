@@ -553,11 +553,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 void Kick()
                 {
                     if (!video.IsVisible) return;
-                    Chaos.ChaosRunHost.RaiseDvdAboveVideo();
-                    // WPF ChaosModeService.cs:761 lists the kept-alive E-Stim windows too: un-hiding
-                    // never re-stacks them, so a video would bury the bolts (restack b120, #3501).
-                    Chaos.ChaosEStimOverlay.RaiseActive();
-                    Chaos.ChaosRunHost.KeepChromeTopmost(() =>
+                    // WPF RaiseGameLayerAboveVideo: the whole game layer, chrome included (#4245), E-Stim
+                    // bolts and halo too (WPF ChaosModeService.cs:761, restack b120 #3501).
+                    Chaos.ChaosRunHost.RaiseGameLayerAboveVideo(() =>
                     {
                         if (watch != null && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
                             Chaos.ChaosWaveTimerWindow.RaiseActive();
