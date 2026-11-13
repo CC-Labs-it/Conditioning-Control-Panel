@@ -170,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("friend-notices", _ => Overlays.FriendNotices.CloseAll(fold: true)), // P06, same fold as knock cards; WPF FriendsLanding.cs:66
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
             new("gaze-debug-cursor", _ => Overlays.GazeDebugCursor.CloseActive()),
+            new("gaze-refine", _ => global::ConditioningControlPanel.Avalonia.Platform.GazeFocus.CloseRefineForPanic()), // stricter than WPF: the camera stop is last and fire-and-forget
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("mod-creator-preview", _ => ModCreatorWindow.StopPreviewsForPanic()), // Creator-owned audio, like close/reset; stricter than WPF.
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)

@@ -182,6 +182,7 @@ public sealed class PanicSurfacesTests
         "discord-share-prompt",
         "friend-notices", "knock-cards",
         "gaze-debug-cursor",
+        "gaze-refine",
         "quick-recal",
         "mod-creator-preview",
         "asset-preview",

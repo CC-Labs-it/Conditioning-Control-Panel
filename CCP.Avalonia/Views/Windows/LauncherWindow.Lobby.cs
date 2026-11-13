@@ -170,7 +170,11 @@ public partial class LauncherWindow
         if (!string.IsNullOrEmpty(url) && !token.IsCancellationRequested && !MainShellWindow.LockdownActive) OpenLobbyUrl(url);
         _ = _lobby?.RefreshAsync();
     }
-    internal static void CancelLobbyClaimForPanic() => Instance?.CancelLobbyClaim();
+    internal static void CancelLobbyClaimForPanic()
+    {
+        Instance?.CancelLobbyClaim();
+        Instance?._lobbyDrop?.Close();   // like launcher-notes and launcher-friends: no join card survives a panic
+    }
 
     private void CancelLobbyClaim()
     {

@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// or blinking while looking near it, pops it through the bubble's own pop pipeline (sound, XP,
     /// quests, haptics). Follows the camera, never powers it (WPF EvaluateDesiredState).
     ///
-    /// <para>The debug cursor remains unported.</para>
+    /// <para>The debug cursor lives in Views/Overlays/GazeDebugCursor.cs.</para>
     ///
     /// <para>Coordinates: OnGazeMove is GAZE space (DIPs local to the calibrated monitor); bubbles are
     /// global DIPs (screen px / scaling). The conversion is the calibrated monitor's origin, a pure
@@ -455,6 +455,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             _cooldownUntil = now.AddMilliseconds(CooldownMs);
         }
+
+        /// <summary>Panic: the refine panel shows flash previews, so it goes before the camera stop reaches it.</summary>
+        internal static void CloseRefineForPanic() => Instance.CloseRefine(true);
 
         private void CloseRefine(bool suppress)
         {

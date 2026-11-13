@@ -90,7 +90,7 @@ internal sealed class GazeRefineOverlay : Window
         Width = right - left; Height = bottom - top;
         DesiredPosition = new PixelPoint((int)Math.Round(left * scale), (int)Math.Round(top * scale));
         EscapeBounds = new Rect(left - 140, top - 140, Width + 280, Height + 280);
-        var canvas = new Canvas { Width = Width, Height = Height, IsHitTestVisible = false, Opacity = 0, Transitions = new global::Avalonia.Animation.Transitions { new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(130) } } };
+        var canvas = new Canvas { Width = Width, Height = Height, IsHitTestVisible = false, Opacity = 0, Transitions = new global::Avalonia.Animation.Transitions { new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(130)) } } };
         canvas.Children.Add(new Border { Width = Width, Height = Height, CornerRadius = new CornerRadius(22), Background = new SolidColorBrush(Color.FromArgb(238, 26, 26, 46)), BorderBrush = Brushes.HotPink, BorderThickness = new Thickness(2) });
         var caption = new TextBlock { Text = Loc.Get("gaze_refine_prompt"), Foreground = Brushes.White, Width = Width, FontSize = 14, TextAlignment = TextAlignment.Center };
         Canvas.SetTop(caption, 10); canvas.Children.Add(caption);
