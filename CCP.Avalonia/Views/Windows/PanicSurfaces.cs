@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("haptics", _ => { try { CoreHaptics.Service?.FunScript.OnVideoStopped(); } finally { CoreHaptics.Service?.PanicStop(); } }),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
+            new("wallpaper", sh => { _ = Platform.WallpaperHead.Service?.DeactivateAsync(); }, After: ["takeover"]),
             // WPF RunPanicStopTail StopEngine/StopAdHocEffects: pauses a running session; OnEngineStopped
             // then ends Takeover pulses, desktop overlays (subliminal/whisper, mind wipe, spiral, video,
             // bubbles, pink filter), pop quizzes and open lock cards.
@@ -121,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
-            new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
+            new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.SpiralOverlay.CloseAll(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => { Overlays.FlashOverlay.CloseAll(final: false); ConditioningControlPanel.Services.Flash.RemoteFlashSource.CleanupCache(); }), // Includes standalone pops and mid-Shatter exits.
             new("brain-drain-audio", _ => Platform.BrainDrainPlayer.Instance?.Stop()),
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.

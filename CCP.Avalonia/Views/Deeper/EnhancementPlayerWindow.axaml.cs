@@ -974,15 +974,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void SliderVolume_PropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != RangeBase.ValueProperty) return;
-            _volumeBeforeMute = null;
-            // WPF EnhancementPlayerWindow.xaml.cs:1017-1025.
+            // WPF EnhancementPlayerWindow.xaml.cs:1017-1029: a hand-moved slider ends a mute, the
+            // value reaches the page's video too, and a muted 0 is never persisted.
+            if (!_muteChanging) _volumeBeforeMute = null;
             if (_localAudio != null) _localAudio.Volume = (int)_sliderVolume.Value;
+            if (_isVideoMode && _videoNavigated && !_pollDisabled)
+                _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(VideoVolumeScript()));
             var volume = (int)_sliderVolume.Value;
-            if (CoreSettings.Current.DeeperPlayerVolume != volume)
+            if (_volumeBeforeMute == null && CoreSettings.Current.DeeperPlayerVolume != volume)
             {
                 CoreSettings.Current.DeeperPlayerVolume = volume;
                 CoreSettings.Save();
             }
+        }
+
+        // WPF xaml.cs:1025,1431,1841 set the slider's volume on the video source at bind time and on
+        // every NavigationCompleted. There is no navigation event here, so the poll carries it: the
+        // stamp lives on the element, which a new page or a late-mounted player starts without.
+        private string VideoVolumeScript()
+        {
+            var v = (_sliderVolume.Value / 100.0).ToString("0.###", CultureInfo.InvariantCulture);
+            return "l.volume=" + v + ";l._ccpVol=" + v + ";";
         }
 
         // ====================================================================================
@@ -1030,7 +1042,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var load = _videoLoad;
             try
             {
-                var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.ReadTime());
+                var v = (_sliderVolume.Value / 100.0).ToString("0.###", CultureInfo.InvariantCulture);
+                var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.LargestVideo(
+                    "if(l._ccpVol!==" + v + "){" + VideoVolumeScript() + "}"
+                    + "return l.currentTime+'|'+(l.duration||0)+'|'+(l.paused?0:1);"));
 
                 if (load != _videoLoad || _pollDisabled || !_videoNavigated) return;
                 var parts = DeeperPreview.Unquote(raw).Split('|');
@@ -1273,7 +1288,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // the moment zoom is real. Same call and same reason in DeeperEditorWindow.axaml's
             // PreviewZoomCluster.
             _browserZoomCluster.IsVisible = false;
-            _volumePanel.IsVisible = !isVideo;
+            // WPF xaml.cs:1361-1364: volume stays up in video mode, the slider drives the page's video.
+            _volumePanel.IsVisible = true;
             _btnPictureInPicture.IsVisible = isVideo;
         }
 

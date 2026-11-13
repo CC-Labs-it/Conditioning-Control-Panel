@@ -4,9 +4,11 @@
 // Programs tab's own layer (ProgramsTabView.CompletionFx QueueProgramBurst), so it is not fired here.
 // EventBurstLayer carries the shared particle/focus gates and native-pixel anchoring.
 // WPF MainWindow.EventFx.cs:249,276. Quest nav fallback already lives in MainShellWindow.Quests.cs.
-// Enhancement purchase/prestige and THE BANK remain separate follow-up work.
+// THE BANK remains separate follow-up work.
 
 using System;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -20,6 +22,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private readonly EventBurstLayer _eventBursts = new();
         private bool _eventFxClosed;
+        private BeatLoop? _prestigeSheenBeat;
+
+        internal void CelebrateEnhancementPurchase(Control? node, Control? prestigeRow, long rankBefore)
+        {
+            if (_eventFxClosed) return;
+            var fallback = NavAnchorForTab("enhancements");
+            if (node == null || !_eventBursts.Fire(node, 100)) FireEventBurst(fallback, 100);
+            var rank = 1 + (App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0) / 100;
+            if (rank <= rankBefore || !Env.AllowFeedbackParticles || !IsActive || WindowState == WindowState.Minimized) return;
+            if (prestigeRow == null || !_eventBursts.Fire(prestigeRow, 150, color: Env.GlowColor)) FireEventBurst(fallback, 150, color: Env.GlowColor);
+            var host = Named<Grid>("EventFxHost");
+            var band = Named<Border>("PrestigeSheen");
+            var slide = (band?.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault();
+            if (host == null || band == null || slide == null || host.Bounds.Width <= 0) return;
+            ParkPrestigeSheen();
+            _prestigeSheenBeat = new BeatLoop(band, seconds =>
+            {
+                if (!IsActive || WindowState == WindowState.Minimized || !Env.AllowFeedbackParticles) { ParkPrestigeSheen(); return; }
+                var progress = Math.Clamp(seconds / 1.15, 0, 1);
+                SheenAt(host.Bounds.Width, band, slide, progress, 0.16);
+                if (progress >= 1) ParkPrestigeSheen();
+            }) { OnParked = ParkPrestigeSheen };
+            _prestigeSheenBeat.Start();
+        }
+
+        private void ParkPrestigeSheen()
+        {
+            _prestigeSheenBeat?.Stop();
+            _prestigeSheenBeat = null;
+            if (Named<Border>("PrestigeSheen") is not { } band) return;
+            band.Opacity = 0;
+            if ((band.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault() is { } slide) slide.X = 0;
+        }
 
         private void InitializeEventFx()
         {
@@ -60,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Stricter than WPF: panic stops even transient sparks (MainWindow.xaml.cs:1954).
         internal void StopEventFx()
         {
+            ParkPrestigeSheen();
             _eventBursts.Stop();
             _questCompletionBurst.Stop();
         }
