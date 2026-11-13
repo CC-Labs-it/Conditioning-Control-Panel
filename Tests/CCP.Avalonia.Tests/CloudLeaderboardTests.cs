@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Models;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -109,6 +113,96 @@ public sealed partial class AccountSeedTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") });
+    }
+
+    [Fact]
+    public async Task LeaderboardThemeRepaintsThePopulatedBoardWithoutModFetch()
+    {
+        var wire = new BoardWire();
+        var oldClient = LeaderboardTabView.NewClient;
+        var oldAccent = CoreMods.AccentColorHexProvider;
+        var oldOffline = CoreSettings.Current.OfflineMode;
+        var oldId = CoreAccount.UnifiedUserId;
+        try
+        {
+            CoreAccount.UnifiedUserId = "u7";
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(wire);
+            CoreSettings.Current.OfflineMode = false;
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var accent = "#123456";
+                CoreMods.AccentColorHexProvider = () => accent;
+                var tab = new LeaderboardTabView();
+                var host = new Window { Width = 1200, Height = 900, Content = tab };
+                try
+                {
+                    host.Show();
+                    await tab.SetLeaderboardMode(false);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.NotEmpty((IEnumerable<object>)tab.FindControl<ListBox>("LstLeaderboard")!.ItemsSource!);
+                    var list = tab.FindControl<ListBox>("LstLeaderboard")!;
+                    host.UpdateLayout();
+                    var row = list.GetVisualDescendants().OfType<Border>()
+                        .First(b => b.Classes.Contains("lbrow") && b.DataContext is LeaderboardRow { IsCurrentUser: true });
+                    Color Actual(IBrush? brush) => ((ISolidColorBrush)brush!).Color;
+                    Assert.Equal(Color.Parse("#20123456"), Actual(row.Background));
+                    Assert.Equal(Color.Parse("#FF123456"), Actual(row.BorderBrush));
+                    host.MouseMove(row.TranslatePoint(new Point(30, 10), host)!.Value);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(Color.Parse("#22123456"), Actual(row.Background));
+                    list.SelectedItem = row.DataContext;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(Color.Parse("#3C123456"), Actual(row.Background));
+                    var seen = wire.Seen.Count;
+                    Color Brush(string key) => ((ISolidColorBrush)tab.Resources[key]!).Color;
+                    Assert.Equal(Color.Parse("#20123456"), Brush("LeaderboardTint20Brush"));
+                    Assert.Equal(Color.Parse("#22123456"), Brush("LeaderboardHoverBrush"));
+                    Assert.Equal(Color.Parse("#3C123456"), Brush("LeaderboardSelectedBrush"));
+                    Assert.Equal(Brush("LeaderboardTint20Brush"), ((ISolidColorBrush)tab.FindControl<Border>("YouBar")!.Background!).Color);
+                    accent = "#ABCDEF";
+                    CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(seen, wire.Seen.Count);
+                    var monthly = tab.FindControl<Button>("BtnLeaderboardMonthly")!;
+                    var allTime = tab.FindControl<Button>("BtnLeaderboardAllTime")!;
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(monthly.Background));
+                    Assert.Equal(Colors.White, Actual(monthly.Foreground));
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(allTime.Foreground));
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(allTime.BorderBrush));
+                    var monthlyBorder = monthly.GetVisualDescendants().OfType<Border>().First(b => b.Name == "MonthlyBorder");
+                    var allTimeBorder = allTime.GetVisualDescendants().OfType<Border>().First(b => b.Name == "AllTimeBorder");
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(monthlyBorder.BorderBrush));
+                    Assert.Equal(Color.Parse("#FFABCDEF"), Actual(allTimeBorder.BorderBrush));
+                    Assert.Equal(Color.Parse("#20ABCDEF"), Brush("LeaderboardTint20Brush"));
+                    Assert.Equal(Color.Parse("#3CABCDEF"), Actual(row.Background));
+                    Assert.Equal(Brush("LeaderboardTint20Brush"), ((ISolidColorBrush)tab.FindControl<Border>("YouBar")!.Background!).Color);
+                    await tab.SetLeaderboardMode(true);
+                    Assert.Equal(Color.Parse("#20FFD700"), Brush("LeaderboardTint20Brush"));
+                    Assert.Equal(Color.Parse("#40FFD700"), ((ISolidColorBrush)tab.FindControl<Border>("YouBar")!.BorderBrush!).Color);
+                    seen = wire.Seen.Count;
+                    accent = "#654321";
+                    CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(seen, wire.Seen.Count);
+                    Assert.Equal(Color.Parse("#FF654321"), Actual(monthly.Foreground));
+                    Assert.Equal(Color.Parse("#FFFFD700"), Actual(allTime.Background));
+                    Assert.Equal(Color.Parse("#FFFFD700"), Actual(allTime.BorderBrush));
+                    Assert.Equal(Color.Parse("#FF654321"), Actual(monthlyBorder.BorderBrush));
+                    Assert.Equal(Color.Parse("#FFFFD700"), Actual(allTimeBorder.BorderBrush));
+                }
+                finally { host.Close(); }
+            });
+        }
+        finally
+        {
+            LeaderboardTabView.NewClient = oldClient;
+            CoreMods.AccentColorHexProvider = oldAccent;
+            CoreAccount.UnifiedUserId = oldId;
+            CoreSettings.Current.OfflineMode = oldOffline;
+        }
     }
 
     [Fact]
