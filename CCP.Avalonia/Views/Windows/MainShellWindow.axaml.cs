@@ -172,6 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) =>
             {
                 StopEngineRamp();
+                Overlays.GazeDebugCursor.CloseActive();
                 StopLockdownPulse();
                 Overlays.CornerGifOverlay.ReleaseHost(this);   // StartEngine made this shell the corner GIF host
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);

@@ -152,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
             new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
+            new("inbox-notice", _ => Dialogs.InboxNoticeCard.CloseForPanic()),   // dismiss without running its actions; WPF ConditioningControlPanel/Dialogs/InboxNoticeCard.cs:35 closes it action-free on Escape
             // WPF MainWindow.xaml.cs:2101 "audio unduck": other apps come back up. That pass runs before WPF's StopEngine;
             // After: engine mirrors StopEngineCore's unduck (StartStop.cs:547). Panic only: the plain Stop does not unduck here yet.
             new("audio-duck", _ => Platform.LibVlcAudio.Instance?.ForceUnduck(), After: ["engine"]),
@@ -160,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("friend-notices", _ => Overlays.FriendNotices.CloseAll(fold: true)), // P06, same fold as knock cards; WPF FriendsLanding.cs:66
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
+            new("gaze-debug-cursor", _ => Overlays.GazeDebugCursor.CloseActive()),
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("mod-creator-preview", _ => ModCreatorWindow.StopPreviewsForPanic()), // Creator-owned audio, like close/reset; stricter than WPF.
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
