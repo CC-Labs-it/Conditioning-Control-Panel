@@ -26,7 +26,7 @@ public sealed class CompanionLinkLauncherTests
         {
             ConditioningControlPanel.CoreSettings.Current.OfflineMode = true;
             RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => oldRelay.Value);
-            CompanionLinkLauncher.Navigate = _ => false;
+            CompanionLinkLauncher.Navigate = _ => Task.FromResult<bool?>(false);
             AppUpdater.OpenUrl = (_, _) => { opens++; return Task.CompletedTask; };
             await CompanionLinkLauncher.OpenAsync("https://127.0.0.1/video");
             Assert.Equal(0, opens);

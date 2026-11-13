@@ -471,20 +471,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _panicBlank = false;
             CancelPendingNavigation();
             NavigationRequests++;
-            if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
-            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
-            // Do not retain a rejected request: a later gate report must not load it after fallback.
+            // Do not retain a request the reported gate refuses: a later gate report must not load it after fallback.
             if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
-            if (_web is null && NavigationInvoker is null)
-            {
-                // No engine: the fallback panel still names the request, and the caller learns it did not load.
-                _explicitNavigate = true;
-                try { Source = url; } finally { _explicitNavigate = false; }
-                return false;
-            }
             var previous = Source;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
+            // Refused or engine-less requests stay named on the fallback panel; the caller learns nothing loaded.
+            if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
+            // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
+            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
+            if (_web is null && NavigationInvoker is null) return false;
             if (_scrolllerGate is null) return true; // held until the gate reports
             try
             {
