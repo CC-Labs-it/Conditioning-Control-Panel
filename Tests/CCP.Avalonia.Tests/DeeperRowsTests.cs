@@ -462,10 +462,10 @@ public sealed class DeeperRowsTests
             Click(editor.BtnPlayPause);
             timer.Stop();
             if (seekAfterPlay) Invoke(editor, "SeekToFraction", 0.7);
-            Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+            Assert.Equal("0:07.0", editor.TxtCurrentTime.Text);
             report = "0|0|0";
             await (Task)poll.Invoke(editor, null)!;
-            Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+            Assert.Equal("0:07.0", editor.TxtCurrentTime.Text);
             PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
             Click(editor.BtnPlayPause);
             timer.Stop();
@@ -473,7 +473,7 @@ public sealed class DeeperRowsTests
             scripts.Clear();
             await (Task)poll.Invoke(editor, null)!;
             Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));
-            Assert.Equal("0:07", editor.TxtCurrentTime.Text);
+            Assert.Equal("0:07.0", editor.TxtCurrentTime.Text);
 
             // Another panic before the next time report must retain the user's seek.
             PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
