@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive;
+        private double _teaseCenterX, _teaseCenterY, _teaseLifeMs;
         private int _animType;
 
         /// <summary>The concrete Bubbles v2 motion this bubble flies (never Mix).</summary>
@@ -90,7 +91,7 @@ namespace ConditioningControlPanel.Services
         public Chaos.ChaosMotion TriggerMotion { get; private set; }
         private double _vx, _vy, _startY, _left, _right;
 
-        public enum Result { Alive, Missed, Done, Detonated, Defused, Shattered }
+        public enum Result { Alive, Missed, Done, Detonated, Defused, Shattered, TeaseDenied }
 
         /// <summary>The linked shield-bearer (WPF BubbleService.cs:2708-2709,2730).</summary>
         public AmbientBubble? Escort { get; set; }
@@ -122,7 +123,7 @@ namespace ConditioningControlPanel.Services
             Y = Math.Clamp(Y, _roamTop, _roamBottom);
         }
         /// <summary>A live threat the player defuses by holding (WPF NeedsHoldDefuse for the plain lives).</summary>
-        public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false };
+        public bool IsLiveThreat => Spec is { IsLive: true, IsDarter: false, IsFreeze: false, IsTease: false };
         public double FuseSecLeft => Math.Max(0, FuseRemainingMs) / 1000.0;
         /// <summary>WPF DefuseJudgeFuseSec: a held snap is judged at the channel's start (the fuse pauses).</summary>
         public double DefuseJudgeFuseSec => DefusedViaChannel ? _channelStartFuseSec : FuseSecLeft;
@@ -261,6 +262,13 @@ namespace ConditioningControlPanel.Services
                 b.X = b._startX = px / scaling - b.Size / 2;
                 b.Y = py / scaling - b.Size / 2;
             }
+            if (spec.IsTease)
+            {
+                b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                b._teaseCenterX = (areaX / scaling + (areaX + areaW) / scaling - b.Size) / 2;
+                b._teaseCenterY = (areaY / scaling - b.Size - 50 + (areaY + areaH) / scaling + 50) / 2;
+                b._teaseLifeMs = Chaos.ChaosTuning.TEASE_LIFE_MS;
+            }
             if (spec.IsChaperoneLive)
             {
                 b._roamLeft = areaX / scaling;
@@ -304,6 +312,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Spec?.IsTease == true) return Scale + 0.10 * Math.Sin(_timeAlive * 5.2);
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
             }
@@ -335,8 +344,9 @@ namespace ConditioningControlPanel.Services
         private static uint Argb(double opacity, byte r, byte g, byte b) =>
             ((uint)Math.Round(Math.Clamp(opacity, 0, 1) * 255) << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
 
-        public double CenterX => X + Size / 2;
-        public double CenterY => Y + Size / 2;
+        public double FreezeOffsetX, FreezeOffsetY;
+        public double CenterX => X + Size / 2 + FreezeOffsetX;
+        public double CenterY => Y + Size / 2 + FreezeOffsetY;
 
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
@@ -394,6 +404,16 @@ namespace ConditioningControlPanel.Services
                 if (_treatMs >= Spec.TreatLifeMs) { Popping = Deflating = true; return Result.Alive; }
             }
             _timeAlive += 0.02;
+            if (Spec?.IsTease == true)
+            {
+                double dx = _teaseCenterX - X, dy = _teaseCenterY - Y, d = Math.Sqrt(dx * dx + dy * dy);
+                if (d > 8) { X += dx / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE; Y += dy / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE; }
+                X += Math.Sin(_timeAlive * 9) * 1.6;
+                Y += Math.Cos(_timeAlive * 7) * 1.2;
+                _teaseLifeMs -= FuseStepMs * Chaos.ChaosTuning.FIELD_PACE;
+                if (_teaseLifeMs <= 0) { Popping = Deflating = true; return Result.TeaseDenied; }
+                return Result.Alive;
+            }
             double offset = 0;
             switch (_animType)
             {
@@ -480,6 +500,19 @@ namespace ConditioningControlPanel.Services
         public Action<int>? LuckyProc;
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
+        /// <summary>Freeze holds motion and fuses while allowing defuse channels and pop animations.</summary>
+        public bool FreezeChaos;
+        /// <summary>WPF BubbleService.cs:255,4323: 200 ms impact jitter in DIPs.</summary>
+        public double FreezeVibrateRemainingMs;
+        private double _freezePulsePhase;
+        public double FreezeAuraOpacity => FreezeChaos ? 0.1125 + 0.0875 * Math.Sin(_freezePulsePhase) : 0;
+
+        public void ClearFreezeVisuals()
+        {
+            FreezeVibrateRemainingMs = 0;
+            _freezePulsePhase = 0;
+            foreach (var bubble in Bubbles) bubble.FreezeOffsetX = bubble.FreezeOffsetY = 0;
+        }
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX = double.PositiveInfinity, CursorY = double.PositiveInfinity;
@@ -490,6 +523,7 @@ namespace ConditioningControlPanel.Services
         public Action<AmbientBubble>? ChaosDetonated;
         /// <summary>A live chaos bubble was snapped (held to the end, or swept).</summary>
         public Action<AmbientBubble>? ChaosDefused;
+        public Action<AmbientBubble>? ChaosTeaseDenied;
 
         /// <summary>A press on a live bubble (WPF OnPlayerPress): starts its channel, or sets it off.</summary>
         public void PressLive(AmbientBubble b, bool canChannel, double cursorX, double cursorY)
@@ -547,21 +581,31 @@ namespace ConditioningControlPanel.Services
         {
             var missed = 0;
             var now = Clock();
+            if (FreezeChaos) _freezePulsePhase += 0.18;
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
+                if (FreezeChaos && FreezeVibrateRemainingMs > 0 && b.Spec != null && !b.AmbientTrigger && !Safety.GentleVisuals.On)
+                {
+                    b.FreezeOffsetX = (Random.NextDouble() - 0.5) * 8;
+                    b.FreezeOffsetY = (Random.NextDouble() - 0.5) * 8;
+                }
+                else b.FreezeOffsetX = b.FreezeOffsetY = 0;
                 if (HoldChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
                 if (b.Spec is { IsEscort: true } && b.OrbitTarget != null && !Bubbles.Contains(b.OrbitTarget))
                     b.OrbitTarget = null;
+                if (FreezeChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping && !b.Channeling) continue;
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Shattered) { ChaosBrittleShattered?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Defused) { ChaosDefused?.Invoke(b); continue; }
+                if (r == AmbientBubble.Result.TeaseDenied) { ChaosTeaseDenied?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Missed) missed++;
                 Bubbles.RemoveAt(i);
             }
+            FreezeVibrateRemainingMs = Math.Max(0, FreezeVibrateRemainingMs - 32);
             return missed;
         }
     }

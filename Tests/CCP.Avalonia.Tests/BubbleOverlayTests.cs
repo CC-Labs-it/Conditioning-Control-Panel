@@ -50,6 +50,50 @@ public sealed class BubbleOverlayTests
     }
 
     [Fact]
+    public async Task Frozen_chaos_bubble_draws_an_aura_that_clears_on_thaw()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var field = BubbleOverlay.Field;
+            var window = new BubbleOverlayWindow(0, new PixelRect(0, 0, 240, 240), 1) { Width = 240, Height = 240 };
+            try
+            {
+                field.Bubbles.Clear();
+                field.Bubbles.Add(new AmbientBubble { X = 70, Y = 70, Size = 100,
+                    Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { Tint = 0xFF80A0FF } });
+                window.Show();
+                window.UpdateLayout();
+                byte[] Frame()
+                {
+                    using var bitmap = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(240, 240));
+                    bitmap.Render((Control)window.Content!);
+                    var pixels = new byte[240 * 240 * 4];
+                    var ptr = System.Runtime.InteropServices.Marshal.AllocHGlobal(pixels.Length);
+                    try
+                    {
+                        bitmap.CopyPixels(new PixelRect(0, 0, 240, 240), ptr, pixels.Length, 240 * 4);
+                        System.Runtime.InteropServices.Marshal.Copy(ptr, pixels, 0, pixels.Length);
+                    }
+                    finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr); }
+                    return pixels;
+                }
+                field.FreezeChaos = false;
+                var normal = Frame();
+                field.FreezeChaos = true;
+                var frozen = Frame();
+                Assert.False(System.Linq.Enumerable.SequenceEqual(normal, frozen));
+                field.FreezeChaos = false;
+                Assert.Equal(normal, Frame());
+            }
+            finally { field.FreezeChaos = false; field.ClearFreezeVisuals(); field.Bubbles.Clear(); window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public void Pop_sound_resolves_mod_override_and_suppressed_lucky_falls_back()
     {
         var dir = System.IO.Directory.CreateTempSubdirectory("ccp-bubble-sound-");

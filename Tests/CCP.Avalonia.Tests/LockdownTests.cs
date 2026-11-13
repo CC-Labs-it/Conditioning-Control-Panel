@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -7,6 +8,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -195,10 +197,9 @@ public sealed class LockdownTests
                 Step(1140);
                 ScaleIs(1.0);
 
-                // The click showed the notice; it must not reflow the card under the cursor
-                // (an unbounded wrap line widened the card 119 px on Linux, 2026-11-06).
+                // The click must not reflow the card under the cursor (an unbounded notice line
+                // widened the card 119 px on Linux, 2026-11-06; WPF shows no notice at all).
                 Dispatcher.UIThread.RunJobs();
-                Assert.True(tab.TxtEmergencyExitNotice.IsVisible);
                 Assert.Equal(p, tab.BtnEmergencyExit.TranslatePoint(new Point(40, 40), win)!.Value);
 
                 // WPF BeginAnimation (LockdownTabView.xaml.cs:330-342) starts a reversal
@@ -301,11 +302,9 @@ public sealed class LockdownTests
                 Assert.True(tab.LockdownActivePanel.IsVisible);
                 Assert.False(tab.LockdownSetupPanel.IsVisible);
 
-                // The slab opens a game and preserves the phrase fallback.
+                // The slab opens a game (WPF LockdownTabView.xaml.cs:355-365, no notice); the phrase still works.
                 tab.BtnEmergencyExit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.NotNull(EmergencyExitWindow.Current);
-                Assert.True(tab.TxtEmergencyExitNotice.IsVisible);
-                Assert.Contains("let me out", tab.TxtEmergencyExitNotice.Text);
                 Assert.False(tab.TxtLockdownExit.IsVisible);
                 Assert.True(ld.IsActive);
 
@@ -494,7 +493,7 @@ public sealed class LockdownTests
     }
 
     [Fact]
-    public async Task TheSlabTripsTheWireHoldsChasterAndShowsTheRealTimeEvenWhenTheTimerIsHidden()
+    public async Task TheSlabTripsTheWireHoldsChasterAndShowsNoNoticeLikeWpf()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -519,8 +518,12 @@ public sealed class LockdownTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(ConditioningControlPanel.Services.Possession.EscapeKinds.EmergencyExit, kind);
                 Assert.Equal(1, holds);
-                Assert.Contains("29:5", tab.TxtEmergencyExitNotice.Text);   // 29:5x, never "••:••"
-                Assert.DoesNotContain(SessionClockLabel.HiddenLockdownClock, tab.TxtEmergencyExitNotice.Text);
+                // WPF BtnEmergencyExit_Click (LockdownTabView.xaml.cs:355-365) only opens the games:
+                // no text appears under the slab, and the hidden timer stays hidden (S18, 2026-11-11).
+                var shown = tab.GetVisualDescendants().OfType<TextBlock>()
+                    .Where(t => t.IsEffectivelyVisible).Select(t => t.Text ?? "").ToList();
+                Assert.DoesNotContain(shown, t => t.Contains("29:5") || t.Contains("let me out")
+                                                 || t.Contains("not on this build"));
                 Assert.True(ld.IsActive);
             }
             finally

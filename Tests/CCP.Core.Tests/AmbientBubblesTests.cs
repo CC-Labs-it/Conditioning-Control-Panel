@@ -88,6 +88,38 @@ public sealed class AmbientBubblesTests
     }
 
     [Fact]
+    public void Freeze_visuals_pulse_and_shudder_only_chaos_bubbles_then_clear()
+    {
+        var field = new AmbientBubbleField(new Random(7)) { FreezeChaos = true, FreezeVibrateRemainingMs = 200 };
+        var chaos = new AmbientBubble { X = 100, Y = 200, Size = 100, Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec() };
+        var ambient = new AmbientBubble { X = 300, Y = 200, Size = 100 };
+        field.Bubbles.Add(chaos);
+        field.Bubbles.Add(ambient);
+        double initialAura = field.FreezeAuraOpacity;
+        field.Step();
+        Assert.NotEqual(initialAura, field.FreezeAuraOpacity);
+        Assert.InRange(field.FreezeAuraOpacity, 0.025, 0.2);
+        Assert.NotEqual(0, chaos.FreezeOffsetX);
+        Assert.InRange(chaos.FreezeOffsetX, -4, 4);
+        Assert.InRange(chaos.FreezeOffsetY, -4, 4);
+        Assert.Equal(0, ambient.FreezeOffsetX);
+        Assert.True(chaos.Contains(chaos.CenterX, chaos.CenterY));
+        for (int i = 0; i < 7; i++) field.Step();
+        Assert.Equal(0, field.FreezeVibrateRemainingMs);
+        Assert.Equal(0, chaos.FreezeOffsetX);
+        Assert.Equal(0, chaos.FreezeOffsetY);
+        Assert.True(field.FreezeAuraOpacity > 0);
+        field.FreezeVibrateRemainingMs = 200;
+        field.Step();
+        field.FreezeChaos = false;
+        field.ClearFreezeVisuals();
+        Assert.Equal(0, field.FreezeAuraOpacity);
+        Assert.Equal(0, field.FreezeVibrateRemainingMs);
+        Assert.Equal(0, chaos.FreezeOffsetX);
+        Assert.Equal(0, chaos.FreezeOffsetY);
+    }
+
+    [Fact]
     public void Engine_arms_bubbles_by_the_saved_flag_and_applies_them_live()
     {
         var s = CoreSettings.Current;

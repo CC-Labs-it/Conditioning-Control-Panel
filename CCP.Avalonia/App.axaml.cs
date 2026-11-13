@@ -359,8 +359,37 @@ namespace ConditioningControlPanel.Avalonia
 
         // WPF Services/Chaos/EffectPayloadFiring.cs:225-237. Only the global multiplier
         // applies to rain, including on a prism pop (DurationMult is deliberately ignored).
+        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash = Views.Overlays.FlashOverlay.TriggerOnce;
         internal static void FireChaosPayload(Services.Chaos.EffectPayload payload)
         {
+            var host = Views.Chaos.ChaosRunHost.Overlay;
+            if (payload is Services.Chaos.FlashPayload flash)
+            {
+                if (host != null)
+                {
+                    var (amount, duration, size) = flash.ResolveBurst(CoreSettings.Current);
+                    FireChaosFlash(host, amount, duration, size, false);
+                }
+                return;
+            }
+            if (payload is Services.Chaos.SubliminalPayload)
+            {
+                if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
+                return;
+            }
+            if (payload is Services.Chaos.OverlayPayload overlay)
+            {
+                if (host == null) return;
+                int duration = (int)(overlay.Scale(1500, 4500) * Services.Chaos.EffectPayload.GlobalDurationMult * overlay.DurationMult);
+                double opacity = overlay.ScaleD(0.25, 0.70);
+                switch (overlay.OverlayKind)
+                {
+                    case "pink_filter": Views.Overlays.PinkFilterOverlay.ShowTimed(host, duration, opacity); break;
+                    case "spiral": Views.Overlays.SpiralOverlay.ShowTimed(host, duration, opacity); break;
+                    case "braindrain": Views.Overlays.ChaosFlashOverlay.Show(host); break;
+                }
+                return;
+            }
             if (payload is Services.Chaos.GifCascadePayload)
             {
                 Views.Chaos.ChaosGifCascadeOverlay.Show(
