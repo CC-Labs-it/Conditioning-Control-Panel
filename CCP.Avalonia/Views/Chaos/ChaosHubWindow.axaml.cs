@@ -112,6 +112,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // in-memory state instead, so --render-all never writes a real profile.
             if (!RenderProof.Rendering) ChaosMeta.Init();
             AvaloniaXamlLoader.Load(this);
+            var logo = ChaosArt.TryLoad(ChaosArt.FilePath("menu_logo.png"));
+            Part<Image>("MenuLogoImage").Source = logo;
+            Part<StackPanel>("MenuLogoFallback").IsVisible = logo == null;
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
