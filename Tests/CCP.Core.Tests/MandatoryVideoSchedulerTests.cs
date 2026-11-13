@@ -372,6 +372,23 @@ public sealed class MandatoryVideoSchedulerTests
         v.Stop();
     });
 
+    [Theory]   // WPF ChaosGifCascadeOverlay.cs:173-182: a poll at the deadline replays when the rain has cleared
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CascadeClearingExactlyAtTheDeadlineStillReplays(bool clearAtDeadline) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var deadline = clock.GetUtcNow() + TimeSpan.FromSeconds(90);
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+        { CascadeIsRaining = () => !clearAtDeadline || clock.GetUtcNow() < deadline };
+        Assert.True(v.Trigger(path: Clips[0]));
+        clock.Advance(TimeSpan.FromSeconds(90));
+        Assert.Equal(clearAtDeadline, v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(clearAtDeadline ? 1 : 0, host.Shown.Count);
+        v.Stop();
+    });
+
     [Fact]
     public void EmptyLibraryAfterCascadeRearmsSchedule() => With(6, false, () =>
     {

@@ -378,16 +378,18 @@ namespace ConditioningControlPanel.Services
                     var replay = _deferIsReplay;
                     try
                     {
-                        if (_time.GetUtcNow() >= deadline ||
-                            (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
+                        // WPF ChaosGifCascadeOverlay.cs:173-182: expire only while it still rains;
+                        // a poll that finds the rain cleared replays, even at the deadline.
+                        var raining = CascadeIsRaining?.Invoke() == true;
+                        if (raining && _time.GetUtcNow() < deadline)
+                        {
+                            pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
+                            return;
+                        }
+                        if (raining || (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
                         {
                             if (DropDefer()) AfterEnd();
                             else if (_running) ScheduleNext();
-                            return;
-                        }
-                        if (CascadeIsRaining?.Invoke() == true)
-                        {
-                            pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
                             return;
                         }
                         replay = DropDefer();
