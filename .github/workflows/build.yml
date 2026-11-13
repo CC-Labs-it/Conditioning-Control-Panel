@@ -178,8 +178,13 @@ jobs:
       - name: perf-bench fails on a missing tab (must exit 3)
         run: |
           export CCP_USERDATA_DIR=$(mktemp -d) XDG_CONFIG_HOME=$(mktemp -d)
+          # Own the Xauthority directory so xvfb-run's temporary-directory cleanup
+          # cannot replace the benchmark's exit code with its cleanup error code 5.
+          bench_auth_dir=$(mktemp -d)
+          trap 'rm -rf "$bench_auth_dir"' EXIT
+          touch "$bench_auth_dir/Xauthority"
           set +e
-          timeout 300 xvfb-run -a -s '-screen 0 1920x1080x24' \
+          timeout 300 xvfb-run -a -f "$bench_auth_dir/Xauthority" -s '-screen 0 1920x1080x24' \
             dotnet run --no-build --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --perf-bench missing.json --perf-bench-tabs SettingsTab,NoSuchTab
           code=$?
           set -e

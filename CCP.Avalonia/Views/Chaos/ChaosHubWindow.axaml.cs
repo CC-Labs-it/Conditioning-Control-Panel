@@ -40,8 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    remaining ChaosSfx cues are not ported. Lesson/script locks and unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
     ///  - <c>BuildBench</c> is inlined over Core <c>ChaosBench</c>; first-open reveal flashes
-    ///    live in ChaosHubWindow.Reveals.cs. Reveal visibility clamps and
-    ///    the CCP_CHAOS_DEBUG strip remain unported.
+    ///    live in ChaosHubWindow.Reveals.cs; reveal visibility clamps are <c>ApplyReveals</c>, and
+    ///    the CCP_CHAOS_DEBUG strip remains unported.
     ///  - The menu flipbook and motion live in ChaosHubWindow.Menu.cs. The Skia fog,
     ///    per-frame glint masks and blooms remain unported; the menu music lives in ChaosHubWindow.Music.cs.
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
@@ -338,11 +338,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _tabEnhance.IsEnabled = true;
             _tabRun.IsEnabled = true;
             _tabImprove.IsEnabled = true;
-            // WPF Reveals.cs:111-117 (ApplyReveals): the start-mantra card and the Diary tab are
-            // bench purchases; don't strand the player on a tab that just vanished.
-            Part<Border>("CardMantras").IsVisible = RevealService.IsUnlocked(RevealIds.StartPicker);
-            _tabDiary.IsVisible = DiaryUnlocked;
-            if (!DiaryUnlocked && _tabDiary.IsChecked == true) ShowTab("loadout");
+            ApplyReveals();   // WPF xaml.cs:73-74: ApplyUnlocks, then the reveal gates on top
+        }
+
+        private const string RevealWallTip = "there's a wall here that isn't quite a wall.";
+
+        /// <summary>WPF ChaosHubWindow.Reveals.cs:54-132 (ported from #4013): hide or show every
+        /// gated surface from the current reveal state. Presentation only, never writes settings.</summary>
+        internal void ApplyReveals()
+        {
+            try
+            {
+                // The Looking Glass is greyed behind a "???" wall, not hidden, until Slipping.
+                bool glass = RevealService.IsUnlocked(RevealIds.TabLookingGlass);
+                _tabImprove.IsEnabled = glass;
+                _tabImprove.Opacity = glass ? 1.0 : 0.40;
+                _tabImprove.Content = glass ? "the Looking Glass" : Glyphed(13, "???", IconKind.LockClosed);
+                ToolTip.SetTip(_tabImprove, glass ? null
+                    : RevealWallTip + "\n" + ChaosRanks.RankSpecifics(ChaosRank.Slipping, ChaosMeta.State.RunsCompleted));
+                ToolTip.SetShowOnDisabled(_tabImprove, !glass);
+                if (!glass && _tabImprove.IsChecked == true) ShowTab("loadout");
+
+                // Toybox shelves follow the sewn pockets; the bag grids mirror them.
+                bool toys = RevealService.IsUnlocked(RevealIds.SectionToys);
+                bool accessories = RevealService.IsUnlocked(RevealIds.SectionAccessories);
+                foreach (var name in new[] { "HdrToys", "BoonHostSkills", "CardBagToys" }) Part<Control>(name).IsVisible = toys;
+                foreach (var name in new[] { "HdrAccessories", "BoonHostAccessories", "CardBagAccessories" }) Part<Control>(name).IsVisible = accessories;
+                Part<Control>("StubToys").IsVisible = !toys;
+                Part<Control>("StubAccessories").IsVisible = !accessories;
+                ToolTip.SetTip(Part<Control>("StubToys"), RevealWallTip
+                    + "\nopens with your first toy pocket. she sews pockets for gold (her corner, later her bench).");
+                ToolTip.SetTip(Part<Control>("StubAccessories"), RevealWallTip
+                    + "\nopens with your first accessory pocket. she sews pockets for gold (her corner, later her bench).");
+
+                _herCornerCard.IsVisible = RevealService.IsUnlocked(RevealIds.HerCorner);
+                if (_herCornerCard.IsVisible) BuildHerCorner();
+
+                // A hidden pill cannot stay the selection: clamp on screen only (_diffAutoClamped
+                // keeps SaveToSettings from writing the fallback over the saved choice).
+                _segMedium.IsVisible = RevealService.IsUnlocked(RevealIds.PillTeasing);
+                _segHard.IsVisible = RevealService.IsUnlocked(RevealIds.PillRelentless);
+                if ((!_segMedium.IsVisible && _segMedium.IsChecked == true) || (!_segHard.IsVisible && _segHard.IsChecked == true))
+                {
+                    SetSegment(_grpDifficulty, "Easy");
+                    _diffAutoClamped = true;
+                }
+
+                // Looking Glass internals are bench purchases; don't strand the player on a vanished tab.
+                Part<Border>("CardMantras").IsVisible = RevealService.IsUnlocked(RevealIds.StartPicker);
+                _tabDiary.IsVisible = DiaryUnlocked;
+                if (!DiaryUnlocked && _tabDiary.IsChecked == true) ShowTab("loadout");
+                bool stats = RevealService.IsUnlocked(RevealIds.StatsPanel);
+                Part<Control>("HdrStats").IsVisible = stats;
+                Part<Control>("StatsGrid").IsVisible = stats;
+
+                // Toy keybinds mirror the sewn pockets: none = no hints at all.
+                int pockets = ChaosMeta.SlotsFor(ChaosBoonCategory.Skill);
+                Part<Control>("CardKeybinds").IsVisible = pockets >= 1;
+                Part<Control>("RowToyKey2").IsVisible = pockets >= 2;
+                Part<TextBlock>("TxtKeybindsSub").Text = pockets >= 2
+                    ? "your equipped toys fire on these, mid-descent."
+                    : "your equipped toy fires on this, mid-descent. the second pocket isn't sewn yet.";
+                Part<TextBlock>("TxtPocketsSub").Text = ChaosMeta.State.ToyPockets + ChaosMeta.State.AccessoryPockets == 0
+                    ? "you fall in with empty hands, for now."
+                    : "what you take down with you. choose like it matters.";
+            }
+            catch (Exception ex) { Log.Warning("ApplyReveals failed ({E})", ex.Message); }
         }
 
         private void Tab_Click(object? sender, RoutedEventArgs e)
@@ -439,7 +500,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void RefreshTabBadges()
         {
             SetTabBadge(_tabEnhance, "the Toybox", CountAffordableToybox());
-            SetTabBadge(_tabImprove, "the Looking Glass", _tabImprove.IsEnabled ? CountAffordableBench() : 0);
+            // A walled Looking Glass keeps its "???" face; WPF's badge refresh rewrote it.
+            if (_tabImprove.IsEnabled) SetTabBadge(_tabImprove, "the Looking Glass", CountAffordableBench());
         }
 
         private static void SetTabBadge(ToggleButton tab, string label, int count)
@@ -816,6 +878,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             RefreshTopBar();
             RefreshStats();
             RevealService.Sync("purchase");
+            ApplyReveals();   // WPF xaml.cs:516
             UnlockCards.Show(ChaosUnlockCardRules.ForHabit(id!));
         }
 
