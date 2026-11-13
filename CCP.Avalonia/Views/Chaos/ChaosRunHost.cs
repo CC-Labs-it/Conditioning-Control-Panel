@@ -165,7 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
         private static int _pendingWave, _runsAtStart, _draftsThisRun;
         private static bool _scriptThreat, _scriptSnapped, _scriptDraft, _sinRigged, _sinPending;
-        private static bool _lessonCardsAfterDraft;
+        private static bool _lessonCardsAfterDraft, _finalLoopAnnounced;
         private static readonly List<ChaosUnlockCardInfo> _pendingLessonCards = new();
 
         static ChaosRunHost()
@@ -235,6 +235,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             HookRunVideo();   // WPF ChaosModeService.cs:504
             _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
             _scriptThreat = _scriptSnapped = _scriptDraft = _sinRigged = _sinPending = false;
+            _finalLoopAnnounced = false;
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
             var picks = _state.RunPickTiles;
             _boonBar = ChaosBoonBarOverlay.ForRun();
@@ -971,6 +972,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     _state.WaveIndex = newWave;
                     _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                    AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:1460
                 }
             }
         }
@@ -1101,6 +1103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _lessonCardPaused = true;
                 _lessonCardsAfterDraft = true;
                 BubbleOverlay.HoldChaos(true);
+                ChaosOverlayWindow.ChaosSfx.Play("ui_unlock", 0.55f);   // WPF ChaosModeService.cs:1614, once for the deferred cards
                 var cards = _pendingLessonCards.ToArray();
                 _pendingLessonCards.Clear();
                 foreach (var card in cards) ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: false);
@@ -1109,6 +1112,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _draftPaused = false;
             if (!_manualPaused && !_lessonCardPaused) _spawnTimer?.Start();
             if (_state?.WelcomeShowerEnabled == true) SpawnWelcomeShower();
+            AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:1625
+        }
+
+        /// <summary>WPF AnnounceFinalLoopIfEntering (ChaosModeService.cs:1639-1647): the last loop's banner, once a run,
+        /// after the post-pick GO (or the last deferred card) on the draft path, at the wave commit without drafts.
+        /// The Relapse bonus loop keeps its own announce.</summary>
+        private static void AnnounceFinalLoopIfEntering()
+        {
+            if (_state == null || _finalLoopAnnounced) return;
+            if (_state.WaveCount <= 1 || _state.WaveIndex < _state.WaveCount) return;
+            _finalLoopAnnounced = true;
+            ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_last_loop"), ChaosAnnounceKind.Depth,
+                artKey: "final_loop", subText: Loc.Get("chaos_last_loop_sub"));
+            _state.PushEvent(Loc.Get("chaos_event_last_loop"));
         }
 
         /// <summary>WPF SpawnWelcomeShower (:1645): six flash or subliminal treats from above.</summary>
@@ -1121,7 +1138,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity, _state.FuseTimeMult,
                     ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale), motion: ChaosMotion.RainDown);
             }
-            var sound = ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", $"chime{Rng.Next(1, 4)}.mp3"));
+            var chime = $"chime{Rng.Next(1, 4)}.mp3";
+            var sound = CoreModArt.AudioOverridePath(chime) ?? ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", chime));
             if (System.IO.File.Exists(sound))
             {
                 var settings = CoreSettings.Current;
@@ -1199,6 +1217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _lessonCardsAfterDraft = false;
                 if (_spawning && _state?.WelcomeShowerEnabled == true) SpawnWelcomeShower();
+                if (_spawning) AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:205
             }
         }
 
