@@ -94,13 +94,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            CoreMods.ModChanged += OnPresetsModChanged;
+            _presetsVisibilityWatch = EffectiveVisibility.Watch(this, DrainPresetsModRefresh);
             RefreshLocalizedDetails();
+            QueuePresetsModRefresh();
             AttachFocalFx();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            CoreMods.ModChanged -= OnPresetsModChanged;
+            _presetsVisibilityWatch?.Dispose();
+            _presetsVisibilityWatch = null;
             DetachFocalFx();
             base.OnDetachedFromVisualTree(e);
         }
@@ -110,7 +116,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 if (VisualRoot is null) return;
                 RefreshLocalizedDetails();
+                QueuePresetsModRefresh();
             });
+
+        private bool _presetsModRefreshQueued;
+        private bool _presetsModDirty;
+        private bool _presetsRackModDirty;
+        private IDisposable? _presetsVisibilityWatch;
+
+        private void OnPresetsModChanged(object? sender, ModPackage mod)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) QueuePresetsModRefresh(modChanged: true);
+            else Dispatcher.UIThread.Post(() => QueuePresetsModRefresh(modChanged: true));
+        }
+
+        // WPF UiUpdates.cs:252-259 queues behind the palette and coalesces mod/language changes.
+        private void QueuePresetsModRefresh(bool modChanged = false)
+        {
+            _presetsRackModDirty |= modChanged;
+            if (_presetsModRefreshQueued) return;
+            _presetsModRefreshQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _presetsModRefreshQueued = false;
+                if (VisualRoot is null) return;
+                if (!IsEffectivelyVisible) { _presetsModDirty = true; return; }
+                _presetsModDirty = false;
+                RefreshPresetsModVisuals(_presetsRackModDirty);
+            }, DispatcherPriority.Background);
+        }
+
+        private void DrainPresetsModRefresh()
+        {
+            if (!_presetsModDirty || !IsEffectivelyVisible) return;
+            _presetsModDirty = false;
+            RefreshPresetsModVisuals(_presetsRackModDirty);
+        }
+
+        // WPF Presets.cs:304-319 keeps the session detail pane intact.
+        private void RefreshPresetsModVisuals(bool refreshRack)
+        {
+            _presetsRackModDirty = false;
+            RefreshPresetsList();
+            if (refreshRack) RepaintSessionRack();
+            if (_selectedPreset is not { } preset || !PresetDetailScroller.IsVisible) return;
+            TxtDetailTitle.Text = PresetNaming.DisplayName(preset);
+            TxtDetailSubtitle.Text = CoreMods.MakeModAware(preset.Description);
+        }
 
         private void RefreshLocalizedDetails()
         {
@@ -138,13 +190,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtSessionDifficulty.Text = Loc.Get("label_easy_2");
         }
 
-        /// <summary>
-        /// Refreshes the code-built catalogue in place. Language changes must not rebuild rows:
-        /// their Session tags, focused row and either ScrollViewer's offset belong to the live view,
-        /// not to a newly loaded catalogue.
-        /// </summary>
+        /// <summary>Reapply the WPF rack query after a language change, retaining rows that still
+        /// match so their focus and the scroll position survive where possible.</summary>
         private void RefreshLocalizedRack()
         {
+            var shown = SessionRackQuery.SortRackSessions(_availableSessions.Where(RackAccepts).ToArray(), _availableSessions, _rackSort);
+            var rows = SessionRackPanel.Children.OfType<Border>().ToArray();
+            if (!shown.SequenceEqual(rows.Select(row => row.Tag as Session)))
+            {
+                DetachCardSheen();
+                DetachRowSweep();
+                for (var i = SessionRackPanel.Children.Count - 1; i >= 0; i--)
+                    if (SessionRackPanel.Children[i] is not Border { Tag: Session session } || !shown.Contains(session))
+                        SessionRackPanel.Children.RemoveAt(i);
+                for (var i = 0; i < shown.Count; i++)
+                {
+                    var session = shown[i];
+                    var row = rows.FirstOrDefault(r => ReferenceEquals(r.Tag, session));
+                    if (row == null) SessionRackPanel.Children.Insert(i, RackRow(session));
+                    else
+                    {
+                        var index = SessionRackPanel.Children.IndexOf(row);
+                        if (index != i) SessionRackPanel.Children.Move(index, i);
+                    }
+                }
+                if (shown.Count == 0)
+                    SessionRackPanel.Children.Add(new TextBlock { Theme = TabTheme("SdRackEmpty"), Text = Loc.Get("rack_empty") });
+                RefreshSessionRackSelection();
+                RefreshCardSheen();
+            }
+
             foreach (var row in SessionRackPanel.Children.OfType<Border>())
             {
                 if (row.Tag is not Session session || row.Child is not Grid grid) continue;
@@ -1029,11 +1104,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _ => ("rack_src_builtin", "SessionSrcBuiltInBrush", "SessionSrcBuiltInWashBrush")
             };
 
-        private static string SessionName(Session session) =>
-            LocalizedOrFallback(session.LocalizedName, $"session_{session.Id}_name", session.GetModeAwareName());
+        private static string SessionName(Session session) => session.GetModeAwareName();
 
-        private static string SessionDescription(Session session) =>
-            LocalizedOrFallback(session.LocalizedDescription, $"session_{session.Id}_desc", session.GetModeAwareDescription());
+        private static string SessionDescription(Session session) => session.GetModeAwareDescription();
 
         private static string LocalizedOrFallback(string localized, string key, string fallback) =>
             string.IsNullOrWhiteSpace(localized) || string.Equals(localized, key, StringComparison.Ordinal)

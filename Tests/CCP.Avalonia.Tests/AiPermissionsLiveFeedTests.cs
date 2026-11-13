@@ -169,6 +169,135 @@ public sealed class AiPermissionsLiveFeedTests
         return Task.CompletedTask;
     });
 
+    // WPF MainWindow.UiUpdates.cs:915-928. A provider event must repaint both verdicts,
+    // preserve the stored choice, and leave per-effect permissions intact.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task EffectiveEffectsChoiceFollowsLiveTierWithoutSaving(bool savedChoice, bool subscribeStar) => Run(_ =>
+    {
+        WithFakeSubscriptions((patreon, substar) =>
+        {
+            var lab = true;
+            CoreAccount.HasLabAccessProvider = () => lab;
+            var prompt = CoreSettings.Current.CompanionPrompt;
+            var (oldEffects, oldFlash) = (prompt.AllowAiToControlEffects, prompt.AllowAiFlash);
+            Window? window = null;
+            try
+            {
+                prompt.AllowAiToControlEffects = savedChoice;
+                prompt.AllowAiFlash = true;
+                var grid = new AiPermissionsGrid();
+                window = new Window { Content = grid };
+                window.Show();
+                foreach (var allowed in new[] { false, true, false, true })
+                {
+                    lab = allowed;
+                    (subscribeStar ? substar : patreon).NotifyEntitlementRaised(
+                        allowed ? PatreonTier.Level2 : PatreonTier.None);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(savedChoice && allowed, grid.FindControl<CheckBox>("ChkCapEffects")!.IsChecked);
+                    Assert.Equal(savedChoice && allowed, grid.FindControl<Border>("EffectPermsPanel")!.IsVisible);
+                    Assert.Equal(savedChoice, prompt.AllowAiToControlEffects);
+                    Assert.True(prompt.AllowAiFlash);
+                }
+            }
+            finally
+            {
+                try { window?.Close(); }
+                finally { (prompt.AllowAiToControlEffects, prompt.AllowAiFlash) = (oldEffects, oldFlash); }
+            }
+        });
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task TierTheoryRestoresPermissionsBeforeSavingProfile(bool flash) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
+        var baseline = new SettingsService();
+        baseline.Current.CompanionPrompt.AllowAiToControlEffects = false;
+        baseline.Current.CompanionPrompt.AllowAiFlash = false;
+        baseline.SaveImmediate();
+
+        await EffectiveEffectsChoiceFollowsLiveTierWithoutSaving(true, false);
+
+        var reloaded = new SettingsService();
+        if (flash) Assert.False(reloaded.Current.CompanionPrompt.AllowAiFlash);
+        else Assert.False(reloaded.Current.CompanionPrompt.AllowAiToControlEffects);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FakeSubscriptionsRestoreStateAfterFailure(bool failDuringSetup) => Run(_ =>
+    {
+        var get = CoreSecrets.RetrieveProvider;
+        var set = CoreSecrets.StoreProvider;
+        var lab = CoreAccount.HasLabAccessProvider;
+        var entitlement = CoreEntitlement.HasLabProvider;
+        var oldPatreon = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
+        var oldSubstar = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar;
+        Assert.Throws<InvalidOperationException>(() => WithFakeSubscriptions(
+            (_, _) =>
+            {
+                CoreAccount.HasLabAccessProvider = () => true;
+                throw new InvalidOperationException("test body");
+            },
+            () => { if (failDuringSetup) throw new InvalidOperationException("setup"); }));
+        Assert.Same(get, CoreSecrets.RetrieveProvider);
+        Assert.Same(set, CoreSecrets.StoreProvider);
+        Assert.Same(lab, CoreAccount.HasLabAccessProvider);
+        Assert.Same(entitlement, CoreEntitlement.HasLabProvider);
+        Assert.Same(oldPatreon, ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon);
+        Assert.Same(oldSubstar, ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar);
+        return Task.CompletedTask;
+    });
+
+    // Install only the event sources used by this test. Seed also replaces account delegates and
+    // rewires IntakePass, so calling it here would leave unrelated process state behind.
+    private static void WithFakeSubscriptions(Action<ProviderSubscription, ProviderSubscription> body, Action? afterFirstInstall = null)
+    {
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed);
+        var patreonProperty = type.GetProperty("Patreon", flags)!;
+        var substarProperty = type.GetProperty("SubscribeStar", flags)!;
+        var oldPatreon = patreonProperty.GetValue(null);
+        var oldSubstar = substarProperty.GetValue(null);
+        var oldGet = CoreSecrets.RetrieveProvider;
+        var oldSet = CoreSecrets.StoreProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var oldEntitlement = CoreEntitlement.HasLabProvider;
+        ProviderSubscription? patreon = null, substar = null;
+        try
+        {
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            CoreEntitlement.HasLabProvider = () => CoreAccount.HasLabAccess;
+            patreon = new ProviderSubscription("patreon", () => new AppSettings());
+            substar = new ProviderSubscription("substar", () => new AppSettings());
+            patreonProperty.SetValue(null, patreon);
+            afterFirstInstall?.Invoke();
+            substarProperty.SetValue(null, substar);
+            body(patreon, substar);
+        }
+        finally
+        {
+            patreonProperty.SetValue(null, oldPatreon);
+            substarProperty.SetValue(null, oldSubstar);
+            CoreSecrets.RetrieveProvider = oldGet;
+            CoreSecrets.StoreProvider = oldSet;
+            CoreAccount.HasLabAccessProvider = oldLab;
+            CoreEntitlement.HasLabProvider = oldEntitlement;
+            patreon?.Dispose();
+            substar?.Dispose();
+        }
+    }
+
     [Fact]
     public Task LockBandCtaOpensSettingsAccountAsWpfDoes() => Run(_ =>
     {
@@ -263,7 +392,8 @@ public sealed class AiPermissionsLiveFeedTests
     private static Task Run(Func<SettingsService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            AppBuilder.Configure<App>().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var old = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
