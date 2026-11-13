@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace ConditioningControlPanel.Services.EmiDesk;
 
@@ -147,13 +147,13 @@ public static class EmiAlive
     /// 420 DIP EMI invisible.</para>
     /// </summary>
     public static (double X, double Y) GazeTarget(
-        System.Windows.Point cursorDip, System.Windows.Rect bodyDip, double bodyWidth)
+        double cursorX, double cursorY, double bodyX, double bodyY, double rectWidth, double bodyHeight, double bodyWidth)
     {
         double cap = GazeMaxDip * GazeScale(bodyWidth);
         const double div = GazeDiv;
 
-        double dx = cursorDip.X - (bodyDip.X + bodyDip.Width / 2.0);
-        double dy = cursorDip.Y - (bodyDip.Y + bodyDip.Height / 2.0);
+        double dx = cursorX - (bodyX + rectWidth / 2.0);
+        double dy = cursorY - (bodyY + bodyHeight / 2.0);
         return (Clamp(dx / div, -cap, cap), Clamp(dy / div, -cap, cap));
     }
 
@@ -182,11 +182,11 @@ public static class EmiAlive
     /// Is the cursor inside the approach radius? Measured from her EDGE (her half-width plus
     /// <see cref="ApproachDip"/>), so a bigger EMI is not a wider trigger.
     /// </summary>
-    public static bool WithinApproach(System.Windows.Point cursorDip, System.Windows.Rect bodyDip)
+    public static bool WithinApproach(double cursorX, double cursorY, double bodyX, double bodyY, double bodyWidth, double bodyHeight)
     {
-        double dx = cursorDip.X - (bodyDip.X + bodyDip.Width / 2.0);
-        double dy = cursorDip.Y - (bodyDip.Y + bodyDip.Height / 2.0);
-        return Math.Sqrt(dx * dx + dy * dy) < bodyDip.Width / 2.0 + ApproachDip;
+        double dx = cursorX - (bodyX + bodyWidth / 2.0);
+        double dy = cursorY - (bodyY + bodyHeight / 2.0);
+        return Math.Sqrt(dx * dx + dy * dy) < bodyWidth / 2.0 + ApproachDip;
     }
 
     // ---------------------------------------------------------------- hover linger
