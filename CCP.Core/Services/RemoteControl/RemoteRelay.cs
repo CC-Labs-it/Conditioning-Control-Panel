@@ -493,6 +493,8 @@ namespace ConditioningControlPanel.Services
                 available_sessions = sessionStatus.Sessions,
                 session_info = sessionStatus.Progress,
                 share_avatar = s.RemoteShareAvatar,
+                // Only advertise features this head actually implements.
+                caps = new[] { "haptic_pattern", "haptic_level" },
             };
             try
             {
