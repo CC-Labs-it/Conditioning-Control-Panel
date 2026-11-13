@@ -155,11 +155,14 @@ public sealed class EnhancementScreenMirrorTests {
         typeof(EnhancementPlayerWindow).GetField("_isVideoMode", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, true);
         typeof(EnhancementPlayerWindow).GetField("_videoNavigated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, true);
         typeof(EnhancementPlayerWindow).GetField("_durationSec", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, 100d);
+        var oldVolume = CoreSettings.Current.DeeperPlayerVolume; player.FindControl<Slider>("SliderVolume")!.Value = 50;
         foreach (var key in new[] { "Space", "Left", "Right", "Up", "Down", "M", "F" }) host.OnWebMessage("ccp_key:" + key + ":1:0");
         Assert.Null(Fullscreen(player)); Assert.Empty(topo.Calls); // a page-relayed F never enters
         player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F }); player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.F });
         Assert.NotNull(Fullscreen(player)); Assert.Contains(scripts, x => x.Contains("l.play()")); Assert.Contains(scripts, x => x.Contains("(-30)")); Assert.Contains(scripts, x => x.Contains("(30)"));
-        Assert.Contains(scripts, x => x.Contains("volume+0.05")); Assert.Contains(scripts, x => x.Contains("volume+-0.05")); Assert.Contains(scripts, x => x.Contains("l.volume=0;"));
+        // WPF player:2811-2889: video keys move the slider, and the slider drives the page volume.
+        Assert.Contains(scripts, x => x.Contains("l.volume=0.55;")); Assert.Contains(scripts, x => x.Contains("l.volume=0.5;")); Assert.Contains(scripts, x => x.Contains("l.volume=0;"));
+        Assert.Equal(0, player.FindControl<Slider>("SliderVolume")!.Value); Assert.Equal(50, CoreSettings.Current.DeeperPlayerVolume);
         host.OnWebMessage("ccp_key:Right:0:0"); Assert.Contains(scripts, x => x.Contains("(5)"));
         var nativeCount = scripts.Count; player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space }); Assert.Equal(nativeCount + 1, scripts.Count); Assert.Contains(scripts, x => x.Contains("l.pause()"));
         typeof(WindowBase).GetMethod("HandleDeactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(player, null); player.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space }); Assert.Equal(nativeCount + 2, scripts.Count);
@@ -175,7 +178,31 @@ public sealed class EnhancementScreenMirrorTests {
         var volume = player.FindControl<Slider>("SliderVolume")!; volume.Value = 50; player.PlayerKey(Key.Up); Assert.Equal(55, volume.Value); player.PlayerKey(Key.Down); Assert.Equal(50, volume.Value);
         player.PlayerKey(Key.M); Assert.Equal(0, volume.Value); player.PlayerKey(Key.M); Assert.Equal(50, volume.Value);
         player.PlayerKey(Key.M); volume.Value = 60; player.PlayerKey(Key.M); Assert.Equal(0, volume.Value); player.PlayerKey(Key.M); Assert.Equal(60, volume.Value);
-        player.PlayerKey(Key.Right); Assert.Equal(5d, typeof(EnhancementPlayerWindow).GetField("_currentSec", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(player)); });
+        player.PlayerKey(Key.Right); Assert.Equal(5d, typeof(EnhancementPlayerWindow).GetField("_currentSec", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(player));
+        CoreSettings.Current.DeeperPlayerVolume = oldVolume; });
+    [Fact]
+    public Task VideoVolumeFollowsTheSliderAndAMuteIsNeverSaved() => RunAsync(false, async (player, host, topo, mirror) => {
+        // WPF EnhancementPlayerWindow.xaml.cs:1017-1029, 1361-1364, 1431, 1841.
+        var scripts = new List<string>(); host.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>("\"1|10|1\""); };
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var oldVolume = CoreSettings.Current.DeeperPlayerVolume;
+        try {
+            typeof(EnhancementPlayerWindow).GetMethod("ShowMediaPaneFor", flags)!.Invoke(player, new object?[] { "video" });
+            Assert.True(player.FindControl<StackPanel>("VolumePanel")!.IsVisible);
+            typeof(EnhancementPlayerWindow).GetField("_isVideoMode", flags)!.SetValue(player, true);
+            typeof(EnhancementPlayerWindow).GetField("_videoNavigated", flags)!.SetValue(player, true);
+            var volume = player.FindControl<Slider>("SliderVolume")!;
+            volume.Value = 40; Assert.Contains(scripts, x => x.Contains("l.volume=0.4;l._ccpVol=0.4;")); Assert.Equal(40, CoreSettings.Current.DeeperPlayerVolume);
+            player.PlayerKey(Key.M); Assert.Equal(0, volume.Value); Assert.Contains(scripts, x => x.Contains("l.volume=0;")); Assert.Equal(40, CoreSettings.Current.DeeperPlayerVolume);
+            // A new page (or a player that mounts late) starts without the stamp, so the poll re-applies the slider.
+            scripts.Clear(); await (Task)typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", flags)!.Invoke(player, null)!;
+            Assert.Contains(scripts, x => x.Contains("if(l._ccpVol!==0){l.volume=0;l._ccpVol=0;}") && x.Contains("l.currentTime+"));
+            player.PlayerKey(Key.M); Assert.Equal(40, volume.Value);
+            player.PlayerKey(Key.M); volume.Value = 30; Assert.Equal(30, CoreSettings.Current.DeeperPlayerVolume); // a hand-moved slider ends the mute
+            player.PlayerKey(Key.M); Assert.Equal(0, volume.Value); player.PlayerKey(Key.M); Assert.Equal(30, volume.Value);
+        }
+        finally { CoreSettings.Current.DeeperPlayerVolume = oldVolume; }
+    });
     [Fact]
     public Task PageMessagesCannotEnterFullscreenButCanLeaveIt() => Run(true, (player, host, topo, mirror) => {
         typeof(EnhancementPlayerWindow).GetField("_isVideoMode", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, true);
