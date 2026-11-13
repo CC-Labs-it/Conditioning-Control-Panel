@@ -26,6 +26,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        /// <summary>The mod the card last followed: WPF only re-syncs the site on a real switch (ApplyActiveModChange),
+        /// while this head's ModChanged also fires on a same-mod asset refresh (#4330).</summary>
+        private string? _browserCardModId;
+
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -41,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnBrowserCardTrackerChanged;
+                _browserCardModId = App.Mods?.ActiveModId;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
                 CoreMods.ModChanged += OnBrowserCardModChanged;
                 SyncBrowserCard();
@@ -60,7 +65,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(OnBrowserModSwitched);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() =>
+        {
+            var active = App.Mods?.ActiveModId;
+            var switched = !string.Equals(_browserCardModId, active, StringComparison.OrdinalIgnoreCase);
+            _browserCardModId = active;
+            // A same-mod asset refresh does not own the page or the radios: the user keeps what is open.
+            if (switched) OnBrowserModSwitched();
+        });
 
         /// <summary>WPF MainWindow/MainWindow.xaml.cs:3244-3262: the radios follow the new mod, and a mod that does not offer
         /// BambiCloud also sends an open page to its own default, even when the override reveals the radio. Only a
