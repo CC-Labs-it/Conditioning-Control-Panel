@@ -373,7 +373,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.Held = false;
             Field.Bubbles.Clear();
+            ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
+            _hoverScreen = -1;
             foreach (var w in Windows) w.Sync();
+            RequestFrame();
         }
 
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>

@@ -1530,6 +1530,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                      : new[] { "chaos/thud.mp3", "bubbles/Pop2.mp3" },
                 rare ? 0.6f : 0.65f);
 
+            /// <summary>WPF ChaosSfx.PlayWaveClear: the burst as a wave boundary clears the field.</summary>
+            public static void PlayWaveClear() => PlayFirstAvailable(new[] { "chaos/wave_clear.mp3", "lvup.mp3" }, 0.8f);
+
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
 
             /// <summary>First candidate that exists on disk wins; a miss in all of them is
