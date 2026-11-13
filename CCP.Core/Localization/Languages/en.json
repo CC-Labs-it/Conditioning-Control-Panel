@@ -6884,6 +6884,7 @@
   "play_arcademy_cta": "Attend",
   "play_arcademy_tooltip": "today's timetable is waiting.",
   "arcademy_boot_error_body": "{0} could not start on this machine.\n\n{1}",
+  "intake_launch_failed_body": "Couldn't start Graded Intake:\n\n{0}",
   "arcademy_open_failed_body": "Couldn't open the Arcademy:\n\n{0}",
   "arcademy_boot_failed_this_session": "The Arcademy failed to start the last time you tried on this machine.\n\nTry opening it again?",
   "_comment_pbp_door": "Piece by Piece (Play wall strip, failure dialog)",

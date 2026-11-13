@@ -6306,6 +6306,7 @@
   "play_arcademy_cta": "Прийти",
   "play_arcademy_tooltip": "сегодняшнее расписание ждёт.",
   "arcademy_boot_error_body": "Не удалось запустить {0} на этом компьютере.\n\n{1}",
+  "intake_launch_failed_body": "Не удалось запустить Graded Intake:\n\n{0}",
   "arcademy_open_failed_body": "Не удалось открыть The Arcademy:\n\n{0}",
   "arcademy_boot_failed_this_session": "The Arcademy не смогла запуститься в прошлый раз на этом компьютере.\n\nПопробовать открыть снова?",
   "_comment_pbp_door": "Piece by Piece (Play wall strip, failure dialog)",

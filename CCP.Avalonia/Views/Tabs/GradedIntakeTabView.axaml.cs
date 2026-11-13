@@ -201,9 +201,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // WPF Lab.cs:195/198: a first-ever run does not duck the control panel (it reads as a crash). The live
             // service first: a finished intake reaches the file only on its next (up to 30 s) save.
-            OpenIntake(owner, duckMain: App.IntakePunchCard?.HasEverCompletedIntake
+            LaunchIntake(owner, App.IntakePunchCard?.HasEverCompletedIntake
                 ?? IntakePunchCardState.ReadEverCompletedIntake(CorePaths.UserData));
         }
+
+        internal static void LaunchIntake(Window? owner, bool duckMain)
+        {
+            try { OpenIntake(owner, duckMain); }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "BtnStartIntake_Click failed");
+                Windows.IntakeHostWindow.ShowWarning(owner, Loc.GetF("intake_launch_failed_body", ex.Message));
+            }
+        }
+
+        internal static Action<Windows.IntakeHostWindow> LoadAndShowIntake = intake =>
+        {
+            intake.Load(Platform.WebAssetServer.Shared);
+            intake.Show();
+        };
 
         /// <summary>WPF IntakeHostService.Launch: one live run at a time, focused if already open;
         /// built in the remembered window mode unless this is a recovery relaunch.</summary>
@@ -216,12 +232,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 live.Activate();
                 return live;
             }
-            var intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null };
+            var intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null, WarningOwner = owner };
             if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
             intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
             intake.Drafted += (session, path) => OnSessionDrafted(shell, session, path);
-            intake.Load(Platform.WebAssetServer.Shared);
-            intake.Show();
+            try { LoadAndShowIntake(intake); }
+            catch { intake.Close(); throw; }
             return intake;
         }
 

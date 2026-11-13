@@ -6306,6 +6306,7 @@
   "play_arcademy_cta": "Teilnehmen",
   "play_arcademy_tooltip": "der Stundenplan von heute wartet.",
   "arcademy_boot_error_body": "{0} konnte auf diesem Rechner nicht gestartet werden.\n\n{1}",
+  "intake_launch_failed_body": "Graded Intake konnte nicht gestartet werden:\n\n{0}",
   "arcademy_open_failed_body": "The Arcademy konnte nicht geöffnet werden:\n\n{0}",
   "arcademy_boot_failed_this_session": "The Arcademy konnte beim letzten Versuch auf diesem Rechner nicht starten.\n\nNoch einmal versuchen?",
   "_comment_pbp_door": "Piece by Piece (Play wall strip, failure dialog)",
