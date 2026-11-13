@@ -134,4 +134,54 @@ public class ChaosDvdFlockTests
             f.Clear();
         }
     }
+
+    // WPF ChaosDvdOverlay.cs:320-331, 392-397: the Intrusive Thoughts capstone (#3555).
+    [Fact]
+    public void RabbitContactSplitsOnceWithTwoSecondsAndDivergedVelocity()
+    {
+        var (f, _) = NewFlock();
+        var parent = f.Launch(3, 1.3, 0.8, text: "thought", splitOnRabbit: true).Single();
+        (parent.X, parent.Y, parent.Vx, parent.Vy) = (300, 200, 100, 100);
+        f.RabbitContact = l => ReferenceEquals(l, parent);
+        var frame = f.Step(0.1);
+        var clone = Assert.Single(frame.Spawned);
+        Assert.Equal(1, frame.RabbitCues);
+        Assert.True(parent.SplitSpent);
+        Assert.Equal(4.9, parent.RemainingSec, 6);
+        Assert.Equal(parent.RemainingSec, clone.RemainingSec);
+        Assert.Equal((parent.X, parent.Y, parent.Text, parent.FontScale), (clone.X, clone.Y, clone.Text, clone.FontScale));
+        Assert.True(clone.SplitOnRabbit);   // a clone may split again on its own rabbit
+        Assert.False(clone.SplitSpent);
+        Assert.Equal(0, clone.Age);
+        Assert.Equal(0.61, Math.Abs(Math.Atan2(clone.Vy, clone.Vx) - Math.PI / 4), 6);
+        Assert.Equal(20000, clone.Vx * clone.Vx + clone.Vy * clone.Vy, 5);
+        Assert.Empty(f.Step(0.1).Spawned);   // the parent split is spent; the clone touches no rabbit
+    }
+
+    [Fact]
+    public void RabbitCapStillExtendsParentAndSpendsItsSplit()
+    {
+        var (f, _) = NewFlock();
+        for (int i = 0; i < ChaosDvdFlock.MaxThoughts; i++)
+            f.Launch(3, 1, 1, text: "thought", splitOnRabbit: true);
+        f.RabbitContact = _ => true;
+        var frame = f.Step(0.1);
+        Assert.Empty(frame.Spawned);
+        Assert.Equal(0, frame.RabbitCues);
+        Assert.All(f.Active, l => { Assert.True(l.SplitSpent); Assert.Equal(4.9, l.RemainingSec, 6); });
+        f.Step(0.1);
+        Assert.All(f.Active, l => Assert.Equal(4.8, l.RemainingSec, 6));
+    }
+
+    [Fact]
+    public void PlainThoughtsAndToyLogosNeverSplitOnRabbits()
+    {
+        var (f, _) = NewFlock();
+        f.Launch(3, 1, 1, text: "thought");
+        f.Launch(3, 1, 1);
+        f.RabbitContact = _ => true;
+        var frame = f.Step(0.1);
+        Assert.Empty(frame.Spawned);
+        Assert.All(f.Active, l => Assert.Equal(2.9, l.RemainingSec, 6));
+    }
 }

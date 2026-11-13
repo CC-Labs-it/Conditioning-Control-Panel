@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (Echo/Bound) - SpawnTick spawns treats, plain live variants, the Tease and the Chaperone; every
     /// motion other than FloatUp, RainDown and Chaperone roaming, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
-    /// the perf backoff on the cadence; only the Gif Rain payload fires; the
+    /// the perf backoff on the cadence; Gif Rain and bouncing text payloads fire; the
     /// first-time bonus pop text.
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
@@ -596,7 +596,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 case "click": _state.PushEvent("💥 a tap isn't a hold"); break;
                 case "release": _state.PushEvent("💥 you let go"); break;
             }
-            // Other payload runners and the ambient remap remain unported.
+            // Other payload families still need their runners.
             EffectLabel(b);   // WPF Detonate :4862
             FirePayloadForDetonation(spec);
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
@@ -757,14 +757,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runVideo = null;
         }
 
+        internal static Random AmbientRng = new();
+        private static bool HeavyEffectActive => CoreEngine.Video?.IsPlaying == true
+            || ChaosGifCascadeOverlay.IsRaining || BubbleOverlay.Field.Clock() < _heavyUntilUtc;
+
         // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
         // detonations, including during the off-thread pool pick, without queuing.
         internal static void FirePayloadForDetonation(EffectBubbleSpec spec)
         {
             var payload = spec.Payload;
+            // WPF ChaosModeService.cs:2279-2291,2340-2349: only HT links soften;
+            // videos retain their opt-out in the variant pool. Busy rain always selects text.
+            if (_state?.Config.AmbientMode == true && payload.Kind == EffectBubblePayloadKind.HtLink)
+            {
+                bool rain = !HeavyEffectActive && AmbientRng.NextDouble() < 0.5;
+                EffectPayload soft = rain ? new GifCascadePayload() : new BouncingTextPayload();
+                soft.Strength = payload.Strength;
+                if (rain) _heavyUntilUtc = BubbleOverlay.Field.Clock().AddSeconds(GifCascadePayload.DURATION_SEC + 5);
+                ChaosOverlayWindow.ChaosSfx.Play(rain ? "fx_rain_start" : "fx_text", 0.45f);
+                FireScaledPayload(soft);
+                return;
+            }
             bool heavy = payload.Kind is EffectBubblePayloadKind.GifCascade or EffectBubblePayloadKind.Video;
             var now = BubbleOverlay.Field.Clock();
-            if (heavy && (CoreEngine.Video?.IsPlaying == true || ChaosGifCascadeOverlay.IsRaining || now < _heavyUntilUtc))
+            if (heavy && HeavyEffectActive)
             {
                 // WPF ChaosModeService.cs:2308-2309: drop only the effect, with a feed line.
                 Log.Information("Chaos: dropped {Kind} detonation: a heavy effect is already running", payload.Kind);

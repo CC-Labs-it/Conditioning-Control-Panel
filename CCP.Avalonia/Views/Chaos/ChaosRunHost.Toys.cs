@@ -14,8 +14,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 internal static partial class ChaosRunHost
 {
     private static double _vibeRemaining, _snapRemaining, _thoughtAccumSec;
+    // WPF ChaosModeService.cs:3009-3011: a maxed Intrusive Thoughts arms the rabbit split (#3555).
     internal static Action<double, double, double, string> LaunchThought = (sec, speed, scale, text) =>
-        ChaosDvdOverlay.Launch(_overlay!, sec, speed, scale, text: text);
+        ChaosDvdOverlay.Launch(_overlay!, sec, speed, scale, text: text,
+            splitOnRabbit: _state?.MaxedBoons.Contains("intrusive_thoughts") == true);
     private static bool _afterglow, _vibeHover;
     private static FrameClock? _sweepTimer;
     // Same desktop pointer seam as the existing cursor/trail surfaces; null off X11.
