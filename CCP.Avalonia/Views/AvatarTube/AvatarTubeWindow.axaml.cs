@@ -1226,6 +1226,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _idleTimer.Start();
         });
 
+        /// <summary>WPF ResetIdleTimer (Speech.cs:1672): a line restarts the cadence and counts as activity
+        /// for autonomy.</summary>
+        private void ResetIdleTimer()
+        {
+            RestartIdleTimer();
+            QuickShell?.Autonomy.ReportUserActivity();
+        }
+
         internal void IdleTick()
         {
             if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
@@ -1254,7 +1262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text, bool unprompted = false)
+        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
@@ -1268,7 +1276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: unprompted);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted);
             });
         }
 
@@ -1278,7 +1286,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
                                 bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false)
         {
-            RestartIdleTimer();
+            ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
                 var spokenHandled = false;
                 var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1385,7 +1393,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 _listeningDotsTimer = timer;
                 timer.Start();
-                RestartIdleTimer();   // WPF AvatarTubeWindow.Speech.cs:789: keep idle off the mic prompt.
+                ResetIdleTimer();   // WPF AvatarTubeWindow.Speech.cs:789: keep idle off the mic prompt.
             });
         }
 
