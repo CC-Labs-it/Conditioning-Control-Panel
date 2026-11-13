@@ -620,6 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             ClearEStim();
             Field.FreezeChaos = false;
+            Field.ChaosTimeScale = 1.0;   // WPF BubbleService.cs:2037
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosResidues.Clear();   // WPF EndChaosMode :2069
