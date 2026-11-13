@@ -40,6 +40,162 @@ public sealed class CompanionPersonalityZoneTests
     private static ExplicitContentAcknowledgementDialog? Gate(Window shell) =>
         shell.OwnedWindows.OfType<ExplicitContentAcknowledgementDialog>().SingleOrDefault();
 
+    private sealed class FrozenClock : System.TimeProvider
+    {
+        public override System.DateTimeOffset GetUtcNow() => new(2026, 10, 12, 12, 0, 0, global::System.TimeSpan.Zero);
+    }
+
+    // WPF MainWindow.CompanionRoom.cs:116-143: only a successful change queues the matching bubble.
+    [Fact]
+    public Task SpiceToggleGivesFeedbackOnlyAfterAChange() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        s.AvatarEnabled = false;
+        s.AvatarMuted = true;
+        s.SlutModeEnabled = false;
+        s.ActiveCommunityPromptId = null;
+        s.CompanionPrompt.UseCustomPrompt = false;
+        s.CompanionPrompt.ExplicitContentAcknowledged = false;
+        s.ActivePersonalityPresetId = PersonalityService.Shared.GetAllPresets()
+            .First(p => ExplicitContentGate.RequiresAcknowledgement(p, true)).Id;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("personality");
+            shell.CompleteTabTransition();
+            Dispatcher.UIThread.RunJobs();
+            s.AvatarEnabled = true;
+            shell.ShowAvatarTube();
+            Dispatcher.UIThread.RunJobs();
+            var tube = Assert.IsType<global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow>(shell.Tube);
+            tube.SpeechClock = new FrozenClock();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            var view = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single();
+            var spice = view.FindControl<ToggleButton>("SpiceToggle")!;
+
+            Click(shell, spice);
+            Gate(shell)!.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(s.SlutModeEnabled);
+            Assert.False(tube.IsSpeaking);
+            Assert.Equal(0, tube.QueuedSpeechCount);
+
+            ExplicitContentGate.MarkAcknowledged(s.CompanionPrompt);
+            Click(shell, spice);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(s.SlutModeEnabled);
+            while (tube.TypewriterFrame is { } onFrame) onFrame();
+            Assert.Equal(Loc.Get("companion_spice_on_line"), text.Text);
+            Assert.True(await shell.SetSlutModeAsync(true)); // unchanged: no second bubble
+            Assert.Equal(0, tube.QueuedSpeechCount);
+
+            System.Action? deliver = null;
+            tube.SpeechDelayScheduler = (_, fire) => { deliver = fire; return () => { }; };
+            tube.EndSpeechBubble();
+            Click(shell, spice);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(s.SlutModeEnabled);
+            Assert.NotNull(deliver); // regular Giggle waits for the previous line's gap
+            deliver!();
+            while (tube.TypewriterFrame is { } offFrame) offFrame();
+            Assert.Equal(Loc.Get("companion_spice_off_line"), text.Text);
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+        }
+    });
+
+    // WPF Speech.cs:463-477: an off-screen toggle skips speech and still earns the gap.
+    [Fact]
+    public Task SpiceWhileAvatarIsHiddenSkipsSpeechAndKeepsTheQueueGap() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont().With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options()).ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previous = CoreSettings.ServiceProvider;
+        var oldMod = CoreMods.ActiveModIdProvider;
+        var oldPath = CoreModArt.AudioOverridePathProvider;
+        var oldOneShot = CoreAudio.PlayOneShotProvider;
+        var oldStoppable = CoreAudio.PlayStoppableProvider;
+        var sound = System.IO.Path.GetTempFileName();
+        int plays = 0;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        s.AvatarEnabled = true;
+        s.AvatarMuted = false;
+        s.MasterVolume = 100;
+        s.SlutModeEnabled = false;
+        s.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
+        s.ActiveCommunityPromptId = null;
+        s.CompanionPrompt.UseCustomPrompt = false;
+        ExplicitContentGate.MarkAcknowledged(s.CompanionPrompt);
+        CoreMods.ActiveModIdProvider = () => "test";
+        CoreModArt.AudioOverridePathProvider = _ => sound;
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => { if (tag == "bubble-fallback") plays++; };
+        CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { if (tag == "giggle") plays++; return () => { }; };
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("personality");
+            shell.CompleteTabTransition();
+            Dispatcher.UIThread.RunJobs();
+            var tube = shell.Tube!;
+            Assert.NotNull(tube);
+            tube.SpeechClock = new FrozenClock();
+            var spice = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().FindControl<ToggleButton>("SpiceToggle")!;
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            var before = text.Text;
+            shell.SetAvatarEnabled(false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(tube.IsVisible);
+            Click(shell, spice);
+            Assert.True(s.SlutModeEnabled);
+            Assert.False(tube.IsSpeaking);
+            Assert.False(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+            Assert.Equal(before, text.Text);
+            Assert.Equal(0, plays);
+
+            System.Action? deliver = null;
+            System.TimeSpan? gap = null;
+            tube.SpeechDelayScheduler = (delay, fire) => { gap = delay; deliver = fire; return () => { }; };
+            shell.SetAvatarEnabled(true);
+            Click(shell, spice);
+            Assert.False(s.SlutModeEnabled);
+            Assert.Equal(System.TimeSpan.FromSeconds(2), gap);
+            Assert.NotNull(deliver);
+            deliver!();
+            while (tube.TypewriterFrame is { } frame) frame();
+            Assert.Equal(Loc.Get("companion_spice_off_line"), text.Text);
+        }
+        finally
+        {
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+            CoreMods.ActiveModIdProvider = oldMod;
+            CoreModArt.AudioOverridePathProvider = oldPath;
+            CoreAudio.PlayOneShotProvider = oldOneShot;
+            CoreAudio.PlayStoppableProvider = oldStoppable;
+            System.IO.File.Delete(sound);
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task PresetChipsSpiceAndResetGoThroughTheGate() => AvaloniaTestDispatcher.RunAsync(() =>
     {

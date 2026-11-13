@@ -71,6 +71,12 @@ internal sealed partial class FirstShowStageWindow : Window
     private double _scale;
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
+    private IDisposable? _stageCaptureLayer, _emiCaptureLayer, _speechCaptureLayer;
+    private double _captureRetryAt;
+    private bool _captureExclusionEstablished;
+    internal Func<Window, bool> CaptureExcluded = FirstShowCapture.CanCapture;
+    internal Func<Window, IDisposable?> LayerForCapture = Win32Overlay.CaptureLayer;
+    internal Window SpeechWindow => _speechWindow;
     private CancellationTokenSource? _load;
     internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadDesktopInput = X11Pointer.Read;
     private PixelRect[] _inputBuf = new PixelRect[64];   // reused every frame
@@ -392,7 +398,7 @@ internal sealed partial class FirstShowStageWindow : Window
             finally { loading = false; }
             if (paths.Count == 0) throw new IOException("No demo images available");
             ShowPreparing();
-            candidate = new FirstShowEffects(_audio.Cue);
+            candidate = new FirstShowEffects(_audio.Cue, screen: _screenPx, captureAllowed: EnsureCaptureExclusion);
             await candidate.LoadAsync(paths);
             request.Token.ThrowIfCancellationRequested();
             if (_closed || _load != request) return;
@@ -424,7 +430,7 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         _load?.Cancel(); _load?.Dispose(); _load = null;
         Ask(Text("loading")); ShowPreparing(); AddButton(Text("later"), Close);
-        var effects = new FirstShowEffects(_audio.Cue);
+        var effects = new FirstShowEffects(_audio.Cue, screen: _screenPx, captureAllowed: EnsureCaptureExclusion);
         try
         {
             await effects.LoadAsync(BundledPictures());
@@ -437,6 +443,35 @@ internal sealed partial class FirstShowStageWindow : Window
     {
         if (_effects != null) { _stage.Children.Remove(_effects); _effects.Dispose(); }
         effects.Width = Width; effects.Height = Height; _stage.Children.Insert(0, effects); _effects = effects;
+    }
+    // WPF excludes stage, EMI and speech from the capture.
+    private bool EnsureCaptureExclusion()
+    {
+        try
+        {
+            if (_emi == null) { ReleaseCaptureLayers(); return false; }
+            // A changed handle or lost affinity invalidates a live frame. Stop this pump before retrying.
+            if (_captureExclusionEstablished && !FirstShowCapture.CanCapture(this, _emi, _speechWindow, CaptureExcluded))
+            { ReleaseCaptureLayers(); return false; }
+            if (Clock() < _captureRetryAt) return false;
+            if (!CaptureExcluded(this)) _stageCaptureLayer = LayerForCapture(this);
+            if (!CaptureExcluded(_emi)) _emiCaptureLayer = LayerForCapture(_emi);
+            if (!CaptureExcluded(_speechWindow)) _speechCaptureLayer = LayerForCapture(_speechWindow);
+            if (FirstShowCapture.CanCapture(this, _emi, _speechWindow, CaptureExcluded)) { _captureExclusionEstablished = true; _captureRetryAt = 0; return true; }
+        }
+        catch (Exception ex) { Log.Debug(ex, "First show capture exclusion unavailable"); }
+        _captureRetryAt = Clock() + 1; // WPF BrainDrainCapturePump.cs:358-374 also backs off failed capture setup
+        ReleaseCaptureLayers(); return false;
+    }
+    private void ReleaseCaptureLayers()
+    {
+        _captureExclusionEstablished = false;
+        var stage = _stageCaptureLayer; _stageCaptureLayer = null;
+        var speech = _speechCaptureLayer; _speechCaptureLayer = null;
+        var emi = _emiCaptureLayer; _emiCaptureLayer = null;
+        try { stage?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "First show stage exclusion cleanup failed"); }
+        try { speech?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "First show speech layer cleanup failed"); }
+        try { emi?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "First show EMI layer cleanup failed"); }
     }
     // WPF Confirm :222-231: the warning, with the stop key in red.
     private void Confirm()
@@ -466,6 +501,7 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_playing)
         {
             _effects?.Tick(time, dt);
+            if (time >= S.WordsAt) ReleaseCaptureLayers();
             UpdateBubbleInput();
             while (_beat + 1 < S.Beats.Length && time >= S.Beats[_beat + 1])
             {
@@ -588,8 +624,9 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_main != null) _main.Activated -= OnShellActivated;
         if (_windowsKeys) Win32PanicKey.KeyDown -= OnGlobalKey;
         _clock.Stop();
+        _effects?.Dispose(); _effects = null; ReleaseCaptureLayers();
         try { _speechWindow.Close(); } catch (Exception ex) { Log.Debug(ex, "First show speech window close failed"); }
         _load?.Cancel(); _load?.Dispose(); _load = null;
-        _effects?.Dispose(); _effects = null; _audio.Dispose(); ReleaseFiles();
+        _audio.Dispose(); ReleaseFiles();
     }
 }

@@ -409,16 +409,18 @@ public sealed class RemoteDirectoryTabTests
 
             tube.ShowEmoteFeedback("good girl", isPending: true);
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } pendingFrame) pendingFrame();
             Assert.Equal("Sending...", speech.Text);
             Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
             // Up one second longer than a preset line of the same text (WPF ShowEmoteFeedback).
             var timer = (DispatcherTimer)typeof(AvatarTubeWindow).GetField("_speechTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(tube)!;
-            Assert.Equal(TimeSpan.FromSeconds(Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0) + 1), timer.Interval);
+            Assert.Equal(TimeSpan.FromSeconds(Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0) + 1.75), timer.Interval);
 
             var longText = new string('x', 50);
             tube.ShowEmoteFeedback(longText, isPending: false);
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } sentFrame) sentFrame();
             Assert.Equal($"Sent: \"{new string('x', 40)}...\"", speech.Text);
 
             // An AI bubble owns the surface: the feedback stays out of its way.

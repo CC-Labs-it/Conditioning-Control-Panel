@@ -853,6 +853,72 @@ public sealed class ChaosRunHostTests
         Assert.Contains(loc.Get("chaos_event_sin_shielded"), state.RecentEvents);
         Assert.Contains(loc.Get("chaos_event_sin_resistance"), state.RecentEvents);
         Assert.EndsWith(sin.Name, ChaosAnnouncerOverlay.Active!.Current!.Text);
+        // WPF ChaosModeService.cs:1571 skull, as the curse icon (#3541); with word-art the picture carries it.
+        if (ChaosEffectBannerOverlay.ResolveArt(sin.Id) == null)
+            Assert.Equal(ChaosOverlayWindow.CurseIcon, Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions
+                .GetLogicalDescendants(ChaosAnnouncerOverlay.Active!).OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>()).Kind);
+    });
+
+    // Hand-ported from #3541: WPF AnnounceFinalLoopIfEntering (ChaosModeService.cs:1460,1625,1639-1647).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task The_last_loop_is_announced_once_when_it_begins(bool drafts) => WithFreshRun(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        var cfg = Cfg(); cfg.BoonDraftEnabled = drafts;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!;
+        int LastLoops() => state.RecentEvents.Count(e => e == loc.Get("chaos_event_last_loop"));
+        void Wave()
+        {
+            Ticks(80);
+            if (!drafts) return;
+            ChaosRunHost.ChooseBoon(null);
+            ChaosAnnouncerOverlay.CloseActive();
+            Assert.Equal(0, LastLoops());   // never under the draft table: the banner waits for GO
+            overlay.FinishCountdown();
+        }
+        Wave();
+        Assert.Equal(2, state.WaveIndex);
+        Assert.Equal(0, LastLoops());
+        ChaosAnnouncerOverlay.CloseActive();
+        Wave();
+        Assert.Equal(3, state.WaveIndex);
+        Assert.Equal(1, LastLoops());
+        Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+        Assert.Equal(ChaosAnnounceKind.Depth, ChaosAnnouncerOverlay.Active.Current.Kind);
+        Ticks(20);
+        Assert.Equal(1, LastLoops());
+    });
+
+    // Hand-ported from #3541: WPF ResumeAfterDraft (ChaosModeService.cs:1614) plays one unlock cue for the deferred cards.
+    [Fact]
+    public Task Deferred_draft_cards_play_one_unlock_cue_at_go() => WithFreshRun(() =>
+    {
+        var cues = new List<string>();
+        var old = CoreAudio.PlayOneShotProvider;
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+        try
+        {
+            var meta = ChaosMeta.State; meta.LessonsComplete.Add("silk_touch");
+            meta.LessonsComplete.Remove("draft4");
+            meta.LessonProgress["draft4"] = ChaosLessons.ById("draft4")!.Target - 1;
+            var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+            ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            Ticks(80);
+            ChaosRunHost.ChooseBoon(ChaosBoonPool.All.First(b => !b.IsCurse));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain("ui_unlock", cues);
+            overlay.FinishCountdown();
+            Assert.True(ChaosUnlockCardOverlay.IsShowing);
+            Assert.Single(cues, c => c == "ui_unlock");
+        }
+        finally { CoreAudio.PlayOneShotProvider = old; }
     });
 
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the

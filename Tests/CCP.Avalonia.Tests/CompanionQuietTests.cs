@@ -80,6 +80,7 @@ public sealed class CompanionQuietTests
             audio = 0;
             Assert.NotNull(pending);
             pending!();
+            while (tube.TypewriterFrame is { } frame) frame();   // presets type slowly (WPF Speech.cs:559)
             Assert.Equal("queued sensing", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             Assert.Equal(0, audio);
             tube.EndSpeechBubble();
