@@ -22,13 +22,14 @@
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * TryPresentSeasonRecap: the pinned WPF reference retires the automatic modal; only
-//     silent monthly bookkeeping remains. Upgrade What's New is in MainShellWindow.UpgradeIntro.cs.
+//   * The automatic season recap modal is retired; silent bookkeeping runs below.
 
 using System;
 using Avalonia.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -45,9 +46,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void HookFirstRun()
         {
+            ProfileAdopt.SeasonAdvanced += OnSeasonAdvanced;
+            Closed += (_, _) => { _seasonBookkeepingClosed = true; ProfileAdopt.SeasonAdvanced -= OnSeasonAdvanced; };
             try
             {
                 bool fresh = FirstRunWizard.ShouldRunAndClaim();
+                if (!fresh) UpdateSeasonBookkeeping();
+
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 if (!fresh) ArmUpgradeIntro();
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
@@ -73,6 +78,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // A first-run screen must never be the reason a fresh install fails to start.
                 Log.Warning(ex, "[FirstRun] Could not arm the first-run wizard");
             }
+        }
+
+        private bool _seasonBookkeepingClosed;
+
+        // WPF ProfileSyncService.cs:894,1029,2158 posts the nudge to the shell dispatcher.
+        private void OnSeasonAdvanced(AppSettings settings)
+        {
+            var account = settings.UnifiedId;
+            try
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_seasonBookkeepingClosed && ReferenceEquals(CoreSettings.Service?.Current, settings)
+                        && settings.UnifiedId == account)
+                        UpdateSeasonBookkeeping();
+                }, DispatcherPriority.Normal);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to queue monthly bookkeeping"); }
+        }
+
+        private void UpdateSeasonBookkeeping()
+        {
+            try
+            {
+                if (CoreSettings.Service != null && SeasonRollover.UpdateBookkeeping(CoreSettings.Current,
+                    handle: CoreAccount.DisplayName, isSupporter: CoreAccount.HasPremiumAccess,
+                    lifetimePointsSpent: App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0,
+                    fallbackPercentile: _lbPercentile))
+                    CoreSettings.Save();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to update monthly bookkeeping"); }
         }
 
         /// <summary>
