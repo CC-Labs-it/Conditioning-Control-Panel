@@ -376,6 +376,9 @@ public sealed class EmiDeskSummonTests
         await svc.Summon();
         Assert.Equal(before + 1, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.SummonCount);
         var win = svc.Window!;
+        // Summon restores whatever place an earlier test saved in the shared EmiState, so park
+        // her first: the round trip below is what this test pins.
+        win.ParkBottomRightOfMain();
         var parked = win.Position;
         var moved = new PixelPoint(parked.X - 137, parked.Y - 91);
         win.Position = moved;

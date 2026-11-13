@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -490,9 +491,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             catch (Exception ex) { Log.Warning(ex, "Webcam review privacy dialog failed"); }
         }
 
+        // Keep the click's task observable so tests can wait for the actual start to finish.
+        internal Task? WebcamDebugStartTask { get; private set; }
+        internal Func<Task<bool>> StartWebcamDebug { get; set; } = () => Platform.WebcamTracker.Instance.StartAsync();
+
         /// <summary>WPF BtnWebcamDebugStart_Click (MainWindow.LabTab.cs:495): stop if running; else
         /// consent when stale, then start off the UI thread and log the outcome.</summary>
-        private async void BtnWebcamDebugStart_Click(object? sender, RoutedEventArgs e)
+        private void BtnWebcamDebugStart_Click(object? sender, RoutedEventArgs e) =>
+            WebcamDebugStartTask = StartWebcamDebugAsync();
+
+        private async Task StartWebcamDebugAsync()
         {
             try
             {
@@ -515,9 +523,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 ResetDebugCounters();
                 AppendWebcamDebugLog("Starting webcam (camera open + model load can take a few seconds)…");
                 BtnWebcamDebugStart.IsEnabled = false;
-                bool started = await tracker.StartAsync();
-                BtnWebcamDebugStart.IsEnabled = true;
-                RefreshWebcamStartLabel();
+                bool started;
+                try { started = await StartWebcamDebug(); }
+                finally { BtnWebcamDebugStart.IsEnabled = true; RefreshWebcamStartLabel(); }
                 AppendWebcamDebugLog(started ? "Start() returned true — capture thread launching." : $"Start() returned false. {tracker.LastError}");
             }
             catch (Exception ex) { Log.Warning(ex, "Webcam debug start failed"); }

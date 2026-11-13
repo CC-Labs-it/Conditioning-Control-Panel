@@ -96,9 +96,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("keyword-comments", _ => Platform.KeywordAvatarComment.CancelPending()),
             new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
+            // Cancel pending browser audio work before zeroing toys (WPF AudioSyncService.cs:331;
+            // MainWindow.xaml.cs:2066,2112). Otherwise decoding may finish after panic and resume haptics.
+            new("audio-sync", _ => Platform.AudioSyncHost.Service?.StopSync()),
             // The funscript first: its RenderTick writes positions through SetPositionAsync, which the
             // 400 ms panic mute does not cover, and it would otherwise run until "engine" closes the video.
-            new("haptics", _ => { try { CoreHaptics.Service?.FunScript.OnVideoStopped(); } finally { CoreHaptics.Service?.PanicStop(); } }),
+            new("haptics", _ => { try { CoreHaptics.Service?.FunScript.OnVideoStopped(); } finally { CoreHaptics.Service?.PanicStop(); } }, After: ["audio-sync"]),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
             new("wallpaper", sh => { _ = Platform.WallpaperHead.Service?.DeactivateAsync(); }, After: ["takeover"]),

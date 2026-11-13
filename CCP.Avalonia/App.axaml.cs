@@ -285,6 +285,11 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
         }
 
+        // WPF App.xaml.cs:677: the real effects dispatcher. Webcam events are not seeded here: each
+        // binder passes its own adapter (browser card, mandatory video) and the player window seeds its own.
+        internal static void SeedDeeperEnhancements() =>
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Platform.Deeper.BrowserEnhancementDispatcher();
+
         // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
         internal static void SeedHapticPlaybackTime()
         {
@@ -940,6 +945,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
+                Platform.AudioSyncHost.Start(CoreHaptics.Service, Settings.Current.Haptics.AudioSync);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
                 StartRichPresence();
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
@@ -1137,6 +1143,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreWebcam.RevokeConsentAction = Platform.WebcamTracker.RevokeConsent;
                 _gazeDrift = new Platform.GazeDriftCorrection(Platform.WebcamTracker.Instance, Settings.Current);
+                SeedDeeperEnhancements();
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
@@ -1697,6 +1704,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopBrainDrainQuestMinutes(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
+            try { Platform.AudioSyncHost.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { Platform.WallpaperHead.Service?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }

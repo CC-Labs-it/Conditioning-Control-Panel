@@ -68,6 +68,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Throws when libvlc is not installed; the caller then leaves CoreAudio unseeded.</summary>
         public LibVlcAudio(params string[] options)
         {
+            InitializeNative();
+            // No global --no-video: video shares this instance. Audio media opt out per item instead.
+            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
+            Shared ??= _vlc;
+            _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
+        }
+
+        internal static void InitializeNative()
+        {
             // Windows ships libvlc beside the exe; a single-file publish has no
             // assembly location for LibVLCSharp to probe from, so point it there as WPF's VideoService does. Linux: system libvlc.
             // publish\libvlc (CopyLibVLCAfterPublish), else the build output's libvlc\win-x64.
@@ -76,10 +85,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 .FirstOrDefault(d => System.IO.File.Exists(System.IO.Path.Combine(d, "libvlc.dll")));
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
-            // No global --no-video: video shares this instance. Audio media opt out per item instead.
-            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
-            Shared ??= _vlc;
-            _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
         /// <summary>This instance's LibVLC (the Windows session test plays through the real output).</summary>
