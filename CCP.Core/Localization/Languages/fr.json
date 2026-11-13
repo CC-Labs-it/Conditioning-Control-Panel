@@ -2,6 +2,7 @@
   "deeper_editor_haptic_test_no_device": "Aucun appareil haptique connecté. Connectez-en un dans les paramètres pour le tester.",
   "deeper_editor_haptic_test_row_off": "La ligne Deeper est désactivée dans l’onglet Haptique. Activez-la pour tester les motifs.",
   "deeper_editor_haptic_test_premium": "Le test de l’appareil nécessite un accès Premium.",
+  "webcam_drift_unavailable": "Les clics globaux sont indisponibles sur ce bureau. La correction est désactivée.",
   "scheduler_started_title": "Planification active",
   "scheduler_started_body": "Séance démarrée automatiquement selon le planning.",
   "scheduler_ended_title": "Planification",
@@ -8375,5 +8376,8 @@
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "chargement",
   "chaos_inescapable_unlock_tip": "une porte plus profonde. elle vend la clé dans la Toybox : termine {0} descentes en Relentless, atteins Devoted ({1} descentes), puis entraîne-le pour ✦{2}.",
-  "chaos_resistance_regrows": "la résistance se régénère"
+  "chaos_resistance_regrows": "la résistance se régénère",
+  "account_merged_signin_title": "Vos comptes ont été fusionnés",
+  "account_merged_signin_summary": "Reconnectez-vous pour reprendre.",
+  "account_merged_signin_body": "Vos deux comptes ont été fusionnés. Reconnectez-vous pour reprendre.\n\nVotre progression locale est conservée."
 }

@@ -1,6 +1,7 @@
 {
   "deeper_editor_haptic_test_row_off": "触觉选项卡中的 Deeper 行已关闭。请开启后再测试模式。",
   "deeper_editor_haptic_test_premium": "设备测试需要 Premium 权限。",
+  "webcam_drift_unavailable": "此桌面不支持全局点击，自动漂移校正已关闭。",
   "scheduler_started_title": "计划已启用",
   "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",
@@ -8880,5 +8881,8 @@
   "chaos_dvd_title": "色情DVD",
   "chaos_dvd_loading": "正在加载",
   "chaos_inescapable_unlock_tip": "通往更深处的门。她在Toybox出售钥匙：完成{0}次Relentless下降，达到Devoted（{1}次下降），然后花✦{2}训练。",
-  "chaos_resistance_regrows": "抵抗力恢复"
+  "chaos_resistance_regrows": "抵抗力恢复",
+  "account_merged_signin_title": "你的账户已合并",
+  "account_merged_signin_summary": "请重新登录以继续。",
+  "account_merged_signin_body": "你的两个账户已合并为一个。请重新登录以继续。\n\n本地进度会保留。"
 }

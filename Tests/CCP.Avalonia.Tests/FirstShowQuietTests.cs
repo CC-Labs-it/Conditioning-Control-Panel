@@ -42,9 +42,12 @@ public sealed partial class FirstShowStageTests
             CoreSettings.Current.Welcomed = false;
             CoreSettings.Current.HasAcceptedAgeVerification = false;
             CoreSettings.Current.SeenFeatureIntros.Clear();
+            StartupLadder.ModalWindowReady = () => shell?.IsVisible == true;
             shell = new MainShellWindow { OpenWelcomeShow = _ => { shows++; return true; } };
             Assert.True(StartupLadder.IsQuiet);   // the ladder is busy from the constructor, as WPF's is
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);   // the ladder's settle
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
 
@@ -55,6 +58,8 @@ public sealed partial class FirstShowStageTests
             wizard.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
             wizard.FindControl<Button>("BtnNext")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             wizard.Close();
+            for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);   // the show's turn
             await Until(() => shows > 0);
             for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
 

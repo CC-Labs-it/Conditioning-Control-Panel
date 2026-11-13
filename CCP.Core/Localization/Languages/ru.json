@@ -2,6 +2,7 @@
   "deeper_editor_haptic_test_no_device": "Тактильное устройство не подключено. Подключите его в настройках для проверки.",
   "deeper_editor_haptic_test_row_off": "Строка Deeper отключена на вкладке тактильной отдачи. Включите её для проверки шаблонов.",
   "deeper_editor_haptic_test_premium": "Для проверки устройства нужен доступ Premium.",
+  "webcam_drift_unavailable": "Глобальные щелчки недоступны в этой среде. Автокоррекция выключена.",
   "scheduler_started_title": "Расписание активно",
   "scheduler_started_body": "Сеанс автоматически запущен по расписанию.",
   "scheduler_ended_title": "Расписание",
@@ -8375,5 +8376,8 @@
   "chaos_dvd_title": "Порно-DVD",
   "chaos_dvd_loading": "загрузка",
   "chaos_inescapable_unlock_tip": "дверь глубже. она продаёт ключ в Toybox: заверши {0} спусков на Relentless, достигни Devoted ({1} спусков), затем обучись за ✦{2}.",
-  "chaos_resistance_regrows": "сопротивление восстанавливается"
+  "chaos_resistance_regrows": "сопротивление восстанавливается",
+  "account_merged_signin_title": "Ваши аккаунты объединены",
+  "account_merged_signin_summary": "Войдите снова, чтобы продолжить.",
+  "account_merged_signin_body": "Два ваших аккаунта объединены в один. Войдите снова, чтобы продолжить.\n\nЛокальный прогресс сохранён."
 }

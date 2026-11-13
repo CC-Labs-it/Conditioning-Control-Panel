@@ -62,12 +62,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///
     /// <para><b>What is stubbed, and why.</b> Each site carries a <c>ponytail:</c> comment.</para>
     /// <list type="bullet">
-    ///   <item><b>Media playback.</b> LOCAL VIDEO is real, without LibVLC: <see cref="InitializeVideo"/>
-    ///         navigates the same <c>WebHost</c> the remote preview uses at the file, behind a gate
-    ///         pinned to that one path, and the engine's own media document supplies the
-    ///         &lt;video&gt; element that <see cref="PollBrowserTimeAsync"/> already reads and
-    ///         drives - so duration, playhead, play/pause and seek describe the file. LOCAL AUDIO
-    ///         uses LibVLC for playback and Core AudioWaveformCache for peaks.</item>
+    ///   <item><b>Media playback.</b> LOCAL AUDIO and LOCAL VIDEO use LibVLC (video frames through the
+    ///         shared frame sink into <c>LocalVideoImage</c>); Core AudioWaveformCache supplies the
+    ///         audio peaks. When LibVLC cannot open a video, <see cref="InitializeBrowserLocalVideo"/>
+    ///         falls back to the web engine's own media document, behind a gate pinned to that one
+    ///         path, read and driven by <see cref="PollBrowserTimeAsync"/>.</item>
     ///   <item><b>The browser preview.</b> Real: the https pre-flight, a per-navigation host
     ///         fence, and the page's own &lt;video&gt; driven and read back through
     ///         <c>WebHost.InvokeScriptAsync</c>, so duration, playhead, play/pause and seek
@@ -141,7 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _isDirty;
         private bool _suppressDirty;
 
-        // Core caches peaks decoded through LibVLC. Playback uses _localAudio.
+        // Core caches peaks decoded through LibVLC. Local audio and video playback use _localAudio;
+        // remote video polls the page media element.
         private float[]? _waveformPeaks;
         private IDeeperLocalAudio? _localAudio;
 
@@ -757,7 +757,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (_enhancement.MediaType == MediaTypes.Audio)
                     await InitializeAudioAsync(source);
                 else
-                    InitializeVideo(source);
+                    await InitializeVideoAsync(source);
             }
             catch (Exception ex)
             {
@@ -906,7 +906,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // it took there (Pause() right after Play() was a no-op while still Opening).
                 //
                 // The flag is one-shot, so a later user-driven Play is never undone, and it is
-                // armed only by InitializeVideo, so a REMOTE page keeps WPF's other rule: the site
+                // armed only by InitializeBrowserLocalVideo, so a REMOTE page keeps WPF's other rule: the site
                 // owns its own player.
                 if (_pauseLocalPreviewOnce && dur > 0)
                 {
@@ -957,32 +957,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             catch (Exception ex) { Log.Debug("DeeperEditor: preview blank failed: {Error}", ex.Message); }
         }
 
-        /// <summary>
-        /// Local video preview. WPF opened a LibVLCSharp <c>MediaPlayer</c> on a <c>VideoView</c>
-        /// and hooked LengthChanged / TimeChanged / EndReached; this head has no LibVLC and may not
-        /// add one. It does not need a second player, though - it needs the one it already has.
-        /// The web engine wraps a navigated media file in its own <c>&lt;video&gt;</c> media
-        /// document (the sibling player's <c>LoadLocalVideo</c> ships on exactly that), and this
-        /// window already drives and reads a page's largest <c>&lt;video&gt;</c> through
-        /// <see cref="DeeperPreview.LargestVideo"/>. So the local branch JOINS the browser branch rather
-        /// than growing a parallel one: duration, playhead, play/pause and seek all describe the
-        /// real file, and <see cref="PollBrowserTimeAsync"/> is the LengthChanged / TimeChanged /
-        /// EndReached triple in one place.
-        ///
-        /// <para>The same one-file fence the player uses, and now literally the same code - both
-        /// windows' gates are <see cref="DeeperPreview"/>'s. <see cref="IsLocalFile"/> proves a file is
-        /// THERE, not that it is media, so the extension is checked BEFORE the engine is pointed at
-        /// anything - a shared .ccpenh.json naming /etc/passwd would otherwise be rendered as a
-        /// page - and the gate then pins the engine to that one file for the rest of the load.</para>
-        ///
-        /// <para>What does NOT cross: playback of a codec the engine will not take (.mkv and .avi
-        /// are in the extension list because the project model allows them, but a media document
-        /// shows a black cell where LibVLC decoded it), and the preferred-output-device routing WPF
-        /// got from <c>App.Audio.ApplyPreferredDevice</c> - the page plays on the system default.</para>
-        /// </summary>
-        private void InitializeVideo(string path)
+        /// <summary>Fallback when LibVLC cannot open the clip: the web engine's media document,
+        /// or the labelled stub when there is no engine or the file is not a video.</summary>
+        private void InitializeBrowserLocalVideo(string path)
         {
             WaveformCanvas.IsVisible = false;
+            LocalVideoImage.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
 
             string? full = null;
@@ -1027,22 +1007,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _playheadTimer?.Start();
         }
 
+        /// <summary>Local video uses the shared LibVLC transport and frame sink.</summary>
+        private async Task InitializeVideoAsync(string path)
+        {
+            if (!DeeperPreview.IsLocalVideoFile(path)) { InitializeBrowserLocalVideo(path); return; }
+            await InitializeAudioAsync(path, video: true);
+        }
+
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
-        /// use LibVLC; Core AudioWaveformCache supplies the peaks beside playback.</summary>
-        private async Task InitializeAudioAsync(string path)
+        /// use LibVLC; Core AudioWaveformCache supplies the peaks beside audio playback. With
+        /// <paramref name="video"/> the same transport feeds <c>LocalVideoImage</c> instead.</summary>
+        private async Task InitializeAudioAsync(string path, bool video = false)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
-            WaveformCanvas.IsVisible = true;
-            _waveformLoad = LoadWaveformAsync(path);
-            await _waveformLoad;
-            if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+            WaveformCanvas.IsVisible = !video;
+            LocalVideoImage.IsVisible = video;
+            if (!video)
+            {
+                _waveformLoad = LoadWaveformAsync(path);
+                await _waveformLoad;
+                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+            }
 
             IDeeperLocalAudio? audio = null;
-            try { audio = await DeeperLocalAudio.Open(path); }
+            try { audio = video ? await DeeperLocalAudio.OpenVideo(path, LocalVideoImage) : await DeeperLocalAudio.Open(path); }
             catch (Exception ex) { Log.Warning(ex, "DeeperEditor: audio playback init failed"); }
-            if (audio == null) { Log.Debug("DeeperEditor: local audio unavailable: {Path}", path); return; }
+            if (audio == null)
+            {
+                Log.Debug("DeeperEditor: local media unavailable: {Path}", path);
+                if (!_playbackDisposed && string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
+                {
+                    if (video) { LocalVideoImage.IsVisible = false; InitializeBrowserLocalVideo(path); }
+                }
+                return;
+            }
             // Swapped or closed while the parse ran: this clip is no longer the project's.
             if (_playbackDisposed || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
             {
@@ -1115,6 +1115,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             var a = _localAudio;
             _localAudio = null;
+            LocalVideoImage.IsVisible = false;
+            LocalVideoImage.Source = null;
             if (a == null) return;
             _isPlaying = false;
             PlayPauseGlyph.Kind = IconKind.Play;
@@ -1127,7 +1129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var ed in s_open)
             {
-                if (ed._localAudio == null || !ed._isPlaying) continue;
+                if (ed._localAudio == null) continue;
                 ed._localAudio.Pause();
                 ed._isPlaying = false;
                 ed._playheadTimer?.Stop();
@@ -1138,6 +1140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void ShowPlaceholder()
         {
             VideoPreview.IsVisible = false;
+            LocalVideoImage.IsVisible = false;
             WaveformCanvas.IsVisible = false;
             BrowserPreview.IsVisible = false;
             PreviewPlaceholder.IsVisible = true;
@@ -1211,8 +1214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// In browser mode this drives the page's own &lt;video&gt; and sets NOTHING locally: the
         /// poll flips the glyph off the page's real state a tick later, so a press on a page that
         /// has no video element yet (still loading, an error page, a navigation the fence refused)
-        /// reads as having done nothing - which is what happened. Local VIDEO takes this branch
-        /// too: it is a hosted media document, so the page owns the clock there as well.
+        /// reads as having done nothing. Local video uses the LibVLC transport when available.
         ///
         /// <para>Local audio drives <see cref="_localAudio"/> as WPF drove WaveOutEvent. With no
         /// player (libvlc missing, unparseable file) a press is refused rather than mimed: a pause
@@ -3333,9 +3335,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>WPF disposed MediaPlayer, Media, WaveOutEvent and AudioFileReader here. The
-        /// video half needs nothing: <see cref="TeardownPreview"/> runs first and blanks the page,
-        /// which is what releases a hosted media element.
-        /// The audio half is <see cref="DisposeLocalAudio"/>.</summary>
+        /// local transport is released by <see cref="DisposeLocalAudio"/>.</summary>
         private void DisposePlayback()
         {
             _playbackDisposed = true;
@@ -3374,7 +3374,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _browserNavigated;
         private bool _browserPollInFlight;
         private bool _browserPollDisabled;
-        /// <summary>Armed by <see cref="InitializeVideo"/> only: pause a LOCAL clip's media
+        /// <summary>Armed by <see cref="InitializeBrowserLocalVideo"/> only: pause a LOCAL clip's media
         /// document once, the first time the poll sees it running, so the editor opens on a still
         /// frame the way WPF's one-shot Playing handler made it.</summary>
         private bool _pauseLocalPreviewOnce;
