@@ -207,7 +207,7 @@ public sealed class TabTransitionsTests
         {
             global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
             shell.Closed += (_, _) => global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = false;
-            shell.ScheduleOnce = (_, delay) => { armed.Add(delay); return new Pending(); };
+            shell.ScheduleOnce = (fire, delay) => { armed.Add(delay); return new Pending(fire, delay); };
         });
     }
 
