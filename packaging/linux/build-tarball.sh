@@ -2,7 +2,7 @@
 # Build the linux-x64 tarball the Flatpak manifest and the AUR PKGBUILD consume
 # (docs/avalonia-linux-install.html). Local only: never uploads anything.
 #   bash packaging/linux/build-tarball.sh [out-dir]   -> prints the tarball path
-# Layout: ConditioningControlPanel/{CCP.Avalonia, conditioning-control-panel.sh, LICENSE, Resources/Models/vosk/<model>,
+# Layout: ConditioningControlPanel/{CCP.Avalonia, conditioning-control-panel.sh, LICENSE, THIRD-PARTY-NOTICES.txt, Resources/Models/vosk/<model>,
 #         share/{applications,icons/hicolor/*/apps,metainfo}/<app-id>.*}  (share/ maps onto /usr/share or /app/share)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -20,6 +20,49 @@ cp -r "$model" "$pub/Resources/Models/vosk/"
 cp -r "$root/packaging/linux/share" "$pub/"
 cp "$root/LICENSE" "$pub/"
 cp "$root/packaging/linux/RT-ENGINE-NOTICES.txt" "$pub/"
+py=
+for c in python3 python; do "$c" -c 'import tarfile' >/dev/null 2>&1 && { py=$c; break; }; done   # Windows: python3 may be the Store stub
+[ -n "$py" ] || { echo "build-tarball: python3 is required to pack the tarball" >&2; exit 1; }
+# Notices for the bundled natives: the hand-written part, then the resolved package versions and the exact
+# upstream licence files from the restored packages. A package that moves or drops its file fails the build.
+"$py" - "$root/CCP.Avalonia/obj/project.assets.json" "$root/packaging/linux/THIRD-PARTY-NOTICES.txt" "$pub/THIRD-PARTY-NOTICES.txt" <<'PY'
+import json, os, sys
+assets, head, out = sys.argv[1:4]
+a = json.load(open(assets, encoding="utf-8"))
+roots = list(a["packageFolders"])
+pkgs = {k.split("/")[0].lower(): k.split("/")[1] for k in a["libraries"]}
+for fw in a["project"]["frameworks"].values():
+    for d in fw.get("downloadDependencies", []):
+        pkgs[d["name"].lower()] = d["version"].strip("[]").split(",")[0].strip()
+LISTED = ["microsoft.netcore.app.runtime.linux-x64", "microsoft.netcore.app.host.linux-x64", "skiasharp",
+          "skiasharp.nativeassets.linux", "harfbuzzsharp", "harfbuzzsharp.nativeassets.linux", "microsoft.ml.onnxruntime",
+          "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia",
+          "avalonia.controls.webview"]
+FILES = [("microsoft.netcore.app.runtime.linux-x64", ["LICENSE.TXT", "THIRD-PARTY-NOTICES.TXT"]),
+         ("skiasharp.nativeassets.linux", ["LICENSE.txt", "THIRD-PARTY-NOTICES.txt"]),
+         ("harfbuzzsharp.nativeassets.linux", ["LICENSE.txt", "THIRD-PARTY-NOTICES.txt"]),
+         ("microsoft.ml.onnxruntime", ["LICENSE", "ThirdPartyNotices.txt"])]
+def find(pkg, name):
+    for r in roots:
+        f = os.path.join(r, pkg, pkgs[pkg], name)
+        if os.path.isfile(f):
+            return f
+    sys.exit(f"build-tarball: {pkg} {pkgs.get(pkg)} has no {name} in {roots}")
+rule = "=" * 70
+with open(out, "w", encoding="utf-8", newline="\n") as o:
+    o.write(open(head, encoding="utf-8").read().rstrip() + f"\n\n\n{rule}\nPackage versions in this build\n{rule}\n\n")
+    for p in LISTED:
+        if p not in pkgs:
+            sys.exit(f"build-tarball: {p} is not in {assets}; update packaging/linux/THIRD-PARTY-NOTICES.txt")
+        o.write(f"{p} {pkgs[p]}\n")
+    seen = {}
+    for pkg, names in FILES:
+        for n in names:
+            text = open(find(pkg, n), encoding="utf-8-sig").read().replace("\r\n", "\n")
+            o.write(f"\n\n{rule}\n{pkg} {pkgs[pkg]}: {n}\n{rule}\n\n")
+            o.write(f"Identical to {seen[text]} above.\n" if text in seen else text.rstrip() + "\n")
+            seen.setdefault(text, f"{pkg} {pkgs[pkg]}: {n}")
+PY
 cp "$root/packaging/linux/conditioning-control-panel.sh" "$pub/"   # the launcher: OpenSSL 3 hint, then CCP.Avalonia
 mkdir -p "$pub/packaging/linux"
 cp "$root/packaging/linux/rt-engine-check.sh" "$pub/packaging/linux/"
@@ -40,9 +83,6 @@ tar=$out/ConditioningControlPanel-$ver-linux-x64.tar.gz
 # Reproducible: sorted names, fixed owner and mtime, no gzip timestamp. Modes are set here, not read from disk:
 # a build on NTFS (Git Bash) has no exec bits, and the beta-1 tarball shipped a 0644 CCP.Avalonia
 # ("Permission denied"). Executables (apphost, createdump, *.sh) and dirs 0755, everything else 0644.
-py=
-for c in python3 python; do "$c" -c 'import tarfile' >/dev/null 2>&1 && { py=$c; break; }; done   # Windows: python3 may be the Store stub
-[ -n "$py" ] || { echo "build-tarball: python3 is required to pack the tarball" >&2; exit 1; }
 "$py" - "$pub" "$tar" <<'PY'
 import gzip, os, sys, tarfile
 pub, out = sys.argv[1], sys.argv[2]
