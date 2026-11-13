@@ -289,6 +289,33 @@ public sealed class TubeChatParityTests
         return Task.CompletedTask;
     });
 
+    // #4227: a chat reply can ask from a worker; the busy probe reads Avalonia state on the UI thread.
+    [Fact]
+    public Task BusyProbeFromAWorkerReadsStartupStateOnTheUiThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var restore = SaveSeams();
+        var previous = CoreTutorial.IsActiveProvider;
+        bool? onUiThread = null;
+        try
+        {
+            CoreTutorial.IsActiveProvider = () => { onUiThread = Dispatcher.UIThread.CheckAccess(); return false; };
+            AvApp.SeedCompanionTubeSeams();
+            await Task.Run(() => CompanionAskService.BusyProvider!());
+            Assert.True(onUiThread);
+        }
+        finally
+        {
+            CoreTutorial.IsActiveProvider = previous;
+            CompanionAskService.Instance.Stop();
+            restore();
+        }
+    });
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(40, -7.5)]
