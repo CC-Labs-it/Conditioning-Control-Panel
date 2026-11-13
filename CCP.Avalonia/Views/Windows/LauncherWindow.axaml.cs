@@ -259,9 +259,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (panel == null) { Log.Warning("[Launcher] OpenPanel with no main window"); return; }
             AfterExitBeat(() =>
             {
-                Hide();
-                panel.ShowFromLauncher();
-                Platform.StartupLadder.Release();
+                // WPF LauncherHost.cs:266 releases on panel open; a throw while showing must not
+                // leave passive offers parked in the inbox for the rest of the run.
+                try { Hide(); panel.ShowFromLauncher(); }
+                finally { Platform.StartupLadder.Release(); }
                 try { then?.Invoke(panel); }
                 catch (Exception ex) { Log.Debug(ex, "[Launcher] step after OpenPanel failed"); }
             });

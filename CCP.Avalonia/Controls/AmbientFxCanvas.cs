@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
         EdgeDrift = 1 << 6,
+        EdgeFog = 1 << 7,      // WPF :47, the section edge fog (AmbientFxCanvas.EdgeFog.cs)
         VaultMotes = 1 << 8,   // WPF AmbientFxCanvas.cs:54 (EdgeFog holds 1 << 7)
     }
 
@@ -77,6 +78,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         /// </summary>
         public Color? Tint { get; set; }
         public EdgeSide EdgeSide { get; set; }
+
+        /// <summary>Depth the EdgeDrift motes keep to on a thicker strip (WPF :180); 0 = the whole strip.</summary>
+        public double EdgeDriftBandPx { get; set; }
+        /// <summary>EdgeFog at Reduced: half the puffs at half the speed (WPF :184).</summary>
+        public bool EdgeFogReduced { get; set; }
+        /// <summary>Alpha gain on the fog, 0-1.5 (WPF :187).</summary>
+        public double EdgeFogGain { get; set; } = 1.0;
 
         /// <summary>
         /// Keep ticking while the host window is NOT the active window (WPF polish wave 13). Only for
@@ -358,6 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _dustN = 0;
             _emberN = 0;
             _edgeN = 0;
+            _fogN = _grainN = 0;
             _vaultN = 0;
             InvalidateVisual();
         }
@@ -680,6 +689,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 : Array.Empty<EdgeMote>();
             _edgeN = 0;
             _edgeT = 0f;
+            ReseedFog();
             _vaultN = 0;
             _vaultT = 0;
             _fogT = _dustT = _sheenT = _breathT = _auroraT = 0f;
@@ -708,6 +718,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 StopClock();
                 UnhookWindow();
                 if (_modHooked) { CoreMods.ModChanged -= OnModChanged; Env.MotionGateChanged -= OnMotionGate; _modHooked = false; }
+                DisposeFogDots();
             }
             catch (Exception ex) { Log.Debug("AmbientFxCanvas.OnDetachedFromVisualTree: {E}", ex.Message); }
             base.OnDetachedFromVisualTree(e);
@@ -807,7 +818,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!oneShotLive)
             {
                 if (_targetFps <= 0) return false;
-                if (!Env.AllowAmbientLoops && !ReducedVaultMayRun()) return false;
+                if (!Env.AllowAmbientLoops && !ReducedFogMayRun() && !ReducedVaultMayRun()) return false;
             }
             var w = _window;
             if (w != null)
@@ -854,6 +865,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 StepDust(dt);
                 StepEmbers(dt);
                 StepEdge(dt);
+                StepFog(dt);
                 StepVault(dt);
                 StepBurst(dt);
                 StepTokens(dt);
@@ -1175,8 +1187,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_fogOnly && (layers & AmbientFxLayers.GlowBreath) != 0) DrawGlowBreath(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.DustField) != 0) DrawDust(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
-                if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
+                if ((layers & AmbientFxLayers.EdgeFog) != 0) DrawEdgeFog(context);
                 if (!_fogOnly && (layers & AmbientFxLayers.EdgeDrift) != 0) DrawEdge(context, w, h, intensity);
+                if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
                 DrawVault(context, w, h);
                 DrawBurst(context, w, h, min);
                 DrawTokens(context, w, h, min);
@@ -1265,12 +1278,16 @@ namespace ConditioningControlPanel.Avalonia.Controls
             double aw = Bounds.Width;
             float px = aw > 1 ? (float)(w / aw) : 1f;
             var side = _config.EdgeSide;
+            // On the fog's 56 px strip the embers keep their 30 px band (WPF :1316).
+            double thick = side is EdgeSide.Top or EdgeSide.Bottom ? Bounds.Height : aw;
+            float band = _config.EdgeDriftBandPx > 0 && thick > _config.EdgeDriftBandPx
+                ? (float)(_config.EdgeDriftBandPx / thick) : 1f;
             for (int i = 0; i < _edgeN; i++)
             {
                 var m = _edge[i];
                 float a = (float)EdgeDriftMath.Alpha(m.Along, m.Life, m.Max, m.Phase, intensity);
                 if (a <= 0.004f) continue;
-                var (x, y) = EdgeDriftMath.Position(side, m.Along, m.Depth);
+                var (x, y) = EdgeDriftMath.Position(side, m.Along, m.Depth * band);
                 float size = m.SizePx * px;
                 DrawSprite(ctx, _particleDot, (float)x * w, (float)y * h, size, size, a);
             }

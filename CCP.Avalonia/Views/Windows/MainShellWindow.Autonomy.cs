@@ -13,6 +13,7 @@
 // Banner, countdown, event audio and diagnostic Test are wired. Force Start is a collapsed WPF
 // debug control. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
+using System.Threading;
 using ConditioningControlPanel.Services.Autonomy;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Companion;
@@ -30,6 +31,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         /// <summary>This window's Takeover. Per window so a test's shell never shares one.</summary>
         internal readonly AutonomyScheduler Autonomy = new();
+        private int _autonomyStoppedForPanic;
+        internal bool AutonomyStoppedForPanic => Volatile.Read(ref _autonomyStoppedForPanic) != 0;
+
+        // A failed user start does not lift the panic hold.
+        private bool StartAutonomyFromUser()
+        {
+            if (!Autonomy.Start()) return false;
+            Volatile.Write(ref _autonomyStoppedForPanic, 0);
+            return true;
+        }
 
         private bool _bubblesPulse, _bouncingPulse, _pinkPulse;
         private bool _pinkWasEnabled;
@@ -323,8 +334,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 UpdateAutonomyButtonState(false);
                 return true;
             }
-            Autonomy.Start();
-            UpdateAutonomyButtonState(true);
+            var started = StartAutonomyFromUser();
+            UpdateAutonomyButtonState(started);
             return true;
         }
 
@@ -360,6 +371,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// already refused the panic before this is reached.</summary>
         internal void StopAutonomyForPanic()
         {
+            Volatile.Write(ref _autonomyStoppedForPanic, 1);
+            Interlocked.Increment(ref _profileLoadGeneration);
             _autonomyTestGeneration++;
             _autonomyTestDialog?.Close();   // registered through PanicSurfaces' takeover entry
             Autonomy.Stop();
@@ -371,6 +384,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// stale enabled flag is cleared so the switch reads OFF on a fresh launch.</summary>
         private void ResumeAutonomyOnStartup()
         {
+            if (AutonomyStoppedForPanic) return;
             var s = CoreSettings.Current;
             if (s.AutonomyResumeOnStartup && s.AutonomyModeEnabled && s.AutonomyConsentGiven)
             {

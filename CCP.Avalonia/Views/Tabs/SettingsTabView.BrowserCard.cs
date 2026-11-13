@@ -36,6 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
+            BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.NavigationFinished += (url, success) =>
                 _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);
@@ -209,14 +210,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             bool popped = Shell?.IsBrowserPoppedOut == true;
             bool offline = CoreSettings.Current.OfflineMode;
-            bool prompt = popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
+            bool prompt = _browserCrashed || popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
-            BrowserLoadingText.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(offline
+            BrowserLoadingText.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(_browserCrashed
+                ? "label_browser_crashed_restart" : offline
                 ? "label_browser_disabled_in_offline_mode" : popped   // WPF MainWindow.Browser.cs:2737
                 ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser").ProvideValue(null!));
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
             // The placeholder belongs to the card; the popped-out host stays visible in its window.
-            BrowserWebHost.IsVisible = popped || !prompt;
+            BrowserWebHost.IsVisible = !_browserCrashed && (popped || !prompt);
             // Replace only a stuck Loading: Offline/Ready (UpdateOfflineModeUI, whose about:blank park and reload
             // land here too) own the line, as WPF writes them whether or not the engine is up.
             if (!BrowserWebHost.HasEngine && BrowserStatusLoading()) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
