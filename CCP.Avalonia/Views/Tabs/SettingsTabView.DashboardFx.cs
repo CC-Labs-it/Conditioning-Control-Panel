@@ -86,7 +86,7 @@ public partial class SettingsTabView
         }
     }
 
-    private void RefreshMysteryFace()
+    internal void RefreshMysteryFace()
     {
         string? key = TodayFreeKey();
         CardMystery.Title = Loc.Get("mosaic_free_today");
@@ -113,7 +113,8 @@ public partial class SettingsTabView
         };
         var brush = MysteryRevealFace.GetLogicalDescendants().OfType<Border>()
             .Select(b => b.Background).OfType<ImageBrush>().First();
-        brush.Source = ModArt.TryLoad("features/" + art + ".png", 512) ?? ModArt.TryLoad("features/mysterybox.png", 512);
+        brush.Source = ModArt.TryLoad("features/" + art + ".png", 512)
+            ?? Windows.MainShellWindow.ModTileVariant("mysterybox", 512);
     }
 
     internal void RequestMysteryFace(bool reveal)

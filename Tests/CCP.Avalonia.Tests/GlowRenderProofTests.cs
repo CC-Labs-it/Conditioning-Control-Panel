@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -46,9 +47,10 @@ public sealed class GlowRenderProofTests
         finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buf); }
     }
 
-    private static Bitmap Frame(Window w, string name)
+    private static Bitmap Frame(Window w, string name, Action? beforeCapture = null)
     {
         Dispatcher.UIThread.RunJobs();
+        beforeCapture?.Invoke();
         var frame = w.CaptureRenderedFrame()!;
         var dir = Environment.GetEnvironmentVariable("CCP_GLOW_PROOF_DIR");
         if (!string.IsNullOrEmpty(dir)) { System.IO.Directory.CreateDirectory(dir); frame.Save(System.IO.Path.Combine(dir, name + ".png")); }
