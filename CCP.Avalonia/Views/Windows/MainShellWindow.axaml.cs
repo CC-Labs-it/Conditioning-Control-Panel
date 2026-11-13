@@ -109,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // see MainShellWindow.FirstRun.cs, which owns both halves.
             HookFirstRun();
             HookDisplayNameAsk();
+            HookProfileLoaded();
 
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
