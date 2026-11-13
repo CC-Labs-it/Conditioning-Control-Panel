@@ -19,6 +19,9 @@
 //   CCP_WIN32_COMPOSITION = winui | dcomp | swapchain | redirection (comma list, priority order)
 //   CCP_WIN32_RENDERING   = angle | wgl | vulkan | software        (comma list, priority order)
 //   CCP_GPU_ADAPTER       = index or a case-insensitive substring of the adapter name
+// With CCP_WIN32_RENDERING unset, a machine whose only DXGI adapter is the Microsoft Basic Render
+// Driver (WARP: no GPU, e.g. CI runners, VMs) renders with Skia software instead of ANGLE on WARP
+// (ChooseRendering; evidence perf-combined-20261104/floor-investigation: tab switches 80-92 -> 35-38 ms).
 //   CCP_FRAME_STATS=1     frame stats from the animated overlays (BouncingTextOverlay, BubbleOverlay);
 //                         the per-window composed-fps counter lives in FrameClock, not in this head yet.
 
@@ -55,6 +58,58 @@ namespace ConditioningControlPanel.Avalonia.Platform
             foreach (var raw in env.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 if (map(raw.ToLowerInvariant()) is T m && !list.Contains(m)) list.Add(m);
             return list.Count == 0 ? null : list;
+        }
+
+        /// <summary>One DXGI adapter as EnumAdapters1/GetDesc1 reports it.</summary>
+        public readonly record struct DxgiAdapter(string Name, uint VendorId, uint DeviceId, uint Flags)
+        {
+            /// <summary>The Microsoft Basic Render Driver (vendor 0x1414, device 0x8C) or any adapter
+            /// flagged DXGI_ADAPTER_FLAG_SOFTWARE (2).</summary>
+            public bool IsSoftware => (VendorId == 0x1414 && DeviceId == 0x8C) || (Flags & 2) != 0;
+        }
+
+        /// <summary>DXGI_ERROR_NOT_FOUND: EnumAdapters1 past the last adapter, the normal end of the list.</summary>
+        public const int DxgiErrorNotFound = unchecked((int)0x887A0002);
+
+        /// <summary>Reads adapter <paramref name="index"/> and returns an HRESULT: EnumAdapters1's, or
+        /// GetDesc1's when that call fails (never DXGI_ERROR_NOT_FOUND for a GetDesc1 failure).</summary>
+        public delegate int ReadAdapter(uint index, out DxgiAdapter adapter);
+
+        /// <summary>The DXGI enumeration loop (DxgiAdapters.List). Stops at DXGI_ERROR_NOT_FOUND. Any other
+        /// failure, or an exception, returns an empty list (= Avalonia's default): DXGI lists WARP last, so
+        /// skipping a GPU that failed to read would leave [WARP] and push a GPU machine to Software.</summary>
+        public static List<DxgiAdapter> CollectAdapters(ReadAdapter read)
+        {
+            var list = new List<DxgiAdapter>();
+            try
+            {
+                for (uint i = 0; i < 16; i++)
+                {
+                    int hr = read(i, out var a);
+                    if (hr == DxgiErrorNotFound) break;
+                    if (hr < 0) { list.Clear(); break; }
+                    list.Add(a);
+                }
+            }
+            catch (Exception ex)
+            {
+                list.Clear();
+                Serilog.Log.Warning(ex, "DXGI adapter enumeration failed; keeping Avalonia's default renderer");
+            }
+            return list;
+        }
+
+        /// <summary>The Win32 rendering modes: the env override when set; Software when every adapter is
+        /// WARP/software; otherwise null, which keeps Avalonia's default (ANGLE). An empty list (enumeration
+        /// failed) keeps the default too, so an unknown machine is never pushed off its GPU.</summary>
+        public static IReadOnlyList<Win32RenderingMode>? ChooseRendering(
+            IReadOnlyList<DxgiAdapter> adapters, IReadOnlyList<Win32RenderingMode>? overrideModes)
+        {
+            if (overrideModes != null) return overrideModes;
+            if (adapters.Count == 0) return null;
+            foreach (var a in adapters)
+                if (!a.IsSoftware) return null;
+            return new[] { Win32RenderingMode.Software };
         }
 
         /// <summary>The adapter the app renders on: index 0 (the primary, what Avalonia picks on its

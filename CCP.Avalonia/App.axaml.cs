@@ -610,6 +610,8 @@ namespace ConditioningControlPanel.Avalonia
         /// (tests, PanicCheck, VideoCheck) starts synchronously without one, as before.</summary>
         internal static bool SplashOnStartup;
         internal static Action? DesktopStartupCompleted;
+        /// <summary>Set by Program.Main: second-launch handoffs, routed to the shell once it has opened.</summary>
+        internal static Platform.HandoffQueue? Handoffs;
 
         public override void OnFrameworkInitializationCompleted()
         {
@@ -1318,6 +1320,7 @@ namespace ConditioningControlPanel.Avalonia
                     Views.Windows.LauncherWindow.Boot = Services.Launcher.BootDecision.PanelFirst;
                 }
                 QueuePendingDeeperFileOpen(shell, desktop.Args);
+                RouteHandoffsOnceOpened(shell);
                 var boot = Views.Windows.LauncherWindow.Boot;
                 bool panelHidden = Services.Launcher.LauncherBoot.PanelStartsHidden(boot, Views.Windows.MainShellWindow.LockdownActive);
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
@@ -1543,6 +1546,19 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 shell.Opened += OpenMediaOnce;
             }
+        }
+
+        /// <summary>Second launches that arrived during startup are routed once the shell has opened, later ones
+        /// as they come (WPF App.xaml.cs:2226-2248 routes through the main window).</summary>
+        internal static void RouteHandoffsOnceOpened(Views.Windows.MainShellWindow shell)
+        {
+            void Route(object? sender, EventArgs e)
+            {
+                shell.Opened -= Route;
+                Handoffs?.Ready(payload => Dispatcher.UIThread.InvokeAsync(
+                    () => Views.Windows.LauncherWindow.RouteHandoff(shell, payload)).GetTask());
+            }
+            shell.Opened += Route;
         }
 
         /// <summary>The exit save, after Takeover hands back what a pulse borrowed - else a boosted

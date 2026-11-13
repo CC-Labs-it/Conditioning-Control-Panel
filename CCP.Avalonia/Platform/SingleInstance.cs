@@ -212,8 +212,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
             if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
+            // One sender at a time. The listener serves one request at a time, so a launch racing another
+            // (several files opened at once) timed out connecting and its request was lost.
+            using var gate = CreateMutex(pipe + "_send", out bool ownsGate);
             try
             {
+                // No timeout: each holder is bounded (connect plus ack timeout) and a dead one abandons the
+                // gate, so the wait ends. A timeout here read a queue of slow but healthy handoffs as "nobody
+                // listening" and the launch exited with its request undelivered.
+                if (!ownsGate)
+                {
+                    try { gate.WaitOne(); }
+                    catch (AbandonedMutexException) { }
+                    ownsGate = true;
+                }
                 using var c = new NamedPipeClientStream(".", pipe, PipeDirection.InOut,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 c.Connect(1000);
@@ -234,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (TimeoutException) { return null; }
             catch (OperationCanceledException) { return false; }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show request failed"); return null; }
+            finally { if (ownsGate) gate.ReleaseMutex(); }
         }
 
         static async Task ListenAsync(string pipe, Func<string?, Task> show, Func<bool> startupPhase, CancellationToken ct)
@@ -263,7 +276,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         // Starting, not wedged: ack now and let the show run when the dispatcher pumps.
                         await s.WriteAsync(new byte[] { 1 }, ct);
                         await s.FlushAsync(ct);
-                        _ = Task.Run(() => show(payload)).ContinueWith(
+                        // Hand it over before accepting the next request, so requests keep arrival order;
+                        // show only queues it (HandoffQueue) and does not wait for the UI. Close this pipe
+                        // first: a launch connecting to it meanwhile would be dropped unanswered.
+                        await s.DisposeAsync();
+                        Task shown;
+                        try { shown = show(payload); } catch (Exception ex) { shown = Task.FromException(ex); }
+                        _ = shown.ContinueWith(
                             t => Serilog.Log.Warning(t.Exception, "Single-instance show failed"),
                             TaskContinuationOptions.OnlyOnFaulted);
                         continue;
