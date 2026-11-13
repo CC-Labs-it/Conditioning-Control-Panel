@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <summary>
     /// The audio player with a playlist: the player's own files, on its own or beside the engine
     /// (it never asks whether the engine runs). The order rules live in
-    /// <see cref="AudioPlaylistRules"/> (linked from the WPF project, no UI in it); the sound is this
+    /// <see cref="AudioPlaylistRules"/> (shared in Core, no UI in it); the sound is this
     /// service's OWN <see cref="IPlaylistAudio"/>, never the Deeper player's.
     ///
     /// <para>PORTED from ConditioningControlPanel/Services/AudioPlayer/AudioPlaylistService.cs, line for line.
