@@ -21,6 +21,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaster;
 using Xunit;
@@ -292,6 +293,39 @@ public sealed class ChasterBillTests
             Assert.False(host.IsVisible);
         }
         finally { LocalizationManager.Instance.SetLanguage("en"); w.Close(); }
+        await Task.CompletedTask;
+    }));
+
+    [Fact]
+    public Task CapFillAnimatesChangesAndSeatsResizesAndMotionOff() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var old = settings.MotionLevel;
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView();
+        var w = new Window { Width = 1200, Height = 900, Content = tab };
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            w.Show(); Dispatcher.UIThread.RunJobs();
+            var track = tab.FindControl<Panel>("CapTrack")!;
+            var fill = tab.FindControl<Border>("CapFill")!;
+            track.Width = 200; Dispatcher.UIThread.RunJobs();
+            Assert.True(chaster.Note("attention").Booked);
+            tab.RefreshNumbers();
+            Assert.NotNull(fill.Transitions);
+            track.Width = 300; Dispatcher.UIThread.RunJobs();
+            Assert.Null(fill.Transitions);
+            Assert.True(fill.Width > 0);
+            Assert.True(chaster.Note("attention").Booked);
+            tab.Refresh(); // WPF :220: showing the tab snaps the fill
+            Assert.Null(fill.Transitions);
+            settings.MotionLevel = MotionLevel.Off;
+            Assert.True(chaster.Note("attention").Booked);
+            tab.RefreshNumbers();
+            Assert.Null(fill.Transitions);
+            Assert.True(fill.Width > 0);
+        }
+        finally { settings.MotionLevel = old; w.Close(); }
         await Task.CompletedTask;
     }));
 

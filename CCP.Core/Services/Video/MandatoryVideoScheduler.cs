@@ -6,6 +6,7 @@ using System.Threading;
 using Serilog;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.Fyp.Online;
 
 namespace ConditioningControlPanel.Services
 {
@@ -335,6 +336,13 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // WPF VideoService.cs:8197: never hand an uncached Scrolller URL to the player.
+        // Resolve again after pre-roll because the licence or cache can change in the meantime.
+        internal Func<string, string?> CachedScrolllerPath { get; set; } = ScrolllerDiskCache.TryGetPath;
+
+        private string? PlaybackPath(string path) => !ScrolllerPolicy.IsScrolllerUrl(path) ? path
+            : ScrolllerPolicy.Enabled ? CachedScrolllerPath(path) : null;
+
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
         /// pre-roll. False when nothing was started (no clip, or one is already playing).</summary>
         public bool TriggerStartup()
@@ -434,6 +442,12 @@ namespace ConditioningControlPanel.Services
                 if (!silentIfEmpty && Interlocked.Exchange(ref _noVideosShown, 1) == 0) NoVideos?.Invoke();
                 return false;
             }
+            // WPF PlayVideo :3044: try one fresh pick before ending a refused run.
+            if (PlaybackPath(path) == null)
+            {
+                path = PickNext();
+                if (path == null || PlaybackPath(path) == null) return false;
+            }
             // WPF TriggerVideo :2479-2485 and PlaySpecificVideo :2587: every clip gets the Freeze, not only the
             // startup one, unless attention checks (or, for a picked clip, the bubble-count game) need alert
             // input. Only on a head with a Freeze surface (CoreSubliminal.BambiFreezeProvider).
@@ -469,11 +483,13 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 Dispose(ref _preroll);
+                var playbackPath = PlaybackPath(path);
+                if (playbackPath == null) { End(); return; }
                 CoreBubbles.Pause();   // WPF StartVideoPlayback: App.Bubbles?.PauseAndClear(), until the run ends
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 // WPF StartVideoPlayback: presentation can change during the pre-roll.
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
-                try { _host.Show(path, strict); }
+                try { _host.Show(playbackPath, strict); }
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }

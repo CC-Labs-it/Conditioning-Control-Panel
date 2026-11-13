@@ -466,19 +466,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// the site you are on takes you home and Reload reloads. Assigning an equal Source raises no
         /// change, so it would do nothing. Source is kept in step (the fallback panel names it).
         /// </summary>
-        public void Navigate(Uri url)
+        public bool Navigate(Uri url)
         {
             _panicBlank = false;
+            CancelPendingNavigation();
+            NavigationRequests++;
+            // Do not retain a request the reported gate refuses: a later gate report must not load it after fallback.
+            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
+            var previous = Source;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
-            NavigationRequests++;
-            if (RefusesScrolller(url)) { RefusedNavigations++; return; }
+            // Refused or engine-less requests stay named on the fallback panel; the caller learns nothing loaded.
+            if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
-            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
-            if (_web is null) return;
-            if (_scrolllerGate is null) return;   // held: the gate's report loads Source
-            try { _web.Navigate(url); }
-            catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
+            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
+            if (_web is null && NavigationInvoker is null) return false;
+            if (_scrolllerGate is null) return true; // held until the gate reports
+            try
+            {
+                if (NavigationInvoker is { } navigate)
+                {
+                    if (!navigate(url)) { RestoreSource(previous); return false; }
+                }
+                else _web!.Navigate(url);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RestoreSource(previous);
+                Log.Debug("WebHost: Navigate failed: {Error}", ex.Message);
+                return false;
+            }
+        }
+
+        private void RestoreSource(Uri? previous)
+        {
+            _explicitNavigate = true;
+            try { Source = previous; } finally { _explicitNavigate = false; }
+        }
+
+        // Null means a newer navigation superseded this request, so the caller must not fall back.
+        internal async Task<bool?> NavigateWhenReadyAsync(Uri url)
+        {
+            CancelPendingNavigation();
+            if (_web is null && NavigationInvoker is null) return false;
+            while (_scrolllerGate is null)
+            {
+                var pending = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingNavigation = pending;
+                var completed = await Task.WhenAny(pending.Task, Task.Delay(TimeSpan.FromSeconds(15)));
+                if (_pendingNavigation != pending) return null;
+                _pendingNavigation = null;
+                if (completed != pending.Task) return false;
+                var ready = await pending.Task;
+                if (ready is null) return null;
+            }
+            return Navigate(url);
+        }
+
+        private TaskCompletionSource<bool?>? _pendingNavigation;
+        internal void CancelPendingNavigation()
+        {
+            var pending = _pendingNavigation;
+            _pendingNavigation = null;
+            pending?.TrySetResult(null);
         }
 
         /// <summary>The URL as the fallback panel names it: WebAssetServer's ccp_t token never reaches the screen.</summary>
@@ -495,6 +546,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Count of <see cref="Navigate"/> calls the sandbox kept from the engine.</summary>
         internal int RefusedNavigations { get; private set; }
 
+        // Headless tests supply an engine without loading a native web view.
+        internal Func<Uri, bool>? NavigationInvoker { get; set; }
         private bool _explicitNavigate;
 
         /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
@@ -525,6 +578,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (engine != _scrolllerEngine) return;
             _scrolllerGate = gated;
+            _pendingNavigation?.TrySetResult(gated);
             var src = Source;
             if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
             {
@@ -552,6 +606,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (change.Property == SourceProperty)
             {
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
+                if (!_explicitNavigate) CancelPendingNavigation();
                 ApplySource();
             }
         }
