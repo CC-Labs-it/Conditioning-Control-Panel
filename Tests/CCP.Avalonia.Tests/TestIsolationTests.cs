@@ -504,6 +504,84 @@ public class TestIsolationTests
         }
         finally { snapshot.Restore(); }
     }
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void TriggerTitleTestRestoresModStartupStateBeforeTheAssemblyHook(bool servicePresent, bool assertionFails) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            var snapshot = ProcessStateSnapshot.Take();
+            var resources = Application.Current!.Resources;
+            var keys = new[] { "FxMistColor", "FxMistBrush", "FxParticleColor", "FxParticleBrush",
+                "FxGlowColor", "FxGlowBrush", "FxFlashTintColor", "FxFlashTintBrush" };
+            var originalResources = keys.ToDictionary(k => k, k => (resources.ContainsKey(k), resources.ContainsKey(k) ? resources[k] : null));
+            var settingsService = new ConditioningControlPanel.Services.SettingsService();
+            var coreService = typeof(CoreMods).GetProperty(nameof(CoreMods.Service))!;
+            var appService = typeof(AvApp).GetProperty(nameof(AvApp.Mods), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            try
+            {
+                CoreSettings.ServiceProvider = () => settingsService;
+                coreService.SetValue(null, null);
+                appService.SetValue(null, null);
+                if (servicePresent) AvApp.StartMods();
+                var beforeCore = CoreMods.Service;
+                var beforeApp = AvApp.Mods;
+                var beforeProvider = CoreSettings.ServiceProvider;
+                var settings = CoreSettings.Current;
+                var beforeSettings = Newtonsoft.Json.JsonConvert.SerializeObject(settings);
+                var flags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                var changed = typeof(ConditioningControlPanel.Models.AppSettings).GetField("PropertyChanged", flags)!;
+                var replaced = typeof(ConditioningControlPanel.Services.SettingsService).GetField("CurrentReplaced", flags)!;
+                var beforeChanged = (System.Delegate?)changed.GetValue(settings);
+                var beforeReplaced = (System.Delegate?)replaced.GetValue(settingsService);
+                var providers = typeof(CoreMods).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public)
+                    .Where(f => f.Name.EndsWith("Provider", System.StringComparison.Ordinal))
+                    .Select(f => (Field: f, Value: f.GetValue(null))).ToArray();
+                var links = CoreModsHooks.KnownVideoLinksProvider;
+                var switched = CoreModsHooks.ModSwitched;
+                var invalidate = CoreModsHooks.InvalidateStablePrompt;
+                var palette = keys.ToDictionary(k => k, k => (resources.ContainsKey(k), resources.ContainsKey(k) ? resources[k] : null));
+
+                void RunTitleTest() => new TubeTriggerModeTests().TriggerBareUrlUsesCanonicalTitle(
+                    "https://hypnotube.com/video/bambis-naughty-tiktok-collection-117314.html",
+                    assertionFails ? "wrong title" : "Bambi's Naughty TikTok Collection");
+                if (assertionFails)
+                {
+                    var error = Record.Exception(RunTitleTest);
+                    Assert.NotNull(error);
+                    Assert.Contains("Assert.Equal()", error.Message);
+                }
+                else RunTitleTest();
+
+                Assert.Same(beforeCore, CoreMods.Service);
+                Assert.Same(beforeApp, AvApp.Mods);
+                Assert.Same(beforeProvider, CoreSettings.ServiceProvider);
+                Assert.Equal(beforeSettings, Newtonsoft.Json.JsonConvert.SerializeObject(settings));
+                Assert.Equal(beforeChanged, (System.Delegate?)changed.GetValue(settings));
+                Assert.Equal(beforeReplaced, (System.Delegate?)replaced.GetValue(settingsService));
+                foreach (var (field, value) in providers) Assert.Same(value, field.GetValue(null));
+                Assert.Same(links, CoreModsHooks.KnownVideoLinksProvider);
+                Assert.Same(switched, CoreModsHooks.ModSwitched);
+                Assert.Same(invalidate, CoreModsHooks.InvalidateStablePrompt);
+                foreach (var key in keys)
+                {
+                    Assert.Equal(palette[key].Item1, resources.ContainsKey(key));
+                    if (palette[key].Item1) Assert.Same(palette[key].Item2, resources[key]);
+                }
+            }
+            finally
+            {
+                settingsService.SealForReset();
+                snapshot.Restore();
+                foreach (var key in keys)
+                {
+                    if (originalResources[key].Item1) resources[key] = originalResources[key].Item2!;
+                    else resources.Remove(key);
+                }
+            }
+        });
 
     /// <summary>A debounce that already FIRED is no longer armed. Its write used to land after Restore
     /// and became every later test's baseline (Welcomed, no age acceptance: an extra Age Verification
