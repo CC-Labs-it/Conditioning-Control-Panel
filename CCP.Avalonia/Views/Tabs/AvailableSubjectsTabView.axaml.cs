@@ -68,7 +68,7 @@ public partial class AvailableSubjectsTabView : UserControl
             SubjectsAmbientFx.Stop();
         };
     }
-    private static LobbyPoll BuildLobby()
+    internal static LobbyPoll BuildLobby()
     {
         var remote = new RemoteLobbyApi();
         return new LobbyPoll(new Platform.FriendsHead.Timer(),
