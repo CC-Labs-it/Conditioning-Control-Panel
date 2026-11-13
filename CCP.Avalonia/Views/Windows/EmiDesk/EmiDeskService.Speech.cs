@@ -9,9 +9,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _greetingTimer;
-    private EmiDeskService()
+    private string _summonVia = "rail";
+    private bool _summonTouring;
+    private DateTime _outSinceUtc;
+    internal Func<DateTime> UtcNow = () => DateTime.UtcNow;
+    // Tests build isolated desks (new EmiDeskService()); the engine's probes stay on the shared desk.
+    internal EmiDeskService()
     {
-        EmiLineEngine.AskSituationProbe = AskSituationOk;
+        EmiLineEngine.AskSituationProbe = static () => Instance.AskSituationOk();
         EmiLineEngine.EffectFeasibleProbe = EffectFeasible;
     }
     private bool AskSituationOk()
@@ -82,9 +87,12 @@ internal sealed partial class EmiDeskService
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bark min-gap stamp failed"); }
     }
-    private void ScheduleGreeting()
+    private void ScheduleGreeting(string? why)
     {
         CancelGreeting();
+        _summonVia = string.Equals(why, "hotkey", StringComparison.OrdinalIgnoreCase) ? "hotkey" : "rail";
+        _summonTouring = string.Equals(why, "tour", StringComparison.OrdinalIgnoreCase);
+        _outSinceUtc = UtcNow();
         _greetingTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2600) };
         _greetingTimer.Tick += (_, _) => GreetingDue();
         _greetingTimer.Start();
@@ -98,7 +106,7 @@ internal sealed partial class EmiDeskService
         // WPF EmiDeskService.cs:819,847-855: delayed, ordered greetings.
         var moment = !LineEngine.EverSpent("firstContact") ? "firstContact"
             : !LineEngine.EverSpent("desktopFirstBoot") ? "desktopFirstBoot" : "summoned";
-        Fire(moment, new { via = "rail", minutes = 0, touring = false });
+        Fire(moment, new { via = _summonVia, minutes = Math.Max(0, (int)(UtcNow() - _outSinceUtc).TotalMinutes), touring = _summonTouring });
     }
     private void CancelGreeting()
     {

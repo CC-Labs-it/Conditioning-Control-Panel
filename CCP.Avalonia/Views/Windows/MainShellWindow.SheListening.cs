@@ -314,6 +314,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (App.WakeWord), so it is never configured and WPF's notice is the whole answer.</summary>
         internal void SL_Calibrate_Click()
             => _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word",
-                "The offline wake-word model isn't installed yet, so there's nothing to calibrate.");
+                Loc.Get("she_wake_calibration_unavailable"));
     }
 }

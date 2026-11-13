@@ -131,6 +131,33 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Theory]
+    [InlineData(true, false, 0)]
+    [InlineData(false, false, 1)]
+    [InlineData(true, true, 1)]
+    public void Bubbles_follow_presentation_at_show(bool floating, bool strict, int expected) => With(20, strict, () =>
+    {
+        var pause = CoreBubbles.PauseAction;
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var pauses = 0;
+        CoreBubbles.PauseAction = () => pauses++;
+        CoreSubliminal.BambiFreezeProvider = null;
+        var clock = new FakeClock();
+        var video = new MandatoryVideoScheduler(new Host { Floating = floating }, clock, () => Clips);
+        try
+        {
+            Assert.True(video.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(expected, pauses);
+        }
+        finally
+        {
+            video.ForceCleanup();
+            CoreBubbles.PauseAction = pause;
+            CoreSubliminal.BambiFreezeProvider = freeze;
+        }
+    });
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void Full_screen_decided_during_pre_roll_stops_flashes_before_show(bool lockStarts)
