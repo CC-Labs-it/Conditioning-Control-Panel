@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "チャージ済み - 次の{0}回は電流が流れます",
+  "Chaos_EStim_Chain": "チャージ済み - 次の{0}回は連鎖します",
+  "Chaos_EStim_Arc": "電流が流れました（残り{0}回）",
+  "Chaos_EStim_Spent": "チャージを使い切りました",
   "deeper_editor_haptic_test_no_device": "触覚デバイスが接続されていません。設定で接続してからテストしてください。",
   "deeper_editor_haptic_test_row_off": "触覚タブの Deeper 行がオフです。パターンを試すにはオンにしてください。",
   "deeper_editor_haptic_test_premium": "デバイスのテストには Premium が必要です。",
@@ -40,6 +44,7 @@
   "chaos_toy_buzz": "振動中。押したままなぞる",
   "chaos_toy_snap_all": "解除。すべて。",
   "chaos_toy_snap_live": "解除。すべての活性バブルが解けた",
+  "chaos_thought_fallback": "身を委ねて",
   "chaos_toy_afterglow": "余韻。まだ続く",
   "chaos_lesson_count": "レッスン: {0} / {1}",
   "chaos_lesson_title": "レッスン",

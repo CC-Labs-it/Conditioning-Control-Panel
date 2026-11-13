@@ -236,6 +236,14 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
+        /// <summary>WPF BubbleService.cs:2743: a surviving Bound half becomes faster and more urgent.</summary>
+        public void Enrage()
+        {
+            if (Popping || Spec is not { IsLive: true }) return;
+            FuseRemainingMs = Math.Max(600, FuseRemainingMs / 2);
+            _speed *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;
+        }
+
         /// <summary>WPF DANGER_TELEGRAPH_MS: the last stretch of a live fuse breathes faster and deeper.</summary>
         public const double DangerTelegraphMs = 1200;
 

@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "charge prête - tes {0} prochaines bulles conduisent",
+  "Chaos_EStim_Chain": "charge prête - tes {0} prochaines bulles déclenchent des chaînes",
+  "Chaos_EStim_Arc": "le courant jaillit (reste {0})",
+  "Chaos_EStim_Spent": "charge épuisée",
   "deeper_editor_haptic_test_no_device": "Aucun appareil haptique connecté. Connectez-en un dans les paramètres pour le tester.",
   "deeper_editor_haptic_test_row_off": "La ligne Deeper est désactivée dans l’onglet Haptique. Activez-la pour tester les motifs.",
   "deeper_editor_haptic_test_premium": "Le test de l’appareil nécessite un accès Premium.",
@@ -40,6 +44,7 @@
   "chaos_toy_buzz": "ça vibre. maintiens et balaie",
   "chaos_toy_snap_all": "libéré. tout.",
   "chaos_toy_snap_live": "libéré. toutes les bulles actives ont cédé",
+  "chaos_thought_fallback": "CÈDE",
   "chaos_toy_afterglow": "rémanence. elle persiste",
   "chaos_lesson_count": "leçon : {0} sur {1}",
   "chaos_lesson_title": "la leçon",

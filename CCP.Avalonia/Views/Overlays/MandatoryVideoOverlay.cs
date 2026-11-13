@@ -515,11 +515,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 // Capture the watch so a delayed kick cannot affect a later run.
                 var watch = Chaos.ChaosWaveTimerWindow.Active;
-                if (watch == null) return;
                 void Kick()
                 {
-                    if (video.IsVisible && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
-                        Chaos.ChaosWaveTimerWindow.RaiseActive();
+                    if (!video.IsVisible) return;
+                    Chaos.ChaosRunHost.RaiseDvdAboveVideo();
+                    Chaos.ChaosRunHost.KeepChromeTopmost(() =>
+                    {
+                        if (watch != null && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
+                            Chaos.ChaosWaveTimerWindow.RaiseActive();
+                    });
                 }
                 Dispatcher.UIThread.Post(Kick);
                 DispatcherTimer.RunOnce(Kick, TimeSpan.FromMilliseconds(60));

@@ -13,7 +13,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 
 internal static partial class ChaosRunHost
 {
-    private static double _vibeRemaining, _snapRemaining;
+    private static double _vibeRemaining, _snapRemaining, _thoughtAccumSec;
+    internal static Action<double, double, double, string> LaunchThought = (sec, speed, scale, text) =>
+        ChaosDvdOverlay.Launch(_overlay!, sec, speed, scale, text: text);
     private static bool _afterglow, _vibeHover;
     private static FrameClock? _sweepTimer;
     // Same desktop pointer seam as the existing cursor/trail surfaces; null off X11.
@@ -69,9 +71,31 @@ internal static partial class ChaosRunHost
                 s.PushEvent($"{toy.Glyph} {Loc.Get("chaos_dvd_loading")}");
                 return true;
             }
+            case "e_stim":
+            {
+                // WPF ChaosModeService.cs:2761-2775 (hand-ported from #4356): arm charged pops.
+                // The toy's Glyph prefixes each event line; the HUD draws it as an IconGlyph.
+                int charges = Math.Max(1, (int)power) * Math.Max(1, s.EStimChargeMult);
+                var violet = Color.FromRgb(0x9C, 0x5C, 0xFF);
+                string glyph = toy.Glyph;
+                BubbleOverlay.EStimArc = left =>
+                {
+                    ChaosOverlayWindow.ChaosSfx.Play("estim_zap", 0.6f);
+                    Pulse(violet, 0.25);
+                    if (left == 0) ChaosEffectBannerOverlay.End("estim");
+                    _state?.PushEvent($"{glyph} {(left > 0 ? Loc.GetF("Chaos_EStim_Arc", left) : Loc.Get("Chaos_EStim_Spent"))}");
+                };
+                BubbleOverlay.ArmEStim(charges, maxed);
+                if (BubbleOverlay.EStimCharges <= 0) return false;
+                ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+                ChaosEffectBannerOverlay.Show("estim", "E-Stim", violet);
+                Pulse(violet, 0.25);
+                s.PushEvent($"{glyph} {Loc.GetF(maxed ? "Chaos_EStim_Chain" : "Chaos_EStim_Conduct", charges)}");
+                return true;
+            }
             default:
-                // ponytail: freeze, rabbit motion/aim and charged arcs need their
-                // BubbleService mechanics ported; do not award first_play for an inert toy.
+                // ponytail: freeze and rabbit motion/aim need their BubbleService
+                // mechanics ported; do not award first_play for an inert toy.
                 return false;
         }
     }
@@ -103,6 +127,18 @@ internal static partial class ChaosRunHost
     private static void TickToyEffects()
     {
         if (_state == null) return;
+        // WPF ChaosModeService.cs:2994-3005. Freeze is not yet exposed by this head.
+        if (_state.IntrusiveThoughtsSec > 0)
+        {
+            _thoughtAccumSec += ChaosRunEngine.TICK_SEC;
+            if (_thoughtAccumSec >= 5)
+            {
+                _thoughtAccumSec = 0;
+                var enabled = CoreSettings.Current.BouncingTextPool.Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
+                var text = enabled is { Length: > 0 } ? enabled[Random.Shared.Next(enabled.Length)] : Loc.Get("chaos_thought_fallback");
+                LaunchThought(_state.IntrusiveThoughtsSec, 1.3, 0.8, text);
+            }
+        }
         if (_vibeRemaining > 0)
         {
             _vibeRemaining -= ChaosRunEngine.TICK_SEC;
@@ -132,6 +168,7 @@ internal static partial class ChaosRunHost
                 "vibe_popping" => _vibeRemaining > 0,
                 "snap_field" => _snapRemaining > 0,
                 "porn_dvd" => dvdLive,
+                "e_stim" => BubbleOverlay.EStimCharges > 0,
                 _ => false,
             };
         if (_dvdBannerOn && !dvdLive)
@@ -146,10 +183,11 @@ internal static partial class ChaosRunHost
     {
         _sweepTimer?.Stop();
         _sweepTimer = null;
-        _vibeRemaining = _snapRemaining = 0;
+        _vibeRemaining = _snapRemaining = _thoughtAccumSec = 0;
         _afterglow = _vibeHover = false;
         _dvdBannerOn = false;
         ChaosVibeTrailOverlay.CloseActive();
         ChaosEffectBannerOverlay.End("vibe");
+        ChaosEffectBannerOverlay.End("estim");
     }
 }

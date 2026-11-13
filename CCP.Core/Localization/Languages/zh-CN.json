@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "已充能 - 接下来戳破的{0}个气泡会导电",
+  "Chaos_EStim_Chain": "已充能 - 接下来戳破的{0}个气泡会引发连锁",
+  "Chaos_EStim_Arc": "电流跃动（剩余{0}次）",
+  "Chaos_EStim_Spent": "充能已用完",
   "deeper_editor_haptic_test_row_off": "触觉选项卡中的 Deeper 行已关闭。请开启后再测试模式。",
   "deeper_editor_haptic_test_premium": "设备测试需要 Premium 权限。",
   "webcam_drift_unavailable": "此桌面不支持全局点击，自动漂移校正已关闭。",
@@ -39,6 +43,7 @@
   "chaos_toy_buzz": "振动中。按住并扫过",
   "chaos_toy_snap_all": "解除了。全部。",
   "chaos_toy_snap_live": "解除了。所有活跃气泡都已松开",
+  "chaos_thought_fallback": "顺从吧",
   "chaos_toy_afterglow": "余韵。仍在持续",
   "chaos_lesson_count": "课程：{0} / {1}",
   "chaos_lesson_title": "课程",
