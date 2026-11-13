@@ -121,6 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Every press, before the lock-card stop or the capture abort reads as silence.
             try { IntakeHostWindow.StopMicsForPanic(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: stopping the mics failed"); }
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1655: the welcome show stops before EMI's panic hold, so the hold face is not
+            // swallowed by a presentation still on screen. The stop pass's "first-show" row repeats it (idempotent).
+            try { WelcomeShow.FirstShowService.Stop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: first show stop failed"); }
             try { EmiDesk.EmiDeskService.Instance.PanicSilence(); } catch (Exception ex) { Serilog.Log.Warning(ex, "EMI panic silence failed"); } // WPF MainWindow.xaml.cs:1620
             // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
             // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.

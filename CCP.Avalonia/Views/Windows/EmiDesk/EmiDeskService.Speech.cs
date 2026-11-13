@@ -37,6 +37,17 @@ internal sealed partial class EmiDeskService
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] speech moment {Moment} failed", moment); }
     }
+    /// <summary>WPF NoteEmiSpoke (EmiDeskService.cs:782): stagger the avatar's next bark after her line,
+    /// only while she is not muting the avatar (no second voice to stagger against then).</summary>
+    internal void NoteEmiSpoke()
+    {
+        try
+        {
+            if (AvatarMuted) return;
+            global::ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine?.NotifyExternalLineSpoken();
+        }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bark min-gap stamp failed"); }
+    }
     private void ScheduleGreeting()
     {
         CancelGreeting();
