@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "충전됨 - 다음 {0}번은 전류가 흐릅니다",
+  "Chaos_EStim_Chain": "충전됨 - 다음 {0}번은 연쇄됩니다",
+  "Chaos_EStim_Arc": "전류가 흐릅니다 (남은 횟수 {0})",
+  "Chaos_EStim_Spent": "충전을 모두 사용했습니다",
   "deeper_editor_haptic_test_no_device": "연결된 햅틱 기기가 없습니다. 설정에서 기기를 연결한 후 테스트하세요.",
   "deeper_editor_haptic_test_row_off": "햅틱 탭의 Deeper 행이 꺼져 있습니다. 패턴을 테스트하려면 켜세요.",
   "deeper_editor_haptic_test_premium": "기기 테스트에는 Premium 이용 권한이 필요합니다.",
@@ -41,6 +45,7 @@
   "chaos_toy_buzz": "진동 중. 누른 채로 쓸기",
   "chaos_toy_snap_all": "해제. 모두.",
   "chaos_toy_snap_live": "해제. 모든 활성 방울이 풀렸다",
+  "chaos_thought_fallback": "몸을 맡겨",
   "chaos_toy_afterglow": "여운. 아직 남아 있다",
   "chaos_lesson_count": "학습: {0} / {1}",
   "chaos_lesson_title": "학습",

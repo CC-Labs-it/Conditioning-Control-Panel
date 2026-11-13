@@ -144,6 +144,103 @@ public sealed class ChaosEStimOverlayTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Bolt_preparation_receives_the_birth_stacking_band(bool pinned) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var clickThrough = ChaosEStimOverlay.SetClickThrough;
+        var overrideRedirect = ChaosEStimOverlay.SetOverrideRedirect;
+        var skipChecks = ChaosEStimOverlay.SkipPlatformChecksForTests;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.ChaosPinOnTop = pinned;
+        var calls = 0;
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+        ChaosEStimOverlay.SetClickThrough = (_, _) => true;
+        ChaosEStimOverlay.SetOverrideRedirect = (window, bounds, passive, topmost) =>
+        {
+            calls++;
+            Assert.Equal(pinned, topmost);
+            Assert.Equal(window.Topmost, topmost);
+            return true;
+        };
+        ChaosEStimOverlay.RaiseWindow = _ => { };
+        try
+        {
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(0, 0), new PixelPoint(100, 100)) });
+            Assert.NotNull(ChaosEStimOverlay.Active);
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.SetClickThrough = clickThrough;
+            ChaosEStimOverlay.SetOverrideRedirect = overrideRedirect;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = skipChecks;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Bolt_pinning_controls_birth_and_raises(bool pinned) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var canShow = ChaosEStimOverlay.CanShow;
+        var raise = ChaosEStimOverlay.RaiseWindow;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.ChaosPinOnTop = pinned;
+        var raised = new System.Collections.Generic.List<global::Avalonia.Controls.Window>();
+        ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+        ChaosEStimOverlay.CanShow = () => true;
+        ChaosEStimOverlay.RaiseWindow = w => raised.Add(w);
+        try
+        {
+            ChaosEStimOverlay.EnsureCreated();
+            var bolt = ChaosEStimOverlay.Active!;
+            Assert.NotNull(bolt);
+            Assert.Equal(pinned, bolt.Topmost);
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(0, 0), new PixelPoint(100, 100)) });
+            Assert.Equal(pinned ? 1 : 0, raised.Count);
+            if (pinned) Assert.Same(bolt, raised[0]);
+            raised.Clear();
+            ChaosEStimOverlay.RaiseActive();
+            Assert.Equal(pinned ? 1 : 0, raised.Count);
+            if (pinned) Assert.Same(bolt, raised[0]);
+            settings.Current.ChaosPinOnTop = false;
+            bolt.Topmost = true;
+            raised.Clear();
+            ChaosEStimOverlay.RaiseActive();
+            Assert.False(bolt.Topmost);
+            Assert.Empty(raised);
+            bolt.Topmost = true;
+            ChaosEStimOverlay.Strike(new[] { (new PixelPoint(0, 0), new PixelPoint(100, 100)) });
+            Assert.False(bolt.Topmost);
+            Assert.Empty(raised);
+        }
+        finally
+        {
+            ChaosEStimOverlay.CloseActive();
+            ChaosEStimOverlay.CanShow = canShow;
+            ChaosEStimOverlay.RaiseWindow = raise;
+            ChaosEStimOverlay.SkipPlatformChecksForTests = false;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Run_start_precreates_only_for_equipped_estim_and_panic_closes_it(bool equipped) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)

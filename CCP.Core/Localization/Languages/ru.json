@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "заряд готов - следующие {0} пузырей проводят ток",
+  "Chaos_EStim_Chain": "заряд готов - следующие {0} пузырей вызовут цепь",
+  "Chaos_EStim_Arc": "ток перескочил (осталось {0})",
+  "Chaos_EStim_Spent": "заряд израсходован",
   "deeper_editor_haptic_test_no_device": "Тактильное устройство не подключено. Подключите его в настройках для проверки.",
   "deeper_editor_haptic_test_row_off": "Строка Deeper отключена на вкладке тактильной отдачи. Включите её для проверки шаблонов.",
   "deeper_editor_haptic_test_premium": "Для проверки устройства нужен доступ Premium.",
@@ -41,6 +45,7 @@
   "chaos_toy_buzz": "вибрирует. удерживай и проводи",
   "chaos_toy_snap_all": "снято. всё.",
   "chaos_toy_snap_live": "снято. все активные пузыри отпущены",
+  "chaos_thought_fallback": "ПОДДАЙСЯ",
   "chaos_toy_afterglow": "послесвечение. оно остаётся",
   "chaos_lesson_count": "урок: {0} из {1}",
   "chaos_lesson_title": "урок",

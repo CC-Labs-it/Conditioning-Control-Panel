@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "charged - your next {0} pops conduct",
+  "Chaos_EStim_Chain": "charged - your next {0} pops chain-react",
+  "Chaos_EStim_Arc": "the current arcs ({0} left)",
+  "Chaos_EStim_Spent": "the charge is spent",
   "webcam_drift_unavailable": "Global clicks are unavailable on this desktop. Auto drift correction is off.",
   "scheduler_started_title": "Scheduler Active",
   "scheduler_started_body": "Session auto-started based on schedule.",
@@ -38,6 +42,7 @@
   "chaos_toy_buzz": "it buzzes. hold and sweep",
   "chaos_toy_snap_all": "snapped. all of it.",
   "chaos_toy_snap_live": "snapped. every live one let go",
+  "chaos_thought_fallback": "GIVE IN",
   "chaos_toy_afterglow": "afterglow. it lingers",
   "chaos_lesson_count": "lesson: {0} of {1}",
   "chaos_lesson_title": "the lesson",
