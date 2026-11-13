@@ -193,4 +193,61 @@ public sealed class FypFeedDeferTests
             v.Stop();
         });
     }
+
+    // #3776: a scheduled tick held behind the feed whose replay throws (unreadable library) re-arms the schedule.
+    [Fact]
+    public void Throwing_feed_replay_rearms_the_schedule()
+    {
+        var feed = true;
+        WithSettings(_ =>
+        {
+            var clock = new FakeClock(); var host = new VideoHost { Feed = () => feed };
+            var picks = 0;
+            var v = new MandatoryVideoScheduler(host, clock,
+                () => ++picks == 1 ? throw new System.IO.IOException("unreadable video folder") : Clips);
+            try
+            {
+                v.Start();
+                clock.Advance(TimeSpan.FromSeconds(4400));    // the scheduled tick lands while the feed is up
+                Assert.Equal(0, picks);
+                feed = false;
+                clock.Advance(TimeSpan.FromSeconds(1));       // the replay throws
+                Assert.Equal(1, picks);
+                Assert.False(v.IsPlaying);
+                clock.Advance(TimeSpan.FromSeconds(4400));    // the next normal interval
+                Assert.True(v.IsPlaying);
+                clock.Advance(MandatoryVideoScheduler.PreRoll);
+                Assert.Single(host.Shown);
+            }
+            finally { v.ForceCleanup(); v.Stop(); }
+        });
+    }
+
+    // #3776, WPF RemoteControlService.cs:1395: a remote trigger is acknowledged unless a video really plays.
+    [Fact]
+    public void Remote_video_is_refused_only_while_a_video_plays()
+    {
+        var feed = true;
+        WithSettings(_ =>
+        {
+            var clock = new FakeClock(); var host = new VideoHost { Feed = () => feed };
+            var empty = true;
+            var v = new MandatoryVideoScheduler(host, clock, () => empty ? Array.Empty<string>() : Clips);
+            var oldVideo = CoreEngine.Video;
+            try
+            {
+                CoreEngine.Video = v;
+                v.Start();
+                Assert.Null(RemoteCommands.Execute("trigger_video", null));   // held behind the feed
+                feed = false;
+                clock.Advance(TimeSpan.FromSeconds(1));
+                Assert.Null(RemoteCommands.Execute("trigger_video", null));   // empty library: nothing to refuse
+                empty = false;
+                Assert.Null(RemoteCommands.Execute("trigger_video", null));
+                Assert.True(v.IsPlaying);
+                Assert.Equal("a video is already playing", RemoteCommands.Execute("trigger_video", null));
+            }
+            finally { CoreEngine.Video = oldVideo; v.ForceCleanup(); v.Stop(); }
+        });
+    }
 }
