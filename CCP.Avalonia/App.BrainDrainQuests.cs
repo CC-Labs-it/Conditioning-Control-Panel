@@ -21,10 +21,8 @@ public partial class App
         BrainDrainCredit.Sample(false, TimeSpan.Zero);
         _brainDrainOverlayStopGeneration = RemoteCommands.OverlayStopGeneration;
         _brainDrainQuestTimer.Start();
-        CoreEngine.StartBrainDrain = () =>
-        {
-            Platform.BrainDrainPlayer.Instance?.Start();
-        };
+        // StartBrainDrain stays unset until LibVLC seeds the player (App.axaml.cs), so remote and voice
+        // "deeper" keep answering "not on this build" without audio; the stop hook always resets the credit.
         CoreEngine.StopBrainDrain = () =>
         {
             BrainDrainCredit.Sample(false, TimeSpan.Zero);
