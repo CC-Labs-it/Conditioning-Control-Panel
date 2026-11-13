@@ -488,6 +488,10 @@ public sealed class RealProfileMigrationTests
                 // mirrored into settings, and the highest streak lifted to it.
                 else if (LoginStreakBankedToday(key, value, now, saved))
                     expect("login-streak-banked-at-launch");
+                // Expected (restack b57, #4696): launch records today's UTC date in the season bucket and
+                // lifts the season peak to the banked streak, as WPF SeasonRecapService.cs:146/:159 does.
+                else if (SeasonActivityRecordedToday(key, value, now, saved))
+                    expect("season-activity-recorded-at-launch");
                 else yield return "value changed: " + key;
                 continue;
             }
@@ -495,6 +499,23 @@ public sealed class RealProfileMigrationTests
             var defaultToken = fallback is null ? JValue.CreateNull() : JToken.FromObject(fallback);
             if (!JToken.DeepEquals(value, defaultToken)) yield return "key dropped with a non-default value: " + key;
         }
+    }
+
+    private static bool SeasonActivityRecordedToday(string key, JToken original, JToken now, JObject saved)
+    {
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var current = saved["CurrentStreak"]?.Type == JTokenType.Integer ? (int)saved["CurrentStreak"]! : -1;
+        return key switch
+        {
+            "SeasonActiveDays" => original is JArray was && now is JArray days
+                && days.Count == was.Count + 1 && was.All(d => days.Any(n => JToken.DeepEquals(d, n)))
+                && days.Any(n => (string?)n == today),
+            "SeasonStatsSeason" => string.IsNullOrEmpty((string?)original) && now.Type == JTokenType.String
+                && System.Text.RegularExpressions.Regex.IsMatch((string)now!, @"^\d{4}-\d{2}$"),
+            "SeasonPeakStreak" => original.Type == JTokenType.Integer && now.Type == JTokenType.Integer
+                && (int)now == Math.Max((int)original, current),
+            _ => false,
+        };
     }
 
     private static bool LoginStreakBankedToday(string key, JToken original, JToken now, JObject saved)
