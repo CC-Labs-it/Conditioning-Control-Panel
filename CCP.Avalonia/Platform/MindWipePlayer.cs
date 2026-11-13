@@ -236,6 +236,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             displaced?.Dispose();
             // WPF App.xaml.cs:750-752: a played one-shot feeds the memory favourite.
             if (voice != null) App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
+            // The bug report's recent sounds (WPF MindWipeService.cs:918, via EngineOffAudioLog).
+            if (voice != null) ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("mindwipe", clip, CoreEngine.IsRunning, false, DateTime.Now);
             Log.Debug("MindWipe: Playing {File} at {Heard}% after master", Path.GetFileName(clip), Math.Round(volume * 100));
         }
 
@@ -265,6 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
             }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
             lock (_lock) { _loop = voice; _cleanSlate = check; }
+            ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("mindwipe-loop", clip, CoreEngine.IsRunning, false, DateTime.Now);   // WPF MindWipeService.cs:485
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume, {Heard}% after master", Path.GetFileName(clip), volume * 100, Math.Round(CurrentGain * 100));
         }
 

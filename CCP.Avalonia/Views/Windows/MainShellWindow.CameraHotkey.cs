@@ -18,15 +18,22 @@ public partial class MainShellWindow
 {
     private IDisposable? _cameraHotkeyRegistration;
     private (bool Global, ChordMods Mods, string Key)? _cameraHotkeyBinding;
+    private PortalCameraHotkey? _portalCameraHotkey;
     private bool _cameraHotkeyBusy, _cameraKeyHooked;
     internal Func<Window, ChordMods, string, Action, IDisposable?> RegisterCameraHotkey = RegisterCameraHotkeyNative;
+    internal Func<ChordMods, string, Action, PortalCameraHotkey> RegisterPortalCamera = (mods, key, pressed) =>
+    {
+        var portal = new PortalCameraHotkey(pressed);
+        _ = portal.BindAsync(mods, key, Loc.Get("set2_palette_camera_shortcut"));
+        return portal;
+    };
     // WPF MainWindow.BlinkTrainer.cs:337-338: persisted consent alone does not finish the dialog.
     internal Func<Window, Task<bool>> ShowCameraConsent = async owner =>
     {
         var dialog = new WebcamConsentDialog();
         return await dialog.ShowDialogSafe<bool?>(owner) == true && dialog.ConsentGiven;
     };
-    internal bool CameraHotkeyArmed => _cameraHotkeyRegistration != null;
+    internal bool CameraHotkeyArmed => _cameraHotkeyRegistration != null || _portalCameraHotkey?.IsBound == true;
     private static IDisposable? RegisterCameraHotkeyNative(Window owner, ChordMods mods, string key, Action pressed)
         => OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.RegisterCamera(owner, mods, key, pressed)
             : X11SummonChord.Register("camera", mods, key, pressed);
@@ -49,7 +56,23 @@ public partial class MainShellWindow
         _cameraHotkeyBinding = binding;
         _cameraHotkeyRegistration?.Dispose();
         _cameraHotkeyRegistration = null;
+        _portalCameraHotkey?.Dispose();
+        _portalCameraHotkey = null;
         if (_quickRecalClosed || !binding.Item1) return;
+        if (OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+        {
+            PortalCameraHotkey? portal = null;
+            portal = RegisterPortalCamera(mods, key, () => Dispatcher.UIThread.Post(async () =>
+            {
+                var current = CameraChord();
+                if (!ReferenceEquals(_portalCameraHotkey, portal) || portal?.IsBound != true
+                    || CoreSettings.Current?.CompanionPrompt?.CameraShortcutGlobal == false
+                    || current != (mods, key)) return;
+                await ToggleWebcamFromHotkeyAsync();
+            }));
+            _portalCameraHotkey = portal;
+            return;
+        }
         try
         {
             _cameraHotkeyRegistration = RegisterCameraHotkey(this, mods, key,
