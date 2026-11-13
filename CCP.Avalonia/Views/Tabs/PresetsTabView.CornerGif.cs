@@ -41,9 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 });
                 if (files.FirstOrDefault()?.TryGetLocalPath() is { } path) SetCornerGifPath(path);
             };
-            // WPF debounces the size edit 400 ms (a live edit recreates the overlay). Here every
-            // live edit re-shows the overlay (frames are decoded at its size), so opacity rides the
-            // same debounce; ponytail: WPF's opacity edit is instant.
+            // WPF Presets.cs:578-605 debounces size for 400 ms; opacity applies at once (:617-628).
             SliderCornerGifSize.ValueChanged += (_, e) =>
             {
                 TxtCornerGifSize.Text = $"{(int)e.NewValue}px";
@@ -52,14 +50,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SliderCornerGifOpacity.ValueChanged += (_, e) =>
             {
                 TxtCornerGifOpacity.Text = $"{(int)e.NewValue}%";
-                DebounceCornerGifEdit();
+                if (App.Sessions is { IsRunning: true } runner) runner.UpdateCornerGifOpacity((int)e.NewValue);
             };
             // The radio's own corner: its group-mate is still checked while this one's event runs.
             foreach (var (rb, corner) in new[] { (RbCornerTL, CornerPosition.TopLeft), (RbCornerTR, CornerPosition.TopRight),
                          (RbCornerBL, CornerPosition.BottomLeft), (RbCornerBR, CornerPosition.BottomRight) })
                 rb.IsCheckedChanged += (_, _) =>
                 {
-                    if (rb.IsChecked == true) LiveCornerGifEdit(ss => ss.CornerGifPosition = corner);
+                    if (rb.IsChecked == true && App.Sessions is { IsRunning: true } runner) runner.UpdateCornerGifPosition(corner);
                 };
         }
 
@@ -91,11 +89,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _cornerGifDebounce.Start();
         }
 
-        /// <summary>The debounced slider values onto a running session. Test seam (the timer's tick).</summary>
+        /// <summary>The debounced size onto a running session. Test seam (the timer's tick).</summary>
         internal void FlushCornerGifEdit() => LiveCornerGifEdit(ss =>
         {
             ss.CornerGifSize = (int)SliderCornerGifSize.Value;
-            ss.CornerGifOpacity = (int)SliderCornerGifOpacity.Value;
         });
 
         /// <summary>WPF's `_sessionEngine.IsRunning` live updates (#474).</summary>

@@ -46,6 +46,12 @@ namespace ConditioningControlPanel
         /// <summary>Show (or re-show, replacing) the session's corner overlay for this setting.</summary>
         public static volatile Action<Models.CornerGifOverlaySetting>? SessionShowHandler;
 
+        /// <summary>Move the session surface without replacing its animation.</summary>
+        public static volatile Action<Models.CornerPosition>? SessionPositionHandler;
+
+        /// <summary>Apply a session opacity edit without replacing the animated surface.</summary>
+        public static volatile Action<int>? SessionOpacityHandler;
+
         /// <summary>Take the session's overlay down; true also hands the corner back to the
         /// standalone slots (WPF CloseCornerGif(handBackCorner)).</summary>
         public static volatile Action<bool>? SessionCloseHandler;
