@@ -715,12 +715,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 audio.Ended += _audioEnded; audio.Failed += _audioFailed;
                 audio.Volume = (int)_sliderVolume.Value;
                 _parsedDuration = audio.DurationSeconds;
-                _durationSec = reuseWaveform && _waveformDuration is { } known ? known : _parsedDuration.Value;
+                var total = reuseWaveform && _waveformDuration is { } known ? known : _parsedDuration.Value;
                 if (_waveformData == null && _waveformLoad?.IsCompleted == true) _waveformLoad = null;
                 _waveformLoad ??= LoadWaveformAsync(path, _waveformGeneration);
                 await _waveformLoad;
                 if (_closing || load != _audioLoad) return;
                 audio.Play();
+                // WPF player.xaml.cs:648-652: a failed start keeps the previous total, so the tick must not paint the parse.
+                _durationSec = _waveformDuration ?? total;
                 _isPlaying = true;
                 _txtTotal.Text = FormatTime(_durationSec);
                 _txtPlayPauseGlyph.Kind = IconKind.Pause;
