@@ -235,6 +235,32 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void IdleRotationPersistsAcrossEnginesAndHonorsSpeechAndVolumeGates()
+    {
+        var saved = _s.BarkIdleRotation;
+        _s.BarkIdleRotation = new List<string>();
+        try
+        {
+            var a = Rule("Idle", "a");
+            var b = Rule("Idle", "b");
+            a.Priority = b.Priority = 100;
+            var e = Engine(a, b);
+            e.IsSpeaking = () => true;
+            Assert.False(e.DispatchIdle());
+            e.IsSpeaking = () => false;
+            _s.MasterVolume = 0;
+            Assert.False(e.DispatchIdle());
+            _s.MasterVolume = 50;
+            Assert.True(e.DispatchIdle());
+            Assert.Single(_s.BarkIdleRotation);
+            Assert.True(Engine(a, b).DispatchIdle());
+            Assert.Equal(2, _said.Select(x => x.Text).Distinct().Count());
+            Assert.Equal(2, _s.BarkIdleRotation.Count);
+        }
+        finally { _s.BarkIdleRotation = saved; }
+    }
+
+    [Fact]
     public void AModOverlayMergesFieldByFieldOverTheBaseRule()
     {
         var dir = Directory.CreateTempSubdirectory().FullName;

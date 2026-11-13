@@ -337,16 +337,19 @@ internal static class AccountSeed
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         PrizeOwnership.Feed.NoteAccount(id);
+        var streakGeneration = LoginStreakHead.ProfileGeneration;
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
-        // The request may finish after logout or an account/settings switch.
-        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode) return false;
+        // The request may finish after logout or an account/settings switch (or a streak profile clear).
+        if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode
+            || streakGeneration != LoginStreakHead.ProfileGeneration) return false;
         // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
         PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
+        LoginStreakHead.ProfileLoaded(id, user.Stats);
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
         // WPF ProfileSyncService read-before-write: the Patreon confirmation keeps a Discord sign-in's grace alive.
@@ -405,6 +408,7 @@ internal static class AccountSeed
         ProgressionClear.Apply(s, clearMigration: true);
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
+        LoginStreakHead.ClearProfile();
         App.Achievements?.Reset();
         // SyncPush.Reset clears its Prizes feed (seeded with PrizeOwnership.Feed); unseeded, clear it here.
         if (Sync is { } push) push.Reset();
