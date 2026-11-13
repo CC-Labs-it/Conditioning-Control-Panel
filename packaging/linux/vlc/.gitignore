@@ -1,0 +1,3 @@
+# build.sh / check.sh outputs: release assets, never committed.
+out/
+cache/
