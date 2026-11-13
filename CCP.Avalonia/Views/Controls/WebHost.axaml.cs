@@ -525,7 +525,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         private TaskCompletionSource<bool?>? _pendingNavigation;
-        private void CancelPendingNavigation()
+        internal void CancelPendingNavigation()
         {
             var pending = _pendingNavigation;
             _pendingNavigation = null;
