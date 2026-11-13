@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 if (target?.Visual is not Control c) return false;
                 if (!Contains(Roles, target.Role)) return false;
                 if (!c.IsEffectivelyVisible || c.Bounds.Width <= 0 || c.Bounds.Height <= 0) return false;
-                if (PossessionTree.IsOffLimits(c) || PossessionLease.IsLeased(c)) return false;
+                if (PossessionTree.IsOffLimits(c, _inner is WobbleHeadEffect && target.Role == PossessionRole.Timer && c is TextBlock && c.Name == "TxtLockdownTimer") || PossessionLease.IsLeased(c)) return false;
                 if (ctx.Photosafe && UsesFlicker) return false;
                 return true;
             }

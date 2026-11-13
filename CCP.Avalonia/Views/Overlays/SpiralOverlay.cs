@@ -103,8 +103,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(
-            VoiceOpacity ?? Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1));
+        // WPF ResolveAdHocOverlayOpacity: a bubble payload raises a live spiral, never lowers it.
+        internal static double PaintedOpacity => SpiralFrames.Paint(HasTimedPayload
+            ? Math.Max(VoiceOpacity ?? (CoreSettings.Current.SpiralEnabled && ShouldShow() ? SliderFraction : 0), PayloadHold.Opacity)
+            : VoiceOpacity ?? SliderFraction);
+        private static double SliderFraction => Math.Clamp((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0, 0, 1);
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
@@ -123,12 +126,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
         }
 
+        internal static readonly TimedOverlayHold PayloadHold = new();
+        internal static bool HasTimedPayload => PayloadHold.IsActive;
+        internal static void ShowTimed(Visual host, int ms, double opacity)
+        {
+            var release = PayloadHold.Acquire(opacity);
+            Refresh(host);
+            global::Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+            {
+                if (release()) Refresh(host);
+            }, TimeSpan.FromMilliseconds(Math.Max(50, ms)));
+        }
+
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             Refreshes++;
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
+            if (VoiceOpacity == null && !HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
 
             var path = SourcePath();
             var video = IsVideo(path);
@@ -292,6 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _configuredPath = null;
             _randomizeAtStart = null;
             _repicked = false;
+            PayloadHold.Clear();
             QuestMinutes.Follow(false);
         }
 

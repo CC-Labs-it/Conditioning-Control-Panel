@@ -1,6 +1,5 @@
 // WPF ChasterTabView.Fx.cs:418-471: staggered marker strokes and splat.
 using System;
-using System.Diagnostics;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,8 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
 public partial class ChasterTabView
 {
-    private readonly DispatcherTimer _calendarDrawTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-    private readonly Stopwatch _calendarDrawClock = new();
+    // The marker strokes ride the calendar row's shared beat (BeatLoop), not an own frame timer.
+    private BeatLoop? _calendarDrawBeat;
     private Canvas[] _calendarCrosses = Array.Empty<Canvas>();
 
     private readonly DispatcherTimer _calendarCometTimer = new() { Interval = TimeSpan.FromMilliseconds(6500) };
@@ -150,14 +149,10 @@ public partial class ChasterTabView
                 line.StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { length, length };
                 line.StrokeDashOffset = length;
             }
-        AdvanceCalendarDraw(0);
-        _calendarDrawTimer.Tick -= CalendarDrawTick;
-        _calendarDrawTimer.Tick += CalendarDrawTick;
-        _calendarDrawClock.Restart();
-        _calendarDrawTimer.Start();
+        _calendarDrawBeat?.Stop();
+        _calendarDrawBeat = new BeatLoop(CalendarRow, seconds => AdvanceCalendarDraw(seconds * 1000));
+        _calendarDrawBeat.Start();   // steps 0 at once, as the old AdvanceCalendarDraw(0)
     }
-
-    private void CalendarDrawTick(object? sender, EventArgs e) => AdvanceCalendarDraw(_calendarDrawClock.Elapsed.TotalMilliseconds);
 
     internal void AdvanceCalendarDraw(double ms)
     {
@@ -180,8 +175,8 @@ public partial class ChasterTabView
 
     private void StopCalendarDraw()
     {
-        _calendarDrawTimer.Stop();
-        _calendarDrawClock.Stop();
+        _calendarDrawBeat?.Stop();
+        _calendarDrawBeat = null;
         foreach (var cross in _calendarCrosses)
         {
             foreach (var line in cross.Children.OfType<Line>()) line.StrokeDashOffset = 0;

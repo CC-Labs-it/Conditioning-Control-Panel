@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public bool TryApply(HeadEffect effect, PossessionHeadTarget target, bool directed)
         {
             var el = target.Element;
-            if (PossessionTree.IsOffLimits(el)) return false;
+            if (PossessionTree.IsOffLimits(el, effect is WobbleHeadEffect && target.Role == PossessionRole.Timer && el is TextBlock && el.Name == "TxtLockdownTimer")) return false;
             if (!el.IsEffectivelyVisible || el.Bounds.Width <= 0 || el.Bounds.Height <= 0) return false;
             if (!Contains(effect.Roles, target.Role)) return false;
             foreach (var g in _ghosts)
@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var metas = new List<PossessionTargetMeta>();
             foreach (var t in targets)
             {
-                if (!t.Element.IsEffectivelyVisible || PossessionTree.IsOffLimits(t.Element)) continue;   // never offered
+                if (!t.Element.IsEffectivelyVisible || PossessionTree.IsOffLimits(t.Element, t.Role == PossessionRole.Timer && t.Element is TextBlock && t.Element.Name == "TxtLockdownTimer")) continue;   // never offered
                 bool live = _ghosts.Exists(g => ReferenceEquals(g.Target.Element, t.Element));
                 bool cool = _cooldownUntil.TryGetValue(t.Key, out var until) && until > now;
                 offered.Add(t);

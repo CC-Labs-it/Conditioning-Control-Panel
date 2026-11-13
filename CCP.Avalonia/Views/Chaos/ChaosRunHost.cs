@@ -733,7 +733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 var variant = ChaosBubbleVariants.All[Rng.Next(2)];
                 BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity, _state.FuseTimeMult,
-                    ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale));
+                    ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale), motion: ChaosMotion.RainDown);
             }
             var sound = ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", $"chime{Rng.Next(1, 4)}.mp3"));
             if (System.IO.File.Exists(sound))

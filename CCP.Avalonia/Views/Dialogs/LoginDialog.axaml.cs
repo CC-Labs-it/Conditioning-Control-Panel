@@ -773,7 +773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if (!string.IsNullOrEmpty(authToken)) CoreSettings.Current.MergedSignInPending = false;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = user.UnifiedId; // before the load: its push is gated on signed in
-            ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170
+            ProfileLoad = AccountSeed.PostLoginAsync(); // WPF MainWindow.Login.cs:155-187
 
             // WPF UpdateServiceProperties
             if (provider == "patreon" && AccountSeed.Patreon is { } p) { p.UnifiedUserId = user.UnifiedId; p.DisplayName = user.DisplayName; }
@@ -986,7 +986,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             CoreSettings.Current.MergedSignInPending = false;
             CoreSettings.Save();
             CoreAccount.UnifiedUserId = result.UnifiedId;
-            ProfileLoad = AccountSeed.LoadProfileAsync(); // WPF MainWindow.Login.cs:170 runs after every sign-in
+            ProfileLoad = AccountSeed.PostLoginAsync(); // WPF MainWindow.Login.cs:155-187
             Result = new LoginResult
             {
                 Success = true,

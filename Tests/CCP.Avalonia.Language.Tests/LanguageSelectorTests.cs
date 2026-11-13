@@ -98,6 +98,7 @@ public sealed class LanguageSelectorTests
 
             try
         {
+            Assert.Equal("2021-01-01", CoreSettings.Current.InstallDate);
             Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
             Assert.Equal("ja", LocalizationManager.Instance.CurrentLanguage);
             Assert.Equal("ja", SelectedCode(Pill(shell)));
@@ -480,6 +481,8 @@ public sealed class LanguageSelectorTests
         settings.Current.Language = "ja";
         settings.Current.SessionRackSourceFilter = "all";
         settings.Current.Welcomed = true;
+        // This is a returning profile, so the one-time install-date repair has already run.
+        settings.Current.InstallDate = "2021-01-01";
         // A current-version profile has no upgrade bookkeeping (WPF MainWindow.Marquee.cs:311-325).
         // Versionless startup is separately exercised by FeatureIntroUpgradeTests.
         var version = typeof(App).Assembly.GetName().Version!; // the provider is seeded only by StartApp

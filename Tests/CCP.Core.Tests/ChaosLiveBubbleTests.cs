@@ -31,7 +31,7 @@ public class ChaosLiveBubbleTests
     {
         var spec = new EffectBubbleSpec { VariantId = "flash", SizePx = 150, Motion = ChaosMotion.RainDown };
         var field = new AmbientBubbleField();
-        var bubble = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, spec);
+        var bubble = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, spec, ChaosMotion.RainDown);
         field.Bubbles.Add(bubble);
         Assert.Equal(-150, bubble.Y);
         field.Step();

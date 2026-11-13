@@ -1,6 +1,6 @@
 // WPF Controls/Leash/Explain/LeashExplainer.cs:63 and LeashExplainCard.cs:99.
 using System;
-using System.Diagnostics;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -24,11 +24,12 @@ internal sealed class LeashHolderIntro : Window
     private readonly RotateTransform _bladeA = new(), _bladeB = new();
     private readonly TranslateTransform _left = new(), _right = new();
     private readonly Ellipse[] _bits = new Ellipse[6];
-    private DispatcherTimer? _timer;
-    private readonly Stopwatch _watch = new();
+    private BeatLoop? _loop;
     private bool _played;
-    internal bool MotionActive => _timer?.IsEnabled == true;
+    internal bool MotionActive => _loop?.IsRunning == true;
     internal Action<PointerPressedEventArgs>? DragOverride { get; set; }
+    /// <summary>--render-all (RenderProof): the holder card offering to a sample friend; the offer does nothing.</summary>
+    internal LeashHolderIntro() : this("Mia", () => { }) { }
     internal LeashHolderIntro(string name, Action? offer)
     {
         Title = offer == null || string.IsNullOrWhiteSpace(name) ? Loc.Get("leash_explain_title") : Loc.GetF("leash_explain_offer_title", name.Trim());
@@ -42,7 +43,8 @@ internal sealed class LeashHolderIntro : Window
         title.TextWrapping = TextWrapping.Wrap;
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         header.Children.Add(title);
-        var x = F.Pill("×", F.Raised, F.Text, "leash-explain-close"); x.Click += (_, _) => Close();
+        var x = F.Pill(new IconGlyph { Kind = IconKind.Dismiss, Size = 12 }, F.Raised, F.Text, "leash-explain-close"); x.Click += (_, _) => Close();
+        global::Avalonia.Automation.AutomationProperties.SetName(x, Loc.Get("btn_close"));   // an icon-only button needs its name
         Grid.SetColumn(x, 1); header.Children.Add(x); root.Children.Add(header);
         var pictures = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
         // Flat, finished-state drawings: offer, collar and level, eye and day, scissors cutting.
@@ -97,28 +99,30 @@ internal sealed class LeashHolderIntro : Window
         AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Close(); } }, RoutingStrategies.Tunnel);
         root.PointerPressed += (_, e) => { if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) try { if (DragOverride is { } drag) drag(e); else BeginMoveDrag(e); } catch { } };
         Opened += (_, _) => StartMotion();
-        Closed += (_, _) => { _timer?.Stop(); _timer = null; };
+        Closed += (_, _) => StopMotion();
     }
     private static Path Part(string geometry, Transform transform, string tag, RelativePoint origin, IBrush? stroke = null) => new()
     {
         Data = Geometry.Parse(geometry), Stroke = stroke ?? F.Gold, StrokeThickness = 2.5, Width = 100, Height = 70,
         Stretch = Stretch.None, RenderTransform = transform, RenderTransformOrigin = origin, Tag = tag,
     };
+    private void StopMotion() { _loop?.Stop(); _loop = null; }
     private void StartMotion()
     {
         if (_played) return;
         _played = true;
         // Gentle visuals: the 220 ms panel rise and the snip burst sit under the 300 ms floor, so the
         // finished drawings show at once instead.
-        if (!AmbientFxCanvas.Env.AllowTransitions || CoreSettings.Current.GentleVisuals) return;
-        MotionFrame(0); _watch.Restart();
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _timer.Tick += (_, _) =>
+        // --render-all draws the finished cards, not a frame of the rise.
+        if (!AmbientFxCanvas.Env.AllowTransitions || CoreSettings.Current.GentleVisuals || RenderProof.Rendering) return;
+        // On the window's shared beat (BeatLoop), not an own frame timer; it parks while minimised.
+        _loop = new BeatLoop(this, seconds =>
         {
-            if (!AmbientFxCanvas.Env.AllowTransitions || _watch.ElapsedMilliseconds >= 1550) { MotionFrame(2000); _timer?.Stop(); _timer = null; return; }
-            MotionFrame(_watch.Elapsed.TotalMilliseconds);
-        };
-        _timer.Start();
+            var ms = seconds * 1000;
+            if (ms > 0 && (!AmbientFxCanvas.Env.AllowTransitions || ms >= 1550)) { MotionFrame(2000); StopMotion(); return; }
+            MotionFrame(ms);
+        });
+        _loop.Start();
     }
     private static double Progress(double t, double duration) => Math.Clamp(t / duration, 0, 1);
     private static double Back(double t) { t -= 1; return 1 + 1.55 * t * t * t + 0.55 * t * t; }
