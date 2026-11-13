@@ -1,5 +1,5 @@
 // WPF ChasterTabView.xaml.cs:449-465, 752-761; ChasterTabView.xaml:444-491,559-568.
-// Static tags reuse Core's landing rules. Swing, tug and bob remain part B.
+// Static tags reuse Core's landing rules. Tug and bob remain part B.
 using System;
 using Avalonia;
 using Avalonia.Interactivity;
@@ -42,6 +42,7 @@ public partial class ChasterTabView
 
     private void TagInit()
     {
+        InitializeTagSwing();
         // The sheet is rotated. Its final transform is available after arrange, not SizeChanged.
         CalendarRow.LayoutUpdated += (_, _) => PlaceCalendarTag();
     }
