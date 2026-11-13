@@ -104,16 +104,30 @@ public partial class TutorialOverlay
 
     private void OnTutorialEvent(object? sender, string name)
     {
-        // Capture the subscribed card before dispatching. A queued event from a completed card
-        // must never advance a successor card or a newly started tour.
+        // Saving an existing file can emit before the Save button's deferred advance runs.
+        // Retain only that button's immediate FileSaved successor, never a later tour or card.
         var step = _step;
+        CoreTutorial.Step? saveSuccessor = null;
+        var service = TutorialHead.Service;
+        var head = TutorialHead.CurrentHeadStep;
+        var index = service.CurrentStepIndex;
+        if (name == "FileSaved" && head != null && ReferenceEquals(step, TutorialHead.Project(head)) &&
+            head.AdvanceTrigger == HeadTrigger.OnButtonClick && head.TargetElementName == "BtnEditorSave" &&
+            index + 1 < service.CurrentSteps.Count)
+        {
+            var next = service.CurrentSteps[index + 1];
+            if (next.AdvanceTrigger == HeadTrigger.OnEvent && next.AdvanceEventName == name)
+                saveSuccessor = TutorialHead.Project(next);
+        }
         Dispatcher.UIThread.Post(() =>
         {
             if (_closed) return;
             if (name.StartsWith("WindowLoaded:", StringComparison.Ordinal))
                 OnWindowLoadedEvent(name["WindowLoaded:".Length..]);
-            if (!_closed && ReferenceEquals(_step, step) && _subscribedStep is { } current &&
-                current.AdvanceTrigger == HeadTrigger.OnEvent && current.AdvanceEventName == name) Advance();
-        });
+            if (!_closed && (ReferenceEquals(_step, step) ||
+                    (saveSuccessor != null && ReferenceEquals(_step, saveSuccessor))) &&
+                _subscribedStep is { } current && current.AdvanceTrigger == HeadTrigger.OnEvent &&
+                current.AdvanceEventName == name) Advance();
+        }, saveSuccessor == null ? DispatcherPriority.Normal : DispatcherPriority.Background);
     }
 }
