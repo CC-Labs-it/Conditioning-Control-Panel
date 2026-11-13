@@ -13,6 +13,7 @@
   "mod_event_help": "根据每个 mp3 的文件名添加语句。", "mod_event_fixed": "载入的名称是标识符，无法还原原始语句。", "mod_event_phrase": "（输入语句）", "mod_event_attach": "添加 mp3…", "mod_event_preview": "播放预览",
   "mod_event_remove": "删除语句", "mod_event_flag": "文件名无效。请输入准确语句。", "mod_event_folder": "选择 mp3 文件夹", "mod_event_pick": "选择音频（mp3）", "mod_event_error": "无法读取该文件夹。",
   "mod_event_empty": "文件夹中没有 mp3 文件。", "mod_event_imported": "已导入 {0} 个文件。", "mod_event_flagged": "已导入 {0} 个文件，标记了 {1} 个名称。", "mod_event_duplicate": "已导出 {0} 个片段，跳过 {1} 个重复名称：{2}。",
+  "mod_emote_title": "动态表情", "mod_emote_help": "导入包含 GIF 和 emotes.json 的已准备文件夹。每个集合替换一个头像。", "mod_emote_add": "添加表情集合", "mod_emote_import": "导入文件夹", "mod_emote_picker": "选择已准备的文件夹", "mod_emote_empty": "尚未导入文件夹", "mod_emote_set": "集合 {0}", "mod_emote_taken": "集合 {0} 已被使用。", "mod_emote_all_used": "七个集合编号均已使用。", "mod_emote_stats": "{0} 个 GIF，{1}", "mod_emote_invalid": "集合无效，不会导出。", "mod_emote_folder_missing": "找不到文件夹。", "mod_emote_map_missing": "缺少 emotes.json。", "mod_emote_map_invalid": "emotes.json 无效：{0}", "mod_emote_clips_missing": "缺少片段：{0}", "mod_emote_unused": "未使用的 GIF：{0}", "mod_emote_no_talk": "没有说话池或 talkA.gif。", "mod_emote_no_timing": "缺少 clip_timing.json。", "mod_emote_large": "文件夹超过 50 MB 建议上限。", "mod_emote_read_error": "无法读取文件夹：{0}",
   "scheduler_started_title": "计划已启用",
   "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",
