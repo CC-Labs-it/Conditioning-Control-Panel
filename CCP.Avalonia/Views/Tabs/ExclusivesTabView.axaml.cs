@@ -70,10 +70,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private readonly HashSet<VaultCardAura> _auras = new();
-        private BeatLoop? _auraMotion;
+        // ONE loop for the flair that ignores the performance tier (owned-card auras and the group-sign
+        // sheen, WPF MainWindow.Exclusives.Flair.cs:107-110, :128); the ambient _motion clock drives both otherwise.
+        private BeatLoop? _flairMotion;
         private long _auraStart;
-        private bool _vaultLoaded;
-        internal bool AuraRunning => _auraMotion?.IsRunning == true;
+        private bool _vaultLoaded, _auraOnly;
+        internal bool AuraRunning => _auraOnly && _flairMotion?.IsRunning == true;
+
+        private void UpdateFlairMotion()
+        {
+            bool need = _auraOnly || _signStandalone;
+            if (!need) { _flairMotion?.Stop(); _flairMotion = null; }
+            else if (_flairMotion == null)
+            {
+                _flairMotion = new BeatLoop(this, _ => { AuraFrame(); if (_signStandalone) SignTick(); });
+                _flairMotion.Start();
+            }
+        }
 
         internal void AuraFrame()
         {
@@ -84,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Aura_Loaded(object? sender, RoutedEventArgs e)
         {
-            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null && _auraMotion == null) aura.Rest();
+            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null && !AuraRunning) aura.Rest();
         }
 
         private void Aura_Unloaded(object? sender, RoutedEventArgs e)
@@ -451,14 +464,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF MainWindow.Exclusives.Flair.cs:107-110: aura motion ignores the performance tier.
             bool auraOnly = _vaultLoaded && IsVisible && _plansActive && this.IsAttachedToVisualTree()
                 && AmbientFxCanvas.Env.Level != MotionLevel.Off && !want;
-            if (!auraOnly) { _auraMotion?.Stop(); _auraMotion = null; }
-            else if (_auraMotion == null)
-            {
-                _auraStart = FxAdorner.Time.GetTimestamp();
-                _auraMotion = new BeatLoop(this, _ => AuraFrame());
-                _auraMotion.Start();
-            }
+            if (auraOnly && !_auraOnly) _auraStart = FxAdorner.Time.GetTimestamp();
+            _auraOnly = auraOnly;
             if (!want && !auraOnly) foreach (var aura in _auras) aura.Rest();
+            UpdateSignMotion();   // also starts or stops the shared flair loop
             foreach (var part in _fxParts) Dress(part);
         }
 
@@ -468,6 +477,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_motion == null) return;
             double t = FxAdorner.Time.GetElapsedTime(_motionStart).TotalSeconds;
             foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t);
+            SignFrame(t);
             _kenBurns.ScaleX = _kenBurns.ScaleY = Breath(t, 26, 1.0, 1.07);
             if (LitPlate != null) LitPlate.Opacity = Breath(t, 3.4, 0.75, 1.0);
             double glow = Breath(t, 3.4, 0.35, 0.9), fade = Breath(t, 1.9, 0.72, 1.0), swell = Breath(t, 1.9, 1.0, 1.06);

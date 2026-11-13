@@ -19,6 +19,8 @@ internal sealed class CoreModsSnapshot : IDisposable
         CoreModsHooks.KnownVideoLinksProvider;
 
     private readonly Action<string?>? _modSwitched = CoreModsHooks.ModSwitched;
+    private readonly Action? _closeDtrh = CoreModsHooks.CloseDtrhHost;
+    private readonly Action? _clearCache = CoreModsHooks.ClearModResourceCache;
     private readonly Action? _invalidatePrompt = CoreModsHooks.InvalidateStablePrompt;
 
     public void Dispose()
@@ -27,5 +29,7 @@ internal sealed class CoreModsSnapshot : IDisposable
         CoreModsHooks.KnownVideoLinksProvider = _links;
         CoreModsHooks.ModSwitched = _modSwitched;
         CoreModsHooks.InvalidateStablePrompt = _invalidatePrompt;
+        CoreModsHooks.CloseDtrhHost = _closeDtrh;
+        CoreModsHooks.ClearModResourceCache = _clearCache;
     }
 }

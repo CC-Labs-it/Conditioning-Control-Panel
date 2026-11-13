@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO;
+using Path = System.IO.Path;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
@@ -93,6 +95,180 @@ public sealed class DashboardDecorationTests
         {
             CoreEntitlement.DailyFreeKeyProvider = oldDaily;
             CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsOnLanguageChangeWithoutMotionChange() => WithShell((shell, _, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var tab = new SettingsTabView();
+        var window = new Window { Content = tab };
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            string key = "takeover";
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            tab.RefreshMysteryFace();
+            var name = tab.FindControl<TextBlock>("MysteryRevealName")!;
+            Assert.Equal(Loc.Get("tab_takeover"), name.Text);
+            key = "dtrh";
+            LocalizationManager.Instance.SetLanguage("fr");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Down the Rabbit Hole", name.Text);
+            Assert.Equal(Loc.Get("mosaic_free_today"), tab.CardMystery.Title);
+        }
+        finally
+        {
+            window.Close();
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            LocalizationManager.Instance.SetLanguage(language);
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsOnModChangeWithoutMotionChange() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        string key = "takeover", mod = "first";
+        var requests = new List<string>();
+        try
+        {
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            CoreMods.ActiveModIdProvider = () => mod;
+            CoreModArt.OverridePathProvider = path => { requests.Add(path); return null; };
+            tab.ApplyDashboardDecoration(false, false);
+            var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
+                .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
+            var previousArt = art.Source;
+            Assert.NotNull(previousArt);
+            requests.Clear();
+            key = "dtrh"; mod = "second";
+            CoreMods.RaiseModChanged(null, new ConditioningControlPanel.Models.ModPackage(
+                ConditioningControlPanel.Models.BuiltInMods.CCPDefault, null, isBuiltIn: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
+            Assert.Contains("features/dtrh.png", requests);
+            Assert.NotSame(previousArt, art.Source);
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldArt;
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsWhenTodayChanges() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var daily = new DailyFreeService(fetchOverride: false);
+        string key = "unknown";
+        var repaint = ConditioningControlPanel.Avalonia.App.WireDailyRepaints(daily, shell);
+        try
+        {
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            tab.ApplyDashboardDecoration(false, false);
+            Dispatcher.UIThread.RunJobs();
+            // RefreshNavPremiumTags normally reruns the dashboard FX gate. Park that gate so
+            // this checks the daily event's own repaint rather than the incidental FX pass.
+            typeof(MainShellWindow).GetField("_dashboardFxInitialized",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(shell, false);
+            var badge = tab.FindControl<TierBadge>("MysteryRevealBadge")!;
+            Assert.Equal(0, badge.Tier);
+            key = "dtrh";
+            daily.NotifyInputsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Down the Rabbit Hole", tab.FindControl<TextBlock>("MysteryRevealName")!.Text);
+            Assert.Equal(1, badge.Tier);
+            Assert.True(badge.FreeToday);
+        }
+        finally
+        {
+            daily.TodayChanged -= repaint;
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    // WPF MainWindow.Presets.cs:1211,1274: try the plain box, including mod overrides, first.
+    [Fact]
+    public Task MysteryVoiceAndUnknownTryPlainBoxBeforeThemedArt() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-mystery-box-");
+        var path = Path.Combine(scratch.FullName, "box.png");
+        using (var bitmap = new WriteableBitmap(new PixelSize(12, 6), new Vector(96, 96))) bitmap.Save(path);
+        var requests = new List<string>();
+        try
+        {
+            string key = "voice";
+            CoreEntitlement.DailyFreeKeyProvider = () => key;
+            CoreMods.ActiveModIdProvider = () => ConditioningControlPanel.Models.BuiltInMods.DronificationId;
+            CoreModArt.OverridePathProvider = name => { requests.Add(name); return name == "features/mysterybox.png" ? path : null; };
+            var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
+                .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
+            foreach (var current in new[] { "voice", "unknown" })
+            {
+                key = current;
+                requests.Clear();
+                tab.RefreshMysteryFace();
+                Assert.Contains("features/mysterybox.png", requests);
+                Assert.DoesNotContain("features/mysterybox_drone.png", requests);
+                Assert.Equal(2, Assert.IsType<Bitmap>(art.Source).Size.AspectRatio);
+            }
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldArt;
+            scratch.Delete(true);
+        }
+    });
+
+    [Fact]
+    public Task MysteryRepaintsUpdatedArtForSameModId() => WithShell((shell, tab, time) =>
+    {
+        var oldDaily = CoreEntitlement.DailyFreeKeyProvider;
+        var oldId = CoreMods.ActiveModIdProvider;
+        var oldArt = CoreModArt.OverridePathProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-mystery-update-");
+        var first = Path.Combine(scratch.FullName, "first.png");
+        var second = Path.Combine(scratch.FullName, "second.png");
+        using (var bitmap = new WriteableBitmap(new PixelSize(12, 6), new Vector(96, 96))) bitmap.Save(first);
+        using (var bitmap = new WriteableBitmap(new PixelSize(6, 12), new Vector(96, 96))) bitmap.Save(second);
+        try
+        {
+            var selected = first;
+            CoreEntitlement.DailyFreeKeyProvider = () => "dtrh";
+            CoreMods.ActiveModIdProvider = () => "same-mod";
+            CoreModArt.OverridePathProvider = name => name == "features/dtrh.png" ? selected : null;
+            tab.ApplyDashboardDecoration(false, false);
+            var art = tab.FindControl<Border>("MysteryRevealFace")!.GetLogicalDescendants()
+                .OfType<Border>().Select(b => b.Background).OfType<ImageBrush>().First();
+            Assert.Equal(2, Assert.IsType<Bitmap>(art.Source).Size.AspectRatio);
+            selected = second;
+            CoreMods.RaiseModChanged(null, new ConditioningControlPanel.Models.ModPackage(
+                ConditioningControlPanel.Models.BuiltInMods.CCPDefault, null, isBuiltIn: true));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(.5, Assert.IsType<Bitmap>(art.Source).Size.AspectRatio);
+        }
+        finally
+        {
+            CoreEntitlement.DailyFreeKeyProvider = oldDaily;
+            CoreMods.ActiveModIdProvider = oldId;
+            CoreModArt.OverridePathProvider = oldArt;
+            scratch.Delete(true);
         }
     });
 

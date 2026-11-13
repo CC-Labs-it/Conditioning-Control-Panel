@@ -76,19 +76,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             EventHandler<PatreonTier> tier = (_, _) => Post();
             Action chasterChanged = () => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshChaster);
             ChasterService? chaster = null;
+            ProviderSubscription? patreon = null, substar = null;
             AttachedToVisualTree += (_, _) =>
             {
                 LocalizationManager.Instance.LanguageChanged += changed;
-                if (AccountSeed.Patreon is { } p) p.TierChanged += tier;
-                if (AccountSeed.SubscribeStar is { } ss) ss.TierChanged += tier;
+                AccountSeed.GraceClosed += Post;
+                patreon = AccountSeed.Patreon; substar = AccountSeed.SubscribeStar;
+                if (patreon != null) patreon.TierChanged += tier;
+                if (substar != null) substar.TierChanged += tier;
                 if ((chaster = ChasterHead.Service) is { } c) { c.ProfileChanged += chasterChanged; c.LinkChanged += chasterChanged; c.LockChanged += chasterChanged; }
                 Refresh();
             };
             DetachedFromVisualTree += (_, _) =>
             {
                 LocalizationManager.Instance.LanguageChanged -= changed;
-                if (AccountSeed.Patreon is { } p) p.TierChanged -= tier;
-                if (AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= tier;
+                AccountSeed.GraceClosed -= Post;
+                if (patreon != null) patreon.TierChanged -= tier;
+                if (substar != null) substar.TierChanged -= tier;
+                patreon = substar = null;
                 if (chaster is { } c) { c.ProfileChanged -= chasterChanged; c.LinkChanged -= chasterChanged; c.LockChanged -= chasterChanged; }
                 chaster = null;
                 _linkCts?.Cancel(); // a Link waiting on the browser frees its callback port with the page
@@ -105,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // WPF MainWindow/MainWindow.Exclusives.cs:296 -> ShowVaultPage -> RefreshVaultCore: gates can move between visits.
             if (PlansView.PlansActive) PlansView.RefreshVault();
         }
-        private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
+        private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (VisualRoot != null) Refresh(); });
 
         /// <summary>Repaints the account/tier card from the account seam. Never throws.</summary>
         internal void RefreshTierBadge()

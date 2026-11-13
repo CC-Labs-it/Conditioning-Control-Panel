@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.html). Ambient bubbles
     /// are paused by the Core scheduler.
-    /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
+    /// Missing against WPF: off-thread player rescue and LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
     /// attention input and no-activate z-order.
     /// </summary>
@@ -75,6 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal readonly ConditioningControlPanel.Services.Video.VideoSafetyDeadline SafetyDeadline = new();
         private long _watchedMs;
         private VideoPlaybackClock? _cutClock;
+        internal VideoWedgeWatchdog? _wedge;
+        internal bool VetoStrictClose(bool playing) => MandatoryVideoScheduler.StrictVetoesClose(playing, _closing, _wedge?.StallSeen == true);
         private IMandatoryPlayback? _playback;
         private readonly Func<IMandatoryPlayback>? _playbackFactory;
         internal Random CutRandom { get; set; } = Random.Shared;
@@ -200,6 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _videoReveal = null;
             var muted = _userMuted;
             if (_playback != null || _surfaces.Count > 0) CloseAll();
+            _wedge?.Dispose();   // a Show that failed before any surface skipped CloseAll: never leak its 1 s timers
+            _wedge = new VideoWedgeWatchdog();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
@@ -504,7 +508,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 e.Handled = true;
             }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
-            w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
+            w.Closing += (_, e) => { if (strict && VetoStrictClose(Scheduler.IsPlaying)) e.Cancel = true; };
+            var watchdog = _wedge;
+            IntPtr wedgeHandle = IntPtr.Zero;
+            w.Opened += (_, _) =>
+            {
+                var handle = w.TryGetPlatformHandle();
+                wedgeHandle = handle?.Handle ?? IntPtr.Zero;
+                watchdog?.Add(wedgeHandle, X11Overlay.BackendOf(handle));
+            };
+            w.Closed += (_, _) => watchdog?.Remove(wedgeHandle);
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
             WireChaosTimerStacking(w);
             var reveal = floating ? new FloatingVideoReveal(w, HoldRevealAudio) : null;
@@ -1255,7 +1268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 BouncingTextOverlay.PauseForVideo(false);
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
-            finally { _closing = false; }
+            finally { _wedge?.Dispose(); _wedge = null; _closing = false; }
             var position = Interlocked.Exchange(ref _watchedMs, 0);
             _cutClock = null;
             return (watched ?? position) / 1000.0;

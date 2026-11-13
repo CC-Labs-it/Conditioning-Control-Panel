@@ -43,6 +43,21 @@ internal static class Win32Overlay
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint colorKey, byte alpha, uint flags);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    [DllImport("user32.dll")] private static extern bool ShowWindowAsync(IntPtr hwnd, int command);
+
+    // DWM can cloak our window without waiting for its owner to process a window message.
+    // The async requests finish the normal hide and unpin if the dispatcher recovers.
+    internal static int ReleaseWedgedWindow(IntPtr hwnd)
+    {
+        int cloak = 1;
+        int result = DwmSetWindowAttribute(hwnd, 13 /* DWMWA_CLOAK */, ref cloak, sizeof(int));
+        if (result < 0) Serilog.Log.Warning("Video wedge: DWM cloak failed: {HResult}", result);
+        SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate | 0x4000);
+        ShowWindowAsync(hwnd, 0);
+        return result;
+    }
+
     // Native call seam: tests verify HWND_NOTOPMOST and the no-activation flags on Linux too.
     internal static Func<IntPtr, IntPtr, int, int, int, int, uint, bool> PositionWindow = SetWindowPos;
 

@@ -529,6 +529,17 @@ internal static class X11Overlay
         }
     }
 
+    // Called on the watchdog worker with a cached XID, never through Avalonia's dispatcher.
+    internal static void ReleaseWedgedWindow(IntPtr xid)
+    {
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return;
+            XUnmapWindow(_display, xid);
+            XFlush(_display);
+        }
+    }
+
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An
     /// override-redirect window is outside the WM, so the plain XRaiseWindow is the one that holds.</summary>
     internal static bool Raise(TopLevel window)

@@ -343,9 +343,15 @@ public sealed class SharedDeeperThemeTests
                     // Disabled: flat, no shadow.
                     button.IsEnabled = false; Dispatcher.UIThread.RunJobs();
                     Assert.Equal(0, Travel(), 3); Assert.Equal(0, Drop(), 3);
-                    // Off changes the actual transform immediately, with no animation collection.
+                    // The headless Windows backend may clear hover on disable. Move outside,
+                    // re-enable, then enter explicitly so this tests Off with a known pointer state.
+                    window.MouseMove(new Point(5, 5)); Dispatcher.UIThread.RunJobs();
                     CoreSettings.Current.MotionLevel = MotionLevel.Off;
                     button.IsEnabled = true; Dispatcher.UIThread.RunJobs();
+                    Assert.False(button.IsPointerOver);
+                    Assert.Equal(0, slide.Y, 3);
+                    window.MouseMove(new Point(100, 50)); Dispatcher.UIThread.RunJobs();
+                    Assert.True(button.IsPointerOver);
                     Assert.Equal(-2, slide.Y, 3);
                     Assert.Null(slide.Transitions);
                     Assert.Equal(h, ((ScaleTransform)drop.RenderTransform!).ScaleY * h, 3);

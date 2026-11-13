@@ -78,6 +78,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
         }
 
+        internal static void CloseDtrhForModSwitch()
+        {
+            _dtrhPanicEpoch++; // cancel a queued recovery of the old mod
+            GameWindow[] windows;
+            lock (Open) windows = Open.Where(w => w.IsDtrh).ToArray();
+            foreach (var window in windows) window.CloseDtrhForPanic();
+        }
+
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>

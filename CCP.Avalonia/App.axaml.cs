@@ -17,6 +17,21 @@ namespace ConditioningControlPanel.Avalonia
     {
         internal static Action? PostCodeInputsChanged;
 
+        // Shared by daily rotation and provider tier changes, as in WPF MainWindow.xaml.cs:465.
+        internal static Action WireDailyRepaints(DailyFreeService dailyFree, Views.Windows.MainShellWindow shell)
+        {
+            void RepaintVeils() => Dispatcher.UIThread.Post(() =>
+            {
+                shell.SettingsPage?.RefreshMysteryFace();
+                shell.RefreshEntitlementVeils(persist: true);
+                shell.RefreshExclusivesTab();
+                shell.RefreshNavPremiumTags();
+                shell.RefreshProfileBubble();
+            });
+            dailyFree.TodayChanged += RepaintVeils;
+            return RepaintVeils;
+        }
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -335,6 +350,8 @@ namespace ConditioningControlPanel.Avalonia
             CoreModsHooks.KnownVideoLinksProvider = () => HypnotubeDefaultLinks.KnownVideoTitles;
             // WPF App.xaml.cs:317/327: discard stale voice context on a switch or content replacement.
             CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
+            CoreModsHooks.CloseDtrhHost = Views.Games.GameWindow.CloseDtrhForModSwitch;
+            CoreModsHooks.ClearModResourceCache = Helpers.StartupArt.InvalidateOverrides;
             CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
             var mods = Mods;
@@ -1344,14 +1361,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF MainWindow.xaml.cs:484 (the ? box rolled over or its override landed) and
                 // OnPatreonTierChanged: both move the veils, the Play bands and the lapse pass.
                 // WPF MainWindow.xaml.cs:486 / UpdatePatreonUI also repaint the vault (RefreshExclusivesTab).
-                void RepaintVeils() => Dispatcher.UIThread.Post(() =>
-                {
-                    shell.RefreshEntitlementVeils(persist: true);
-                    shell.RefreshExclusivesTab();
-                    shell.RefreshNavPremiumTags();
-                    shell.RefreshProfileBubble();   // WPF OnPatreonTierChanged
-                });
-                dailyFree.TodayChanged += RepaintVeils;
+                var RepaintVeils = WireDailyRepaints(dailyFree, shell);
                 // WPF NavPremiumTags.cs:118 / Lab.cs:435: a spent or refunded pass moves the star and the vault.
                 // Not RepaintVeils: that persists the lapse pass, and sign-in/out raises this at startup.
                 IntakePass.PassStateChanged += (_, _) => Dispatcher.UIThread.Post(() =>

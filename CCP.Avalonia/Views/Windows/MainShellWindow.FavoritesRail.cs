@@ -32,6 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _favoritesRailHooked;
+        internal global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer? PageFavorites =>
+            Named<global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer>("PageDrawer");
 
         /// <summary>WPF FavoritePinMap (MainWindow.FavoritesRail.cs:63): rail/Play-wall x:Name -> palette id.</summary>
         private static readonly (string Element, string Id)[] FavoritePinMap =
@@ -65,12 +67,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 EventHandler onIdentity = (_, _) => Dispatcher.UIThread.Post(RefreshFavoritesRail);
                 // This head's snapshots land in PrizeOwnership (its Core OwnershipService raises Changed);
                 // PrizeGrants.GrantsChanged is kept for the Core facade's own raisers.
+                EventHandler<Models.ModPackage> onMod = (_, _) => Dispatcher.UIThread.Post(RefreshFavoritesRail);
+                CoreMods.ModChanged += onMod;
                 PrizeGrants.GrantsChanged += onGrants;
                 PrizeOwnership.Changed += onGrants;
                 CoreAccount.UnifiedIdentityChanged += onIdentity;
                 Closed += (_, _) =>
                 {
                     LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                    CoreMods.ModChanged -= onMod;
                     PrizeGrants.GrantsChanged -= onGrants;
                     PrizeOwnership.Changed -= onGrants;
                     CoreAccount.UnifiedIdentityChanged -= onIdentity;
@@ -109,7 +114,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
+            RefreshPageDrawer();
         }
+
+        // WPF MainWindow.FavoritesRail.cs:151-191: independent chips, same rules and builder.
+        private void RefreshPageDrawer()
+        {
+            if (PageFavorites is not { } drawer || SettingsPage is not { } dash) return;
+            // WPF MainWindow.FavoritesRail.cs:156-184: a repaint failure stays local.
+            try
+            {
+                var s = CoreSettings.Current;
+                var entries = SettingsPaletteIndex.All.Where(e => FavoritesRailRule.IsDestination(e.Id))
+                    .ToDictionary(e => e.Id, StringComparer.Ordinal);
+                bool Known(string id) => entries.TryGetValue(id, out var e) && e.Available;
+                var glow = App.Mods?.GetGlowColorRgb(); // WPF FxTheme.cs:19-29
+                drawer.Paint(glow is { } c ? Color.FromRgb(c.R, c.G, c.B) : global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+                drawer.FavoritesList.Children.Clear();
+                foreach (var id in s.RailFavorites.Where(Known))
+                    drawer.FavoritesList.Children.Add(BuildRailChip(dash, entries[id]));
+                drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
+                drawer.RecentList.Children.Clear();
+                foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
+                    drawer.RecentList.Children.Add(BuildRailChip(dash, entries[id]));
+                drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
+            }
+            catch (Exception ex) { Log.Debug("RefreshPageDrawer: {E}", ex.Message); }
+        }
+
+
 
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)
         {
@@ -323,6 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // favorite slides it out for a moment.
             if (!wasPinned)
             {
+                if (PageFavorites?.IsVisible == true) PageFavorites.SetOpen(true, true);
                 try { SettingsPage?.PeekFavoritesDrawer(id); }
                 catch (Exception ex) { Log.Debug("PeekFavoritesDrawer({Id}): {E}", id, ex.Message); }
             }
