@@ -621,6 +621,30 @@ public sealed class ChaosRunHostTests
         Assert.True(state.ElapsedSec > elapsed);
     });
 
+    // WPF ChaosModeService.UseToy :2690: the draft holds the run, so a toy neither fires nor spends
+    // its cooldown until GO (restack b116, from #3556).
+    [Fact]
+    public Task Toys_wait_for_go_while_a_wave_draft_holds_the_run() => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = false;
+        ChaosRunHost.StartRun(cfg);
+        var overlay = ChaosRunHost.Overlay!; overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!;
+        var toy = new ChaosToyState { Id = "vibe_popping", CooldownSec = 20 };
+        state.ActiveToys.Add(toy);
+        Ticks(80);
+        Assert.Equal(1, state.WaveIndex);
+        ChaosRunHost.UseToyById(toy.Id);
+        Assert.Equal(0, toy.CooldownRemainingSec);
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { null });
+        ChaosRunHost.UseToyById(toy.Id);
+        Assert.Equal(0, toy.CooldownRemainingSec);   // still held for the GO beat
+        overlay.FinishCountdown(); Ticks(1);
+        ChaosRunHost.UseToyById(toy.Id);
+        Assert.Equal(20, toy.CooldownRemainingSec);
+    });
+
     [Fact]
     public Task Wave_draft_skip_and_panic_are_safe() => WithFreshRun(() =>
     {
