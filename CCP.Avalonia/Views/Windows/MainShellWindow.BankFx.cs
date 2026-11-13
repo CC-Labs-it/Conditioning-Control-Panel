@@ -43,6 +43,13 @@ public partial class MainShellWindow {
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Bank award failed"); StopBankFx(); }
     }
+    // WPF OnBankXpChanged (BankFx.cs:262): ProgressionBank raises Awarded before XPAwarded (WPF order), so the
+    // header repaint would tween to the full total before ReceiveBankAward holds it. Arm the hold for a
+    // bankable source first; the XPAwarded that always follows resolves it into a pot or a truthful release.
+    private void ArmBankHold(string source) {
+        if (_bankClosed || _bank == null || !BankAllowed) return;
+        if (Enum.TryParse<XPSource>(source, out var parsed) && BankAccumulator.IsBankable(parsed)) _bankHolding = true;
+    }
     // WPF :394,441: only presentation is held; every exit writes the current ledger.
     private void ReleaseBankHold(bool writeTruth = true) { bool held = _bankHolding; _bankHolding = false; if (held && writeTruth && !_bankClosed) UpdateLevelDisplay(); }
     // WPF :464,488: no idle poll; six second watchdog and orphan-hold self heal.

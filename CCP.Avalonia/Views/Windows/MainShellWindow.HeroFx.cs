@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// so they come off again when the window closes.</summary>
         private void HookLevelDisplay()
         {
-            Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
+            Action<double, string> awarded = (_, source) => Dispatcher.UIThread.Post(() => { ArmBankHold(source); UpdateLevelDisplay(); });
             Action<int> levelUp = level => Dispatcher.UIThread.Post(() => { StopBankFx(false); CelebrateHeroLevelUp(level); });
             HookBankFx();
             HookHeroXpFx();

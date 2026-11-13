@@ -61,6 +61,14 @@ public sealed class BankShellTests {
         Assert.Equal(1, ((ScaleTransform)sh.FindControl<TextBlock>("TxtXP")!.RenderTransform!).ScaleX, 3);
         Assert.StartsWith("25 /", Text(sh)); // no abandoned step rewinds the truthful release
     });
+    // ProgressionBank raises Awarded (the header repaint) before XPAwarded (the pot), as WPF; the repaint must not
+    // fill the bar to the new total first. Restack b141 review fix (ArmBankHold, WPF OnBankXpChanged).
+    [Fact]
+    public Task ACompletionAwardHoldsTheHeaderBeforeItsRepaint() => Run((sh, clock) => {
+        double need = XpCurve.GetXPForLevel(10, XpCurve.EpochOf(CoreSettings.Current)); double before = (double)Field(sh, "_xpFraction")!;
+        Award(); Assert.True(sh.BankHolding); Assert.Equal(before, (double)Field(sh, "_xpFraction")!, 8); Assert.NotEqual(25 / need, before, 8);
+        Award(2, "Mantra"); Assert.Equal(before, (double)Field(sh, "_xpFraction")!, 8); // weather rides the hold
+    });
     [Fact]
     public Task WeatherBypassesButWeatherAndSuccessorDuringFlightKeepTheirOwnPot() => Run((sh, clock) => {
         Award(2, "Mantra"); Assert.False(sh.BankHolding); Assert.False(sh.BankPolling); clock.Advance(TimeSpan.FromSeconds(1)); BeatLoop.StepAll(); Award(); Launch(sh, clock);
