@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: 5. the menu (BuildMenu, Row,
 // PaintRowLit, PriceToggle_Changed :1176-1290), ApplyPriceToggles (:1149) and the red flash switch
 // (ChkFlashDodge_Changed :1168), on Core TabPrices / TabPageText / TabMenuCopy.
-// ponytail: FxRow / FxKeyTurned (Fx.cs) are not ported (views-tab-chaster).
+// ponytail: row burst and FxKeyTurned (Fx.cs) are not ported (views-tab-chaster).
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +14,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
@@ -26,6 +27,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly Dictionary<string, ToggleButton> _priceToggles = new();
         private readonly Dictionary<string, Border> _rowDims = new();
         private bool _menuBuilt;
+        internal static TimeProvider RowPopTime = TimeProvider.System;
+        private readonly Dictionary<ToggleButton, (BeatLoop Beat, DateTimeOffset Start, double From)> _rowPops = new();
+
+        private void PopRow(ToggleButton row)
+        {
+            if (!Motion) return;
+            if (_rowPops.Remove(row, out var old)) old.Beat.Stop();
+            if (row.RenderTransform is not ScaleTransform scale)
+            {
+                scale = new ScaleTransform(1, 1);
+                row.RenderTransform = scale;
+                row.RenderTransformOrigin = RelativePoint.Center;
+            }
+            var beat = new BeatLoop(row, _ => TickRowPop(row)) { OnParked = () => CancelRowPop(row) };
+            _rowPops[row] = (beat, RowPopTime.GetUtcNow(), scale.ScaleX);
+            beat.Start();
+        }
+
+        internal void TickRowPop(ToggleButton row)
+        {
+            if (!_rowPops.TryGetValue(row, out var pop) || row.RenderTransform is not ScaleTransform scale) return;
+            var t = Math.Clamp((RowPopTime.GetUtcNow() - pop.Start).TotalMilliseconds / 380, 0, 1);
+            double value;
+            if (t < 0.35)
+            {
+                var u = t / 0.35;
+                value = pop.From + (1.06 - pop.From) * (1 - (1 - u) * (1 - u));
+            }
+            else
+            {
+                var u = (t - 0.35) / 0.65;
+                var eased = u < 0.5 ? 2 * u * u : 1 - Math.Pow(-2 * u + 2, 2) / 2;
+                value = 1.06 + (1 - 1.06) * eased;
+            }
+            scale.ScaleX = scale.ScaleY = value;
+            if (t >= 1) CancelRowPop(row);
+        }
+
+        private void CancelRowPop(ToggleButton row)
+        {
+            if (!_rowPops.Remove(row, out var pop)) return;
+            pop.Beat.Stop();
+            if (row.RenderTransform is ScaleTransform scale) scale.ScaleX = scale.ScaleY = 1;
+        }
 
         internal IReadOnlyDictionary<string, ToggleButton> PriceRows => _priceToggles;
 
@@ -143,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(row, tip);
             }
             row.Click += PriceToggle_Changed;
+            row.DetachedFromVisualTree += (_, _) => CancelRowPop(row);
             row.PointerEntered += Row_PointerEntered;
             row.PointerExited += Row_PointerExited;
             _priceToggles[price.Id] = row;
@@ -169,6 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             settings.ChasterPrices = next;
             CoreSettings.Save();
             PaintRowLit(id, on);
+            PopRow(row);
             // One hand-flipped row can land exactly on a preset, or step off one.
             RefreshPresets();
         }

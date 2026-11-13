@@ -130,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
             // WPF StartStop.cs:480-482: Stop stops everything (owner, 7.1.8): the audio player with a playlist
             // goes quiet with the engine. The list stays. StartEngine never touches the player.

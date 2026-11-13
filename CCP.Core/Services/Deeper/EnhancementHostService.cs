@@ -173,7 +173,7 @@ namespace ConditioningControlPanel.Services.Deeper
         ///
         /// No-op if no enhancement is loaded.
         /// </summary>
-        public bool Bind(IPlaybackTimeSource source, Action? attach = null, Action? detach = null)
+        public bool Bind(IPlaybackTimeSource source, Action? attach = null, Action? detach = null, IActionDispatcher? dispatcher = null, IEnhancementWebcam? webcam = null)
         {
             if (LoadedEnhancement == null) return false;
             UnbindEngine();
@@ -187,7 +187,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 // Wrap the real dispatcher in a recorder so subscribers (like the
                 // Player's event log) can show a live feed of what the engine
                 // fired without us touching every effect path.
-                _activeRecorder = new RecordingActionDispatcher(DispatcherFactory?.Invoke() ?? new LoggingActionDispatcher());
+                _activeRecorder = new RecordingActionDispatcher(dispatcher ?? DispatcherFactory?.Invoke() ?? new LoggingActionDispatcher());
                 _activeRecorder.ActionLogged += OnRecorderActionLogged;
 
                 // Pass the webcam reference unconditionally — the engine subscribes to
@@ -196,7 +196,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 // BlinkDetected/GazeTarget/etc. rules silently when playback started
                 // before the webcam did, even though the user later started tracking
                 // mid-session and saw the events register everywhere else.
-                _webcamEvents = WebcamProvider?.Invoke();
+                _webcamEvents = webcam ?? WebcamProvider?.Invoke();
                 _engine = new EnhancementEngine(LoadedEnhancement, source, _activeRecorder, _webcamEvents, EmitDiagnostic);
                 _engine.PlaybackCompleted += OnEnginePlaybackCompleted;
                 _engine.Start();
