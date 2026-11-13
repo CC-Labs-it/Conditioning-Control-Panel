@@ -81,18 +81,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = JustDropHandoff.IsSite;
             Web.RequestHeader = uri => JustDropHeaderFor(uri, JustDropHandoff.AuthToken());
             Web.InjectCarrier = true;   // the remote page speaks chrome.webview; WebKitGTK needs the shim
-            // WPF ChaosWebViewHost.cs:1227-1231,1562-1578: Escape while the page owns focus.
+            // WPF ChaosWebViewHost.cs:1227-1231,1562-1578: register before the first document.
+            Web.WindowsDocumentStartScript = JustDropEscapeScript;
+            // Keep the fallback for WebKit and for a failed WebView2 registration.
             Web.NavigationCompleted += uri =>
             {
-                if (JustDropHandoff.IsSite(uri)) _ = Web.InvokeScriptAsync(
-                    "(function(){if(window.__ccpHostEscape)return;window.__ccpHostEscape=true;" +
-                    "window.addEventListener('keydown',function(e){if(e.key!=='Escape'&&e.keyCode!==27)return;" +
-                    "try{window.chrome.webview.postMessage({type:'ccp-host-escape'});}catch(_){}},true);})();");
+                if (JustDropHandoff.IsSite(uri)) _ = Web.InvokeScriptAsync(JustDropEscapeScript);
             };
             BuildJustDropChrome();
             Web.Navigate(PageUrl);
             Log.Information("[Game] justdrop: launched (shop)");   // never the url: it names the account
         }
+
+        internal const string JustDropEscapeScript =
+            "(function(){if(window.__ccpHostEscape)return;window.__ccpHostEscape=true;" +
+            "window.addEventListener('keydown',function(e){if(e.key!=='Escape'&&e.keyCode!==27)return;" +
+            "try{window.chrome.webview.postMessage({type:'ccp-host-escape'});}catch(_){}},true);})();";
 
         // WPF Chaos/ChaosWebViewHost.cs:620-678: a permanent title and host-owned toggle,
         // outside the remote page. No shop or order UI is recreated here.

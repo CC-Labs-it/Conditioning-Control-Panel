@@ -94,6 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Uri? CurrentUrl { get; private set; }
 
+        // The last accepted top-level start, only while it has not completed. NativeWebView's
+        // message event has no source, so callers must not treat this as a message's proven origin.
+        internal Uri? ActiveNavigation { get; private set; }
+
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
         /// completes, failed ones included, as WPF's <c>BrowserService.NavigationCompleted</c>
@@ -114,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
+            ActiveNavigation = null;
             if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
@@ -513,6 +518,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             NavigationStarting?.Invoke();
             var target = e.Request;
+            ActiveNavigation = null;
+            if (e.Cancel) return;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
             if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
@@ -531,15 +538,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
-            if (gate is null) { NavigationBeginning?.Invoke(); return; }
+            if (gate is null) { RecordAllowedNavigation(target); NavigationBeginning?.Invoke(); return; }
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) { NavigationBeginning?.Invoke(); return; }
+            if (gate(target)) { RecordAllowedNavigation(target); NavigationBeginning?.Invoke(); return; }
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
         }
+
+        internal void RecordAllowedNavigation(Uri? target) => ActiveNavigation = target;
 
         /// <summary>
         /// Loads <paramref name="url"/> even when it is already the <see cref="Source"/>: WPF #867, clicking
@@ -548,6 +557,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool Navigate(Uri url)
         {
+            ActiveNavigation = null;
             _panicBlank = false;
             CancelPendingNavigation();
             NavigationRequests++;
@@ -628,6 +638,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Headless tests supply an engine without loading a native web view.
         internal Func<Uri, bool>? NavigationInvoker { get; set; }
+
+        // A caller sets this before the native adapter is attached. WebView2 installs it on each
+        // recreated core before the held first navigation; other engines retain the load fallback.
+        internal string? WindowsDocumentStartScript { get; set; }
+        internal Func<string, Task>? DocumentStartInstaller { get; set; }
+
+        internal async Task PrepareScrolllerGate(int engine, bool gated)
+        {
+            if (engine != _scrolllerEngine) return;
+            if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
+            {
+                try
+                {
+                    if (DocumentStartInstaller is { } install) await install(script).WaitAsync(TimeSpan.FromSeconds(5));
+                    else if (OperatingSystem.IsWindows()) await InstallWindowsDocumentStart(script).WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
+            }
+            OnScrolllerGate(engine, gated);
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private async Task InstallWindowsDocumentStart(string script)
+        {
+            if (_web?.TryGetPlatformHandle() is not IWindowsWebView2PlatformHandle win || win.CoreWebView2 == IntPtr.Zero)
+                throw new InvalidOperationException("WebView2 core unavailable");
+            var core = Microsoft.Web.WebView2.Core.CoreWebView2.CreateFromComICoreWebView2(win.CoreWebView2);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
+        }
+
         private bool _explicitNavigate;
 
         /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
@@ -646,10 +687,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal Action<bool> NewScrolllerEngine()
         {
             _scrolllerGate = null;
+            ActiveNavigation = null;
             _loadedOnThisEngine = false;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
-            return gated => OnScrolllerGate(engine, gated);
+            return gated => _ = PrepareScrolllerGate(engine, gated);
         }
 
         /// <summary>One engine's gate report (UI thread): the held page loads now. A rebuilt engine already carries
@@ -691,6 +733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnPropertyChanged(change);
             if (change.Property == SourceProperty)
             {
+                ActiveNavigation = null;
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
                 if (!_explicitNavigate) CancelPendingNavigation();
                 ApplySource();

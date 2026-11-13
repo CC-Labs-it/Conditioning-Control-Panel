@@ -642,6 +642,9 @@ namespace ConditioningControlPanel.Services
         /// (WPF ProfileSyncService hands the same body to EntitlementTierSync.Offer).</summary>
         public Action<string>? HeartbeatBody;
 
+        /// <summary>The response with the identity used for the request. Never log the token.</summary>
+        public Action<string, string?, string>? HeartbeatIdentityBody;
+
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()
         {
@@ -663,7 +666,13 @@ namespace ConditioningControlPanel.Services
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession(), HeartbeatBody);
+            var id = s.UnifiedId!;
+            var token = s.AuthToken;
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(id, true, _inSession(), body =>
+            {
+                HeartbeatBody?.Invoke(body);
+                HeartbeatIdentityBody?.Invoke(id, token, body);
+            });
         }
     }
 }

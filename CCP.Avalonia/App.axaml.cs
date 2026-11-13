@@ -1006,8 +1006,8 @@ namespace ConditioningControlPanel.Avalonia
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
                     WireRecoveredProfileRefresh(sync, () => desktop.MainWindow as Views.Windows.MainShellWindow);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
-                    sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
-                        Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
+                    sync.HeartbeatIdentityBody = (id, token, body) => Dispatcher.UIThread.Post(() =>
+                        Platform.AccountSeed.ApplyHeartbeatTier(id, token, body));
                     SkillPurchase.Current = new SkillPurchase
                     {
                         SyncBeforeRetry = sync.SyncBeforeRetryAsync,
