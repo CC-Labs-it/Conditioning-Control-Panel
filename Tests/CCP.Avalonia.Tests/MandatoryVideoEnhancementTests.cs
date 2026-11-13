@@ -155,6 +155,23 @@ public class MandatoryVideoEnhancementTests
         }
     });
 
+    // One webcam path: App seeds only the dispatcher, so the player window's own adapter
+    // (EnhancementPlayerWindow.Webcam.cs WebcamProvider ??=) is never pre-empted at startup.
+    [Fact]
+    public void StartupSeedsTheRealDispatcherAndLeavesTheWebcamProviderAlone()
+    {
+        var (dispatcher, webcam) = (EnhancementHostService.DispatcherFactory, EnhancementHostService.WebcamProvider);
+        try
+        {
+            EnhancementHostService.DispatcherFactory = null;
+            EnhancementHostService.WebcamProvider = null;
+            ConditioningControlPanel.Avalonia.App.SeedDeeperEnhancements();
+            Assert.IsType<ConditioningControlPanel.Avalonia.Platform.Deeper.BrowserEnhancementDispatcher>(EnhancementHostService.DispatcherFactory!());
+            Assert.Null(EnhancementHostService.WebcamProvider);
+        }
+        finally { (EnhancementHostService.DispatcherFactory, EnhancementHostService.WebcamProvider) = (dispatcher, webcam); }
+    }
+
     private sealed class Counter : IActionDispatcher
     {
         internal int Fired;

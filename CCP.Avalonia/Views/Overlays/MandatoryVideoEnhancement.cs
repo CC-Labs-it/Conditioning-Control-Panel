@@ -25,8 +25,12 @@ internal sealed partial class MandatoryVideoOverlay
                 : _enhancementHost.LoadFromMemory(resolved.Enhancement!, "video:" + System.IO.Path.GetFileName(path));
             if (!loaded) return;
             var source = new MandatoryVideoTimeSource(this, _playback);
-            if (!_enhancementHost.Bind(source, source.Attach, source.Dispose))
+            // The browser card's adapter (SettingsTabView.BrowserEnhance.cs): a subscription, never a camera
+            // start; the host disposes it on unbind.
+            var webcam = new Platform.Deeper.BrowserEnhancementWebcam();
+            if (!_enhancementHost.Bind(source, source.Attach, source.Dispose, webcam: webcam))
             {
+                webcam.Dispose();
                 source.Dispose();
                 _enhancementHost.Unload();
             }
