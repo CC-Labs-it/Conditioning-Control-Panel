@@ -1666,6 +1666,7 @@ in again - tester plan note), <code>pack-stamp-new-root</code> (builtin_mods/*/p
 <li>This lane adds the Avalonia flag, the JSON shape and the report-only Linux job (<code>perf-bench-linux</code>); the WPF flag, the
 Windows job and the comparison script come with <code>perf-bench-wpf-compare</code>. The gate starts report-only and becomes required
 after 3 consecutive stable runs. Table: <code>docs/avalonia-perf.html</code>.</li>
+<li>2026-11-04 (owner): tab rows compare both heads at WPF's stop point, the UI thread handing the frame to the render thread. Avalonia writes it as <code>handoff_median_ms</code>/<code>handoff_p95_ms</code> and <code>perf-compare.py</code> gates on those; its frame-drawn numbers (<code>median_ms</code>/<code>p95_ms</code>) stay in the report as information. Evidence: <code>~/ccp-port/evidence/perf-combined-20261104/floor-investigation.html</code> (root cause 1). Details: <code>docs/avalonia-perf.html</code>, "Two stop points".</li>
 </ul>
 <h2 id="2026-10-23-scrolller-web-gate--a-loopback-relay-the-same-on-windows-and-linux-port72scrolller-2">2026-10-23: Scrolller web gate = a loopback relay, the same on Windows and Linux (port72/scrolller-2)</h2>
 <ul>

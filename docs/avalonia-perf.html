@@ -20,6 +20,7 @@ th{background:var(--code);position:sticky;top:0}td{overflow-wrap:anywhere}blockq
 <body>
 <h1 id="avalonia-performance-parity">Avalonia performance parity</h1>
 <p>Numbers come from <code>--perf-bench &lt;out.json&gt;</code> (<code>CCP.Avalonia/PerfBench.cs</code>, <code>ConditioningControlPanel/PerfBench.cs</code>), run on the real windowing platform, never headless.
+<code>handoff_*</code> is written by Avalonia only; WPF's twin is unchanged.
 Decision and threshold: <code>docs/avalonia-decisions.html</code> (2026-10-23). A row passes when the Avalonia median is ≤ WPF median × 1.10 + 20 ms
 (memory: ≤ WPF × 1.10), both heads measured back to back on the same <code>windows-latest</code> runner. Linux is information only. A row
 with no WPF number is a gap, not a pass.</p>
@@ -33,12 +34,31 @@ Splash, launcher routing and modal onboarding are bypassed only under the flag; 
 onboarded offline user. <code>startup_since_process_ms</code> adds the runtime's own start-up (process start time to the same frame).
 <strong>Startup is informational, not a gate:</strong> the scopes differ (WPF includes its full service init, Avalonia does not), so
 <code>perf-compare.py</code> reports both startup rows as <code>info</code> and never fails on them.</li>
-<li><strong>Tab switch</strong>: <code>ShowTab</code> (the call every rail handler makes) to the next rendered frame, for every panel in
-<code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab. Frame done differs slightly: Avalonia waits for <code>RequestCompositionBatchCommitAsync().Rendered</code> (render thread included), WPF stops at a Background hop after <code>CompositionTarget.Rendering</code> (UI thread committed, before the render thread presents), so tab rows lean slightly against Avalonia; the 20 ms slack is meant to absorb it.</li>
+<li><strong>Tab switch</strong>: <code>ShowTab</code> (the call every rail handler makes) to the next frame, for every panel in
+<code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab.
+Avalonia records two stop points for every switch (see below); WPF records one.</li>
 <li><strong>Idle Home</strong> (Avalonia only, informational): <code>idle_home_frame_requests_per_s</code>, the frames the
 window's <code>FrameClock</code>s requested per second over 3 s on Home after a 1 s settle. A clock parks between beats on a
 one-shot timer and a clock whose owner is detached, hidden or minimised requests nothing, so this sits near the beat rate
 (30/s), not the monitor refresh.</li>
+</ul>
+<h3 id="two-stop-points">Two stop points for a tab switch (owner decision 2026-11-04)</h3>
+<p>Drawing a frame happens in two steps on both heads. First the UI thread does the layout and hands the finished frame to a
+separate render thread. Then the render thread draws it and puts it on screen. The two benches used to stop the clock at
+different steps: WPF stops at the handoff, Avalonia waited until the frame was on screen. On a runner with no graphics card
+the second step costs Avalonia 50 to 80 ms per switch, so the comparison counted work on one side only
+(<code>~/ccp-port/evidence/perf-combined-20261104/floor-investigation.html</code>, root cause 1).</p>
+<ul>
+<li><strong>Handoff</strong> (<code>handoff_median_ms</code>, <code>handoff_p95_ms</code>; Avalonia only): the UI thread has finished the
+frame. Avalonia stops at a Background hop posted from the next frame callback; WPF stops at a Background hop after
+<code>CompositionTarget.Rendering</code> (its <code>median_ms</code>/<code>p95_ms</code>). <strong>The parity rule compares these.</strong>
+Avalonia can still hold the actual commit back while an earlier frame is in flight, so its handoff is a lower bound of the commit.</li>
+<li><strong>Drawn</strong> (<code>median_ms</code>, <code>p95_ms</code> on Avalonia, unchanged meaning): the render thread has drawn and presented
+the frame (<code>RequestCompositionBatchCommitAsync().Rendered</code>). Kept in the report as information: it is what a user waits
+for, and a regression there is still worth reading, but WPF has no matching number.</li>
+<li>A report written before <code>handoff_*</code> existed is compared on its drawn numbers, which is stricter.</li>
+</ul>
+<ul>
 <li><strong>Memory</strong>: working set after the cycles and two <code>GC.Collect</code> + <code>WaitForPendingFinalizers</code> passes.</li>
 <li>Exit 0 with the JSON written; 3 when a tab is missing or does not show; 4 on a frame timeout (30 s). WPF also exits 2 with usage on a bad command line or a non-absolute <code>CCP_USERDATA_DIR</code>, and every WPF benchmark exit goes through <code>PerfBench.Exit</code> (flush, then <code>TerminateProcess</code>), because <code>Environment.Exit</code> crashes WPF in ProcessExit and loses the code.</li>
 </ul>
@@ -46,7 +66,8 @@ one-shot timer and a clock whose owner is detached, hidden or minimised requests
 <pre><code class="language-json">{ &quot;schema&quot;: &quot;ccp-perf-bench/1&quot;, &quot;head&quot;: &quot;avalonia&quot;, &quot;os&quot;: &quot;...&quot;, &quot;runtime&quot;: &quot;...&quot;,
   &quot;startup_ms&quot;: 0, &quot;startup_since_process_ms&quot;: 0, &quot;working_set_mb&quot;: 0, &quot;cycles&quot;: 20,
   &quot;idle_home_frame_requests_per_s&quot;: 0,
-  &quot;tabs&quot;: [ { &quot;tab&quot;: &quot;SettingsTab&quot;, &quot;median_ms&quot;: 0, &quot;p95_ms&quot;: 0 } ] }
+  &quot;tabs&quot;: [ { &quot;tab&quot;: &quot;SettingsTab&quot;, &quot;median_ms&quot;: 0, &quot;p95_ms&quot;: 0,
+             &quot;handoff_median_ms&quot;: 0, &quot;handoff_p95_ms&quot;: 0 } ] }
 </code></pre>
 <p>CI: <code>perf-bench-linux</code> (xvfb, artifact <code>perf-bench-linux</code>) and <code>perf-bench-windows</code> (artifact <code>perf-bench-windows</code>)
 in <code>.github/workflows/build.yml</code>. Windows publishes both heads as they ship (Avalonia win-x64 profile, WPF ReadyToRun single-file),
@@ -54,7 +75,8 @@ runs five Avalonia/WPF pairs sequentially on the same runner with a fresh <code>
 and checks that a WPF run with a missing tab exits 3 without JSON. The job is report-only until three consecutive stable runs have been reviewed.</p>
 <p>Compare reports (Python stdlib only): <code>python3 .github/scripts/perf-compare.py --self-test</code>, then
 <code>python3 .github/scripts/perf-compare.py --avalonia 'perf-results/avalonia-*.json' --wpf 'perf-results/wpf-*.json'</code>.
-It takes each metric's median across runs (per-tab median and p95 too), applies the rule above, prints a Markdown table and exits 1 on a
+It takes each metric's median across runs (per-tab median and p95 too), applies the rule above (tab rows: Avalonia handoff against WPF),
+prints a Markdown table with Avalonia's drawn numbers in an info column and exits 1 on a
 regression, missing reports, missing/extra tabs or invalid measurements. Tab keys are <code>NavCheck.TabPanels</code>; WPF's legacy
 <code>ExclusivesTab</code> goes through <code>ShowTab(&quot;exclusives&quot;)</code> to the lazy Premium page, whose visibility is checked.</p>
 <h2 id="discord-remote-first-show">Discord and Remote Control first-show work</h2>
