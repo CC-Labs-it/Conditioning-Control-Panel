@@ -24,6 +24,7 @@ public sealed class DeeperPlayerAudioTests
     private sealed class Audio : IDeeperLocalAudio
     {
         public double DurationSeconds { get; set; } = 95;
+        public double? PlaybackDurationSeconds => null;
         public double PositionSeconds { get; set; }
         public int Volume { get; set; }
         public bool Playing, Disposed;

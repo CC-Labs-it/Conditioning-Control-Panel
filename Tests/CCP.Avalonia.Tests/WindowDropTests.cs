@@ -19,6 +19,7 @@ using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Deeper;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -118,6 +119,7 @@ public sealed class WindowDropTests
         public bool RejectStart;
         public int Volume { get; set; }
         public double DurationSeconds => 95;
+        public double? PlaybackDurationSeconds => 95;
         public double PositionSeconds { get; set; }
         public event Action? Ended;
         public event Action? Failed;
@@ -129,10 +131,20 @@ public sealed class WindowDropTests
         public void Dispose() => Disposed = true;
     }
 
+    private sealed class WaveformFixture : IDisposable
+    {
+        private readonly string _dir = Directory.CreateTempSubdirectory("ccp-drop-wave-").FullName;
+        private readonly Func<string, AudioWaveformResult>? _decoder = AudioWaveformCache.Decoder;
+        public WaveformFixture() => AudioWaveformCache.Decoder = _ => new AudioWaveformResult { Peaks = new[] { 0.5f }, DurationSeconds = 95 };
+        public string File(string name) { var path = Path.Combine(_dir, name); System.IO.File.WriteAllBytes(path, new byte[16]); return path; }
+        public void Dispose() { AudioWaveformCache.Decoder = _decoder; Directory.Delete(_dir, true); }
+    }
+
     // WPF EnhancementPlayerWindow.xaml.cs:616,686,836,1017,1180,1223,2621.
     [Fact]
     public Task AudioDropPlaysAndTransportStopsReplaysAndCleansUp() => Run(async (shell, root, _) =>
     {
+        using var waves = new WaveformFixture();
         var path = Path.Combine(root, "track.mp3");
         File.WriteAllBytes(path, new byte[16]);
         var original = DeeperLocalAudio.Open;
@@ -151,6 +163,7 @@ public sealed class WindowDropTests
             Click(ask, "BtnPlay");
             var player = await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
             var first = Assert.Single(opened);
+            await WaitFor(() => first.Playing ? first : null);
             Assert.True(first.Playing);
             Assert.Equal(80, first.Volume);
             Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
@@ -171,10 +184,12 @@ public sealed class WindowDropTests
             Assert.False(first.Subscribed);
             Assert.Equal(Loc.Get("deeper_player_status_ended"), player.FindControl<TextBlock>("TxtStatus")!.Text);
             Click(player, "BtnPlayPause");
+            await WaitFor(() => opened.Count > 1 && opened[1].Playing ? opened[1] : null);
             Assert.True(opened[1].Playing); Assert.Equal(0, opened[1].PositionSeconds);
             Click(player, "BtnStop");
             Assert.True(opened[1].Disposed); Assert.False(opened[1].Playing);
             Click(player, "BtnPlayPause");
+            await WaitFor(() => opened.Count > 2 && opened[2].Playing ? opened[2] : null);
             player.Close();
             Assert.True(opened[2].Disposed); Assert.False(opened[2].Playing);
             Assert.False(opened[2].Subscribed);
@@ -194,6 +209,8 @@ public sealed class WindowDropTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        using var waves = new WaveformFixture();
+        var firstPath = waves.File("first.mp3"); var secondPath = waves.File("second.mp3");
         var pending = new TaskCompletionSource<IDeeperLocalAudio?>();
         var original = DeeperLocalAudio.Open;
         var stale = new ProbeAudio(); var next = new ProbeAudio();
@@ -201,15 +218,15 @@ public sealed class WindowDropTests
         var player = new EnhancementPlayerWindow(null, null);
         try
         {
-            player.Show(); player.OpenLocalMediaFile("/tmp/first.mp3");
+            player.Show(); player.OpenLocalMediaFile(firstPath);
             if (action == "panic") PanicSurfaces.StopAll("test");
             else if (action == "stop") Click(player, "BtnStop");
             else if (action == "close") player.Close();
-            else player.OpenLocalMediaFile(action == "video" ? "/tmp/clip.mp4" : "/tmp/second.mp3");
+            else player.OpenLocalMediaFile(action == "video" ? "/tmp/clip.mp4" : secondPath);
             pending.SetResult(stale);
             await WaitFor(() => stale.Disposed ? player : null);
             Assert.Equal(0, stale.Plays); Assert.False(stale.Subscribed);
-            if (action == "replace") Assert.True(next.Playing);
+            if (action == "replace") { await WaitFor(() => next.Playing ? next : null); Assert.True(next.Playing); }
         }
         finally { player.Close(); DeeperLocalAudio.Open = original; }
         if (action == "replace") { Assert.True(next.Disposed); Assert.False(next.Playing); }
@@ -221,11 +238,13 @@ public sealed class WindowDropTests
     [InlineData("throw")]
     [InlineData("start")]
     [InlineData("late")]
-    public Task FailedAudioOpenReportsFailureAndStopsTheOldClip(string failure) => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task FailedAudioOpenReportsFailureAndStopsTheOldClip(string failure) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        using var waves = new WaveformFixture();
+        var firstPath = waves.File("first.mp3"); var badPath = waves.File("bad.mp3");
         var original = DeeperLocalAudio.Open;
         var audio = new ProbeAudio();
         var player = new EnhancementPlayerWindow(null, null);
@@ -233,17 +252,18 @@ public sealed class WindowDropTests
         {
             player.Show();
             DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
-            player.OpenLocalMediaFile("/tmp/first.mp3");
+            player.OpenLocalMediaFile(firstPath);
+            await WaitFor(() => audio.Playing ? audio : null);
             var next = new ProbeAudio { RejectStart = failure == "start" };
             DeeperLocalAudio.Open = _ => failure == "throw" ? throw new InvalidOperationException("bad media") : Task.FromResult<IDeeperLocalAudio?>(failure == "null" ? null : next);
-            player.OpenLocalMediaFile("/tmp/bad.mp3");
-            if (failure == "late") { next.Fail(); Dispatcher.UIThread.RunJobs(); }
+            player.OpenLocalMediaFile(badPath);
+            if (failure == "late") { await WaitFor(() => next.Playing ? next : null); next.Fail(); Dispatcher.UIThread.RunJobs(); }
+            await WaitFor(() => player.FindControl<TextBlock>("TxtStatus")!.Text == Loc.Get("deeper_player_status_audio_failed") ? player : null);
             if (failure is "start" or "late") { Assert.True(next.Disposed); Assert.False(next.Playing); Assert.False(next.Subscribed); }
             Assert.True(audio.Disposed); Assert.False(audio.Playing); Assert.False(audio.Subscribed);
             Assert.Equal(Loc.Get("deeper_player_status_audio_failed"), player.FindControl<TextBlock>("TxtStatus")!.Text);
         }
         finally { player.Close(); DeeperLocalAudio.Open = original; }
-        return Task.CompletedTask;
     });
 
     // WPF player:686-742: an old video command must not overwrite a replacement transport.
@@ -284,6 +304,8 @@ public sealed class WindowDropTests
     [Fact]
     public Task AudioSwapCancelsDelayedVideoAndItsPoll() => Run(async (shell, _, _) =>
     {
+        using var waves = new WaveformFixture();
+        var track = waves.File("track.mp3");
         var player = new EnhancementPlayerWindow(null, null); player.Show(shell);
         var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
         var pending = new TaskCompletionSource<string?>(); web.ScriptInvoker = _ => pending.Task;
@@ -294,9 +316,10 @@ public sealed class WindowDropTests
             player.OpenLocalMediaFile("/tmp/clip.mp4");
             var poll = (Task)typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null)!;
             PanicSurfaces.StopAll("video test"); Assert.True(web.Source!.IsFile); // WPF panic pauses, preserving the video for resume.
-            player.OpenLocalMediaFile("/tmp/track.mp3");
+            player.OpenLocalMediaFile(track);
             Assert.Equal("about:blank", web.Source!.AbsoluteUri); Assert.False(web.AllowNavigation!(new Uri("file:///tmp/clip.mp4")));
             pending.SetResult("90|100|0"); await poll;
+            await WaitFor(() => audio.Playing ? audio : null);
             Assert.Equal(95d, typeof(EnhancementPlayerWindow).GetField("_durationSec", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player));
             Assert.True((bool)typeof(EnhancementPlayerWindow).GetField("_isPlaying", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!);
             Assert.True(audio.Playing); Assert.Equal("1:35", player.FindControl<TextBlock>("TxtTotal")!.Text);
