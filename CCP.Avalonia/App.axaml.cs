@@ -667,6 +667,21 @@ namespace ConditioningControlPanel.Avalonia
 
         private Platform.GazeDriftCorrection? _gazeDrift;
 
+        internal static void RepairLaunchSettings(SettingsService settings)
+        {
+            // WPF App.xaml.cs:463,2952,3282: re-clones must see the live AI availability.
+            CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
+            var presets = new KeywordTriggerPresetService();
+            try { presets.SyncInstalledCustomSources(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
+            foreach (var id in settings.PendingPresetReinstalls.ToList())
+            {
+                try { presets.InstallPreset(id, presets.ChasterTimeWasAllowed(id)); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Pending preset reinstall failed for {Id}", id); }
+            }
+            settings.PendingPresetReinstalls.Clear();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -717,6 +732,8 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                try { InstallDateRecorder.EnsureRecorded(Settings, CorePaths.UserData, AppDomain.CurrentDomain.BaseDirectory); }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
                 // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
@@ -913,6 +930,7 @@ namespace ConditioningControlPanel.Avalonia
                         await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
+                RepairLaunchSettings(Settings);
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
                 // Once the active mod is known (its overrides key the entries): decode the art the last
