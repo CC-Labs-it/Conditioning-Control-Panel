@@ -677,6 +677,82 @@ public sealed class ChaosGifCascadeOverlayTests
         finally { Directory.Delete(dir, true); }
     }
 
+    [Fact]
+    public void WebpAnimationFlagDistinguishesStillsAndMissingFiles()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".webp");
+        try
+        {
+            var head = new byte[21];
+            System.Text.Encoding.ASCII.GetBytes("RIFF").CopyTo(head, 0);
+            System.Text.Encoding.ASCII.GetBytes("WEBPVP8X").CopyTo(head, 8);
+            File.WriteAllBytes(path, head);
+            Assert.False(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+            head[20] = 2;
+            File.WriteAllBytes(path, head);
+            Assert.True(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+            head[0] = 0;
+            File.WriteAllBytes(path, head);
+            Assert.False(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+        }
+        finally { File.Delete(path); }
+        Assert.False(ChaosGifCascadeOverlay.IsAnimatedWebp(path));
+    }
+
+    [Fact]
+    public async Task WebpFallersReserveSlotsOnlyForAnimatedImages()
+    {
+        // Valid 2x2 still and two-frame animated WebPs. Replace the file only after each decode
+        // completes, so every spawn picks deterministically without racing the background reader.
+        const string still = "UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoCAAIAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA=";
+        const string animated = "UklGRsQAAABXRUJQVlA4WAoAAAACAAAAAQAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSgAAAAAAAAAAAAEAAAEAAGQAAAJWUDggMgAAADABAJ0BKgIAAgABQCYloAADcAD+8ut///mwP/bz/wR6Af//0uD//pcH//S4P/SkAAAAQU5NRkYAAAAAAAAAAAABAAABAABkAAAAVlA4IC4AAAA0AQCdASoCAAIAAAAmJaAAA3AA/vtV4///S4P/+lwf/9Lg/9Lg//rV5Vesq6AA";
+        var dir = Directory.CreateTempSubdirectory("ccp-cascade-webp-").FullName;
+        var path = Path.Combine(dir, "image.webp");
+        File.WriteAllBytes(path, Convert.FromBase64String(still));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var clock = new SteppedClock();
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.Clock = clock;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    Show(path);
+                    var w = ChaosGifCascadeOverlay.Active!;
+                    await Decoded();
+                    for (int i = 1; i < 3; i++) { clock.Advance(0.6); w.Frame(); await Decoded(); }
+                    Assert.Equal(3, w.Cascade.Fallers.Count);
+                    Assert.All(w.Cascade.Fallers, f => Assert.False(f.Animated));
+                    Assert.Equal(0, w.Cascade.AnimatedAlive);
+
+                    File.WriteAllBytes(path, Convert.FromBase64String(animated));
+                    for (int i = 0; i < 4; i++) { clock.Advance(0.6); w.Frame(); await Decoded(); }
+                    Assert.Equal(7, w.Cascade.Fallers.Count);
+                    Assert.All(w.Cascade.Fallers.Skip(3).Take(3), f => Assert.True(f.Animated));
+                    Assert.False(w.Cascade.Fallers[6].Animated);
+                    Assert.Equal(GifCascade.MaxAnimated, w.Cascade.AnimatedAlive);
+                    w.Cascade.Clear();
+                    Assert.Equal(0, w.Cascade.AnimatedAlive);
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    ChaosGifCascadeOverlay.Clock = TimeProvider.System;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     // Restack b62 (#3762): WPF ChaosModeService.cs:2164-2174,2260,2308-2309. A mandatory video that ends
     // mid-run keeps the heavy gate shut 3 s more, never shortens a floor, and a dropped detonation says so.
     private sealed class GateVideoHost : global::ConditioningControlPanel.Services.IMandatoryVideoHost

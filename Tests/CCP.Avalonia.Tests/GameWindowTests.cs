@@ -13,6 +13,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -1148,6 +1149,86 @@ public sealed partial class GameWindowTests
     /// <summary>WPF LauncherCatalogue (Basic door, DemandPremium refusal), OnPageReady :271 (init with motionLevel
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
+    [Fact]
+    public void Dtrh_FullscreenSetRestoresFrameAndReplies() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Position = new PixelPoint(120, 80);
+        w.Width = 800;
+        w.Height = 600;
+        Dispatcher.UIThread.RunJobs();
+        var position = w.Position;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        Assert.Equal(WindowState.FullScreen, w.WindowState);
+        Assert.True((bool)Assert.Single(sent)["on"]!);
+        sent.Clear();
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Assert.Equal(WindowState.Normal, w.WindowState);
+        Assert.Equal(position, w.Position);
+        Assert.Equal(800, w.Width);
+        Assert.Equal(600, w.Height);
+        Assert.False((bool)Assert.Single(sent)["on"]!);
+    });
+
+    private static global::Avalonia.Platform.Screen DtrhScreen(PixelRect bounds, double scale, bool primary)
+    {
+        var screen = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(bounds.X + 1), "headless-test") })!;
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("WorkingArea")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Scaling")!.SetValue(screen, scale);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("IsPrimary")!.SetValue(screen, primary);
+        return screen;
+    }
+
+    [Fact]
+    public void Dtrh_FullscreenFromMaximizedPreservesNormalFrame() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Position = new PixelPoint(120, 80);
+        w.Width = 800;
+        w.Height = 600;
+        Dispatcher.UIThread.RunJobs();
+        w.WindowState = WindowState.Maximized;
+        w.Position = new PixelPoint(0, 0); // model the native maximized position
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+        w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+        Assert.Equal(WindowState.Maximized, w.WindowState);
+        w.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new PixelPoint(120, 80), w.Position);
+        Assert.Equal(800, w.Width);
+        Assert.Equal(600, w.Height);
+    });
+
+    [Fact]
+    public void Dtrh_RemovedMonitorCentersFrameOnLiveMonitor() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var previous = ScreenList.QueryOverride;
+        var primary = DtrhScreen(new PixelRect(0, 0, 1600, 900), 1, true);
+        var secondary = DtrhScreen(new PixelRect(1600, 0, 1600, 900), 1, false);
+        var screens = new[] { primary, secondary };
+        ScreenList.QueryOverride = _ => screens;
+        try
+        {
+            var w = GameWindow.Launch("dtrh")!;
+            w.Position = new PixelPoint(2000, 100);
+            w.Width = 800;
+            w.Height = 600;
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
+            screens = new[] { primary };
+            w.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
+            Assert.Equal(WindowState.Normal, w.WindowState);
+            Assert.Equal(new PixelPoint(400, 150), w.Position);
+            Assert.Equal(800, w.Width);
+            Assert.Equal(600, w.Height);
+        }
+        finally { ScreenList.QueryOverride = previous; }
+    });
+
     [Fact]
     public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {

@@ -35,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests drive <see cref="Frame"/> themselves; the frame clock stays off (P08).</summary>
         internal static bool ManualFramesForTests;
         internal static bool Refused;
+        internal static long RunId { get; private set; }
         private static ChaosGifCascadeOverlay? _active;
         private static int _generation;
         internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
@@ -83,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!w.IsVisible) w.Show();   // idles hidden between cascades
             if (!SkipPlatformChecksForTests) X11Overlay.Raise(w);   // WPF ChaosWindowZ.RaiseAboveVideo / ForceTopmost
             w.Restart(files, spawnRatePerSec, durationSec, gifSize, fallSpeed, opacity, startScale);
+            RunId++;
             Log.Information("GifCascade: raining (pool={N}, spread=[{L:F0}..{R:F0}])",
                 files.Count, w._cascade.SpawnLeft, w._cascade.SpawnLeft + w._cascade.SpawnWidth);
         }
@@ -98,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _generation++;
             Refused = false;
+            RunId++;
             try { _active?.CloseNow(); } catch (Exception ex) { Log.Debug("GifCascade.CloseActive: {E}", ex.Message); }
         }
 
@@ -263,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             string path = _files[f.FileIndex];
             bool animatedFormat = path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
-                                  || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase);
+                                  || IsAnimatedWebp(path);
             long len = 0;
             if (animatedFormat) { try { len = new FileInfo(path).Length; } catch { } }
             f.Animated = _cascade.CanAnimate(animatedFormat, len);
@@ -298,6 +301,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 TaskScheduler.Default);
             _pendingDecodes.RemoveAll(t => t.IsCompleted);
             _pendingDecodes.Add(LastDecode);
+        }
+
+        // WPF AnimatedWebp.IsAnimated: a static WebP must not consume an animation slot.
+        internal static bool IsAnimatedWebp(string path)
+        {
+            if (!path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var head = new byte[21];
+                int count = stream.Read(head, 0, head.Length);
+                return ConditioningControlPanel.Services.Fyp.Online.ScrolllerDiskCache.IsAnimatedWebp(head, count);
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
         }
 
         private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
