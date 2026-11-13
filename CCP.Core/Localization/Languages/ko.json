@@ -5974,6 +5974,7 @@
   "profile_spiral_plate": "나선",
   "profile_spiral_plate_tip": "지금까지의 하강 기록이에요. 클릭하면 나선이 열려요.",
   "_comment_descent_spiral_explainer": "THE SPIRAL, EXPLAINED. The seven stage names are the owner-locked set already shipping on web (cclabs-web src/lib/descent/stages.ts) - do not re-word them here without re-wording them there. The help topic is read at runtime by SpiralTabView, which is why it is loc keys and not one of the 56 hardcoded English topics in HelpContentService.",
+  "descent_stage_drip": "단계 {0}. 이미 한 번 걸어온 길이야. 나와 다시 걸어가자.",
   "descent_stage_0_name": "가장자리",
   "descent_stage_0_flavor": "당신은 가장자리에 서 있고, 아직 쌓인 날은 하나도 없어요.",
   "descent_stage_1_name": "얇은 물",

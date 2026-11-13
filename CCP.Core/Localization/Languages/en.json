@@ -6521,6 +6521,7 @@
   "profile_spiral_plate": "SPIRAL",
   "profile_spiral_plate_tip": "Your descent so far. Click to open the spiral.",
   "_comment_descent_spiral_explainer": "THE SPIRAL, EXPLAINED. The seven stage names are the owner-locked set already shipping on web (cclabs-web src/lib/descent/stages.ts) - do not re-word them here without re-wording them there. The help topic is read at runtime by SpiralTabView, which is why it is loc keys and not one of the 56 hardcoded English topics in HelpContentService.",
+  "descent_stage_drip": "Stage {0}. You walked this once already. Walk it again with me.",
   "descent_stage_0_name": "The Edge",
   "descent_stage_0_flavor": "You are standing at the rim. Nothing has been banked yet.",
   "descent_stage_1_name": "Shallows",
