@@ -61,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Property == IsVisibleProperty) OnProfileVatVisibilityChanged(page.IsEffectivelyVisible);
             };
-            Activated += (_, _) => EvaluateVatPoll();
+            Activated += (_, _) => { if (_vatArmed) UpdateFaucetPresentation(); EvaluateVatPoll(); }; // the waiting tap wakes with the window (restack b168)
             Deactivated += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(); EvaluateVatPoll(); };
             PropertyChanged += (_, e) =>
             {
@@ -255,6 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EvaluateVatPoll();
 
             CancelFaucetCharge();
+            StopFaucetAmbient();
             foreach (var name in new[] { "ProfileVatFaucet", "ProfileVatChip", "ProfileVatFaucetBadge", "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
                 if (FaucetControl<Control>(name) is { } control) control.IsVisible = false;
             if (glass != null) glass.ExternalSpoutXFraction = null;

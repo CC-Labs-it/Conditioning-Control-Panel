@@ -175,6 +175,63 @@ public sealed class ProfileFaucetTests
         finally { shell?.Close(); service.Reset(); CoreHaptics.Service = priorHaptics; if (action == "intro") { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); FeatureIntroPopup.ResetForTests(); } }
     });
 
+    /// <summary>WPF MainWindow.ProfileFaucet.cs:352-531 (restack b168, from #4043): a tap with held XP
+    /// wobbles, breathes its chip and ticks sparsely while the card is on screen; hover grows it, reduced
+    /// motion and a withdrawn vat put every ambient transform back at rest.</summary>
+    [Fact]
+    public Task WaitingTapWobblesUntilMotionOrTheVatGoes() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = new ConditioningControlPanel.Services.SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = false; s.PerformanceMode = false; s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full; s.MasterVolume = 100;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.UnifiedId = "faucet-ambient"; s.OfflineMode = false; s.VatPouredTodayXp = 0; s.VatPouredAccount = "";
+        CoreSecrets.RetrieveProvider = _ => "test-token";
+        CoreSecrets.StoreProvider = (_, _) => { };
+        var sounds = new List<string>();
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => sounds.Add(Path.GetFileName(path));
+        var reply = DescentReader.ParseWire("{\"descent\":{\"devotion_days\":3,\"vat\":{\"cap\":4000,\"today_xp\":1000,\"fill_lip_pct\":120}}}")!;
+        var service = new DescentService(_ => Task.FromResult<JObject?>(reply));
+        AvApp.Descent = service;
+        var time = new SteppedTime(); var priorTime = BeatLoop.Time; BeatLoop.Time = time;
+        MainShellWindow? shell = null;
+        void Step(double seconds) { time.Advance(TimeSpan.FromSeconds(seconds)); shell!.StepFaucetAmbient(); }
+        try
+        {
+            await service.RefreshAsync("seed", force: true);
+            shell = new MainShellWindow(); shell.Show(); shell.Activate();
+            shell.ShowTab("discord"); Dispatcher.UIThread.RunJobs();
+            var page = shell.ProfilePage!;
+            var tap = page.FindControl<Grid>("ProfileVatFaucet")!;
+            Assert.True(tap.IsVisible);
+            Assert.Equal(AmbientFxCanvas.Env.AllowAmbientLoops, shell.FaucetWobbling);
+            Assert.True(shell.FaucetWobbling, "ambient loops are off on this host - the test proves nothing");
+            var transforms = (TransformGroup)tap.RenderTransform!;
+            var lean = (RotateTransform)transforms.Children[0]; var hover = (ScaleTransform)transforms.Children[2];
+            var chip = (ScaleTransform)page.FindControl<Border>("ProfileVatChip")!.RenderTransform!;
+            Step(.55); Assert.Equal(2.2, lean.Angle, 3); Assert.Equal(1 + .05 * BeatLoop.Breath(.55, 2.8), chip.ScaleX, 3);
+            Step(3.3); Assert.Contains("faucet_tick.wav", sounds); // one sparse tick per 3.8 s
+            int ticks = sounds.FindAll(x => x == "faucet_tick.wav").Count; Step(1); Assert.Equal(ticks, sounds.FindAll(x => x == "faucet_tick.wav").Count);
+            tap.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, tap, new Pointer(1, PointerType.Mouse, true), shell, default, 0, default, default));
+            Step(.15); Assert.Equal(1.16, hover.ScaleX, 3);
+            tap.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, tap, new Pointer(1, PointerType.Mouse, true), shell, default, 0, default, default));
+            Step(.15); Assert.Equal(1, hover.ScaleX, 3);
+            s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
+            typeof(MainShellWindow).GetMethod("UpdateFaucetPresentation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, null);
+            Assert.False(shell.FaucetWobbling); Assert.Equal(0, lean.Angle); Assert.Equal(1, chip.ScaleX);
+            s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            typeof(MainShellWindow).GetMethod("UpdateFaucetPresentation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, null);
+            Assert.True(shell.FaucetWobbling);
+            s.OfflineMode = true; service.Reset(); Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.FaucetWobbling); Assert.Equal(0, lean.Angle); Assert.Equal(1, hover.ScaleX);
+        }
+        finally { BeatLoop.Time = priorTime; shell?.Close(); service.Reset(); }
+    });
+
     /// <summary>WPF MainWindow.ProfileFaucet.cs:189-217,236 (restack b39, from #3671): the tick legend hangs
     /// on the jar's own tick lines once it is armed and goes away with it.</summary>
     [Fact]

@@ -22,7 +22,7 @@ public partial class MainShellWindow
         if (!AmbientFxCanvas.Env.AllowTransitions) return;
         _faucetFeedbackPour = pour; _faucetSettleAt = double.PositiveInfinity; _faucetNextSettle = 250;
         var tap = FaucetControl<Grid>("ProfileVatFaucet")!;
-        var transforms = new TransformGroup(); transforms.Children.Add(_faucetLean); transforms.Children.Add(_faucetShake); tap.RenderTransform = transforms;
+        EnsureFaucetTransforms(tap);
         FaucetControl<Grid>("ProfileVatHandle")!.RenderTransform = _faucetStamp;
         FaucetControl<Ellipse>("ProfileVatFaucetDrop")!.RenderTransform = _faucetDropFall;
         if (pour && _faucetPours < 3 && AmbientFxCanvas.Env.Level == MotionLevel.Full && FaucetControl<Canvas>("ProfileVatSparks") is { } host)

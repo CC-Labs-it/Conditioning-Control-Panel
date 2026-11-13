@@ -66,6 +66,7 @@ public partial class MainShellWindow
             chip.Margin = new Thickness(0, Math.Round(h * .175) + 8, 0, 0);
         if (_faucetWired) return;
         _faucetWired = true;
+        EnsureFaucetTransforms(tap);
         // The canvas answers tick positions from its laid-out size: re-hang the legend when it changes.
         glass.SizeChanged += (_, _) => { if (_vatArmed) PositionVatTickGlyphs(); };
         tap.PointerPressed += (_, e) =>
@@ -74,7 +75,8 @@ public partial class MainShellWindow
             e.Handled = true; tap.Focus(); e.Pointer.Capture(tap); BeginFaucetCharge();
         };
         tap.PointerReleased += (_, e) => { e.Handled = true; CancelFaucetCharge(true); e.Pointer.Capture(null); };
-        tap.PointerExited += (_, _) => CancelFaucetCharge(true);
+        tap.PointerEntered += (_, _) => { if (!_faucetCharging) AnimateFaucetScale(1.16); }; // WPF ProfileFaucet.cs:493-531
+        tap.PointerExited += (_, _) => { if (_faucetCharging) CancelFaucetCharge(true); else AnimateFaucetScale(1); };
         tap.PointerCaptureLost += (_, _) => CancelFaucetCharge();
         tap.LostFocus += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(); };
         tap.KeyDown += (_, e) =>
@@ -124,6 +126,8 @@ public partial class MainShellWindow
         if (FaucetControl<Border>("ProfileVatChip") is { } chip) chip.IsVisible = waiting;
         if (FaucetControl<TextBlock>("ProfileVatChipText") is { } label) label.Text = Loc.GetF("profile_vat_chip", held);
         if (FaucetControl<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0;
+        // WPF ProfileFaucet.cs:352-489: the waiting tap wobbles, sparkles, ticks and breathes its chip.
+        SetFaucetAmbient(waiting && _vatArmed && _vatOnScreen && VatGlassCanvas.WindowIsPresenting(this) && AmbientFxCanvas.Env.AllowAmbientLoops);
     }
     private void BeginFaucetCharge() // WPF MainWindow.ProfileFaucet.cs:609-683, 1080-1095. Same budget and daily compact cut.
     {
@@ -133,8 +137,9 @@ public partial class MainShellWindow
         if (_faucetPours >= 3) _faucetBudget *= .6;
         _faucetCharging = true;
         _faucetRungs = 1;
+        AnimateFaucetScale(.94, 90); // WPF ProfileFaucet.cs:634-638
         PlayFaucetSfx("faucet_charge_1.wav", .15f);
-        DrawFaucetRing(0);
+        DrawFaucetRing(0, 0);
         _faucetChargeBeat?.Start();
         UpdateFaucetPresentation();
     }
@@ -146,7 +151,7 @@ public partial class MainShellWindow
             return;
         }
         double t = Math.Clamp(ms / _faucetBudget, 0, 1);
-        DrawFaucetRing(t);
+        DrawFaucetRing(t, ms);
         int want = Math.Min(6, (int)(t * 6) + 1);
         while (_faucetRungs < want) PlayFaucetSfx($"faucet_charge_{++_faucetRungs}.wav", .15f);
         if (t < 1) return;
@@ -155,6 +160,7 @@ public partial class MainShellWindow
         if (!_vatArmed || glass == null || _faucetHold.HeldXp <= 0) return;
         bool wasOver = glass.IsPastBrim(glass.Fill);
         var step = _faucetHold.PourAll();
+        AnimateFaucetScale(1, 120); // WPF ProfileFaucet.cs:740-751
         StartFaucetFeedback(true);
         PlayFaucetSfx("faucet_pour.wav", .35f);
         glass.PourTo(step.Fill, userGesture: true); FireFaucetPourHaptic();
@@ -171,12 +177,13 @@ public partial class MainShellWindow
         _faucetChargeBeat?.Stop();
         if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = false; ring.Opacity = 0; }
         if (!feedback && (charging || !_vatOnScreen || !_vatArmed || !IsActive || !IsVisible)) StopFaucetFeedback();
+        if (charging) AnimateFaucetScale(1);
         if (charging && feedback) { StartFaucetFeedback(false); PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
         UpdateFaucetPresentation();
     }
-    private void DrawFaucetRing(double t) // WPF MainWindow.ProfileFaucet.cs:779-860. Reduced motion uses a whole still circle.
+    private void DrawFaucetRing(double t, double ms) // WPF MainWindow.ProfileFaucet.cs:760-860. Reduced motion uses a whole still circle.
     {
-        if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = true; ring.Opacity = 1; }
+        if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = true; ring.Opacity = FaucetRingOpacity(ms); }
         if (FaucetControl<Path>("ProfileVatChargeArc") is not { } arc) return;
         if (AmbientFxCanvas.Env.Level != MotionLevel.Full || t >= .999)
         { arc.Data = new EllipseGeometry(new Rect(2, 2, 30, 30)); return; }
