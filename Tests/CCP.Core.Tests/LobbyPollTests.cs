@@ -96,6 +96,22 @@ public sealed class LobbyPollTests {
         await faulty.RefreshAsync();
         Assert.False(faulty.LastRoundOk); Assert.True(faulty.Snapshot.IsEmpty);
     }
+    [Fact]
+    public async Task RaceRidesTheSameRoundAndAloneKeepsTheRoundOk() {
+        // WPF LobbyService.RunAsync (LobbyService.cs:110-118): one round, ok = chess || remote || race.
+        var timer = new Timer(); var raceOk = true;
+        using var lobby = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)),
+            () => raceOk ? Task.FromResult(new RaceOpenReply(new[] { new RaceOpenRoom("abcdefghijkl", "keep", "Host", 8, 2, 3, false, null, false) }, true))
+                : throw new Exception());
+        await lobby.RefreshAsync();
+        var row = Assert.Single(lobby.Snapshot.Open);
+        Assert.Equal(LobbyGame.Race, row.Game); Assert.Equal("abcdefghijkl", row.Key);
+        Assert.True(lobby.LastRoundOk); Assert.Equal(LobbyPollPlan.Base, timer.Interval);
+        raceOk = false; await lobby.RefreshAsync();
+        Assert.Empty(lobby.Snapshot.Open); Assert.False(lobby.LastRoundOk);
+    }
     private sealed class DirectoryHandler : HttpMessageHandler {
         public bool Fail;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
