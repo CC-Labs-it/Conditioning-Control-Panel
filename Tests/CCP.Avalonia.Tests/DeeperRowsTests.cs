@@ -104,7 +104,7 @@ public sealed class DeeperRowsTests
             var poll = (Task)typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null)!;
             Click(editor.FindControl<Button>("BtnPreview")!);
-            Assert.Contains(scripts, s => s.Contains("querySelectorAll('video,audio')") && s.Contains("v.pause()"));
+            // Trunk TearDownVideo (WPF player:1325) blanks the page instead of a pause script.
             Assert.Equal("about:blank", web.Source!.AbsoluteUri);
             Assert.True(web.AllowNavigation!(new Uri("about:blank")));
             Assert.False(web.AllowNavigation!(new Uri("https://www.tiktok.com/@a/video/1")));

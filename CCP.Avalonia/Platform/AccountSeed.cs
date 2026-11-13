@@ -140,7 +140,7 @@ internal static class AccountSeed
                 };
                 if (!result.Success || result.User == null || string.IsNullOrEmpty(result.User.UnifiedId)
                     || string.IsNullOrEmpty(result.AuthToken)) continue;
-                ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);
+                ApplyLoginUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);   // keeps a pending Descent migration's ledger, as LoginDialog
                 CoreAccount.UnifiedUserId = result.User.UnifiedId;
                 CoreSettings.Save();
                 return true;

@@ -1182,6 +1182,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 LoadLocalVideo(enh.MediaSource);
             }
+            else if (!string.Equals(enh.MediaType, MediaTypes.Video, StringComparison.OrdinalIgnoreCase))
+            {
+                // WPF EnhancementPlayerWindow.xaml.cs:1303-1307: an audio enhancement over a still-loaded
+                // video (editor Preview, a catalogue pick) tears the video down first.
+                TearDownVideo();
+            }
 
             RefreshFileContextStrip(enh, path);
             OnEnhancementLoadedForMini(enh);
