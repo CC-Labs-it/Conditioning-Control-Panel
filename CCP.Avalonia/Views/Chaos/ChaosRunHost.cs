@@ -173,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             if (ChaosMeta.IsBoonActive("e_stim")) ChaosEStimOverlay.EnsureCreated();   // WPF ChaosModeService.cs:453
             _state.StartShields = _state.Shields;
+            _thoughtAccumSec = 0;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
             _lastComboBigFired = 0;

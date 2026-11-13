@@ -13,7 +13,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 
 internal static partial class ChaosRunHost
 {
-    private static double _vibeRemaining, _snapRemaining;
+    private static double _vibeRemaining, _snapRemaining, _thoughtAccumSec;
+    internal static Action<double, double, double, string> LaunchThought = (sec, speed, scale, text) =>
+        ChaosDvdOverlay.Launch(_overlay!, sec, speed, scale, text: text);
     private static bool _afterglow, _vibeHover;
     private static FrameClock? _sweepTimer;
     // Same desktop pointer seam as the existing cursor/trail surfaces; null off X11.
@@ -103,6 +105,18 @@ internal static partial class ChaosRunHost
     private static void TickToyEffects()
     {
         if (_state == null) return;
+        // WPF ChaosModeService.cs:2994-3005. Freeze is not yet exposed by this head.
+        if (_state.IntrusiveThoughtsSec > 0)
+        {
+            _thoughtAccumSec += ChaosRunEngine.TICK_SEC;
+            if (_thoughtAccumSec >= 5)
+            {
+                _thoughtAccumSec = 0;
+                var enabled = CoreSettings.Current.BouncingTextPool.Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
+                var text = enabled is { Length: > 0 } ? enabled[Random.Shared.Next(enabled.Length)] : Loc.Get("chaos_thought_fallback");
+                LaunchThought(_state.IntrusiveThoughtsSec, 1.3, 0.8, text);
+            }
+        }
         if (_vibeRemaining > 0)
         {
             _vibeRemaining -= ChaosRunEngine.TICK_SEC;
@@ -146,7 +160,7 @@ internal static partial class ChaosRunHost
     {
         _sweepTimer?.Stop();
         _sweepTimer = null;
-        _vibeRemaining = _snapRemaining = 0;
+        _vibeRemaining = _snapRemaining = _thoughtAccumSec = 0;
         _afterglow = _vibeHover = false;
         _dvdBannerOn = false;
         ChaosVibeTrailOverlay.CloseActive();
