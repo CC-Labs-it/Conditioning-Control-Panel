@@ -410,9 +410,12 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>One logical step. <paramref name="held"/> and the cursor (global DIPs) feed a
-        /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).</summary>
-        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default)
+        /// running defuse channel; a channel pins the bubble and pauses the fuse (WPF :3796).
+        /// <paramref name="timeScale"/> below 1 is the chaos slow-mo (WPF TimeScale, BubbleService.cs:2612):
+        /// it slows a chaos bubble's travel and fuse, never an ambient one.</summary>
+        public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, double timeScale = 1.0)
         {
+            double ts = Spec == null ? 1.0 : Math.Max(0, timeScale);
             if (Popping)
             {
                 // WPF BubbleService.cs:3791-3814: particles move before gravity and fade.
@@ -439,7 +442,7 @@ namespace ConditioningControlPanel.Services
                     Popping = Deflating = true;
                     return Result.Alive;
                 }
-                _orbitPhase += 2 * Math.PI * 0.032 / Chaos.ChaosTuning.CHAPERONE_ORBIT_PERIOD_SEC;
+                _orbitPhase += 2 * Math.PI * 0.032 / Chaos.ChaosTuning.CHAPERONE_ORBIT_PERIOD_SEC * Math.Max(ts, 0.15);
                 double radius = Math.Max(Chaos.ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
                     (target.Size + Size) / 2 + Chaos.ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
                 X = target.CenterX + Math.Cos(_orbitPhase) * radius - Size / 2;
@@ -458,7 +461,7 @@ namespace ConditioningControlPanel.Services
             // WPF :4147-4193: the fuse burns 32 ms a step; fuse-out detonates.
             if (Spec is { IsLive: true } && FuseRemainingMs > 0)
             {
-                FuseRemainingMs -= FuseStepMs;
+                FuseRemainingMs -= FuseStepMs * ts;   // WPF :4227: slow-mo makes live fuses last longer
                 if (FuseRemainingMs <= 0) return GoOff(null);
             }
             if (AmbientTrigger && Spec is { TreatLifeMs: > 0 })
@@ -480,10 +483,10 @@ namespace ConditioningControlPanel.Services
             if (Spec?.IsTease == true)
             {
                 double dx = _teaseCenterX - X, dy = _teaseCenterY - Y, d = Math.Sqrt(dx * dx + dy * dy);
-                if (d > 8) { X += dx / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE; Y += dy / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE; }
+                if (d > 8) { X += dx / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE * ts; Y += dy / d * Chaos.ChaosTuning.TEASE_CENTER_PULL_DIP * Chaos.ChaosTuning.FIELD_PACE * ts; }
                 X += Math.Sin(_timeAlive * 9) * 1.6;
                 Y += Math.Cos(_timeAlive * 7) * 1.2;
-                _teaseLifeMs -= FuseStepMs * Chaos.ChaosTuning.FIELD_PACE;
+                _teaseLifeMs -= FuseStepMs * Chaos.ChaosTuning.FIELD_PACE * ts;
                 if (_teaseLifeMs <= 0) { Popping = Deflating = true; return Result.TeaseDenied; }
                 return Result.Alive;
             }
@@ -497,7 +500,7 @@ namespace ConditioningControlPanel.Services
             }
             if (Spec is { IsChaperoneLive: true })
             {
-                X += _vx; Y += _vy;
+                X += _vx * ts; Y += _vy * ts;
                 if (X < _roamLeft) { X = _roamLeft; _vx = Math.Abs(_vx); }
                 else if (X > _roamRight) { X = _roamRight; _vx = -Math.Abs(_vx); }
                 if (Y < _roamTop) { Y = _roamTop; _vy = Math.Abs(_vy); }
@@ -508,9 +511,9 @@ namespace ConditioningControlPanel.Services
             switch (TriggerMotion)
             {
                 case Chaos.ChaosMotion.RainDown:
-                    Y += _speed; X = _startX + offset; exited = Y > _bottom; break;
+                    Y += _speed * ts; X = _startX + offset; exited = Y > _bottom; break;
                 case Chaos.ChaosMotion.RoamBounce:
-                    X += _vx; Y += _vy;
+                    X += _vx * ts; Y += _vy * ts;
                     if (X < _left) { X = _left; _vx = Math.Abs(_vx); }
                     else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); }
                     double topB = _top + Size + 50, botB = _bottom - Size - 50;
@@ -518,7 +521,7 @@ namespace ConditioningControlPanel.Services
                     else if (Y > botB) { Y = botB; _vy = -Math.Abs(_vy); }
                     exited = false; break;
                 case Chaos.ChaosMotion.SideDrift:
-                    X += _vx; Y = _startY + offset;
+                    X += _vx * ts; Y = _startY + offset;
                     exited = _vx > 0 ? X > _right + Size : X < _left - Size; break;
                 default:
                     switch (Motion)
@@ -534,7 +537,7 @@ namespace ConditioningControlPanel.Services
                             X = _startX + offset;
                             return Y > _bottom ? Result.Missed : Result.Alive;
                         default:
-                            Y -= _speed; X = _startX + offset; exited = Y < _top; break;
+                            Y -= _speed * ts; X = _startX + offset; exited = Y < _top; break;
                     }
                     break;
             }
@@ -579,6 +582,10 @@ namespace ConditioningControlPanel.Services
         public double FreezeVibrateRemainingMs;
         private double _freezePulsePhase;
         public double FreezeAuraOpacity => FreezeChaos ? 0.1125 + 0.0875 * Math.Sin(_freezePulsePhase) : 0;
+        /// <summary>WPF SetChaosTimeScale (BubbleService.cs:257): the chaos slow-mo, clamped 0.05-1.
+        /// Chaos bubbles only; ambient bubbles keep their pace.</summary>
+        public double ChaosTimeScale { get => _chaosTimeScale; set => _chaosTimeScale = Math.Clamp(value, 0.05, 1.0); }
+        private double _chaosTimeScale = 1.0;
 
         public void ClearFreezeVisuals()
         {
@@ -674,7 +681,7 @@ namespace ConditioningControlPanel.Services
                 if (b.Spec is { IsEscort: true } && b.OrbitTarget != null && !Bubbles.Contains(b.OrbitTarget))
                     b.OrbitTarget = null;
                 if (FreezeChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping && !b.Channeling) continue;
-                var r = b.Step(Held, CursorX, CursorY, now);
+                var r = b.Step(Held, CursorX, CursorY, now, _chaosTimeScale);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Shattered) { ChaosBrittleShattered?.Invoke(b); continue; }
                 if (r == AmbientBubble.Result.Detonated) { ChaosDetonated?.Invoke(b); continue; }
