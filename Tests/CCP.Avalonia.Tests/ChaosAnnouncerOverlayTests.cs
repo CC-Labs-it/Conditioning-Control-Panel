@@ -239,6 +239,27 @@ public sealed class ChaosAnnouncerOverlayTests
         });
     }
 
+    // WPF ChaosModeService.cs:434 prefixes a mantra with a diamond; without art the head draws it as a
+    // Fluent icon beside the outlined name (#3528). Art replaces the whole line, as WPF's image does.
+    [Fact]
+    public async Task Mantra_text_fallback_renders_a_diamond_icon()
+    {
+        await Run(_ =>
+        {
+            var missingArt = "mantra-missing-" + Guid.NewGuid().ToString("N");
+            Assert.Null(ChaosEffectBannerOverlay.ResolveArt(missingArt));
+            ChaosAnnouncerOverlay.Announce("Soft Focus", ChaosAnnounceKind.Mantra, missingArt);
+            var host = Assert.IsType<Grid>(ChaosAnnouncerOverlay.Active!.Content);
+            var anchor = Assert.IsType<Grid>(Assert.Single(host.Children));
+            var panel = Assert.IsType<StackPanel>(Assert.Single(anchor.Children));
+            var icon = Assert.IsType<IconGlyph>(panel.Children[0]);
+            Assert.Equal(IconKind.Diamond, icon.Kind);
+            Assert.Equal(IconVariant.Filled, icon.Variant);
+            Assert.False(icon.IsFallback);
+            Assert.Equal("SOFT FOCUS", Assert.IsType<OutlinedTextBlock>(panel.Children[1]).Text);
+        });
+    }
+
     [Fact]
     public void Line_is_anchored_to_the_work_area_including_a_left_docked_panel()
     {

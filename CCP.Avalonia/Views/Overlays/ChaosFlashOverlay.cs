@@ -138,6 +138,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // Reuse the existing animation decoder; only stills need WPF's larger width budget.
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int stageWidth, bool still)
         {
+            // Remote media must never reach a file-shaped codec probe (WPF overlay :219).
+            // Remote posters reach this decoder as cached local files (RemoteFlashSource), never as URLs.
+            if (Uri.TryCreate(path, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                return (new(), TimeSpan.Zero);
             using var codec = SKCodec.Create(path);
             if (codec == null) return (new(), TimeSpan.Zero);
             if (!still && codec.FrameCount > 1)

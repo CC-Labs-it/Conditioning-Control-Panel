@@ -95,4 +95,39 @@ public class ChaosThoughtCallerTests
             return Task.CompletedTask;
         });
     }
+
+    // WPF ChaosModeService.cs:3009-3011: only a maxed Intrusive Thoughts arms the rabbit split (#3555).
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MaxedCapstoneArmsTheRabbitSplit(bool maxed)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var pool = CoreSettings.Current.BouncingTextPool;
+            var (can, prepare, sfx) = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx);
+            try
+            {
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+                CoreSettings.Current.BouncingTextPool = new() { ["selected"] = true };
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 300, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosRunHost.State!.IntrusiveThoughtsSec = 4;
+                if (maxed) ChaosRunHost.State.MaxedBoons.Add("intrusive_thoughts");
+                for (int i = 0; i < 20; i++) ChaosRunHost.Tick();
+                var thought = Assert.Single(ChaosDvdOverlay.Flock.Active, l => l.IsThought);
+                Assert.Equal(maxed, thought.SplitOnRabbit);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.PlaySfx) = (can, prepare, sfx);
+                CoreSettings.Current.BouncingTextPool = pool;
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

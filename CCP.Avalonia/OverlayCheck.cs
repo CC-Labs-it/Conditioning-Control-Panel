@@ -223,6 +223,7 @@ namespace ConditioningControlPanel.Avalonia
         }
 
         [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
         [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
         [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
@@ -298,6 +299,27 @@ namespace ConditioningControlPanel.Avalonia
                         Check((ex & (Win32Overlay.WsExTransparent | Win32Overlay.WsExNoActivate)) == 0 && (ex & Win32Overlay.OverlayBits) == Win32Overlay.OverlayBits,
                             "SetClickThrough(false) clears TRANSPARENT|NOACTIVATE, keeps LAYERED|TOOLWINDOW");
                     }
+                    // Two flips through the public entry point, even on a one-monitor runner.
+                    // Reading GW_HWNDPREV proves adjacency, not just the TOPMOST style bit.
+                    var first = overlays[0];
+                    var second = new Window { ShowActivated = false, ShowInTaskbar = false, Topmost = true };
+                    try
+                    {
+                        second.Show();
+                        var secondHwnd = second.TryGetPlatformHandle()!.Handle;
+                        var foreground = GetForegroundWindow();
+                        GetWindowRect(first.Hwnd, out var beforeFirst);
+                        GetWindowRect(secondHwnd, out var beforeSecond);
+                        Check(X11Overlay.RestackAbove(first.Window, second), "RestackAbove first over second");
+                        Check(Win32Overlay.GetWindow(secondHwnd, 3) == first.Hwnd, "first directly above second");
+                        Check(X11Overlay.RestackAbove(second, first.Window), "RestackAbove second over first");
+                        Check(Win32Overlay.GetWindow(first.Hwnd, 3) == secondHwnd, "second directly above first");
+                        GetWindowRect(first.Hwnd, out var afterFirst);
+                        GetWindowRect(secondHwnd, out var afterSecond);
+                        Check(beforeFirst == afterFirst && beforeSecond == afterSecond, "restacking preserves geometry");
+                        Check(GetForegroundWindow() == foreground, "restacking preserves foreground");
+                    }
+                    finally { second.Close(); }
                     // Native read-back for the field's actual Place path, not Window.Topmost.
                     // WPF ChaosFieldFxOverlay.cs:162; ChaosWindowZ.cs:35,47-53.
                     bool savedPin = CoreSettings.Current.ChaosPinOnTop;

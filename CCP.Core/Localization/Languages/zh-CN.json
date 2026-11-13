@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "初次品尝",
+  "chaos_bonus_first_snap": "初次弹响",
+  "chaos_bonus_first_whisper": "初次低语",
+  "chaos_bonus_first_yes": "初次答应",
+  "chaos_bonus_first_play": "初次玩耍",
   "media_drop_player_error_title": "无法打开播放器",
   "media_drop_editor_error_title": "无法打开编辑器",
   "media_drop_player_error_fmt": "无法打开 Deeper Player: {0}: {1}",
@@ -8950,6 +8955,7 @@
   "chaos_expiry_label": "消散",
   "chaos_expiry_halved": "💨 {0}消散了…连击减半至 x{1}",
   "chaos_expiry_gone": "💨 {0}消散了",
+  "chaos_aftermath_event": "⚡ 余波：空气仍在噼啪作响",
   "chaos_expiry_name_lucky": "幸运泡泡",
   "chaos_expiry_name_flash": "闪光",
   "chaos_expiry_name_subliminal": "潜意识",

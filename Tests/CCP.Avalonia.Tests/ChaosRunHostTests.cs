@@ -36,6 +36,41 @@ public sealed class ChaosRunHostTests
 
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
+    // WPF ChaosModeService.cs:371, :378: current config and run-state magnet sampled at spawn (includes #3500).
+    [Theory]
+    [InlineData("flash", false)]
+    [InlineData("pink", true)]
+    public async Task Run_spawns_sample_hitbox_settings_and_magnet_state(string variant, bool live)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                var cfg = Cfg();
+                cfg.EnabledVariants = new() { variant };
+                cfg.HitboxScale = 1.25;
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.State!.MagnetEnabled = true;
+                ChaosRunHost.SpawnTick();
+                var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Spec.IsPrism);
+                Assert.Equal(live, b.Spec!.IsLive);
+                Assert.Equal(System.Math.Round(b.Size * (live ? 1.75 : 1.25)), b.HitSize);
+                Assert.Equal(b.Spec.SizePx, b.Size);
+                ChaosRunHost.State!.Config.HitboxScale = 2;
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.SpawnTick();
+                b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Spec.IsPrism);
+                Assert.Equal(System.Math.Round(b.Size * 2), b.HitSize);
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
@@ -489,7 +524,7 @@ public sealed class ChaosRunHostTests
                 Assert.Equal((1, 0), (treats, snaps));
                 BubbleOverlay.StepPlayerRipples();
                 Assert.Equal((1, 1), (treats, snaps));
-                Assert.True(live.Deflating);
+                Assert.True(live.Popping && !live.Deflating);   // a swept snap bursts (WPF Pop)
                 Assert.False(excluded.Popping);
                 BubbleOverlay.StepPlayerRipples();
                 BubbleOverlay.StepPlayerRipples();
@@ -691,6 +726,7 @@ public sealed class ChaosRunHostTests
     public Task First_descent_deals_one_scripted_draft_after_the_threat_or_fallback(bool snapped) => WithFreshRun(() =>
     {
         ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        ChaosMeta.Save();   // the boot-error fallback loads the save before routing
         var web = new GameWindow(GameWindow.Games[GameWindow.DtrhId]); web.Show();
         web.HandleMessage("{\"type\":\"boot-error\"}");
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();

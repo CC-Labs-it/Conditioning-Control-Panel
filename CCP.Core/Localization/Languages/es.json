@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "primer sabor",
+  "chaos_bonus_first_snap": "primer chasquido",
+  "chaos_bonus_first_whisper": "primer susurro",
+  "chaos_bonus_first_yes": "primer sí",
+  "chaos_bonus_first_play": "primer juego",
   "media_drop_player_error_title": "No se pudo abrir el reproductor",
   "media_drop_editor_error_title": "No se pudo abrir el editor",
   "media_drop_player_error_fmt": "No se pudo abrir Deeper Player: {0}: {1}",
@@ -8445,6 +8450,7 @@
   "chaos_expiry_label": "DESVANECIDA",
   "chaos_expiry_halved": "💨 {0} se desvaneció… racha reducida a x{1}",
   "chaos_expiry_gone": "💨 {0} se desvaneció",
+  "chaos_aftermath_event": "⚡ secuela: el aire aún chisporrotea",
   "chaos_expiry_name_lucky": "burbuja de la suerte",
   "chaos_expiry_name_flash": "destello",
   "chaos_expiry_name_subliminal": "subliminal",

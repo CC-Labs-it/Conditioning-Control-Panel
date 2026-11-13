@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "premier goût",
+  "chaos_bonus_first_snap": "premier claquement",
+  "chaos_bonus_first_whisper": "premier murmure",
+  "chaos_bonus_first_yes": "premier oui",
+  "chaos_bonus_first_play": "premier jeu",
   "media_drop_player_error_title": "Échec de l’ouverture du lecteur",
   "media_drop_editor_error_title": "Échec de l’ouverture de l’éditeur",
   "media_drop_player_error_fmt": "Impossible d’ouvrir Deeper Player : {0} : {1}",
@@ -8445,6 +8450,7 @@
   "chaos_expiry_label": "DISPARUE",
   "chaos_expiry_halved": "💨 {0} disparaît… série réduite à x{1}",
   "chaos_expiry_gone": "💨 {0} a disparu",
+  "chaos_aftermath_event": "⚡ rémanence : l’air crépite encore",
   "chaos_expiry_name_lucky": "bulle porte-bonheur",
   "chaos_expiry_name_flash": "flash",
   "chaos_expiry_name_subliminal": "subliminal",

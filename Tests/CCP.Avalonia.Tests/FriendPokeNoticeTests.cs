@@ -78,9 +78,11 @@ public sealed class FriendPokeNoticeTests
     {
         Platform();
         var (svc, _) = FriendsDrawerTests.Service();
-        var (world, anchor, active, service) = (FriendsLanding.World, FriendsLanding.Anchor, FriendsLanding.ActiveGameWindow, FriendsLanding.Service);
+        var (world, anchor, active, service, says) = (FriendsLanding.World, FriendsLanding.Anchor, FriendsLanding.ActiveGameWindow, FriendsLanding.Service, FriendsLanding.EmiSays);
         var bell = CoreSettings.Current.FriendNotificationsEnabled;
-        const string id = "00000000000000a2";
+        const string id = "00000000000000a2", gone = "00000000000000a3";
+        var clock = KnockCard.Clock;
+        var said = new System.Collections.Generic.List<(string Line, string Face)>();
         try
         {
             CoreSettings.Current.FriendNotificationsEnabled = false;
@@ -91,14 +93,28 @@ public sealed class FriendPokeNoticeTests
             FriendsLanding.Tick();
             FriendsLanding.Router!.OnDelivered(new InboxItem(id, SendKind.Poke, "u_on", "Mia", null, "hi", null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
             Assert.Null(FriendNotices.Current);
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + id);
+            // WPF FriendsLanding.cs:487: reopening a poke takes the arrival path, so the bell still holds it.
+            StartupLadder.Inbox.Open(row);
+            Assert.Null(FriendNotices.Current);
             Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + id);
+            // WPF FriendsLanding.cs:482-485: an expired row only gets Emi's too-late line.
+            FriendsLanding.EmiSays = (line, face) => said.Add((line, face));
+            FriendsLanding.Router!.OnDelivered(new InboxItem(gone, SendKind.Poke, "u_on", "Mia", null, "hi", null, null, null, DateTimeOffset.UtcNow.AddMinutes(-2), DateTimeOffset.UtcNow.AddMinutes(1)));
+            var late = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + gone);
+            KnockCard.Clock = () => DateTimeOffset.UtcNow.AddHours(1);
+            StartupLadder.Inbox.Open(late);
+            Assert.Null(FriendNotices.Current);
+            Assert.Equal((ConditioningControlPanel.Localization.Loc.Get("friends_land_too_late"), ";_;"), Assert.Single(said));
         }
         finally
         {
+            KnockCard.Clock = clock;
             FriendsLanding.Stop();
             FriendNotices.CloseAll();
             StartupLadder.Inbox.Remove("friends:" + id);
-            (FriendsLanding.World, FriendsLanding.Anchor, FriendsLanding.ActiveGameWindow, FriendsLanding.Service) = (world, anchor, active, service);
+            StartupLadder.Inbox.Remove("friends:" + gone);
+            (FriendsLanding.World, FriendsLanding.Anchor, FriendsLanding.ActiveGameWindow, FriendsLanding.Service, FriendsLanding.EmiSays) = (world, anchor, active, service, says);
             CoreSettings.Current.FriendNotificationsEnabled = bell;
         }
         await Task.CompletedTask;

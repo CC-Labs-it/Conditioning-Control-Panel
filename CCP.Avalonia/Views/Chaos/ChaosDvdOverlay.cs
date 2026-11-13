@@ -22,8 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// Motion remains in the primary work area. Core ChaosDvdFlock owns motion and fades.
     /// The frame subscription drops when the last logo retires; windows live until CloseActive.
     /// <para>The Porn DVD toy is launched by ChaosRunHost and pops chaos bubbles on contact.
-    /// Missing: Intrusive Thoughts caller, Spanker input, rabbit splitting,
-    /// and re-stacking above mandatory video.</para>
+    /// Intrusive Thoughts logos come from ChaosRunHost.LaunchThought; a capstone thought splits on a rabbit.
+    /// Missing: Spanker input and re-stacking above mandatory video.</para>
     /// </summary>
     internal static class ChaosDvdOverlay
     {
@@ -58,12 +58,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF Launch. Refused (logged, no window) where no composited click-through overlay exists.</summary>
         public static void Launch(Visual host, double durationSec, double speedMult, double scale, int count = 1,
-                                  string? text = null, int splitBounces = 0)
+                                  string? text = null, int splitBounces = 0, bool splitOnRabbit = false)
         {
             // WPF Launch (:98) always hands off to the UI thread.
             if (!Dispatcher.UIThread.CheckAccess())
             {
-                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces));
+                Dispatcher.UIThread.Post(() => Launch(host, durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit));
                 return;
             }
             try
@@ -74,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     return;
                 }
                 if (!_initialized && !Create(host)) return;
-                foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces)) AddLabel(l);
+                foreach (var l in Flock.Launch(durationSec, speedMult, scale, count, text, splitBounces, splitOnRabbit)) AddLabel(l);
                 EnsureLoop();
             }
             catch (Exception ex) { Log.Debug("ChaosDvdOverlay.Launch: {E}", ex.Message); }
@@ -99,6 +99,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Flock.Right = (wa.Right - stage.X) / k;
             Flock.Bottom = (wa.Bottom - stage.Y) / k;
             Flock.Measure = Measure;
+            // WPF ChaosDvdOverlay.cs:393-394: the capstone thought asks the field for a rabbit under its box.
+            Flock.RabbitContact = l => BubbleOverlay.AnyDarterIntersects(new Rect(_origin.X + l.X, _origin.Y + l.Y, l.W, l.H));
 
             _stage = stage;
             _scale = k;
@@ -231,6 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             if (f.BounceCue) PlaySfx("dvd_bounce", 0.35f);
             if (f.LaunchCue) PlaySfx("dvd_launch", 0.35f);
+            for (int i = 0; i < f.RabbitCues; i++) PlaySfx("dvd_bounce", 0.4f);   // WPF SplitInTwo :330
             if (!Flock.AnyActive) StopLoop();
             else EnsureLoop(); // a per-logo driver may have just retired and hidden
         }
@@ -260,6 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(CloseActive); return; }
             StopLoop();
             Flock.Clear();
+            Flock.RabbitContact = null;
             Labels.Clear();
             foreach (var logoWindow in LogoWindows.Values.Concat(Pool))
                 try { logoWindow.Close(); } catch (Exception ex) { Log.Debug("ChaosDvd close: {E}", ex.Message); }

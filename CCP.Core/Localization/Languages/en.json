@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "first taste",
+  "chaos_bonus_first_snap": "first snap",
+  "chaos_bonus_first_whisper": "first whisper",
+  "chaos_bonus_first_yes": "first yes",
+  "chaos_bonus_first_play": "first play",
   "media_drop_player_error_title": "Open Player failed",
   "media_drop_editor_error_title": "Open Editor failed",
   "media_drop_player_error_fmt": "Could not open Deeper Player: {0}: {1}",
@@ -9188,6 +9193,7 @@
   "chaos_expiry_label": "FADED",
   "chaos_expiry_halved": "💨 {0} faded… streak halved to x{1}",
   "chaos_expiry_gone": "💨 {0} faded away",
+  "chaos_aftermath_event": "⚡ aftermath: the air still crackles",
   "chaos_expiry_name_lucky": "lucky bubble",
   "chaos_expiry_name_flash": "flash",
   "chaos_expiry_name_subliminal": "subliminal",

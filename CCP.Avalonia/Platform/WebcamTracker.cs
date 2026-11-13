@@ -100,8 +100,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return Open(index, OperatingSystem.IsLinux(), OperatingSystem.IsWindows());
         }
 
+        /// <summary>A backend opened the device during the last Open but no usable frame arrived.
+        /// WPF WebcamTrackingService.cs:1540-1556 reads that as CameraInUse, not CameraDenied.</summary>
+        internal bool AnyOpened { get; private set; }
+
         internal bool Open(int index, bool linux, bool windows)
         {
+            AnyOpened = false;
             foreach (var attempt in Attempts(linux, windows))
             {
                 if (Abandoned()) return false;
@@ -110,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     candidate = Create(index, attempt.Api);
                     if (!candidate.IsOpened()) continue;
+                    AnyOpened = true;
                     if (attempt.Fourcc is { } f)
                         candidate.Set(VideoCaptureProperties.FourCC, VideoWriter.FourCC(f[0], f[1], f[2], f[3]));
                     candidate.Set(VideoCaptureProperties.FrameWidth, 640);
@@ -194,6 +200,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Tests swap in a fake; the app captures through OpenCV.</summary>
         internal static Func<IFrameSource> SourceFactory = () => new OpenCvFrameSource();
 
+        /// <summary>WPF WebcamTrackingService.cs:1540-1556: a device that opened but gave no usable
+        /// frame reads as in use; Open false on every backend reads as denied.</summary>
+        internal static WebcamTrackingState FailedOpenState(IFrameSource source) =>
+            source is OpenCvFrameSource { AnyOpened: true } ? WebcamTrackingState.CameraInUse : WebcamTrackingState.CameraDenied;
+
         internal static string ModelDir = Path.Combine(AppContext.BaseDirectory, "Resources", "Models");
 
         public event Action? OnBlink;
@@ -226,6 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void RaiseGazeSideForTest(GazeSide side) => OnGazeSide?.Invoke(side);
         internal void RaiseMouthForTest() => OnMouthOpen?.Invoke();
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
+        internal void RaiseGazeForTest(double x, double y) => OnGazeMove?.Invoke(new ScreenPoint(x, y));
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
         public event Action<ScreenPoint>? OnGazeMove;
         public event Action<ScreenPoint>? OnLongStare;
@@ -367,7 +379,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 try
                 {
                     opened = run.Source.Open();
-                    if (!opened) failureState = WebcamTrackingState.CameraDenied; // WPF Open returned false on every backend
+                    if (!opened) failureState = FailedOpenState(run.Source);
                 }
                 catch (UnauthorizedAccessException ex)
                 {

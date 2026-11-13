@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "первый вкус",
+  "chaos_bonus_first_snap": "первый щелчок",
+  "chaos_bonus_first_whisper": "первый шёпот",
+  "chaos_bonus_first_yes": "первое да",
+  "chaos_bonus_first_play": "первая игра",
   "media_drop_player_error_title": "Не удалось открыть проигрыватель",
   "media_drop_editor_error_title": "Не удалось открыть редактор",
   "media_drop_player_error_fmt": "Не удалось открыть Deeper Player: {0}: {1}",
@@ -8445,6 +8450,7 @@
   "chaos_expiry_label": "ИСЧЕЗ",
   "chaos_expiry_halved": "💨 {0} исчезает… серия сокращена до x{1}",
   "chaos_expiry_gone": "💨 {0} исчезает",
+  "chaos_aftermath_event": "⚡ последствие: воздух ещё потрескивает",
   "chaos_expiry_name_lucky": "счастливый пузырь",
   "chaos_expiry_name_flash": "вспышка",
   "chaos_expiry_name_subliminal": "сублиминал",

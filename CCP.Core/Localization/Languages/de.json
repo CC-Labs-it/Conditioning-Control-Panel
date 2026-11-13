@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "erster Geschmack",
+  "chaos_bonus_first_snap": "erstes Schnappen",
+  "chaos_bonus_first_whisper": "erstes Flüstern",
+  "chaos_bonus_first_yes": "erstes Ja",
+  "chaos_bonus_first_play": "erstes Spiel",
   "media_drop_player_error_title": "Player konnte nicht geöffnet werden",
   "media_drop_editor_error_title": "Editor konnte nicht geöffnet werden",
   "media_drop_player_error_fmt": "Deeper Player konnte nicht geöffnet werden: {0}: {1}",
@@ -8445,6 +8450,7 @@
   "chaos_expiry_label": "VERBLASST",
   "chaos_expiry_halved": "💨 {0} verblasst… Serie halbiert auf x{1}",
   "chaos_expiry_gone": "💨 {0} ist verblasst",
+  "chaos_aftermath_event": "⚡ Nachwirkung: die Luft knistert noch",
   "chaos_expiry_name_lucky": "Glücksblase",
   "chaos_expiry_name_flash": "Blitz",
   "chaos_expiry_name_subliminal": "Subliminal",

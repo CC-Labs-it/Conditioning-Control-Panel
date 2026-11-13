@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -55,9 +56,11 @@ public sealed class ChaosBoonBarLiveTests
                 else
                 {
                     Assert.Equal(boon.Id, Assert.Single(state.RunPickTiles).Id);
-                    // WPF ChaosModeService.cs:434: authored announcement text, kind and art key.
+                    // WPF ChaosModeService.cs:434: authored announcement text, kind and art key; the
+                    // diamond prefix is a Fluent icon in the text fallback, not text (#3528; see
+                    // ChaosAnnouncerOverlayTests.Mantra_text_fallback_renders_a_diamond_icon).
                     var announcement = Assert.IsType<ChaosAnnouncement>(ChaosAnnouncerOverlay.Active?.Current);
-                    Assert.Equal(($"◈ {boon.Name}", ChaosAnnounceKind.Mantra, boon.Id),
+                    Assert.Equal((boon.Name, ChaosAnnounceKind.Mantra, boon.Id),
                         (announcement.Text, announcement.Kind, announcement.ArtKey));
                 }
             }

@@ -836,6 +836,50 @@
     </Style>
   </ControlTheme>
 
+  <!-- Inputs.xaml:441-469: retain Fluent's scrolling and item presenter while replacing
+       the surface. Local ContextMenu properties and themes retain precedence. -->
+  <ControlTheme x:Key="InputContextMenuTheme" TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="4"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MaxWidth" Value="Infinity"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ContextMenu">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ScrollViewer Theme="{StaticResource FluentMenuScrollViewer}"
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"
+                            KeyboardNavigation.TabNavigation="Continue" Grid.IsSharedSizeScope="True"/>
+          </ScrollViewer>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:695-709: the keyed menu divider. Standalone and local styles stay separate. -->
+  <ControlTheme x:Key="InputSeparatorTheme" TargetType="Separator">
+    <Setter Property="Background" Value="{DynamicResource GlassBorderBrush}"/>
+    <Setter Property="Height" Value="1"/>
+    <Setter Property="Margin" Value="6,4"/>
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Separator">
+        <Border Background="{TemplateBinding Background}" Height="{TemplateBinding Height}"/>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:675-688: implicit standalone divider. -->
+  <ControlTheme x:Key="InputStandaloneSeparatorTheme" TargetType="Separator" BasedOn="{StaticResource InputSeparatorTheme}">
+    <Setter Property="Margin" Value="0,6"/>
+  </ControlTheme>
+
   <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxTheme}"/>
 
   <!-- MainWindow.xaml:280. The WPF template replaced wholesale, and so does this one: a

@@ -540,7 +540,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerMultiplication: the children stay on the parent's screen, play no
         /// sound and spawn 100 ms apart; a CloseAll in between drops them.</summary>
-        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
+        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration) =>
+            await SpawnChildrenAsync(parent, count, lifetime, hydraGeneration);
+
+        internal static async Task SpawnChildrenAsync(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
         {
             if (_closed || parent.SpawnScreen is not { } screen) return;
             var generation = _generation;

@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "primo assaggio",
+  "chaos_bonus_first_snap": "primo schiocco",
+  "chaos_bonus_first_whisper": "primo sussurro",
+  "chaos_bonus_first_yes": "primo sì",
+  "chaos_bonus_first_play": "primo gioco",
   "media_drop_player_error_title": "Impossibile aprire il lettore",
   "media_drop_editor_error_title": "Impossibile aprire l’editor",
   "media_drop_player_error_fmt": "Impossibile aprire Deeper Player: {0}: {1}",
@@ -9185,6 +9190,7 @@
   "chaos_expiry_label": "SVANITA",
   "chaos_expiry_halved": "💨 {0} è svanita… serie dimezzata a x{1}",
   "chaos_expiry_gone": "💨 {0} è svanita",
+  "chaos_aftermath_event": "⚡ strascico: l’aria crepita ancora",
   "chaos_expiry_name_lucky": "bolla fortunata",
   "chaos_expiry_name_flash": "flash",
   "chaos_expiry_name_subliminal": "subliminale",
