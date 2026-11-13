@@ -83,6 +83,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
+                StopLobby();
+                CancelLobbyClaim();
+                _lobby?.Dispose();
                 CoreMods.ModChanged -= OnModChanged;
                 PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
@@ -91,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Property != IsVisibleProperty) return;
                 if (IsVisible) OnShown();
-                else _statusTimer.Stop();
+                else { _statusTimer.Stop(); StopLobby(); }
             };
             BuildTiles();
             HookVeil();
@@ -113,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshStatus();
                 RefreshStats();
                 _statusTimer.Start();
+                StartLobby();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] OnShown failed"); }
         }
@@ -257,10 +261,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF LauncherHost.OpenPanel: the launcher hides, the panel comes up, then <paramref name="then"/>.</summary>
         internal void OpenPanel(Action<MainShellWindow>? then = null)
         {
+            if (MainShellWindow.LockdownActive) return;
             var panel = Panel;
             if (panel == null) { Log.Warning("[Launcher] OpenPanel with no main window"); return; }
             AfterExitBeat(() =>
             {
+                if (MainShellWindow.LockdownActive) return;
                 // WPF LauncherHost.cs:266 releases on panel open; a throw while showing must not
                 // leave passive offers parked in the inbox for the rest of the run.
                 try { Hide(); panel.ShowFromLauncher(); }
@@ -569,7 +575,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// that refused leaves the launcher where it is.</summary>
         private void LaunchGameWindow(string id)
         {
-            var game = Games.GameWindow.Launch(id);
+            HandoffGame(Games.GameWindow.Launch(id), id);
+        }
+
+        private void HandoffGame(Window? game, string id)
+        {
             if (game == null) return;
             AfterExitBeat(() =>
             {

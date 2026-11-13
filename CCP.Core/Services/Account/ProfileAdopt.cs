@@ -160,8 +160,8 @@ namespace ConditioningControlPanel.Services
         /// The <c>/v2/user/sync</c> response: conditioning minutes take-higher, then user level/xp/season
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
         /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
-        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), recap or
-        /// SeasonResetPending on level_reset - add each with its feature. Does not save.
+        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe) or
+        /// SeasonResetPending on level_reset. Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
@@ -175,6 +175,7 @@ namespace ConditioningControlPanel.Services
                 Log.Information("V2 Sync: season key advanced {Old} -> {New}", settings.CurrentSeason ?? "(none)", user.CurrentSeason);
                 settings.CurrentSeason = user.CurrentSeason;
                 ClearXpWatermark(settings, "season rollover");
+                SeasonAdvanced?.Invoke(settings);
             }
             if (response["level_reset"]?.Type == JTokenType.Boolean && response.Value<bool>("level_reset"))
             {
@@ -231,6 +232,7 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(keepSeason) ? "(none)" : keepSeason, user.CurrentSeason);
                 settings.CurrentSeason = user.CurrentSeason;
                 ClearXpWatermark(settings, "season rollover (read-before-write)");
+                SeasonAdvanced?.Invoke(settings);
             }
             var scopedSeason = settings.CurrentSeason ?? string.Empty;
             if (string.Equals(user.CurrentSeason ?? string.Empty, scopedSeason, StringComparison.Ordinal))
@@ -241,6 +243,9 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);
             return seasonAdvances;
         }
+        /// <summary>A confirmed server season advanced during profile sync.</summary>
+        public static event Action<AppSettings>? SeasonAdvanced;
+
         /// <summary>Raised after a cloud merge lifted <see cref="AppSettings.TotalConditioningMinutes"/>. The head
         /// re-baselines its FeatureDayLog here, as WPF ProfileSyncService.cs:2187 does, so the gain is not credited
         /// to today (the "1,000-minute day" bug).</summary>

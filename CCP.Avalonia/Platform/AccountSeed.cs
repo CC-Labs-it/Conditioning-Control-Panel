@@ -147,7 +147,6 @@ internal static class AccountSeed
     /// WPF ProfileSyncService.LoadProfileAsync's V2 read-before-write (ReadServerProfileBeforePushAsync), READ-ONLY:
     /// GET /v2/user/profile, follow the curve epoch, offer a tier rise, adopt take-higher (Core <see cref="ProfileAdopt"/>).
     /// Then, as WPF LoadProfileAsync does after the read, the heartbeat and the push (<see cref="Sync"/>; unseeded = none).
-    /// ponytail: no season-recap nudge - the next layer.
     /// </summary>
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)
@@ -351,6 +350,14 @@ internal static class AccountSeed
     {
         if (CoreAccount.HasLabAccess) return 2;
         return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
+    }
+
+    // A queued heartbeat can arrive after logout or a new sign-in, even for the same id.
+    internal static void ApplyHeartbeatTier(string id, string? token, string body)
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || s.UnifiedId != id || string.IsNullOrEmpty(token) || s.AuthToken != token) return;
+        ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat");
     }
 
     /// <summary>WPF EntitlementTierSync.ApplyOnUi: THE one server tier reading path of this head, from the

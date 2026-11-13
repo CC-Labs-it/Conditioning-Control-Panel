@@ -11,6 +11,55 @@ public class SeasonRolloverTests
         Assert.Null(typeof(AppSettings).Assembly.GetType("ConditioningControlPanel.Services.SeasonRecapService"));
     }
 
+    [Fact]
+    public void BookkeepingRequiresConfirmedSeasonAndClearsPendingOnlyWhenConfirmed()
+    {
+        var s = new AppSettings { CurrentSeason = "bad", SeasonResetPending = true };
+        Assert.False(SeasonRollover.UpdateBookkeeping(s));
+        Assert.True(s.SeasonResetPending);
+        s.CurrentSeason = "2026-08";
+        s.LastSeasonResetSeen = "2026-08";
+        Assert.True(SeasonRollover.UpdateBookkeeping(s));
+        Assert.False(s.SeasonResetPending);
+        Assert.False(SeasonRollover.UpdateBookkeeping(s));
+    }
+
+    [Fact]
+    public void BookkeepingInitializesAndRollsOnlyAfterSnapshotSave()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-07" };
+        Assert.True(SeasonRollover.UpdateBookkeeping(s));
+        Assert.Equal("2026-07", s.SeasonStatsSeason);
+        s.CurrentSeason = "2026-08";
+        s.SeasonSessionsStarted = 3;
+        Assert.False(SeasonRollover.UpdateBookkeeping(s, _ => false));
+        Assert.Equal("2026-07", s.LastSeasonResetSeen);
+        Assert.True(SeasonRollover.UpdateBookkeeping(s, snap => snap.SessionCount == 3));
+        Assert.Equal("2026-08", s.SeasonStatsSeason);
+        Assert.Equal("2026-08", s.LastSeasonResetSeen);
+        Assert.Equal(0, s.SeasonSessionsStarted);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 17)]
+    [InlineData(4, 100, 4)]
+    public void SnapshotKeepsHeadValuesAndPrefersSeasonRank(int rank, int total, int expectedPercentile)
+    {
+        var s = new AppSettings { CurrentSeason = "2098-08", SeasonStatsSeason = "2098-07",
+            SeasonSessionsStarted = 3, SeasonPeakRank = rank, SeasonPeakRankTotal = total };
+        SeasonRecapSnapshot? saved = null;
+        Assert.True(SeasonRollover.UpdateBookkeeping(s, snap => { saved = snap; return true; },
+            handle: "Tester", isSupporter: true, lifetimePointsSpent: 12345, fallbackPercentile: 17));
+        Assert.NotNull(saved);
+        Assert.Multiple(
+            () => Assert.Equal("Tester", saved.Handle),
+            () => Assert.True(saved.IsSupporter),
+            () => Assert.Equal(12345, saved.LifetimePointsSpent),
+            () => Assert.Equal(expectedPercentile, saved.Percentile),
+            () => Assert.Equal(3, saved.SessionCount),
+            () => Assert.Equal(0, s.SeasonSessionsStarted));
+    }
+
     [Theory]
     [InlineData(null)] [InlineData("bad")] [InlineData("2026-06")] [InlineData("2026-07")]
     public void RequiresConfirmedForwardKey(string? key)

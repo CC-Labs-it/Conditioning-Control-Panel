@@ -38,6 +38,7 @@ public sealed class DeeperPlayerWebcamTests
     {
         public int Volume { get; set; }
         public double DurationSeconds => 90;
+        public double? PlaybackDurationSeconds => null;
         public double PositionSeconds { get; set; }
         public void Play() { }
         public void Pause() { }
