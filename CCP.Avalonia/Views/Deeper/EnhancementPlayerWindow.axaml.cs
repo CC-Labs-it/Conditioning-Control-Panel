@@ -119,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         genuinely has no counterpart is ZoomFactor, AddScriptToExecuteOnDocumentCreatedAsync
     ///         and ContainsFullScreenElementChanged. Zoom stays stubbed; fullscreen entry reads the engine's
     ///         own signal through the platform handle (Platform/WebFullscreenSignal), exit uses page messages.</item>
-    ///   <item>Dark title bars remain unported. Fullscreen uses Avalonia windows.</item>
+    ///   <item>Dark title bars are tinted globally by Win32Window on Windows. Fullscreen uses Avalonia windows.</item>
     /// </list>
     /// </summary>
     public partial class EnhancementPlayerWindow : Window
@@ -231,10 +231,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             AvaloniaXamlLoader.Load(this);
             InitializeWindowBounds();
 
-            // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
-            // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
-            // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
-            // window its native move/resize/maximize for a colour. Left native and untinted.
+            // Windows title bars are tinted globally by Win32Window (WPF App.xaml.cs:2075); Linux keeps native decoration.
+            // RestoreOwnerOnClose:
             Opened += (_, _) => OpenPlayers.Add(this);
             Closed += (_, _) => { OpenPlayers.Remove(this); try { (Owner as Window)?.Activate(); } catch { } };
             // WPF EnhancementPlayerWindow.xaml.cs:111-114: friends see "in Deeper" while the player is on
