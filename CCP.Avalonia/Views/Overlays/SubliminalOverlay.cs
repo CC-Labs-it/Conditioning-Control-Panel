@@ -111,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
-        public static void Show(Visual host, string text, int? opacity = null)
+        public static void Show(Visual host, string text, int? opacity = null, int? durationMs = null)
         {
             if (!X11Overlay.IsAvailable)
             {
@@ -126,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _visibleOwner = _drawingOwner;
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-            var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
+            var hold = Hold(s.SubliminalDuration, durationMs);
             var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
@@ -156,6 +156,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Run(alpha, hold);
             }
         }
+
+        internal static TimeSpan Hold(int frames, int? durationMs) => TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(frames, durationMs));
 
         /// <summary>Native focus request; tests substitute it without touching a desktop.</summary>
         internal static Action<Window> ActivateCard = w => RequestFocus(w, NativeFocus);
