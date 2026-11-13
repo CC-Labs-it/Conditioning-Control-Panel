@@ -92,9 +92,13 @@ public partial class ConversationPage : UserControl
     private void Stop_Click(object? sender, RoutedEventArgs e) => Vm.Stop();
     private async void New_Click(object? sender, RoutedEventArgs e)
     {
-        if (TopLevel.GetTopLevel(this) is Window owner
-            && await MessageDialog.ConfirmAsync(owner, Loc.Get("companion_v2_new"), Loc.Get("companion_v2_history_note")))
-            Vm.NewChat();
+        try
+        {
+            if (TopLevel.GetTopLevel(this) is Window owner
+                && await MessageDialog.ConfirmAsync(owner, Loc.Get("companion_v2_new"), Loc.Get("companion_v2_history_note")))
+                Vm.NewChat();
+        }
+        catch (Exception ex) { Serilog.Log.Warning(ex, "Companion new chat failed"); }
     }
     private async void Copy_Click(object? sender, RoutedEventArgs e)
     {
