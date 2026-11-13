@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    live in ChaosHubWindow.Reveals.cs. Reveal visibility clamps and
     ///    the CCP_CHAOS_DEBUG strip remain unported.
     ///  - The menu flipbook and motion live in ChaosHubWindow.Menu.cs. The Skia fog,
-    ///    per-frame glint masks and blooms, and NAudio menu music remain unported.
+    ///    per-frame glint masks and blooms remain unported; the menu music lives in ChaosHubWindow.Music.cs.
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
     ///    <c>MouseLeftButtonDown</c> -> <c>PointerPressed</c>; <c>StateChanged</c> ->
     ///    <c>GetObservable(WindowStateProperty)</c>; <c>ToolTip =</c> -> <c>ToolTip.SetTip</c>;
