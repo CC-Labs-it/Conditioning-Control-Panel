@@ -23,8 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (<see cref="X11Overlay.SetOpacity"/>), as SubliminalOverlay's, so a fade frame costs no re-render.
     /// The window is kept hidden between cues and closed on panic or shell teardown.</para>
     ///
-    /// <para>ponytail: no caller yet. WPF's only caller is Deeper's SpeakPromptSession (Persistent cue
-    /// mode, SpeakPromptSession.cs:172/196), which needs the Deeper runtime ported (deeper-core-c/d).</para>
+    /// <para>The Deeper speak session calls this for persistent cues (WPF SpeakPromptSession.cs:123/146).</para>
     /// </summary>
     internal sealed class SpeakCueOverlay : Window
     {
