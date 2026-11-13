@@ -59,7 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     ///   <item><c>SetWindowLongPtr(GWL_HWNDPARENT)</c> - native ownership, which is what glued the
     ///         tube directly above main in z-order - -> <see cref="X11Overlay.SetTransientFor"/>
     ///         (WM_TRANSIENT_FOR) while attached, plus <see cref="X11Overlay.RestackAbove"/> on open
-    ///         and when main activates (ApplyStacking). Both return false off X11.</item>
+    ///         and when main activates (ApplyStacking). SetTransientFor is X11 only; RestackAbove also
+    ///         has a Win32 half (the sibling's predecessor, no activation).</item>
     ///   <item><c>SetWindowPos(SWP_FRAMECHANGED)</c>, <c>HwndSource.AddHook(WndProc)</c>,
     ///         <c>WindowInteropHelper</c>, <c>DisableProcessWindowsGhosting</c> - all dropped. They
     ///         exist to flush a LAYERED window's cached frame and to intercept WM_ messages; X11 has

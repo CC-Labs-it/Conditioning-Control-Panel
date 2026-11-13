@@ -59,9 +59,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Recover("heartbeat-silent");
         }
 
+        // WPF IntakeHostService.cs:1025: native death recovers even before page-ready. The one native
+        // watch is WebHost's (TrailerBrowserPolicy); the recovery is queued so the engine is never torn
+        // down inside its own native event stack, and a callback after close is dropped by Recover.
+        private void OnBrowserProcessFailed() => Dispatcher.UIThread.Post(() => Recover("process-failed"));
+
         /// <summary>WPF Recover: close, then relaunch once - windowed - carrying the duck choice.</summary>
         private void Recover(string reason)
         {
+            if (_closed) return;
             var retry = !RelaunchedOnce;
             Log.Warning("IntakeHost: recovery ({Reason}) - {Action}", reason, retry ? "relaunching once" : "giving up");
             Close();

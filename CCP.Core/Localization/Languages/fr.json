@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "premier goût",
+  "chaos_bonus_first_snap": "premier claquement",
+  "chaos_bonus_first_whisper": "premier murmure",
+  "chaos_bonus_first_yes": "premier oui",
+  "chaos_bonus_first_play": "premier jeu",
   "media_drop_player_error_title": "Échec de l’ouverture du lecteur",
   "media_drop_editor_error_title": "Échec de l’ouverture de l’éditeur",
   "media_drop_player_error_fmt": "Impossible d’ouvrir Deeper Player : {0} : {1}",

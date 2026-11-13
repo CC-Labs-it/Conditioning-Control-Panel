@@ -308,7 +308,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ? Loc.Get("label_wallpaper_folder_default")
                 : s.WallpaperSourceFolder;
 
-            TxtWallpaperCredit.IsVisible = global::ConditioningControlPanel.Services.Quiz.IntakeRun.RemoteMediaEnabled(s);
             ChkWallpaperKeep.IsChecked = s.WallpaperEnabled;
             // Clamp before assigning, like the other Takeover bars (#485).
             s.WallpaperPulseSeconds = Math.Clamp(s.WallpaperPulseSeconds,
