@@ -9,7 +9,7 @@ namespace ConditioningControlPanel.Services
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
     /// ponytail: HypnoTube,
-    /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
+    /// wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
     {

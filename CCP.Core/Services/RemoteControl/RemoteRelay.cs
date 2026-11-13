@@ -72,6 +72,8 @@ namespace ConditioningControlPanel.Services
 
         public Func<IEnumerable<Session>>? SessionsProvider { get; set; }
         public Func<SessionRunner?>? SessionRunnerProvider { get; set; }
+        /// <summary>The head resumes a session and returns a refusal, if any.</summary>
+        public Func<Func<bool>, string?>? ResumeSession { get; set; }
 
         public bool IsActive { get; private set; }
         /// <summary>WPF RemoteControlService.cs:377: session end starts Chaster RemoteGrace.</summary>
@@ -200,6 +202,7 @@ namespace ConditioningControlPanel.Services
         private void Cleanup(bool leashCut = false)
         {
             if (!IsActive) return;
+            Interlocked.Increment(ref _leaveGeneration); // cancel commands delayed past session end
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
@@ -367,7 +370,9 @@ namespace ConditioningControlPanel.Services
                 {
                     if (gen.Leave != Volatile.Read(ref _leaveGeneration)) return "the controller left";
                     if (gen.Panic != RemoteCommands.PanicGeneration) return "stopped by panic";
-                    try { return _execute(action, parameters); }
+                    try { return action == "resume_session" && ResumeSession is { } resume
+                        ? resume(() => gen.Leave == Volatile.Read(ref _leaveGeneration)
+                            && gen.Panic == RemoteCommands.PanicGeneration) : _execute(action, parameters); }
                     catch (Exception ex) { Log.Error(ex, "[RemoteControl] Error executing command: {Action}", action); return "error"; }
                 }, TimeSpan.FromSeconds(10));
                 reason = done ? refused : "timed out";

@@ -468,6 +468,30 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
+    public async Task Resume_routes_to_head_and_reports_panic()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        string? refusal = "panic";
+        var calls = 0;
+        r.ResumeSession = _ => { calls++; return refusal; };
+        await r.StartAsync("full");
+        Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"resume_session\"}]}");
+        await r.PollOnceAsync();
+        var status = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["last_executed"]!;
+        Assert.Equal("fail", (string?)status["status"]);
+        Assert.Equal("panic", (string?)status["reason"]);
+        Assert.Equal(1, calls);
+        Assert.Empty(_ran);
+        refusal = null;
+        Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"resume_session\"}]}");
+        await r.PollOnceAsync();
+        status = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["last_executed"]!;
+        Assert.Equal("ok", (string?)status["status"]);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public void Lockdown_refuses_only_enable_strict_lock()
     {
         Assert.Null(RemoteCommandGate.Screen("enable_strict_lock", lockdownActive: false));
