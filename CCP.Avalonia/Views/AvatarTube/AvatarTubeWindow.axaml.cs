@@ -21,6 +21,7 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -1716,8 +1717,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// history, memory) while UseCompanionBrain is on, its default, and takes the stateless call when
         /// it is off or the brain failed to build, with WPF's thinking bubble, double bounce and the asks
         /// offer after a brain reply. The "user talked" signal feeds the memory chat counter (App.UserMessageSent).
-        /// ponytail: still missing - SeasonRecapService.TrackFeature and the companion-chat
-        /// achievement listener on that signal (both head services with no Avalonia twin) and the
+        /// ponytail: still missing - the companion-chat achievement listener on that signal
+        /// and the
         /// enabled-phrases filter (App.CompanionPhrases).</para>
         /// </summary>
         internal async System.Threading.Tasks.Task SendChatAsync()
@@ -1732,6 +1733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtUserInput.Text = string.Empty;
             // WPF b248a7b91: Send closes the box. Click her or use the chat key for the next line.
             _inputPanel.IsVisible = false;
+            SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Companion, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
 
             var ai = App.Ai;
             var brain = App.Brain;   // decided once, up front, as WPF (ChatInput.cs:772)

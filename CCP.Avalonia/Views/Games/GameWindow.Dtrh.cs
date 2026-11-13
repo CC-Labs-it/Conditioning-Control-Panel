@@ -13,7 +13,7 @@
 // loom-*, favorites + asset-stats, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, fullscreen-set, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
-// tucking the panel to the tray, and SeasonRecap TrackFeature. WebHost has no process-failed signal;
+// tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
 using System;
 using System.IO;
@@ -109,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (_dtrhRunActive) _dtrhLastProgress = o;
                     return true;
                 case "run-started":
+                    SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Dtrh, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
                     _dtrhRunStartedUtc = DtrhUtcNow();
