@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             HookLinkComet();
+            InitializeCalendarFx();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
             SlowTick.Tick += (_, _) => RefreshHero();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
@@ -88,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Back on screen: a RaffleChanged missed while hidden may have dropped the card (another
             // account), so it repaints from PageRaffleCard, as WPF's OpenLadder does before it opens.
             if (on) PaintLadder();
+            if (!on) StopCalendarFx();
+            else RefreshCalendarLoops();
             if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
@@ -129,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();
-            if (booking.AppliedSeconds != 0) HeroTitle.Jolt(); // WPF :157 -> Fx.cs:676, the padlocks take a tug
+            if (booking.AppliedSeconds != 0) { NudgeCalendarSheet(); HeroTitle.Jolt(); } // WPF :157 -> Fx.cs:676, the padlocks take a tug
         });
 
         internal void Refresh()
