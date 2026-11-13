@@ -412,8 +412,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private DispatcherTimer? _collapseRecheck;
         private DispatcherTimer? _openDwell;
         private Point _lastPointer;
-        internal Func<PixelPoint?> ReadPointer = () => OperatingSystem.IsWindows()
-            ? Win32Overlay.CursorPosition() : X11Pointer.Read()?.At;
+        /// <summary>Tests replace the desktop pointer probe; null = the platform probe.</summary>
+        internal Func<PixelPoint?>? ReadPointer;
+        /// <summary>Tests: whether an X surface holds the pointer when <see cref="ReadPointer"/> is replaced.</summary>
+        internal bool XSurfaceHasPointerForTests = true;
+        internal static bool? WaylandOverride;
+        private readonly bool _wayland = WaylandOverride ?? (OperatingSystem.IsLinux() &&
+            (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) ||
+             string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)));
+
+        private PixelPoint? ReadDesktopPointer(out bool xSurfaceHasPointer)
+        {
+            xSurfaceHasPointer = true;
+            if (ReadPointer is { } read) { xSurfaceHasPointer = XSurfaceHasPointerForTests; return read(); }
+            if (OperatingSystem.IsWindows()) return Win32Overlay.CursorPosition();
+            return X11Pointer.Read(out xSurfaceHasPointer)?.At;
+        }
 
         // Opening is intent-gated: a brush-past on the way to a bubble near the edge shouldn't fling
         // the panel open. Hovering the strip ARMS a ~1s dwell; it expands only if the cursor is still
@@ -535,7 +549,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// flip can answer wrongly.</para>
         ///
         /// <para>Use the current desktop pointer where available. If it is unavailable, the
-        /// collapse timer waits for a fresh position instead of trusting popup-sensitive hit tests.</para>
+        /// collapse timer waits for a fresh position instead of trusting popup-sensitive hit tests.
+        /// On Wayland an X11 query keeps the last X position once a native surface takes the
+        /// pointer, and XWayland then reports no root child: that position is stale, so only the
+        /// window's own hover can hold the halo open (WPF has no twin; hand-ported from #4754).</para>
         /// </summary>
         internal bool CursorInHudGrace() => CursorInHudGrace(out _);
 
@@ -544,18 +561,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             positionKnown = false;
             try
             {
-                var screen = ReadPointer();
+                var screen = ReadDesktopPointer(out bool xSurface);
                 positionKnown = screen is not null;
                 Point? cursor = screen is { } position ? this.PointToClient(position) : null;
                 if (cursor is { } current) _lastPointer = current;
-                return CursorInGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                                     cursor, LEAVE_GRACE_MARGIN_DIP, _panel.IsPointerOver);
+                return CursorInHudGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
+                                        cursor, _panel.IsPointerOver, _wayland, xSurface);
             }
             catch
             {
                 return true;
             }
         }
+
+        /// <summary>Pure half of <see cref="CursorInHudGrace()"/>: on Wayland a position no X surface
+        /// confirms is stale and never counts; the window's own hover still does.</summary>
+        internal static bool CursorInHudGrace(Rect panel, Rect strip, Point? cursor, bool over,
+            bool wayland = false, bool xSurfaceHasPointer = true) =>
+            CursorInGrace(panel, strip, wayland && !xSurfaceHasPointer ? null : cursor, LEAVE_GRACE_MARGIN_DIP, over);
 
         /// <summary>An element's bounds in this window's coordinate space, honouring render transforms
         /// (the panel rides a TranslateTransform). An empty rect when the element is not laid out.

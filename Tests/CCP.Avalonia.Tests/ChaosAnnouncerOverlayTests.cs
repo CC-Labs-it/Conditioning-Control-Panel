@@ -9,11 +9,14 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 
 namespace CCP.Avalonia.Tests;
 
@@ -213,6 +216,26 @@ public sealed class ChaosAnnouncerOverlayTests
                 Assert.Equal(60, label.FontSize);
             }
             finally { File.Delete(path); }
+        });
+    }
+
+    [Fact]
+    public async Task Chaperone_text_fallback_renders_a_heart_icon()
+    {
+        await Run(_ =>
+        {
+            var missingArt = "chaperone-missing-" + Guid.NewGuid().ToString("N");
+            Assert.Null(ChaosEffectBannerOverlay.ResolveArt(missingArt));
+            ChaosAnnouncerOverlay.Announce($"{IconMap.Chaperone} THE CHAPERONE: its little escort first",
+                ChaosAnnounceKind.Item, missingArt, "its little escort first");
+            var host = Assert.IsType<Grid>(ChaosAnnouncerOverlay.Active!.Content);
+            var anchor = Assert.IsType<Grid>(Assert.Single(host.Children));
+            var panel = Assert.IsType<StackPanel>(Assert.Single(anchor.Children));
+            var icon = Assert.IsType<IconGlyph>(panel.Children[0]);
+            Assert.Equal(IconKind.Heart, icon.Kind);
+            Assert.Equal(IconVariant.Filled, icon.Variant);
+            var label = Assert.IsType<OutlinedTextBlock>(panel.Children[1]);
+            Assert.Equal("THE CHAPERONE: ITS LITTLE ESCORT FIRST", label.Text);
         });
     }
 
