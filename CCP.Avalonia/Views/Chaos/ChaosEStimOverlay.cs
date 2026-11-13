@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: Strike/Arm callers wait for charged-pop conduction and e_stim toy effects.
-// The bubble field and toy buttons exist, but their e-stim effects do not. Device output is untouched.
+// Charged player pops (BubbleOverlay.EStimClick) and the e_stim toy (ChaosRunHost.Toys) call this overlay.
+// Free synergy discharges are not ported yet. The e-stim DEVICE output is untouched.
 
 using System;
 using System.Collections.Generic;

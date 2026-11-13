@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "geladen - deine nächsten {0} Treffer leiten",
+  "Chaos_EStim_Chain": "geladen - deine nächsten {0} Treffer lösen Ketten aus",
+  "Chaos_EStim_Arc": "der Strom springt über (noch {0})",
+  "Chaos_EStim_Spent": "die Ladung ist verbraucht",
   "deeper_editor_haptic_test_no_device": "Kein Haptikgerät verbunden. Verbinde zum Testen ein Gerät in den Einstellungen.",
   "deeper_editor_haptic_test_row_off": "Die Deeper-Zeile ist im Haptik-Tab ausgeschaltet. Schalte sie für den Test ein.",
   "deeper_editor_haptic_test_premium": "Für den Gerätetest ist Premium-Zugang erforderlich.",

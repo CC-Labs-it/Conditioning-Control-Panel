@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "carga lista - tus próximos {0} estallidos conducen",
+  "Chaos_EStim_Chain": "carga lista - tus próximos {0} estallidos crean cadenas",
+  "Chaos_EStim_Arc": "salta la corriente (quedan {0})",
+  "Chaos_EStim_Spent": "carga agotada",
   "deeper_editor_haptic_test_no_device": "No hay ningún dispositivo háptico conectado. Conecta uno en Ajustes para probarlo.",
   "deeper_editor_haptic_test_row_off": "La fila Deeper está desactivada en la pestaña Háptica. Actívala para probar los patrones.",
   "deeper_editor_haptic_test_premium": "La prueba del dispositivo requiere acceso Premium.",

@@ -1,4 +1,8 @@
 {
+  "Chaos_EStim_Conduct": "charged - your next {0} pops conduct",
+  "Chaos_EStim_Chain": "charged - your next {0} pops chain-react",
+  "Chaos_EStim_Arc": "the current arcs ({0} left)",
+  "Chaos_EStim_Spent": "the charge is spent",
   "webcam_drift_unavailable": "Global clicks are unavailable on this desktop. Auto drift correction is off.",
   "scheduler_started_title": "Scheduler Active",
   "scheduler_started_body": "Session auto-started based on schedule.",
