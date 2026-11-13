@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using Avalonia;
@@ -28,10 +30,19 @@ public partial class AvailableSubjectsTabView : UserControl
     private LobbyPoll? _lobby;
     private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
+    // Stable sources: a show, an entitlement refresh or a poll with unchanged data rebuilds nothing,
+    // and a changed poll replaces only the card slots whose values differ (perf: tab switch).
+    private readonly ObservableCollection<LobbyCardView> _open = new(), _playing = new(), _friends = new();
+    private LobbyGates? _paintedGates;
+    private string? _paintedLanguage;
+    private bool _paintedError;
 
     public AvailableSubjectsTabView()
     {
         InitializeComponent();
+        AvailableSubjectsList.ItemsSource = _open;
+        LobbyPlayingList.ItemsSource = _playing;
+        LobbyFriendsList.ItemsSource = _friends;
         Repaint();
         InitializeSubjectsMotion();
         SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
@@ -117,10 +128,16 @@ public partial class AvailableSubjectsTabView : UserControl
 
     internal void PaintSnapshot(LobbySnapshot snapshot, LobbyGates gates, bool error = false)
     {
-        _snapshot = snapshot;
-        AvailableSubjectsList.ItemsSource = snapshot.Open.Select(r => new LobbyCardView(r, gates)).ToList();
-        LobbyPlayingList.ItemsSource = snapshot.Playing.Select(r => new LobbyCardView(r, gates)).ToList();
-        LobbyFriendsList.ItemsSource = snapshot.Friends.Select(r => new LobbyCardView(r, gates)).ToList();
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        if (_paintedGates == gates && _paintedLanguage == language && _paintedError == error
+            && _snapshot.SignedIn == snapshot.SignedIn && _snapshot.Open.SequenceEqual(snapshot.Open)
+            && _snapshot.Playing.SequenceEqual(snapshot.Playing) && _snapshot.Friends.SequenceEqual(snapshot.Friends)) return;
+        // Copies: a caller may reuse a mutable list for its next snapshot.
+        _snapshot = snapshot with { Open = snapshot.Open.ToArray(), Playing = snapshot.Playing.ToArray(), Friends = snapshot.Friends.ToArray() };
+        _paintedGates = gates; _paintedLanguage = language; _paintedError = error;
+        UpdateCards(_open, snapshot.Open, gates);
+        UpdateCards(_playing, snapshot.Playing, gates);
+        UpdateCards(_friends, snapshot.Friends, gates);
         LobbyOpenCount.Text = snapshot.Open.Count.ToString(CultureInfo.InvariantCulture);
         LobbyPlayingCount.Text = snapshot.Playing.Count.ToString(CultureInfo.InvariantCulture);
         LobbyFriendsCount.Text = snapshot.Friends.Count.ToString(CultureInfo.InvariantCulture);
@@ -142,6 +159,17 @@ public partial class AvailableSubjectsTabView : UserControl
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
         // Goon doors and Remote claims remain part B.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private static void UpdateCards(ObservableCollection<LobbyCardView> cards, IReadOnlyList<LobbyRow> rows, LobbyGates gates)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var card = new LobbyCardView(rows[i], gates);
+            if (i == cards.Count) cards.Add(card);
+            else if (cards[i] != card) cards[i] = card;
+        }
+        while (cards.Count > rows.Count) cards.RemoveAt(cards.Count - 1);
     }
 
     private void BtnHostChess_Click(object? sender, RoutedEventArgs e)
@@ -169,7 +197,8 @@ public partial class AvailableSubjectsTabView : UserControl
     }
 }
 
-public sealed class LobbyCardView
+/// <summary>A record: value equality is what lets an unchanged row keep its slot and container.</summary>
+public sealed record LobbyCardView
 {
     public LobbyCardView(LobbyRow row, LobbyGates gates)
     {

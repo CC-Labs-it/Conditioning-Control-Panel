@@ -60,6 +60,7 @@ regression, missing reports, missing/extra tabs or invalid measurements. Tab key
 <tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>423.0 (ExclusivesTab)</td><td>171.4 (AchievementsTab; ExclusivesTab 108.7)</td><td>FAIL</td></tr>
 <tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
 <tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
+<tr><td>AvailableSubjectsTab switch median / p95 (ms)</td><td>LOCAL HEADLESS, not <code>--perf-bench</code>: 1.68 / 52.87 before, 1.61 / 5.72 after the card-reuse change (see ledger 2026-11-11)</td><td>2.49 / 26.08 at the handoff point (2026-11-11, before the card-reuse change; rerun pending)</td><td>15.96 / 23.38</td><td>PASS (p95 above WPF, inside the rule)</td></tr>
 </table>
 <h2 id="render-path">Render path on a GPU-less Windows machine</h2>
 <p>When every DXGI adapter is the Microsoft Basic Render Driver (WARP: vendor <code>0x1414</code> device <code>0x8C</code>, or
@@ -82,6 +83,13 @@ Artifact <code>perf-bench-linux</code>.</li>
 startup (info) Avalonia 5124 / WPF 4268 ms; working set 1172.4 / 1030.8 MB (FAIL); 12 of 48 tab rows FAIL: SettingsTab 99.7/18.4, ProgramsTab 64.3/31.1,
 EnhancementsTab 72.6/44.4, AvailableSubjectsTab 64.0/12.9, BlinkTrainerTab 65.1/24.3, <strong>ExclusivesTab 423.0/108.7 ms median</strong> (p95 also DiscordTab, RemoteControlTab).
 WPF missing-tab run exited 3 with no JSON. One run; report-only until three stable runs are reviewed. Artifact <code>perf-bench-windows</code>.</li>
+<li>2026-11-11, LOCAL Linux headless (Skia, <code>UseHeadlessDrawing=false</code>, uncommitted test harness, not <code>--perf-bench</code> and not comparable with the Windows rows), AvailableSubjectsTab only,
+200 switches per variant (3 × 40 cycles RemoteControl → AvailableSubjects → BambiTakeover, 4 × 20 cycles of the full <code>NavCheck.TabPanels</code> order), <code>ShowTab</code> + all dispatcher jobs + layout:
+before 1.68 ms median / 52.87 ms p95 (15 of 200 above 20 ms), after 1.61 / 5.72 (9 of 200). The view rebuilt its three lists three times per switch
+(visibility hook, <code>RefreshEntitlementVeils</code>, the posted <code>LobbyPoll.Changed</code>) and once on every other tab switch; it now rebuilds nothing when the data is unchanged.
+Every slow sample is Avalonia's <code>UiThreadRender</code> job, a whole-window software draw (about 50-65 ms, the same on RemoteControl, Subjects and Bambi, and unchanged when
+the Subjects fog, backgrounds or lobby columns are hidden) landing in the switch. The view's own work is under 0.1 ms, so the remaining tail is frame phase and shell-wide draw cost.
+The p95 shift sits at the 5% edge and is not a Windows result.</li>
 </ul>
 
 <script>
