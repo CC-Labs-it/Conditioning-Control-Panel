@@ -325,4 +325,50 @@ public sealed class InvitePanelTests
         finally { s.InviteGrantUntil = until; InvitePanel.CancelExpiry(); shell.Close(); }
         return Task.CompletedTask;
     });
+
+    /// <summary>WPF InvitePanel.cs:405-414 BadgeImage(grey: !reached): a locked rung's badge is greyscale (alpha kept),
+    /// an earned one keeps its colour. Synthetic pixels, so the check never depends on LFS art being checked out.</summary>
+    [Fact]
+    public Task LockedRungBadgesAreGreyEarnedOnesKeepTheirColour() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsurePlatform();
+        var src = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(4, 4), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul);
+        using (var fb = src.Lock())
+            for (var i = 0; i < 16; i++)
+                System.Runtime.InteropServices.Marshal.WriteInt32(fb.Address, i * 4, unchecked((int)0xFF2080E0));   // opaque, strongly coloured
+        Assert.Equal(16, ColouredPixels(src));
+        var grey = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(InvitePanel.Grey(src));
+        Assert.Equal(0, ColouredPixels(grey));
+        Assert.All(Pixels(grey).Where((_, i) => i % 4 == 3), a => Assert.Equal(0xFF, a));   // alpha kept
+
+        // The real tile, when the badge art is on disk (LFS): earned keeps colour, locked is grey.
+        var rung = InviteRewards.Ladder[0];
+        if (All<Image>(InvitePanel.RungTile(rung, converted: rung.Converted, isNext: false)).FirstOrDefault()?.Source is global::Avalonia.Media.Imaging.Bitmap earned)
+        {
+            Assert.True(ColouredPixels(earned) > 100);
+            var locked = Assert.IsAssignableFrom<global::Avalonia.Media.Imaging.Bitmap>(All<Image>(InvitePanel.RungTile(rung, converted: 0, isNext: true)).First().Source);
+            Assert.Equal(0, ColouredPixels(locked));
+        }
+        return Task.CompletedTask;
+    });
+
+    private static byte[] Pixels(global::Avalonia.Media.Imaging.Bitmap bmp)
+    {
+        int w = bmp.PixelSize.Width, h = bmp.PixelSize.Height, stride = w * 4;
+        var px = new byte[stride * h];
+        var pin = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try { bmp.CopyPixels(new PixelRect(0, 0, w, h), pin.AddrOfPinnedObject(), px.Length, stride); }
+        finally { pin.Free(); }
+        return px;
+    }
+
+    private static int ColouredPixels(global::Avalonia.Media.Imaging.Bitmap bmp)
+    {
+        var px = Pixels(bmp);
+        int n = 0;
+        for (var i = 0; i < px.Length; i += 4)
+            if (Math.Abs(px[i] - px[i + 1]) > 8 || Math.Abs(px[i + 1] - px[i + 2]) > 8) n++;
+        return n;
+    }
 }

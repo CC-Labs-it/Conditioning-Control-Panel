@@ -151,6 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The launcher goes with its panel: hidden, it would keep a trayless process alive UI-less.</summary>
         private LauncherWindow Link(MainShellWindow panel)
         {
+            // Also on a reused link: an X-to-tray may have happened since the last handoff.
+            panel.ClearTrayHide();
             if (!ReferenceEquals(_panel, panel)) { _panel = panel; panel.Closed += (_, _) => Close(); }
             return this;
         }
@@ -281,7 +283,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // WPF hides behind the panel's tray icon. With no tray host (a bare Linux
                     // desktop) a hidden launcher over a hidden panel has no way back: minimize.
                     if (panel is { IsVisible: false } && !panel.TrayIconConfirmed()) WindowState = WindowState.Minimized;
-                    else Hide();
+                    else
+                    {
+                        // A later registration denial must bring this launcher back (no icon left).
+                        if (panel is { IsVisible: false }) panel.MarkLauncherHiddenToTray();
+                        Hide();
+                    }
                     break;
                 case LauncherCloseOutcome.Exit:
                     panel!.RequestExit();

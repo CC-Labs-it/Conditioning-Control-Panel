@@ -90,12 +90,12 @@ public sealed class MindWipeTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
-            var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency);
+            var saved = (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume);
             var engine = CoreSession.IsEngineRunningProvider;
             var dir = Directory.CreateTempSubdirectory();
             var clip = Path.Combine(dir.FullName, "wipe.mp3");
             File.WriteAllText(clip, "x");
-            (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = (false, false, clip, 40, 180);
+            (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume) = (false, false, clip, 40, 180, 100);
             var voices = new List<Voice>();
             var clock = new Clock();
             var player = new MindWipePlayer((path, vol, loop, ended) =>
@@ -110,12 +110,13 @@ public sealed class MindWipeTests
             finally
             {
                 CoreMindWipe.Stop();
+                player.UnwatchMaster();
                 CoreMindWipe.StartProvider = null; CoreMindWipe.StartSessionProvider = null; CoreMindWipe.StopProvider = null; CoreMindWipe.IsRunningProvider = null;
                 CoreMindWipe.TriggerOnceProvider = null; CoreMindWipe.StartLoopProvider = null; CoreMindWipe.StopLoopProvider = null;
                 CoreMindWipe.IsLoopingProvider = null; CoreMindWipe.UpdateSettingsProvider = null;
                 CoreMindWipe.ReloadClipsProvider = null; CoreMindWipe.ClipCountProvider = null;
                 CoreSession.IsEngineRunningProvider = engine;
-                (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency) = saved;
+                (s.MindWipeEnabled, s.MindWipeLoop, s.MindWipeAudioPath, s.MindWipeVolume, s.MindWipeFrequency, s.MasterVolume) = saved;
                 dir.Delete(true);
             }
             return Task.CompletedTask;
@@ -252,4 +253,43 @@ public sealed class MindWipeTests
         Assert.True(voices.All(v => v.Disposed));
         Assert.False(player.IsLooping);
     });
+
+    /// <summary>restack b41 (#3868): WPF MindWipeService.EffectiveVolume (MindWipeService.cs:120) and its live master
+    /// watch (:136-174): the heard level is the feature's own beneath the master dial, and what is sounding follows
+    /// the dial while it plays. Master 0 is silence (ccp-bugs #1432).</summary>
+    [Fact]
+    public void Heard_level_sits_beneath_the_master_dial_and_follows_it_live() => Run((player, voices, clock) =>
+    {
+        var s = CoreSettings.Current;
+        s.MasterVolume = 50;
+        player.TriggerOnce();
+        Assert.Equal(0.2, voices[0].Vol, 3);          // 40% under a 50% master
+        player.StartLoop(0.8);
+        var loop = voices.Last();
+        Assert.True(loop.Loop);
+        Assert.Equal(0.4, loop.Vol, 3);
+        s.MasterVolume = 25;                          // moved while both play
+        Assert.Equal(0.2, loop.Vol, 3);
+        s.MasterVolume = 0;
+        Assert.Equal(0, loop.Vol, 3);
+        player.UpdateSettings(180, 0.5);              // the feature's own level still applies beneath it
+        s.MasterVolume = 100;
+        Assert.Equal(0.5, loop.Vol, 3);
+        player.UnwatchMaster();
+        s.MasterVolume = 10;                          // unwatched: no more live writes
+        Assert.Equal(0.5, loop.Vol, 3);
+    });
+
+    [Theory]
+    [InlineData(100, 0.4, 0.4)]
+    [InlineData(50, 0.4, 0.2)]
+    [InlineData(0, 1.0, 0)]
+    [InlineData(150, 2.0, 1)]
+    [InlineData(-5, 0.5, 0)]
+    public void EffectiveVolume_is_the_linear_product_clamped(int master, double own, double heard) =>
+        Assert.Equal(heard, global::ConditioningControlPanel.Services.MindWipeSchedule.EffectiveVolume(master, own), 6);
+
+    [Fact]
+    public void EffectiveVolume_of_NaN_is_silence() =>
+        Assert.Equal(0, global::ConditioningControlPanel.Services.MindWipeSchedule.EffectiveVolume(100, double.NaN));
 }
