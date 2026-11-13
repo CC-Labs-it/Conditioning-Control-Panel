@@ -425,6 +425,9 @@
                                     <fx:TierBadge Tier="{Binding Tier}" FreeToday="{Binding BadgeFreeToday}"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top"
                                                   Margin="0,-6,-6,0"/>
+                                    <fx:VaultCardAura IsVisible="{Binding IsMine}" Hue="{Binding GroupHue}"
+                                                      Seed="{Binding AuraSeed}" Margin="{Binding AuraMargin}"
+                                                      Loaded="Aura_Loaded" Unloaded="Aura_Unloaded"/>
                                   </Grid>
                                 </Border>
                             </DataTemplate>
