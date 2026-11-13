@@ -175,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _shownSinceStart = true;   // asked for: a late StartMinimized must not undo it
             _trayRecheckStale = true;
             if (_windowClosed) return;
+            Platform.OsNotifications.DismissWindowsBalloon();
             RestoreLauncherPanelOpacity();
             Show();
             WindowState = WindowState.Normal;
