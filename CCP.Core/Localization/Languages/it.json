@@ -6560,6 +6560,7 @@
   "play_arcademy_cta": "Vai a lezione",
   "play_arcademy_tooltip": "l'orario di oggi ti aspetta.",
   "arcademy_boot_error_body": "{0} non è riuscito ad avviarsi su questo computer.\n\n{1}",
+  "intake_launch_failed_body": "Impossibile avviare Graded Intake:\n\n{0}",
   "arcademy_open_failed_body": "Impossibile aprire l'Arcademy:\n\n{0}",
   "arcademy_boot_failed_this_session": "L'ultima volta che hai provato, l'Arcademy non si è avviata su questo computer.\n\nVuoi riprovare ad aprirla?",
   "_comment_pbp_door": "Piece by Piece (Play wall strip, failure dialog)",

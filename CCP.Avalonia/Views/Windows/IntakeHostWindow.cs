@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Services;
@@ -37,6 +38,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private const int Protocol = 1;                                                     // WPF IntakeHostService.Protocol
         private const string ProxyBaseUrl = "https://codebambi-proxy.vercel.app";          // WPF IntakeHostService.ProxyBaseUrl
 
+        internal static Action<Window?, string> ShowWarning = (owner, message) =>
+        {
+            var dialog = new Views.Dialogs.MessageDialog("Graded Intake", message, showCancel: false);
+            _ = dialog.ShowDialogSafe<bool?>(owner);   // OwnedDialog: a hidden owner falls back to a shown window
+        };
+        internal Window? WarningOwner { get; init; }
         internal IntakeRun Run { get; } = new();
         internal WebHost Web { get; } = new();
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
@@ -122,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case "boot-error":
                     Log.Warning("IntakeHost: page boot-error: {Msg}", (string?)o["msg"]);
                     Close();
+                    ShowWarning(WarningOwner, Loc.GetF("arcademy_boot_error_body", "Graded Intake", (string?)o["msg"] ?? ""));
                     break;
                 case "exit":   // page-initiated wind-down: its own exit-done, or the watchdog
                     ReportWalkOutIfUnfinished();

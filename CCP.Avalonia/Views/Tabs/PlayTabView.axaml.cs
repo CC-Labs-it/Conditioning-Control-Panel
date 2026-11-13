@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // The hero plates, and the repaint that keeps them honest across a mod switch. Not
             // deferred to attach: a card that draws its scrim first and its art a frame later flickers.
+            RefreshGameDoors();
             RefreshHeroArt();
             RefreshWebcamStatus();
         }
@@ -98,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // The pass is spent (or entitlement lands) off the UI thread.
         private void OnIntakePassStateChanged(object? sender, EventArgs e) =>
-            Dispatcher.UIThread.Post(() => { RefreshPlayCards(); RefreshWebcamStatus(); });
+            Dispatcher.UIThread.Post(() => { RefreshPlayCards(); RefreshWebcamStatus(); RefreshGameDoors(); });
 
         // The shell owns the one entrance: WPF MainWindow/MainWindow.ChromeFx.cs:248,375.
         // MainShellWindow.TabTransitions.cs keeps delayed sections at base values until BeginTime.
@@ -268,9 +269,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
         // WPF card forwards to. GAMES: the Breakout demo, Piece by Piece, DtRH and Racing Thoughts open their
         // GameWindow as the launcher does (LauncherWindow.Destinations). Full Breakout uses the same host
-        // with a Lab gate. Goon has no host on this head, so its button stays disabled in the markup with the
-        // exclusives_not_on_this_build tooltip and carries no shim.
+        // with a Lab gate. Goon, Back Room and Arcademy doors activate when their hosts register.
         // ==================================================================================
+
+        internal void RefreshGameDoors()
+        {
+            SetGameDoor(BtnPlayGoon, "goon");
+            SetGameDoor(BtnPlayBackRoom, "backroom");
+            SetGameDoor(BtnPlayArcademy, "arcademy");
+        }
+
+        private static void SetGameDoor(Button button, string id)
+        {
+            button.IsEnabled = Games.GameWindow.Games.ContainsKey(id);
+            if (button.IsEnabled) ToolTip.SetTip(button, null);
+            else ToolTip.SetTip(button, Loc.Get("exclusives_not_on_this_build"));
+        }
+
+        private void BtnPlayGoon_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayGoon();
+        private void BtnPlayBackRoom_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayBackRoom();
+        private void BtnPlayArcademy_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("arcademy");
 
         // WPF MainWindow.PlayTab.cs:79-86.
         private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
