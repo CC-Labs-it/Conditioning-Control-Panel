@@ -71,6 +71,29 @@ namespace ConditioningControlPanel.Services
         public double MotionFade { get; private set; } = 1.0;
         private double _spiralCx, _spiralCy, _spiralR0, _spiralRadial, _spiralTurns, _spiralDir;
         private BubbleSpiralPath.State _spiral;
+        // WPF BubbleService.cs:4430-4472. Coordinates are local to the unscaled bubble.
+        public struct Sparkle
+        {
+            public double X, Y, VelX, VelY, Alpha, Size;
+        }
+        public Sparkle[] Sparkles { get; private set; } = Array.Empty<Sparkle>();
+
+        internal void StartSparkles(Random random, bool boost)
+        {
+            if (!Lucky && !boost) return;
+            Sparkles = new Sparkle[Lucky ? 16 : 8];
+            for (var i = 0; i < Sparkles.Length; i++)
+            {
+                var angle = random.NextDouble() * Math.PI * 2;
+                var speed = 2 + random.NextDouble() * 4;
+                Sparkles[i] = new Sparkle
+                {
+                    X = Size / 2, Y = Size / 2,
+                    VelX = Math.Cos(angle) * speed, VelY = Math.Sin(angle) * speed,
+                    Alpha = 1, Size = Lucky ? 4 + random.NextDouble() * 4 : 3 + random.NextDouble() * 3
+                };
+            }
+        }
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
         /// <summary>WPF's fuse tick: 32 ms per logical step (BubbleService.cs:4149).</summary>
@@ -365,6 +388,15 @@ namespace ConditioningControlPanel.Services
         {
             if (Popping)
             {
+                // WPF BubbleService.cs:3791-3814: particles move before gravity and fade.
+                for (var i = 0; i < Sparkles.Length; i++)
+                {
+                    ref var sp = ref Sparkles[i];
+                    sp.X += sp.VelX;
+                    sp.Y += sp.VelY;
+                    sp.VelY += 0.15;
+                    sp.Alpha -= Lucky ? 0.04 : 0.06;
+                }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
                 Scale = _dissolving ? Math.Max(0.1, Scale - 0.02) : Scale + (Deflating ? -0.03 : 0.04);
                 Fade -= _dissolving ? 0.05 : Lucky ? 0.044 : 0.066;
@@ -576,6 +608,8 @@ namespace ConditioningControlPanel.Services
             if (multiplier > 1) LuckyProc?.Invoke(multiplier);
             var paid = AmbientBubbleXp.Take(s, 5 * multiplier);
             b.Lucky = multiplier > 1 && paid > 0;
+            // WPF BubbleService.cs:1105-1108: dry lucky rolls lose gold, boost respects FlashGlow.
+            b.StartSparkles(Random, SkillTreeRules.GetSparkleBoostTier(s) > 0 && s.FlashGlowEnabled);
             return paid;
         }
 
