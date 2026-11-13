@@ -90,12 +90,22 @@ namespace ConditioningControlPanel.Avalonia
         private DispatcherTimer? _achievementSaveTimer;
 
         /// <summary>WPF AchievementService.cs:99-107: periodically save dirty progress off the UI thread.</summary>
-        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine)
+        internal static DispatcherTimer StartAchievementAutosave(AchievementEngine engine, Action? checkDay = null)
         {
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-            timer.Tick += (_, _) => _ = engine.SaveIfDirtyAsync();
+            timer.Tick += (_, _) => { checkDay?.Invoke(); _ = engine.SaveIfDirtyAsync(); };
             timer.Start();
             return timer;
+        }
+
+        /// <summary>WPF SeasonRecapService.cs:146 and :159, AchievementService.cs:93: mark today's UTC date
+        /// active and sample the season peak streak, at startup and on each autosave tick (UTC day rollover).
+        /// Saves settings only when something changed.</summary>
+        internal static void NoteSeasonActivity(SettingsService settings, ConditioningControlPanel.Models.AchievementProgress progress, DateTime utcNow)
+        {
+            var s = settings.Current;
+            var added = SeasonActivity.MarkActiveToday(s, utcNow);
+            if (SeasonActivity.TrackStreakPeak(s, progress.ConsecutiveDays) || added) settings.Save();
         }
 
         /// <summary>The automatic cloud settings backup (WPF ProfileSyncService.BackupSettingsAsync, force: false).</summary>
@@ -1080,8 +1090,16 @@ namespace ConditioningControlPanel.Avalonia
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
                 Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
                 Platform.LoginStreakHead.Start(Achievements, CoreSettings.Current);
+                var seasonEngine = Achievements;
+                void CheckSeasonActivity()
+                {
+                    if (!ReferenceEquals(Achievements, seasonEngine) || Settings is not { } live) return;
+                    try { NoteSeasonActivity(live, seasonEngine.Progress, DateTime.UtcNow); }
+                    catch (Exception exSeason) { Serilog.Log.Warning(exSeason, "Season activity write failed"); }
+                }
+                CheckSeasonActivity();
                 _achievementSaveTimer?.Stop();
-                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                _achievementSaveTimer = StartAchievementAutosave(Achievements, CheckSeasonActivity);
                 WireAchievementUnlocks(Achievements);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;

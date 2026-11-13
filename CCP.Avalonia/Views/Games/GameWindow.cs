@@ -39,7 +39,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal sealed record Game(string Id, string TitleKey, string Page, Func<bool>? Gate = null, string? Query = null);
 
         /// <summary>WPF 7.1.5's game hosts, StartUrl for StartUrl.</summary>
-        internal static readonly IReadOnlyDictionary<string, Game> Games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase)
+        internal static readonly Dictionary<string, Game> Games = BuildGames();
+
+        private static Dictionary<string, Game> BuildGames()
+        {
+            var games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase)
         {
             // WPF BreakoutHostService.cs:8 StartUrl; LaunchDemo (:13) is free and needs no account. demo=1 holds the
             // page to 3 levels even before init lands (access.js reads it wherever chrome.webview is absent).
@@ -59,6 +63,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF #3132: Racing Thoughts is Prime only, including solo.
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
+
+            RegisterGoon(games);
+            RegisterBackRoom(games);
+            RegisterArcademy(games);
+            return games;
+        }
+
+        static partial void RegisterGoon(Dictionary<string, Game> games);
+        static partial void RegisterBackRoom(Dictionary<string, Game> games);
+        static partial void RegisterArcademy(Dictionary<string, Game> games);
+        partial void HandleGoonMessage(JObject message, ref bool handled);
+        partial void HandleBackRoomMessage(JObject message, ref bool handled);
+        partial void HandleArcademyMessage(JObject message, ref bool handled);
 
         internal const string BreakoutDemoId = "breakoutdemo";
 
@@ -226,6 +243,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            bool handled = false;
+            if (Spec.Id == "goon") HandleGoonMessage(o, ref handled);
+            if (Spec.Id == "backroom") HandleBackRoomMessage(o, ref handled);
+            if (Spec.Id == "arcademy") HandleArcademyMessage(o, ref handled);
+            if (handled) return;
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
