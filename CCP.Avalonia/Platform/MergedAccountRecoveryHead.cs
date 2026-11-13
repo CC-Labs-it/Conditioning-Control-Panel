@@ -55,6 +55,8 @@ internal static class MergedAccountRecoveryHead
         ConditioningControlPanel.Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
         V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
         AiService.MergedAccountHook = response => MergedAccountRecovery.TryHandleAsync(response);
+        // WPF RemoteControlService.cs:129 AuthPostAsync: the Remote Control door.
+        RemoteRelay.MergedRecovery = response => MergedAccountRecovery.TryHandleAsync(response);
     }
 
     // WPF App.ReauthenticateAfterMergedSwapAsync + EnsureAuthTokenAsync (App.xaml.cs:3851-3930): serialized, rechecked

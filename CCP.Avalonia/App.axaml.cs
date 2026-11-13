@@ -757,13 +757,14 @@ namespace ConditioningControlPanel.Avalonia
                 // scheduler's tick arrives on a thread-pool thread. Everything after the hop -
                 // including the phrase draw - therefore runs on the UI thread, which is what keeps
                 // the scheduler's rotation state single-threaded.
-                CoreLockCard.ShowHandler = isTest => global::Avalonia.Threading.Dispatcher.UIThread.Post(
-                    () => Views.Windows.LockCardWindow.ShowNext(isTest));
+                CoreLockCard.ShowHandler = Views.Windows.LockCardWindow.PostNext;
+                CoreLockCard.CloseAllHandler = Views.Windows.LockCardWindow.ForceCloseAll;   // callers are on the UI thread (RemoteRelay marshals)
 
                 // Pop quiz: Core schedules, PopQuizHost opens the window (WPF App.PopQuiz).
                 CoreEngine.PopQuiz = Views.Windows.PopQuizHost.Instance.Scheduler;
                 // Mandatory video: Core schedules, the overlay plays (WPF App.Video).
                 CoreEngine.Video = Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
+                CoreEngine.Video.DeferTrigger = Views.Windows.LockCardWindow.DeferVideo;
                 CoreEngine.BubbleCount = Views.Windows.BubbleCountHost.Instance.Scheduler;
 
                 await step(0.4, "Initializing flash service...");

@@ -4,8 +4,7 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session verbs (StartSessionFromRemote & co; Core
-// RemoteCommands refuses them "not on this build"), the directory opt-in chain, tray minimise/restore
+// ponytail: still missing here - remote-driven session start, resume and stop, the directory opt-in chain, tray minimise
 // for remote, the RemoteHud pill and remote
 // browser video playback and reveal.
 
@@ -39,10 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static bool RemoteControllerConnected => RemoteControlTabView.Relay.IsValueCreated && RemoteControlTabView.Relay.Value.ControllerConnected;
 
+        internal static MainShellWindow? RemoteCommandOwner;
+
         /// <summary>WPF wires these in ChkRemoteControlEnabled_Changed; the relay here is one per process, so
         /// the shell listens from startup and lets go on close.</summary>
         private void InitializeRemoteControlOverlay()
         {
+            RemoteCommandOwner = this;
             Action refreshOverlays = () =>
             {
                 Overlays.PinkFilterOverlay.Refresh(this);
@@ -53,7 +55,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
             r.SessionRunnerProvider = () => App.Sessions;
-            EventHandler connected = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerChanged);
+            EventHandler connected = (_, _) =>
+            {
+                bool restore = r.IsActive && !r.ControllerConnected && CoreSettings.Current.StopEffectsOnRemoteDisconnect;
+                Dispatcher.UIThread.Post(() => { OnRemoteControllerChanged(); if (restore) ShowFromTray(); });
+            };
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);
             EventHandler<string> command = (_, a) => Dispatcher.UIThread.Post(() => OnRemoteCommandReceived(a));
@@ -69,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
+                if (ReferenceEquals(RemoteCommandOwner, this)) RemoteCommandOwner = null;
                 _remoteOverlayTimer?.Stop();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
             };
@@ -114,11 +121,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HideRemoteControlOverlay();
             UpdateStartButtonForRemoteControl(false);
             Platform.FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Remote);   // WPF RemoteControlService.cs:410
+            ShowFromTray();
         }
 
         /// <summary>WPF OnRemoteCommandReceived (:1091): quiet verbs make no toast.</summary>
         internal void OnRemoteCommandReceived(string action)
         {
+            if (action == "trigger_panic") ShowFromTray();
             if (RemoteCommands.Quiet.Contains(action)) return;
             ShowCommandNotification(action);
         }

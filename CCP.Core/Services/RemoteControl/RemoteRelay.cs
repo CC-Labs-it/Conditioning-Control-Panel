@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Services
         private readonly string? _baseUrl;
         private readonly Func<string?> _token, _unifiedId;
         private readonly Func<string, JObject?, string?> _execute;
-        private readonly Action<bool> _stopEffects;
+        private readonly Action<bool, bool> _stopEffects;
         private CancellationTokenSource? _loop;
         private int _pollBusy, _consecutiveFailures;
         private DateTime? _idleSince;
@@ -94,6 +94,12 @@ namespace ConditioningControlPanel.Services
         /// <param name="stopEffects">WPF StopAllRemoteEffects(force) / StopRemoteTriggeredEffects.</param>
         public RemoteRelay(Func<string?> token, Func<string?> unifiedId, string appVersion,
             Func<string, JObject?, string?> execute, Action<bool> stopEffects, HttpMessageHandler? handler = null)
+            : this(token, unifiedId, appVersion, execute, (force, _) => stopEffects(force), handler) { }
+
+        /// <param name="stopEffects">(force, leashCut): WPF StopAllRemoteEffects(cause); a leash cut keeps the
+        /// full teardown over a local run (RemoteEndRule.LeavesLocalRun).</param>
+        public RemoteRelay(Func<string?> token, Func<string?> unifiedId, string appVersion,
+            Func<string, JObject?, string?> execute, Action<bool, bool> stopEffects, HttpMessageHandler? handler = null)
         {
             (_token, _unifiedId, _execute, _stopEffects) = (token, unifiedId, execute, stopEffects);
             _baseUrl = handler != null ? RealBaseUrl : ResolveBaseUrl(
@@ -105,13 +111,18 @@ namespace ConditioningControlPanel.Services
             _http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{appVersion}");
         }
 
+        /// <summary>Head-provided merged-account recovery, as in WPF AuthPostAsync (RemoteControlService.cs:129); the Avalonia head seeds it in Platform/MergedAccountRecoveryHead.Seed.</summary>
+        public static volatile Func<HttpResponseMessage, Task<bool>>? MergedRecovery;
+
         private async Task<HttpResponseMessage> PostAsync(string path, object body)
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path)
             { Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json") };
             var token = _token();
             if (!string.IsNullOrEmpty(token)) req.Headers.Add("X-Auth-Token", token);
-            return await _http.SendAsync(req).ConfigureAwait(false);
+            var response = await _http.SendAsync(req).ConfigureAwait(false);
+            if (MergedRecovery is { } recover) await recover(response).ConfigureAwait(false);
+            return response;
         }
 
         /// <summary>WPF StartSessionAsync: the new session code, or null (logged; see <see cref="LastStartFailedAuth"/>).</summary>
@@ -175,7 +186,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsActive) return;
             var uid = _unifiedId();
-            Cleanup();
+            Cleanup(leashCut: true);
             Log.Information("[RemoteControl] Session ended locally (leash cut)");
             if (string.IsNullOrEmpty(uid)) return;
             _ = Task.Run(async () =>
@@ -186,7 +197,7 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF CleanupSession: everything the controller started stops; the subject's own run stays.</summary>
-        private void Cleanup()
+        private void Cleanup(bool leashCut = false)
         {
             if (!IsActive) return;
             _loop?.Cancel();
@@ -202,7 +213,8 @@ namespace ConditioningControlPanel.Services
             // session's snapshot and its recovery file go.
             void StopEffects()
             {
-                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                try { _stopEffects(false, leashCut); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                if (!RemoteCommands.LeavesLocalRun(false, leashCut)) RemoteCommands.ResetAutonomy();   // WPF StopAllRemoteEffects: the session end and a leash cut reset autonomy, a leave does not
                 Remote.RemoteWearer.Drop();
             }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));
@@ -336,7 +348,7 @@ namespace ConditioningControlPanel.Services
             RemoteCommands.RemoteHaptics.Stop();
             Remote.RemoteWearer.ReleaseSafetyState();
             if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
-                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                try { _stopEffects(false, false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
         }
 
         private int _leaveGeneration;
@@ -493,6 +505,8 @@ namespace ConditioningControlPanel.Services
                 available_sessions = sessionStatus.Sessions,
                 session_info = sessionStatus.Progress,
                 share_avatar = s.RemoteShareAvatar,
+                // Only advertise features this head actually implements.
+                caps = new[] { "haptic_pattern", "haptic_level" },
             };
             try
             {
@@ -510,6 +524,7 @@ namespace ConditioningControlPanel.Services
             if (s.StrictLockEnabled) list.Add("strict_lock");
             if (CoreHaptics.Service?.IsConnected == true) list.Add("haptics");   // WPF 7b22ece8c: trigger_haptic will land
             if (!s.PanicKeyEnabled) list.Add("no_panic");
+            if (RemoteCommands.AutonomyRunning?.Invoke() == true) list.Add("autonomy");
             if (CoreEngine.IsRunning) list.Add("session");
             if (CoreFlash.IsRunning) list.Add("flash_loop");
             if (CoreSubliminal.IsRunning) list.Add("subliminal_loop");

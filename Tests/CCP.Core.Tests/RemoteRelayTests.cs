@@ -17,6 +17,97 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class RemoteRelayTests
 {
+    // WPF RemoteControlService.cs:1476/:1488 dispatch; :980 panic/session end stop and re-arm on the saved
+    // switch; :1159 a leave only cancels pulses; :1020/:1179 every card closes; :964/:1154 over the wearer's own
+    // run neither touches autonomy nor the cards; :921 the status lists a running autonomy.
+    [Fact]
+    public async Task Remote_autonomy_and_lock_card_route_to_the_head_and_each_teardown_does_what_WPF_does()
+    {
+        var s = CoreSettings.Current;
+        var saved = (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
+            CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled,
+            RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions, s.FlashEnabled, s.LockCardEnabled);
+        var log = new List<string>();
+        try
+        {
+            (RemoteCommands.AutonomyCommand, CoreLockCard.ShowHandler) = (null, null);
+            foreach (var a in new[] { "start_autonomy", "stop_autonomy", "trigger_lock_card" })
+                Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute(a, null));
+
+            RemoteCommands.AutonomyCommand = on => { log.Add(on ? "start" : "stop"); return true; };
+            RemoteCommands.CancelAutonomyPulses = () => log.Add("pulses");
+            CoreLockCard.ShowHandler = test => log.Add(test ? "test card" : "card");
+            CoreLockCard.CloseAllHandler = () => log.Add("close");
+            Assert.Null(RemoteCommands.Execute("start_autonomy", null));
+            Assert.Null(RemoteCommands.Execute("stop_autonomy", null));
+            Assert.Null(RemoteCommands.Execute("trigger_lock_card", null));
+            Assert.Equal(new[] { "start", "stop", "card" }, log);
+
+            log.Clear();
+            RemoteCommands.StopEffects(false);   // the controller left: autonomy keeps running
+            Assert.Equal(new[] { "pulses", "close" }, log);
+
+            s.AutonomyModeEnabled = true;
+            log.Clear();
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.Equal(new[] { "pulses", "stop", "start", "close" }, log);
+            s.AutonomyModeEnabled = false;
+            log.Clear();
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.Equal(new[] { "pulses", "stop", "close" }, log);
+
+            s.AutonomyModeEnabled = true;
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            foreach (var on in new[] { true, false })
+            {
+                RemoteCommands.AutonomyRunning = () => on;
+                await r.PushStatusNowAsync();
+                var services = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["active_services"]!.ToObject<string[]>()!;
+                Assert.Equal(on, services.Contains("autonomy"));
+            }
+            log.Clear();
+            f.Answer = _ => Json(HttpStatusCode.NotFound, "{}");
+            await r.PollOnceAsync();   // the session ended
+            Assert.False(r.IsActive);
+            Assert.Equal(new[] { "pulses", "stop", "start" }, log);
+
+            // The wearer's own run (WPF LeavesLocalRun, ReleaseRemoteHoldings :1125): a leave and a session end
+            // leave its services, autonomy and cards alone. Flash off: armed, but never ticks.
+            (s.AudioOnlySession, s.FlashEnabled, s.LockCardEnabled) = (true, false, true);
+            CoreEngine.Start();
+            CoreFlash.Start();
+            LockCardScheduler.Instance.Start();
+            log.Clear();
+            RemoteCommands.StopEffects(false);
+            var f2 = new FakeRelay();
+            using var r2 = Relay(f2);
+            await r2.StartAsync("full");
+            f2.Answer = _ => Json(HttpStatusCode.NotFound, "{}");
+            await r2.PollOnceAsync();
+            Assert.False(r2.IsActive);
+            Assert.Empty(log);
+            Assert.True(CoreFlash.IsRunning);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));   // panic still tears it all down
+            Assert.Equal(new[] { "pulses", "stop", "start", "close" }, log);
+
+            RemoteCommands.AutonomyCommand = _ => false;   // the shell refused: switch, consent or entitlement
+            Assert.Equal(RemoteCommands.AutonomyOff, RemoteCommands.Execute("start_autonomy", null));
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            CoreFlash.Stop();
+            LockCardScheduler.Instance.Stop();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.ShowHandler,
+                CoreLockCard.CloseAllHandler, s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled,
+                RemoteCommands.AutonomyRunning, s.AudioOnlySession, s.TotalSessions, s.FlashEnabled, s.LockCardEnabled) = saved;
+        }
+    }
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<(string Path, JObject Body)> Seen = new();
@@ -41,6 +132,40 @@ public sealed class RemoteRelayTests
     // RemoteWearer is one static session per app: a test that started a relay and never ended it must not
     // hand a stale snapshot to the next one.
     public RemoteRelayTests() => ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+
+    // WPF RemoteEndRule.cs:26-27, EndSessionNow :344: a leash cut over the wearer's own run still cancels the
+    // pulses, closes every card (:1020) and stops autonomy, re-armed on the saved switch (:980-985).
+    [Fact]
+    public async Task Leash_cut_over_a_local_run_closes_cards_and_resets_autonomy()
+    {
+        var s = CoreSettings.Current;
+        var saved = (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.CloseAllHandler,
+            s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled, s.AudioOnlySession, s.TotalSessions);
+        var log = new List<string>();
+        try
+        {
+            RemoteCommands.AutonomyCommand = on => { log.Add(on ? "start" : "stop"); return true; };
+            RemoteCommands.CancelAutonomyPulses = () => log.Add("pulses");
+            CoreLockCard.CloseAllHandler = () => log.Add("close");
+            (s.AutonomyModeEnabled, s.AudioOnlySession) = (true, true);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            CoreEngine.Start();
+            log.Clear();
+            r.EndSessionNow();
+            Assert.False(r.IsActive);
+            Assert.True(CoreEngine.IsRunning);   // the wearer's engine stays, as WPF
+            Assert.Equal(new[] { "pulses", "close", "pulses", "stop", "start" }, log);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (RemoteCommands.AutonomyCommand, RemoteCommands.CancelAutonomyPulses, CoreLockCard.CloseAllHandler,
+                s.AutonomyModeEnabled, s.StrictLockEnabled, s.PanicKeyEnabled, s.AudioOnlySession, s.TotalSessions) = saved;
+        }
+    }
 
     private RemoteRelay Relay(FakeRelay f) => new(() => "tok", () => "uid-1", "9.9.9",
         (a, _) => { _ran.Add(a); return null; }, force => _stops.Add(force), f) { AutoPoll = false };
@@ -285,6 +410,18 @@ public sealed class RemoteRelayTests
             Assert.Equal(17, (int?)paused["elapsed_seconds"]);
         }
         finally { runner.Stop(); CoreEngine.Stop(); CoreSession.IsSessionRunningProvider = null; }
+    }
+
+    [Fact]
+    public async Task Status_advertises_only_features_available_on_this_head()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        await r.StartAsync("full");
+        Poll(f, "{\"controller_connected\":true}");
+        await r.PollOnceAsync();
+        var caps = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["caps"];
+        Assert.Equal(new[] { "haptic_pattern", "haptic_level" }, caps!.Values<string>().ToArray());
     }
 
     [Fact]

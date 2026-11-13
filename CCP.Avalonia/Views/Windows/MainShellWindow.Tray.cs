@@ -178,6 +178,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Platform.OsNotifications.DismissWindowsBalloon();
             RestoreLauncherPanelOpacity();
             Show();
+            // WPF LauncherHost.ShowPanel (:265): the panel on screen releases the boot launcher hold, whichever door showed it.
+            Platform.StartupLadder.Release();
             WindowState = WindowState.Normal;
             Activate();
             ShowAvatarTube();
