@@ -1518,7 +1518,11 @@ namespace ConditioningControlPanel.Avalonia
             {
                 if (Directory.Exists(customPath)) return customPath;
                 if (Interlocked.Exchange(ref _warnedMissingCustomAssetsPath, 1) == 0)
+                {
                     Serilog.Log.Warning("CustomAssetsPath '{Path}' does not exist — falling back to default assets folder. Imports/extractions will go to the default location.", customPath);
+                    // Only recorded here, drained once the shell is open (WPF App.xaml.cs:228).
+                    Platform.RemoteMediaOffer.Park("custom-assets-path-missing");
+                }
             }
             return DefaultAssetsRoot;
         }
