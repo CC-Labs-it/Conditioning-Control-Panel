@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using Avalonia;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using Avalonia.Controls;
@@ -8,10 +10,8 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
-using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
-using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -43,10 +43,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Bound) - SpawnTick spawns treats, plain live variants, the Tease and the Chaperone; every
-    /// motion other than FloatUp, RainDown and Chaperone roaming, treat rot, chain reaction, cam-girl tips,
+    /// motion other than FloatUp, RainDown and Chaperone roaming, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// the perf backoff on the cadence; Gif Rain and bouncing text payloads fire; the
-    /// first-time bonus and ripple-denial pop text.
+    /// first-time bonus pop text.
     /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
     /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
@@ -80,6 +80,79 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF BubbleService :4910-4918 and ChaosModeService :1685-1689: bubble
         /// labels and payouts use the pooled overlay. Tests may replace the delivery seam.</summary>
         internal static Action<double, double, string, Color>? PopText = ChaosPopText.Show;
+        internal static Action<string, float> RippleCue = (key, volume) =>
+        {
+            if (key == "ripple_cast") ChaosOverlayWindow.ChaosSfx.PlayRippleCast();
+            else ChaosOverlayWindow.ChaosSfx.Play(key, volume);
+        };
+        private sealed record RippleTarget(ChaosRunState Run, Point[] Centers, double Reach);
+        private static RippleTarget? _rippleTarget;
+        private static RipplePointer? _ripplePointer;
+
+        // Published on the UI thread; the hook only reads this immutable snapshot.
+        internal static void RefreshRippleInput()
+        {
+            var run = _state;
+            Volatile.Write(ref _rippleTarget, _spawning && run != null && !_manualPaused && !_lessonCardPaused && !_draftPaused
+                ? new RippleTarget(run, BubbleOverlay.ChaosCenters(), run.RippleRadiusPx + ChaosTuning.RIPPLE_TRIGGER_GRACE_PX)
+                : null);
+        }
+
+        // WPF ChaosModeService.cs:2569-2585: only a near right-click is consumed.
+        internal static bool OnRippleRightDown(PixelPoint px)
+        {
+            var target = Volatile.Read(ref _rippleTarget);
+            if (target == null) return false;
+            bool near = false;
+            foreach (var c in target.Centers)
+            {
+                double dx = c.X - px.X, dy = c.Y - px.Y;
+                if (dx * dx + dy * dy <= target.Reach * target.Reach) { near = true; break; }
+            }
+            if (!near || !ReferenceEquals(target, Volatile.Read(ref _rippleTarget))) return false;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!ReferenceEquals(target.Run, _state)) return;
+                OnBubbleRightDown(new Point(px.X, px.Y), _hud?.Screens.Primary?.Scaling ?? 1);
+            });
+            return true;
+        }
+
+        // WPF ChaosModeService.cs:2590-2624: cast or answer at the physical click.
+        internal static bool OnBubbleRightDown(Point px, double primaryScale)
+        {
+            var run = _state;
+            if (!_spawning || run == null || _manualPaused || _lessonCardPaused || _draftPaused) return false;
+            if (!run.RippleReady)
+            {
+                RippleCue("toy_denied", 0.45f);
+                run.PushEvent(IconText.BareLoc("Chaos_Ripple_Denied", run.RippleText));
+                double scale = primaryScale > 0 ? primaryScale : 1;
+                PopText?.Invoke(px.X / scale, px.Y / scale - 30, Loc.GetF("Chaos_Ripple_Gathering", run.RippleText),
+                    Color.FromRgb(0x7A, 0xE0, 0xFF));
+                return true;
+            }
+            run.RippleCooldown = run.RippleRechargeSec;
+            if (!ChaosMeta.State.SeenRippleTeach)
+            {
+                ChaosMeta.State.SeenRippleTeach = true;
+                ChaosMeta.Save();
+                ChaosAnnouncerOverlay.Announce(IconText.BareLoc("Chaos_Ripple_Teach"), ChaosAnnounceKind.PowerUp);
+            }
+            bool skips = run.MaxedBoons.Contains("skipping_stone");
+            void Wave()
+            {
+                if (!_spawning || !ReferenceEquals(run, _state)) return;
+                RippleCue("ripple_cast", 0.6f);
+                BubbleOverlay.TriggerPlayerRipple(px, run.RippleRadiusPx, run.RippleLifeMs);
+            }
+            Wave();
+            if (skips)
+                for (int i = 1; i <= 2; i++)
+                    DispatcherTimer.RunOnce(Wave, TimeSpan.FromMilliseconds(i * ChaosTuning.RIPPLE_WAVE_GAP_MS));
+            run.PushEvent(Loc.Get(skips ? "Chaos_Ripple_Skips" : "Chaos_Ripple_Cast"));
+            return true;
+        }
         /// <summary>Observer of every gated <c>_fx.Pulse(color, strength)</c> (ChaosFxWindow); tests only.</summary>
         internal static Action<Color, double>? PulseFx;
         /// <summary>WPF <c>App.ScreenShake.Shake(intensity, ms)</c>; unseeded until it lands.</summary>
@@ -195,7 +268,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired);
+            RefreshRippleInput();
+            _ripplePointer?.Dispose();   // never two grabs if a run restarts without EndField
+            _ripplePointer = RipplePointer.Start(OnRippleRightDown);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
             _spawnTimer.Start();
@@ -420,6 +496,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             App.Achievements?.TrackBubblePopped();
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Serilog.Log.Debug("chaos pop quest credit: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF BubbleService.Dissolve :4864 and ChaosModeService.OnTreatExpired :1898.</summary>
+        internal static void OnTreatExpired(AmbientBubble b)
+        {
+            if (_state == null || b.Spec == null || _manualPaused || _lessonCardPaused) return;
+            Label(b, Loc.Get("chaos_expiry_label"), Color.FromRgb(0xB8, 0xB8, 0xD0));
+            string name = b.Spec.IsGolden ? Loc.Get("chaos_expiry_name_lucky") : b.Spec.Payload.DisplayName switch
+            {
+                "flash" => Loc.Get("chaos_expiry_name_flash"),
+                "subliminal" => Loc.Get("chaos_expiry_name_subliminal"),
+                "pink_filter" => Loc.Get("chaos_expiry_name_pink"),
+                "spiral" => Loc.Get("chaos_expiry_name_spiral"),
+                "braindrain" => Loc.Get("chaos_expiry_name_braindrain"),
+                "gif cascade" => Loc.Get("chaos_expiry_name_gif"),
+                _ => b.Spec.Payload.DisplayName
+            };
+            if (_state.Combo > 1)
+            {
+                _state.Combo /= 2;
+                _state.PushEvent(IconLabel.ForKey("chaos_expiry_halved", name, _state.Combo).Source);
+            }
+            else
+            {
+                _state.Combo = 0;
+                _state.PushEvent(IconLabel.ForKey("chaos_expiry_gone", name).Source);
+            }
+            Pulse(Color.FromRgb(150, 150, 175), 0.10);
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
@@ -705,6 +809,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnTimer?.Stop();
             _spawnTimer = null;
             EndFreeze();
+            Volatile.Write(ref _rippleTarget, null);
+            _ripplePointer?.Dispose();
+            _ripplePointer = null;
             BubbleOverlay.EndChaos();
             _hud?.SetCursorOnLive(false);
         }
@@ -754,6 +861,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (_freezeRemainingSec <= 0) EndFreeze();
             }
             _hud?.SetCursorOnLive(BubbleOverlay.CursorOnLive);
+            // WPF ChaosModeService.cs:984-989: gather only while the run clock advances.
+            if (_state.RippleCooldown > 0)
+            {
+                _state.RippleCooldown -= ChaosRunEngine.TICK_SEC;
+                if (_state.RippleReady) RippleCue("toy_ready", 0.3f);
+            }
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
@@ -779,7 +892,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 // WPF BeginWaveTransition with drafts off (:1442-1449): lessons, tip, then roll straight on.
                 // Claim the draft pause before loop lessons fire, so their cards are deferred.
-                if (_state.Config.BoonDraftEnabled) _draftPaused = true;
+                if (_state.Config.BoonDraftEnabled) { _draftPaused = true; RefreshRippleInput(); }
                 ChaosRunLessons.OnLoopCompleted();
                 AwardLoopTip();
                 _state.AllLiveNextWave = false;
@@ -822,6 +935,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _scriptDraft = true;
             if (cards.Count == 0) return false;
             _draftPaused = true; _pendingWave = s.WaveIndex; _spawnTimer?.Stop();
+            RefreshRippleInput();   // the right-click hook stops consuming while the draft card is up
             ChaosWaveTimerWindow.Clear(); BubbleOverlay.ClearChaos();
             ChaosOverlayWindow.ChaosSfx.PlayWaveClear();   // WPF ChaosModeService.cs:1499
             foreach (var card in cards) ChaosMeta.MarkDiscovered("boon:" + card.Id);
@@ -1246,11 +1360,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // The field cannot yet place or move a summoned darter. Do not spend the whistle.
             if (toy.Id == "rabbit_caller")
             {
-                if (_spawning && !_manualPaused && !_lessonCardPaused && _overlay is { IsVisible: true })
+                if (_spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true })
                     ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
                 return;
             }
-            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && _overlay is { IsVisible: true });
+            // WPF UseToy :2690: a wave draft holds the run (_paused), so toys wait for GO.
+            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true });
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r == ChaosToyRules.UseResult.Fired && FireToyEffect(toy))
                 ChaosFirstTimes.TryAward(ChaosFirstTimes.Play);

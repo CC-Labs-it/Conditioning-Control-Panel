@@ -114,6 +114,11 @@
   "chaos_announce_resist": "+1 RESISTENZA",
   "chaos_first_sin_demo": "il primo peccato è protetto per questa volta",
   "chaos_duo_demo": "una carta dorata. i tuoi giocattoli hanno imparato a lavorare insieme.",
+  "Chaos_Ripple_Denied": "🌊 acqua calma... ricarica {0}",
+  "Chaos_Ripple_Gathering": "ricarica... {0}",
+  "Chaos_Ripple_Teach": "🌊 ecco l'onda. si ricarica da sola",
+  "Chaos_Ripple_Skips": "🌊 la pietra rimbalza - tre onde",
+  "Chaos_Ripple_Cast": "🌊 onda",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",
@@ -9176,5 +9181,15 @@
   "chaos_resistance_regrows": "la resistenza si rigenera",
   "she_wake_unavailable_tooltip": "Il motore di attivazione opzionale sherpa-onnx non è disponibile in questa versione. Viene usato il riconoscimento integrato.",
   "she_wake_unavailable_status": "Il motore di attivazione opzionale non è disponibile in questa versione. Viene usato il riconoscimento integrato.",
-  "she_wake_calibration_unavailable": "La calibrazione della parola di attivazione non è disponibile in questa versione."
+  "she_wake_calibration_unavailable": "La calibrazione della parola di attivazione non è disponibile in questa versione.",
+  "chaos_expiry_label": "SVANITA",
+  "chaos_expiry_halved": "💨 {0} è svanita… serie dimezzata a x{1}",
+  "chaos_expiry_gone": "💨 {0} è svanita",
+  "chaos_expiry_name_lucky": "bolla fortunata",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminale",
+  "chaos_expiry_name_pink": "filtro rosa",
+  "chaos_expiry_name_spiral": "spirale",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "cascata di GIF"
 }

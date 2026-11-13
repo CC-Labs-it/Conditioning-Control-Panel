@@ -119,6 +119,11 @@
   "chaos_announce_resist": "耐性 +1",
   "chaos_first_sin_demo": "最初の罪は今回だけ守られる",
   "chaos_duo_demo": "金のカード。おもちゃたちが力を合わせることを覚えた。",
+  "Chaos_Ripple_Denied": "🌊 静かな水... 回復中 {0}",
+  "Chaos_Ripple_Gathering": "回復中... {0}",
+  "Chaos_Ripple_Teach": "🌊 これが波紋。自然に回復します",
+  "Chaos_Ripple_Skips": "🌊 石が跳ねる - 3つの波",
+  "Chaos_Ripple_Cast": "🌊 波紋",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",
@@ -8436,5 +8441,15 @@
   "account_merged_signin_body": "2つのアカウントが1つに統合されました。続けるにはもう一度サインインしてください。\n\nローカルの進行状況は保持されます。",
   "she_wake_unavailable_tooltip": "オプションの sherpa-onnx 起動エンジンはこのバージョンでは利用できません。内蔵の認識機能を使用します。",
   "she_wake_unavailable_status": "オプションの起動エンジンはこのバージョンでは利用できません。内蔵の認識機能を使用します。",
-  "she_wake_calibration_unavailable": "起動ワードの調整はこのバージョンでは利用できません。"
+  "she_wake_calibration_unavailable": "起動ワードの調整はこのバージョンでは利用できません。",
+  "chaos_expiry_label": "消滅",
+  "chaos_expiry_halved": "💨 {0}が消えた…連続記録が半分のx{1}に",
+  "chaos_expiry_gone": "💨 {0}が消えた",
+  "chaos_expiry_name_lucky": "幸運のバブル",
+  "chaos_expiry_name_flash": "フラッシュ",
+  "chaos_expiry_name_subliminal": "サブリミナル",
+  "chaos_expiry_name_pink": "ピンクフィルター",
+  "chaos_expiry_name_spiral": "スパイラル",
+  "chaos_expiry_name_braindrain": "ブレインドレイン",
+  "chaos_expiry_name_gif": "GIFの連続表示"
 }

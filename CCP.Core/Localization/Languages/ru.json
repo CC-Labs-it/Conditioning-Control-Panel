@@ -119,6 +119,11 @@
   "chaos_announce_resist": "+1 СОПРОТИВЛЕНИЕ",
   "chaos_first_sin_demo": "первый грех на этот раз защищён",
   "chaos_duo_demo": "золотая карта. твои игрушки научились работать вместе.",
+  "Chaos_Ripple_Denied": "🌊 тихая вода... восстановление {0}",
+  "Chaos_Ripple_Gathering": "восстановление... {0}",
+  "Chaos_Ripple_Teach": "🌊 это волна. она восстанавливается сама",
+  "Chaos_Ripple_Skips": "🌊 камень скачет - три волны",
+  "Chaos_Ripple_Cast": "🌊 волна",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",
@@ -8436,5 +8441,15 @@
   "account_merged_signin_body": "Два ваших аккаунта объединены в один. Войдите снова, чтобы продолжить.\n\nЛокальный прогресс сохранён.",
   "she_wake_unavailable_tooltip": "Дополнительный движок активации sherpa-onnx недоступен в этой версии. Используется встроенное распознавание.",
   "she_wake_unavailable_status": "Дополнительный движок активации недоступен в этой версии. Используется встроенное распознавание.",
-  "she_wake_calibration_unavailable": "Калибровка слова активации недоступна в этой версии."
+  "she_wake_calibration_unavailable": "Калибровка слова активации недоступна в этой версии.",
+  "chaos_expiry_label": "ИСЧЕЗ",
+  "chaos_expiry_halved": "💨 {0} исчезает… серия сокращена до x{1}",
+  "chaos_expiry_gone": "💨 {0} исчезает",
+  "chaos_expiry_name_lucky": "счастливый пузырь",
+  "chaos_expiry_name_flash": "вспышка",
+  "chaos_expiry_name_subliminal": "сублиминал",
+  "chaos_expiry_name_pink": "розовый фильтр",
+  "chaos_expiry_name_spiral": "спираль",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "каскад GIF"
 }
