@@ -73,6 +73,9 @@ internal static class BarkHead
             Wire<Action<TimeSpan>>(h => ld.CountdownTick += h, h => ld.CountdownTick -= h,
                 ts => e.Raise("LockdownCountdownTick", c => c.Set("remaining_sec", ts.TotalSeconds)));
         }
+        if (BrainDrainPlayer.Instance is { } brainDrain)
+            Wire<EventHandler>(h => brainDrain.Triggered += h, h => brainDrain.Triggered -= h,
+                (_, _) => e.Raise("BrainDrainTriggered")); // WPF BarkService.cs:749-751
         Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
     }
 

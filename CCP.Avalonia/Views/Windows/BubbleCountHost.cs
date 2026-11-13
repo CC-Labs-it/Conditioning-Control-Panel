@@ -33,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public bool OtherInteractionActive =>
             CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
 
+        public bool DeferTrigger(Action trigger) => LockCardWindow.DeferBubble(trigger);
+
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(Games.GameWindow.IsForYouOnScreen);
 
         // ponytail: shared overlay parking is unported; reuse the existing video text hold.

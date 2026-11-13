@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -25,6 +26,7 @@ namespace CCP.Avalonia.Tests;
 /// the Session Editor's ? opens it with the SessionEditor loop playing; a topic without a loop
 /// keeps WPF's caption fallback; a topic with a clip plays it muted and
 /// looping through the head's LibVLC frame sink.</summary>
+[Collection(RunsAloneCollection.Name)]
 public sealed class HelpVideoWindowTests
 {
     [Fact]
@@ -158,11 +160,15 @@ public sealed class HelpVideoWindowTests
                     Assert.True(container.IsVisible);
                     Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
                     var sink = win.Sink!;
-                    // The 2 s, 24-frame clip runs past its end: frames keep coming (WPF EndReached -> Play loop;
-                    // without it one pass stops below 50 displays). Event-driven wait, no sleep (P08).
-                    var looped = new TaskCompletionSource();
-                    win.FrameShown += () => { if (sink.FrameCount >= 70) looped.TrySetResult(); };
-                    try { await looped.Task.WaitAsync(TimeSpan.FromSeconds(10)); } catch (TimeoutException) { }
+                    // The sink can drop frames when the UI is busy. Check both the original
+                    // 70 displayed frames and a frame after the third completed pass restarts.
+                    var looped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    int endings = 0, restarted = 0;
+                    win.Player!.EndReached += (_, _) => Interlocked.Increment(ref endings);
+                    win.Player.Playing += (_, _) => { if (Volatile.Read(ref endings) >= 3) Volatile.Write(ref restarted, 1); };
+                    win.FrameShown += () => { if (Volatile.Read(ref restarted) != 0 && sink.FrameCount >= 70) looped.TrySetResult(); };
+                    await looped.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                    Assert.True(Volatile.Read(ref endings) >= 3);
                     Assert.True(sink.FrameCount >= 70, $"looped past the 2 s end ({sink.FrameCount} frames)");
                     Assert.Same(sink.Bitmap, Assert.IsType<Image>(container.Child).Source);
                     Assert.Equal(-1, win.Player!.AudioTrack);   // muted tutorial loop: the clip's audio track is never selected

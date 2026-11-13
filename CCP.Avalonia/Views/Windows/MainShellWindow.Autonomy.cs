@@ -70,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_autonomyHooked) return;
             _autonomyHooked = true;
+            RemoteCommands.AutonomyCommand = RemoteAutonomyCommand;
+            RemoteCommands.CancelAutonomyPulses = CancelAutonomyPulses;
+            RemoteCommands.AutonomyRunning = AutonomyRunning;
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
@@ -89,10 +92,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var audio = CompanionEventAudio.Resolve(phrase);
                 _avatarTubeWindow?.GigglePriority(phrase, audio != null, aiGenerated: false, phraseAudioPath: audio);
             });
-            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
+            Closed += (_, _) => { if (RemoteCommands.AutonomyCommand == RemoteAutonomyCommand) RemoteCommands.AutonomyCommand = null;
+                if (RemoteCommands.CancelAutonomyPulses == CancelAutonomyPulses) RemoteCommands.CancelAutonomyPulses = null;
+                if (RemoteCommands.AutonomyRunning == AutonomyRunning) RemoteCommands.AutonomyRunning = null;
+                CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             OnceOpened(ResumeAutonomyOnStartup);
             Opened += (_, _) => RefreshVoiceInputModes();
         }
+
+        // WPF RemoteControlService.cs:1476: start/stop the runtime, not the saved switch.
+        private bool RemoteAutonomyCommand(bool start)
+        {
+            if (start) return Autonomy.Start();
+            Autonomy.Stop();
+            return true;
+        }
+
+        private bool AutonomyRunning() => Autonomy.IsEnabled;
 
         private bool CanPerformAutonomy(AutonomyActionType a) => a switch
         {

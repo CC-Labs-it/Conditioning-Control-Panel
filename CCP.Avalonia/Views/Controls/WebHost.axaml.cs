@@ -66,6 +66,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal event Action? NativeFullscreenEntered;
         private IDisposable? _fullscreenWatch;
         internal void OnNativeFullscreenEntered() => NativeFullscreenEntered?.Invoke();
+        /// <summary>Keys the page never sees, taken at the engine's input (Platform/WebKeySignal), any frame.
+        /// Runs on the engine's input thread, so it must be pure. Set before the first navigation.</summary>
+        internal Func<global::Avalonia.Input.Key, global::Avalonia.Input.KeyModifiers, bool>? NativeKeyFilter { get; set; }
+        internal event Action<global::Avalonia.Input.Key, global::Avalonia.Input.KeyModifiers>? NativeKeyDown;
+        private IDisposable? _keyWatch;
+        internal void OnNativeKeyDown(global::Avalonia.Input.Key key, global::Avalonia.Input.KeyModifiers mods) => NativeKeyDown?.Invoke(key, mods);
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
         /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
@@ -360,7 +366,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.AdapterDestroyed += (_, _) => { try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Trailer failure cleanup failed"); } finally { _failureWatch = null; }
-                        try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; } };
+                        try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; }
+                        try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; } };
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => {
                         // The native core exists now; subscribe before observers can reveal a scene.
@@ -370,6 +377,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         if (NativeFullscreenEntered != null && _fullscreenWatch == null)
                             try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(_web.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
                             catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
+                        if (NativeKeyFilter is { } wants && _keyWatch == null)
+                            try { _keyWatch = Platform.WebKeySignal.Attach(_web.TryGetPlatformHandle(), wants, OnNativeKeyDown); }
+                            catch (Exception ex) { Log.Debug(ex, "Key signal subscription failed"); }
                         OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     };
                     _web.NewWindowRequested += (_, e) => { if (SuppressNewWindows) e.Handled = true; else e.Handled = OnBrowserPopup(e.Request); };
