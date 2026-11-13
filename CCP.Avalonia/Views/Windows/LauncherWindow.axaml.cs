@@ -583,7 +583,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (game == null) return;
             AfterExitBeat(() =>
             {
-                bool shell = game.RaceShell?.IsAlive == true;   // the Linux race shell: its session window is never shown
+                bool shell = (game as Games.GameWindow)?.RaceShell?.IsAlive == true;   // the Linux race shell: its session window is never shown
                 if (!game.IsVisible && !shell) return;
                 Hide();
                 if (!shell) game.Activate();
