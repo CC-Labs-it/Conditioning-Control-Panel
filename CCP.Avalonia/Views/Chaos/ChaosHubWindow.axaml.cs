@@ -1964,6 +1964,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var mode = (sender as Control)?.Tag?.ToString() == "FreeDesktop"
                 ? ChaosPlayMode.FreeDesktop : ChaosPlayMode.Story;
+            _fallingIn = true;
             SaveToSettings();
             Close();
             var cfg = ChaosRunConfig.FromSettings();
@@ -1997,19 +1998,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _dollhouseView.IsVisible = true;
         }
 
-        /// <summary>Straight into a descent. WPF also detached the companion for the handoff
-        /// (<c>App.AvatarWindow?.SetChaosRunActive(true)</c>).
-        /// <para>ponytail: NOT a Core move - <c>App.AvatarWindow</c> is an
-        /// <c>AvatarTubeWindow</c>, a window, and windows do not move to Core. What this needs is
-        /// on this head: <c>SetChaosRunActive</c> on
-        /// CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs (it has no such member yet) and
-        /// an owner holding the live instance.</para></summary>
-        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) { StopMenuMusic(); FallIn(); }
+        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) { StopMenuMusic(); BeginCompanionHandoff(); FallIn(); }
 
         private void Menu_Dollhouse_Click(object? sender, RoutedEventArgs e)
         {
             // WPF also spawned the loadout sidebar here (App.Chaos.ShowLoadoutSidebar).
             // ponytail: needs ChaosService, wired when it moves to Core.
+            EnterRunContext();
             ShowDollhouseView();
             ShowTab("loadout");
         }
@@ -2222,11 +2217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void SetFullscreen(bool on) => WindowState = on ? WindowState.Maximized : WindowState.Normal;
 
-        /// <summary>WPF also detached the companion tube while maximized (it is anchored to the
-        /// main window). ponytail: same head-side blocker as <see cref="Menu_FallIn_Click"/> -
-        /// <c>SetChaosRunActive</c> on CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs,
-        /// plus an owner for the live instance. Nothing here is waiting on Core.</summary>
-        private void OnHubStateChanged(WindowState state) => _optFullscreen.IsChecked = state == WindowState.Maximized;
+        private void OnHubStateChanged(WindowState state) { _optFullscreen.IsChecked = state == WindowState.Maximized; UpdateCompanionForHubState(state); }
 
         /// <summary>Re-open the spoiler-free rules card on demand, modal over the dollhouse
         /// (WPF ChaosHubWindow.xaml.cs:2942-2948). Never touches SeenIntroGuide.</summary>
