@@ -81,25 +81,8 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
-        // WPF App.xaml.cs:416-419 and MergedAccountRecoveryHead.Seed.
-        V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
-        MergedAccountRecovery.StopSync = () => Sync?.Reset();
-        MergedAccountRecovery.StampQuests = id => App.Quests?.StampOwner(id);
-        MergedAccountRecovery.Reauthenticate = ReauthenticateAfterMergedSwapAsync;
-        MergedAccountRecovery.ReloadProfile = async () => { await LoadProfileAsync(); };
-        MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
-        {
-            RecoveryShell()?.UpdateQuickLoginUI(accountChanged: true);
-            if (!reauthed)
-                StartupLadder.PresentOrInbox(new InboxItem
-                {
-                    Key = "merged-account-signin:" + canonical,
-                    Glyph = "🔗",
-                    Title = Loc.Get("account_merged_signin_title"),
-                    Summary = Loc.Get("account_merged_signin_summary"),
-                    Open = () => { if (RecoveryShell() is { } shell) _ = shell.OpenLoginAfterMergedSwap(); },
-                });
-        });
+        // WPF App.xaml.cs:416-419: contract D's swap seams, one owner (MergedAccountRecoveryHead).
+        MergedAccountRecoveryHead.Seed();
         // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.
         AuthRecovery.Recovered = () => { if (Sync is { Loaded: true } sync) sync.StartHeartbeat(); };
         AuthRecovery.ProviderRevalidate = async () =>
@@ -117,47 +100,16 @@ internal static class AccountSeed
     }
 
     /// <summary>WPF App.ReauthenticateAfterMergedSwapAsync: mint a fresh token from an existing provider.</summary>
-    internal static async Task<bool> ReauthenticateAfterMergedSwapAsync()
-    {
-        var v2 = NewV2();
-        foreach (var provider in new[] { "patreon", "discord", "substar" })
-        {
-            try
-            {
-                var token = provider switch
-                {
-                    "patreon" when Patreon?.IsAuthenticated == true => Patreon.GetAccessToken(),
-                    "discord" when Discord?.IsAuthenticated == true => Discord.GetAccessToken(),
-                    "substar" when SubscribeStar?.IsAuthenticated == true => SubscribeStar.GetAccessToken(),
-                    _ => null,
-                };
-                if (string.IsNullOrEmpty(token)) continue;
-                var result = provider switch
-                {
-                    "patreon" => await v2.AuthenticateWithPatreonAsync(token),
-                    "discord" => await v2.AuthenticateWithDiscordAsync(token),
-                    _ => await v2.AuthenticateWithSubstarAsync(token),
-                };
-                if (!result.Success || result.User == null || string.IsNullOrEmpty(result.User.UnifiedId)
-                    || string.IsNullOrEmpty(result.AuthToken)) continue;
-                ApplyLoginUserData(CoreSettings.Current, result.User, result.AuthToken, DateTime.UtcNow);   // keeps a pending Descent migration's ledger, as LoginDialog
-                CoreAccount.UnifiedUserId = result.User.UnifiedId;
-                CoreSettings.Save();
-                return true;
-            }
-            catch (Exception ex) { Log.Warning(ex, "Merged account provider sign-in failed"); }
-        }
-        return false;
-    }
+    internal static Task<bool> ReauthenticateAfterMergedSwapAsync() => MergedAccountRecoveryHead.ReauthenticateAsync();
 
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
     /// only when something can still prove it (an auth token, or a signed-in provider): with no Secret Service
-    /// the token is gone after a restart, and showing "signed in" with nothing behind it is worse than signed out.</summary>
+    /// the token is gone after a restart, so the identity is not restored except for a pending merged swap.</summary>
     internal static void RestoreSession()
     {
         var id = CoreSettings.Current.UnifiedId;
         if (string.IsNullOrEmpty(id)) return;
-        if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
+        if (!CoreSettings.Current.MergedSignInPending && string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
             && Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true && SubscribeStar?.IsAuthenticated != true)
         {
             Log.Information("Stored UnifiedUserId not restored: no auth token and no signed-in provider");
@@ -175,14 +127,17 @@ internal static class AccountSeed
     {
         var id = CoreAccount.UnifiedUserId;
         if (string.IsNullOrEmpty(id) || CoreSettings.Current.OfflineMode) return;
+        // A pending merge: a provider mints the token (WPF App.xaml.cs:4690,4757); when none can, restore-session does (WPF :4805).
+        var unproven = CoreSettings.Current.MergedSignInPending && !await MergedAccountRecoveryHead.ReauthenticateAsync();
         v2 ??= NewV2();
         // If a provider already authenticated, it validated the session (and owns the load in WPF).
-        if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
+        if (unproven || (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true))
         {
             Log.Information("Validating restored session for {Id}...", id);
             var outcome = await v2.ValidateRestoredSessionAsync(id);
-            if (outcome == V2AuthService.RestoreOutcome.Cleared) CoreAccount.UnifiedUserId = null;
+            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;
+            if (unproven && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) { CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
         }
         await LoadProfileAsync(v2);
     }
@@ -440,6 +395,7 @@ internal static class AccountSeed
         Discord?.Logout();
         SubscribeStar?.Logout();
         CoreAccount.UnifiedUserId = null;
+        CoreSettings.Current.MergedSignInPending = false;
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;

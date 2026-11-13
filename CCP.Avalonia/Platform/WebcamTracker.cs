@@ -511,6 +511,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             Calibration = data;
             _gaze.ResetSideHysteresis();
+            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
         }
 
         /// <summary>WPF Quick Recal's SetRuntimeOffset: swap the whole calibration (the capture thread

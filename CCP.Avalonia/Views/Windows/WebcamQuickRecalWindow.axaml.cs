@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly List<(double X, double Y)> _samples = new();
         private bool _collecting, _cancelled, _completedOk, _offsetParked;
         private static readonly HashSet<WebcamQuickRecalWindow> Active = new();
+        internal static bool IsShowing => Active.Count != 0;
 
         internal static void CloseAllForPanic()
         {

@@ -1,4 +1,5 @@
 {
+  "webcam_drift_unavailable": "Global clicks are unavailable on this desktop. Auto drift correction is off.",
   "scheduler_started_title": "Scheduler Active",
   "scheduler_started_body": "Session auto-started based on schedule.",
   "scheduler_ended_title": "Scheduler",
