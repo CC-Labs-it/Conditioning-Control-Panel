@@ -81,6 +81,33 @@ internal static class Win32Overlay
             0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    /// <summary>The Windows half of <see cref="X11Overlay.RestackAbove"/>: z-order only, no activation, no
+    /// geometry, no owner moves. Styles, click-through and focus are untouched.</summary>
+    internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling)
+    {
+        if (!OperatingSystem.IsWindows() || !IsWindow(hwnd) || !IsWindow(sibling)) return false;
+        return RestackAbove(hwnd, sibling, h => GetWindow(h, 3 /* GW_HWNDPREV */),
+            h => (GetWindowLong(h, GwlExStyle) & WsExTopmost) != 0,
+            (h, after, flags) => SetWindowPos(h, after, 0, 0, 0, 0, flags));
+    }
+
+    // WPF AvatarTubeWindow.Windowing.cs:283-284 keeps the attached tube directly above main;
+    // Win32 inserts BELOW hWndInsertAfter, so inserting after sibling would reverse RestackAbove.
+    // Use the sibling's predecessor, without moving the sibling or its owner. Keep the sibling's topmost band at its boundary.
+    internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling, Func<IntPtr, IntPtr> previous,
+        Func<IntPtr, bool> topmost, Func<IntPtr, IntPtr, uint, bool> position)
+    {
+        if (hwnd == IntPtr.Zero || sibling == IntPtr.Zero || hwnd == sibling) return false;
+        var above = previous(sibling);
+        var band = topmost(sibling);
+        if (above == hwnd && topmost(hwnd) == band) return true;
+        // WPF attached tubes must also shed stray TOPMOST (AvatarTubeWindow.Windowing.cs:277-284).
+        if (above == IntPtr.Zero || topmost(above) != band)
+            // NOTOPMOST is a no-op for an already non-topmost window. TOP raises it in that band.
+            above = new IntPtr(band ? -1 : topmost(hwnd) ? -2 : 0);
+        return position(hwnd, above, SwpNoMove | SwpNoSize | SwpNoActivate | 0x200 /* SWP_NOOWNERZORDER */);
+    }
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 
@@ -202,7 +229,8 @@ internal static class Win32Overlay
     }
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
-    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
     private const int GwlHwndParent = -8;
     private const uint GwHwndPrev = 3;
     private const uint WmWindowPosChanging = 0x0046;
