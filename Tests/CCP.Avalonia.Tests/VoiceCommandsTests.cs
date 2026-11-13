@@ -22,7 +22,11 @@ namespace CCP.Avalonia.Tests;
 /// wake loop opens the mic only when armed + consented + entitled, Stop / revoke / lapse close it,
 /// panic aborts the capture in flight but leaves the loop armed, and the spoken safe word reaches exactly
 /// as far as the panic key (hard rule 6, owner 2026-10-22: refused under Lockdown, whole once it ends). Fed by Vosk's test.wav through a fake mic, never a
-/// real microphone. The WAV says "one zero zero zero one", which the user sets as the wake phrase.</summary>
+/// real microphone. The WAV says "one zero zero zero one", which the user sets as the wake phrase.
+/// Runs alone: its tests switch process-wide state (LockdownService.Current, the panic key, the mic seam)
+/// and then yield the shared UI thread. Any parallel class whose job runs in that gap and closes, minimizes or stops
+/// its own shell trips this test's Lockdown wire (and a refused close leaves that shell open). Wave 2 Linux shard 4 counted 2.</summary>
+[Collection(RunsAloneCollection.Name)]
 public sealed class VoiceCommandsTests
 {
     [Fact]
@@ -180,14 +184,14 @@ public sealed class VoiceCommandsTests
         {
             Assert.True(shell.SetAutonomyEnabled(true));
             ld.Activate(TimeSpan.FromMinutes(30));
-            var escapes = 0;
-            ld.EscapeAttempted += _ => escapes++;
+            var escapes = new System.Collections.Generic.List<string>();
+            ld.EscapeAttempted += a => escapes.Add(a.Kind);
             var wake = new[] { "hey bambi" };
 
             Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi stop taking over", wake));
             Dispatcher.UIThread.RunJobs();
             Assert.True(shell.Autonomy.IsEnabled);       // refused (#514) ...
-            Assert.Equal(1, escapes);                    // ... and it trips the escape wire
+            Assert.Equal(new[] { ConditioningControlPanel.Services.Possession.EscapeKinds.Stop }, escapes);   // ... and trips the wire once
 
             // Hard rule 6 (owner 2026-10-22, supersedes the 2026-09-30 "voice panic stays unguarded"):
             // the spoken safe word is never more permissive than the panic key, which Lockdown ignores.
