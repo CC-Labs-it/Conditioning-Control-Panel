@@ -421,6 +421,47 @@ public sealed partial class AccountSeedTests : IDisposable
         });
     }
 
+    [Fact]
+    public Task A_focus_read_applies_the_member_fields_on_the_same_request() => WithTierReadings("free-member", 0, ReadingClock(), async (s, events) =>
+    {
+        var saved = (s.PatreonMember, s.ServerPaidUntil, s.PostGrants);
+        var applied = 0;
+        void Applied() => applied++;
+        AccountSeed.ProfileExtrasApplied += Applied;
+        try
+        {
+            s.PatreonMember = false;
+            s.ServerPaidUntil = DateTime.UtcNow;
+            s.PostGrants = new Dictionary<string, string>();
+            var answer = new Answer(HttpStatusCode.OK, JsonConvert.SerializeObject(new
+            {
+                user = new { effective_tier = 0, patreon_member = true, paid_until = (string?)null, post_grants = new { voice = "2099-01-01T00:00:00Z" } },
+            }));
+
+            await AccountSeed.OnAppFocusedAsync(new V2AuthService(() => s, answer));
+
+            Assert.Equal(1, answer.Requests);   // the tier and the member fields ride one read (no second focus poll)
+            Assert.True(s.PatreonMember);
+            Assert.Null(s.ServerPaidUntil);
+            Assert.True(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.GrantOpen(s.PostGrants, "voice", DateTime.UtcNow));
+            Assert.Equal(1, applied);
+            // A field the server did not send keeps what is stored (older server).
+            AccountSeed.ApplyProfileExtras(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Parse(new Newtonsoft.Json.Linq.JObject()));
+            Assert.True(s.PatreonMember);
+            // Signed out: nothing moves.
+            s.AuthToken = null;
+            AccountSeed.ApplyProfileExtras(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Parse(
+                Newtonsoft.Json.Linq.JObject.Parse("{\"patreon_member\":false}")));
+            Assert.True(s.PatreonMember);
+            Assert.Equal(2, applied);
+        }
+        finally
+        {
+            AccountSeed.ProfileExtrasApplied -= Applied;
+            (s.PatreonMember, s.ServerPaidUntil, s.PostGrants) = saved;
+        }
+    });
+
     private sealed class Answer(HttpStatusCode status, string body = "{}") : HttpMessageHandler
     {
         public int Requests;
