@@ -18,6 +18,8 @@ internal sealed class FloatingVideoFrame
     private readonly Func<(PixelPoint Position, bool Down)?>? _nativePointer;
     private readonly FloatingVideoMotion _motion;
     private readonly HookProc _mouseHookProc;
+    // Only the real cursor reader installs the system mouse hook; an injected pointer (tests) polls.
+    private readonly bool _hookable;
     private IntPtr _mouseHook;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly BeatLoop _beat;
@@ -36,6 +38,7 @@ internal sealed class FloatingVideoFrame
         _window = window; _frame = frame;
         _mouseHookProc = OnNativeMouse;
         _nativePointer = nativePointer ?? (OperatingSystem.IsWindows() ? ReadNativePointer : null);
+        _hookable = nativePointer == null && OperatingSystem.IsWindows();
         _audible = audible ?? (() => false);
         _nowMs = nowMs ?? (() => _clock.Elapsed.TotalMilliseconds);
         var b = window.Screens.ScreenFromWindow(window)?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
@@ -94,7 +97,7 @@ internal sealed class FloatingVideoFrame
         _receivingNativeMoves = false;
         _motion.Press(p.X, p.Y, _nowMs());
         UpdateRate();
-        if (_nativePointer != null && OperatingSystem.IsWindows())
+        if (_hookable)
         {
             StopMouseHook();
             _mouseHook = SetWindowsHookEx(14, _mouseHookProc, GetModuleHandle(null), 0);
