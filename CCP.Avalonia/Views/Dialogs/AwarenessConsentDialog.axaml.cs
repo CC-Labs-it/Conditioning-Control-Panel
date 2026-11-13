@@ -55,10 +55,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// <para>Async because Avalonia's <c>ShowDialog</c> is; the WPF original was blocking. The
         /// owner is required for the same reason — a parentless modal has nothing to be modal to.</para>
         /// </summary>
-        public static async Task<bool> EnsureConsentAsync(Window? owner, AppSettings? settings)
+        public static async Task<bool> EnsureConsentAsync(Window? owner, AppSettings? settings, bool force = false)
         {
             if (settings == null) return false;
-            if (!IsRequired(settings)) return true;
+            if (!force && !IsRequired(settings)) return true;
 
             bool accepted;
             try
