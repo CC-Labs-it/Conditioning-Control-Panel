@@ -85,6 +85,7 @@
   "msg_export_server_error_0": "Erro do servidor: {0}",
   "title_select_companion_personality": "Selecionar personalidade de IA para {0}",
   "filter_personality_json_files": "Arquivos JSON de personalidade",
+  "chaos_heavy_fizzle": "As profundezas estão ocupadas. {0} se dissipa",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",

@@ -80,6 +80,7 @@
   "msg_export_server_error_0": "Errore del server: {0}",
   "title_select_companion_personality": "Scegli la personalità IA per {0}",
   "filter_personality_json_files": "File JSON di personalità",
+  "chaos_heavy_fizzle": "Le profondità sono occupate. {0} svanisce",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

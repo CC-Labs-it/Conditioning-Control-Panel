@@ -85,6 +85,7 @@
   "msg_export_server_error_0": "Serverfehler: {0}",
   "title_select_companion_personality": "KI-Persönlichkeit für {0} auswählen",
   "filter_personality_json_files": "JSON-Persönlichkeitsdateien",
+  "chaos_heavy_fizzle": "Die Tiefe ist beschäftigt. {0} verpufft",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",

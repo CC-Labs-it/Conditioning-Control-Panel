@@ -85,6 +85,7 @@
   "msg_export_server_error_0": "サーバーエラー: {0}",
   "title_select_companion_personality": "{0}のAIパーソナリティを選択",
   "filter_personality_json_files": "パーソナリティのJSONファイル",
+  "chaos_heavy_fizzle": "深淵は使用中です。{0}は不発です",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

@@ -142,6 +142,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // With a panic already queued, start only after it has run: it usually ends the run, and
             // then nothing (boons, HUD, StartToys) ever starts. Background runs after the panic's Default.
             if (PanicWatchdog.PanicPending) { Dispatcher.UIThread.Post(BeginRun, DispatcherPriority.Background); return; }
+            _heavyUntilUtc = DateTime.MinValue;   // WPF ChaosModeService.cs:405
+            HookRunVideo();   // WPF ChaosModeService.cs:504
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
             var picks = _state.RunPickTiles;
             _boonBar = ChaosBoonBarOverlay.ForRun();
@@ -460,6 +462,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
+        private static MandatoryVideoScheduler? _runVideo;
+
+        // WPF ChaosModeService.cs:503-504,2164-2174,2260: a mandatory video that ends mid-run keeps
+        // the heavy gate shut 3 s more (never shortening an existing floor).
+        private static void HookRunVideo()
+        {
+            UnhookRunVideo();
+            _runVideo = CoreEngine.Video;
+            if (_runVideo != null) _runVideo.VideoEnded += OnVideoEndedDuringRun;
+        }
+
+        internal static void OnVideoEndedDuringRun()
+        {
+            var until = BubbleOverlay.Field.Clock().AddSeconds(3);
+            if (until > _heavyUntilUtc) _heavyUntilUtc = until;
+        }
+
+        private static void UnhookRunVideo()
+        {
+            // Unsubscribe the captured publisher even if CoreEngine.Video has since changed.
+            if (_runVideo != null) _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            _runVideo = null;
+        }
 
         // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
         // detonations, including during the off-thread pool pick, without queuing.
@@ -469,7 +494,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             bool heavy = payload.Kind is EffectBubblePayloadKind.GifCascade or EffectBubblePayloadKind.Video;
             var now = BubbleOverlay.Field.Clock();
             if (heavy && (CoreEngine.Video?.IsPlaying == true || ChaosGifCascadeOverlay.IsRaining || now < _heavyUntilUtc))
+            {
+                // WPF ChaosModeService.cs:2308-2309: drop only the effect, with a feed line.
+                Log.Information("Chaos: dropped {Kind} detonation: a heavy effect is already running", payload.Kind);
+                _state?.PushEvent(Loc.GetF("chaos_heavy_fizzle", payload.DisplayName));
                 return;
+            }
             if (payload.Kind == EffectBubblePayloadKind.GifCascade)
                 _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
             // WPF ChaosModeService.cs:2321-2337: the variant's stinger follows gate acceptance.
@@ -625,6 +655,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             ChaosSkiaFxOverlay.CloseActive();   // WPF ChaosModeService.ForceShutdown; before the idle return
+            UnhookRunVideo();   // WPF ChaosModeService.cs:3220
             _heavyUntilUtc = DateTime.MinValue;
             ChaosGifCascadeOverlay.CloseActive(); // also cancel a pending pick before the idle return
             if (!_active && _hud == null && _overlay == null && _fx == null) return;
@@ -679,6 +710,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
             ChaosRunLessons.OnRunCompleted(_state.Shields, _state.Config.Difficulty, ranFullCourse);
             _spawning = false;
+            UnhookRunVideo();   // WPF EndRun :3220
+            _heavyUntilUtc = DateTime.MinValue;
             _runTimer?.Stop();
             EndField();
             StopToys();
@@ -842,6 +875,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hud = null;
             _overlay = null;
             _state = null;
+            UnhookRunVideo();   // WPF CleanupAfterRun :3318
             _heavyUntilUtc = DateTime.MinValue;
             _active = false;
             _spawning = false;
