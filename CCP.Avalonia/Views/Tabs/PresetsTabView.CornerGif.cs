@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                          (RbCornerBL, CornerPosition.BottomLeft), (RbCornerBR, CornerPosition.BottomRight) })
                 rb.IsCheckedChanged += (_, _) =>
                 {
-                    if (rb.IsChecked == true) LiveCornerGifEdit(ss => ss.CornerGifPosition = corner);
+                    if (rb.IsChecked == true && App.Sessions is { IsRunning: true } runner) runner.UpdateCornerGifPosition(corner);
                 };
         }
 

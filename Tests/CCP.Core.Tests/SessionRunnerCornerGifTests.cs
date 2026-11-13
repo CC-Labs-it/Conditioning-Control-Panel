@@ -272,6 +272,30 @@ public sealed class SessionRunnerCornerGifTests : IDisposable
         finally { CoreCornerGif.SessionOpacityHandler = previous; }
     }
 
+    [Fact]
+    public void PositionEditRemembersHiddenCornerAndMovesShownSurfaceWithoutRecreate()
+    {
+        var moves = new List<CornerPosition>();
+        var previous = CoreCornerGif.SessionPositionHandler;
+        CoreCornerGif.SessionPositionHandler = moves.Add;
+        try
+        {
+            var session = Gamer(start: 2);
+            _standalone = true;
+            _runner.Start(session);
+            _runner.UpdateCornerGifPosition(CornerPosition.BottomLeft);
+            Assert.Equal(CornerPosition.BottomLeft, session.Settings.CornerGifPosition);
+            Assert.Empty(moves);
+            _standalone = false;
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            _runner.UpdateCornerGifPosition(CornerPosition.BottomRight);
+            Assert.Equal(CornerPosition.BottomRight, session.Settings.CornerGifPosition);
+            Assert.Equal(new[] { CornerPosition.BottomRight }, moves);
+            Assert.Equal(new[] { "show BottomLeft 250 40" }, _events);
+        }
+        finally { CoreCornerGif.SessionPositionHandler = previous; }
+    }
+
     [Theory]
     [InlineData(true, true, false, true, true, false, true)]
     [InlineData(false, true, false, false, true, false, false)]   // the template did not ask

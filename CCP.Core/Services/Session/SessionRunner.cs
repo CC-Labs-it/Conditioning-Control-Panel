@@ -568,7 +568,7 @@ namespace ConditioningControlPanel.Services
             finally { _refreshingCornerGifPolicy = false; }
         }
 
-        /// <summary>WPF UpdateCornerGifPath/Size/Position (#474): the session's own
+        /// <summary>WPF UpdateCornerGifPath/Size (#474): the session's own
         /// settings take the edit, and a shown overlay is re-shown with it (hide-only close).</summary>
         public void UpdateCornerGif(Action<SessionSettings> edit)
         {
@@ -577,6 +577,14 @@ namespace ConditioningControlPanel.Services
             if (!CornerGifShown) return;
             CloseCornerGif(handBack: false);
             ShowCornerGif(session.Settings);
+        }
+
+        /// <summary>WPF SessionEngine.cs:2328: remember the corner even while hidden and move a shown surface.</summary>
+        public void UpdateCornerGifPosition(CornerPosition position)
+        {
+            if (CurrentSession is not { } session) return;
+            session.Settings.CornerGifPosition = position;
+            if (CornerGifShown) CoreCornerGif.SessionPositionHandler?.Invoke(position);
         }
 
         /// <summary>WPF SessionEngine.cs:2380: opacity applies only while the session corner is shown.</summary>

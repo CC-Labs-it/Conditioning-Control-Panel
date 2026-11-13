@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             public List<Bitmap> Frames = new();
             public DispatcherTimer? Timer;
             public int Index;
+            public PixelRect Bounds;
         }
 
         private sealed record Pending(CornerGifOverlaySetting Setting, long DueMs, int Defers);
@@ -66,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _pump;
         private static bool _refused;
         private static int _sessionOpacity;
+        private static CornerPosition _sessionPosition;
 
         internal static Task? LastDecode { get; private set; }
         internal static IReadOnlyCollection<int> ShownSlots => Windows.Keys;
@@ -98,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CoreCornerGif.SessionShowHandler = setting => OnUi(() => { if (host() is { } h) ShowSession(h, setting); });
             CoreCornerGif.SessionCloseHandler = handBack => OnUi(() => CloseSession(handBack ? host() : null));
             CoreCornerGif.SessionOpacityHandler = opacity => OnUi(() => SetSessionOpacity(opacity));
+            CoreCornerGif.SessionPositionHandler = position => OnUi(() => SetSessionPosition(position));
             CoreCornerGif.StandaloneActiveProvider = () => HasActiveOverlays;
             CoreCornerGif.SpiralOverlayActiveProvider = () => SpiralOverlay.IsShowing;
         }
@@ -120,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _host = host;
             _sessionOpacity = Math.Clamp(setting.Opacity, 1, 100);
+            _sessionPosition = setting.Position;
             CloseSlot(SessionSlot);
             QueueShow(SessionSlot, setting);
         }
@@ -131,6 +135,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sessionOpacity = opacity;
             if (Windows.TryGetValue(SessionSlot, out var shown))
                 shown.Window.Spiral.Opacity = Math.Clamp(opacity / 100.0, 0, 1);
+        }
+
+        // WPF SessionEngine.cs:2328: move the existing window and preserve the animation.
+        private static PixelRect SessionBounds(PixelRect bounds)
+        {
+            if (_host is not { } host) return bounds;
+            var screens = ScreenList.Enumerate(host);
+            var screen = screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+            if (screen is null) return bounds;
+            var area = screen.Bounds;
+            int x = _sessionPosition is CornerPosition.TopRight or CornerPosition.BottomRight ? area.Right - bounds.Width : area.X;
+            int y = _sessionPosition is CornerPosition.BottomLeft or CornerPosition.BottomRight ? area.Bottom - bounds.Height : area.Y;
+            return new PixelRect(x, y, bounds.Width, bounds.Height);
+        }
+
+        private static void SetSessionPosition(CornerPosition position)
+        {
+            _sessionPosition = position;
+            if (Windows.TryGetValue(SessionSlot, out var shown))
+            {
+                shown.Bounds = SessionBounds(shown.Bounds);
+                shown.Window.Position = shown.Bounds.Position;
+            }
         }
 
         /// <summary>WPF SessionEngine.CloseCornerGif: a non-null host is the handback, which
@@ -319,6 +346,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Decoding.Remove(index);
+            if (index == SessionSlot) bounds = SessionBounds(bounds);
             var w = new SpiralOverlayWindow();
             w.Spiral.Stretch = global::Avalonia.Media.Stretch.Uniform;
             w.Spiral.Source = frames[0];
@@ -332,7 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SyncSentinel();
                 return;
             }
-            var shown = new Shown { Window = w, Frames = frames };
+            var shown = new Shown { Window = w, Frames = frames, Bounds = bounds };
             Windows[index] = shown;   // tracked BEFORE Show, so a throwing Show stays reachable (#709)
             try { w.Show(); }
             catch (Exception ex)
