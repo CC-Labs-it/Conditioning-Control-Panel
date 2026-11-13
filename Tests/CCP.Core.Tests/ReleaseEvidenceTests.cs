@@ -44,6 +44,10 @@ public sealed class ReleaseEvidenceTests : IDisposable
         Write("Version.props", "<Version>1.2.3</Version>\n");
         Write("LICENSE", "fixture license");
         Write("packaging/linux/share/applications/test.desktop", "fixture desktop");
+        // The script also ships the launcher, the race engine check and its notices (restack b29: the trunk's
+        // build-tarball.sh copies them under set -e, so a fixture without them stops the build).
+        foreach (var shipped in new[] { "packaging/linux/conditioning-control-panel.sh", "packaging/linux/rt-engine-check.sh", "packaging/linux/RT-ENGINE-NOTICES.txt" })
+            Write(shipped, File.ReadAllText(Path.Combine(Repo(), shipped)));
         // Only the expensive publish/download boundaries are substituted. The packaging script,
         // archive extraction and runtime model discovery are real.
         Write(".github/scripts/fetch-vosk-model.sh", "echo \"$(dirname \"$0\")/../../model/vosk-model-small-en-us-0.15\"\n");
@@ -65,6 +69,7 @@ public sealed class ReleaseEvidenceTests : IDisposable
         Assert.Equal("acoustic fixture", File.ReadAllText(Path.Combine(model!, "am/final.mdl")));
         Assert.True(File.Exists(Path.Combine(install, "LICENSE")));
         Assert.True(File.Exists(Path.Combine(install, "libvosk.so")));
+        Assert.True(File.Exists(Path.Combine(install, "conditioning-control-panel.sh")));
     }
 
     [Fact]
