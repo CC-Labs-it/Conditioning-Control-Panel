@@ -75,12 +75,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, Windows.MainShellWindow? panel = null)
         {
             id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
-            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec);
+            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec, panel: panel);
         }
 
         /// <summary>A friend's Racing Thoughts invite: the same race gate and window, plus the room to join
@@ -102,7 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning(ex, "[Game] gate for {Id} threw; refused", spec.Id); return false; }
         }
 
-        private static GameWindow? LaunchWindow(Game spec, bool gated = false, string? room = null)
+        private static GameWindow? LaunchWindow(Game spec, bool gated = false, string? room = null,
+            Windows.MainShellWindow? panel = null)
         {
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase)
@@ -140,6 +141,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             else window.Load(Server(), room);
             window.Show();
+            // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
+            if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
+                window.AttachJustDropOwner(shell);
             return window;
         }
 

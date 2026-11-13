@@ -8,6 +8,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Services.EmiDesk;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Localization;
@@ -15,6 +20,8 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Models;
+using System.Collections.Generic;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -119,6 +126,42 @@ public sealed class TakeawayShelfTests
         Assert.Equal(prior, shell.WindowState);
     });
 
+    [Fact]
+    public Task NativeOwnershipFollowsVisiblePanelAndUnsubscribesOnClose() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var owners = new System.Collections.Generic.List<Window?>();
+        NativeWindowOwner.SetForTests = (_, owner) => { owners.Add(owner); return true; };
+        // WPF JustDropHostService.cs:68-75: the shop stays windowed.
+        shell.OpenJustDrop();
+        var shop = GameWindow.OpenForTests(GameWindow.JustDropId)!;
+        Assert.NotEqual(WindowState.FullScreen, shop.WindowState);
+        Assert.True(shop.JustDropOwnerLinked);
+        Assert.Same(shell, owners[^1]);
+        shop.WindowState = WindowState.Maximized;
+        shell.WindowState = WindowState.Minimized;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(shop.JustDropOwnerLinked);
+        Assert.Null(owners[^1]);
+        Assert.True(shop.IsVisible);
+        Assert.Equal(WindowState.Maximized, shop.WindowState); // owner changes preserve the player state
+        shop.WindowState = WindowState.Normal;
+        shell.WindowState = WindowState.Normal;
+        Assert.True(shop.JustDropOwnerLinked);
+        shell.Hide();
+        Assert.False(shop.JustDropOwnerLinked);
+        shell.Show();
+        Assert.True(shop.JustDropOwnerLinked);
+        shop.Close();
+        int closedCalls = owners.Count;
+        shell.WindowState = WindowState.Maximized;
+        Assert.Equal(closedCalls, owners.Count);
+        var replay = GameWindow.LaunchJustDropReplay("kept", shell)!;
+        Assert.False(replay.JustDropOwnerLinked);
+        Assert.Null(owners[^1]);
+        replay.Close();
+    });
+
     /// <summary>ccp-bugs #1499 (WPF JustDropHostService.cs:176-188): a refused sign-in handoff opens the
     /// signed-out destination once; the site's own pages never trip it.</summary>
     [Fact]
@@ -220,6 +263,15 @@ public sealed class TakeawayShelfTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var state = EmiState.Current;
+        var usage = new Dictionary<string, int>(state.Usage);
+        var score = new Dictionary<string, double>(state.OpenScore);
+        var usageAt = new Dictionary<string, long>(state.UsageAt);
+        var motion = CoreSettings.Current.MotionLevel;
+        var getHandle = NativeWindowOwner.HandleForTests;
+        var nativeOwner = NativeWindowOwner.SetForTests;
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+        NativeWindowOwner.SetForTests = (_, _) => true;
         var get = CoreSecrets.RetrieveProvider;
         var id = CoreAccount.UnifiedUserId;
         var http = JustDropOrdersService.Http;
@@ -239,6 +291,12 @@ public sealed class TakeawayShelfTests
         finally
         {
             GameWindow.CloseAllForPanic(); shell?.Close();
+            CoreSettings.Current.MotionLevel = motion;
+            NativeWindowOwner.HandleForTests = getHandle;
+            NativeWindowOwner.SetForTests = nativeOwner;
+            state.Usage.Clear(); foreach (var entry in usage) state.Usage[entry.Key] = entry.Value;
+            state.OpenScore.Clear(); foreach (var entry in score) state.OpenScore[entry.Key] = entry.Value;
+            state.UsageAt.Clear(); foreach (var entry in usageAt) state.UsageAt[entry.Key] = entry.Value;
             JustDropOrdersService.Http = http; JustDropOrdersService.Invalidate();
             CoreSecrets.RetrieveProvider = get; CoreAccount.UnifiedUserId = id;
             JustDropService.SetServerEnabledForTests(available);
