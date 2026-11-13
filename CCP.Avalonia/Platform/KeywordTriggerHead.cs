@@ -225,7 +225,8 @@ internal sealed class KeywordAudioRuntime
             try { QuestCredit(); } catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); }
         var first = fired[0];
         List<KeywordAction> actions;
-        if (fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0))
+        var legacy = fired.Count == 1 && (first.Actions == null || first.Actions.Count == 0);
+        if (legacy)
         {
             actions = new();
             if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
@@ -241,6 +242,12 @@ internal sealed class KeywordAudioRuntime
             actions = fired.SelectMany(t => t.Actions ?? new()).Where(a => a is { Enabled: true } &&
                 seen.Add(a is VisualEffectAction ve ? $"VisualEffect:{ve.Effect}" : a.GetType().Name)).ToList();
         }
+        // WPF KeywordTriggerService DispatchActionsAsync: actions duck once when any audio action asks
+        // and audio is not held; DispatchLegacyFlatFieldsAsync ducks on DuckAudio even while audio is held.
+        // Either way a match whose clip never plays (held, missing) still ducks for 500 ms.
+        var running = CoreSession.IsEngineRunning || CoreSession.IsSessionRunning;
+        var duck = legacy ? first.DuckAudio
+            : running && actions.OfType<PlayAudioAction>().Any(a => a.DuckSystemAudio);
         var played = false;
         foreach (var action in actions)
         {
@@ -249,9 +256,12 @@ internal sealed class KeywordAudioRuntime
             {
                 switch (action)
                 {
+                    // The first clip that actually plays wins; a missing first clip lets the next one try.
+                    // Legacy flat fields check the stored path as is (WPF File.Exists(trigger.AudioFilePath)).
                     case PlayAudioAction audio when !played:
-                        played = true;
-                        if (!await PlayAsync(audio)) return;
+                        var result = await PlayAsync(audio, resolveRelative: !legacy, duck);
+                        if (result == ClipResult.Stopped) return;
+                        played = result == ClipResult.Played;
                         break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     case AddXpAction xp when xp.Amount > 0:
@@ -262,7 +272,26 @@ internal sealed class KeywordAudioRuntime
             }
             catch (Exception ex) { Log.Warning(ex, "Keyword action {Action} failed", action.GetType().Name); }
         }
+        if (!played && duck) DuckBriefly();
     }
+
+    // WPF Task.Delay(500) then Unduck(duckGen). The release is its own generation and survives a clip
+    // stop. Unlike WPF it never unducks when it did not duck: Unduck(-1) would release another owner's duck.
+    private void DuckBriefly()
+    {
+        if (!CoreSettings.Current.AudioDuckingEnabled) return;
+        CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
+        var generation = CoreAudio.DuckGeneration;
+        _ = Release();
+        async Task Release()
+        {
+            try { await Delay(500, CancellationToken.None); }
+            catch (Exception ex) { Log.Warning(ex, "Keyword duck delay failed"); }
+            finally { CoreAudio.Unduck(generation); }
+        }
+    }
+
+    private enum ClipResult { Skipped, Played, Stopped }
 
     private void BookChaster(ChasterAddTimeAction chaster, KeywordTrigger trigger)
     {
@@ -316,23 +345,23 @@ internal sealed class KeywordAudioRuntime
         _duckGeneration = null;
     }
 
-    private async Task<bool> PlayAsync(PlayAudioAction audio)
+    private async Task<ClipResult> PlayAsync(PlayAudioAction audio, bool resolveRelative, bool duck)
     {
         // WPF KeywordTriggerService.cs:1398,1841-1855: unsolicited audio requires an engine or session;
         // the other actions still run.
-        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return true;
+        if ((!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) || string.IsNullOrEmpty(audio.FilePath)) return ClipResult.Skipped;
         var path = audio.FilePath;
-        if (!Path.IsPathRooted(path))
+        if (resolveRelative && !Path.IsPathRooted(path))
         {
             var resource = ContentLocator.Resolve(Path.Combine("Resources", path));
             var legacy = ContentLocator.Resolve(Path.Combine("Resources", "sub_audio", path));
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
-        if (!File.Exists(path)) return true;
+        if (!File.Exists(path)) return ClipResult.Skipped;
         StopClip();
         var cancellation = _audio ??= new CancellationTokenSource();
         var token = cancellation.Token;
-        if (audio.DuckSystemAudio && CoreSettings.Current.AudioDuckingEnabled)
+        if (duck && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
             _duckGeneration = CoreAudio.DuckGeneration;
@@ -346,7 +375,7 @@ internal sealed class KeywordAudioRuntime
                     if (i > 0 && audio.DelayBetweenMs > 0) await Delay(audio.DelayBetweenMs, token);
                     token.ThrowIfCancellationRequested();
                     // Old lane's stricter hold: also check after every repeat gap.
-                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return false; }
+                    if (!CoreSession.IsEngineRunning && !CoreSession.IsSessionRunning) { StopAudio(); return ClipResult.Stopped; }
                     _stop?.Invoke();
                     var last = i == count - 1;
                     var generation = ++_playGeneration;
@@ -359,9 +388,9 @@ internal sealed class KeywordAudioRuntime
                         }); });
                 }
             }
-            catch (OperationCanceledException) { return false; }
-            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return false; }
-            return true;
+            catch (OperationCanceledException) { return ClipResult.Stopped; }
+            catch (Exception ex) { Log.Warning(ex, "Keyword audio failed"); StopAudio(); return ClipResult.Stopped; }
+            return ClipResult.Played;
         }
     }
 }
