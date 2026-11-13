@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -108,6 +109,30 @@ public sealed class ChasterMenuTests
         w.KeyPress(key, RawInputModifiers.None, physical, "");
         Dispatcher.UIThread.RunJobs();
     }
+
+    [Fact]
+    public Task HeroArtIsPresentAtWideAndNarrowWidths() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        var art = tab.FindControl<Image>("HeroArt")!;
+        Assert.NotNull(art.Source);
+        var plate = tab.FindControl<Grid>("HeroArtPlate")!;
+        Assert.False(plate.IsHitTestVisible);
+        foreach (var linked in new[] { true, false })
+        {
+            if (!linked) { new SecretChasterTokenStore().Clear(); tab.RefreshHero(); }
+            Assert.Equal(linked, tab.FindControl<Control>("HeroTitle")!.IsVisible);
+            foreach (var width in new[] { 1200d, 480d })
+            {
+                w.Width = width;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(art.Bounds.Width > 0);
+                var hero = tab.FindControl<Border>("HeroCard")!;
+                using var bitmap = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(hero.Bounds.Width), (int)Math.Ceiling(hero.Bounds.Height)));
+                bitmap.Render(hero);
+            }
+        }
+        await Task.CompletedTask;
+    }));
 
     [Fact]
     public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
