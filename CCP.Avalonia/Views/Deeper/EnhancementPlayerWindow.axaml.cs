@@ -892,8 +892,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // letting the poll correct it would show ⏸ / LIVE / "Playing" in the meantime, and on
             // a page that never grows a video element it would never be corrected at all.
             var want = !_isPlaying;
-            if (DeeperPreview.Unquote(await _videoBrowser.InvokeScriptAsync(
-                    DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"))) != "ok")
+            var load = _videoLoad;
+            var result = await _videoBrowser.InvokeScriptAsync(
+                DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"));
+            if (_closing || load != _videoLoad || !_isVideoMode || !_videoNavigated
+                || DeeperPreview.Unquote(result) != "ok")
                 return;
             _isPlaying = want;
             _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
@@ -903,6 +906,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnStop_Click()
         {
+            ++_videoLoad; // Discard a pending Play/Pause result and time readback.
             StopAudio();
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
