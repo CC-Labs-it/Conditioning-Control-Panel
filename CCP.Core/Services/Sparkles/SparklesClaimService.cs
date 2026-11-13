@@ -47,7 +47,8 @@ public sealed class SparklesClaimService
     public static TimeSpan RetryWait(JObject? reply)
     {
         var ms = reply?["retryAfterMs"] is JValue { Type: JTokenType.Integer or JTokenType.Float } v ? v.Value<double>() : -1;
-        var wait = ms > 0 ? TimeSpan.FromMilliseconds(ms) : DefaultRetryWait;
+        // #3853: an untrusted retryAfterMs (NaN, infinity, past TimeSpan range) never throws.
+        var wait = double.IsFinite(ms) && ms > 0 ? TimeSpan.FromMilliseconds(Math.Min(ms, MaxRetryWait.TotalMilliseconds)) : DefaultRetryWait;
         return wait < MinRetryWait ? MinRetryWait : wait > MaxRetryWait ? MaxRetryWait : wait;
     }
     public async Task<SparklesClaimOutcome> ClaimAsync(SparklesClaim claim, CancellationToken ct = default)
@@ -64,7 +65,7 @@ public sealed class SparklesClaimService
             if (ct.IsCancellationRequested) break;
             var (status, reply) = await SendAsync(body, id.Value.Token, ct).ConfigureAwait(false);
             if (status == 401) return SparklesClaimOutcome.Refused("signin");
-            if (reply != null && reply.Value<bool?>("ok") == true && SparklesReceipt.Parse(reply) is { } receipt)
+            if (reply != null && reply["ok"]?.Type == JTokenType.Boolean && (bool)reply["ok"]! && SparklesReceipt.Parse(reply) is { } receipt)
             {
                 var adopted = false;
                 if (_adoptSp != null && ShouldAdopt(receipt))
@@ -75,7 +76,7 @@ public sealed class SparklesClaimService
                 return new SparklesClaimOutcome(receipt, null, adopted);
             }
             TimeSpan wait;
-            if (reply != null && reply.Value<bool?>("pending") == true)
+            if (reply != null && reply["pending"]?.Type == JTokenType.Boolean && (bool)reply["pending"]!)
             {
                 last = "pending";
                 wait = RetryWait(reply);
