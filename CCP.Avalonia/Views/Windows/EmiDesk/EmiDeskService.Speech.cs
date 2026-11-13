@@ -18,7 +18,7 @@ internal sealed partial class EmiDeskService
     {
         var win = _window;
         var main = (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-        return IsOut && win is { IsVisible: true, PresentationActive: false, InputLocked: false, Transiting: false, AskLive: false }
+        return IsOut && win is { IsVisible: true, PresentationActive: false, InputLocked: false, Transiting: false, AskLive: false, RainAskLive: false }
             && !CoreSession.IsSessionRunning && App.Sessions?.IsRunning != true && CoreEngine.Video?.IsPlaying != true
             && !TubeBubbleLive() && main?.WindowState != WindowState.Minimized;
     }
