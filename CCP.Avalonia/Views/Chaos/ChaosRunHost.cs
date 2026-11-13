@@ -93,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void RefreshRippleInput()
         {
             var run = _state;
-            Volatile.Write(ref _rippleTarget, _spawning && run != null && !_manualPaused && !_lessonCardPaused
+            Volatile.Write(ref _rippleTarget, _spawning && run != null && !_manualPaused && !_lessonCardPaused && !_draftPaused
                 ? new RippleTarget(run, BubbleOverlay.ChaosCenters(), run.RippleRadiusPx + ChaosTuning.RIPPLE_TRIGGER_GRACE_PX)
                 : null);
         }
@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool OnBubbleRightDown(Point px, double primaryScale)
         {
             var run = _state;
-            if (!_spawning || run == null || _manualPaused || _lessonCardPaused) return false;
+            if (!_spawning || run == null || _manualPaused || _lessonCardPaused || _draftPaused) return false;
             if (!run.RippleReady)
             {
                 RippleCue("toy_denied", 0.45f);
@@ -270,6 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
             if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired);
             RefreshRippleInput();
+            _ripplePointer?.Dispose();   // never two grabs if a run restarts without EndField
             _ripplePointer = RipplePointer.Start(OnRippleRightDown);
             _spawnTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };   // WPF :510
             _spawnTimer.Tick += (_, _) => SpawnTick();
@@ -875,7 +876,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 // WPF BeginWaveTransition with drafts off (:1442-1449): lessons, tip, then roll straight on.
                 // Claim the draft pause before loop lessons fire, so their cards are deferred.
-                if (_state.Config.BoonDraftEnabled) _draftPaused = true;
+                if (_state.Config.BoonDraftEnabled) { _draftPaused = true; RefreshRippleInput(); }
                 ChaosRunLessons.OnLoopCompleted();
                 AwardLoopTip();
                 _state.AllLiveNextWave = false;
@@ -918,6 +919,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _scriptDraft = true;
             if (cards.Count == 0) return false;
             _draftPaused = true; _pendingWave = s.WaveIndex; _spawnTimer?.Stop();
+            RefreshRippleInput();   // the right-click hook stops consuming while the draft card is up
             ChaosWaveTimerWindow.Clear(); BubbleOverlay.ClearChaos();
             ChaosOverlayWindow.ChaosSfx.PlayWaveClear();   // WPF ChaosModeService.cs:1499
             foreach (var card in cards) ChaosMeta.MarkDiscovered("boon:" + card.Id);

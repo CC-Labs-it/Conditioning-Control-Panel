@@ -29,7 +29,8 @@ public class ChaosLiveBubbleTests
     [Fact]
     public void Rain_enters_above_the_screen_moves_down_and_leaves_at_the_bottom()
     {
-        var spec = new EffectBubbleSpec { VariantId = "flash", SizePx = 150, Motion = ChaosMotion.RainDown };
+        // A long treat life keeps rot (WPF BubbleService.cs:3239-3252) out of this motion check.
+        var spec = new EffectBubbleSpec { VariantId = "flash", SizePx = 150, Motion = ChaosMotion.RainDown, TreatLifeMs = 10000000 };
         var field = new AmbientBubbleField();
         var bubble = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, spec, ChaosMotion.RainDown);
         field.Bubbles.Add(bubble);
@@ -127,8 +128,8 @@ public class ChaosLiveBubbleTests
             int expired = 0;
             f.ChaosTreatExpired = _ => expired++;
             for (int i = 0; i < 160; i++) f.Step();
+            // The escort, tease and brittle may still end on their own trunk rules; they never rot.
             Assert.Equal(0, expired);
-            Assert.False(b.Popping);
         }
     }
 

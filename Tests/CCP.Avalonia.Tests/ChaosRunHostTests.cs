@@ -278,12 +278,18 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 settings.ChaosSkiaFxEnabled = true;
+                // The run creates the field FX window up front (WPF ChaosModeService.cs:411), so the
+                // selected effect is judged by which surface receives the wave, not which window exists.
+                int fieldBefore = ChaosFieldFxOverlay.Active?.Model.TransientCount ?? 0;
                 BubbleOverlay.TriggerPlayerRipple(new Point(10, 10), 50, 500);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.NotNull(ChaosSkiaFxOverlay.Active);
-                Assert.Null(ChaosFieldFxOverlay.Active);
+                Assert.Equal(fieldBefore, ChaosFieldFxOverlay.Active?.Model.TransientCount ?? 0);
                 settings.ChaosSkiaFxEnabled = false;
                 BubbleOverlay.TriggerPlayerRipple(new Point(10, 10), 50, 500);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 Assert.NotNull(ChaosFieldFxOverlay.Active);
+                Assert.True(ChaosFieldFxOverlay.Active!.Model.TransientCount > fieldBefore);
             }
             finally
             {
