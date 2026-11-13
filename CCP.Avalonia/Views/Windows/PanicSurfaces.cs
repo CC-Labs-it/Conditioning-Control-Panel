@@ -38,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
+            // Stricter than WPF: panic must not leave this modal or its delete confirmation open.
+            new("personality-studio", _ => Dialogs.PersonalityStudio.CloseForPanic()),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
             new("help-video", _ => HelpVideoWindow.CloseCurrent(forPanic: true)), // Stricter than WPF MainWindow.xaml.cs:2017: include tutorial media in stop-all.
             new("emi-ring", _ => EmiDesk.EmiDeskService.Instance.Window?.CloseRing()), // stricter safety: fold on every panic route
@@ -121,6 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
+                Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.SpiralOverlay.CloseAll(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => { Overlays.FlashOverlay.CloseAll(final: false); ConditioningControlPanel.Services.Flash.RemoteFlashSource.CleanupCache(); }), // Includes standalone pops and mid-Shatter exits.
