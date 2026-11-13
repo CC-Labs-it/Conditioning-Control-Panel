@@ -50,13 +50,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 hero.ViewModel?.Sync();
         }
 
-        /// <summary>WPF SetAvatarMuted: persist the shared voice gate and re-read the tube menu.</summary>
+        /// <summary>WPF SetAvatarMuted: persist the shared voice gate, then the live in-memory mute and the tube menu
+        /// (WPF MainWindow.CompanionRoom.cs:99 SetMuteAvatar).</summary>
         internal void SetAvatarMuted(bool muted)
         {
             if (_roomLoading) return;
             CoreSettings.Current.AvatarMuted = muted;
             CoreSettings.Save();
-            _avatarTubeWindow?.UpdateQuickMenuState(); // audio-only: leave the speech bubble alone.
+            _avatarTubeWindow?.SetMuteAvatar(muted); // audio-only: re-reads the menu, leaves the speech bubble alone.
             SyncHero();
         }
 
