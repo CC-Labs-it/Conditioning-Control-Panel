@@ -146,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TryRedirectMovedTab(tab)) return;   // WPF :229, "together" -> Social > Lobby with the note
             // The dashboard's RECENT rail, at the door before the intercepts (WPF :121), so a
             // window key counts as an open like any tab (MainShellWindow.FavoritesRail.cs).
-            NoteDestinationOpened(tab);
+            NoteDestinationOpened(tab, deferRail: TabPanels.ContainsKey(tab));
             timing?.Mark("recent");
             // WPF ShowTab("patreon") -> ShowAppInfoPopup -> ShowAccountSettings (MainWindow.TabNavigation.cs:126,
             // MainWindow.AccountShell.cs:73): Settings, scrolled to Account. Before the bark, as there.
