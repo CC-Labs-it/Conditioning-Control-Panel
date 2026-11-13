@@ -139,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
         private string? _audioPath;
         private int _audioLoad;
+        private bool _audioDurationRemembered;
+        internal Action<string?, double> RememberAudioDuration = MediaDurationCache.Remember;
         private bool _closing;
 
 
@@ -227,6 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public EnhancementPlayerWindow(Enhancement? enhancement, string? sourceTag)
         {
             AvaloniaXamlLoader.Load(this);
+            InitializeWindowBounds();
 
             // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
             // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
@@ -680,6 +683,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             StopAudio();
             var load = _audioLoad;
             _audioPath = path;
+            _audioDurationRemembered = false;
             _txtAudioPath.Text = path;
             _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
             ShowMediaPaneFor(MediaTypes.Audio);
@@ -889,8 +893,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // letting the poll correct it would show ⏸ / LIVE / "Playing" in the meantime, and on
             // a page that never grows a video element it would never be corrected at all.
             var want = !_isPlaying;
-            if (DeeperPreview.Unquote(await _videoBrowser.InvokeScriptAsync(
-                    DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"))) != "ok")
+            var load = _videoLoad;
+            var result = await _videoBrowser.InvokeScriptAsync(
+                DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"));
+            if (_closing || load != _videoLoad || !_isVideoMode || !_videoNavigated
+                || DeeperPreview.Unquote(result) != "ok")
                 return;
             _isPlaying = want;
             _txtPlayPauseGlyph.Kind = _isPlaying ? IconKind.Pause : IconKind.Play;
@@ -900,6 +907,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnStop_Click()
         {
+            ++_videoLoad; // Discard a pending Play/Pause result and time readback.
             StopAudio();
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
@@ -1011,6 +1019,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 _currentSec = _localAudio.PositionSeconds;
                 _durationSec = _localAudio.DurationSeconds;
+                if (!_audioDurationRemembered && _durationSec > 0 && double.IsFinite(_durationSec))
+                {
+                    _audioDurationRemembered = true;
+                    RememberAudioDuration(_audioPath, _durationSec);
+                }
             }
 
             _txtCurrent.Text = FormatTime(_currentSec);
@@ -1154,6 +1167,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             _loadedEnhancement = enh;
             _loadedFilePath = path;
+            var name = string.IsNullOrEmpty(enh?.Metadata?.Name) ? "(untitled)" : enh.Metadata.Name;
+            Title = enh == null ? Loc.Get("deeper_player_title")
+                : string.Format(Loc.Get("deeper_player_window_title_fmt"), name);
 
             if (enh == null)
             {

@@ -10259,6 +10259,16 @@ namespace ConditioningControlPanel.Models
             set { _deeperPlayerWindowTop = value; OnPropertyChanged(); }
         }
 
+        // Avalonia's display scale and the WPF-compatible coordinates it was saved with.
+        // Null for WPF saves made before the hint existed.
+        private double[]? _deeperPlayerWindowPositionHint;
+        [JsonProperty]
+        public double[]? DeeperPlayerWindowPositionHint
+        {
+            get => _deeperPlayerWindowPositionHint;
+            set { _deeperPlayerWindowPositionHint = value; OnPropertyChanged(); }
+        }
+
         private double _deeperPlayerWindowWidth;
         /// <summary>0 = never saved; the window then opens at its XAML default size, centred on its owner.</summary>
         [JsonProperty]

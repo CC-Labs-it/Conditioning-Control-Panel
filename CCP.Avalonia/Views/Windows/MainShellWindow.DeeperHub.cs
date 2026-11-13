@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
         private EnhancementLibrary? _deeperLibrary;
         private bool _deeperHubClosed;
+        internal EnhancementLibrary? BrowserEnhancementLibrary { get { EnsureDeeperLibrary(); return _deeperLibrary; } }
         internal void InitializeDeeperHub()
         {
             if (_deeperHubClosed) return;

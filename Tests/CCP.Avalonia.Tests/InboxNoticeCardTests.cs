@@ -45,6 +45,25 @@ public class InboxNoticeCardTests
         finally { first.Close(); next?.Close(); }
     });
 
+    // Restack b33 (includes #3638): a panic closes the card through its registry row and runs neither action.
+    [Fact]
+    public void PanicClosesTheCardWithoutRunningItsActions() => WithOwner(owner =>
+    {
+        int primary = 0, secondary = 0;
+        var card = InboxNoticeCard.Present(owner, "Prime is on", "Everything is open.", "Open", () => primary++, "Later", () => secondary++);
+        try
+        {
+            Assert.Same(card, InboxNoticeCard.Open);
+            var row = ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "inbox-notice");
+            row.Stop(null);
+            Assert.False(card.IsVisible);
+            Assert.Null(InboxNoticeCard.Open);
+            Assert.Equal((0, 0), (primary, secondary));
+            InboxNoticeCard.CloseForPanic();   // nothing open: harmless
+        }
+        finally { card.Close(); }
+    });
+
     [Fact]
     public void PresenterTracksNoticeAndHoldsNextPassiveUntilItCloses() => WithOwner(owner =>
     {

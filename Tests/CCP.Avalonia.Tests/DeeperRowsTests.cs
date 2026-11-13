@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -177,18 +178,18 @@ public sealed class DeeperRowsTests
 
     private sealed class FakeAudio : IDeeperLocalAudio
     {
-        public bool Playing, Disposed, Rejects;
+        public bool Playing, Disposed, Rejects, RejectsPause;
         public int Pauses;
         public int Volume { get; set; }
         public double DurationSeconds { get; set; } = 95;
         public double PositionSeconds { get; set; }
         public void Play() { if (Rejects) throw new InvalidOperationException("Audio transport could not start"); Playing = true; }
-        public void Pause() { Pauses++; Playing = false; }
+        public void Pause() { Pauses++; if (RejectsPause) throw new InvalidOperationException(); Playing = false; }
         public event Action? Ended;
         public event Action? Failed;
         public void End() { Playing = false; Ended?.Invoke(); }
         public void Fail() { Playing = false; Failed?.Invoke(); }
-        public void Dispose() => Disposed = true;
+        public void Dispose() { Playing = false; Disposed = true; }
     }
 
     [Theory]
@@ -334,6 +335,184 @@ public sealed class DeeperRowsTests
             DeeperLocalAudio.Open = original;
             Directory.Delete(dir, true);
         }
+        Assert.True(fake.Disposed);
+    });
+
+    [Fact]
+    public Task PanicStopsLocalVideoBeforeTheFirstPollAndCleansUp() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var path = Path.Combine(Path.GetTempPath(), "ccp-panic-preview.mp4");
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var navigated = typeof(DeeperEditorWindow).GetField("_browserNavigated", flags)!;
+        var timer = (DispatcherTimer)typeof(DeeperEditorWindow).GetField("_playheadTimer", flags)!.GetValue(editor)!;
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            // Model a local media document before its first time poll reports playback.
+            navigated.SetValue(editor, true);
+            editor.BrowserPreview.Source = new Uri(path);
+            timer.Start();
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Assert.False((bool)navigated.GetValue(editor)!);
+            Assert.False(timer.IsEnabled);
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.ToString());
+            Assert.False(editor.BrowserPreview.AllowNavigation!(new Uri(path)));
+            Assert.True(editor.BrowserPreview.AllowNavigation!(new Uri("about:blank")));
+            Assert.Equal(IconKind.Play, editor.PlayPauseGlyph.Kind);
+        }
+        finally { editor.Close(); }
+        Assert.False(timer.IsEnabled);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PanicStoppedLocalVideoRestartsOnlyOnExplicitPlay() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-panic-video-").FullName;
+        var path = Path.Combine(dir, "clip.mp4");
+        File.WriteAllBytes(path, new byte[16]);
+        var scripts = new List<string>();
+        TaskCompletionSource<string?>? pendingRead = null;
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        editor.BrowserPreview.ScriptInvoker = js =>
+        {
+            scripts.Add(js);
+            if (js.Contains("l.currentTime+") && pendingRead != null) return pendingRead.Task;
+            return Task.FromResult<string?>(js.Contains("l.currentTime+") ? "0|10|0" : "ok");
+        };
+        var poll = typeof(DeeperEditorWindow).GetMethod("PollBrowserTimeAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new Uri(path), editor.BrowserPreview.Source);
+            Invoke(editor, "OnBrowserTimeChanged", 3.0);
+            pendingRead = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldPoll = (Task)poll.Invoke(editor, null)!;
+            Assert.False(oldPoll.IsCompleted);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.ToString());
+            scripts.Clear();
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+
+            Click(editor.BtnPlayPause);
+            var timer = (DispatcherTimer)typeof(DeeperEditorWindow).GetField("_playheadTimer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!;
+            Assert.True(timer.IsEnabled);
+            timer.Stop(); // Step the polls below in a deterministic order.
+            Assert.Equal(new Uri(path), editor.BrowserPreview.Source);
+            Assert.True(editor.BrowserPreview.AllowNavigation!(new Uri(path)));
+            Assert.False(editor.BrowserPreview.AllowNavigation!(new Uri(Path.Combine(dir, "other.mp4"))));
+            pendingRead.SetResult("0|10|0");
+            pendingRead = null;
+            await oldPoll;
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Contains(scripts, js => js.Contains("l.currentTime=3;l.play();"));
+            Assert.DoesNotContain(scripts, js => js.Contains("l.autoplay=false;l.pause();"));
+
+            // A second panic while recovery is pending must cancel it too.
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Click(editor.BtnPlayPause);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            scripts.Clear();
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.ToString());
+        }
+        finally { editor.Close(); Directory.Delete(dir, true); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SeekAroundRecoveryPreservesTheRequestedPosition(bool seekAfterPlay) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-panic-seek-").FullName;
+        var path = Path.Combine(dir, "clip.mp4");
+        File.WriteAllBytes(path, new byte[16]);
+        var scripts = new List<string>();
+        var report = "0|10|0";
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Video, MediaSource = path }, null);
+        editor.BrowserPreview.ScriptInvoker = js =>
+        {
+            scripts.Add(js);
+            return Task.FromResult<string?>(js.Contains("l.currentTime+") ? report : "ok");
+        };
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var poll = typeof(DeeperEditorWindow).GetMethod("PollBrowserTimeAsync", flags)!;
+        var timer = (DispatcherTimer)typeof(DeeperEditorWindow).GetField("_playheadTimer", flags)!.GetValue(editor)!;
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            timer.Stop();
+            await (Task)poll.Invoke(editor, null)!; // Learn the clip duration.
+            Invoke(editor, "OnBrowserTimeChanged", 3.0);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            scripts.Clear();
+
+            if (!seekAfterPlay) Invoke(editor, "SeekToFraction", 0.7);
+            Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
+            Click(editor.BtnPlayPause);
+            timer.Stop();
+            if (seekAfterPlay) Invoke(editor, "SeekToFraction", 0.7);
+            Assert.Equal("0:07.0", editor.TxtCurrentTime.Text);
+            report = "0|0|0";
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Equal("0:07.0", editor.TxtCurrentTime.Text);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Click(editor.BtnPlayPause);
+            timer.Stop();
+            report = "0|10|0";
+            scripts.Clear();
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));
+            Assert.Equal("0:07.0", editor.TxtCurrentTime.Text);
+
+            // Another panic before the next time report must retain the user's seek.
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Click(editor.BtnPlayPause);
+            timer.Stop();
+            scripts.Clear();
+            await (Task)poll.Invoke(editor, null)!;
+            Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));
+        }
+        finally { editor.Close(); Directory.Delete(dir, true); }
+    });
+
+    [Fact]
+    public Task PanicStopsLocalAudioEvenWhenTheEditorThinksItIsPaused() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-panic-audio-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var fake = new FakeAudio();
+        var original = DeeperLocalAudio.Open;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(fake);
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            await editor._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            fake.Play(); // transport has started before the editor observes it
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Assert.False(fake.Playing);
+            fake.Play();
+            fake.RejectsPause = true;
+            PanicSurfaces.All.Single(s => s.Id == "deeper-editor-audio").Stop(null);
+            Assert.True(fake.Disposed);
+            Assert.False(fake.Playing);
+        }
+        finally { editor.Close(); DeeperLocalAudio.Open = original; Directory.Delete(dir, true); }
         Assert.True(fake.Disposed);
     });
 
@@ -568,6 +747,48 @@ public sealed class DeeperRowsTests
         e.Starts = false; Assert.Throws<InvalidOperationException>(t.Play);
         var failed = false; t.Failed += () => failed = true; t.OnError(); Assert.True(failed);
     }
+
+    [Fact]
+    public Task PlayerTitleTracksLoadedEnhancementAndUnload() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            var defaultTitle = player.Title;
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" };
+            enhancement.Metadata.Name = "Test title";
+            player.LoadEnhancementFromMemory(enhancement, "memory");
+            Assert.Equal(string.Format(ConditioningControlPanel.Localization.Loc.Get("deeper_player_window_title_fmt"), "Test title"), player.Title);
+            Invoke(player, "Unload");
+            Assert.Equal(defaultTitle, player.Title);
+        }
+        finally { player.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PlayerPublishesAudioDurationOncePerLoad() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var original = DeeperLocalAudio.Open;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new FakeAudio());
+        var player = new EnhancementPlayerWindow(null, null);
+        var calls = new System.Collections.Generic.List<(string?, double)>();
+        player.RememberAudioDuration = (path, duration) => calls.Add((path, duration));
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile("first.mp3");
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal(new[] { ("first.mp3", 95d) }, calls);
+            player.OpenLocalMediaFile("second.mp3");
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal(new[] { ("first.mp3", 95d), ("second.mp3", 95d) }, calls);
+        }
+        finally { player.Close(); DeeperLocalAudio.Open = original; }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task PlayerOpensTheEditorForNewAndExistingEnhancements() => AvaloniaTestDispatcher.RunAsync(() =>

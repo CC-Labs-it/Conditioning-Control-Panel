@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _programFxSuppressed;
         private Window? _fxWindow;
         private CancellationTokenSource? _railPipCts;
+        private long? _pipPhaseStarted;
         private readonly HashSet<ProgramDayPip> _ignitedPips = new();
 
         /// <summary>Tests read these: the heat tier last computed, and whether ambient clocks run.</summary>
@@ -420,9 +421,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     pip.Breathe = pip.IsCurrent && AmbientOn && _tier >= ProgramHeatTier.Warm;
                     if (!pip.Breathe) continue;
                     var scale = (ScaleTransform)glow.RenderTransform!;
+                    _pipPhaseStarted ??= BeatLoop.Time.GetTimestamp();
                     var loop = new BeatLoop(glow, t =>
                     {
-                        var phase = BeatLoop.Breath(t, 1.2);
+                        var phase = BeatLoop.Breath(BeatLoop.Time.GetElapsedTime(_pipPhaseStarted.Value).TotalSeconds, 1.2);
                         glow.Opacity = .35 + .60 * phase;
                         scale.ScaleX = scale.ScaleY = .9 + .22 * phase;
                     });
