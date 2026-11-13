@@ -139,8 +139,13 @@ public sealed class RenderBudgetTests
         foreach (var a in real)
         {
             Assert.False(string.IsNullOrWhiteSpace(a.Name));
-            // The Basic Render Driver carries DXGI_ADAPTER_FLAG_SOFTWARE: proves the DXGI_ADAPTER_DESC1 layout.
-            if (a.VendorId == 0x1414 && a.DeviceId == 0x8C) Assert.Equal(2u, a.Flags & 2);
+            // DXGI_ADAPTER_DESC1.Flags holds only REMOTE (1) and SOFTWARE (2): a misread layout lands LUID or padding
+            // bytes here. The Basic Display Adapter shares the Basic Render Driver's 0x1414/0x8C ids without the
+            // SOFTWARE flag (windows-latest runners read 0 there), so the ids alone cannot demand the flag;
+            // IsSoftware covers both by the ids.
+            Assert.Equal(0u, a.Flags & ~3u);
+            Assert.NotEqual(0u, a.VendorId);
+            if ((a.Flags & 2) != 0) Assert.True(a.IsSoftware);
         }
         var o = global::ConditioningControlPanel.Avalonia.Program.Win32Options(_ => null, DxgiAdapters.List);
         if (real.TrueForAll(a => a.IsSoftware))   // windows-latest runners: WARP only
