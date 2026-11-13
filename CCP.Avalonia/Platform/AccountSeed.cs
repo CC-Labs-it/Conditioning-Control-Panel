@@ -330,6 +330,14 @@ internal static class AccountSeed
         return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
     }
 
+    // A queued heartbeat can arrive after logout or a new sign-in, even for the same id.
+    internal static void ApplyHeartbeatTier(string id, string? token, string body)
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || s.UnifiedId != id || string.IsNullOrEmpty(token) || s.AuthToken != token) return;
+        ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat");
+    }
+
     /// <summary>WPF EntitlementTierSync.ApplyOnUi: THE one server tier reading path of this head, from the
     /// profile load, a heartbeat or the focus refresh. A rise unlocks, a tier renews its grace, and the same
     /// lower reading 90 s later closes it. Never throws.</summary>
