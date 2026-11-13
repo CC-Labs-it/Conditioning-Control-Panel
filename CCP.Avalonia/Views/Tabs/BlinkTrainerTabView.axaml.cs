@@ -76,19 +76,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (IsVisible) Refresh(); else Park();
             };
 
+            EventHandler<Models.PatreonTier> tier = (_, _) => PostEntitlement();
+            Services.ProviderSubscription? patreon = null, substar = null;
             // WPF HookBlinkTrainerService: one fan-out for session and tracker state.
             AttachedToVisualTree += (_, _) =>
             {
+                patreon = Platform.AccountSeed.Patreon; substar = Platform.AccountSeed.SubscribeStar;
+                if (patreon != null) patreon.TierChanged += tier;
+                if (substar != null) substar.TierChanged += tier;
+                Platform.AccountSeed.GraceClosed += PostEntitlement;
+                RepaintEntitlement();
                 BlinkTrainerSession.StateChanged += OnSessionStateChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnSessionStateChanged;
                 RefreshWebcamStatus();
             };
             DetachedFromVisualTree += (_, _) =>
             {
+                if (patreon != null) patreon.TierChanged -= tier;
+                if (substar != null) substar.TierChanged -= tier;
+                Platform.AccountSeed.GraceClosed -= PostEntitlement;
                 BlinkTrainerSession.StateChanged -= OnSessionStateChanged;
                 Platform.WebcamTracker.Instance.StateChanged -= OnSessionStateChanged;
                 Park();
             };
+        }
+
+        private void PostEntitlement() => Dispatcher.UIThread.Post(() => { if (VisualRoot != null) RepaintEntitlement(); });
+        internal void RepaintEntitlement()
+        {
+            RefreshGate();
+            RefreshStatusRow();
+            ApplyStageMode();
         }
 
         /// <summary>A hidden or detached page does no work (P01/P07): no demo loop, no live blink

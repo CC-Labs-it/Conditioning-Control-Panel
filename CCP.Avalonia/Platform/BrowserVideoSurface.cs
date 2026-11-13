@@ -49,7 +49,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     private readonly Func<string, Task<string?>> _execute;
     private readonly string _id = Guid.NewGuid().ToString("N");
     private DispatcherTimer? _startup;
-    private bool _closed, _loaded;
+    private bool _closed, _loaded, _primary;
     private string _url = "";
     internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null) {
         _execute = execute ?? View.InvokeScriptAsync;
@@ -59,6 +59,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     }
     internal void Start(string url, bool primary, int masterVolume) {
         _url = url;
+        _primary = primary;
         Volume = primary ? Math.Clamp(masterVolume / 100.0, 0, 1) : 0;
         _startup = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
         _startup.Tick += (_, _) => Fail();
@@ -69,7 +70,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         if (_closed || _loaded || uri.ToString() != "about:blank") return;
         _loaded = true;
         try {
-            var result = await _execute(BuildScript(_url, Volume, _id));
+            var result = await _execute(BuildScript(_url, Volume, _id, _primary));
             if (_closed) return;
             if (result != "true") { Fail(); return; }
         }
@@ -99,11 +100,21 @@ internal sealed class BrowserVideoSurface : IDisposable
         _startup?.Stop();
         Failed?.Invoke(mediaFailure);
     }
-    internal async void Pause()
+    // WPF BrowserVideoEngine.cs:652-669: mirrors always stay muted, including after volume changes.
+    internal void Pause() => Control("window.ccpVideo?.pause();");
+    internal void Resume() => Control("window.ccpVideo?.resume();");
+    internal void Seek(long milliseconds) => Control($"window.ccpVideo?.seek({Math.Max(0, milliseconds)});");
+    internal void SetVolume(int volume)
     {
         if (_closed) return;
-        try { await _execute("document.querySelector('video')?.pause();"); }
-        catch { /* Teardown still detaches the adapter if its script channel has died. */ }
+        Volume = _primary ? Math.Clamp(volume / 100.0, 0, 1) : 0;
+        Control($"window.ccpVideo?.volume({JsonSerializer.Serialize(Volume)});");
+    }
+    private async void Control(string script)
+    {
+        if (_closed) return;
+        try { await _execute(script); }
+        catch { /* A dead script channel must not prevent teardown. */ }
     }
     public void Dispose()
     {
@@ -118,7 +129,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         Failed = null;
         View.Content = null;
     }
-    internal static string BuildScript(string url, double volume, string id) =>
+    internal static string BuildScript(string url, double volume, string id, bool primary) =>
         "(function(c){" + """
         const send=m=>{m.session=c.id; const s=JSON.stringify(m);
           if(typeof window.invokeCSharpAction==='function') window.invokeCSharpAction(s);
@@ -127,6 +138,12 @@ internal sealed class BrowserVideoSurface : IDisposable
         const v=document.createElement('video'); v.playsInline=true; v.preload='auto';
         v.style='width:100vw;height:100vh;object-fit:contain';
         v.muted=c.volume===0; v.volume=c.volume; document.body.replaceChildren(v);
+        window.ccpVideo={
+          pause:()=>v.pause(),
+          resume:()=>v.play().catch(()=>send({type:'error',code:v.error?.code||0})),
+          seek:ms=>{v.currentTime=Math.max(0,ms)/1000;},
+          volume:value=>{v.volume=c.primary?Math.max(0,Math.min(1,value)):0; v.muted=v.volume===0;}
+        };
         const meta=()=>send({type:'meta',durationMs:Number.isFinite(v.duration)?v.duration*1000:0});
         v.onloadedmetadata=meta; v.ondurationchange=meta;
         let started=false, lastTime=0, lastAdvance=performance.now();
@@ -143,5 +160,5 @@ internal sealed class BrowserVideoSurface : IDisposable
         window.addEventListener('keydown',e=>{e.preventDefault(); if(!e.repeat)
           send({type:'key',key:e.key,alt:e.altKey});},true);
         v.src=c.url; v.play().catch(()=>send({type:'error',code:v.error?.code||0})); return true;
-        """ + "})(" + JsonSerializer.Serialize(new { url, volume, id }) + ");";
+        """ + "})(" + JsonSerializer.Serialize(new { url, volume, id, primary }) + ");";
 }

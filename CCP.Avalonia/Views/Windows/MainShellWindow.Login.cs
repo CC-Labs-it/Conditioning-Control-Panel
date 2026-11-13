@@ -56,6 +56,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.
                 RefreshEntitlementVeils(persist: accountChanged);
+                Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.RepaintEntitlement();
+                Named<Tabs.AchievementsTabView>("AchievementsTab")?.RefreshAll();
+                Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<Controls.Companion.CompanionRoomView>("Room")?.SyncBrain();
+                AppSettingsPage?.SectionAccount.RefreshTierBadge();
                 // WPF Patreon.cs:294: the pass is per-account, so sign-in/out moves the intake door.
                 App.IntakePass.RaiseChanged();
             }

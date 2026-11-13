@@ -76,10 +76,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 lock (_pending) { _pending.Add(a.Id); if (_flushQueued) return; _flushQueued = true; }
                 global::Avalonia.Threading.Dispatcher.UIThread.Post(Flush);
             }
+            EventHandler<PatreonTier> tier = (_, _) => PostEntitlement();
+            Services.ProviderSubscription? patreon = null, substar = null;
             AttachedToVisualTree += (_, _) =>
             {
                 engine.Unlocked -= OnUnlocked; engine.Unlocked += OnUnlocked;
                 CoreMods.ModChanged += OnModChanged;
+                patreon = Platform.AccountSeed.Patreon; substar = Platform.AccountSeed.SubscribeStar;
+                if (patreon != null) patreon.TierChanged += tier;
+                if (substar != null) substar.TierChanged += tier;
+                Platform.AccountSeed.GraceClosed += PostEntitlement;
                 LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
                 // A detached view misses mod events. Discard its old art before it is shown again.
                 lock (ArtCache) ArtCache.Clear();
@@ -90,6 +96,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 engine.Unlocked -= OnUnlocked;
                 CoreMods.ModChanged -= OnModChanged;
                 LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+                if (patreon != null) patreon.TierChanged -= tier;
+                if (substar != null) substar.TierChanged -= tier;
+                Platform.AccountSeed.GraceClosed -= PostEntitlement;
             };
             DetachedFromVisualTree += (_, _) => FinishFx();
             PropertyChanged += (_, e) =>
@@ -112,6 +121,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (VisualRoot != null && IsEffectivelyVisible) RefreshAll();
         });
+        // #4670: a tier reading or a closed grace repaints the open view (WPF OnPatreonTierChanged).
+        private void PostEntitlement() => QueueRefresh();
 
         /// <summary>The live engine; on the headless render path a read-only load of the same file
         /// (nothing on that path ever saves it).</summary>

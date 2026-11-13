@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Webcam;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -214,6 +215,134 @@ public sealed class PremiumCelebrationTests
             Assert.True(s.CompanionPrompt.AllowAiToControlEffects);
         }
         finally { AccountSeed.UtcNow = clock; window.Close(); }
+    });
+    [Fact]
+    public void GraceCloseRepaintsAttachedAccountTier() => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.UnifiedId = "lapsing-account";
+        s.AuthToken = "test-token";
+        s.PatreonTier = 2;
+        CoreAccount.IsLoggedInProvider = () => true;
+        grant(true, true);
+        var section = new ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection();
+        var window = new Window { Content = section };
+        var clock = AccountSeed.UtcNow;
+        var start = DateTime.UtcNow;
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var tier = section.FindControl<TextBlock>("TxtAccountSectionTier")!;
+            var badge = section.FindControl<Border>("AccountTierBadge")!;
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_patreon_tier_level2"), tier.Text);
+            Assert.True(badge.IsVisible);
+            AccountSeed.UtcNow = () => start;
+            AccountSeed.ApplyTierReading(0, "heartbeat");
+            grant(false, false);
+            AccountSeed.UtcNow = () => start.AddSeconds(90);
+            AccountSeed.ApplyTierReading(0, "heartbeat");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_patreon_tier_connected"), tier.Text);
+            Assert.False(badge.IsVisible);
+            window.Content = null;
+            grant(true, true);
+            // A detached section must not respond to later grace-close notifications.
+            var closed = (Action)typeof(AccountSeed).GetField("GraceClosed", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            closed();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(badge.IsVisible);
+        }
+        finally { AccountSeed.UtcNow = clock; window.Close(); }
+    });
+    [Theory]
+    [InlineData("blink")]
+    [InlineData("achievements")]
+    [InlineData("room")]
+    public void OpenViewsRepaintAndDetachOnEntitlementChanges(string kind) => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.AiChatEnabled = true;
+        s.CompanionPrompt.AiProvider = AiProviderType.Cloud;
+        if (kind == "blink")
+        {
+            s.WebcamConsentGiven = true;
+            s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            s.BlinkTrainerFolders.Add(Path.GetTempPath());
+        }
+        CoreAccount.UnifiedUserId = null;
+        Control view = kind switch
+        {
+            "blink" => new ConditioningControlPanel.Avalonia.Views.Tabs.BlinkTrainerTabView(),
+            "achievements" => new ConditioningControlPanel.Avalonia.Views.Tabs.AchievementsTabView(),
+            _ => new ConditioningControlPanel.Avalonia.Views.Controls.Companion.CompanionRoomView(),
+        };
+        var window = new Window { Content = view };
+        bool Locked() => kind switch
+        {
+            "blink" => view.FindControl<Control>("BlinkTrainerGate")!.IsVisible,
+            "achievements" => view.FindControl<Control>("PatronAchievementsOverlay")!.IsVisible,
+            _ => ((ConditioningControlPanel.Avalonia.Views.Controls.Companion.EngineRoomVm)
+                view.FindControl<Control>("EngineZone")!.DataContext!).StatusLine == ConditioningControlPanel.Localization.Loc.Get("companion_engine_status_disconnected"),
+        };
+        void Set(bool premium)
+        {
+            grant(premium, premium);
+            CoreAccount.UnifiedUserId = premium ? "test-user" : null;
+        }
+        void Grace() => ((Action)typeof(AccountSeed).GetField("GraceClosed", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!)();
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.True(Locked());
+            Set(true); AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level2); Dispatcher.UIThread.RunJobs();
+            Assert.False(Locked());
+            if (kind == "blink")
+            {
+                Assert.True(view.FindControl<Control>("BlinkTrainerGatedContent")!.IsEnabled);
+                Assert.True(view.FindControl<Control>("BlinkTrainerStageActions")!.IsEnabled);
+                Assert.True(((ConditioningControlPanel.Avalonia.Views.Tabs.BlinkTrainerTabView)view).LivePreview);
+            }
+            Set(false); AccountSeed.SubscribeStar!.NotifyEntitlementRaised((PatreonTier)0); Dispatcher.UIThread.RunJobs();
+            Assert.True(Locked());
+            if (kind == "blink") Assert.False(((ConditioningControlPanel.Avalonia.Views.Tabs.BlinkTrainerTabView)view).LivePreview);
+            Set(true); Grace(); Dispatcher.UIThread.RunJobs();
+            Assert.False(Locked());
+            window.Content = null;
+            Set(false); Grace(); AccountSeed.Patreon!.NotifyEntitlementRaised((PatreonTier)0); Dispatcher.UIThread.RunJobs();
+            Assert.False(Locked());
+        }
+        finally { window.Close(); CoreAccount.UnifiedUserId = null; }
+    });
+    [Fact]
+    public void AccountChangeRepaintsViewsWithoutTierEvent() => Run(false, (shell, opened, grant) =>
+    {
+        CoreSettings.Current.AiChatEnabled = true;
+        CoreSettings.Current.CompanionPrompt.AiProvider = AiProviderType.Cloud;
+        bool loggedIn = false;
+        CoreAccount.IsLoggedInProvider = () => loggedIn;
+        CoreAccount.UnifiedUserId = null;
+        shell.UpdateQuickLoginUI(accountChanged: true);
+        var blink = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.BlinkTrainerTabView>("BlinkTrainerTab")!;
+        var achievements = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.AchievementsTabView>("AchievementsTab")!;
+        var room = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>("CompanionTab")!
+            .FindControl<ConditioningControlPanel.Avalonia.Views.Controls.Companion.CompanionRoomView>("Room")!;
+        var engine = (ConditioningControlPanel.Avalonia.Views.Controls.Companion.EngineRoomVm)room.FindControl<Control>("EngineZone")!.DataContext!;
+        var tier = shell.AppSettingsPage!.SectionAccount.FindControl<TextBlock>("TxtAccountSectionTier")!;
+        Assert.True(blink.FindControl<Control>("BlinkTrainerGate")!.IsVisible);
+        Assert.True(achievements.FindControl<Control>("PatronAchievementsOverlay")!.IsVisible);
+        grant(true, true); loggedIn = true; CoreAccount.UnifiedUserId = "test-user";
+        shell.UpdateQuickLoginUI(accountChanged: true);
+        Assert.False(blink.FindControl<Control>("BlinkTrainerGate")!.IsVisible);
+        Assert.False(achievements.FindControl<Control>("PatronAchievementsOverlay")!.IsVisible);
+        Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("companion_engine_status_disconnected"), engine.StatusLine);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_patreon_tier_level2"), tier.Text);
+        grant(false, false); loggedIn = false; CoreAccount.UnifiedUserId = null;
+        shell.UpdateQuickLoginUI(accountChanged: true);
+        Assert.True(blink.FindControl<Control>("BlinkTrainerGate")!.IsVisible);
+        Assert.True(achievements.FindControl<Control>("PatronAchievementsOverlay")!.IsVisible);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_engine_status_disconnected"), engine.StatusLine);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_login_to_unlock_exclusive_features"), tier.Text);
     });
     [Fact]
     public void LiveRiseIgnoresLegacyFlagAndFirstLaunchQuietButBusyRiseStaysInInbox() => Run(false, (shell, opened, grant) =>

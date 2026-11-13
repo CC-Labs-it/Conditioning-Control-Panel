@@ -350,6 +350,8 @@ namespace ConditioningControlPanel.Avalonia
             CoreModsHooks.KnownVideoLinksProvider = () => HypnotubeDefaultLinks.KnownVideoTitles;
             // WPF App.xaml.cs:317/327: discard stale voice context on a switch or content replacement.
             CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
+            CoreModsHooks.CloseDtrhHost = Views.Games.GameWindow.CloseDtrhForModSwitch;
+            CoreModsHooks.ClearModResourceCache = Helpers.StartupArt.InvalidateOverrides;
             CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
             var mods = Mods;
