@@ -570,6 +570,48 @@ public sealed class DeeperRowsTests
     }
 
     [Fact]
+    public Task PlayerTitleTracksLoadedEnhancementAndUnload() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var player = new EnhancementPlayerWindow(null, null);
+        try
+        {
+            player.Show();
+            var defaultTitle = player.Title;
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" };
+            enhancement.Metadata.Name = "Test title";
+            player.LoadEnhancementFromMemory(enhancement, "memory");
+            Assert.Equal(string.Format(ConditioningControlPanel.Localization.Loc.Get("deeper_player_window_title_fmt"), "Test title"), player.Title);
+            Invoke(player, "Unload");
+            Assert.Equal(defaultTitle, player.Title);
+        }
+        finally { player.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PlayerPublishesAudioDurationOncePerLoad() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var original = DeeperLocalAudio.Open;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new FakeAudio());
+        var player = new EnhancementPlayerWindow(null, null);
+        var calls = new System.Collections.Generic.List<(string?, double)>();
+        player.RememberAudioDuration = (path, duration) => calls.Add((path, duration));
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile("first.mp3");
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal(new[] { ("first.mp3", 95d) }, calls);
+            player.OpenLocalMediaFile("second.mp3");
+            Invoke(player, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal(new[] { ("first.mp3", 95d), ("second.mp3", 95d) }, calls);
+        }
+        finally { player.Close(); DeeperLocalAudio.Open = original; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PlayerOpensTheEditorForNewAndExistingEnhancements() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

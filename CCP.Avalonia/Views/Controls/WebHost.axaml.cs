@@ -101,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// hangs its status line and catalogue lookup on.
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
+        internal event Action? NavigationStarting;
 
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
@@ -442,6 +443,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
+            NavigationStarting?.Invoke();
             var target = e.Request;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
