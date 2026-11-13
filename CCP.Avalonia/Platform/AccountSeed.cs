@@ -282,9 +282,32 @@ internal static class AccountSeed
                 if (node == null || CoreSettings.Current.UnifiedId != id) return;
                 ApplyTierReading(EntitlementTierRule.ParseTier(node["effective_tier"]), "focus");
                 ApplyPatreonReading(PatreonActiveRule.Parse(node), "focus");
+                ApplyProfileExtras(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Parse(node));
             });
         }
         catch (Exception ex) { Log.Debug("[Entitlement] focus refresh failed: {Error}", ex.Message); }
+    }
+
+    /// <summary>Raised on the UI thread after a focus read's conversion fields were applied (the member hello row).</summary>
+    internal static event Action? ProfileExtrasApplied;
+
+    /// <summary>WPF EntitlementTierSync.RefreshAsync -> ProfileExtras.Apply: the same focus read carries the free
+    /// member flag, paid_until and post grants (no second request). Only what the server sent moves; a change saves
+    /// and re-reads the Daily Gift. Never throws.</summary>
+    internal static void ApplyProfileExtras(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtrasReading? reading)
+    {
+        try
+        {
+            var s = CoreSettings.Current;
+            if (reading == null || string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)) return;
+            if (ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Apply(s, reading))
+            {
+                CoreSettings.Save();
+                App.DailyFree?.NotifyInputsChanged();
+            }
+            ProfileExtrasApplied?.Invoke();
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] profile extras failed: {Error}", ex.Message); }
     }
 
     /// <summary>WPF EntitlementTierSync.OfferPatreon: a fresh server Patreon confirmation (patreon_is_active +
