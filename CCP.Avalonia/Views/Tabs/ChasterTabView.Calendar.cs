@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: the calendar (:434-560),
 // CalendarSpan (:451), BuildCalendar (:466), Cell (:511), Cross (:576), on Core LockCalendar.
 // ponytail: the cross is two straight marker strokes plus the splat (WPF bends them), the padlock stamp is a glyph not the padlock art mask, the key is the key glyph on gold not
-// the foil sticker, tonight's tag and its bob (Fx.cs) are not ported.
+// the foil sticker, tonight's tag bob (Fx.cs) is not ported.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +12,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
 
@@ -25,6 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static readonly IBrush CalMarker = new SolidColorBrush(Color.FromRgb(0xC8, 0x24, 0x4A));
         private static readonly IBrush CalRule = new SolidColorBrush(Color.FromArgb(0x38, 0x24, 0x1A, 0x2E));
         private static readonly FontFamily CalMono = new("Consolas, Courier New, monospace");
+        private Border? _tonightCell;
         private (DateTime Start, DateTime End, DateTime Today)? _calendarKey;
 
         private readonly List<(LockDay Day, Border Square, int Number)> _calendarCells = new();
@@ -45,6 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (span is not { } lockSpan)
             {
                 StopCalendarFx();
+                _tonightCell = null;
+                CalendarTag.IsVisible = false;
                 _calendarKey = null;
                 _calendarCells.Clear();
                 CalendarRaffleKey.IsVisible = false;
@@ -53,11 +57,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             var key = (lockSpan.Start.Date, lockSpan.End.Date, today.Date);
-            if (_calendarKey == key && CalendarRow.IsVisible) { RefreshCalendarRaffle(); return; }   // a tick that changes nothing redraws nothing
+            if (_calendarKey == key && CalendarRow.IsVisible) { RefreshCalendarRaffle(); RefreshTag(ChasterHead.Service?.BalanceSeconds ?? 0); return; }   // a tick that changes nothing redraws nothing
             StopCalendarFx();
             _calendarKey = key;
             Calendar.Children.Clear();
             _calendarCells.Clear();
+            _tonightCell = null;
             var elided = LockCalendar.ElidedDays(lockSpan.Start, lockSpan.End);
             foreach (var day in LockCalendar.CellsFor(lockSpan.Start, lockSpan.End, today))
             {
@@ -65,9 +70,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var square = Cell(day, number, elided);
                 Calendar.Children.Add(square);
                 _calendarCells.Add((day, square, number));
+                if (day.Today) _tonightCell = square;
             }
             RefreshCalendarRaffle();
             CalendarRow.IsVisible = true;
+            RefreshTag(ChasterHead.Service?.BalanceSeconds ?? 0);
             RefreshCalendarLoops();
             StartCalendarDraw();
         }
