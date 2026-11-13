@@ -143,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtTrySessionLabel, _txtTrendHeader;
         private readonly IconGlyph _txtTrySessionIcon;
         private readonly Button _btnMaximizeTitleBar;
+        private readonly bool _wasAvatarMuted;
 
         /// <summary>Render/design constructor: the windowed first screen, which is the state the
         /// quiz actually opens in when it is not fullscreen - title bar, headline and the category
@@ -170,16 +171,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             IsOpen = true;
             Opened += (_, _) => _shown.Add(this);
 
-            // ponytail: needs App.AvatarWindow.IsMuted / SetMuteAvatar - there is NO
-            // ConditioningControlPanel/Windows/AvatarWindow.xaml.cs, which is what this note used
-            // to claim. The type is AvatarTubeWindow and the two members are at
-            // ConditioningControlPanel/AvatarTube/AvatarTubeWindow.ChatInput.cs:1523/1528, where
-            // the mute is CoreWebView2.IsMuted on the hosted browser. This head's
-            // CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs exposes a read-only IsMuted
-            // over CoreSettings.AvatarMuted and no setter at all (same gap MainShellWindow.
-            // Companion.cs:121 records), so there is nothing to call. WPF muted the avatar for the
-            // whole run so her z-order work could not cover the quiz, and restored the previous
-            // state on close.
+            // Mute avatar while quiz is open (WPF QuizWindow.xaml.cs:151-155); restored in OnClosed.
+            var avatar = AvatarTube.AvatarTubeWindow.Live;
+            _wasAvatarMuted = avatar?.IsMuted ?? true;
+            if (avatar != null && !_wasAvatarMuted)
+                avatar.SetMuteAvatar(true);
 
             AvaloniaXamlLoader.Load(this);
             _playDrone = playDrone;
@@ -1427,6 +1423,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _loadingDotsTimer.Stop();
             _gradientTimer.Stop();
             StopDrone();
+
+            // Restore avatar mute state (WPF QuizWindow.xaml.cs:1511-1515).
+            if (!_wasAvatarMuted)
+            {
+                try { AvatarTube.AvatarTubeWindow.Live?.SetMuteAvatar(false); }
+                catch { }
+            }
 
             // Deliberate divergence from WPF: it ducks to 95 in EnterSurrenderMode and only unducks
             // in ExitSurrenderMode, so closing the window (Escape) while the surrender screen is up
