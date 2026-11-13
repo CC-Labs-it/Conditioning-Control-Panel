@@ -51,6 +51,48 @@ public sealed class IntakeLifecycleTests
     }
 
     [Fact]
+    public Task OpeningRecordsOnceAndHoldEndsOnCloseAndRecovery() => WithCleanState(() =>
+    {
+        var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        var engine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        state.Usage.TryGetValue("intake", out var before);
+        IntakeHostWindow.RelaunchedOnce = false;
+        var first = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        Assert.Equal(before + 1, state.Usage["intake"]);
+        Assert.Equal("intakeRunning", engine.HeldBy);
+        Assert.Same(first, GradedIntakeTabView.OpenIntake(null, duckMain: false));
+        Assert.Equal(before + 1, state.Usage["intake"]);
+        first.Web.OnBrowserProcessFailed(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(before + 2, state.Usage["intake"]);
+        Assert.Equal("intakeRunning", engine.HeldBy);
+        Only().HandleMessage("{\"type\":\"intake-close\"}");
+        Assert.Null(engine.HeldBy);
+        var next = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        next.Close();
+        Assert.Null(engine.HeldBy);
+        GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        IntakeHostWindow.CloseAllForPanic();
+        Assert.Null(engine.HeldBy);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task AFailedLaunchReleasesTheHold() => WithCleanState(() =>
+    {
+        var engine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var show = GradedIntakeTabView.LoadAndShowIntake;
+        GradedIntakeTabView.LoadAndShowIntake = _ => throw new InvalidOperationException("no engine");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => GradedIntakeTabView.OpenIntake(null, duckMain: false));
+            Assert.Null(engine.HeldBy);
+            Assert.Empty(IntakeHostWindow.Snapshot());
+        }
+        finally { GradedIntakeTabView.LoadAndShowIntake = show; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task NativeDeathBeforeReadyRetriesWindowedOnceAndIgnoresClosedEngines() => WithCleanState(() =>
     {
         IntakeHostWindow.RelaunchedOnce = false;

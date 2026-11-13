@@ -27,6 +27,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     {
         public static EmiDeskService Instance { get; } = new();
 
+        // WPF IntakeHostService.Launch and DisposeAll: count the use, fire the opening line (spoken only while
+        // she is out), then the intakeRunning hold, which the line engine arms even while she is away.
+        internal void BeginIntake()
+        {
+            EmiState.NoteUsage("intake");
+            Fire("intakeOpened");
+            Fire("intakeRunning");
+        }
+
+        internal void EndIntake() => LineEngine.ReleaseHold("intakeRunning");
+
         private EmiDeskWindow? _window;
         private long _summonGen;
         private bool _muteAccepted;

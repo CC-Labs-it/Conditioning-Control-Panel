@@ -232,12 +232,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 live.Activate();
                 return live;
             }
-            var intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null, WarningOwner = owner };
+            // WPF IntakeHostService.Launch: the opening moment and the intakeRunning hold come first; the
+            // window's close (or a failed launch) releases the hold.
+            var emi = Windows.EmiDesk.EmiDeskService.Instance;
+            emi.BeginIntake();
+            Windows.IntakeHostWindow intake;
+            try
+            {
+                intake = new Windows.IntakeHostWindow { DuckTarget = duckMain ? owner : null, WarningOwner = owner };
+            }
+            catch { emi.EndIntake(); throw; }
             if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
             intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
             intake.Drafted += (session, path) => OnSessionDrafted(shell, session, path);
             try { LoadAndShowIntake(intake); }
-            catch { intake.Close(); throw; }
+            catch { intake.Close(); emi.EndIntake(); throw; }
             return intake;
         }
 
