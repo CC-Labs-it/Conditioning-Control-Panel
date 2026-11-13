@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
         /// Native only: a page message can never raise it.</summary>
         internal event Action? NativeFullscreenEntered;
+        internal event Action? NativeFullscreenExited;
         private IDisposable? _fullscreenWatch;
         internal void OnNativeFullscreenEntered() => NativeFullscreenEntered?.Invoke();
         /// <summary>Keys the page never sees, taken at the engine's input (Platform/WebKeySignal), any frame.
@@ -72,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal event Action<global::Avalonia.Input.Key, global::Avalonia.Input.KeyModifiers>? NativeKeyDown;
         private IDisposable? _keyWatch;
         internal void OnNativeKeyDown(global::Avalonia.Input.Key key, global::Avalonia.Input.KeyModifiers mods) => NativeKeyDown?.Invoke(key, mods);
+        internal void OnNativeFullscreenExited() => NativeFullscreenExited?.Invoke();
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
         /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
@@ -481,8 +483,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // The native core exists now; subscribe before observers can reveal a scene.
                     AttachFailureWatch(native, true);
                     if (BrowserProcessFailed != null && _failureWatch == null) return;
-                    if (NativeFullscreenEntered != null && _fullscreenWatch == null)
-                        try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(native.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
+                    if ((NativeFullscreenEntered != null || NativeFullscreenExited != null) && _fullscreenWatch == null)
+                        try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(native.TryGetPlatformHandle(), OnNativeFullscreenEntered, OnNativeFullscreenExited); }
                         catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
                     if (NativeKeyFilter is { } wants && _keyWatch == null)
                         try { _keyWatch = Platform.WebKeySignal.Attach(native.TryGetPlatformHandle(), wants, OnNativeKeyDown); }

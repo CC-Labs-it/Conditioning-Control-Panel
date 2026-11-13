@@ -449,6 +449,14 @@
                                            Foreground="{StaticResource TabHueBrush}" FontSize="10" FontWeight="Bold"
                                            Margin="0,0,0,10"/>
 
+                                <Button x:Name="BtnRemoteMore" IsVisible="False" Click="BtnRemoteMore_Click"
+                                        HorizontalAlignment="Left" Margin="0,0,0,10"
+                                        ToolTip.Tip="{loc:Str remote_hud_more_tip}">
+                                    <TextBlock Text="{loc:Str remote_hud_more}"/>
+                                </Button>
+                                <TextBlock x:Name="TxtRemoteMoreStatusTab" Foreground="{DynamicResource TextMutedBrush}"
+                                           FontSize="11" Margin="0,0,0,8"/>
+
                                 <!-- 5 preset slots, seeded in code-behind (App.Settings.Current
                                      .RemoteEmotePresets on WPF). -->
                                 <ItemsControl x:Name="LstEmotePresets" Margin="0,0,0,12">
