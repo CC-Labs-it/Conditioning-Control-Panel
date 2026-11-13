@@ -37,8 +37,21 @@ public sealed class ListeningKeywordStopTests
         cooldowns.LastGlobal = DateTime.MinValue;
         var stopped = 0;
         var played = 0;
+        // Trunk rules the PR predates: keyword audio waits for a running engine or session, a panic quiet
+        // left by another test holds every keyword, and the shared engine's cooldown clock is per instance.
+        var engineRunning = CoreSession.IsEngineRunningProvider;
+        var sessionRunning = CoreSession.IsSessionRunningProvider;
+        var singletonClock = KeywordTriggerHead.Engine.Now;
+        var now = new DateTime(2026, 11, 1, 12, 0, 0);
+        var saved = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider,
+            s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
+            s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.AwarenessLoopProtectionEnabled);
         try
         {
+            CoreSession.IsEngineRunningProvider = () => true;
+            CoreSession.IsSessionRunningProvider = () => false;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            KeywordTriggerHead.Engine.Now = () => now;
             CoreEntitlement.HasPremiumProvider = () => true;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             s.KeywordTriggersEnabled = true;
@@ -80,6 +93,14 @@ public sealed class ListeningKeywordStopTests
             Assert.DoesNotContain("trigger words on", phrases);
             Assert.Contains("trigger words off", phrases);
         }
-        finally { KeywordTriggerHead.Stop(); cooldowns.LastGlobal = lastGlobal; shell.Close(); File.Delete(file); }
+        finally
+        {
+            KeywordTriggerHead.Stop(); cooldowns.LastGlobal = lastGlobal; shell.Close(); File.Delete(file);
+            KeywordTriggerHead.Engine.Now = singletonClock;
+            CoreSession.IsEngineRunningProvider = engineRunning; CoreSession.IsSessionRunningProvider = sessionRunning;
+            (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider,
+                s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
+                s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.AwarenessLoopProtectionEnabled) = saved;
+        }
     });
 }
