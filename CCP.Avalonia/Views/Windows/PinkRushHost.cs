@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -34,6 +35,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF SkillTreeService.Start, called by StartEngine: arm the check when the skill is owned.</summary>
         internal static void Start()
+        {
+            SkillTreeEngineStart.Apply(CoreSettings.Current, Now(), DateTime.UtcNow);
+            CoreSettings.Save();
+            Arm();
+        }
+
+        internal static void Arm()
         {
             if (!SkillTreeRules.HasSkill(CoreSettings.Current, PinkRushRules.SkillId)) return;
             if (_check is null)

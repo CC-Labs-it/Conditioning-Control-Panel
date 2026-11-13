@@ -50,6 +50,7 @@ public sealed class WelcomeBackContentTests
             Assert.Equal(expectedVersion, CoreReleaseContent.AppVersion);
             WelcomeBackOffer.ResetForTests();
             WelcomeBackOffer.Present = content => { offered = content; return Task.CompletedTask; };
+            WelcomeBackOffer.NewBackup = WelcomeBackRestoreTests.NoBackupClient; // never the real proxy
             WelcomeBackOffer.Arm(true, dir);
             await WelcomeBackOffer.TryOfferAsync("content test");
 

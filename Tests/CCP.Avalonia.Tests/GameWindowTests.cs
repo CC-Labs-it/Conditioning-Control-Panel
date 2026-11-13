@@ -160,6 +160,8 @@ public sealed partial class GameWindowTests
             File.WriteAllBytes(Path.Combine(lib, "images", "still.png"), new byte[] { 1 });   // not an animation
             CorePaths.EffectiveAssetsProvider = () => lib;
             var w = GameWindow.Launch("breakoutdemo")!;
+            w.RainBridgeFactory = () => new ConditioningControlPanel.Avalonia.Views.BackRoom.BackRoomRainBridge(
+                (a, b, c, d, e, f) => { }, () => { }, () => false, () => false, () => 100);
             Assert.Same(w, GameWindow.Launch("breakoutdemo"));   // focused, never relaunched
             Assert.Contains("backroom/stations/breakout/play.html", w.PageUrl!.AbsolutePath);
             Assert.Contains("desktop=1&demo=1", w.PageUrl.Query);   // 3 levels even before init (access.js)
@@ -190,8 +192,13 @@ public sealed partial class GameWindowTests
             var ack = sent.Last();
             Assert.Equal("fx-ack", (string?)ack["type"]);
             Assert.Equal("t7", (string?)ack["token"]);
-            Assert.Empty(ack["fired"]!);
-            Assert.Equal("unknown", (string?)ack["skipped"]!.Single()["why"]);
+            Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+            Assert.All(ack["skipped"]!, skip => Assert.Equal("unknown", (string?)skip["why"]));
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"t8\",\"fxId\":\"fx.unknown\",\"station\":\"breakout\"}");
+            var unknown = sent.Last();
+            Assert.Equal("t8", (string?)unknown["token"]);
+            Assert.Empty(unknown["fired"]!);
+            Assert.Equal("unknown", (string?)unknown["skipped"]!.Single()["why"]);
             w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());

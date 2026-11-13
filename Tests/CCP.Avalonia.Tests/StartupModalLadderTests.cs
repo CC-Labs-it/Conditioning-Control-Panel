@@ -116,7 +116,8 @@ public sealed class StartupModalLadderTests
             CoreAccount.UnifiedUserId = "returning-user";
             var closed = new TaskCompletionSource();
             var shown = 0;
-            WelcomeBackOffer.ShowSheet = _ => { shown++; return Task.CompletedTask; };
+            WelcomeBackOffer.Choose = _ => { shown++; return Task.FromResult((false, false)); };
+            WelcomeBackOffer.NewBackup = WelcomeBackRestoreTests.NoBackupClient; // never the real proxy
             StartupLadder.EnqueueModal("first-run-wizard", 20, () => closed.Task);
             WelcomeBackOffer.Arm(true, dir);
             await WelcomeBackOffer.TryOfferAsync("startup");

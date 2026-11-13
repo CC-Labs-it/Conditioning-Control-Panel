@@ -192,14 +192,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             && ConditioningControlPanel.Services.Safety.PanicAftermath.RemoteResumeRefused(
                 _panicPause, runner.CurrentSession, runner.RunNumber, runner.IsPaused, runner.PauseCount);
 
-        internal void ResumeSessionFromRemote()
+        internal void ResumeSessionFromRemote() => ResumeSessionFromRemote(() => true);
+
+        internal void ResumeSessionFromRemote(Func<bool> stillCurrent)
         {
             // WPF :1392: a remote or voice resume cannot undo a local panic's pause.
             if (LocalPanicHoldsSession) return;
             if (App.Sessions is not { IsRunning: true, IsPaused: true }) return;
             StartEffect(() =>
             {
-                if (LocalPanicHoldsSession
+                if (!stillCurrent() || LocalPanicHoldsSession
                     || App.Sessions is not { IsRunning: true, IsPaused: true } runner) return;
                 runner.Resume();
                 PinkFilterOverlay.Refresh(this);

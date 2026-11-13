@@ -178,6 +178,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Content = Web;
             Web.WebMessage += OnPageMessage;
+            PropertyChanged += (_, e) =>
+            {
+                if (!IsBreakout || e.Property != WindowStateProperty) return;
+                RoomMinimizedChanged(WindowState == WindowState.Minimized);
+            };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             if (IsDtrh)
@@ -188,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
+            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
@@ -283,6 +288,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         Dispatcher.UIThread.Post(() => Post(deal));
                     });
                     break;
+                case "fx-release" when IsBreakout:
+                    _backRoomFx?.Release((string?)o["token"] ?? "", (string?)o["station"] ?? "");
+                    break;
+                case "station-close" when IsBreakout:
+                    _backRoomFx?.ReleaseStation((string?)o["station"] ?? "");
+                    break;
+                case "fx" when IsBreakout:
+                    if (!_shellExiting && !_closing && !_roomMinimized) FireRoomFx(o);
+                    else Post(new { type = "fx-ack", token = (string?)o["token"], fired = Array.Empty<string>(),
+                        skipped = new[] { new { prim = (string?)o["fxId"] ?? "", why = "busy" } } });
+                    break;
                 case "fx":
                     // WPF BackRoomBridge.OnFx (:479) answers every fx with one fx-ack, or the page waits out its 4 s
                     // timeout. The five big-beat ids are drawn in the page (page-fx.js); this head has no desktop
@@ -302,6 +318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
+                    _backRoomFx?.CancelAll();
                     _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;

@@ -69,9 +69,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var root = CorePaths.EffectiveAssets;
             var files = AssetFolderExclusion.Enabled(ChaosImagePool.GetFiles(), root, s);
-            var picked = new List<string>();
-            for (int i = 0; i < batch; i++)
-                if (FlashOverlay.NextFlashPath(files) is { } p && !picked.Contains(p)) picked.Add(p);
+            return PickFiles(batch, files, FlashOverlay.PackImages);
+        }
+
+        internal static List<string> PickFiles(int batch, IReadOnlyList<string> files, PackMediaPool packs)
+        {
+            int poolSize = files.Count + packs.Count;
+            int want = Math.Min(Math.Max(0, batch), poolSize);
+            var picked = new List<string>(want);
+            var chosenPack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            long guard = (long)poolSize * 8 + 16;
+            while (picked.Count < want && guard-- > 0)
+            {
+                var p = packs.TryDraw(files.Count, chosen: chosenPack) ?? FlashOverlay.NextPath(files);
+                if (p != null && !picked.Contains(p, StringComparer.OrdinalIgnoreCase)) picked.Add(p);
+            }
             return picked;
         }
 

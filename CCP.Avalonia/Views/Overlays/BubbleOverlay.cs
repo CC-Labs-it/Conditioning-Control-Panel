@@ -367,6 +367,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             ClearEStim();
             ChaosRipples.Clear();
+            ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
             _chaosCanChannel = null;
