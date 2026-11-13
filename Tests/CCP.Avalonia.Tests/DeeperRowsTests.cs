@@ -57,6 +57,85 @@ public sealed class DeeperRowsTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task PreviewFromPlayerOwnedEditorReusesOwner() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var enh = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "/tmp/preview.mp3" };
+        enh.Metadata.Name = "Unsaved";
+        var editor = new DeeperEditorWindow(enh, null);
+        try
+        {
+            player.Show();
+            editor.Show(player);
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Unsaved", player.FindControl<TextBlock>("TxtEnhName")!.Text);
+            Assert.Null(player.LoadedFilePath);
+        }
+        finally { editor.Close(); player.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PreviewAudioStopsPreviousVideoAndIgnoresLatePoll() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var audio = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "/tmp/preview.mp3" };
+        var editor = new DeeperEditorWindow(audio, null);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var scripts = new System.Collections.Generic.List<string>();
+        var pending = new TaskCompletionSource<string?>();
+        web.ScriptInvoker = script =>
+        {
+            scripts.Add(script);
+            return script.Contains("l.currentTime+") ? pending.Task : Task.FromResult<string?>("ok");
+        };
+        try
+        {
+            player.Show();
+            editor.Show(player);
+            player.LoadEnhancementFromMemory(new Enhancement
+            {
+                MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1"
+            }, "video");
+            var poll = (Task)typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(player, null)!;
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            // Trunk TearDownVideo (WPF player:1325) blanks the page instead of a pause script.
+            Assert.Equal("about:blank", web.Source!.AbsoluteUri);
+            Assert.True(web.AllowNavigation!(new Uri("about:blank")));
+            Assert.False(web.AllowNavigation!(new Uri("https://www.tiktok.com/@a/video/1")));
+            pending.SetResult("42|100|1");
+            await poll;
+            Assert.Equal("0:00", player.FindControl<TextBlock>("TxtCurrent")!.Text);
+            Assert.Equal(IconKind.Play, ((ConditioningControlPanel.Avalonia.Controls.IconGlyph)
+                player.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtPlayPauseGlyph")!).Kind);
+        }
+        finally { editor.Close(); player.Close(); }
+    });
+
+    [Fact]
+    public Task PreviewReportsMissingPlayer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio }, null);
+        try
+        {
+            editor.Show();
+            Click(editor.FindControl<Button>("BtnPreview")!);
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(editor.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("deeper_editor_preview_not_initialized"),
+                dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            dialog.Close();
+        }
+        finally { editor.Close(); }
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeAudio : IDeeperLocalAudio
     {
         public bool Playing, Disposed, Rejects;

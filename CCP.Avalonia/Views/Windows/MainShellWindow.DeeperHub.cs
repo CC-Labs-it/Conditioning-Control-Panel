@@ -120,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF EnhancementPlayerWindow.ShowOrActivate: one player window, reused.</summary>
-        private EnhancementPlayerWindow ShowOrActivateDeeperPlayer()
+        internal EnhancementPlayerWindow ShowOrActivateDeeperPlayer()
         {
             if (_deeperPlayer is { } open)
             {

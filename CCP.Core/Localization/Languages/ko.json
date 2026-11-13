@@ -8372,5 +8372,8 @@
   "chaos_dvd_title": "포르노 DVD",
   "chaos_dvd_loading": "불러오는 중",
   "chaos_inescapable_unlock_tip": "더 깊은 곳으로 가는 문. 열쇠는 Toybox에서 판다. Relentless 하강 {0}회를 마치고 Devoted(하강 {1}회)에 도달한 뒤 ✦{2}로 훈련하자.",
-  "chaos_resistance_regrows": "저항력 회복"
+  "chaos_resistance_regrows": "저항력 회복",
+  "account_merged_signin_title": "계정이 통합되었습니다",
+  "account_merged_signin_summary": "계속하려면 다시 로그인하세요.",
+  "account_merged_signin_body": "두 계정이 하나로 통합되었습니다. 계속하려면 다시 로그인하세요.\n\n로컬 진행 상황은 유지됩니다."
 }
