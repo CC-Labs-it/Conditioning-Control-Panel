@@ -250,8 +250,10 @@ namespace ConditioningControlPanel.Services
             double scaling, Chaos.EffectBubbleSpec spec, Chaos.ChaosMotion motion = Chaos.ChaosMotion.FloatUp, int ambientSpeedBoost = 0)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            // An ambient trigger spec (Payload.Ambient) keeps its own deflate clock (AmbientTrigger, Spec.TreatLifeMs):
+            // the chaos treat clock skips it whether or not the caller has set the flag yet (restack b115, from #4186).
             if (!spec.IsLive && !spec.IsDarter && !spec.IsFreeze && !spec.IsHeart && !spec.IsDroplet
-                && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle)
+                && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle && spec.Payload?.Ambient != true)
                 b._treatLifeMs = spec.TreatLifeMs > 0 ? spec.TreatLifeMs : 5000; // WPF :3239-3252
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
             b._speed = (1.0 + r.NextDouble()) * Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4)
