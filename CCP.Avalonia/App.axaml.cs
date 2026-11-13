@@ -892,6 +892,11 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
                     Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
                 }
+                // A restored profile can pay a web claim during startup, before later splash steps.
+                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                _achievementSaveTimer?.Stop();
+                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                SeedAchievementXp(Achievements);
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
@@ -1107,7 +1112,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Achievements: the Core engine over the same achievements.json WPF uses, seeded the
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
-                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                // The engine itself is created before AccountSeed.Seed (restack b08, #4544).
                 Platform.LoginStreakHead.Start(Achievements, CoreSettings.Current);
                 var seasonEngine = Achievements;
                 void CheckSeasonActivity()
@@ -1383,8 +1388,15 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
         /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
-        /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
-        /// silent). Returns the LevelUp handler so a test can detach it.</summary>
+        // WPF ProgressionService.cs:104,162: achievements count settled XP from awards and claims.
+        internal static Action<ProgressionBank.XpAward> SeedAchievementXp(AchievementEngine engine)
+        {
+            Action<ProgressionBank.XpAward> onXp = award => engine.TrackXPEarned(award.Amount);
+            ProgressionBank.XPAwarded += onXp;
+            return onXp;
+        }
+
+        /// <summary>WPF ProgressionService.cs:285 and App.xaml.cs:3174. Returns the handler for tests.</summary>
         internal static Action<int> SeedLevelAchievements(AchievementEngine engine)
         {
             Action<int> onLevel = engine.CheckLevelAchievements;
