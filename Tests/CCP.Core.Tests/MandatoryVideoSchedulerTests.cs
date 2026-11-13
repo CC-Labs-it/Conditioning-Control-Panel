@@ -918,6 +918,8 @@ public sealed class MandatoryVideoSchedulerTests
         var v = new MandatoryVideoScheduler(new Host(), new FakeClock(), () => Array.Empty<string>());
         var n = 0;
         v.NoVideos += () => n++;
+        Assert.False(v.Trigger(silentIfEmpty: true)); Assert.False(v.Trigger(silentIfEmpty: true));
+        Assert.Equal(0, n);
         v.Trigger(); v.Trigger();
         Assert.Equal(1, n);
     }

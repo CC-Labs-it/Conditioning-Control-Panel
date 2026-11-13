@@ -1357,6 +1357,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
             Views.Overlays.CornerGifOverlay.StopAll();
+            Views.Overlays.BubbleOverlay.Stop();   // ambient trigger payloads stop with it (BubblePayloadHost)
             Views.Overlays.SpiralOverlay.Stop();
             if (final) Views.Overlays.SpiralOverlay.CloseAll();
             Views.Overlays.PinkFilterOverlay.Stop();   // WPF MainWindow.StartStop.cs:527 Overlay.Stop

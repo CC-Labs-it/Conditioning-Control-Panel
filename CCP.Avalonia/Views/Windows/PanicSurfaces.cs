@@ -121,6 +121,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
+                Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.SpiralOverlay.CloseAll(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
             new("flash", _ => { Overlays.FlashOverlay.CloseAll(final: false); ConditioningControlPanel.Services.Flash.RemoteFlashSource.CleanupCache(); }), // Includes standalone pops and mid-Shatter exits.

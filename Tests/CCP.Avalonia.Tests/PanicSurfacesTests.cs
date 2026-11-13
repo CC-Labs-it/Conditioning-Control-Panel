@@ -155,6 +155,7 @@ public sealed class PanicSurfacesTests
         "deeper-player",
         "scheduler",
         "engine",
+        "bubble-host",
         "flash",
         "pink-rush",
         "corner-gif",
