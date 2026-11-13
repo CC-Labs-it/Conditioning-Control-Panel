@@ -175,6 +175,7 @@ public sealed class PanicSurfacesTests
         "deeper-editor-audio",
         "discord-share-prompt",
         "friend-notices", "knock-cards",
+        "gaze-debug-cursor",
         "quick-recal",
         "mod-creator-preview",
         "asset-preview",
