@@ -213,13 +213,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
-                // WPF :1301: a Tease replaces the ordinary slot, never the scripted first run.
-                if (TrySpawnTease(cfg, effIntensity))
-                {
-                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
-                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
-                    return;
-                }
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
                     .Where(id => ChaosBubbleVariants.All.Any(v => v.Id == id)).ToList();
                 double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
@@ -234,6 +227,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     SpawnChaperone(effIntensity);
                     if (_spawnTimer != null)
                         _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                    return;
+                }
+                // WPF :1301 (after the Chaperone roll at :1264): a Tease replaces the ordinary slot, never the scripted first run.
+                if (TrySpawnTease(cfg, effIntensity))
+                {
+                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
+                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
                     return;
                 }
 

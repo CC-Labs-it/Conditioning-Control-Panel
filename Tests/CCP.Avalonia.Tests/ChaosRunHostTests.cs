@@ -1064,6 +1064,12 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    private sealed class ChaperoneMissDice : Random
+    {
+        private bool _rolled;
+        public override double NextDouble() { if (_rolled) return 0; _rolled = true; return 0.99; }
+        public override int Next(int minValue, int maxValue) => minValue;
+    }
     private sealed class TeaseDice : Random
     {
         public override double NextDouble() => 0;
@@ -1100,7 +1106,8 @@ public sealed class ChaosRunHostTests
         Assert.False(ChaosRunHost.TrySpawnTease(cfg, 0.5));
         ChaosMeta.State.RunsCompleted = 10; cfg.ScriptedFirstRun = true;
         Assert.False(ChaosRunHost.TrySpawnTease(cfg, 0.5));
-        cfg.ScriptedFirstRun = false; ChaosRunHost.SpawnTick();
+        // WPF rolls the Chaperone first (ChaosModeService.cs:1264): miss it, then the Tease roll hits.
+        cfg.ScriptedFirstRun = false; ChaosRunHost.Rng = new ChaperoneMissDice(); ChaosRunHost.SpawnTick();
         Assert.Single(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsTease == true);
         Assert.True(ChaosMeta.State.SeenTease); Assert.Equal("Tease: nicht berühren", ChaosAnnouncerOverlay.Active!.Current!.Text);
         Assert.Equal(new[] { "ChaosTeaseDebut:" }, barks);
