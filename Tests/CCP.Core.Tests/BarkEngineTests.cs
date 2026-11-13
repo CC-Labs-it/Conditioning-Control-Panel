@@ -34,6 +34,53 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
+    private sealed class DecisionSink : Serilog.Core.ILogEventSink
+    {
+        public readonly List<Serilog.Events.LogEvent> Events = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Add(e);
+    }
+
+    // Restack b76 (#3272): WPF LogDecision metadata, and tier latches on the raw account tier.
+    [Fact]
+    public void DecisionLogsHaveWpfMetadataAndLengthButNeverText()
+    {
+        var old = Serilog.Log.Logger; var sink = new DecisionSink();
+        using var logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
+        Serilog.Log.Logger = logger;
+        try
+        {
+            var r = Rule("Log", "private companion words"); r.Mood = "happy";
+            var e = Engine(r); Assert.True(e.Raise("Log"));
+            Assert.False(e.Raise("Log"));
+            var fire = Assert.Single(sink.Events, x => x.Properties.ContainsKey("Chars"));
+            Assert.Equal("23", fire.Properties["Chars"].ToString());
+            Assert.Contains("Mood", fire.Properties.Keys); Assert.Contains("Priority", fire.Properties.Keys);
+            Assert.Contains(sink.Events, x => x.Properties.ContainsKey("Reason"));
+            Assert.DoesNotContain(sink.Events, x => x.RenderMessage().Contains("private companion words"));
+        }
+        finally { Serilog.Log.Logger = old; }
+    }
+
+    [Fact]
+    public void TierLatchUsesTheRawAccountTierAndRetainsTheWpfSessionLatch()
+    {
+        var old = CoreAccount.CurrentTierProvider;
+        try
+        {
+            var r = Rule("Tier", "hello"); (r.Repeatable, r.ScopeRaw) = (false, "tier");
+            CoreAccount.CurrentTierProvider = () => ConditioningControlPanel.Models.PatreonTier.Level1;
+            var e = Engine(r); Assert.True(e.Raise("Tier", guaranteed: true));
+            Assert.True(_s.IsBarkFired(r.Id + "@Level1"));
+            Assert.False(Engine(r).Raise("Tier", guaranteed: true));
+            CoreAccount.CurrentTierProvider = () => ConditioningControlPanel.Models.PatreonTier.Level2;
+            Assert.False(e.Raise("Tier", guaranteed: true)); // WPF also keeps a session latch
+            Assert.True(Engine(r).Raise("Tier", guaranteed: true)); Assert.True(_s.IsBarkFired(r.Id + "@Level2"));
+            CoreAccount.CurrentTierProvider = () => throw new InvalidOperationException();
+            Assert.Equal(ConditioningControlPanel.Models.PatreonTier.None, CoreAccount.CurrentTier);
+        }
+        finally { CoreAccount.CurrentTierProvider = old; }
+    }
+
     [Theory]
     [InlineData("FaceLost", true)]
     [InlineData("FaceFound", true)]
