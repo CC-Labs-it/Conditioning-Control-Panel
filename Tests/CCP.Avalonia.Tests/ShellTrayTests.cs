@@ -285,6 +285,49 @@ public sealed class ShellTrayTests
     }
 
     [Fact]
+    public void FirstTrayMinimizeRequestsOnlyOneBalloon() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previous = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
+        var count = 0;
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => count++;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.CreateTray();
+            shell.TrayHostPresent = () => true;
+            shell.Close();
+            Assert.False(shell.IsVisible);
+            Assert.Equal(1, count);
+            var field = typeof(global::ConditioningControlPanel.Avalonia.Platform.OsNotifications)
+                .GetField("_windows", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var cleared = 0;
+            using var balloon = new global::ConditioningControlPanel.Avalonia.Platform.WindowsNotifications(
+                (IntPtr)42, 7, (_, _) => true, () => cleared++);
+            Assert.True(balloon.Show("Title", "Body"));
+            field.SetValue(null, balloon);
+            shell.ShowFromTray();
+            Assert.Equal(1, cleared);
+            Assert.Null(field.GetValue(null));
+            shell.Close();
+            Assert.False(shell.IsVisible);
+            Assert.Equal(1, count);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = previous;
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.DismissWindowsBalloon();
+            shell.MarkExitRequestedForTest();
+            shell.Close();
+            shell.Tray?.Dispose();
+        }
+    });
+
+    [Fact]
     public async Task CloseWithoutATrayHostReallyCloses()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
