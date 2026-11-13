@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
@@ -27,6 +29,8 @@ public partial class AvailableSubjectsTabView : UserControl
     internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
         TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
     internal Func<LobbyPoll>? CreateLobby;
+    // Prime gate and the Linux race card live behind GameWindow.LaunchFriendRace (owner B2).
+    internal Action<string> OpenRace = room => GameWindow.LaunchFriendRace(room);
     private LobbyPoll? _lobby;
     private IDisposable? _lease;
     private LobbySnapshot _snapshot = LobbySnapshot.Empty;
@@ -75,7 +79,9 @@ public partial class AvailableSubjectsTabView : UserControl
             () => Platform.FriendsHead.Identity() != null,
             () => Platform.FriendsHead.Service?.Snapshot.Friends ?? Array.Empty<Friend>(),
             () => new PbpLobbyApi().FetchAsync(), () => GoonOpenTables.RefreshAsync(), () => remote.FetchAsync(),
-            () => new RaceOpenApi(identity: LobbyWire.DefaultIdentity, baseUrl: LobbyWire.DefaultBaseUrl()).FetchAsync());
+            () => LobbyWire.DefaultBaseUrl() is { } url
+                ? new RaceOpenApi(identity: LobbyWire.DefaultIdentity, baseUrl: url).FetchAsync()
+                : Task.FromResult(RaceOpenReply.Empty));
     }
 
     private void SyncWatch()
@@ -138,6 +144,8 @@ public partial class AvailableSubjectsTabView : UserControl
         UpdateCards(_open, snapshot.Open, gates);
         UpdateCards(_playing, snapshot.Playing, gates);
         UpdateCards(_friends, snapshot.Friends, gates);
+        // WPF MainWindow.Lobby.cs:146-155: the first fill staggers in; after that only a new table pops.
+        QueueLobbyEntrance(_open.Concat(_playing).Concat(_friends).Select(v => v.Id).ToList());
         LobbyOpenCount.Text = snapshot.Open.Count.ToString(CultureInfo.InvariantCulture);
         LobbyPlayingCount.Text = snapshot.Playing.Count.ToString(CultureInfo.InvariantCulture);
         LobbyFriendsCount.Text = snapshot.Friends.Count.ToString(CultureInfo.InvariantCulture);
@@ -181,10 +189,26 @@ public partial class AvailableSubjectsTabView : UserControl
 
     private void BtnLobbyRow_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Control { DataContext: LobbyCardView card } || card.Row.Game != LobbyGame.Chess) return;
+        if (sender is not Control { DataContext: LobbyCardView card }) return;
+        if (card.Row.Game == LobbyGame.Race) { PressRaceRow(card.Row); return; }
+        if (card.Row.Game != LobbyGame.Chess) return;
         if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
         if (!ReadGates().CanJoin(LobbyGame.Chess)) { _ = shell.OpenUnifiedLoginDialog(); return; }
         GameWindow.OpenChessLobby(card.Row.CanWatch ? "spectate" : "join", card.Row.Key);
+    }
+
+    /// <summary>WPF MainWindow.Lobby.cs:254-257 and :283-287: sign-in first, then a malformed room id never leaves.</summary>
+    internal void PressRaceRow(LobbyRow row)
+    {
+        if (row.Game != LobbyGame.Race || !row.CanJoin) return;
+        if (!ReadGates().CanJoin(LobbyGame.Race))
+        {
+            if (TopLevel.GetTopLevel(this) is MainShellWindow shell) _ = shell.OpenUnifiedLoginDialog();
+            return;
+        }
+        if (!RaceJoinLink.IsRoomId(row.Key)) { Serilog.Log.Warning("[Lobby] race join refused: bad room id"); return; }
+        try { OpenRace(row.Key!); }
+        catch (Exception ex) { Serilog.Log.Warning(ex, "[Lobby] join {Game} failed", row.Game); }
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -212,7 +236,34 @@ public sealed record LobbyCardView
         ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
     }
     public LobbyRow Row { get; }
-    public bool DoorAvailable => Row.Game == LobbyGame.Chess;
+    /// <summary>WPF LobbyRowView.Id: stable across polls, for the new-table pop.</summary>
+    public string Id => LobbyPageRules.Id(Row);
+    // WPF LobbyRowView.cs:27-57,103-139: the game's small feature art and, when they wear something, the host's look.
+    public IBrush? ArtBrush => ArtFor(Row.Game) is { } art ? new ImageBrush(art) { Stretch = Stretch.UniformToFill } : null;
+    public bool HasLook => !Row.Look.IsEmpty;
+    public IBrush? FaceBrush => !HasLook ? null
+        : Helpers.ModArt.AvatarPreset(Row.Look.AvatarId) is { } face ? new ImageBrush(face) { Stretch = Stretch.UniformToFill }
+        : LeaderboardRow.BuildAvatarBrush(Row.HostName);
+    public Bitmap? FrameArt => HasLook ? Helpers.ModArt.ShopFrame(Row.Look.FrameId) : null;
+    public double FrameSize => 22 / ShopCosmeticsRegistry.FrameWindowRatio;
+    public Thickness FrameMargin => new(-(FrameSize - 22) / 2);
+    internal static string ArtPath(LobbyGame game) => game switch
+    {
+        LobbyGame.Chess => "features/piecebypiece.png",
+        LobbyGame.Goon => "features/goon_game_tile.png",
+        LobbyGame.Race => "features/race.png",
+        _ => "features/lobby_remote.png",
+    };
+    private static readonly System.Collections.Generic.Dictionary<LobbyGame, Bitmap?> ArtCache = new();
+    private static Bitmap? ArtFor(LobbyGame game)
+    {
+        lock (ArtCache)
+        {
+            if (!ArtCache.TryGetValue(game, out var art)) ArtCache[game] = art = Helpers.ModArt.TryLoadBuiltIn(ArtPath(game), 96);
+            return art;
+        }
+    }
+    public bool DoorAvailable => Row.Game is LobbyGame.Chess or LobbyGame.Race;
     private static IBrush? Theme(string key) =>
         global::Avalonia.Application.Current?.TryFindResource(key, out var value) == true ? value as IBrush : null;
     public IBrush? CardRim => Theme("DepthFloatRim");
