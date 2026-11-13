@@ -415,6 +415,14 @@ public sealed class RealProfileMigrationTests
         // runner is UTC, the fixture +01:00) re-serializes as different text for the same instant.
         var (beforeToken, afterToken) = (AsUtc(ReadToken(sourcePath)), AsUtc(ReadToken(copyPath)));
         if (JToken.DeepEquals(beforeToken, afterToken)) return "exit-flush-same-content";
+        // The login streak banked at launch (see LoginStreakBankedToday): only the streak fields move.
+        if (relative == "achievements.json" && beforeToken is JObject wasAch && afterToken is JObject nowAch
+            && ReadToken(copyPath)["LastLaunchDate"] is { } launch && launch.ToObject<DateTime>().Date == DateTime.Today)
+        {
+            foreach (var key in new[] { "LastLaunchDate", "ConsecutiveDays", "PendingStreakBreak", "PendingStreakBonus" })
+            { wasAch.Remove(key); nowAch.Remove(key); }
+            return JToken.DeepEquals(wasAch, nowAch) ? "login-streak-banked-at-launch" : null;
+        }
         if (relative != "quests.json" || beforeToken is not JObject before || afterToken is not JObject after) return null;
         // A day (week) passed since WPF last ran: the quests roll exactly as WPF rolls them.
         var progress = new QuestProgress
@@ -475,6 +483,11 @@ public sealed class RealProfileMigrationTests
                 // does (MainWindow.Patreon.cs TierOnNoticePass records the first reading and saves).
                 else if (key == "last_known_effective_tier" && value.Type == JTokenType.Null && now.Type == JTokenType.Integer)
                     expect("first-tier-reading-recorded");
+                // Expected: a day passed since WPF last ran, so launch banks the login streak exactly as WPF
+                // 7.2 does (AchievementProgressStreak.UpdateStreak at startup): today's date, the new count
+                // mirrored into settings, and the highest streak lifted to it.
+                else if (LoginStreakBankedToday(key, value, now, saved))
+                    expect("login-streak-banked-at-launch");
                 else yield return "value changed: " + key;
                 continue;
             }
@@ -482,6 +495,21 @@ public sealed class RealProfileMigrationTests
             var defaultToken = fallback is null ? JValue.CreateNull() : JToken.FromObject(fallback);
             if (!JToken.DeepEquals(value, defaultToken)) yield return "key dropped with a non-default value: " + key;
         }
+    }
+
+    private static bool LoginStreakBankedToday(string key, JToken original, JToken now, JObject saved)
+    {
+        static bool IsToday(JToken? t) => t is { Type: JTokenType.Date or JTokenType.String }
+            && t.ToObject<DateTime>().Date == DateTime.Today;
+        var current = saved["CurrentStreak"]?.Type == JTokenType.Integer ? (int)saved["CurrentStreak"]! : -1;
+        return key switch
+        {
+            "LastStreakDate" => IsToday(now),
+            "CurrentStreak" => IsToday(saved["LastStreakDate"]) && current >= 1,
+            "HighestStreak" => IsToday(saved["LastStreakDate"]) && now.Type == JTokenType.Integer && original.Type == JTokenType.Integer
+                && (int)now == Math.Max((int)original, current),
+            _ => false,
+        };
     }
 
     /// <summary>True when the saved haptics block differs from the original only by v2 layer or event

@@ -158,6 +158,11 @@ namespace ConditioningControlPanel.Services.Awareness
     /// </summary>
     public static class AwarenessObserverPolicy
     {
+        /// <summary>Requires entitlement and both generations of consent before v2 can observe.</summary>
+        public static bool IsEnabled(AppSettings? settings, bool hasEntitlement) =>
+            settings != null && hasEntitlement && settings.UseAwarenessV2 && settings.AwarenessModeEnabled &&
+            settings.AwarenessConsentGiven && settings.AwarenessConsentShownV2;
+
         /// <summary>Real input idle under which fullscreen counts as "playing", not "left running".</summary>
         public const int FullscreenRecentInputSeconds = 30;
 

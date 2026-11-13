@@ -55,6 +55,58 @@ public sealed class AwarenessPrivacyCardTests
     }
 
     [Fact]
+    public Task PublishedAdultFrameUsesProjection() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var previousProvider = CoreSettings.ServiceProvider;
+        var previousObserver = AwarenessLive.ObserverEnabled;
+        var previousPause = AwarenessPause.PausedUntil;
+        // Publish assigns a new timestamp when CutAt is default, so preserve both fields exactly.
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        var liveLock = typeof(AwarenessLive).GetField("Lock", flags)!.GetValue(null)!;
+        var frameField = typeof(AwarenessLive).GetField("_lastFrame", flags)!;
+        var timeField = typeof(AwarenessLive).GetField("_lastFrameAt", flags)!;
+        object? previousFrame, previousTime;
+        lock (liveLock) { previousFrame = frameField.GetValue(null); previousTime = timeField.GetValue(null); }
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            s.AwarenessModeEnabled = s.AwarenessConsentGiven = true;
+            AwarenessPause.Resume();
+            AwarenessLive.Clear();
+            AwarenessLive.ObserverEnabled = false;
+            var vm = new AwarenessPrivacyViewModel(() => null);
+            Assert.True(vm.IsLegacyPipeline);
+            Assert.False(vm.IsWireLive);
+            AwarenessLive.Publish(new ContextFrame { AppCluster = AwarenessClusters.Adult, AppId = "private-app", ServiceName = "private-name", PageTitleSanitized = "private-title" });
+            AwarenessLive.ObserverEnabled = true;
+            vm.Sync();
+            Assert.False(vm.IsLegacyPipeline);
+            Assert.True(vm.IsWireLive);
+            Assert.Contains(AwarenessClusters.Adult, vm.WireLine);
+            Assert.Contains(AwarenessClusters.Adult, vm.WireJson);
+            Assert.DoesNotContain("private", vm.WireLine);
+            Assert.DoesNotContain("private", vm.WireJson);
+            AwarenessLive.Publish(new ContextFrame { AppId = "editor", ServiceName = "Editor", PageTitleSanitized = "Contact user@example.com" });
+            vm.Sync();
+            Assert.DoesNotContain("user@example.com", vm.WireLine);
+            Assert.DoesNotContain("user@example.com", vm.WireJson);
+            Assert.Contains("Contact", vm.WireLine);
+            Assert.Contains("Contact", vm.WireJson);
+        }
+        finally
+        {
+            lock (liveLock) { frameField.SetValue(null, previousFrame); timeField.SetValue(null, previousTime); }
+            AwarenessLive.ObserverEnabled = previousObserver;
+            AwarenessPause.Resume();
+            if (previousPause is { } until) AwarenessPause.Pause(TimeSpan.FromTicks(1), until.AddTicks(-1));
+            CoreSettings.ServiceProvider = previousProvider;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task DialConsentBandChipsPauseAndWipeAreReal() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
@@ -70,6 +122,7 @@ public sealed class AwarenessPrivacyCardTests
         s.AwarenessModeEnabled = false;
         s.AwarenessConsentGiven = false;
         s.AwarenessConsentShownV2 = false;
+        s.UseAwarenessV2 = true;
         s.AwarenessTitleAllowList = new();
         var oldPremium = CoreEntitlement.HasPremiumProvider;
         var ledger = Path.Combine(CorePaths.UserData, "awareness_ledger.json");
@@ -104,6 +157,40 @@ public sealed class AwarenessPrivacyCardTests
             Assert.True(vm.IsLegacyPipeline);
             Assert.False(vm.IsWireLive);
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_awareness_wire_legacy"), vm.WireLine);
+
+            // Until the observer exists, the review action cannot switch on v2 protections.
+            var reviewButton = Assert.Single(card.GetLogicalDescendants().OfType<Button>(),
+                button => ReferenceEquals(button.Command, vm.ReviewConsentCommand));
+            Assert.False(vm.CanReviewConsent);
+            Assert.False(reviewButton.IsVisible);
+            s.UseAwarenessV2 = false;
+            vm.Sync();
+            Assert.False(vm.CanReviewConsent);
+            Assert.False(reviewButton.IsVisible);
+            s.UseAwarenessV2 = true;
+            vm.Sync();
+
+            // The retained command still asks again. Decline changes nothing; accept bounces the poll.
+            var calls = new System.Collections.Generic.List<bool>();
+            var lifecycle = ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle;
+            try
+            {
+                ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle = calls.Add;
+                AvApp.WindowAwareness.Start();
+                calls.Clear();
+                vm.ReviewConsentCommand.Execute(null);
+                await Until(() => shell.OwnedWindows.OfType<AwarenessConsentDialog>().Any());
+                shell.OwnedWindows.OfType<AwarenessConsentDialog>().Single().FindControl<Button>("BtnDecline")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await vm.Pending;
+                Assert.True(s.AwarenessConsentShownV2);
+                Assert.Empty(calls);
+                vm.ReviewConsentCommand.Execute(null);
+                await Until(() => shell.OwnedWindows.OfType<AwarenessConsentDialog>().Any());
+                shell.OwnedWindows.OfType<AwarenessConsentDialog>().Single().FindControl<Button>("BtnAccept")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await vm.Pending;
+                Assert.Equal(new[] { false, true }, calls);
+            }
+            finally { ConditioningControlPanel.Services.WindowAwarenessService.V2Lifecycle = lifecycle; AvApp.WindowAwareness.Stop(); }
 
             // Deny chips are the effective (seeded) list; removing one writes it.
             var first = vm.DenyList.First();
@@ -140,6 +227,81 @@ public sealed class AwarenessPrivacyCardTests
             s.AwarenessModeEnabled = false;
             s.AwarenessConsentGiven = false;
             File.Delete(ledger);
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    /// <summary>Live S23: a declined consent must snap the RENDERED dial back to Off, and a second real
+    /// click must ask again (WPF AwarenessPrivacyRuntimeVm.cs:84-119 re-syncs and raises Intensity).
+    /// Drives the RadioButtons with the mouse, because the bug lived in the TwoWay binding, not the VM.</summary>
+    [Fact]
+    public Task DeclinedConsentSnapsTheClickedDialBackToOff() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.AwarenessConsentGiven = false;
+        s.AwarenessConsentShownV2 = false;
+        s.AwarenessTitleAllowList = new();
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("awareness");
+            Dispatcher.UIThread.RunJobs();
+            var card = shell.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
+            var vm = card.ViewModel!;
+            var dial = card.GetLogicalDescendants().OfType<RadioButton>()
+                .Where(r => r.GroupName == "CmpAwarenessDial").ToList();
+            Assert.Equal(3, dial.Count);
+            RadioButton off = dial[0], broad = dial[1];
+
+            async Task ClickAndDecline(RadioButton segment)
+            {
+                segment.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                var at = segment.TranslatePoint(new Point(segment.Bounds.Width / 2, segment.Bounds.Height / 2), shell)!.Value;
+                shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                await Until(() => shell.OwnedWindows.OfType<AwarenessConsentDialog>().Any());
+                var dialog = Assert.Single(shell.OwnedWindows.OfType<AwarenessConsentDialog>());
+                dialog.FindControl<Button>("BtnDecline")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await vm.Pending;
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Assert.True(off.IsChecked);
+            await ClickAndDecline(broad);
+            Assert.False(s.AwarenessModeEnabled);
+            Assert.Equal(AwarenessIntensity.Off, vm.Intensity);
+            Assert.True(off.IsChecked, "declined consent must snap the dial back to Off");
+            Assert.False(broad.IsChecked, "the clicked segment must not stay selected after a decline");
+
+            // A second click on the same segment asks again rather than doing nothing.
+            await ClickAndDecline(broad);
+            Assert.False(s.AwarenessModeEnabled);
+            Assert.True(off.IsChecked);
+            Assert.False(broad.IsChecked);
+        }
+        finally
+        {
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+            s.AwarenessModeEnabled = false;
+            s.AwarenessConsentGiven = false;
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
             shell.RequestExit();
             Dispatcher.UIThread.RunJobs();
