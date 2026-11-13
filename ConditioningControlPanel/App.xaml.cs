@@ -775,8 +775,8 @@ namespace ConditioningControlPanel
         private static void SeedAskSeams()
         {
             Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
-            Services.Companion.Asks.CompanionAskService.ShowCardSurface = card =>
-                AvatarWindow?.RunOnAvatar(() => AvatarWindow?.ShowAskCard(card));
+            Services.Companion.Asks.CompanionAskService.ShowCardSurface = (card, unprompted) =>
+                AvatarWindow?.RunOnAvatar(() => AvatarWindow?.ShowAskCard(card, unprompted));
             Services.Companion.Asks.CompanionAskService.SaySurface = text =>
             {
                 var avatar = AvatarWindow;
@@ -794,6 +794,10 @@ namespace ConditioningControlPanel
                 if (BrowserMedia?.IsPlaying == true || BrowserMedia?.IsTakeover == true) return true;
                 if (Lockdown?.IsActive == true) return true;
                 if (Mantra?.IsActive == true) return true;
+                // A Deeper audio session and a running Takeover action own the user too (ccp-bugs #1569:
+                // ask cards fired over a Deeper session).
+                if (DeeperHost?.IsRunning == true) return true;
+                if (Autonomy?.IsActionInProgress == true) return true;
                 if (RemoteControl?.ControllerConnected == true) return true;
                 return Current?.Windows.OfType<Window>().Any(w => w.IsVisible && w is LockCardWindow) == true;
             };

@@ -11,7 +11,7 @@ public class LauncherRulesTests
     public void Cards_KeepLauncherOrderAndIds()
     {
         // The ids are --game arguments and shortcut targets: never renamed, never reordered by accident.
-        Assert.Equal(new[] { "backroom", "breakoutdemo", "breakout", "piecebypiece", "race", "dtrh", "arcademy", "goon", "intake" },
+        Assert.Equal(new[] { "backroom", "breakoutdemo", "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "arcademy", "goon", "intake" },
             LauncherCards.All.Select(c => c.Id));
         Assert.Equal("launcher_game_intake_title", LauncherCards.Find(" INTAKE ")!.TitleKey);
         Assert.Null(LauncherCards.Find("panel"));

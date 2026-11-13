@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Services.Companion
     ///
     /// <para>The idle slider still sets the cadence; one tick in <see cref="OneIn"/> goes to an own
     /// line, the rest to the Idle bark pool as before. The line is unprompted, so
-    /// <see cref="CompanionIdleVoice"/> holds its sound while the engine is off.</para>
+    /// WPF <c>CompanionIdleVoice</c> (Avalonia <c>MayVoice</c>) holds its sound while the engine is off.</para>
     /// </summary>
     public static class IdleVoiceLines
     {
@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Services.Companion
             foreach (var p in phrases)
             {
                 if (p == null || !p.Enabled || string.IsNullOrEmpty(p.AudioFileName)) continue;
-                if (!string.Equals(p.Category, CompanionPhraseService.VoiceLineCategory, StringComparison.Ordinal)) continue;
+                if (!string.Equals(p.Category, CompanionPhraseIds.VoiceLineCategory, StringComparison.Ordinal)) continue;
                 var full = Path.Combine(folder, p.AudioFileName);
                 if (exists(full)) result.Add(full);
             }

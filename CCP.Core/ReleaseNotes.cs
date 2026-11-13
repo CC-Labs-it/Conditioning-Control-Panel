@@ -4,68 +4,38 @@ namespace ConditioningControlPanel
     public static class ReleaseNotes
     {
         public const string Current =
-            "v7.2.2 - Second Lap\n" +
+            "v7.2.3 - Racing Thoughts Classic\n" +
             "\n" +
-            "NEW IN 7.2.2\n" +
+            "NEW IN 7.2.3\n" +
             "\n" +
-            "FIXES\n" +
-            "- Racing Thoughts: Boudoir no longer gets stuck at \"Preparing track\". the course builds about six times faster, and a slow PC gets time to finish loading instead of the window closing on it.\n" +
-            "- the launcher no longer goes blank on setups with several monitors. it grows inside the monitor it is on and redraws itself after a game, and if it still shows nothing it switches to a safer way of drawing for that run.\n" +
-            "- Dynamic wallpaper makes one collage per monitor, at each screen's own size: no more stretched or squashed pictures on a second, vertical or wider monitor. thanks to McKenzi for the report.\n" +
-            "- Circe's Tab: the raffle card says its total is net. time anyone takes off during the month comes out of it.\n" +
-            "- strict lock cards say what really happens: Escape is the default panic key, and panic always ends a card. want Escape to do nothing on a card? bind panic to another key in Settings.\n" +
+            "RACING THOUGHTS CLASSIC IS BACK\n" +
+            "the original 2D race returns beside the 3D one, as its own door on Play and in the launcher. free for everyone, every track open. the 3D Racing Thoughts stays Prime. Classic is also on the website and, soon, on the phone.\n" +
             "\n" +
             "NEW\n" +
-            "- Pink Filter: a new switch, \"Under spirals and text\", puts the tint under spirals, subliminals, bubbles and text so they keep their own colours. off by default.\n" +
-            "\n" +
-            "HUNTING A STRAY SOUND\n" +
-            "some of you hear short music stings that come from nowhere. bug reports now also list sounds played by web pages and the bubble video. if you hear one, send an in-app bug report right away and it should name the source.\n" +
-            "\n" +
-            "IN CASE YOU MISSED 7.2.1 (yesterday)\n" +
-            "\n" +
-            "RACING THOUGHTS\n" +
-            "\n" +
-            "the race is rebuilt in 3D, and the song drives it. it lays the road, drops the words in your path and plays the floor under your wheels. you race through the lyrics, and they count.\n" +
-            "\n" +
-            "five courses: Threshold, The Keep, Mainframe, GOONWORKS and Boudoir. each has its own song, its own traps and its own idea of a good time.\n" +
-            "\n" +
-            "ten karts that really drive differently, from easy to heavy to fast. no kart beats another on every stat. Lovebomb is free, the rest are earned or bought.\n" +
-            "\n" +
-            "jump ramps, boost arches, nine power-ups, and EMI doing tricks off the long jumps.\n" +
-            "\n" +
-            "race online: host a room, pick the course, invite a friend or fill it from the Lobby. the start waits for everyone to load, and first place online pays five times solo.\n" +
-            "\n" +
-            "your own pictures on the screens, or Scrolller pictures and clips with online media on, which count against your daily share. a connected toy plays the race with you: a steady buzz while you race clean, surges on boosts, a thud and then silence when you get hit. your limits apply and panic stops it.\n" +
-            "\n" +
-            "Time Trial, medals, ghosts, achievements and a record of your races. Escape pauses, panic ends it, Gentle visuals calm it down.\n" +
-            "\n" +
-            "Racing Thoughts is for Prime, solo included. without Prime the door stays visible, with a lock.\n" +
-            "\n" +
-            "WALLPAPER, FREE FOR EVERYONE\n" +
-            "a wallpaper built from your own images, in Studio > Effects. Static, Dynamic behind your icons, or one picture of your own. your own wallpaper comes back after, and one panic takes it down. thanks to McKenzi for this one.\n" +
-            "\n" +
-            "THE PRIZE COUNTER\n" +
-            "a 3D shop on desktop, the website and the phone, with one wallet that takes Sparkles and nothing else. kart bodies, outfits, chess skins, profile frames, things for EMI's desk. what you buy carries across, stock changes every week, and what you own stays on the shelf. a buy asks once to confirm. no refunds, no gifts.\n" +
-            "\n" +
-            "SPARKLES IN EVERY GAME\n" +
-            "Racing Thoughts, chess, Goon, Breakout, Arcademy, Down the Rabbit Hole, the Caucus race and Intake all pay by finishing place or medal. the website's Goon and Intake don't pay yet, and solo pay tapers after five rounds of one game in a day.\n" +
-            "\n" +
-            "ALSO\n" +
-            "- Piece by Piece: watch public games from the Lobby, react from the stands, and climb a rating and a Ladder.\n" +
-            "- Down the Rabbit Hole moves to Basic, and it is calmer.\n" +
-            "- Escape pauses Arcademy, Goon, the Back Room, Intake, chess and Breakout.\n" +
+            "- Perk effects: Full, No cards or Off, in Settings > Notifications. Off also turns off the Pink Rush wash and the gold and pink sparkles on flashes and bubbles. XP still pays the same.\n" +
+            "- Circe's Tab: a price and the day limit can go up to 24 hours. anything over an hour shows a warning line.\n" +
+            "- Awareness: a new \"On at launch\" switch. it can now be turned off during a session, and pausing a session pauses it.\n" +
+            "- quests: click a daily or weekly quest to open the page that completes it. Lockdown included.\n" +
+            "- Wallpaper: a Fit choice (Fill, Fit, Stretch, Span, Center), so a vertical or mixed setup can span instead of stretch. your own fit comes back after.\n" +
+            "- Natasha's bubbles: trigger words can come up more often, in Circe's Tab costs.\n" +
+            "- Brain Drain: the audio clip rate goes down to 0, for blur only.\n" +
+            "- \"+Add Trigger\" jumps to the new row and puts the cursor in it.\n" +
+            "- fewer popups: the online media offer, the \"share achievements on Discord?\" question and the tier celebration cards are gone. online media and Discord sharing are still one switch away.\n" +
             "\n" +
             "FIXES\n" +
-            "- Slut Mode no longer repeats the same lines.\n" +
-            "- the switch for the companion's offers is back, under Companion > Permissions.\n" +
-            "- the Lobby shows every Remote Control tag, not just the first three.\n" +
-            "- the Mantra drone follows the master volume and its own dial at every stage, streaks included.\n" +
-            "- the quest sound follows the perk notification switch.\n" +
-            "- when a plan ends, Prime closes at the next check instead of lingering. paying again reopens it.\n" +
-            "- bug reports list the sounds that just played, to help track down stray ones.\n" +
-            "- Goon: a refused game card comes back with a reason.\n" +
-            "- Circe's Tab: a lock that ended or ran out no longer hides the credit behind a raffle day slip-up.\n" +
+            "- Wallpaper no longer leaves a white desktop when Windows rotates your wallpapers: Dynamic redraws the whole desktop when it stops, and Static and the session wallpaper leave a rotating, Spotlight or per-monitor desktop alone.\n" +
+            "- other apps such as Discord no longer stay turned down after a session.\n" +
+            "- the spiral clears when a session ends.\n" +
+            "- the companion's speech bubble no longer covers the chat box, and the tube no longer covers its own menu.\n" +
+            "- the Prize Counter plays its sounds as soon as it opens.\n" +
+            "- Bubble Count time counts for the \"watch videos\" quests, including a clip you leave early.\n" +
+            "- a strict lock card with panic turned off says that Escape closes it.\n" +
             "\n" +
-            "online races need 7.2.1 or newer. every 7.1.x fix is in here too. coming from 7.0.x or older? read the 7.1.0 notes on the release";
+            "HUNTING A STRAY SOUND\n" +
+            "thanks to your reports, most \"random\" sounds now have a name. the giggle while idle was the companion asking you something on its own: with nothing running it now shows the question quietly, unless you let it speak while idle. it also waits while a Deeper session plays. the sounds right at launch are the launcher's own chimes and hover notes (its speaker button mutes them). still hearing something? send an in-app bug report right away, it now names more sources.\n" +
+            "\n" +
+            "ALSO LOGGED FOR THE NEXT REPORT\n" +
+            "- a crash when the in-app browser goes full screen now saves your graphics card and window sizes.\n" +
+            "- corner GIFs log how long they take to load and show.";
     }
 }

@@ -20,8 +20,9 @@ internal sealed class CompanionAskService
 {
     /// <summary>The head's CompanionBrain (WPF/Avalonia App.Brain).</summary>
     internal static volatile Func<CompanionBrain?>? BrainProvider;
-    /// <summary>Tube: say the card's question with its answers under it (UI thread).</summary>
-    internal static volatile Action<AskCard>? ShowCardSurface;
+    /// <summary>Tube: say the card's question with its answers under it (UI thread). The flag is
+    /// <c>unprompted</c> (the 60 s pacing timer's own card): it obeys the idle-voice hold (WPF 7.2.3 0729c3644).</summary>
+    internal static volatile Action<AskCard, bool>? ShowCardSurface;
     /// <summary>Tube: say an application line, unbadged (UI thread).</summary>
     internal static volatile Action<string>? SaySurface;
     /// <summary>Anything that owns the user right now (session, video, lock card, lockdown, ...).</summary>
@@ -160,7 +161,7 @@ internal sealed class CompanionAskService
         if (_cards.Count > 30) foreach (var stale in _cards.Values.OrderBy(c => c.CreatedUtc).Take(_cards.Count - 30).ToArray()) _cards.Remove(stale.Id);
         _planner.NoteShown(unprompted);
         AppendTurn(TurnKind.AssistantChat, card.Question, card.Id);
-        ShowCardSurface?.Invoke(card);
+        ShowCardSurface?.Invoke(card, unprompted);
         CardChanged?.Invoke(card);
     }
 
@@ -193,7 +194,7 @@ internal sealed class CompanionAskService
             if (next == null) return;
             if (card.Swap(AskCatalog.WatchQuestion(sources, next, _rng), AskCatalog.WatchChoices(sources, next), next.Title, next.Url, now))
             {
-                ShowCardSurface?.Invoke(card);
+                ShowCardSurface?.Invoke(card, false);
                 CardChanged?.Invoke(card);
             }
             return;

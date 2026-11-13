@@ -366,8 +366,8 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown =
                 ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.CanOfferFor;
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
-            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.ShowCardSurface = card =>
-                Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card));
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.ShowCardSurface = (card, unprompted) =>
+                Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card, unprompted));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning

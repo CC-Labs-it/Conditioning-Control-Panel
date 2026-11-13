@@ -458,6 +458,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else Place(w, screen);
             void OnKey(KeyEventArgs e)
             {
+                // WPF main 642a040e9e (#1594 #1595): a floating video leaves Escape alone unless it is the panic key.
+                if (e.Key == Key.Escape && !VideoTakesEscape()) return;
                 var s = CoreSettings.Current;
                 var live = s.PanicKeyEnabled && PanicListenerLive();
                 var panicKey = HotkeyNames.Canonical(s.PanicKey);   // "Enter" prints as "Return"
@@ -590,7 +592,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF VideoService.WantsGlobalEscape (:6361): a NON-strict clip is on screen, so a plain Esc
         /// from the global hook may reach it when its window lost focus (Platform/Win32Input.EscapeDoor).</summary>
         internal bool OnScreen => !Floating || _floatingOnScreen;
-        internal bool WantsGlobalEscape => Scheduler.IsPlaying && _surfaces.Count > 0 && OnScreen && !_closing && !_strict;
+        internal bool WantsGlobalEscape => Scheduler.IsPlaying && _surfaces.Count > 0 && OnScreen && !_closing && !_strict
+            && VideoTakesEscape();   // #1594 #1595: a floating video never hears another app's Escape
+
+        /// <summary>WPF VideoService.VideoTakesEscape: always on a full-screen clip, on a floating one only when
+        /// Escape is the panic key (PanicPolicy.VideoTakesEscape).</summary>
+        internal bool VideoTakesEscape()
+        {
+            var s = CoreSettings.Current;
+            return ConditioningControlPanel.Services.Safety.PanicPolicy.VideoTakesEscape(Floating, s.PanicKeyEnabled, s.PanicKey);
+        }
 
         /// <summary>WPF TryEscapeFromGlobalKey (:6386), UI thread: the window handler's Esc, re-checked here
         /// because a focused window may already have taken the same keystroke.</summary>

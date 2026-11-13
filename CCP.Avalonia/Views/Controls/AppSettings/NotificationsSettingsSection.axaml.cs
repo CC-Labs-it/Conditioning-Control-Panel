@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
@@ -9,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// <summary>
     /// SETTINGS · NOTIFICATIONS, ported from the WPF head. All three rows are persisted preferences:
     /// <c>ChkIntakeNudge</c> controls the weekly intake reminder,
-    /// <c>ChkSuppressPerkNotifications</c> live perk announcements and <c>ChkBannerPool</c> the
+    /// <c>CmbPerkEffects</c> live perk announcements and visuals (Full / No cards / Off, WPF 7.2.3) and <c>ChkBannerPool</c> the
     /// header banner's pool beat.
     /// </summary>
     public partial class NotificationsSettingsSection : UserControl, IAppSettingsSection
@@ -21,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             InitializeComponent();
             ChkIntakeNudge.IsCheckedChanged += ChkIntakeNudge_Changed;
-            ChkSuppressPerkNotifications.IsCheckedChanged += ChkSuppressPerkNotifications_Changed;
+            CmbPerkEffects.SelectionChanged += CmbPerkEffects_SelectionChanged;
             ChkBannerPool.IsCheckedChanged += ChkBannerPool_Changed;
             SyncFromSettings();
         }
@@ -54,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             try
             {
                 ChkIntakeNudge.IsChecked = s.IntakeNudgeEnabled;
-                ChkSuppressPerkNotifications.IsChecked = s.SuppressPerkNotifications;
+                CmbPerkEffects.SelectedIndex = (int)PerkEffectsRules.Clamp(s.PerkEffects);
                 ChkBannerPool.IsChecked = s.BannerPoolEnabled;
             }
             finally { _isLoading = false; }
@@ -67,10 +68,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CoreSettings.Save();
         }
 
-        private void ChkSuppressPerkNotifications_Changed(object? sender, RoutedEventArgs e)
+        private void CmbPerkEffects_SelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
-            if (_isLoading) return;
-            CoreSettings.Current.SuppressPerkNotifications = ChkSuppressPerkNotifications.IsChecked ?? false;
+            if (_isLoading || CmbPerkEffects.SelectedIndex < 0) return;
+            CoreSettings.Current.PerkEffects = PerkEffectsRules.FromIndex(CmbPerkEffects.SelectedIndex);
             CoreSettings.Save();
         }
 

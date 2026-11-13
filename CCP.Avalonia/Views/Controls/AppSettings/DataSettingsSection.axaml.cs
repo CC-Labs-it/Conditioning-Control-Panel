@@ -57,20 +57,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             SyncFromSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
+        private void OnIdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(SyncFromSettings);
+
+        /// <summary>WPF main e22a0cef83: a pure forward to the Profile bin's handler (type-DELETE dialog,
+        /// server call, local wipe); DeleteProfileAsync disables both doors while the request runs.</summary>
+        private async void BtnDeleteAccount_Click(object? sender, RoutedEventArgs e)
+        {
+            if (this.FindLogicalAncestorOfType<Windows.MainShellWindow>() is not { } shell) return;
+            await shell.DeleteProfileAsync();
+            SyncFromSettings();
+        }
 
         internal void SyncFromSettings()
         {
             _isLoading = true;
+            // The Delete account row shows only while signed in, the Profile bin's rule (WPF RefreshDeleteAccountRow).
+            RowDeleteAccount.IsVisible = !string.IsNullOrEmpty(CoreSettings.Current.UnifiedId);
             try { ChkOfflineMode.IsChecked = CoreSettings.Current.OfflineMode; }
             finally { _isLoading = false; }
         }

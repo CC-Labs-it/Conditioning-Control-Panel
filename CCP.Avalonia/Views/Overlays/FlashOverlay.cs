@@ -160,8 +160,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Active.Count >= Cap(s, ambient)) { Drop(bmp); return false; }
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
+            // Perk effects Off (WPF 7.2.3 FlashService :1895): no lucky gold, no Sparkle Boost pink; XP is paid either way.
+            var perkFx = PerkEffectsRules.ShowsVisuals(s.PerkEffects);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
-                multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
+                multiplier > 1 && perkFx, perkFx ? SkillTreeRules.GetSparkleBoostTier(s) : 0, natasha: false);
             var w = new FlashOverlayWindow(bmp, path)
             {
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
