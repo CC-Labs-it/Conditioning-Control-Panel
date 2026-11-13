@@ -25,7 +25,11 @@ public partial class EmiDeskWindow
         {
             _dismissPending = false; _dismissDone = null; // #3329: the show abandons a running dismissal
             FinishSummon(); CancelChain(); CancelHold(); CloseRing(); CloseOptionsPanel(); CloseBook();
-            StopIdleBeats(); DisarmPet(); _dragging = false; SweepFx(all: true); TearDownReactions();
+            StopIdleBeats(); DisarmPet();
+            var pointer = _dragPointer;
+            EndDragHold();
+            if (pointer?.Captured == _bodyRoot) pointer.Capture(null);   // WPF releases only BodyRoot's own
+            SweepFx(all: true); TearDownReactions();
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] presentation setup step failed"); }
         _bodyRoot.IsVisible = true; SetCrt(1, 1); InputLocked = false; _transiting = false;
@@ -37,10 +41,11 @@ public partial class EmiDeskWindow
     internal void RunPresentationEntrance()
     {
         if (!PresentationActive) return;
-        if (CoreSettings.Current?.MotionLevel == ConditioningControlPanel.Models.MotionLevel.Off) return;
         PresentationArriving = true;
+        if (CoreSettings.Current?.MotionLevel == ConditioningControlPanel.Models.MotionLevel.Off)
+        { PresentationArriving = false; return; }
         int epoch = _presentationEpoch;
-        RunSummon(() => { if (epoch == _presentationEpoch) { PresentationArriving = false; _presentationFace = _presentationPose = null; } });
+        RunSummon(() => { if (epoch == _presentationEpoch) { PresentationArriving = false; _presentationFace = _presentationPose = null; } }, presentation: true);
     }
     /// <summary>WPF :45: her centre in PHYSICAL screen pixels, plus this frame's bob (DIPs), turn
     /// (degrees), pose and face.</summary>
