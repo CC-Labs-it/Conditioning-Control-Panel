@@ -22,9 +22,7 @@ public partial class MainShellWindow
             {
                 // WPF MainWindow.Launcher.cs:74 hides before App.xaml.cs:4290 routes,
                 // even if Lockdown began during Opened. The launcher veil owns that surface.
-                // RouteBoot hides through HideForLauncher too, and releases the hold if routing fails.
-                try { Hide(); }
-                catch (Exception ex) { Serilog.Log.Debug(ex, "[Launcher] hide before boot routing"); }
+                Hide();
                 LauncherWindow.RouteBoot(this);
             }
             catch
