@@ -19,8 +19,13 @@ internal static class LoginStreakHead
     internal static void Start(AchievementEngine engine, AppSettings settings)
     {
         _questXpEngine = null;
-        Update(engine.Progress, settings, DateTime.Today, false);
-        SaveAndPay(engine, settings);
+        // A real bank (yesterday kept, a shield, a reset) is saved at once so a crash before the
+        // autosave cannot bank and pay the same day twice. A first stamp (no launch history) or a
+        // same-day launch only changes memory, as WPF AchievementProgress.UpdateLoginStreak does:
+        // saving then would also flush unrelated in-memory startup state on every launch.
+        var hadHistory = engine.Progress.LastLaunchDate != default;
+        if (Update(engine.Progress, settings, DateTime.Today, false) && hadHistory)
+            SaveAndPay(engine, settings);
         if (engine.Progress.PendingStreakBreak)
         {
             var id = settings.UnifiedId;
