@@ -69,7 +69,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
-        private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
+        private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed, _safetyLengthArmed;
+        /// <summary>WPF _safetyTimer / _fallbackSafetyTimer: wall clock, length + 5 s (else the fallback).
+        /// Only a grace pause suspends it; a voice pause (PausePrimary) does not.</summary>
+        internal readonly ConditioningControlPanel.Services.Video.VideoSafetyDeadline SafetyDeadline = new();
         private long _watchedMs;
         private VideoPlaybackClock? _cutClock;
         private IMandatoryPlayback? _playback;
@@ -210,6 +213,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
+            SafetyDeadline.Reset();
+            SafetyDeadline.Arm(Now, 0);   // WPF StartFallbackSafetyTimer: armed before the length is known
+            _safetyLengthArmed = false;
 
             // The injected decoder omits native allocation and windows; lifecycle methods stay shared.
             if (_playbackFactory != null)
@@ -639,6 +645,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (d != GraceDecision.Pause) return false;
             SampleCutPlayback();
             _gracePaused = true;
+            SafetyDeadline.PauseForGrace(now);
             _lastGraceUtc = _gracePausedAt = now;
             _playback?.SetPause(true);
             PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
@@ -684,6 +691,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (!_gracePaused) return;
             _gracePaused = false;
+            SafetyDeadline.ResumeFromGrace(Now);
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
@@ -701,7 +709,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void GuardTick()
         {
             // The injected decoder (tests) has no windows: a live playback is the clip to guard (#3822).
-            if (_gracePaused || PrimaryPaused || _playback == null || !Scheduler.IsPlaying) return;
+            if (_gracePaused || _playback == null || !Scheduler.IsPlaying) return;
+            // WPF StartSafetyTimer (VideoService.cs:6838-6870): once the length is known, length + 5 s of
+            // wall clock; the timer keeps running through a voice pause, so a held clip still ends.
+            if (!_safetyLengthArmed && _playback.Length > 0)
+            {
+                SafetyDeadline.Arm(Now, _playback.Length / 1000.0);
+                _safetyLengthArmed = true;
+            }
+            if (SafetyDeadline.Expired(Now))
+            {
+                Log.Warning("VideoService: safety timeout after {Sec:F1}s - ending the clip", Elapsed);
+                Scheduler.End();
+                return;
+            }
+            if (PrimaryPaused) return;
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
@@ -1179,6 +1201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _videoReveal?.Dispose();
                 _videoReveal = null;
                 _attention = _gracePaused = false;
+                SafetyDeadline.Reset();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
                 _userMuted = false;
