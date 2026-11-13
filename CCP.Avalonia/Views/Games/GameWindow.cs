@@ -390,6 +390,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!IsBreakout) return init;
             // WPF BackRoomHostService.cs:589-607: the page must know Off before it starts.
             var frame = JObject.FromObject(init);
+            // WPF BackRoomHostService.cs:684-686: the end card reads the current plan list.
+            frame["plans"] = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current);
             var motion = CoreSettings.Current.MotionLevel;
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
