@@ -123,7 +123,7 @@ public partial class EnhancementPlayerWindow {
                 return true;
             case Key.F11: ExitVideoFullscreen(); return true;
             case Key.F: if (!repeat) { if (_videoFullscreenWindow != null) ExitVideoFullscreen(); else if (_isVideoMode && _videoNavigated) EnterVideoFullscreen(); } return true;
-            case Key.Space: if (!repeat) BtnPlayPause_Click(); return true;
+            case Key.Space: if (!repeat) { OfferWebcamBeforePlay(); BtnPlayPause_Click(); } return true;
             case Key.Left: case Key.Right:
                 if (!_isVideoMode) { _currentSec = Math.Clamp(_currentSec + (key == Key.Left ? -1 : 1) * (shift ? 30 : 5), 0, Math.Max(0, _durationSec)); UpdatePlayhead(Fraction()); return true; }
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.currentTime=Math.max(0,Math.min(isFinite(l.duration)&&l.duration>0?l.duration:Infinity,l.currentTime+(" + ((key == Key.Left ? -1 : 1) * (shift ? 30 : 5)) + "));")); return true;

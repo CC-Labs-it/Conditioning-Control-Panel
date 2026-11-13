@@ -304,12 +304,19 @@
              Hosts a "Now: [region label]" overlay (top-right) that appears when the playhead is
              inside a region.
              ===================================================================== -->
-        <Grid Grid.Row="2" Margin="0,0,0,10" RowDefinitions="Auto,*">
-            <StackPanel x:Name="HoldEscHint" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,8,4" IsVisible="False" IsHitTestVisible="False">
+        <Grid Grid.Row="2" Margin="0,0,0,10" RowDefinitions="Auto,Auto,*">
+            <Border x:Name="WebcamBanner" Grid.Row="0" Margin="0,0,0,6" Background="{DynamicResource DarkerBgBrush}" Padding="10" IsVisible="False">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="{loc:Str btn_close}" Click="WebcamDismiss_Click"/>
+                    <Button x:Name="WebcamEnable" DockPanel.Dock="Right" Content="{loc:Str deeper_player_webcam_banner_enable}" Click="WebcamEnable_Click"/>
+                    <TextBlock x:Name="WebcamBannerText" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </DockPanel>
+            </Border>
+            <StackPanel Grid.Row="1" x:Name="HoldEscHint" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,8,4" IsVisible="False" IsHitTestVisible="False">
                 <TextBlock Text="{loc:Str deeper_player_hold_esc_hint}" Foreground="{DynamicResource DeeperAccentSoftBrush}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
                 <ProgressBar x:Name="HoldEscProgress" Width="70" Height="6" Minimum="0" Maximum="1" Foreground="{DynamicResource DeeperAccentBrush}" Background="{DynamicResource DeeperAccentTransparent20Brush}" BorderThickness="0" VerticalAlignment="Center"/>
             </StackPanel>
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="2">
             <!-- Audio mode -->
             <Border x:Name="AudioPane"
                     Background="{DynamicResource DeeperLaneCanvasBrush}"
@@ -402,7 +409,7 @@
              Row 4: TRANSPORT — primary cluster (left) + secondary cluster (right)
              ===================================================================== -->
         <DockPanel Grid.Row="4" LastChildFill="False" Margin="0,0,0,10">
-            <Button x:Name="BtnPlayPause" DockPanel.Dock="Left"
+            <Button x:Name="BtnPlayPause" DockPanel.Dock="Left" Click="WebcamPlay_Click"
                     ToolTip.Tip="{loc:Str deeper_player_tip_play_pause}"
                     AutomationProperties.Name="{loc:Str deeper_player_tip_play_pause}"
                     Width="38" Height="32" Padding="0"
@@ -443,7 +450,7 @@
                         VerticalAlignment="Center"
                         ToolTip.Tip="{loc:Str deeper_player_tip_volume}"/>
             </StackPanel>
-            <Button x:Name="BtnEyeTracking" DockPanel.Dock="Right"
+            <Button x:Name="BtnEyeTracking" DockPanel.Dock="Right" Click="EyeTracking_Click" IsVisible="False"
                     ToolTip.Tip="{loc:Str deeper_player_tt_eye_tracking}"
                     Padding="12,0" Height="32" Margin="8,0,0,0" FontSize="11"
                     Background="{DynamicResource DeeperAccentTransparent20Brush}"
