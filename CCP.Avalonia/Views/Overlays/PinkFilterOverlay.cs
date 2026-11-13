@@ -39,7 +39,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         /// <summary>A Takeover pulse holds the tint up with the engine off (WPF: the pulse starts
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
-        internal static bool PulseHold;
+        private static bool _pulseHold;
+        internal static bool PulseHold
+        {
+            get => _pulseHold;
+            set
+            {
+                if (!_pulseHold && value) App.NoteBrainDrainPulseStart();
+                if (_pulseHold && !value) App.ResetBrainDrainQuestSampleAfterPulse();
+                _pulseHold = value;
+            }
+        }
 
         // WPF voice "go pink": a 40% floor, without dimming a stronger configured tint.
         internal static double? VoiceOpacity { get; private set; }

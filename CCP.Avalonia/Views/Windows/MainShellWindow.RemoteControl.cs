@@ -64,8 +64,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.ResumeSession = ResumeRemoteSession;
             EventHandler connected = (_, _) =>
             {
+                var joined = r.ControllerConnected;
+                var stopGeneration = RemoteCommands.OverlayStopGeneration;
                 bool restore = r.IsActive && !r.ControllerConnected && CoreSettings.Current.StopEffectsOnRemoteDisconnect;
-                Dispatcher.UIThread.Post(() => { OnRemoteControllerChanged(); if (restore) ShowFromTray(); });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // A queued join cannot undo a pause, stop or panic that happened afterward.
+                    if (joined && r.IsActive && r.ControllerConnected && stopGeneration == RemoteCommands.OverlayStopGeneration)
+                        RemoteCommands.EnsureOverlayRunning();
+                    OnRemoteControllerChanged();
+                    if (restore) ShowFromTray();
+                });
             };
             EventHandler idle = (_, _) => Dispatcher.UIThread.Post(OnRemoteControllerIdleChanged);
             EventHandler ended = (_, _) => Dispatcher.UIThread.Post(OnRemoteSessionEnded);

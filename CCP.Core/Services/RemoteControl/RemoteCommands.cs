@@ -48,11 +48,24 @@ namespace ConditioningControlPanel.Services
         public static Action? RefreshOverlays;
         public static bool OverlayRunning { get; private set; }
         public static bool OverlaysStopped { get; private set; }
+        private static int _overlayStopGeneration;
+        public static int OverlayStopGeneration => Volatile.Read(ref _overlayStopGeneration);
         public static void ReleaseOverlayStop() => OverlaysStopped = false;
+
+        // WPF RemoteControlService.cs:1204 starts the overlay when a controller joins.
+        public static void EnsureOverlayRunning()
+        {
+            if (OverlayRunning && !OverlaysStopped) return;
+            OverlayRunning = true;
+            OverlaysStopped = false;
+            try { RefreshOverlays?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay start failed"); }
+        }
 
         public static void StopOverlays()
         {
-            if (!OverlayRunning && !OverlaysStopped) return;
+            Interlocked.Increment(ref _overlayStopGeneration);
+            if (!OverlayRunning && OverlaysStopped) return;
             OverlayRunning = false;
             OverlaysStopped = true;
             try { RefreshOverlays?.Invoke(); }
