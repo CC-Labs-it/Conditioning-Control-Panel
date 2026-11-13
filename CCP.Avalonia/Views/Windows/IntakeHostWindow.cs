@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 _closed = true;
                 lock (OpenWindows) OpenWindows.Remove(this);
-                StopSpeechBridge("closed", notifyPage: false);
+                ReleaseSpeechMic("closed", notifyPage: false);
                 EndLifecycle();
             };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
@@ -133,11 +133,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     break;
                 case "exit":   // page-initiated wind-down: its own exit-done, or the watchdog
                     ReportWalkOutIfUnfinished();
+                    ReleaseSpeechMic("closing");
                     Run.Exiting = true;
                     DispatcherTimer.RunOnce(Close, ExitWatchdog);
                     break;
                 case "intake-close":   // "are you sure? -> Yes": an abort, nothing is earned
                     ReportWalkOutIfUnfinished();
+                    ReleaseSpeechMic("closing");
                     Run.Exiting = true;
                     Close();
                     break;

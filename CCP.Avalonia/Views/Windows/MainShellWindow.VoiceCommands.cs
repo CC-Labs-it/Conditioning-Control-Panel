@@ -220,6 +220,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "RefreshVoiceInputModes failed"); }
         }
 
+        /// <summary>True while the user has the wake word or push-to-talk armed: the mic Graded Intake
+        /// borrows (IntakeMicBorrow, WPF AutonomyService.UserDrivenVoiceArmed).</summary>
+        internal bool UserDrivenVoiceArmed => _wakeLoopCts != null || _pttArmed;
+
         /// <summary>WPF StopVoiceInput (privacy pill, "stop listening", a voice lock card taking the mic):
         /// cut any capture and stand both modes down until the next reconcile.</summary>
         internal void StopVoiceInput()
