@@ -119,6 +119,32 @@ public sealed class Sync7bGentleTests
         finally { FlashOverlay.CloseAll(final: false); w.Close(); FlashOverlay.Clock = oldClock; }
     });
 
+    // WPF FlashService.cs:3199-3200: the heartbeat fade-in takes the gentle length, never a shorter one
+    // (restack b79, from #3469).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task GentleLengthensTheFlashFadeIn(bool gentle) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var saved = new SettingsScope();
+        EnsureApp();
+        CoreSettings.Current.GentleVisuals = gentle;
+        CoreSettings.Current.GentleFadeSeconds = 3;
+        var w = new FlashOverlayWindow();
+        try
+        {
+            w.Show();
+            w.Run(0.8, TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(20));
+            var wait = System.Diagnostics.Stopwatch.StartNew();
+            while (w.DisplayedAlpha < 0.8 && wait.Elapsed < TimeSpan.FromMilliseconds(600))
+                await Task.Delay(20);
+            // Off: 80 ms to full. Gentle: 3 s x 0.8 = 2.4 s, so a fraction after 600 ms.
+            if (gentle) Assert.InRange(w.DisplayedAlpha, 0, 0.4);
+            else Assert.Equal(0.8, w.DisplayedAlpha, 3);
+        }
+        finally { w.Close(); }
+    });
+
     [Fact]
     public Task GentlePopUsesPlainFadeEvenWhenExitIsNone() => AvaloniaTestDispatcher.RunAsync(() =>
     {
