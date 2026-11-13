@@ -8436,5 +8436,15 @@
   "account_merged_signin_body": "Tus dos cuentas se han fusionado en una. Inicia sesión de nuevo para continuar.\n\nTu progreso local se conserva.",
   "she_wake_unavailable_tooltip": "El motor opcional de activación sherpa-onnx no está disponible en esta versión. Se usa el reconocedor integrado.",
   "she_wake_unavailable_status": "El motor opcional de activación no está disponible en esta versión. Se usa el reconocedor integrado.",
-  "she_wake_calibration_unavailable": "La calibración de la palabra de activación no está disponible en esta versión."
+  "she_wake_calibration_unavailable": "La calibración de la palabra de activación no está disponible en esta versión.",
+  "chaos_expiry_label": "DESVANECIDA",
+  "chaos_expiry_halved": "💨 {0} se desvaneció… racha reducida a x{1}",
+  "chaos_expiry_gone": "💨 {0} se desvaneció",
+  "chaos_expiry_name_lucky": "burbuja de la suerte",
+  "chaos_expiry_name_flash": "destello",
+  "chaos_expiry_name_subliminal": "subliminal",
+  "chaos_expiry_name_pink": "filtro rosa",
+  "chaos_expiry_name_spiral": "espiral",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "cascada de GIF"
 }

@@ -8941,5 +8941,15 @@
   "account_merged_signin_body": "你的两个账户已合并为一个。请重新登录以继续。\n\n本地进度会保留。",
   "she_wake_unavailable_tooltip": "此版本不支持可选的 sherpa-onnx 唤醒引擎。将使用内置识别器。",
   "she_wake_unavailable_status": "此版本不支持可选的唤醒引擎。将使用内置识别器。",
-  "she_wake_calibration_unavailable": "此版本不支持唤醒词校准。"
+  "she_wake_calibration_unavailable": "此版本不支持唤醒词校准。",
+  "chaos_expiry_label": "消散",
+  "chaos_expiry_halved": "💨 {0}消散了…连击减半至 x{1}",
+  "chaos_expiry_gone": "💨 {0}消散了",
+  "chaos_expiry_name_lucky": "幸运泡泡",
+  "chaos_expiry_name_flash": "闪光",
+  "chaos_expiry_name_subliminal": "潜意识",
+  "chaos_expiry_name_pink": "粉色滤镜",
+  "chaos_expiry_name_spiral": "螺旋",
+  "chaos_expiry_name_braindrain": "脑力消耗",
+  "chaos_expiry_name_gif": "GIF 瀑布"
 }

@@ -9,13 +9,16 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel;
 using Xunit;
 using M = ConditioningControlPanel.Avalonia.Views.Chaos.ChaosPopTextMotion;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -99,6 +102,114 @@ public sealed class ChaosPopTextTests
                 ChaosPopText.PlatformCanShow = canShow;
                 CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
                 if (!tasted) ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // WPF BubbleService :4864 and ChaosModeService :1898: rot applies the penalty even with text off.
+    [Theory]
+    [InlineData("en", true, 5, 2, "FADED", "💨 flash faded… streak halved to x2")]
+    [InlineData("en", false, 1, 0, "FADED", "💨 flash faded away")]
+    [InlineData("de", true, 5, 2, "VERBLASST", "💨 Blitz verblasst… Serie halbiert auf x2")]
+    [InlineData("de", false, 1, 0, "VERBLASST", "💨 Blitz ist verblasst")]
+    public async Task Treat_expiry_delivers_faded_at_its_centre_and_docks_combo(string language, bool enabled, int combo, int expected, string word, string feed)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var prepare = ChaosPopText.Prepare;
+            var canShow = ChaosPopText.PlatformCanShow;
+            var hook = ChaosRunHost.PopText;
+            bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            string previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+            LocalizationManager.Instance.SetLanguage(language);
+            ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
+            ChaosPopText.PlatformCanShow = () => true;
+            ChaosRunHost.PopText = ChaosPopText.Show;
+            try
+            {
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                ChaosRunHost.State!.Combo = combo;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "flash", SizePx = 100, TreatLifeMs = 64 });
+                BubbleOverlay.Field.Step();
+                BubbleOverlay.Field.Step();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(b.Popping);
+                Assert.Equal(expected, ChaosRunHost.State.Combo);
+                Assert.Equal(feed, ChaosRunHost.State.RecentEvents[0]);
+                var icon = Assert.Single(IconText.Split(ChaosRunHost.State.RecentEvents[0]).Icons);
+                Assert.Equal("💨", icon);
+                Assert.True(IconMap.TryGet(icon, out var mapped));
+                Assert.Equal(IconKind.WeatherSqualls, mapped.Kind);
+                if (enabled)
+                {
+                    var w = Assert.Single(ChaosPopText.Pool.All);
+                    Assert.Equal(word, w.LabelText);
+                    var (r, g, blue) = M.Lift(0xB8, 0xB8, 0xD0);
+                    Assert.Equal(Color.FromRgb(r, g, blue), ((ISolidColorBrush)w.LabelFill).Color);
+                    var k = w.Screens.Primary?.Scaling is > 0 and var scale ? scale : 1.0;
+                    Assert.Equal(new PixelPoint((int)Math.Round((b.CenterX - 140) * k),
+                        (int)Math.Round((b.CenterY - 44) * k)), w.Position);
+                }
+                else Assert.Empty(ChaosPopText.Pool.All);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosPopText.ShutdownPool();
+                ChaosPopText.Prepare = prepare;
+                ChaosPopText.PlatformCanShow = canShow;
+                ChaosRunHost.PopText = hook;
+                CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                LocalizationManager.Instance.SetLanguage(previousLanguage);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Expired_prisms_and_lucky_bubbles_use_localized_payload_names()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var loc = LocalizationManager.Instance;
+            var previousLanguage = loc.CurrentLanguage;
+            var hook = ChaosRunHost.PopText;
+            try
+            {
+                loc.SetLanguage("de");
+                ChaosRunHost.PopText = null;
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var cases = new (EffectPayload Payload, bool Golden, string Name)[]
+                {
+                    (new FlashPayload(), false, "Blitz"),
+                    (new SubliminalPayload(), false, "Subliminal"),
+                    (new OverlayPayload("pink_filter"), false, "Pinkfilter"),
+                    (new OverlayPayload("spiral"), false, "Spirale"),
+                    (new OverlayPayload("braindrain"), false, "Brain Drain"),
+                    (new GifCascadePayload(), false, "GIF-Kaskade"),
+                    (new FlashPayload(), true, "Glücksblase")
+                };
+                foreach (var (payload, golden, name) in cases)
+                {
+                    ChaosRunHost.State!.Combo = 1;
+                    BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = golden ? "golden" : "prism", IsPrism = !golden, Payload = payload, IsGolden = golden, SizePx = 100, TreatLifeMs = 32 });
+                    BubbleOverlay.Field.Step();
+                    Assert.Equal($"💨 {name} ist verblasst", ChaosRunHost.State.RecentEvents[0]);
+                }
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.PopText = hook;
+                loc.SetLanguage(previousLanguage);
             }
             return Task.CompletedTask;
         });

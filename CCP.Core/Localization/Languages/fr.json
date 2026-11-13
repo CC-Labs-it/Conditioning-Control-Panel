@@ -8436,5 +8436,15 @@
   "account_merged_signin_body": "Vos deux comptes ont été fusionnés. Reconnectez-vous pour reprendre.\n\nVotre progression locale est conservée.",
   "she_wake_unavailable_tooltip": "Le moteur de réveil sherpa-onnx facultatif est indisponible dans cette version. Le système de reconnaissance intégré est utilisé.",
   "she_wake_unavailable_status": "Le moteur de réveil facultatif est indisponible dans cette version. Le système de reconnaissance intégré est utilisé.",
-  "she_wake_calibration_unavailable": "Le calibrage du mot de réveil est indisponible dans cette version."
+  "she_wake_calibration_unavailable": "Le calibrage du mot de réveil est indisponible dans cette version.",
+  "chaos_expiry_label": "DISPARUE",
+  "chaos_expiry_halved": "💨 {0} disparaît… série réduite à x{1}",
+  "chaos_expiry_gone": "💨 {0} a disparu",
+  "chaos_expiry_name_lucky": "bulle porte-bonheur",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminal",
+  "chaos_expiry_name_pink": "filtre rose",
+  "chaos_expiry_name_spiral": "spirale",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "cascade de GIF"
 }

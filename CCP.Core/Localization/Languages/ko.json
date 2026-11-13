@@ -8436,5 +8436,15 @@
   "account_merged_signin_body": "두 계정이 하나로 통합되었습니다. 계속하려면 다시 로그인하세요.\n\n로컬 진행 상황은 유지됩니다.",
   "she_wake_unavailable_tooltip": "선택 사항인 sherpa-onnx 호출 엔진은 이 버전에서 사용할 수 없습니다. 내장 인식기를 사용합니다.",
   "she_wake_unavailable_status": "선택 사항인 호출 엔진은 이 버전에서 사용할 수 없습니다. 내장 인식기를 사용합니다.",
-  "she_wake_calibration_unavailable": "호출어 보정은 이 버전에서 사용할 수 없습니다."
+  "she_wake_calibration_unavailable": "호출어 보정은 이 버전에서 사용할 수 없습니다.",
+  "chaos_expiry_label": "사라짐",
+  "chaos_expiry_halved": "💨 {0}이 사라짐… 연속 기록이 x{1}로 절반 감소",
+  "chaos_expiry_gone": "💨 {0}이 사라짐",
+  "chaos_expiry_name_lucky": "행운의 방울",
+  "chaos_expiry_name_flash": "플래시",
+  "chaos_expiry_name_subliminal": "서브리미널",
+  "chaos_expiry_name_pink": "핑크 필터",
+  "chaos_expiry_name_spiral": "나선",
+  "chaos_expiry_name_braindrain": "브레인 드레인",
+  "chaos_expiry_name_gif": "GIF 연속 표시"
 }
