@@ -84,14 +84,9 @@ public partial class PresetsTabView
     {
         DetachCardSheen();
         DetachRowSweep();
+        // The data half (chips, rack, detail title) is QueuePresetsModRefresh's: one coalesced pass, deferred
+        // while the tab is hidden (WPF UiUpdates.cs:252-259). Here only the sheen and the sweep re-attach.
         if (VisualRoot is null) return;
-        RefreshPresetsList();
-        RepaintSessionRack();
-        if (_selectedPreset is { } preset && PresetDetailScroller.IsVisible)
-        {
-            TxtDetailTitle.Text = PresetNaming.DisplayName(preset);
-            TxtDetailSubtitle.Text = CoreMods.MakeModAware(preset.Description);
-        }
         RefreshCardSheen();
     });
 
