@@ -275,6 +275,7 @@ public sealed class WindowDropTests
     public Task DelayedVideoPlayDoesNotOverwriteReplacement(string replacement) => Run(async (shell, _, _) =>
     {
         var player = new EnhancementPlayerWindow(null, null); player.Show(shell);
+        player.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
         var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
         var pending = new TaskCompletionSource<string?>(); web.ScriptInvoker = _ => pending.Task;
         var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;

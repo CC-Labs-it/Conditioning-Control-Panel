@@ -21,6 +21,11 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class DeeperPlayerAudioTests
 {
+    // The player waits for the waveform decode before Play (WPF EnhancementPlayerWindow.xaml.cs:640); a decode that
+    // fails at once keeps these opens synchronous.
+    internal static Task<ConditioningControlPanel.Services.Deeper.AudioWaveformResult> NoPeaks(string path) =>
+        Task.FromException<ConditioningControlPanel.Services.Deeper.AudioWaveformResult>(new FileNotFoundException("no peaks in this test", path));
+
     private sealed class Audio : IDeeperLocalAudio
     {
         public double DurationSeconds { get; set; } = 95;
@@ -59,6 +64,7 @@ public sealed class DeeperPlayerAudioTests
         var audio = new Audio();
         DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
         var win = new EnhancementPlayerWindow(null, null);
+        win.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
         try
         {
             win.Show();
@@ -96,6 +102,7 @@ public sealed class DeeperPlayerAudioTests
         var audio = new Audio { StartSucceeds = laterError };
         DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
         var win = new EnhancementPlayerWindow(null, null);
+        win.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
         try
         {
             win.Show();
@@ -139,6 +146,7 @@ public sealed class DeeperPlayerAudioTests
         var count = 0;
         DeeperLocalAudio.Open = p => Task.FromResult<IDeeperLocalAudio?>(p == path ? (++count == 1 ? first : count == 2 ? replay : endedReplay) : null);
         var win = new EnhancementPlayerWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", Regions = { new Region { End = 200 } } }, "test");
+        win.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
         try
         {
             win.Show();
@@ -222,6 +230,7 @@ public sealed class DeeperPlayerAudioTests
         var second = new TaskCompletionSource<IDeeperLocalAudio?>();
         DeeperLocalAudio.Open = p => p == "first.mp3" ? first.Task : p == "second.mp3" ? second.Task : Task.FromResult<IDeeperLocalAudio?>(null);
         var win = new EnhancementPlayerWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "test");
+        win.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
         win.Show();
         try
         {
@@ -270,6 +279,7 @@ public sealed class DeeperPlayerAudioTests
         var pending = new TaskCompletionSource<IDeeperLocalAudio?>();
         DeeperLocalAudio.Open = _ => pending.Task;
         var win = new EnhancementPlayerWindow(null, null);
+        win.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
         win.Show();
         try
         {

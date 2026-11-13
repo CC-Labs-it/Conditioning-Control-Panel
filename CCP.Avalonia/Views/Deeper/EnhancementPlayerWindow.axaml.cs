@@ -140,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private int _audioLoad;
         private bool _audioDurationRemembered;
         internal Action<string?, double> RememberAudioDuration = MediaDurationCache.Remember;
+        // Tests only: a decode that settles at once keeps the open synchronous.
+        internal Func<string, Task<AudioWaveformResult>> LoadWaveformPeaks = AudioWaveformCache.LoadAsync;
         private int _waveformGeneration;
         private AudioWaveformResult? _waveformData;
         private double? _waveformDuration;
@@ -740,7 +742,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             try
             {
-                var data = await AudioWaveformCache.LoadAsync(path);
+                var data = await LoadWaveformPeaks(path);
                 if (_closing || generation != _waveformGeneration) return;
                 _waveformData = data;
                 UpdateAudioWaveform();
