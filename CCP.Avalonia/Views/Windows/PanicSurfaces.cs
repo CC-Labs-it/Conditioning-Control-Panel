@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("companion-audio", _ => CompanionEffects.StopAudio()),     // WPF b1a39bc77 KillAllAudio -> Audio.StopSound
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
+            new("chaos-hub-music", _ => Chaos.ChaosHubWindow.StopMenuMusicForPanic()),
             new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
             // WPF ChaosModeService.ForceShutdown (:3176) closes the rain; it also runs outside a run (trigger bubble, Emi, BackRoom).
             new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
