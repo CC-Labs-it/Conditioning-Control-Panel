@@ -526,6 +526,8 @@ namespace ConditioningControlPanel.Services
         private static List<string> ActiveServices(Models.AppSettings s)
         {
             var list = new List<string>();
+            if (s.PinkFilterEnabled) list.Add("pink_filter");
+            if (s.SpiralEnabled) list.Add("spiral");
             if (s.StrictLockEnabled) list.Add("strict_lock");
             if (CoreHaptics.Service?.IsConnected == true) list.Add("haptics");   // WPF 7b22ece8c: trigger_haptic will land
             if (!s.PanicKeyEnabled) list.Add("no_panic");
@@ -534,6 +536,7 @@ namespace ConditioningControlPanel.Services
             if (CoreFlash.IsRunning) list.Add("flash_loop");
             if (CoreSubliminal.IsRunning) list.Add("subliminal_loop");
             if (LockCardScheduler.Instance.IsRunning) list.Add("lock_card");
+            if (CoreMindWipe.IsRunning) list.Add("mind_wipe");
             return list;
         }
 

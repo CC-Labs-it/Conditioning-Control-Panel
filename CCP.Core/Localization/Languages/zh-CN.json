@@ -2751,6 +2751,7 @@
   "setting_auto_connect_on_startup": "启动时自动连接",
   "tooltip_automatically_connect_to_your_haptic_device_w": "应用启动时自动连接触觉设备",
   "label_status": "状态：",
+  "label_browser_crashed_restart": "浏览器已崩溃 - 点击网站重新启动",
   "label_disconnected": "已断开",
   "label_no_devices": "无设备",
   "label_intensity": "强度：",

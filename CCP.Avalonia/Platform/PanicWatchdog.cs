@@ -126,6 +126,7 @@ internal static class PanicWatchdog
         // Conditional, as WPF (#668): with the standalone Audio Layers master on, the bed is the user's.
         Step("audio layers", () => { if (!CoreSettings.Current.AudioLayersEnabled) LayeredAudio.Instance?.Stop(); });
         Step("brain drain", () => BrainDrainPlayer.Instance?.Stop());
+        Step("audio playlist", App.StopAudioPlaylist); // WPF MainWindow.xaml.cs:1117
         Step("mantra chant", () => App.MantraChant.StopEmergency()); // WPF MainWindow.xaml.cs:1112
         Step("mind wipe", () => CoreMindWipe.StopProvider?.Invoke());
         Step("unduck", () => LibVlcAudio.Instance?.ForceUnduck());

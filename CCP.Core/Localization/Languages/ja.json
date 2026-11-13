@@ -2014,6 +2014,7 @@
   "setting_auto_connect_on_startup": "起動時に自動接続",
   "tooltip_automatically_connect_to_your_haptic_device_w": "アプリ起動時にハプティクスデバイスに自動接続",
   "label_status": "ステータス：",
+  "label_browser_crashed_restart": "ブラウザーが停止しました - サイトを選んで再起動",
   "label_disconnected": "切断",
   "label_no_devices": "デバイスなし",
   "label_intensity": "強度：",

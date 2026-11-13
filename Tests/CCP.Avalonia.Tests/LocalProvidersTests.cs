@@ -66,9 +66,9 @@ public sealed class LocalProvidersTests
         return (listener, baseUrl, hits);
     }
 
-    private static SettingsService FreshSettings()
+    private static SettingsService FreshSettings(SettingsService? service = null)
     {
-        var service = new SettingsService();
+        service ??= new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.AiChatEnabled = true;
         CoreSettings.Current.OfflineMode = false;
@@ -191,7 +191,9 @@ public sealed class LocalProvidersTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var service = FreshSettings();
+        var service = new SettingsService();
+        var originalSettings = Newtonsoft.Json.JsonConvert.SerializeObject(service.Current);
+        FreshSettings(service);
         CoreSettings.Current.Welcomed = true;
         CoreSettings.Current.HasAcceptedAgeVerification = true;
         var (listener, baseUrl, _) = StartFake();
@@ -205,6 +207,9 @@ public sealed class LocalProvidersTests
         AvApp.Brain = new CompanionBrain(AvApp.Ai, memory: memory,
             store: new CompanionSessionStore(sessionPath, Path.Combine(dir, "legacy.json")));
         var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var previousBark = CoreBark.UiAction;
+        var actions = new List<string?>();
+        CoreBark.UiAction = action => actions.Add(action);
         try
         {
             shell.Show();
@@ -228,16 +233,36 @@ public sealed class LocalProvidersTests
             }
 
             await Answer("BtnCancel");
+            Assert.Contains("reset_memory", actions);
             Assert.Equal(2, AvApp.Brain.Session.Count);
             Assert.True(File.Exists(sessionPath));
 
-            await Answer("BtnOk");
+            var room = shell.RoomView()!;
+            var hero = room.FindControl<CompanionHeroCard>("HeroZone")!.ViewModel!;
+            var engine = (EngineRoomVm)room.FindControl<EngineRoomDrawer>("EngineZone")!.DataContext!;
+            var chat = room.FindControl<ChatThresholdView>("ChatZone")!.ViewModel!;
+            var attention = room.FindControl<AttentionGaugeView>("AttentionZone")!.ViewModel!;
+            chat.Detach();
+            Assert.False(chat.IsAttached);
+            var ai = AvApp.Ai;
+            AvApp.Ai = null;
+            CoreSettings.Current.CompanionPrompt.AiProvider = AiProviderType.OpenAiCompatible;
+            CoreSettings.Current.CompanionPrompt.DailyRequestLimit = 10;
+            CoreSettings.Current.AvatarEnabled = !hero.IsCompanionShown;
+            CoreSettings.Current.CompanionPrompt.AiModel = "changed-model";
+            try { await Answer("BtnOk"); }
+            finally { AvApp.Ai = ai; }
+            Assert.True(chat.IsAttached);
+            Assert.Equal(0, attention.Fraction);
+            Assert.Equal(CoreSettings.Current.AvatarEnabled, hero.IsCompanionShown);
+            Assert.Equal("changed-model", engine.OllamaModel);
             Assert.Equal(0, AvApp.Brain.Session.Count);
             Assert.False(File.Exists(sessionPath) && File.ReadAllText(sessionPath).Contains("purple ribbon"));
             Assert.Contains(memory.GetFacts(), f => f.Text == "likes purple ribbons");
         }
         finally
         {
+            CoreBark.UiAction = previousBark;
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
             shell.RequestExit();
             Dispatcher.UIThread.RunJobs();
@@ -246,6 +271,8 @@ public sealed class LocalProvidersTests
             memory.Dispose();
             AvApp.Ai?.Dispose();
             (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
+            Newtonsoft.Json.JsonConvert.PopulateObject(originalSettings, service.Current,
+                new Newtonsoft.Json.JsonSerializerSettings { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace });
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);

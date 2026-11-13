@@ -109,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // see MainShellWindow.FirstRun.cs, which owns both halves.
             HookFirstRun();
             HookDisplayNameAsk();
+            HookProfileLoaded();
 
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
@@ -132,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileBubble(); // MainShellWindow.ProfileBubble.cs (WPF MainWindow ctor): face + reactions
             InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
+            InitializeDailyGiftRows();
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
             InitializeIntakePassNudge();
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)

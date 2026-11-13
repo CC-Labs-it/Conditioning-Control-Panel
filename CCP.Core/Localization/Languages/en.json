@@ -3027,6 +3027,7 @@
   "setting_auto_connect_on_startup": "Auto-connect on startup",
   "tooltip_automatically_connect_to_your_haptic_device_w": "Automatically connect to your haptic device when the app starts",
   "label_status": "Status:",
+  "label_browser_crashed_restart": "Browser crashed - click a site to restart",
   "label_disconnected": "Disconnected",
   "label_no_devices": "No devices",
   "label_intensity": "Intensity:",

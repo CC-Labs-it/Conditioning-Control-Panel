@@ -2014,6 +2014,7 @@
   "setting_auto_connect_on_startup": "Auto-conectar na inicialização",
   "tooltip_automatically_connect_to_your_haptic_device_w": "Conectar automaticamente ao seu dispositivo háptico quando o app iniciar",
   "label_status": "Status:",
+  "label_browser_crashed_restart": "Navegador falhou - escolha um site para reiniciar",
   "label_disconnected": "Desconectado",
   "label_no_devices": "Sem dispositivos",
   "label_intensity": "Intensidade:",

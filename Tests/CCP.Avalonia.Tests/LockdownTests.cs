@@ -174,6 +174,9 @@ public sealed class LockdownTests
                 var p = tab.BtnEmergencyExit.TranslatePoint(new Point(40, 40), win)!.Value;
                 win.MouseDown(p, MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
+                // Fluent also scales the outer button on its own clock. The WPF press belongs
+                // to EERoot only, so the hit target must stay put during the animation.
+                Assert.Equal(global::Avalonia.Matrix.Identity, tab.BtnEmergencyExit.RenderTransform!.Value);
                 var down = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(root.Transitions!));
                 Assert.Equal(TimeSpan.FromMilliseconds(60), down.Duration);
                 Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseOut>(down.Easing);

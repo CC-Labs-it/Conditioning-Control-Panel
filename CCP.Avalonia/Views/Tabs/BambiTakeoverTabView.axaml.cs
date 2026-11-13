@@ -500,7 +500,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void BtnAutonomyStartStop_Click(object? sender, RoutedEventArgs e)
         {
             var s = CoreSettings.Current;
-            var turningOn = !s.AutonomyModeEnabled;
+            var turningOn = Shell?.AutonomyStoppedForPanic == true || !s.AutonomyModeEnabled;
             if (turningOn && !s.AutonomyConsentGiven)
             {
                 var owner = TopLevel.GetTopLevel(this) as Window;
