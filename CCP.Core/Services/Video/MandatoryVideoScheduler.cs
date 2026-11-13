@@ -23,6 +23,8 @@ namespace ConditioningControlPanel.Services
         bool FeedOwnsTheScreen => false;
         /// <summary>Use the host's presentation rule before the pre-roll as well as at Show.</summary>
         bool IsFloating(bool strict) => false;
+        bool TryFloatingTrigger(bool userInitiated) => false;
+        bool FloatingRunOpen => false;
         /// <summary>WPF VideoService.cs:2305-2313: wait while bubble count owns the screen.</summary>
         bool BubbleCountActive => false;
         void Freeze() { }
@@ -369,7 +371,9 @@ namespace ConditioningControlPanel.Services
             bool scheduled = false, bool silentIfEmpty = false, bool freezeBeforePreroll = false)
         {
             if (DeferTrigger?.Invoke(() => Trigger(strictOverride, path)) == true) return true;
-            if (_playing) return false;
+            if (_playing)
+                return _host.IsFloating(IsStrict) && _host.IsFloating(strictOverride ?? CoreSettings.Current.StrictLockEnabled)
+                    && _host.TryFloatingTrigger(userInitiated);
             // WPF VideoService.cs:2226: the cascade guard comes before the feed guard.
             if (_cascadeDefer != null) return true; // WPF: coalesce, retain the first request
             if (CascadeIsRaining?.Invoke() == true)

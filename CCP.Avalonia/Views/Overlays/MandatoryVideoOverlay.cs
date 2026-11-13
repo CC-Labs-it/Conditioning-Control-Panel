@@ -366,6 +366,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
         public bool IsFloating(bool strict) => Floats(strict);
 
+        // The current host supports one floating window, so a Test replaces it.
+        public bool TryFloatingTrigger(bool userInitiated)
+        {
+            if (!userInitiated || !Floating) return false;
+            Scheduler.ForceCleanup();
+            return Scheduler.Trigger(userInitiated: true);
+        }
+
         internal static bool Floats(bool strict) => ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ShouldFloat(
             CoreSettings.Current.MandatoryVideoFloating, strict,
             ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
