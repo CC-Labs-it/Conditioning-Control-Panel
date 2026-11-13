@@ -225,6 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TutorialHead.EndingInstantly || _stage == null || !IsOnStage) { Teardown(); return; }
             _fadingOut = true;
             _closed = true;
+            // The tour has ended: hand the main window its input back now, not after the card's fade.
+            RemoveMainWindowDim();
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
             UnsubscribeAdvanceTrigger();
