@@ -146,19 +146,8 @@ public class AwarenessConsentTests
     [Fact]
     public void TheObserverPredicateAsksAboutEntitlementAndNotOnlySettings()
     {
-        // Awareness is sold at tier 1, its page wears the premium veil, and until #1047 the engine's
-        // own predicate read four settings flags and nothing else — so a lapsed account was still
-        // observed, behind a padlock that covered the only toggle on that page. A source scan rather
-        // than a call, because App.Patreon cannot be stood up headlessly and the regression this
-        // guards is a term going MISSING from an expression.
-        var source = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserver.cs");
-
-        Assert.Contains("return AwarenessObserverPolicy.IsEnabled(s, HasEntitlement);", source, StringComparison.Ordinal);
-        var policy = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserverPolicy.cs");
-        Assert.Contains("settings != null && hasEntitlement && settings.UseAwarenessV2", policy, StringComparison.Ordinal);
-        Assert.Contains("App.Patreon?.HasPremiumAccess == true", source, StringComparison.Ordinal);
-        // The free day has to be OR'd in or the ? box would advertise a door it cannot open.
-        Assert.Contains("IsFreeToday(\"awareness\")", source, StringComparison.Ordinal);
+        // Check both Core's gate and the WPF entitlement provider that feeds it.
+        AwarenessEntitlementWiringTests.AssertObserverEntitlementWiring();
     }
 
     [Fact]

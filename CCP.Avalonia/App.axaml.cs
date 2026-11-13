@@ -1166,7 +1166,7 @@ namespace ConditioningControlPanel.Avalonia
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
                     vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
-                    new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
+                    new Platform.MindWipePlayer(vlc.PlayVoice, vlc.PrepareVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
                 }
                 catch (Exception ex)
