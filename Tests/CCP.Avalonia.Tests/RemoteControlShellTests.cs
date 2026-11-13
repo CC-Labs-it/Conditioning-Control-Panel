@@ -19,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -121,13 +122,20 @@ public sealed class RemoteControlShellTests
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<string> Paths = new();
+        public readonly List<JObject> Emotes = new();
+        public HttpStatusCode EmoteStatus = HttpStatusCode.OK;
         public string Poll = "{}";
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var path = r.RequestUri!.AbsolutePath;
+            if (path == "/v2/remote/emote")
+            {
+                var payload = JObject.Parse(await r.Content!.ReadAsStringAsync(ct));
+                lock (Emotes) Emotes.Add(payload);
+            }
             lock (Paths) Paths.Add(path);
             var body = path switch { "/v2/remote/start" => "{\"code\":\"ABC123\"}", "/v2/remote/poll" => Poll, _ => "{}" };
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+            return new HttpResponseMessage(path == "/v2/remote/emote" ? EmoteStatus : HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 
@@ -496,6 +504,78 @@ public sealed class RemoteControlShellTests
             relay.Dispose();
             RemoteControlTabView.Relay = oldRelay;
             CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    [Fact]
+    public Task Connected_overlay_more_receives_pointer_click_and_posts_signal() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (oldRelay, oldAttention, oldSink) = (RemoteControlTabView.Relay, MainShellWindow.RemoteJoinAttention,
+            global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink);
+        var oldDelay = RemoteControlTabView.MoreConfirmationDelay;
+        RemoteControlTabView.MoreConfirmationDelay = (_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token);
+        var fake = new FakeRelay();
+        using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", (_, _) => null, _ => { }, fake) { AutoPoll = false };
+        MainShellWindow.RemoteJoinAttention = _ => { };
+        global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var overlay = shell.Named<Border>("RemoteControlOverlay")!;
+            overlay.Transitions = null;
+            Assert.False(overlay.IsVisible);
+            await relay.StartAsync("light");
+            fake.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(overlay.IsVisible);
+            var more = shell.Named<Button>("BtnRemoteMoreOverlay");
+            Assert.NotNull(more);
+            Assert.True(more!.IsEffectivelyVisible);
+            Assert.True((await relay.SendEmoteAsync("hello", "", "custom")).ok);
+            var point = more.TranslatePoint(new Point(more.Bounds.Width / 2, more.Bounds.Height / 2), shell);
+            Assert.NotNull(point);
+            Assert.InRange(point.Value.X, 0, shell.ClientSize.Width);
+            Assert.InRange(point.Value.Y, 0, shell.ClientSize.Height);
+            shell.MouseMove(point.Value);
+            shell.MouseDown(point.Value, MouseButton.Left);
+            shell.MouseUp(point.Value, MouseButton.Left);
+            await WaitFor(() => { lock (fake.Emotes) return fake.Emotes.Count == 2; });
+            lock (fake.Emotes)
+            {
+                Assert.Equal("more", (string?)fake.Emotes[1]["text"]);
+                Assert.Equal("signal", (string?)fake.Emotes[1]["kind"]);
+                Assert.Equal("uid-1", (string?)fake.Emotes[1]["unified_id"]);
+            }
+            var status = shell.Named<TextBlock>("TxtRemoteMoreStatus")!;
+            await WaitFor(() => status.Text == string.Format(Loc.Get("remote_hud_sent"), Loc.Get("remote_hud_more")));
+            fake.EmoteStatus = HttpStatusCode.ServiceUnavailable;
+            shell.MouseDown(point.Value, MouseButton.Left);
+            shell.MouseUp(point.Value, MouseButton.Left);
+            await WaitFor(() => status.Text == Loc.Get("remote_hud_not_sent"));
+            fake.Poll = "{\"controller_connected\":false}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); // fade may still be in progress
+            lock (fake.Emotes) Assert.Equal(3, fake.Emotes.Count);
+            fake.Poll = "{\"controller_connected\":true}";
+            await relay.PollOnceAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("", status.Text);
+            await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            if (relay.IsActive) await relay.StopAsync();
+            shell?.Close();
+            RemoteControlTabView.MoreConfirmationDelay = oldDelay;
+            (RemoteControlTabView.Relay, MainShellWindow.RemoteJoinAttention,
+                global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink) = (oldRelay, oldAttention, oldSink);
         }
     });
 
