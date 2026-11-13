@@ -224,8 +224,7 @@ internal static class X11PanicKey
             var name = currentKey();
             if (name == boundName) return;
             boundName = name;
-            _boundCode = KeycodeOf(display, name);
-            if (_boundCode == 0) Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
+            _boundCode = ResolveKeycode(name, n => KeycodeOf(display, n));
         }
         Resolve();
         while (true)
@@ -295,6 +294,32 @@ internal static class X11PanicKey
         ["BrowserHome"] = "XF86HomePage", ["LaunchMail"] = "XF86Mail", ["SelectMedia"] = "XF86AudioMedia",
         ["LaunchApplication1"] = "XF86MyComputer", ["LaunchApplication2"] = "XF86Calculator",
     };
+
+    /// <summary>The bound key cannot fire on this desktop (no keysym, or none on this layout): the key name,
+    /// raised on the listener thread once per key name (start, rebind; a keymap change that leaves it dead does
+    /// not repeat it). WPF's hook hears any bound key (GlobalKeyboardHook.cs:165), so a dead key here is news the
+    /// user must see, not only a log line. Handlers post, never work.</summary>
+    internal static volatile Action<string?>? Unhearable;
+
+    /// <summary>The keycode for <paramref name="name"/> via <paramref name="keycodeOf"/>; 0 = cannot fire,
+    /// which is logged AND raised on <see cref="Unhearable"/>, so a dead panic key is never silent.</summary>
+    internal static int ResolveKeycode(string? name, Func<string?, int> keycodeOf)
+    {
+        var code = keycodeOf(name);
+        if (code != 0) { _unhearableName = null; _unhearableSent = false; return code; }
+        Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
+        if (!_unhearableSent || name != _unhearableName)
+        {
+            try { Unhearable?.Invoke(name); }
+            catch (Exception ex) { Log.Warning(ex, "Panic key: unhearable notice failed"); }   // never into the listener loop
+        }
+        _unhearableName = name;
+        _unhearableSent = true;
+        return 0;
+    }
+
+    private static string? _unhearableName;
+    private static bool _unhearableSent;
 
     /// <summary>The X keysym for a stored key name ("Escape", "F8", "A", "D1", "NumPad0", "OemTilde"); 0 when unknown.</summary>
     internal static ulong KeysymOf(string? name) => string.IsNullOrWhiteSpace(name) ? 0 : XStringToKeysym(XKeyName(name));

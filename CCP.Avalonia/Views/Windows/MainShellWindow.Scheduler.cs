@@ -42,7 +42,7 @@ public partial class MainShellWindow
         // WPF MainWindow.StartStop.cs:795-874, with the base's indefinite panic hold retained.
         if (action == SchedulerRun.Action.Start && !PanicAftermath.HoldsEngineRestart)
         {
-            if (Tray != null && TrayHostPresent()) { Hide(); HideAvatarTube(); }
+            if (Tray != null && TrayHostPresent()) { if (IsVisible) _hiddenToTray = true; Hide(); HideAvatarTube(); }
             Platform.OsNotifications.Show(Loc.Get("scheduler_started_title"), Loc.Get("scheduler_started_body"));
             if (!CoreEngine.IsRunning) StartEngine(systemInitiated: false);   // WPF :789/:807 StartEngine() defaults to false: Relapse check + empty-library notice run
         }
