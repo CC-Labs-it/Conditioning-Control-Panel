@@ -88,4 +88,46 @@ public class DailyGiftRelockInboxTests
             shell.Close();
         }
     });
+
+    [Fact]
+    public void A_free_member_gets_the_hello_row_once_ever_and_a_paid_one_never() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var shell = new MainShellWindow();
+        var old = (CoreAccount.HasPremiumAccessProvider, CoreSettings.ServiceProvider);
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            StartupLadder.ResetForTests();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromDays(2));
+            CoreAccount.HasPremiumAccessProvider = () => true;
+            s.PatreonMember = true;
+            Assert.False(shell.MaybePostMemberHello(s));   // a paying patron is not a free member
+            Assert.Empty(s.InboxStamps);
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            s.PatreonMember = false;
+            Assert.False(shell.MaybePostMemberHello(s));
+            s.PatreonMember = true;
+            shell.DailyGiftFocus();
+            var row = Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == "conv:" + ConversionRules.KeyFreeMemberHello));
+            Assert.Equal("Gift", row.IconKey);
+            Assert.Equal(Loc.Get("conv_member_hello_title"), row.Title);
+            Assert.StartsWith(Loc.Get("conv_member_hello_body"), MainShellWindow.MemberHelloBody(row.Summary!));
+            shell.DailyGiftFocus();
+            Assert.False(shell.MaybePostMemberHello(s));   // once ever
+            Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == row.Key));
+            row.Open!();
+            var card = Assert.IsType<InboxNoticeCard>(InboxNoticeCard.Open);
+            Assert.True(shell.IsEnabled);   // non-modal
+            Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("conv_ok"));
+            card.Close();
+        }
+        finally
+        {
+            (CoreAccount.HasPremiumAccessProvider, CoreSettings.ServiceProvider) = old;
+            StartupLadder.ResetForTests();
+            shell.Close();
+        }
+    });
 }

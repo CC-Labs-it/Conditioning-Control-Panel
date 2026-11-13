@@ -184,7 +184,11 @@ namespace ConditioningControlPanel.Services
                 case "stop_bubbles": CoreBubbles.Stop(); return null;
                 case "start_bounce_text": CoreBouncingText.Start(); return null;
                 case "stop_bounce_text": CoreBouncingText.Stop(); return null;
-                case "trigger_video": return CoreEngine.Video?.Trigger() == true ? null : CoreEngine.Video == null ? NotOnThisBuild : "a video is already playing";
+                case "trigger_video":
+                    if (CoreEngine.Video is not { } video) return NotOnThisBuild;
+                    // WPF RemoteControlService.cs:1395 acknowledges every trigger (held behind the feed, empty
+                    // library): only a video that is really playing is refused (#3776).
+                    return video.Trigger() || !video.IsPlaying ? null : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
                 case "stop_video": CoreEngine.Video?.Stop(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
