@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<TopLevel, bool, bool> FypGhostClickThrough = X11Overlay.SetClickThrough;
         internal static Func<TopLevel, double, bool> FypGhostOpacity = X11Overlay.SetOpacity;
         internal static Func<DateTime> FypGhostNow = () => DateTime.UtcNow;
-        internal static Func<Window, PixelRect, bool, bool> FypGhostButtonConfigure = X11Overlay.SetOverrideRedirect;
+        internal static Func<Window, PixelRect, bool, bool> FypGhostButtonConfigure = (w, bounds, passive) => X11Overlay.SetOverrideRedirect(w, bounds, passive);
         private static double ClampFypGhostOpacity(double value) =>
             double.IsFinite(value) ? Math.Clamp(value, 0.01, 1.0) : 1.0;
 
