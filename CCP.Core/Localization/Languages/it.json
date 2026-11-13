@@ -1327,6 +1327,7 @@
   "browser_show_bambicloud_tooltip": "Mostra il sito BambiCloud nelle mod che di solito lo nascondono. Il sito predefinito della mod resta selezionato; così puoi passare a BambiCloud se vuoi.",
   "browser_toast_offline_blocked": "La Modalità Offline è attiva, quindi il browser resta scollegato. Disattivala nelle Impostazioni per navigare.",
   "companion_prompt_too_long_notice": "Il prompt del tuo companion è troppo lungo per l'AI cloud, quindi risponde con meno contesto. Accorcia i link della knowledge base o scegli una personalità più breve.",
+  "browser_enhance_unsupported": "Alcuni effetti di questo miglioramento non sono disponibili in questa versione.",
   "browser_enhance_match_none": "Nessun enhancement salvato per questa pagina.",
   "browser_enhance_match_off": "Enhancement Deeper disattivati.",
   "browser_enhance_match_fmt": "Enhancement attivo: {0}",

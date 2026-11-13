@@ -1156,6 +1156,7 @@
   "deeper_player_tip_event_open": "跳转到编辑器中的这条规则",
   "browser_enhance_label": "尽可能增强",
   "browser_enhance_tooltip": "启用后导航到匹配已保存增强的视频页面时在其之上播放效果",
+  "browser_enhance_unsupported": "此版本不支持此增强功能中的某些效果。",
   "browser_enhance_match_none": "此页面没有已保存的增强",
   "browser_enhance_match_off": "Deeper 增强已禁用",
   "browser_enhance_match_fmt": "增强中：{0}",
