@@ -27,12 +27,12 @@ public sealed class PresetsFocalFxTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task ModRefreshKeepsSessionSelectionAndUpdatesCards(bool hidden) => WithPresets((host, view) =>
+    public Task ModRefreshKeepsSessionSelectionAndUpdatesCards(bool hidden) => WithPresets((host, view, clock) =>
     {
         var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
         var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
         var row = rack.Children.OfType<Border>().First();
-        row.Focus(); host.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, ""); Settle();
+        row.Focus(); host.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, ""); Settle(clock);
         var title = view.FindControl<TextBlock>("TxtDetailTitle")!.Text;
         var custom = Preset.FromSettings(CoreSettings.Current, "Test preset", "Test description");
         CoreSettings.Current.UserPresets.Add(custom);
@@ -40,8 +40,8 @@ public sealed class PresetsFocalFxTests
         var first = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, custom.Id));
         CoreMods.MakeModAwareProvider = text => "changed " + text;
         view.IsVisible = !hidden;
-        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
-        view.IsVisible = true; Settle();
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle(clock);
+        view.IsVisible = true; Settle(clock);
         var refreshed = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, custom.Id));
         Assert.NotSame(first, refreshed);
         Assert.StartsWith("changed ", ((StackPanel)refreshed.Child!).Children.OfType<TextBlock>().Single().Text);
@@ -54,7 +54,7 @@ public sealed class PresetsFocalFxTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task ModRefreshUpdatesRackNameAndDescription(bool hidden) => WithPresets((host, view) =>
+    public Task ModRefreshUpdatesRackNameAndDescription(bool hidden) => WithPresets((host, view, clock) =>
     {
         var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
         var row = rack.Children.OfType<Border>().First();
@@ -66,8 +66,8 @@ public sealed class PresetsFocalFxTests
         {
             CoreMods.MakeModAwareProvider = text => "changed " + text;
             view.IsVisible = !hidden;
-            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
-            view.IsVisible = true; Settle();
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle(clock);
+            view.IsVisible = true; Settle(clock);
             var refreshed = rack.Children.OfType<Border>().Single(r => (r.Tag as Session)?.Id == session.Id);
             var grid = Assert.IsType<Grid>(refreshed.Child);
             var name = grid.Children.OfType<TextBlock>().Single(t => Grid.GetColumn(t) == 2);
@@ -80,7 +80,7 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
-    public Task BuiltInPresetNameChangesWithModAndLanguage() => WithPresets((host, view) =>
+    public Task BuiltInPresetNameChangesWithModAndLanguage() => WithPresets((host, view, clock) =>
     {
         var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
         var preset = Preset.GetDefaultPresets().Single(p => p.Id == "default-gentle");
@@ -93,15 +93,15 @@ public sealed class PresetsFocalFxTests
         try
         {
             CoreMods.ActiveModIdProvider = () => modId;
-            LocalizationManager.Instance.SetLanguage("en"); Settle();
+            LocalizationManager.Instance.SetLanguage("en"); Settle(clock);
             var original = ExpectedName();
             Assert.Equal(original, DisplayedName());
             modId = BuiltInMods.BambiSleepId;
             var modName = ExpectedName();
             Assert.NotEqual(original, modName);
-            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle(clock);
             Assert.Equal(modName, DisplayedName());
-            LocalizationManager.Instance.SetLanguage("fr"); Settle();
+            LocalizationManager.Instance.SetLanguage("fr"); Settle(clock);
             var translatedName = ExpectedName();
             Assert.NotEqual(modName, translatedName);
             Assert.Equal(translatedName, DisplayedName());
@@ -109,20 +109,20 @@ public sealed class PresetsFocalFxTests
         finally
         {
             CoreMods.ActiveModIdProvider = oldProvider;
-            LocalizationManager.Instance.SetLanguage(oldLanguage); Settle();
+            LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(clock);
         }
     });
 
     [Fact]
-    public Task LanguageAndModRefreshSelectedPresetDetails() => WithPresets((host, view) =>
+    public Task LanguageAndModRefreshSelectedPresetDetails() => WithPresets((host, view, clock) =>
     {
         var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
         var preset = Preset.FromSettings(CoreSettings.Current, "Custom name", "Custom description");
         CoreSettings.Current.UserPresets.Add(preset);
         view.RefreshPresetsList();
-        typeof(PresetsTabView).GetMethod("SelectPreset", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, new object[] { preset }); Settle();
+        typeof(PresetsTabView).GetMethod("SelectPreset", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, new object[] { preset }); Settle(clock);
         CoreMods.MakeModAwareProvider = text => "changed " + text;
-        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle(clock);
         Assert.Equal("changed Custom name", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
         Assert.Equal("changed Custom description", view.FindControl<TextBlock>("TxtDetailSubtitle")!.Text);
         var chip = panel.Children.OfType<Border>().Single(b => Equals(b.Tag, preset.Id));
@@ -132,26 +132,26 @@ public sealed class PresetsFocalFxTests
         var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         try
         {
-            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            LocalizationManager.Instance.SetLanguage("de"); Settle(clock);
             Assert.NotSame(chip, panel.Children.OfType<Border>().Single(b => Equals(b.Tag, preset.Id)));
             Assert.Equal("changed Custom name", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
             Assert.True(view.FindControl<ScrollViewer>("PresetDetailScroller")!.IsVisible);
         }
-        finally { LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(); }
+        finally { LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(clock); }
     });
 
     [Fact]
-    public Task LanguageRefreshesUnselectedPresetCards() => WithPresets((host, view) =>
+    public Task LanguageRefreshesUnselectedPresetCards() => WithPresets((host, view, clock) =>
     {
         var panel = view.FindControl<WrapPanel>("PresetCardsPanel")!;
         var chip = panel.Children.OfType<Border>().First(b => b.Tag is string);
         var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         try
         {
-            LocalizationManager.Instance.SetLanguage("de"); Settle();
+            LocalizationManager.Instance.SetLanguage("de"); Settle(clock);
             Assert.NotSame(chip, panel.Children.OfType<Border>().First(b => b.Tag is string));
         }
-        finally { LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(); }
+        finally { LocalizationManager.Instance.SetLanguage(oldLanguage); Settle(clock); }
     });
 
     [Fact]
