@@ -41,6 +41,258 @@ public sealed class ChaosSkiaFxOverlayTests
     }
 
     [Fact]
+    public void WorldFieldCrossesNegativeOriginMonitorsAtDifferentScales()
+    {
+        var fx = new ConditioningControlPanel.Services.Compositor.ChaosFxLayer(() => { });
+        fx.ArmCursor();
+        fx.MoveCursor(-2, -40);
+        using var left = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(100, 100));
+        using var right = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(200, 200));
+        ChaosSkiaFxOverlay.RenderMonitor(left.Canvas, fx, new PixelRect(-200, -140, 200, 200), new Size(100, 100));
+        ChaosSkiaFxOverlay.RenderMonitor(right.Canvas, fx, new PixelRect(0, -140, 200, 200), new Size(200, 200));
+        using var li = left.Snapshot();
+        using var ri = right.Snapshot();
+        using var lb = SkiaSharp.SKBitmap.FromImage(li);
+        using var rb = SkiaSharp.SKBitmap.FromImage(ri);
+        Assert.True(lb.GetPixel(99, 50).Alpha > 0);
+        Assert.True(rb.GetPixel(1, 100).Alpha > 0);
+        Assert.Equal(0, lb.GetPixel(5, 5).Alpha);
+        Assert.Equal(0, rb.GetPixel(190, 5).Alpha);
+
+        fx.MoveCursor(40, -40);
+        right.Canvas.Clear();
+        ChaosSkiaFxOverlay.RenderMonitor(right.Canvas, fx, new PixelRect(0, -140, 200, 200), new Size(200, 200));
+        using var moved = right.Snapshot();
+        using var mb = SkiaSharp.SKBitmap.FromImage(moved);
+        Assert.True(mb.GetPixel(40, 100).Alpha > 0);
+        Assert.Equal(0, mb.GetPixel(190, 5).Alpha);
+    }
+
+    [Fact]
+    public Task MultipleHostsShareOneFieldAndCloseTogether() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var frames = new SteppedFrames();
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = frames;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-200, -140, 200, 200), new PixelRect(0, -140, 200, 200) };
+            ChaosSkiaFxOverlay.Burst(new Point(-2, -40), Colors.Cyan);
+            var owner = ChaosSkiaFxOverlay.Active!;
+            Assert.Equal(2, owner.Hosts.Count);
+            var hosts = owner.Hosts.ToArray();
+            Assert.All(hosts, host =>
+            {
+                Assert.Same(owner.Fx, host.Fx);
+                Assert.True(host.IsVisible);
+                Assert.False(host.IsHitTestVisible);
+                Assert.False(host.Focusable);
+            });
+            Assert.Single(frames.Subs);
+            ChaosSkiaFxOverlay.CloseActive();
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            Assert.All(hosts, host => Assert.False(host.IsVisible));
+            Assert.Empty(frames.Subs);
+        }
+        finally
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SecondaryPopHasHostWhenDualMonitorIsOff() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var enabled = settings.ChaosSkiaFxEnabled;
+        var dual = settings.DualMonitorEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var held = BubbleOverlay.Field.HoldChaos;
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            settings.ChaosSkiaFxEnabled = true;
+            settings.DualMonitorEnabled = false;
+            BubbleOverlay.Field.HoldChaos = false;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = new SteppedFrames();
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(0, 0, 200, 200), new PixelRect(200, 0, 200, 200) };
+            BubbleOverlay.PopChaos(new AmbientBubble { X = 250, Y = 50, Size = 100,
+                Spec = new EffectBubbleSpec { Tint = 0xFFFF0000 } });
+            var owner = ChaosSkiaFxOverlay.Active!;
+            Assert.Equal(2, owner.Hosts.Count);
+            Assert.Equal(new PixelPoint(200, 0), owner.Hosts[1].Position);
+            Assert.True(owner.Hosts[1].IsVisible);
+            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(200, 200));
+            ChaosSkiaFxOverlay.RenderMonitor(surface.Canvas, owner.Fx, new PixelRect(200, 0, 200, 200), new Size(200, 200));
+            using var image = surface.Snapshot();
+            using var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+            Assert.True(bitmap.GetPixel(100, 100).Alpha > 200);
+        }
+        finally
+        {
+            BubbleOverlay.Field.HoldChaos = held;
+            ChaosSkiaFxOverlay.CloseActive();
+            settings.ChaosSkiaFxEnabled = enabled;
+            settings.DualMonitorEnabled = dual;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DisplayChangesUpdateHostsScaleAndTeardown() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var frames = new SteppedFrames();
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.FramesForTests = frames;
+            ChaosSkiaFxOverlay.MonitorScaleForTests = 1;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-200, 0, 200, 200), new PixelRect(0, 0, 200, 200) };
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            ChaosSkiaFxOverlay.MoveCursorGlowToPx(150, 150);
+            var owner = ChaosSkiaFxOverlay.Active!;
+            var fx = owner.Fx;
+            Assert.True(owner.ListeningForScreens);
+            Assert.Equal(2, owner.Hosts.Count);
+            Assert.Single(frames.Subs);
+
+            byte GlowAtDistance()
+            {
+                using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(400, 300));
+                fx.Render(surface.Canvas, new SkiaSharp.SKRectI(0, 0, 400, 300), 1, TimeSpan.Zero);
+                using var image = surface.Snapshot();
+                using var bitmap = SkiaSharp.SKBitmap.FromImage(image);
+                return bitmap.GetPixel(235, 150).Alpha;
+            }
+            Assert.Equal(0, GlowAtDistance());
+
+            // Rearrange, resize, add a display and change the primary DPI while the field is live.
+            ChaosSkiaFxOverlay.MonitorScaleForTests = 2;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-400, -100, 400, 300), new PixelRect(0, -100, 300, 300), new PixelRect(300, -100, 200, 300) };
+            owner.OnScreensChanged(null, EventArgs.Empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(3, owner.Hosts.Count);
+            Assert.Equal(new PixelPoint(-400, -100), owner.Hosts[0].Position);
+            Assert.InRange(Math.Abs(owner.Width * owner.DesktopScaling - 400), 0, 0.01);
+            Assert.InRange(Math.Abs(owner.Height * owner.DesktopScaling - 300), 0, 0.01);
+            Assert.Equal(new PixelPoint(300, -100), owner.Hosts[2].Position);
+            Assert.All(owner.Hosts, host => { Assert.Same(fx, host.Fx); Assert.True(host.IsVisible); Assert.False(host.IsHitTestVisible); });
+            Assert.Single(frames.Subs);
+            Assert.True(GlowAtDistance() > 0);
+
+            var removed = owner.Hosts.Skip(1).ToArray();
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250) };
+            owner.OnScreensChanged(null, EventArgs.Empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(owner.Hosts);
+            Assert.Equal(new PixelPoint(-500, 20), owner.Position);
+            Assert.All(removed, host => Assert.False(host.IsVisible));
+
+            // A parked field stays hidden when displays change, then shows all new hosts on activity.
+            fx.Clear();
+            frames.Step(5);
+            owner.HideTick();
+            Assert.False(owner.IsVisible);
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = new[] { new PixelRect(-500, 20, 300, 250), new PixelRect(-200, 20, 300, 250) };
+            owner.OnScreensChanged(null, EventArgs.Empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, owner.Hosts.Count);
+            Assert.All(owner.Hosts, host => Assert.False(host.IsVisible));
+            ChaosSkiaFxOverlay.ArmCursorGlow();
+            Assert.All(owner.Hosts, host => Assert.True(host.IsVisible));
+
+            owner.OnScreensChanged(null, EventArgs.Empty); // queued callbacks must not revive closed hosts
+            var closed = owner.Hosts.ToArray();
+            ChaosSkiaFxOverlay.CloseActive();
+            Assert.False(owner.ListeningForScreens);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            Assert.All(closed, host => Assert.False(host.IsVisible));
+            Assert.Empty(frames.Subs);
+        }
+        finally
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            ChaosSkiaFxOverlay.FramesForTests = null;
+            ChaosSkiaFxOverlay.AvailableMonitorBoundsForTests = null;
+            ChaosSkiaFxOverlay.MonitorScaleForTests = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task NativeRefusalDoesNotLeakAcrossSnapshots() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var enabled = CoreSettings.Current.ChaosSkiaFxEnabled;
+        var composited = ChaosSkiaFxOverlay.Composited;
+        var skip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = true;
+            // Windows reports DWM composition even for headless windows. Reproduce that on every OS.
+            ChaosSkiaFxOverlay.Composited = () => true;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+            var snapshot = ProcessStateSnapshot.Take();
+            ChaosSkiaFxOverlay.EnsureCreated(); // headless has no native click-through window
+            Assert.Null(ChaosSkiaFxOverlay.Active);
+            snapshot.Restore(); // equivalent to the next test's starting state
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+            ChaosSkiaFxOverlay.EnsureCreated();
+            Assert.NotNull(ChaosSkiaFxOverlay.Active);
+        }
+        finally
+        {
+            ChaosSkiaFxOverlay.CloseActive();
+            CoreSettings.Current.ChaosSkiaFxEnabled = enabled;
+            ChaosSkiaFxOverlay.Composited = composited;
+            ChaosSkiaFxOverlay.SkipPlatformChecksForTests = skip;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task SparkleWindowLivesOnlyWhileEffectsAreLiveAndPanicClosesIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
