@@ -425,6 +425,21 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Warning(ex, "[RemoteControl] Emote send error"); return (false, ex.Message, null); }
         }
 
+        /// <summary>WPF RemoteControlService.V2.cs:45: send More on the signal channel.
+        /// Signals bypass the emote debounce so a preceding emote cannot swallow them.</summary>
+        public async Task<bool> SendMoreSignalAsync()
+        {
+            if (!IsActive) return false;
+            var uid = _unifiedId();
+            if (string.IsNullOrEmpty(uid)) return false;
+            try
+            {
+                using var response = await PostAsync("/v2/remote/emote", new { unified_id = uid, text = "more", icon = "", kind = "signal" }).ConfigureAwait(false);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex) { Log.Warning(ex, "[RemoteControl] More signal failed"); return false; }
+        }
+
         /// <summary>WPF PushStatusNowAsync: a settings change (share avatar) reaches the controller now,
         /// not at the next ~15 s push. No-op without a session.</summary>
         public Task PushStatusNowAsync() => IsActive ? SendStatusAsync(null, null) : Task.CompletedTask;

@@ -16,7 +16,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool IsBrowserPoppedOut => _browserPopoutWindow != null;
 
         // Panic preserves user browsing (WPF MainWindow.Browser.cs:3146-3150, 3228-3230).
-        private void InitializeBrowserSurfaceLifecycle() => Closed += (_, _) => CloseBrowserSurfaces();
+        private void InitializeBrowserSurfaceLifecycle()
+        {
+            InitializeBrowserFullscreen();
+            Closed += (_, _) => CloseBrowserSurfaces();
+        }
 
         internal void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e)
         {
@@ -48,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 popout.Content = host;
                 popout.Closing += (_, _) =>
                 {
+                    ExitBrowserPopoutFullscreen();
                     using var returning = host.BeginReparenting();
                     popout.Content = null;
                     if (!container.Children.Contains(host)) container.Children.Add(host);
@@ -75,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.xaml.cs:1987 disposes the browser on shell close; unload the page and close its unowned window.</summary>
         private void CloseBrowserSurfaces()
         {
+            DisposeBrowserFullscreen();
             if (BrowserView is { Source: not null } host) host.Navigate(new Uri("about:blank"));
             _browserPopoutWindow?.Close();
         }
