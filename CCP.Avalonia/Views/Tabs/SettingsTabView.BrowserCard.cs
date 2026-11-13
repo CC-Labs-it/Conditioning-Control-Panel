@@ -121,7 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF BtnWebcamTracking_Click: stop if running; else the consent gate (declined = nothing), the
         /// calibration warning when there is none, a start off the UI thread, then calibration on the live stream
         /// (cancelled = the camera stops again).</summary>
-        private async void BtnWebcamTracking_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnWebcamTracking_Click(object? sender, RoutedEventArgs e)
         {
             try
             {

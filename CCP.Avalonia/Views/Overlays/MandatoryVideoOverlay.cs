@@ -223,6 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _playback = _playbackFactory();
                 FirstFrameMs = 0;
                 FrameTs = Stopwatch.GetTimestamp();
+                BeginEnhancement(path);
                 return;
             }
             var s = CoreSettings.Current;
@@ -329,6 +330,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
+            BeginEnhancement(path);
             // WPF VideoService.cs:3410: discover the companion script only after playback starts.
             try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
             catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
@@ -1190,6 +1192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            EndEnhancement();
             _floatingOnScreen = false;
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;

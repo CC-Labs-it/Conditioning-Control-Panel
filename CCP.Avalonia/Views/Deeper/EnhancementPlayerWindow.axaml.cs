@@ -109,8 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
     ///         host's <c>Bind</c> and the rule engine are in Core too, but this head has no
-    ///         <c>IPlaybackTimeSource</c> for the web pane and seeds no
-    ///         <c>EnhancementHostService.DispatcherFactory</c>/<c>WebcamProvider</c>, so a loaded
+    ///         <c>IPlaybackTimeSource</c> for the web pane (App seeds the dispatcher and webcam), so a loaded
     ///         enhancement's rules never fire here.</item>
     ///   <item><b>WebView2.</b> The WPF pane hosted a <c>wv2:WebView2</c> driven through
     ///         <c>CoreWebView2</c>. <see cref="Controls.WebHost"/> covers more of that than the
