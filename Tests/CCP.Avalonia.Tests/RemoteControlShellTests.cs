@@ -131,6 +131,73 @@ public sealed class RemoteControlShellTests
         }
     }
 
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("end")]
+    [InlineData("wearer")]
+    [InlineData("disconnect")]
+    public Task Remote_stop_reaches_head_audio(string cause) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var playlistSlot = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("AudioPlaylist")!;
+        var oldPlaylist = playlistSlot.GetValue(null);
+        var playlist = new AudioPlaylistCardModelTests.FakePlaylist { IsPlaying = true };
+        var chant = global::ConditioningControlPanel.Avalonia.App.MantraChant;
+        var settings = CoreSettings.Current;
+        var oldChant = settings.MantraChantEnabled;
+        var oldDisconnect = settings.StopEffectsOnRemoteDisconnect;
+        var fake = new FakeRelay();
+        var oldMod = (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider);
+        var id = "remote-chant-" + Guid.NewGuid().ToString("N");
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), id);
+        var sounds = System.IO.Path.Combine(root, "resources", "sounds", "companion_audio");
+        System.IO.Directory.CreateDirectory(sounds);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(sounds, "p.mp3"), "audio");
+        System.IO.File.WriteAllText(System.IO.Path.Combine(sounds, "mantras.json"),
+            "{\"mantras\":[{\"id\":\"a\",\"phrase\":\"Obey\",\"promptAudio\":\"p.mp3\"}]}");
+        CoreMods.ActiveModIdProvider = () => id;
+        CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = id }, root, false);
+        using var relay = global::ConditioningControlPanel.Avalonia.App.WireRemoteQuestProgress(
+            new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, fake) { AutoPoll = false });
+        try
+        {
+            playlistSlot.SetValue(null, playlist);
+            settings.MantraChantEnabled = true;
+            settings.StopEffectsOnRemoteDisconnect = cause == "disconnect";
+            chant.Start();
+            Assert.True(chant.IsRunning);
+            if (cause == "wearer") CoreEngine.Start();
+            Assert.Equal("ABC123", await relay.StartAsync("light"));
+            if (cause == "panic")
+            {
+                fake.Poll = "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"trigger_panic\"}]}";
+                await relay.PollOnceAsync();
+            }
+            else if (cause == "disconnect")
+            {
+                fake.Poll = "{\"controller_connected\":true}";
+                await relay.PollOnceAsync();
+                fake.Poll = "{\"controller_connected\":false}";
+                await relay.PollOnceAsync();
+            }
+            else await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(cause == "wearer", chant.IsRunning);
+            Assert.Equal(cause == "wearer", playlist.IsPlaying);
+        }
+        finally
+        {
+            if (relay.IsActive) await relay.StopAsync();
+            Dispatcher.UIThread.RunJobs();
+            chant.Stop();
+            CoreEngine.Stop();
+            settings.MantraChantEnabled = oldChant;
+            settings.StopEffectsOnRemoteDisconnect = oldDisconnect;
+            playlistSlot.SetValue(null, oldPlaylist);
+            (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider) = oldMod;
+            System.IO.Directory.Delete(root, true);
+        }
+    });
+
     private sealed class SteppedClock : TimeProvider
     {
         public long Now = 1_000_000;
