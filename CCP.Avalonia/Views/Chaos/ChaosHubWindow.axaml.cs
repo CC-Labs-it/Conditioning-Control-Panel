@@ -105,8 +105,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
+        internal static Action<string, float> PlayCue = ChaosOverlayWindow.ChaosSfx.Play;
+        private bool _uiSoundsReady;
+
         public ChaosHubWindow()
         {
+            AddHandler(Button.ClickEvent, (_, _) => { if (_uiSoundsReady) PlayCue("ui_click", 0.3f); }, RoutingStrategies.Bubble, true);
             // Init runs WPF's on-load refunds/sanitize, which can save. A render draws the
             // in-memory state instead, so --render-all never writes a real profile.
             if (!RenderProof.Rendering) ChaosMeta.Init();
@@ -114,7 +118,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
+            Closed += (_, _) =>
+            {
+                UnlockCards.Stop();
+                StopRevealFlashes();
+                foreach (var timer in _balanceAnims.Values) timer.Stop();
+                _balanceAnims.Clear();
+                _balanceTickOwner = null;
+            };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
@@ -229,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             UpdateMuteIcon(CoreSettings.Current.ChaosMenuMusicMuted);
             ShowMenuView();      // the main menu is the landing view; the dollhouse waits behind it
             SetupMenuMotion();   // ponytail stub — see the method
+            _uiSoundsReady = true;
             Opened += (_, _) => IntroShown = OnHubOpenedReveals();   // WPF ChaosHubWindow.xaml.cs:81 Loaded
         }
 
@@ -379,6 +391,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private int _shownSparks = -1, _shownGold = -1;
         private readonly Dictionary<TextBlock, DispatcherTimer> _balanceAnims = new();
+        private DispatcherTimer? _balanceTickOwner;
 
         private void RefreshTopBar()
         {
@@ -454,14 +467,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosBench.Items.Count(i => !ChaosBench.IsOwned(i) && !ChaosBench.IsRankShort(i) && !ChaosBench.IsHazy(i) && Live.Gold >= i.Cost);
 
         /// <summary>Roll a top-bar balance from its last shown value to the new one (~500ms) so
-        /// spending visibly *costs* — first paint just snaps. WPF layered a soft tick cue under
-        /// it; ChaosSfx is a head service, so the sound is dropped.</summary>
+        /// spending visibly *costs* — first paint just snaps. WPF layers a soft tick cue under it.</summary>
         private void AnimateBalance(TextBlock tb, int from, int to)
         {
             if (_balanceAnims.TryGetValue(tb, out var old))
             {
                 old.Stop();
                 _balanceAnims.Remove(tb);
+                if (ReferenceEquals(_balanceTickOwner, old)) _balanceTickOwner = null;
             }
             if (from < 0 || from == to || !IsLoaded)
             {
@@ -470,10 +483,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
 
             const int DURATION_MS = 500, FRAME_MS = 33;
-            int elapsed = 0;
+            int elapsed = 0, lastTick = -90;
 
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FRAME_MS) };
             _balanceAnims[tb] = timer;
+            _balanceTickOwner ??= timer;
             timer.Tick += (_, _) =>
             {
                 elapsed += FRAME_MS;
@@ -481,11 +495,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     timer.Stop();
                     _balanceAnims.Remove(tb);
+                    if (ReferenceEquals(_balanceTickOwner, timer)) _balanceTickOwner = null;
                     tb.Text = to.ToString("N0");
                     return;
                 }
                 double eased = 1 - Math.Pow(1 - elapsed / (double)DURATION_MS, 3);
                 tb.Text = ((int)Math.Round(from + (to - from) * eased)).ToString("N0");
+                if (ReferenceEquals(_balanceTickOwner, timer) && elapsed - lastTick >= 90)
+                {
+                    lastTick = elapsed;
+                    PlayCue("count_tick", 0.4f);
+                }
             };
             timer.Start();
         }
@@ -778,6 +798,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var id = (sender as Button)?.Tag?.ToString();
             if (string.IsNullOrEmpty(id)) return;
             Shelf.ToggleHabit(id!);
+            PlayCue(ChaosMeta.IsUpgradeActive(id!) ? "ui_equip" : "ui_unequip", 0.45f);
             BuildHabits();
             BuildLoadoutTiles();
         }
