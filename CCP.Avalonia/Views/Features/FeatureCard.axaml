@@ -14,6 +14,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.FeatureCard"
              Cursor="Hand">
 
@@ -147,25 +148,51 @@
                 </StackPanel>
             </Border>
 
-            <!-- Tier badge (top-left). A price tag, NOT the LockedOverlay veil above: the art
-                 stays bright and the badge names the price. IsHitTestVisible=False on purpose,
-                 so a locked click still lands on the real handler. -->
-            <Border x:Name="TierBadgeHost"
-                    HorizontalAlignment="Left" VerticalAlignment="Top"
-                    Margin="8,8,0,0" Padding="6,2,7,3"
-                    CornerRadius="7"
-                    Background="#D91A1A2E"
-                    BorderBrush="{DynamicResource PinkBrush}"
-                    BorderThickness="1"
-                    IsHitTestVisible="False"
-                    ZIndex="11"
-                    IsVisible="False">
-                <TextBlock x:Name="TxtTierBadge"
-                           Text="TIER 1"
-                           Foreground="{DynamicResource PinkBrush}"
-                           FontSize="9"
-                           FontWeight="Bold"/>
-            </Border>
+            <!-- THE MARK COLUMN (top-left, WPF FeatureCard.xaml:183): price tag first, then the
+                 v2 pill, stacked so they cannot land on each other. Tier badge: a price tag, NOT
+                 the LockedOverlay veil above: the art stays bright and the badge names the price.
+                 IsHitTestVisible=False on purpose, so a locked click still lands on the real handler.
+                 The 4px gap lives on the tier badge's BOTTOM: a hidden badge takes no room, so the
+                 pill lands where the tier badge would. -->
+            <StackPanel x:Name="BadgeColumn"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Margin="8,8,0,0"
+                        IsHitTestVisible="False"
+                        ZIndex="11">
+                <Border x:Name="TierBadgeHost"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,4" Padding="6,2,7,3"
+                        CornerRadius="7"
+                        Background="#D91A1A2E"
+                        BorderBrush="{DynamicResource PinkBrush}"
+                        BorderThickness="1"
+                        IsHitTestVisible="False"
+                        IsVisible="False">
+                    <TextBlock x:Name="TxtTierBadge"
+                               Text="TIER 1"
+                               Foreground="{DynamicResource PinkBrush}"
+                               FontSize="9"
+                               FontWeight="Bold"/>
+                </Border>
+
+                <!-- v2 pill (ShowV2Badge, WPF FeatureCard.xaml:207): the tier badge's pill family
+                     in champagne #FFE08A, worn when the feature owns a Back Room v2 style. -->
+                <Border x:Name="V2BadgeHost"
+                        HorizontalAlignment="Left"
+                        Padding="6,2,7,3"
+                        CornerRadius="7"
+                        Background="#D91A1A2E"
+                        BorderBrush="#FFE08A"
+                        BorderThickness="1"
+                        IsHitTestVisible="False"
+                        IsVisible="False">
+                    <TextBlock x:Name="TxtV2Badge"
+                               Text="{loc:Str badge_v2}"
+                               Foreground="#FFE08A"
+                               FontSize="9"
+                               FontWeight="Bold"/>
+                </Border>
+            </StackPanel>
 
             <!-- The shared lamp: a 1 px bevel, DepthRaisedBevel while the tile stands off its
                  socket, DepthPressedBevel while it is on or pressed (DashboardCardDepth.Refresh). -->
