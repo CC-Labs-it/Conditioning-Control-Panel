@@ -32,7 +32,8 @@
 //   CheckIntakePassNudge / StartIntakeFromNudge and the shared announcement slot:
 //     MainShellWindow.IntakeNudge.cs.
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
-//   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
+//   ExternalOpener; its FailurePurpose gives WPF BrowserLauncher's copy-and-explain fallback.
+//   The support beat's link is a SafeHyperlinkButton too, as WPF's inline Hyperlink.)
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
 //     formatters, neither of which runs here; Loc.Get already returns the key when a string is
 //     missing, so there is nothing to restore in isolation.

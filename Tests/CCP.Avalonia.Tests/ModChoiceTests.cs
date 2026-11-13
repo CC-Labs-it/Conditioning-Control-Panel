@@ -245,6 +245,18 @@ public sealed class ModChoiceTests
         Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
     });
 
+    [Fact]   // WPF MainWindow.xaml.cs:3869: the palette hangs off ModChanged too (restack b78, from #3465)
+    public Task ExternalModChangeRethemesWithoutApplyActiveModChange() => Run(async (shell, svc, server) =>
+    {
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);   // the uninstall route: no ApplyActiveModChange
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Color.Parse(AvApp.Mods.GetAccentColorHex()), (Color)Application.Current!.Resources["PinkColor"]!);
+        AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Color.Parse(AvApp.Mods.GetAccentColorHex()), (Color)Application.Current.Resources["PinkColor"]!);
+        await Task.CompletedTask;
+    });
+
     [Fact]
     public Task HeaderModSwitchRepaintsHomeArtAndExternalModChangeRestoresShippedArt() => Run(async (shell, svc, server) =>
     {
