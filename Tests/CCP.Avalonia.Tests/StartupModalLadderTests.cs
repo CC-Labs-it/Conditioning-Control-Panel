@@ -117,6 +117,7 @@ public sealed class StartupModalLadderTests
             var closed = new TaskCompletionSource();
             var shown = 0;
             WelcomeBackOffer.Choose = _ => { shown++; return Task.FromResult((false, false)); };
+            WelcomeBackOffer.NewBackup = WelcomeBackRestoreTests.NoBackupClient; // never the real proxy
             StartupLadder.EnqueueModal("first-run-wizard", 20, () => closed.Task);
             WelcomeBackOffer.Arm(true, dir);
             await WelcomeBackOffer.TryOfferAsync("startup");

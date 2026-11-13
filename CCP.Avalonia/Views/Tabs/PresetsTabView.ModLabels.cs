@@ -29,20 +29,26 @@ public partial class PresetsTabView
         if (VisualRoot is not null) PaintModLabels();
     });
 
-    // WPF MainWindow.UiUpdates.cs:145-152. Keep the full icon prefix for IconLabel.
+    // WPF MainWindow.UiUpdates.cs:145-152. The English literal is the mod lookup key; the icon comes
+    // from the loc value's own prefix (IconGuard: no emoji literals in code), so IconLabel keeps it.
     private void PaintModLabels()
     {
-        SetModLabel(TxtFeatureCornerGif, "🖼 Corner GIF", "label_corner_gif");
-        SetModLabel(TxtDetailFlashLabel, "⚡ Flash Images", "section_flash_images");
-        SetModLabel(TxtDetailVideoLabel, "🎬 Mandatory Videos", "label_mandatory_videos");
-        SetModLabel(TxtDetailSubLabel, "💭 Subliminals", "section_subliminals");
-        SetModLabel(TxtSessionFlashLabel, "⚡ Flash Images", "section_flash_images");
-        SetModLabel(TxtSessionSubLabel, "💭 Subliminals", "section_subliminals");
+        SetModLabel(TxtFeatureCornerGif, "Corner GIF", "label_corner_gif");
+        SetModLabel(TxtDetailFlashLabel, "Flash Images", "section_flash_images");
+        SetModLabel(TxtDetailVideoLabel, "Mandatory Videos", "label_mandatory_videos");
+        SetModLabel(TxtDetailSubLabel, "Subliminals", "section_subliminals");
+        SetModLabel(TxtSessionFlashLabel, "Flash Images", "section_flash_images");
+        SetModLabel(TxtSessionSubLabel, "Subliminals", "section_subliminals");
     }
 
-    private static void SetModLabel(IconLabel label, string english, string key)
+    internal static string ModLabel(string english, string local)
     {
         var mod = CoreMods.MakeModAware(english);
-        label.Text = mod != english ? mod : Loc.Get(key);
+        if (mod == english) return local;
+        var space = local.IndexOf(' ');
+        return space > 0 && !char.IsLetterOrDigit(local, 0) ? local[..(space + 1)] + mod : mod;
     }
+
+    private static void SetModLabel(IconLabel label, string english, string key) =>
+        label.Text = ModLabel(english, Loc.Get(key));
 }

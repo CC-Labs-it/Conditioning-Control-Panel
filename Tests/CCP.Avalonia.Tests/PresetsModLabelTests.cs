@@ -29,12 +29,12 @@ public class PresetsModLabelTests
         var view = new PresetsTabView();
         var window = new Window { Content = view };
         var labels = new[] {
-            ("TxtDetailFlashLabel", "⚡ Flash Images", "section_flash_images"),
-            ("TxtDetailVideoLabel", "🎬 Mandatory Videos", "label_mandatory_videos"),
-            ("TxtDetailSubLabel", "💭 Subliminals", "section_subliminals"),
-            ("TxtSessionFlashLabel", "⚡ Flash Images", "section_flash_images"),
-            ("TxtSessionSubLabel", "💭 Subliminals", "section_subliminals"),
-            ("TxtFeatureCornerGif", "🖼 Corner GIF", "label_corner_gif") };
+            ("TxtDetailFlashLabel", "Flash Images", "section_flash_images"),
+            ("TxtDetailVideoLabel", "Mandatory Videos", "label_mandatory_videos"),
+            ("TxtDetailSubLabel", "Subliminals", "section_subliminals"),
+            ("TxtSessionFlashLabel", "Flash Images", "section_flash_images"),
+            ("TxtSessionSubLabel", "Subliminals", "section_subliminals"),
+            ("TxtFeatureCornerGif", "Corner GIF", "label_corner_gif") };
         try
         {
             loc.SetLanguage("en");
@@ -43,16 +43,17 @@ public class PresetsModLabelTests
             foreach (var (name, _, key) in labels)
                 Assert.Equal(loc.Get(key), view.FindControl<IconLabel>(name)!.Source);
             mods.ActivateMod(BuiltInMods.DronificationId); Dispatcher.UIThread.RunJobs();
-            foreach (var (name, english, _) in labels)
+            foreach (var (name, english, key) in labels)
             {
                 var label = view.FindControl<IconLabel>(name)!;
-                Assert.Equal(CoreMods.MakeModAware(english), label.Source);
+                Assert.Equal(PresetsTabView.ModLabel(english, loc.Get(key)), label.Source);
+                Assert.EndsWith(CoreMods.MakeModAware(english), label.Source);
                 Assert.IsType<IconGlyph>(label.Children[0]);
             }
             Assert.Contains("Data Injection", view.FindControl<IconLabel>("TxtDetailFlashLabel")!.Source);
             loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
-            foreach (var (name, english, _) in labels)
-                Assert.Equal(CoreMods.MakeModAware(english), view.FindControl<IconLabel>(name)!.Source);
+            foreach (var (name, english, key) in labels)
+                Assert.Equal(PresetsTabView.ModLabel(english, loc.Get(key)), view.FindControl<IconLabel>(name)!.Source);
             mods.ActivateMod(BuiltInMods.LockedId); Dispatcher.UIThread.RunJobs();
             Assert.Equal(Loc.Get("section_flash_images"), view.FindControl<IconLabel>("TxtDetailFlashLabel")!.Source);
             mods.ActivateMod(BuiltInMods.InfectionControlId); Dispatcher.UIThread.RunJobs();

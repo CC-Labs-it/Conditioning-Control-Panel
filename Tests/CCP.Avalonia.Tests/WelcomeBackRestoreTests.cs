@@ -45,6 +45,8 @@ public sealed class WelcomeBackRestoreTests
     }
 
     internal static CloudSettingsBackup ClientFor(AppSettings settings) => new(new BackupServer(settings, false));
+    /// <summary>A loopback client with an empty slot: welcome-back tests never reach the real proxy.</summary>
+    internal static CloudSettingsBackup NoBackupClient() => new(new BackupServer(null, false));
 
     // WPF App.xaml.cs:4899-4923,4982-5000,5033-5035,5080-5118.
     [Theory]
@@ -88,6 +90,7 @@ public sealed class WelcomeBackRestoreTests
             };
             var server = new BackupServer(backup, bodyFails);
             WelcomeBackOffer.ResetForTests();
+            WelcomeBackOffer.RunModal = show => show(); // the restore rules, not the ladder (StartupModalLadderTests)
             WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
             WelcomeBackSheetContent? offered = null;
             WelcomeBackOffer.Choose = content =>
@@ -147,6 +150,7 @@ public sealed class WelcomeBackRestoreTests
             CoreSettings.ServiceProvider = () => service;
             service.Current.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
             WelcomeBackOffer.ResetForTests();
+            WelcomeBackOffer.RunModal = show => show(); // the restore rules, not the ladder (StartupModalLadderTests)
             var sheets = 0;
             WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
             WelcomeBackOffer.Choose = _ => { sheets++; return Task.FromResult((false, false)); };

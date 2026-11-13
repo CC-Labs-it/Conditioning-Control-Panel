@@ -49,6 +49,7 @@ public sealed class ModChoiceTests
         {
             settings.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.RunModal = show => show();
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell = () => shell;
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup = () => WelcomeBackRestoreTests.ClientFor(backup);
             ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose = content =>

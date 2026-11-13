@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     };
                     // Existing presentation seam still covers content tests; the real presenter returns the choice.
                     if (Present != PresentOnShellAsync) await Present(content);
-                    else StartupLadder.EnqueueModal("welcome-back", 30, async () =>
+                    else await RunModal(async () =>
                     {
                         // One startup modal at a time (WPF EnqueueModal :4968): the ladder waits out the wizard.
                         try
@@ -189,6 +189,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (FormatException) { return template; }
         }
 
+        /// <summary>Where the chosen sheet runs: the startup ladder at WPF's priority (App.xaml.cs:4968), one
+        /// startup modal at a time. Restore tests run the job in place.</summary>
+        internal static Func<Func<Task>, Task> RunModal = QueueOnLadder;
+
+        private static Task QueueOnLadder(Func<Task> show)
+        {
+            StartupLadder.EnqueueModal("welcome-back", 30, show);
+            return Task.CompletedTask;
+        }
+
         // The default entry path queues the sheet at WPF's priority (App.xaml.cs:4968). The ladder owns
         // IsStartupDialogShowing and flushes a parked remote-media offer once the sheet has gone.
         // TryOfferAsync enqueues the choice itself; this sentinel only marks the default presenter.
@@ -224,6 +234,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             _claimed = 0;
             Present = PresentOnShellAsync;
             Choose = ChooseOnShellAsync;
+            RunModal = QueueOnLadder;
             Shell = () => MainShellWindow.Current;
             NewBackup = () => new CloudSettingsBackup();
         }
