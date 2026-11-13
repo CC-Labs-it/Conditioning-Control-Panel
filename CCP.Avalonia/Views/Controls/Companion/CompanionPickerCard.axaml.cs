@@ -259,7 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             ImgPreview.Opacity = 0.2;
             ImgPreview.Transitions = new Transitions
             {
-                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(160) }
+                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(160)) }
             };
             ImgPreview.Opacity = 1;
         }
