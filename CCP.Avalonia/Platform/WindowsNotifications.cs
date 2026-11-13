@@ -5,7 +5,7 @@ using Avalonia.Controls;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// Avalonia 12.1.2 owns the tray icon and its click/menu handling. Only modify its balloon fields.
+// Avalonia 12.1.x (fields checked on 12.1.5) owns the tray icon and its click/menu handling. Only modify its balloon fields.
 internal sealed class WindowsNotifications : IDisposable
 {
     internal const uint Modify = 1;
