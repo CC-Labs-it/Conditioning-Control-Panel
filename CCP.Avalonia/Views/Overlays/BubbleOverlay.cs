@@ -620,6 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             ClearEStim();
             Field.FreezeChaos = false;
+            Field.ChaosTimeScale = 1.0;   // WPF BubbleService.cs:2037
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosResidues.Clear();   // WPF EndChaosMode :2069
@@ -958,6 +959,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, .7) }
         };
         private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
+        /// <summary>WPF BubbleService.cs:2533-2550, :3551-3565 (hand-ported from #4599): the glassy
+        /// specular highlight on a plain chaos bubble while the Skia FX layer is on. Variant sprites
+        /// bring their own art; ambient bubbles keep their bubble.png highlights.</summary>
+        private static readonly IBrush ChaosShine = new RadialGradientBrush
+        {
+            Center = new RelativePoint(0.34, 0.27, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(0.34, 0.27, RelativeUnit.Relative),
+            RadiusX = new RelativeScalar(0.32, RelativeUnit.Relative),
+            RadiusY = new RelativeScalar(0.32, RelativeUnit.Relative),
+            GradientStops = { new GradientStop(Color.FromArgb(190, 255, 255, 255), 0),
+                new GradientStop(Color.FromArgb(70, 255, 255, 255), 0.5),
+                new GradientStop(Color.FromArgb(0, 255, 255, 255), 1) },
+        }.ToImmutable();
+        internal static bool HasChaosShine(AmbientBubble b, bool variantSprite) =>
+            b.Spec != null && !variantSprite && ChaosSkiaFxOverlay.Enabled;
         private static readonly IBrush HintBack = new SolidColorBrush(Color.FromArgb(0xA0, 0x12, 0x0A, 0x18)), HintFore = new SolidColorBrush(Color.FromRgb(0xFF, 0xE2, 0xF2));
         internal static readonly IPen ShieldPen = new Pen(new SolidColorBrush(Color.FromRgb(0x9C, 0xE8, 0xFF)), 3.5,
             dashStyle: new DashStyle(new[] { 3.0, 2.0 }, 0));
@@ -1162,6 +1178,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (HasChaosShine(b, teaseImage != null))
+                            dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
                         if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                         {
                             var frame = face.Frames[face.Animated
