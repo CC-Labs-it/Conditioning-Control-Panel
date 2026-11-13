@@ -42,6 +42,17 @@ internal sealed class FriendLeashOffer : StackPanel
         catch { return null; }
     }
 
+    /// <summary>--render-all (RenderProof): the offer chip for a sample online friend, on a leash service whose
+    /// wire answers nothing, so drawing it never reaches the network or a real account.</summary>
+    internal FriendLeashOffer() : this(new Friend("render", "Mia", null, 0, true, FriendPresence.None, false),
+        new LeashService(new RenderWire(), () => "render", cutSafety: () => { }), new HashSet<string>()) { }
+
+    private sealed class RenderWire : ILeashApi
+    {
+        public System.Threading.Tasks.Task<Newtonsoft.Json.Linq.JObject?> CallAsync(string op, Newtonsoft.Json.Linq.JObject body, System.Threading.CancellationToken ct = default) =>
+            System.Threading.Tasks.Task.FromResult<Newtonsoft.Json.Linq.JObject?>(null);
+    }
+
     internal FriendLeashOffer(Friend friend, ILeashService service, HashSet<string> sent, HashSet<string>? pending = null, Action? refresh = null)
     {
         _friend = friend; _service = service; _sent = sent; _pending = pending ?? new(); _refresh = refresh;

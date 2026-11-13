@@ -219,6 +219,10 @@ public sealed class WebcamCalibrationTests
             WebcamTracker.SourceFactory = () => new BlankSource();
             WebcamCalibrationData.DeleteIfExists();
             tracker.Calibration = sentinel;
+            // The bubble test scores LastPreLockGaze when the tracker has one. These tests feed the gaze
+            // handlers directly, so a point an earlier test emitted on the shared Instance (the drift hook
+            // test, #4289) must not stand in for the aim here.
+            ClearPreLockGaze(tracker);
             if (start) Assert.True(tracker.Start(), tracker.LastError);
             body(tracker, sentinel);
         }
@@ -229,10 +233,15 @@ public sealed class WebcamCalibrationTests
             Dispatcher.UIThread.RunJobs(); // close windows even when a body assertion throws
             WebcamCalibrationData.DeleteIfExists();
             tracker.Calibration = oldCal;
+            ClearPreLockGaze(tracker);
             (s.WebcamConsentGiven, s.WebcamConsentVersion, s.WebcamCalibrated, s.WebcamCalibrationMode, WebcamTracker.SourceFactory,
                 s.MasterVolume, CoreAudio.PlayOneShotProvider) = old;
         }
     });
+
+    private static void ClearPreLockGaze(WebcamTracker tracker) =>
+        typeof(WebcamTracker).GetField("_lastPreLockGaze", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(tracker, null);
 
     private static WebcamCalibrationWindow OpenAndContinue()
     {
