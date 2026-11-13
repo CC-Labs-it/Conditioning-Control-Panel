@@ -74,6 +74,67 @@ public sealed class AmbientBubblesTests
         Assert.Equal(640, b.Y);
     }
 
+    [Theory]
+    [InlineData(false, false, false, false, 0)]
+    [InlineData(true, false, true, false, 8)]
+    [InlineData(true, false, false, false, 0)]
+    [InlineData(false, true, false, false, 16)]
+    [InlineData(false, true, true, true, 0)]
+    [InlineData(true, true, true, true, 8)]
+    public void Pop_particles_follow_skill_glow_and_paid_lucky_rules(bool boost, bool lucky, bool glow, bool dry, int count)
+    {
+        // WPF BubbleService.cs:1105-1108, :4430-4472.
+        var s = new AppSettings { FlashGlowEnabled = glow };
+        if (boost) s.UnlockedSkills.Add("sparkle_boost_1");
+        if (lucky) s.UnlockedSkills.Add("lucky_bubbles");
+        if (dry) AmbientBubbleXp.Take(s, AmbientBubbleXp.DailyXpCap);
+        var field = new AmbientBubbleField(new LuckyRandom());
+        var b = new AmbientBubble { Size = 100 };
+        field.Pop(b, s);
+        Assert.Equal(count, b.Sparkles.Length);
+        Assert.Equal(lucky && !dry, b.Lucky);
+        var particles = b.Sparkles;
+        field.Pop(b, s);
+        Assert.Same(particles, b.Sparkles); // repeat input must not restart the burst
+        foreach (var sp in particles)
+        {
+            Assert.Equal(50, sp.X);
+            Assert.Equal(50, sp.Y);
+            Assert.Equal(1, sp.Alpha);
+            Assert.Equal(2.04, Math.Sqrt(sp.VelX * sp.VelX + sp.VelY * sp.VelY), 8);
+            Assert.Equal(b.Lucky ? 4.04 : 3.03, sp.Size, 8);
+        }
+        b.Step();
+        for (var i = 0; i < particles.Length; i++)
+        {
+            var sp = particles[i];
+            Assert.Equal(50 + sp.VelX, sp.X, 8);
+            Assert.Equal(50 + sp.VelY - 0.15, sp.Y, 8);
+            Assert.Equal(b.Lucky ? 0.96 : 0.94, sp.Alpha, 8);
+        }
+        field.Bubbles.Add(b);
+        for (var i = 0; i < 24; i++) field.Step();
+        Assert.Empty(field.Bubbles); // particles cannot keep a completed bubble alive
+    }
+
+    [Fact]
+    public void Perk_effects_off_pops_plain_but_still_pays_the_lucky_roll()
+    {
+        // WPF BubbleService.cs:1108-1111 (owner 2026-11-05): no gold glow or sparkle burst.
+        var s = new AppSettings { FlashGlowEnabled = true, PerkEffects = PerkEffectsMode.Off };
+        s.UnlockedSkills.Add("sparkle_boost_1");
+        s.UnlockedSkills.Add("lucky_bubbles");
+        var field = new AmbientBubbleField(new LuckyRandom());
+        var b = new AmbientBubble { Size = 100 };
+        Assert.Equal(100, field.Pop(b, s));
+        Assert.Empty(b.Sparkles);
+    }
+
+    private sealed class LuckyRandom : Random
+    {
+        public override double NextDouble() => 0.01; // force a lucky roll without a probabilistic test
+    }
+
     [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {
