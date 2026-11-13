@@ -303,4 +303,67 @@ public sealed class TakeoverTabUiTests
         }
         return Task.CompletedTask;
     });
+
+    // restack b186 (#3969): WPF MainWindow.Autonomy.cs:466-492 asks even when a stale saved voice setting is on.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SurpriseMantraRequiresConsentEvenWithAStaleSetting(bool savedOn) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven) = (savedOn, false);
+            shell.ShowTab("bambitakeover");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            tab.SyncFromSettings();
+            var toggle = tab.FindControl<CheckBox>("ChkAutonomyVoice")!;
+            Assert.False(toggle.IsChecked);
+
+            toggle.IsChecked = true;
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MicConsentDialog>());
+            Assert.False(s.MicConsentGiven);
+            dialog.FindControl<Button>("BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Assert.False(toggle.IsChecked);
+            Assert.False(s.MicConsentGiven);
+            Assert.Equal(savedOn, s.AutonomyCanTriggerVoiceCommand);
+
+            toggle.IsChecked = true;
+            dialog = Assert.Single(shell.OwnedWindows.OfType<global::ConditioningControlPanel.Avalonia.Views.Dialogs.MicConsentDialog>());
+            var next = dialog.FindControl<Button>("BtnNext")!;
+            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            foreach (var name in new[] { "ChkConsent1", "ChkConsent2", "ChkConsent3" })
+                dialog.FindControl<CheckBox>(name)!.IsChecked = true;
+            dialog.FindControl<TextBox>("TxtConfirm")!.Text = "ENABLE";
+            Dispatcher.UIThread.RunJobs();
+            var enable = dialog.FindControl<Button>("BtnEnable")!;
+            Assert.True(enable.IsEnabled);
+            enable.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Assert.True(s.MicConsentGiven);
+            Assert.True(s.AutonomyCanTriggerVoiceCommand);
+            Assert.True(toggle.IsChecked);
+        }
+        finally
+        {
+            foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+            shell.Close();
+            (s.AutonomyCanTriggerVoiceCommand, s.MicConsentGiven) = saved;
+        }
+    });
 }
