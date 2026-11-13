@@ -39,6 +39,7 @@
         MinHeight="672" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource DarkerBgBrush}"
+        KeyDown="TimelineZoom_KeyDown"
         DragDrop.AllowDrop="True">
 
     <Window.Resources>
@@ -319,7 +320,9 @@
 
                         <!-- Remote http(s):// preview (HypnoTube etc). WebHost draws its own
                              fallback panel wherever no web engine is installed. -->
-                        <controls:WebHost x:Name="BrowserPreview" IsVisible="False"/>
+                        <controls:WebHost x:Name="BrowserPreview" IsVisible="False"
+                                          NavigationCompleted="PreviewZoom_NavigationCompleted"
+                                          WebMessage="PreviewZoom_WebMessage"/>
                         <Image x:Name="LocalVideoImage" IsVisible="False" Stretch="Uniform"/>
 
                         <Canvas x:Name="WaveformCanvas" IsVisible="False" Background="{DynamicResource DeeperWaveformBgBrush}">
