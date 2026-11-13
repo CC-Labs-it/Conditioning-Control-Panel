@@ -94,6 +94,7 @@ public sealed class PanicSurfacesTests
         "emi-ring",
         "launcher-notes",
         "launcher-friends",
+        "launcher-lobby-claim",
         "event-fx",
         "perfect-week-bonus",
         "brain-drain-audio",

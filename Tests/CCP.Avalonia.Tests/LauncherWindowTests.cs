@@ -1,5 +1,11 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using Avalonia.Interactivity;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -57,6 +63,258 @@ public sealed class LauncherWindowTests
             }
         });
     }
+
+    private sealed class LobbyTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public event EventHandler? Tick { add { } remove { } }
+        public void Start() { }
+        public void Stop() { }
+        public void OnUiThread(Action action) => action();
+    }
+
+    private static Button JoinButton(MenuItem row) =>
+        (Button)((Grid)((Border)row.Header!).Child!).Children[2];
+
+    [Fact]
+    public void LobbyChipRefreshesOnShowAndOpensLobby() => Run(shell =>
+    {
+        var calls = 0;
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => { calls++; return Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Host", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)); },
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            launcher.Show();
+            Assert.Equal(1, calls);
+            Assert.Equal(Loc.GetF("launcher_lobby_open", 1), launcher.FindControl<TextBlock>("LobbyChipText")!.Text);
+            launcher.Hide();
+            launcher.Show();
+            Assert.Equal(2, calls);
+            launcher.FindControl<Button>("LobbyChip")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(launcher.IsVisible);
+            var menu = launcher.FindControl<Button>("LobbyChip")!.ContextMenu!;
+            Assert.True(menu.IsOpen);
+            var card = Assert.IsType<Border>(((MenuItem)menu.Items[0]!).Header);
+            var grid = Assert.IsType<Grid>(card.Child);
+            Assert.NotNull(Assert.IsType<Image>(grid.Children[0]).Source);
+            var words = Assert.IsType<StackPanel>(grid.Children[1]);
+            Assert.Contains(words.Children.OfType<TextBlock>(), text => text.Text!.Contains("Host"));
+            Assert.IsType<Button>(grid.Children[2]);
+            Assert.True(calls >= 3);
+            ((MenuItem)menu.Items[1]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal("availablesubjects", shell.CurrentTab);
+            Assert.False(launcher.IsVisible);
+        }
+        finally { launcher.Close(); }
+    });
+
+    [Fact]
+    public void LobbyCardsHaveGlassShellHoverLiftAndJoinTravel() => Run(shell =>
+    {
+        var launcher = new LauncherWindow();
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Host", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var menu = chip.ContextMenu!;
+            Assert.Equal(global::Avalonia.Media.Color.Parse("#F2160B22"), Assert.IsType<global::Avalonia.Media.SolidColorBrush>(menu.Background).Color);
+            var row = (MenuItem)menu.Items[0]!;
+            var frame = (Border)row.Header!;
+            var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(frame.RenderTransform);
+            var pointer = new Pointer(1, PointerType.Mouse, true);
+            frame.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, frame, pointer, launcher, default, 0, PointerPointProperties.None, KeyModifiers.None));
+            Assert.Equal(1.02, scale.ScaleX);
+            frame.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, frame, pointer, launcher, default, 0, PointerPointProperties.None, KeyModifiers.None));
+            Assert.Equal(1, scale.ScaleX);
+            var join = JoinButton(row);
+            var travel = Assert.IsType<global::Avalonia.Media.TranslateTransform>(join.RenderTransform);
+            join.RaiseEvent(new PointerPressedEventArgs(join, pointer, launcher, default, 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+            Assert.Equal(3, travel.Y);
+            join.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, join, pointer, launcher, default, 0, PointerPointProperties.None, KeyModifiers.None));
+            Assert.Equal(0, travel.Y);
+        }
+        finally { launcher.Close(); }
+    });
+
+    [Fact]
+    public void LobbyDropClosesOnLockdownAndStalePageActionCannotOpenPanel() => Run(shell =>
+    {
+        var ld = LockdownService.Current = new LockdownService();
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => false, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            shell.Hide(); launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var menu = chip.ContextMenu!;
+            var page = (MenuItem)menu.Items[^1]!;
+            Assert.True(menu.IsOpen);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.False(menu.IsOpen);
+            page.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.True(launcher.IsVisible); Assert.False(shell.IsVisible);
+        }
+        finally { ld.Deactivate(); launcher.Close(); }
+    });
+
+    [Fact]
+    public void LobbyPageHandoffRechecksLockdownAfterFade() => Run(shell =>
+    {
+        var ld = LockdownService.Current = new LockdownService();
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => false, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        try
+        {
+            shell.Hide(); launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            ((MenuItem)chip.ContextMenu!.Items[^1]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.True(launcher.IsVisible);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            launcher.FinishExit();
+            Assert.True(launcher.IsVisible); Assert.False(shell.IsVisible);
+        }
+        finally { ld.Deactivate(); launcher.Close(); }
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LobbyChessJoinHonorsLeashAndReturnsAfterGameCloses() => Run(shell =>
+    {
+        var oldDue = MainShellWindow.LeashGateDueProvider;
+        var oldPresent = MainShellWindow.PresentLeashGateProvider;
+        var due = true; var presented = 0; var launches = 0;
+        MainShellWindow.LeashGateDueProvider = () => due;
+        MainShellWindow.PresentLeashGateProvider = _ => presented++;
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(new[] { new PbpOpenSeat("p_table", "Host", 300000, 0, 0) }, Array.Empty<PbpPlayingGame>(), true)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        var game = new Window();
+        launcher.OpenLobbyGame = _ => { launches++; game.Show(); return game; };
+        void Join()
+        {
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            JoinButton((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        }
+        try
+        {
+            shell.Hide(); launcher.Show(); Join();
+            Assert.Equal(1, presented); Assert.Equal(0, launches);
+            due = false; shell.Hide(); launcher.Show(); Join();
+            Assert.Equal(1, launches); Assert.False(launcher.IsVisible);
+            game.Close(); Assert.True(launcher.IsVisible);
+        }
+        finally
+        {
+            MainShellWindow.LeashGateDueProvider = oldDue;
+            MainShellWindow.PresentLeashGateProvider = oldPresent;
+            game.Close(); launcher.Close();
+        }
+    });
+
+    [Fact]
+    public void LobbyRemoteJoinClaimsAndOpensTheReturnedSession() => Run(shell =>
+    {
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("subject", "Host", 1, "light", Array.Empty<string>(), false) }, true)));
+        string? claimed = null; string? opened = null;
+        launcher.ClaimLobbySubject = (key, _) => { claimed = key; return Task.FromResult<string?>("https://example.invalid/#pin"); };
+        launcher.OpenLobbyUrl = url => { opened = url; return true; };
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var row = (MenuItem)chip.ContextMenu!.Items[0]!;
+            var join = JoinButton(row);
+            Assert.True(join.IsEnabled);
+            join.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("subject", claimed);
+            Assert.Equal("https://example.invalid/#pin", opened);
+        }
+        finally { launcher.Close(); }
+    });
+
+    [Fact]
+    public void LobbyRemoteClaimInFlightWhenLockdownStarts_IsCancelledAndNeverOpens() => Run(shell =>
+    {
+        var launcher = new LauncherWindow();
+        typeof(LauncherWindow).GetField("_panel", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(launcher, shell);
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        launcher.CreateLobby = () => new LobbyPoll(new LobbyTimer(), () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(PbpLobbyReply.Empty), () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("subject", "Host", 1, "light", Array.Empty<string>(), false) }, true)));
+        var reply = new TaskCompletionSource<string?>();
+        var token = System.Threading.CancellationToken.None; string? opened = null;
+        launcher.ClaimLobbySubject = (_, ct) => { token = ct; return reply.Task; };
+        launcher.OpenLobbyUrl = url => { opened = url; return true; };
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("LobbyChip")!;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            JoinButton((MenuItem)chip.ContextMenu!.Items[0]!).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(token.IsCancellationRequested);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(token.IsCancellationRequested);
+            reply.SetResult("https://example.invalid/#pin");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(opened);
+        }
+        finally { ld.Deactivate(); launcher.Close(); }
+    });
+
+    [Fact]
+    public void PanicCancelsInFlightLobbyClaimAndIgnoresLateReply() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell);
+        var launcher = LauncherWindow.Instance!;
+        launcher.ReadLobbyGates = () => LobbyGates.From(true, true, true);
+        var reply = new TaskCompletionSource<string?>();
+        var token = System.Threading.CancellationToken.None; string? opened = null;
+        launcher.ClaimLobbySubject = (_, ct) => { token = ct; return reply.Task; };
+        launcher.OpenLobbyUrl = url => { opened = url; return true; };
+        var row = new LobbyRow { Game = LobbyGame.Remote, State = LobbyRowState.Open, Key = "subject" };
+        typeof(LauncherWindow).GetMethod("JoinLobbyRow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(launcher, new object[] { row });
+        Assert.True(token.CanBeCanceled);
+        PanicSurfaces.StopAll("lobby test", shell);
+        Assert.True(token.IsCancellationRequested);
+        reply.SetResult("https://example.invalid/#pin");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(opened);
+        launcher.ClaimLobbySubject = (_, ct) => { token = ct; return Task.FromResult<string?>("https://example.invalid/#new"); };
+        typeof(LauncherWindow).GetMethod("JoinLobbyRow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(launcher, new object[] { row });
+        Assert.False(token.IsCancellationRequested);
+        Assert.Equal("https://example.invalid/#new", opened);
+    });
 
     [Fact]
     public void HiddenBoot_ConcealsTheWholeWindowUntilRoutingCompletes() => Run(shell =>

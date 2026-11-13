@@ -176,6 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("help-tooltips", _ => global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.CloseAll()), // WPF help lifetime :750; stricter panic cleanup
             new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
             new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),
+            new("launcher-lobby-claim", _ => LauncherWindow.CancelLobbyClaimForPanic()),
             // Stricter than WPF MainWindow.xaml.cs:1934-2013: retire calibration before camera teardown.
             new("webcam-calibration", _ => WebcamCalibrationWindow.CloseAllForPanic()),
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame", "webcam-calibration"]),   // decision C: last, fire-and-forget; gaze reads it
