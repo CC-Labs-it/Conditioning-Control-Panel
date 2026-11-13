@@ -681,6 +681,7 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                RecoverEngineCrash();
                 Platform.EntitlementRefresh.Install();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
@@ -1534,11 +1535,14 @@ namespace ConditioningControlPanel.Avalonia
             Platform.ToneWav.DeleteFiles();
         }
 
+        internal static void RecoverEngineCrash() => Services.EngineCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
             Platform.LoginStreakHead.ClearProfile();
+            Services.EngineCrashSentinel.Clear();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
