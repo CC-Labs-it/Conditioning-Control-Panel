@@ -41,8 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Action<Window?, string> ShowWarning = (owner, message) =>
         {
             var dialog = new Views.Dialogs.MessageDialog("Graded Intake", message, showCancel: false);
-            if (owner != null && owner.IsVisible) _ = dialog.ShowDialog<bool?>(owner);
-            else dialog.Show();
+            _ = dialog.ShowDialogSafe<bool?>(owner);   // OwnedDialog: a hidden owner falls back to a shown window
         };
         internal Window? WarningOwner { get; init; }
         internal IntakeRun Run { get; } = new();
