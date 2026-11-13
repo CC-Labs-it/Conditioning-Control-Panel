@@ -50,6 +50,226 @@ public sealed class BubbleCountSchedulerTests
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
+    private sealed class VideoHost : IMandatoryVideoHost
+    {
+        public readonly List<(string Path, bool Strict)> Shown = new();
+        public void Show(string path, bool strict) => Shown.Add((path, strict));
+        public bool BubbleCountActive => CoreEngine.BubbleCount?.IsBusy == true; // as MandatoryVideoOverlay
+        public double CloseAll() => 0;
+        public bool HoldMessage;
+        public Action? MessageThen;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then)
+        {
+            if (HoldMessage) MessageThen = then; else then();
+        }
+    }
+
+    [Fact]
+    public void Video_waits_through_lead_in_answer_retry_and_mercy() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var videoHost = new VideoHost();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var reads = 0;
+        var v = new MandatoryVideoScheduler(videoHost, clock, () => { reads++; return Clips; });
+        var previous = CoreEngine.BubbleCount;
+        var mercy = CoreSettings.Current.MercyAfterFails;
+        CoreSettings.Current.MercyAfterFails = 2;
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(forceTest: true);
+            Assert.True(v.Trigger(true, "/explicit.mp4")); // during Freeze lead-in
+            Assert.False(v.Trigger(false, "/duplicate.mp4"));
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.False(v.IsPlaying);
+            Assert.Empty(videoHost.Shown); // answer window still owns the interaction
+            host.Shown[0].Done(false);
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.False(v.IsPlaying); // retry message
+            host.Messages[0].Then();
+            host.Shown[1].Done(false);
+            clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.False(v.IsPlaying); // mercy message
+            host.Messages[1].Then();
+            clock.Advance(BubbleCountScheduler.QueuePoll + MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(("/explicit.mp4", true), Assert.Single(videoHost.Shown));
+            Assert.Equal(0, reads); // explicit path and strictness survive the wait
+        }
+        finally
+        {
+            v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous;
+            CoreSettings.Current.MercyAfterFails = mercy;
+        }
+    });
+
+    [Fact]
+    public void Scheduled_video_waits_without_consuming_library_then_rearms() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var videoHost = new VideoHost(); var reads = 0;
+        var v = new MandatoryVideoScheduler(videoHost, clock, () => { reads++; return Clips; });
+        var previous = CoreEngine.BubbleCount;
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour);
+        (s.MandatoryVideosEnabled, s.VideosPerHour) = (true, 60);
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(forceTest: true);
+            v.Start();
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.False(v.IsPlaying);
+            Assert.Equal(0, reads);
+            host.Shown[0].Done(true);
+            clock.Advance(BubbleCountScheduler.QueuePoll + MandatoryVideoScheduler.PreRoll);
+            Assert.Single(videoHost.Shown);
+            Assert.Equal(1, reads);
+            v.End();
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.Equal(2, videoHost.Shown.Count);
+        }
+        finally
+        {
+            v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous;
+            (s.MandatoryVideosEnabled, s.VideosPerHour) = saved;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Deferred_video_selection_failure_recovers_without_latching(bool running) => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var videoHost = new VideoHost(); var reads = 0; var inaccessible = true;
+        var v = new MandatoryVideoScheduler(videoHost, clock, () =>
+        {
+            reads++;
+            if (inaccessible) throw new System.IO.IOException("Video folder unavailable");
+            return Clips;
+        });
+        var previous = CoreEngine.BubbleCount;
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour);
+        (s.MandatoryVideosEnabled, s.VideosPerHour) = (true, 60);
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(forceTest: true);
+            if (running) v.Start();
+            else Assert.True(v.Trigger());
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.Equal(0, reads);
+            host.Shown[0].Done(true);
+            Assert.Null(Record.Exception(() => clock.Advance(BubbleCountScheduler.QueuePoll)));
+            Assert.Equal(1, reads);
+            Assert.False(v.IsPlaying);
+            Assert.Empty(videoHost.Shown);
+            inaccessible = false;
+            clock.Advance(TimeSpan.FromHours(1));
+            if (!running)
+            {
+                Assert.Empty(videoHost.Shown); // failed Test Now must not arm a stopped schedule
+                Assert.Equal(1, reads);
+                Assert.True(v.Trigger()); // the pending latch was released
+                clock.Advance(MandatoryVideoScheduler.PreRoll);
+            }
+            Assert.Single(videoHost.Shown); // running schedule recovered without another trigger
+            Assert.Equal(2, reads);
+        }
+        finally
+        {
+            v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous;
+            (s.MandatoryVideosEnabled, s.VideosPerHour) = saved;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Video_wait_is_cancelled_by_stop_or_panic(bool stop) => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var b = new BubbleCountScheduler(new Host(), clock, () => Clips);
+        var host = new VideoHost(); var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var previous = CoreEngine.BubbleCount;
+        CoreEngine.BubbleCount = b;
+        try
+        {
+            b.Trigger(forceTest: true);
+            Assert.True(v.Trigger());
+            if (stop) v.Stop(); else v.ForceCleanup();
+            b.ForceCleanup();
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.Empty(host.Shown);
+            Assert.False(v.IsPlaying);
+            Assert.True(v.Trigger()); // cancelled latch must allow a later explicit request
+        }
+        finally { v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous; }
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Failed_deferred_attention_retry_finishes_the_run(bool throws, bool flash) => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var videoHost = new VideoHost { HoldMessage = true }; var unavailable = false;
+        var v = new MandatoryVideoScheduler(videoHost, clock, () =>
+        {
+            if (unavailable && throws) throw new System.IO.IOException("Video folder unavailable");
+            return unavailable ? Array.Empty<string>() : new[] { "/v/only.mp4" };
+        });
+        var previous = CoreEngine.BubbleCount;
+        var oldRpc = CoreDiscord.ServiceProvider;
+        using var rpc = new DiscordRichPresenceService();
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
+            s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails);
+        (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
+            s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails) = (true, true, flash, false, false, 3);
+        CoreEngine.BubbleCount = b;
+        CoreDiscord.ServiceProvider = () => rpc;
+        try
+        {
+            v.Start();
+            if (flash) CoreFlash.Start();
+            Assert.True(v.Trigger(true));
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            v.NoteSpawn(); v.Ended(); // missed target, verdict message still up
+            Assert.Equal(1, v.Penalties);
+            Assert.False(CoreFlash.IsRunning);
+            b.Trigger(forceTest: true); // the game takes the screen inside the verdict gap
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            videoHost.MessageThen!();
+            unavailable = true;
+            clock.Advance(BubbleCountScheduler.QueuePoll * 2); // marker must survive repeated polls
+            Assert.Equal(1, v.Penalties);
+            host.Shown[0].Done(true);
+            Assert.Null(Record.Exception(() => clock.Advance(BubbleCountScheduler.QueuePoll)));
+            Assert.Equal(0, v.Penalties);
+            Assert.Equal(flash, CoreFlash.IsRunning);
+            if (flash) Assert.Equal("Flash training", rpc.CurrentDetails);
+            else Assert.Equal("Browsing", rpc.CurrentState);
+            Assert.Single(videoHost.Shown);
+            unavailable = false;
+            clock.Advance(TimeSpan.FromHours(1));
+            Assert.Equal(2, videoHost.Shown.Count); // AfterEnd also rearmed the schedule
+            Assert.Equal(0, v.Penalties);
+        }
+        finally
+        {
+            v.Stop(); b.ForceCleanup(); CoreFlash.Stop();
+            CoreEngine.BubbleCount = previous; CoreDiscord.ServiceProvider = oldRpc;
+            (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
+                s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails) = saved;
+        }
+    });
+
     [Fact]
     public void PanicIgnoresCompletionRaisedWhileClosingAStrictRound() => With(true, true, true, () =>
     {
