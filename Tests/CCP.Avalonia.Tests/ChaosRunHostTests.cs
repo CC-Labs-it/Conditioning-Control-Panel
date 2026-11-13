@@ -334,7 +334,7 @@ public sealed class ChaosRunHostTests
             ChaosAnnouncerOverlay.CloseActive();
             engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ }; engine.Start(); BarkHead.Engine = engine;
             ChaosRunHost.ChooseBoon(null); overlay.FinishCountdown(); Ticks(80);
-            Assert.True(meta.SeenDuoDemo); Assert.Equal(1, spoken); Assert.Null(ChaosAnnouncerOverlay.Active);
+            Assert.True(meta.SeenDuoDemo); Assert.Equal(1, spoken); Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("chaos_duo_demo"), ChaosAnnouncerOverlay.Active?.Current?.Text);   // the skip announces +1 resistance (#4776)
             ChaosRunHost.ForceShutdown(); ChaosRunHost.StartRun(cfg); overlay = ChaosRunHost.Overlay!;
             overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(80);
             Assert.Equal(1, spoken); Assert.Null(ChaosAnnouncerOverlay.Active);
@@ -353,7 +353,8 @@ public sealed class ChaosRunHostTests
             {
                 var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
                 var strings = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
-                foreach (var key in new[] { "chaos_draft_reroll", "chaos_welcome_shower", "chaos_first_sin_demo", "chaos_duo_demo" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
+                foreach (var key in new[] { "chaos_draft_reroll", "chaos_welcome_shower", "chaos_first_sin_demo", "chaos_duo_demo",
+                    "chaos_event_skip", "chaos_event_sin_bonus", "chaos_event_sin_shielded", "chaos_event_sin_resistance", "chaos_announce_resist" }) Assert.False(string.IsNullOrWhiteSpace((string?)strings[key]));
             }
             loc.SetLanguage("de"); ChaosMeta.State.LessonsComplete.Add("silk_touch");
             var cfg = Cfg(); cfg.BoonDraftEnabled = true;
@@ -365,6 +366,31 @@ public sealed class ChaosRunHostTests
             Assert.Contains(loc.Get("chaos_welcome_shower"), state.RecentEvents);
         }
         finally { loc.SetLanguage(language); }
+    });
+
+    // Hand-ported from #4776: WPF OnBoonChosen's feedback (ChaosModeService.cs:1546-1584).
+    [Fact]
+    public Task Draft_choices_report_resistance_and_sins() => WithFreshRun(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests(); Ticks(80);
+        var state = ChaosRunHost.State!;
+        ChaosRunHost.ChooseBoon(null);
+        Assert.Contains(loc.Get("chaos_event_skip"), state.RecentEvents);
+        Assert.Equal(loc.Get("chaos_announce_resist"), ChaosAnnouncerOverlay.Active!.Current!.Text);
+        overlay.FinishCountdown(); ChaosAnnouncerOverlay.CloseActive();
+        state.SinExtraMult = 0.25; state.MaxedBoons.Add("surrender");
+        Ticks(80);
+        var sin = ChaosBoonPool.All.First(b => b.IsCurse);
+        ChaosRunHost.ChooseBoon(sin);
+        Assert.Contains(loc.GetF("chaos_event_sin_bonus", 0.25), state.RecentEvents);
+        Assert.Contains(loc.Get("chaos_event_sin_shielded"), state.RecentEvents);
+        Assert.Contains(loc.Get("chaos_event_sin_resistance"), state.RecentEvents);
+        Assert.EndsWith(sin.Name, ChaosAnnouncerOverlay.Active!.Current!.Text);
     });
 
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the

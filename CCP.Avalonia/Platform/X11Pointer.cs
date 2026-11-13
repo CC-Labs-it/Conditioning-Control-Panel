@@ -33,8 +33,13 @@ internal static class X11Pointer
     private static IntPtr _display, _root;
     private static byte _esc;
 
-    public static (PixelPoint At, bool Pressed, bool Escape)? Read()
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read() => Read(out _);
+
+    // On XWayland, a root child confirms an X surface has pointer focus. Coordinates alone
+    // can remain at the last position after the pointer enters a native Wayland surface.
+    public static (PixelPoint At, bool Pressed, bool Escape)? Read(out bool overWindow)
     {
+        overWindow = false;
         try
         {
             if (!_tried)
@@ -47,8 +52,9 @@ internal static class X11Pointer
                 _esc = XKeysymToKeycode(_display, (IntPtr)XK_Escape);
             }
             if (_display == IntPtr.Zero) return null;
-            if (!XQueryPointer(_display, _root, out _, out _, out int x, out int y, out _, out _, out uint mask))
+            if (!XQueryPointer(_display, _root, out _, out var child, out int x, out int y, out _, out _, out uint mask))
                 return null;
+            overWindow = child != IntPtr.Zero;
             // Privacy: the keymap is every key held right now. It lives only in this stack buffer,
             // only the Escape bit leaves it, and it is wiped before anything else runs.
             Span<byte> keys = stackalloc byte[32];

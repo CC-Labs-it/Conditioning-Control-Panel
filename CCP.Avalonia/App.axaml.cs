@@ -940,6 +940,9 @@ namespace ConditioningControlPanel.Avalonia
                         await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
+                // WPF App.xaml.cs:2303: moderation is seeded BEFORE the AI services; RepairLaunchSettings
+                // makes the AI provider live (the one seed), so moderation goes first.
+                SeedModeration();
                 RepairLaunchSettings(Settings);
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
@@ -1086,7 +1089,6 @@ namespace ConditioningControlPanel.Avalonia
                 if (CoreEngine.Video is { } recapVideo)
                     recapVideo.VideoStarted += () => MediaHistory?.RecordVideo(recapVideo.LastVideoPath);
                 //
-                SeedModeration();
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
                 // echo is attached by Platform.BarkHead.Start below; command executor and
