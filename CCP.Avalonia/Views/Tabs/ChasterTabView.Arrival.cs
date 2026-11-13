@@ -17,6 +17,7 @@ public partial class ChasterTabView
     private BeatLoop? _arrivalBeat;
     private long _arrivalStart;
     private bool _arrivalShown;
+    private int _arrivalRiseMs = 220;
 
     private void InitArrival()
     {
@@ -61,6 +62,8 @@ public partial class ChasterTabView
             card.Opacity = 0;
             _arrivalCards.Add((card, 40 * Math.Min(slot++, 6)));
         }
+        // Gentle visuals: a fade only lengthens, with the 300 ms rise floor.
+        _arrivalRiseMs = ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(220);
         _arrivalStart = ArrivalTime.GetTimestamp();
         if (_arrivalCards.Count == 0) return;
         _arrivalBeat ??= new BeatLoop(this, _ => StepArrival());
@@ -73,10 +76,10 @@ public partial class ChasterTabView
         double ms = ArrivalTime.GetElapsedTime(_arrivalStart).TotalMilliseconds;
         foreach (var (card, delay) in _arrivalCards)
         {
-            double p = Math.Clamp((ms - delay) / 220, 0, 1);
+            double p = Math.Clamp((ms - delay) / _arrivalRiseMs, 0, 1);
             card.Opacity = 1 - (1 - p) * (1 - p);
         }
-        if (ms >= 460) FinishArrival();
+        if (ms >= 240 + _arrivalRiseMs) FinishArrival();
     }
 
     private void FinishArrival()
