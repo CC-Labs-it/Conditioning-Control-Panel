@@ -457,13 +457,22 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card, unprompted));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
-            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning
+            static bool BusyProbe() => CoreSession.IsSessionRunning
                 || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
                 || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
                 || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:779-788
+            // The window and startup probes touch Avalonia state, and a chat reply can ask from a worker (#4227):
+            // read them on the UI thread. A UI thread that does not answer in 2 s counts as busy (no offer).
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () =>
+            {
+                var ui = global::Avalonia.Threading.Dispatcher.UIThread;
+                if (ui.CheckAccess()) return BusyProbe();
+                var probe = ui.InvokeAsync(BusyProbe).GetTask();
+                return !probe.Wait(TimeSpan.FromSeconds(2)) || probe.Result;
+            };
             // WPF App.xaml.cs:715 routes this through CompanionLinkLauncher.Open (remote guard, embedded browser, https fallback).
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.OpenLink = url =>
                 _ = Views.Controls.Companion.CompanionLinkLauncher.OpenAsync(url);
