@@ -97,6 +97,43 @@ public sealed partial class DeeperFollowupTests
         }
         return Task.CompletedTask;
     });
+    // A second launch during a cold start is acked at once and opens its file once the shell has opened.
+    [Fact]
+    public Task AMediaHandoffBeforeTheShellOpensIsRoutedOnceItOpens() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var savedPerformance = CoreSettings.Current.PerformanceMode;
+        CoreSettings.Current.PerformanceMode = true;
+        var shell = new MainShellWindow();
+        var media = Path.Combine(TestUserDataProfile.Root, "early.mp3");
+        File.WriteAllText(media, "test");
+        var saved = ConditioningControlPanel.Avalonia.App.Handoffs;
+        var queue = new ConditioningControlPanel.Avalonia.Platform.HandoffQueue();
+        ConditioningControlPanel.Avalonia.App.Handoffs = queue;
+        try
+        {
+            Assert.True(queue.Enqueue(DeeperFileOpen.Encode(new[] { "--edit", media })).IsCompleted);
+            ConditioningControlPanel.Avalonia.App.RouteHandoffsOnceOpened(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(DeeperEditorWindow.OpenEditors);
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var editor = Assert.Single(shell.OwnedWindows.OfType<DeeperEditorWindow>());
+            var enhancement = (Enhancement)typeof(DeeperEditorWindow).GetField("_enhancement", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor)!;
+            Assert.Equal(media, enhancement.MediaSource);
+            Assert.Equal(MediaTypes.Audio, enhancement.MediaType);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.App.Handoffs = saved;
+            foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+            LauncherWindow.Instance?.Close();
+            shell.Close();
+            CoreSettings.Current.PerformanceMode = savedPerformance;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("edit")]
     [InlineData("play")]
@@ -214,6 +251,34 @@ public sealed partial class DeeperFollowupTests
             }
         }
         finally { shell.Close(); localization.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
+
+    // WPF MainWindow.DeeperTab.cs:613-616,664-667 shows the box even with the panel hidden (first launch
+    // behind the launcher, tray): here it opens ownerless, centred on screen, instead of only being logged.
+    [Fact]
+    public Task OpenErrorsShowWithThePanelHidden() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var savedPerformance = CoreSettings.Current.PerformanceMode;
+        CoreSettings.Current.PerformanceMode = true;
+        var shell = new MainShellWindow();
+        MessageDialog? shown = null;
+        void OnOpened(object? s, RoutedEventArgs e) => shown ??= s as MessageDialog;
+        using var hook = Window.WindowOpenedEvent.AddClassHandler<MessageDialog>(OnOpened);
+        try
+        {
+            Assert.False(shell.IsVisible);
+            typeof(MainShellWindow).GetMethod("ReportDeeperOpenError", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(shell, new object[] { new IOException("test detail"), "Editor" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(shown);
+            Assert.True(shown!.IsVisible);
+            Assert.Null(shown.Owner);
+            Assert.Equal(Loc.Get("deeper_open_editor_failed_title"), shown.Title);
+            Assert.Contains("IOException: test detail", shown.FindControl<TextBlock>("TxtMessage")!.Text);
+        }
+        finally { shown?.Close(); shell.Close(); CoreSettings.Current.PerformanceMode = savedPerformance; }
         return Task.CompletedTask;
     });
 

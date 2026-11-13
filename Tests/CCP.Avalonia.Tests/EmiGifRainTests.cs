@@ -110,7 +110,13 @@ public sealed class EmiGifRainTests
                 {
                     owner?.ShutDown();
                     EmiGifRain.Stop();
+                    var decodes = ChaosGifCascadeOverlay.Active?.PendingDecodes;
                     ChaosGifCascadeOverlay.CloseActive();
+                    // A spawn decodes a.GIF on a worker (File.OpenRead); Windows refuses the folder delete
+                    // below while that read is still in flight, so let every started decode finish first.
+                    foreach (var t in new[] { decodes, ChaosGifCascadeOverlay.LastDecode })
+                        if (t != null) try { await t.WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+                    Dispatcher.UIThread.RunJobs();
                     ChaosGifCascadeOverlay.Clock = TimeProvider.System;
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
                     ChaosGifCascadeOverlay.ManualFramesForTests = false;
@@ -119,6 +125,14 @@ public sealed class EmiGifRainTests
                 }
             });
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            // An earlier, already closed cascade can still hold a decode's read handle for a moment.
+            for (var attempt = 0; ; attempt++)
+            {
+                try { Directory.Delete(root, true); break; }
+                catch (IOException) when (attempt < 20) { await Task.Delay(100); }
+            }
+        }
     }
 }
