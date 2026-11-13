@@ -61,6 +61,17 @@ regression, missing reports, missing/extra tabs or invalid measurements. Tab key
 <tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
 <tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
 </table>
+<h2 id="render-path">Render path on a GPU-less Windows machine</h2>
+<p>When every DXGI adapter is the Microsoft Basic Render Driver (WARP: vendor <code>0x1414</code> device <code>0x8C</code>, or
+<code>DXGI_ADAPTER_FLAG_SOFTWARE</code>) and <code>CCP_WIN32_RENDERING</code> is unset, the Windows head renders with Skia software instead of
+ANGLE on WARP (<code>Program.Win32Options</code>, <code>Platform/RenderBudget.ChooseRendering</code>, <code>Platform/DxgiAdapters.cs</code>). The log
+line <code>Win32 rendering: ...</code> names the choice and the adapters. A machine with any real GPU keeps Avalonia's default.
+Measured on windows-latest (rgate 41830667836, ~/ccp-port/evidence/perf-combined-20261104/floor-investigation.html, single run):</p>
+<table>
+<tr><th>mode</th><th>Programs</th><th>AvailableSubjects</th><th>BlinkTrainer</th><th>Settings</th><th>all-tab median</th></tr>
+<tr><td>default (ANGLE on WARP)</td><td>92</td><td>77</td><td>75</td><td>108</td><td>81</td></tr>
+<tr><td>software (now automatic on WARP)</td><td>35</td><td>38</td><td>35</td><td>75</td><td>57</td></tr>
+</table>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>

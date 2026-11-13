@@ -100,6 +100,33 @@ public sealed class LauncherWindowTests
         Assert.True(opened);
     }, pumpUntilIdle: false);
 
+    private sealed class HideThrowsShell : MainShellWindow
+    {
+        internal bool ThrowOnHide = true;
+        public override void Hide()
+        {
+            if (ThrowOnHide) { ThrowOnHide = false; throw new InvalidOperationException("hide failed"); }
+            base.Hide();
+        }
+    }
+
+    [Fact]
+    public void HiddenBoot_RoutingThrows_ReleasesTheStartupLadder() => Run(_ =>
+    {
+        LauncherWindow.Boot = new BootDecision(BootSurface.Launcher, null);
+        var panel = new HideThrowsShell();
+        try
+        {
+            panel.PrepareLauncherBoot();
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+            Assert.Throws<InvalidOperationException>(() => panel.Show());
+            Assert.False(ConditioningControlPanel.Avalonia.Platform.StartupLadder.LauncherHolding);
+            Assert.False(panel.BuildingHiddenForBoot);
+            Assert.Equal(1, panel.Opacity);
+        }
+        finally { panel.Close(); }
+    }, pumpUntilIdle: false);
+
     [Fact]
     public void LockdownStartingDuringHiddenBoot_KeepsPanelHiddenAndLauncherVeiled() => Run(shell =>
     {

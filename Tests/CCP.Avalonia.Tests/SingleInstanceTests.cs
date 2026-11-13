@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -251,6 +252,67 @@ namespace CCP.Avalonia.Tests
             t.Start();
             Assert.True(t.Join(TimeSpan.FromSeconds(20)));
             Assert.Equal(payload, got);
+        }
+
+        /// <summary>Launches racing each other (several files opened at once) each reach a primary that is busy
+        /// showing: none is lost and none reads the busy primary as wedged and kills it, even when the queue
+        /// as a whole takes longer than one ack timeout.</summary>
+        [Fact]
+        public void ConcurrentLaunchesAllReachABusyPrimaryAndNoneKillsIt()
+        {
+            var savedKill = SingleInstance.KillStale;
+            var savedAck = SingleInstance.ShowAckTimeoutMs;
+            int kills = 0;
+            SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 0; };
+            SingleInstance.ShowAckTimeoutMs = 1500;
+            try
+            {
+                var suffix = "_test_" + Guid.NewGuid().ToString("N");
+                var received = new System.Collections.Concurrent.ConcurrentBag<string?>();
+                using var primary = SingleInstance.Claim(suffix, async p => { await Task.Delay(500); received.Add(p); });
+                primary!.EndStartupPhase();
+                // 10 x 500 ms of showing is well past one ack timeout (1.5 s) plus the connect second.
+                var payloads = Enumerable.Range(0, 10).Select(i => "deeper:play\n/" + i + ".mp4").ToArray();
+                var threads = Array.ConvertAll(payloads, p => new Thread(() =>
+                    SingleInstance.Claim(suffix, _ => Task.CompletedTask, p)?.Dispose()));
+                foreach (var t in threads) t.Start();
+                foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(60)));
+                Assert.Equal(0, Volatile.Read(ref kills));
+                Assert.Equal(payloads.OrderBy(p => p), received.OrderBy(p => p));
+            }
+            finally
+            {
+                SingleInstance.KillStale = savedKill;
+                SingleInstance.ShowAckTimeoutMs = savedAck;
+            }
+        }
+
+        /// <summary>During startup the listener acks first; each request still reaches the handoff queue before
+        /// the next one is accepted, so a slow hand-over cannot let a later launch overtake it.</summary>
+        [Fact]
+        public void StartupHandoffsReachTheQueueInArrivalOrder()
+        {
+            var suffix = "_test_" + Guid.NewGuid().ToString("N");
+            var queue = new HandoffQueue();
+            int handed = 0;
+            using var primary = SingleInstance.Claim(suffix, p =>
+            {
+                if (p == "first") Thread.Sleep(300);
+                var queued = queue.Enqueue(p);
+                Interlocked.Increment(ref handed);
+                return queued;
+            });
+            foreach (var payload in new[] { "first", "second", "third" })
+            {
+                var t = new Thread(() => SingleInstance.Claim(suffix, _ => Task.CompletedTask, payload)?.Dispose());
+                t.Start();
+                Assert.True(t.Join(TimeSpan.FromSeconds(20)));
+            }
+            // The ack precedes the hand-over, so the last one may still be on its way.
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref handed) == 3, TimeSpan.FromSeconds(10)));
+            var received = new System.Collections.Generic.List<string?>();
+            queue.Ready(p => { received.Add(p); return Task.CompletedTask; });
+            Assert.Equal(new string?[] { "first", "second", "third" }, received);
         }
 
         /// <summary>A sandbox profile (CCP_USERDATA_DIR, as kc and the tests use) never wakes or blocks the

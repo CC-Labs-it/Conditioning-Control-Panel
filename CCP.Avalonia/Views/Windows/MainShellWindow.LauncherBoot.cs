@@ -25,6 +25,13 @@ public partial class MainShellWindow
                 Hide();
                 LauncherWindow.RouteBoot(this);
             }
+            catch
+            {
+                // WPF App.xaml.cs:4358 releases on any routing failure; a Hide throw here must not
+                // leave the ladder held (WPF's own Hide throw, App.xaml.cs:3704, rethrows held).
+                Platform.StartupLadder.Release();
+                throw;
+            }
             finally
             {
                 BuildingHiddenForBoot = false;

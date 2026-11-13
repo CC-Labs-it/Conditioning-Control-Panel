@@ -243,14 +243,10 @@ namespace ConditioningControlPanel.Avalonia
 
             // WPF's single-instance gate: a second launch hands its surface (or none) to the running app
             // and exits; the primary routes it (WPF RouteSurfaceHandoff / LauncherHost.OnBareRelaunch).
-            using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(), payload =>
-                global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var w = (global::Avalonia.Application.Current?.ApplicationLifetime as
-                        global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-                    if (w is Views.Windows.MainShellWindow shell) Views.Windows.LauncherWindow.RouteHandoff(shell, payload);
-                    else w?.Activate();
-                }).GetTask(), Services.Deeper.DeeperFileOpen.Encode(args) ?? Services.Launcher.LauncherHandoff.Encode(args));
+            // A handoff that arrives before the shell has opened waits for it (Platform/HandoffQueue).
+            var handoffs = new Platform.HandoffQueue();
+            using var instance = Platform.SingleInstance.Claim(Platform.SingleInstance.SandboxSuffix(), handoffs.Enqueue,
+                Services.Deeper.DeeperFileOpen.Encode(args) ?? Services.Launcher.LauncherHandoff.Encode(args));
             if (instance is null)
             {
                 Serilog.Log.Information("Another instance is running; asked it to show its window");
@@ -259,6 +255,7 @@ namespace ConditioningControlPanel.Avalonia
 
             // WPF App.xaml.cs:4069: end protection after initialization, not an intermediate splash frame.
             App.DesktopStartupCompleted = instance.EndStartupPhase;
+            App.Handoffs = handoffs;
             var app = BuildAvaloniaApp();
 #if DEBUG
             // Keincheck MCP server on http://127.0.0.1:3001, Debug builds only. Kept out of
@@ -310,12 +307,18 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The Win32 presentation path. Avalonia's defaults (WinUI composition over ANGLE on
         /// the primary adapter) unless CCP_WIN32_COMPOSITION / CCP_WIN32_RENDERING / CCP_GPU_ADAPTER
         /// say otherwise (Platform/RenderBudget.cs); with CCP_GPU_ADAPTER set the adapter list is logged
-        /// once, so a log says which GPU drew the frames.</summary>
-        private static global::Avalonia.Win32PlatformOptions Win32Options()
+        /// once, so a log says which GPU drew the frames. With CCP_WIN32_RENDERING unset and only the
+        /// Microsoft Basic Render Driver present, rendering is Software (RenderBudget.ChooseRendering).</summary>
+        private static global::Avalonia.Win32PlatformOptions Win32Options() => Win32Options(Environment.GetEnvironmentVariable,
+            () => OperatingSystem.IsWindows() ? Platform.DxgiAdapters.List() : new System.Collections.Generic.List<Platform.RenderBudget.DxgiAdapter>());
+
+        /// <summary>Win32Options with its environment and adapter list passed in (RenderBudgetTests).</summary>
+        internal static global::Avalonia.Win32PlatformOptions Win32Options(Func<string, string?> env,
+            Func<System.Collections.Generic.IReadOnlyList<Platform.RenderBudget.DxgiAdapter>> listAdapters)
         {
             var o = new global::Avalonia.Win32PlatformOptions();
             var comp = Platform.RenderBudget.ParseModes<global::Avalonia.Win32CompositionMode>(
-                Environment.GetEnvironmentVariable("CCP_WIN32_COMPOSITION"), s => s switch
+                env("CCP_WIN32_COMPOSITION"), s => s switch
                 {
                     "winui" => global::Avalonia.Win32CompositionMode.WinUIComposition,
                     "dcomp" => global::Avalonia.Win32CompositionMode.DirectComposition,
@@ -325,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia
                 });
             if (comp != null) o.CompositionMode = comp;
             var rend = Platform.RenderBudget.ParseModes<global::Avalonia.Win32RenderingMode>(
-                Environment.GetEnvironmentVariable("CCP_WIN32_RENDERING"), s => s switch
+                env("CCP_WIN32_RENDERING"), s => s switch
                 {
                     "angle" => global::Avalonia.Win32RenderingMode.AngleEgl,
                     "wgl" => global::Avalonia.Win32RenderingMode.Wgl,
@@ -333,17 +336,24 @@ namespace ConditioningControlPanel.Avalonia
                     "software" => global::Avalonia.Win32RenderingMode.Software,
                     _ => null,
                 });
-            if (rend != null) o.RenderingMode = rend;
+            // The override wins; else a machine whose only adapter is WARP (no GPU) renders in software,
+            // which beats ANGLE on WARP (Platform/RenderBudget.cs). This logs once per app start.
+            var dxgi = rend == null ? listAdapters() : Array.Empty<Platform.RenderBudget.DxgiAdapter>();
+            var modes = Platform.RenderBudget.ChooseRendering(dxgi, rend);
+            if (modes != null) o.RenderingMode = modes;
+            if (rend == null)
+                Serilog.Log.Information("Win32 rendering: {Mode} (DXGI adapters: {List})", modes == null ? "default" : "software, WARP only",
+                    dxgi.Count == 0 ? "none read" : string.Join(" | ", dxgi.Select(a => $"{a.Name} {a.VendorId:x4}:{a.DeviceId:x4} flags {a.Flags}")));
             if (comp != null || rend != null)
                 Serilog.Log.Information("Win32 presentation override: composition {C}, rendering {R}",
                     comp == null ? "default" : string.Join(",", comp), rend == null ? "default" : string.Join(",", rend));
             // Only when asked: unset, Avalonia keeps its own adapter choice (index 0 is not proven
             // to be what it picks on every machine).
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CCP_GPU_ADAPTER"))) return o;
+            if (string.IsNullOrWhiteSpace(env("CCP_GPU_ADAPTER"))) return o;
             o.GraphicsAdapterSelectionCallback = adapters =>
             {
                 var names = adapters.Select(a => a.Description).ToList();
-                int pick = Platform.RenderBudget.ChooseAdapter(names, Environment.GetEnvironmentVariable("CCP_GPU_ADAPTER"));
+                int pick = Platform.RenderBudget.ChooseAdapter(names, env("CCP_GPU_ADAPTER"));
                 Serilog.Log.Information("GPU adapters: {List}; rendering on #{Pick} {Name}",
                     string.Join(" | ", names.Select((n, i) => $"#{i} {n}")), pick, names.Count > pick ? names[pick] : "?");
                 return pick;

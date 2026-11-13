@@ -151,10 +151,13 @@ mismatch, a <code>depends=</code> entry the host lacks (<code>pacman -T</code>) 
 <code>ldd</code> over every bundled <code>.so</code>: all owning packages are inside the <code>pactree</code> closure of <code>depends=</code> (zlib via
 zlib-ng-compat's provide); only <code>liblttng-ust.so.0</code> (optional .NET tracing) is unresolved (<code>aur-native-deps.txt</code>).
 A clean-container proof of <code>depends=</code> sufficiency is still owed: the host has far more than the closure installed.</li>
-<li><strong>Flatpak:</strong> no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker is down, so the manifest is still unbuilt.
+<li><strong>Flatpak:</strong> at the time (10-07) no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker was down, so the manifest was unbuilt.
 Substitute proof: the extracted tarball run inside the installed <code>org.gnome.Platform//50</code> runtime (<code>flatpak run --command=...</code>) passes every smoke check except LibVLC (<code>libvlc</code> absent), which is exactly the module the manifest
 bundles (<code>flatpak-runtime-smoke.log</code>). The runtime has webkit2gtk-4.1, javascriptcoregtk-4.1, soup-3, libsecret, libX11,
-libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>).</li>
+libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>).
+Superseded since: the manifest has been built, installed and smoked with flatpak-builder on 2026-10-30 (7.1.15, with a live start)
+and 2026-11-04 (port/7.2, 7.2.1, headless); see the linux-package-flatpak row in docs/avalonia-parity.html and
+~/ccp-port/evidence/linux-package/flatpak-20261030/ and preview-72-20261104/.</li>
 <li><strong>Desktop/metainfo:</strong> <code>desktop-file-validate</code> clean; <code>appstreamcli validate --pedantic</code> passes with two pedantic notes
 (uppercase in the component id, which is the fixed app id, and no <code>&lt;releases&gt;</code>) (<code>validate.txt</code>).</li>
 </ul>
