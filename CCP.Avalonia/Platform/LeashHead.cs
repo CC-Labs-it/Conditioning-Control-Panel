@@ -2,9 +2,10 @@
 // Services/Leash/LeashServiceApp.cs CreateForApp + AppDayInputs, LeashCutSafetyApp.cs AppTargets and
 // ChasterLeashTab.cs. The service itself is Core (CCP.Core/Services/Leash); this is the head's half.
 // The task runner is Platform/LeashTaskHost (gate card: MainShellWindow.LeashGate).
-// ponytail: the explainer/drawer UI lands with the Drawer unit.
+// Friend offer state is shared by the rail drawer and the Friends page.
 using System;
 using System.IO;
+using System.Collections.Generic;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
@@ -16,13 +17,47 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal static class LeashHead
 {
     /// <summary>WPF App.Leash. Null until startup built it and after exit.</summary>
+    private static ILeashService? _service;
+    internal static event Action? ServiceChanged;
+    private static string? _offerAccount;
+    internal static HashSet<string> SentOffers = new(), PendingOffers = new();
+    internal static event Action? OffersChanged;
     internal static ILeashService? Service
     {
         get => _service;
-        set { if (ReferenceEquals(_service, value)) return; _service = value; ServiceChanged?.Invoke(); }
+        set
+        {
+            if (ReferenceEquals(_service, value)) return;
+            if (_service != null) { _service.SnapshotChanged -= OfferSnapshot; _service.EventArrived -= OfferEvent; }
+            _service = value;
+            ResetOffers();
+            if (_service != null) { _service.SnapshotChanged += OfferSnapshot; _service.EventArrived += OfferEvent; }
+            ServiceChanged?.Invoke();
+        }
     }
-    private static ILeashService? _service;
-    internal static event Action? ServiceChanged;
+    private static void ResetOffers()
+    {
+        _offerAccount = CoreSettings.Current.UnifiedId;
+        SentOffers = new(); PendingOffers = new();
+        OffersChanged?.Invoke();
+    }
+    internal static void CheckOfferAccount()
+    {
+        if (_offerAccount != CoreSettings.Current.UnifiedId) ResetOffers();
+    }
+    internal static void OfferChanged() => OffersChanged?.Invoke();
+    private static void OfferSnapshot(LeashSnapshot snap)
+    {
+        CheckOfferAccount();
+        bool changed = false;
+        foreach (var held in snap.Holding) changed |= SentOffers.Remove(held.Who.Id);
+        if (changed) OfferChanged();
+    }
+    private static void OfferEvent(LeashEvent e)
+    {
+        CheckOfferAccount();
+        if (e.Kind is LeashEventKind.Answered or LeashEventKind.Ended && SentOffers.Remove(e.From.Id)) OfferChanged();
+    }
 
     /// <summary>WPF App.LeashedChanged: the account went on or off a leash.</summary>
     internal static event Action<bool>? LeashedChanged;
