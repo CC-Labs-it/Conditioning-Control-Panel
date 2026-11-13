@@ -26,6 +26,9 @@ public sealed class RaceEngineFetcherTests : IDisposable
             entry.ExternalAttributes = mode << 16;
             using var writer = new StreamWriter(entry.Open());
             writer.Write("test engine");
+            writer.Dispose();
+            foreach (var licence in new[] { "LICENSE", "LICENSES.chromium.html" }.Where(x => x != name))
+                using (var w = new StreamWriter(zip.CreateEntry(licence).Open())) w.Write("licence");
         }
         return output.ToArray();
     }
@@ -80,6 +83,33 @@ public sealed class RaceEngineFetcherTests : IDisposable
         Assert.Equal(path, await fetcher.FetchAsync(Pin(bytes)));
         Assert.Equal(1, handler.Calls);
         Assert.Empty(Directory.GetDirectories(Root, ".fetch-*"));
+    }
+    [Fact]
+    public async Task InstalledRequiresExecutableAndMatchingReceipt()
+    {
+        var bytes = Zip();
+        using var http = new HttpClient(new Handler(bytes));
+        var fetcher = new RaceEngineFetcher(http, data);
+        var pin = Pin(bytes);
+        Assert.False(fetcher.IsInstalled(pin));
+        var exe = await fetcher.FetchAsync(pin);
+        Assert.True(fetcher.IsInstalled(pin));
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(exe)!, ".verified-sha256"), "wrong");
+        Assert.False(fetcher.IsInstalled(pin));
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(exe)!, ".verified-sha256"), pin.Sha256);
+        File.Delete(exe);
+        Assert.False(fetcher.IsInstalled(pin));
+    }
+    [Fact]
+    public async Task MissingLicencesRejectsArchive()
+    {
+        using var output = new MemoryStream();
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
+        using (var writer = new StreamWriter(zip.CreateEntry("electron").Open())) writer.Write("engine");
+        var bytes = output.ToArray();
+        using var http = new HttpClient(new Handler(bytes));
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RaceEngineFetcher(http, data).FetchAsync(Pin(bytes)));
+        Assert.Empty(Directory.GetFileSystemEntries(Root));
     }
     [Fact]
     public async Task BadChecksumNeverUnpacksAndKeepsOldVersion()

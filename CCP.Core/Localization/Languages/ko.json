@@ -42,6 +42,7 @@
   "rt_engine_browser": "브라우저에서 열기",
   "rt_engine_browser_warning": "패닉으로 브라우저 탭을 닫을 수 없습니다.",
   "rt_engine_progress": "다운로드 중: {0}%",
+  "rt_engine_downloading": "다운로드 중...",
   "rt_engine_unavailable": "이 빌드에서는 엔진을 다운로드할 수 없습니다.",
   "rt_engine_network": "다운로드 실패. 연결을 확인하세요.",
   "rt_engine_checksum": "엔진 체크섬이 일치하지 않습니다.",

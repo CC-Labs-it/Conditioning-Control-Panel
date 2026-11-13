@@ -18,6 +18,17 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
     private readonly string userDataRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(userData));
     private readonly string root = Path.GetFullPath(Path.Combine(userData, "engines"));
 
+    public bool IsInstalled(RaceEnginePackage package)
+    {
+        SafeName(package.Version);
+        SafeName(package.Architecture);
+        var target = Path.Combine(root, package.DirectoryName);
+        var executable = Path.Combine(target, "electron");
+        var receipt = Path.Combine(target, ".verified-sha256");
+        NoLinks(root); NoLinks(target); NoLinks(executable); NoLinks(receipt);
+        return File.Exists(executable) && File.Exists(receipt) && File.ReadAllText(receipt) == package.Sha256;
+    }
+
     public async Task<string> FetchAsync(RaceEnginePackage package,
         IProgress<RaceEngineProgress>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -37,7 +48,7 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
             var receipt = Path.Combine(target, ".verified-sha256");
             NoLinks(executable);
             NoLinks(receipt);
-            if (File.Exists(executable) && File.Exists(receipt) && File.ReadAllText(receipt) == package.Sha256)
+            if (IsInstalled(package))
                 return executable;
             staging = Path.Combine(root, ".fetch-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(staging);
@@ -93,6 +104,8 @@ public sealed class RaceEngineFetcher(HttpClient http, string userData)
                 }
             }
             if (!File.Exists(Path.Combine(unpack, "electron"))) throw new InvalidDataException("Race engine executable missing.");
+            if (!File.Exists(Path.Combine(unpack, "LICENSE")) || !File.Exists(Path.Combine(unpack, "LICENSES.chromium.html")))
+                throw new InvalidDataException("Race engine licences missing.");
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(Path.Combine(unpack, "electron"), UnixFileMode.UserRead | UnixFileMode.UserWrite |
                     UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
