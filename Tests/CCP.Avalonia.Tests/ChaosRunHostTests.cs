@@ -691,6 +691,7 @@ public sealed class ChaosRunHostTests
     public Task First_descent_deals_one_scripted_draft_after_the_threat_or_fallback(bool snapped) => WithFreshRun(() =>
     {
         ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        ChaosMeta.Save();   // the boot-error fallback loads the save before routing
         var web = new GameWindow(GameWindow.Games[GameWindow.DtrhId]); web.Show();
         web.HandleMessage("{\"type\":\"boot-error\"}");
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();

@@ -765,6 +765,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
+        /// <summary>WPF BubbleService.AnyDarterIntersects (:1963): a live rabbit's box touches <paramref name="rect"/>
+        /// (desktop DIPs). A read only, so the Intrusive Thoughts split never pops or pays anything.</summary>
+        internal static bool AnyDarterIntersects(Rect rect)
+        {
+            foreach (var b in Field.Bubbles)
+                if (!b.Popping && b.Spec is { IsDarter: true } && rect.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) return true;
+            return false;
+        }
+
         private static string ChaosCuePath(string name) =>
             ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", name + ".mp3"));   // as ChaosSfx
 

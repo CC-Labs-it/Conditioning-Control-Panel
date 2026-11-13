@@ -770,6 +770,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!_gracePaused) return;
             _gracePaused = false;
             SafetyDeadline.ResumeFromGrace(Now);
+            _stallSince = Now;   // WPF VideoService.cs:6636 (#735): the pause never eats the stall grace
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
@@ -795,11 +796,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SafetyDeadline.Arm(Now, _playback.Length / 1000.0);
                 _safetyLengthArmed = true;
             }
+            var enhanced = EnhancementOwnsLength(_playback.Length / 1000.0);
             if (SafetyDeadline.Expired(Now))
             {
-                Log.Warning("VideoService: safety timeout after {Sec:F1}s - ending the clip", Elapsed);
-                Scheduler.End();
-                return;
+                // #536: an enhancement-driven clip past its deadline ends only on a stalled playhead.
+                if (!enhanced)
+                {
+                    Log.Warning("VideoService: safety timeout after {Sec:F1}s - ending the clip", Elapsed);
+                    Scheduler.End();
+                    return;
+                }
+                if (EnhancementStalled(Now))
+                {
+                    Log.Warning("VideoService: enhancement-driven video stalled {Grace}s with no playback progress - ending the clip",
+                        EnhancementStallGraceSeconds);
+                    Scheduler.End();
+                    return;
+                }
             }
             if (PrimaryPaused) return;
             SampleCutPlayback();
@@ -808,8 +821,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (UpdateFloatingReveal(_sinceReady.Elapsed.TotalSeconds, _player?.IsPlaying == true)
                     == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip) return;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
+            // The played-time "overran" guard is the same length guillotine: the deadline above owns it then.
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                _playback.HasVideo, _playback.Length / 1000.0,
+                _playback.HasVideo, enhanced ? double.PositiveInfinity : _playback.Length / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
                 _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
             if (why == null) return;
