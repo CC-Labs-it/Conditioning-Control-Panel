@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     {
         public const string FriendRequest = "💌"; // WPF Services/Friends/FriendsLanding.cs:320,365: Inbox row data, rendered as Mail.
         // Stable keys for the shared InboxItem string hint, resolved by IconGlyph in the flyout.
+        public const string DailyGiftRelockKey = "daily-gift.relock";
         public const string InviteClaimedKey = "invite.claimed";
         public const string InviteSubscribedKey = "invite.subscribed";
 
@@ -62,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Lightbulb, R, null, "💡"); M(IconKind.Search, R, null, "🔍", "🔎"); M(IconKind.Alert, R, null, "🔔");
             M(IconKind.Megaphone, R, null, "📣"); M(IconKind.Settings, R, null, "⚙"); M(IconKind.WrenchScrewdriver, R, null, "🛠");
             M(IconKind.Wrench, R, null, "🔧"); M(IconKind.Bug, R, null, "🐛", "🐞"); M(IconKind.SignOut, R, null, "⏻");
-            M(IconKind.CloudOff, R, null, "📴"); M(IconKind.PlugDisconnected, R, null, "🔌"); M(IconKind.DoorArrowLeft, R, null, "🚪");
+            M(IconKind.CloudOff, R, null, "📴"); M(IconKind.PlugDisconnected, R, null, "🔌"); M(IconKind.DoorArrowLeft, R, null, "🚪", DailyGiftRelockKey);
             M(IconKind.Rocket, R, null, "🚀"); M(IconKind.LocalLanguage, R, null, "🌍"); M(IconKind.Desktop, R, null, "🖥");
             M(IconKind.Keyboard, R, null, "⌨", "📐"); M(IconKind.Window, R, null, "🪟"); M(IconKind.ArrowCircleUp, R, null, "⬆");
             M(IconKind.ArrowDown, R, null, "⬇", "↓");
