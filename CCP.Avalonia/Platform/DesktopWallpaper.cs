@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using ConditioningControlPanel.Services;
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -102,34 +100,18 @@ public sealed class LinuxWallpaperPlatform : IWallpaperPlatform
         catch { return null; }
     }
 }
-public sealed class WindowsWallpaperPlatform : IWallpaperPlatform
-{
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern int SystemParametersInfo(int action, int parameter, StringBuilder value, int flags);
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern int SystemParametersInfo(int action, int parameter, string value, int flags);
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool SendNotifyMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
-    public string? Capture()
-    {
-        var buffer = new StringBuilder(4096);
-        return SystemParametersInfo(0x73, buffer.Capacity, buffer, 0) != 0 && File.Exists(buffer.ToString()) ? buffer.ToString() : null;
-    }
-    public bool Apply(string path)
-    {
-        if (SystemParametersInfo(0x14, 0, path, 1) == 0) return false;
-        SendNotifyMessage(new IntPtr(0xffff), 0x1a, new IntPtr(0x14), IntPtr.Zero);
-        return true;
-    }
-    public bool Restore(string snapshot) => File.Exists(snapshot) && Apply(snapshot);
-}
+/// <summary>Takeover's wallpaper action on this head. Owner 2026-11-11: Takeover may write the GNOME/KDE
+/// wallpaper on Linux; the Wallpaper feature itself stays off Linux. No writer on Windows: WPF owns that desktop,
+/// and a plain SPI capture would hand a slideshow's TranscodedWallpaper back as the original (WPF 7.2.3 #4447).
+/// A sandbox run (CCP_USERDATA_DIR) never touches the real desktop.</summary>
 internal static class WallpaperHead
 {
     internal static WallpaperHost? Service;
     internal static void Initialize()
     {
+        if (!OperatingSystem.IsLinux()) return;
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return;
-        Service = new WallpaperHost(OperatingSystem.IsWindows() ? new WindowsWallpaperPlatform() : new LinuxWallpaperPlatform());
+        Service = new WallpaperHost(new LinuxWallpaperPlatform());
         _ = Service.RestoreStaleAsync();
     }
 }

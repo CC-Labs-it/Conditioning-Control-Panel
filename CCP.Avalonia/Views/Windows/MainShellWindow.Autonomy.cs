@@ -153,11 +153,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF PulsePinkFilter: boost the tint for 30 s, then hand it back. Skipped while a
-        /// session runs (it owns the overlays). <see cref="PinkFilterOverlay.PulseHold"/> is WPF's
-        /// "pulse started the overlay service" (#1180): it shows the tint with the engine off and
-        /// is released, not left on, when the pulse ends.</summary>
         private int _wallpaperGen, _wallpaperStopGen;
+        /// <summary>WPF Services/AutonomyService.cs:1158-1165 + WallpaperService.cs:130: one local shuffle, reverted
+        /// after the pulse unless Keep is on; a newer pulse or a stop cancels the older revert.</summary>
         internal async System.Threading.Tasks.Task TriggerWallpaperChangeAsync()
         {
             var host = Platform.WallpaperHead.Service;
@@ -173,6 +171,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }, TimeSpan.FromSeconds(CoreSettings.Current.WallpaperPulseSeconds));
         }
 
+        /// <summary>WPF PulsePinkFilter: boost the tint for 30 s, then hand it back. Skipped while a
+        /// session runs (it owns the overlays). <see cref="PinkFilterOverlay.PulseHold"/> is WPF's
+        /// "pulse started the overlay service" (#1180): it shows the tint with the engine off and
+        /// is released, not left on, when the pulse ends.</summary>
         private void PulsePinkFilter()
         {
             if (App.Sessions?.IsRunning == true || _pinkPulse) return;

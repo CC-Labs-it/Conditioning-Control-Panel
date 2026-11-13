@@ -180,6 +180,8 @@ public sealed class TakeoverTabUiTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var shell = new MainShellWindow();
+        var previous = WallpaperHead.Service;
+        var (keepBefore, originalBefore) = (s.WallpaperEnabled, s.WallpaperOriginalPath);
         try
         {
             shell.Show();
@@ -200,7 +202,12 @@ public sealed class TakeoverTabUiTests
             await WallpaperHead.Service.WhenIdle;
             Assert.True(desktop.Restored);
         }
-        finally { shell.RequestExit(); }
+        finally
+        {
+            shell.RequestExit();
+            WallpaperHead.Service = previous;
+            (s.WallpaperEnabled, s.WallpaperOriginalPath) = (keepBefore, originalBefore);
+        }
     });
 
     private sealed class CreditDesktop : global::ConditioningControlPanel.Services.IWallpaperPlatform

@@ -175,6 +175,106 @@ public sealed class WallpaperHostTests
         public bool Apply(string path) => true;
         public bool Restore(string snapshot) { Restored = snapshot == "panic-original"; return true; }
     }
+    /// <summary>Owner 2026-11-11: Takeover may write the GNOME/KDE wallpaper on Linux only if the user's own
+    /// wallpaper comes back. Drives the real Takeover pulse against a fake desktop that keeps state, then proves
+    /// every key is back exactly as it was after panic (Keep on too), a normal Takeover end, and app exit.</summary>
+    [Theory]
+    [InlineData("GNOME")]
+    [InlineData("KDE")]
+    public Task TakeoverPictureIsUndoneByPanicNormalEndAndExit(string desktopName) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var folder = Directory.CreateTempSubdirectory("wallpaper-takeover-").FullName;
+        var light = Path.Combine(folder, "own light.jpg");
+        var dark = Path.Combine(folder, "own-dark.jpg");
+        var pool = Directory.CreateDirectory(Path.Combine(folder, "pool")).FullName;
+        File.WriteAllText(light, "fixture"); File.WriteAllText(dark, "fixture");
+        File.WriteAllText(Path.Combine(pool, "a.png"), "fixture"); File.WriteAllText(Path.Combine(pool, "b.png"), "fixture");
+        var s = CoreSettings.Current;
+        var saved = (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.WallpaperEnabled, s.WallpaperPulseSeconds);
+        var previous = WallpaperHead.Service;
+        MainShellWindow? shell = null;
+        // Fake desktop state: GNOME keys, or KDE screen id -> Image.
+        var state = new Dictionary<string, string>();
+        void Reset()
+        {
+            state.Clear();
+            if (desktopName == "GNOME")
+            {
+                state["picture-uri"] = "'" + new Uri(light).AbsoluteUri + "'";
+                state["picture-uri-dark"] = "'" + new Uri(dark).AbsoluteUri + "'";
+                state["picture-options"] = "'scaled'";
+            }
+            else { state["1"] = new Uri(light).AbsoluteUri; state["2"] = new Uri(dark).AbsoluteUri; }
+        }
+        Reset();
+        var original = new Dictionary<string, string>(state);
+        string? Run(string exe, string[] args)
+        {
+            if (desktopName == "GNOME")
+            {
+                Assert.Equal("gsettings", exe);
+                if (args[0] == "get") return state[args[2]];
+                state[args[2]] = args[3];
+                return "";
+            }
+            var script = args[3];
+            if (script.StartsWith("print(JSON"))
+                return System.Text.Json.JsonSerializer.Serialize(state.Select(kv => new[] { kv.Key, kv.Value }).ToArray());
+            var image = System.Text.Json.JsonSerializer.Deserialize<string>(script[(script.IndexOf("writeConfig('Image', ") + 21)..script.LastIndexOf("); });")])!;
+            var only = script.Contains("String(d.id) !== ") ? System.Text.Json.JsonSerializer.Deserialize<string>(script[(script.IndexOf("!== ") + 4)..script.IndexOf(") return;")]) : null;
+            foreach (var id in state.Keys.ToList()) if (only == null || only == id) state[id] = image;
+            return "";
+        }
+        bool IsOriginal() => state.Count == original.Count && original.All(kv => state[kv.Key] == kv.Value);
+        try
+        {
+            s.WallpaperSourceFolder = pool;
+            s.WallpaperOriginalPath = "";
+            s.WallpaperPulseSeconds = 45;
+            var host = new WallpaperHost(new LinuxWallpaperPlatform(Run, desktopName));
+            WallpaperHead.Service = host;
+            shell = new MainShellWindow();
+            shell.PulseTimer = (_, _) => { }; // the pulse revert never fires on its own here
+
+            // Panic, with Keep on: panic takes it down in every mode.
+            s.WallpaperEnabled = true;
+            await shell.TriggerWallpaperChangeAsync();
+            Assert.False(IsOriginal());
+            Assert.NotEqual("", s.WallpaperOriginalPath); // the breadcrumb is written before the first write (#692)
+            foreach (var surface in PanicSurfaces.All.Where(x => x.Id is "takeover" or "wallpaper")) surface.Stop(shell);
+            await host.WhenIdle;
+            Assert.True(IsOriginal());
+            Assert.Equal("", s.WallpaperOriginalPath);
+            Assert.False(host.IsActive);
+
+            // Normal end: Takeover off or the engine stopping both cancel the pulses.
+            s.WallpaperEnabled = false;
+            await shell.TriggerWallpaperChangeAsync();
+            await shell.TriggerWallpaperChangeAsync(); // a second shuffle never replaces the saved original
+            Assert.False(IsOriginal());
+            shell.CancelAutonomyPulses();
+            await host.WhenIdle;
+            Assert.True(IsOriginal());
+            Assert.Equal("", s.WallpaperOriginalPath);
+
+            // Exit with Keep on still puts the user's own wallpaper back, and nothing writes after it.
+            s.WallpaperEnabled = true;
+            await shell.TriggerWallpaperChangeAsync();
+            Assert.False(IsOriginal());
+            Assert.True(await host.ShutdownAsync());
+            Assert.True(IsOriginal());
+            Assert.False(await host.ShuffleAsync());
+            Assert.True(IsOriginal());
+        }
+        finally
+        {
+            shell?.RequestExit();
+            WallpaperHead.Service = previous;
+            (s.WallpaperSourceFolder, s.WallpaperOriginalPath, s.WallpaperEnabled, s.WallpaperPulseSeconds) = saved;
+            Directory.Delete(folder, true);
+        }
+    });
     [Fact]
     public async Task PanicWallpaperEntryRestoresEvenWithoutShell()
     {
