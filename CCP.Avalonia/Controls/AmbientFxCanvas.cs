@@ -718,6 +718,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 StopClock();
                 UnhookWindow();
                 if (_modHooked) { CoreMods.ModChanged -= OnModChanged; Env.MotionGateChanged -= OnMotionGate; _modHooked = false; }
+                DisposeFogDots();
             }
             catch (Exception ex) { Log.Debug("AmbientFxCanvas.OnDetachedFromVisualTree: {E}", ex.Message); }
             base.OnDetachedFromVisualTree(e);

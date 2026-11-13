@@ -204,6 +204,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _grainDot = Bake(Color.FromRgb(Lift(16), Lift(8), Lift(0)), 0f, 128);
         }
 
+        /// <summary>Free the baked fog sprites (render target surfaces) when the strip leaves the tree;
+        /// the next draw bakes them again.</summary>
+        private void DisposeFogDots()
+        {
+            _fogBigDot?.Dispose(); _fogSmallDot?.Dispose(); _grainDot?.Dispose();
+            (_fogBigDot, _fogSmallDot, _grainDot, _fogBakedFor) = (null, null, null, null);
+        }
+
         /// <summary>Big puffs first, small over them, then the dust (WPF :549/:337). WPF summed them
         /// Plus on its own surface and composited that over the window; the opacity mask is that
         /// surface here (a bare Plus would add the window under the strip too).</summary>
