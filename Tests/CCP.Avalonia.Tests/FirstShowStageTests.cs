@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -354,14 +355,19 @@ public sealed partial class FirstShowStageTests
         {
             CoreSettings.Current.Welcomed = false;
             CoreSettings.Current.HasAcceptedAgeVerification = false;
+            StartupLadder.ModalWindowReady = () => shell?.IsVisible == true;
             shell = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
             Assert.Equal(0, opened);
             wizard.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
             wizard.FindControl<Button>("BtnNext")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             wizard.Close();
+            for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
             await Until(() => opened > 0);
             Assert.Equal(1, opened);
 
