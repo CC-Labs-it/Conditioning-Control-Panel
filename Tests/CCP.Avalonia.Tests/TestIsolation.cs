@@ -279,6 +279,10 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // The cached motion value and its timestamp are one state. Restoring only the public
+        // test seam leaves a fresh timestamp paired with another test's cached result.
+        found.Add(typeof(UiMotionPreference).GetField("_cached", AnyStatic)!);
+
         // Panic is raised through methods, so the assignment scanner cannot see its private state.
         // Restore the quiet deadline, engine hold and count together after every test.
         foreach (var f in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic)
