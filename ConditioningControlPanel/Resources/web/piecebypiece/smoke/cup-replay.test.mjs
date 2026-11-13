@@ -143,7 +143,7 @@ test('no PBP_REPLAY: the boot path is the one it always was', () => {
   // the replay modules are only ever imported inside startHostReplay, and that is only reached with an ask
   for (const mod of ['./game/cup-replay.js', './net/replay-seat.js', './ui/replay-bar.js']) {
     assert.equal(boot.split(mod).length, 2, mod + ' is imported in one place');
-    assert.ok(!new RegExp('^import .*' + mod.replace(/[./]/g, '\\$&'), 'm').test(boot), mod + ' is never a static import');
+    assert.ok(!boot.split('\n').some((line) => line.startsWith('import ') && line.includes(mod)), mod + ' is never a static import');
   }
   assert.ok(boot.includes("if (replayAsk && await startHostReplay(replayAsk, { bus, board, game })) return null;"));
   assert.ok(boot.includes("attachEffects(bus, board, replayAsk ? new URLSearchParams('media=none') : params)"));
