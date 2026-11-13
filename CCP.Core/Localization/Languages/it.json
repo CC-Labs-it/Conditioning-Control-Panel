@@ -9150,5 +9150,8 @@
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "caricamento",
   "chaos_inescapable_unlock_tip": "una porta più profonda. vende la chiave nella Toybox: completa {0} discese in Relentless, raggiungi Devoted ({1} discese), poi allenalo per ✦{2}.",
-  "chaos_resistance_regrows": "la resistenza si rigenera"
+  "chaos_resistance_regrows": "la resistenza si rigenera",
+  "she_wake_unavailable_tooltip": "Il motore di attivazione opzionale sherpa-onnx non è disponibile in questa versione. Viene usato il riconoscimento integrato.",
+  "she_wake_unavailable_status": "Il motore di attivazione opzionale non è disponibile in questa versione. Viene usato il riconoscimento integrato.",
+  "she_wake_calibration_unavailable": "La calibrazione della parola di attivazione non è disponibile in questa versione."
 }

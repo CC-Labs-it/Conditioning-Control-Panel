@@ -8410,5 +8410,8 @@
   "chaos_resistance_regrows": "Widerstand regeneriert sich",
   "account_merged_signin_title": "Deine Konten wurden zusammengeführt",
   "account_merged_signin_summary": "Melde dich erneut an, um fortzufahren.",
-  "account_merged_signin_body": "Deine beiden Konten wurden zu einem zusammengeführt. Melde dich erneut an, um fortzufahren.\n\nDein lokaler Fortschritt bleibt erhalten."
+  "account_merged_signin_body": "Deine beiden Konten wurden zu einem zusammengeführt. Melde dich erneut an, um fortzufahren.\n\nDein lokaler Fortschritt bleibt erhalten.",
+  "she_wake_unavailable_tooltip": "Die optionale sherpa-onnx-Weckerkennung ist in dieser Version nicht verfügbar. Die integrierte Erkennung wird verwendet.",
+  "she_wake_unavailable_status": "Die optionale Weckerkennung ist in dieser Version nicht verfügbar. Die integrierte Erkennung wird verwendet.",
+  "she_wake_calibration_unavailable": "Die Kalibrierung des Weckworts ist in dieser Version nicht verfügbar."
 }

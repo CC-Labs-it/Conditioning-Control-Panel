@@ -9153,5 +9153,8 @@
   "chaos_dvd_title": "Porn DVD",
   "chaos_dvd_loading": "now loading",
   "chaos_inescapable_unlock_tip": "a deeper door. she sells the key in the Toybox: finish {0} relentless descents, reach Devoted ({1} descents), then train it for ✦{2}.",
-  "chaos_resistance_regrows": "resistance regrows"
+  "chaos_resistance_regrows": "resistance regrows",
+  "she_wake_unavailable_tooltip": "The optional sherpa-onnx wake engine is not available in this version. The built-in recognizer is used.",
+  "she_wake_unavailable_status": "The optional wake engine is not available in this version. Using the built-in recognizer.",
+  "she_wake_calibration_unavailable": "Wake word calibration is not available in this version."
 }

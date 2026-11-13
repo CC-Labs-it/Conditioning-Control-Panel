@@ -8410,5 +8410,8 @@
   "chaos_resistance_regrows": "a resistência se regenera",
   "account_merged_signin_title": "Suas contas foram unificadas",
   "account_merged_signin_summary": "Entre novamente para continuar.",
-  "account_merged_signin_body": "Suas duas contas foram unificadas. Entre novamente para continuar.\n\nSeu progresso local será mantido."
+  "account_merged_signin_body": "Suas duas contas foram unificadas. Entre novamente para continuar.\n\nSeu progresso local será mantido.",
+  "she_wake_unavailable_tooltip": "O mecanismo opcional de ativação sherpa-onnx não está disponível nesta versão. O reconhecedor integrado é usado.",
+  "she_wake_unavailable_status": "O mecanismo opcional de ativação não está disponível nesta versão. O reconhecedor integrado é usado.",
+  "she_wake_calibration_unavailable": "A calibração da palavra de ativação não está disponível nesta versão."
 }

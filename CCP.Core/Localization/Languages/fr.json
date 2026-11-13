@@ -8410,5 +8410,8 @@
   "chaos_resistance_regrows": "la résistance se régénère",
   "account_merged_signin_title": "Vos comptes ont été fusionnés",
   "account_merged_signin_summary": "Reconnectez-vous pour reprendre.",
-  "account_merged_signin_body": "Vos deux comptes ont été fusionnés. Reconnectez-vous pour reprendre.\n\nVotre progression locale est conservée."
+  "account_merged_signin_body": "Vos deux comptes ont été fusionnés. Reconnectez-vous pour reprendre.\n\nVotre progression locale est conservée.",
+  "she_wake_unavailable_tooltip": "Le moteur de réveil sherpa-onnx facultatif est indisponible dans cette version. Le système de reconnaissance intégré est utilisé.",
+  "she_wake_unavailable_status": "Le moteur de réveil facultatif est indisponible dans cette version. Le système de reconnaissance intégré est utilisé.",
+  "she_wake_calibration_unavailable": "Le calibrage du mot de réveil est indisponible dans cette version."
 }
