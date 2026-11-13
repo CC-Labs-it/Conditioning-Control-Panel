@@ -226,6 +226,8 @@ internal static class AccountSeed
         {
             // A minutes lift rebaselines the day log once, through ProfileAdopt.ConditioningMinutesLifted
             // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
+            ResetDailyQuest = () => App.Quests?.ForceRegenerateDailyQuest(),
+            ResetWeeklyQuest = () => App.Quests?.ForceRegenerateWeeklyQuest(),
             Prizes = PrizeOwnership.Feed,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,

@@ -107,6 +107,8 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        public Action? ResetDailyQuest { get; set; }
+        public Action? ResetWeeklyQuest { get; set; }
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -197,6 +199,7 @@ namespace ConditioningControlPanel.Services
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
                     | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics) | (consent & Privacy)
+                    | SyncBody.Field.ResetDailyQuest | SyncBody.Field.ResetWeeklyQuest
                     | (adopted ? AfterAdopt : SyncBody.Field.None)
                     | (knownProgress & (SyncBody.Field.CompanionProgress | SyncBody.Field.TotalConditioningMinutes))
                     | (adopted && s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None)
@@ -376,6 +379,7 @@ namespace ConditioningControlPanel.Services
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     if (AdoptFromResponse(s, reply)) _adopted = true;
                     ClaimWebXp(s, reply, allowUnread, session, id);
+                    ApplyQuestResets(s, id, session, reply);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
@@ -399,6 +403,22 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
             finally { _gate.Release(); }
+        }
+
+        // WPF ProfileSyncService.cs:1791-1800. The queued action belongs to the request's
+        // account and session, even if logout or another login happens before UI dispatch.
+        private void ApplyQuestResets(AppSettings s, string account, int session, JObject reply)
+        {
+            bool daily = reply["reset_daily_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_daily_quest");
+            bool weekly = reply["reset_weekly_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_weekly_quest");
+            if (!daily && !weekly) return;
+            CoreDispatch.Post(() =>
+            {
+                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || !SignedIn(s) || s.UnifiedId != account) return;
+                if (daily) ResetDailyQuest?.Invoke();
+                if (weekly) ResetWeeklyQuest?.Invoke();
+            });
         }
 
         private static void PersistMigration()

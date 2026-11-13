@@ -15,7 +15,7 @@
 //   possession-head-b: the shell host (MainWindow.Possession.cs walk: Possession.Role opt-in,
 //     InferLeafRole, size/placement filter, display names, the two overlay canvases), the Lockdown
 //     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
-//     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, PossessionPointer, Warden,
+//     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
 //   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
 //     drop, fall, ghost cursor, glitch portrait, glyphrot, melt, misroute, relabel, reorder doors,
@@ -214,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         /// <summary>Panic (PanicSurfaces "possession"): UndoAll on every runtime still alive.</summary>
         internal static void UndoAllLive()
         {
+            PossessionGhost.UndoAll();
             List<PossessionRuntime> alive = new();
             lock (Live)
             {
