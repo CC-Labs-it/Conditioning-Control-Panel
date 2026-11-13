@@ -42,15 +42,18 @@ public sealed class Sync7CompanionTests
             .SetValue(shell, tube);
         try
         {
+            shell.Show(); // an attached tube speaks only while its parent is on screen (WPF Windowing.cs:2210)
             tube.Show();
             Assert.True(await shell.SetSlutModeAsync(true));
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } frame) frame();   // presets type slowly (WPF Speech.cs:559)
             Assert.Equal(Loc.Get("companion_spice_on_line"), tube.FindControl<TextBlock>("TxtSpeech")!.Text);
             // Clear the first bubble so the low-priority preset line may show again.
             tube.PanicSilence();
             tube.SpeechClock = new LaterClock();
             Assert.False(await shell.SetSlutModeAsync(false));
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
             Assert.Equal(Loc.Get("companion_spice_off_line"), tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         }
         finally { tube.Close(); shell.Close(); Dispatcher.UIThread.RunJobs(); }

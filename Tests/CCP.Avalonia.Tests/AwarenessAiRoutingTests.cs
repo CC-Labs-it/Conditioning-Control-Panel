@@ -139,6 +139,7 @@ public sealed class AwarenessAiRoutingTests
             await tube.ReactStillOnAsync(Gaming());
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(requests);
+            while (tube.TypewriterFrame is { } frame) frame();
             Assert.False(string.IsNullOrWhiteSpace(tube.FindControl<TextBlock>("TxtSpeech")!.Text));   // the preset
         }));
 

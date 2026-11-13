@@ -166,6 +166,7 @@ public sealed class CompanionShellEventsTests
         Dispatcher.UIThread.RunJobs();
         Assert.True(CoreSettings.Current.AvatarEnabled);
         Assert.True(shell.Tube!.IsDetached);
+        while (shell.Tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
         Assert.Equal("Good morning.", shell.Tube.FindControl<TextBlock>("TxtSpeech")!.Text);
     });
 
