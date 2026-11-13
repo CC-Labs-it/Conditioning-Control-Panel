@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Avalonia.Threading;
-using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -10,7 +9,8 @@ using ConditioningControlPanel.Services.Startup;
 using ConditioningControlPanel.Services.Invites;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
-/// <summary>WPF MergedAccountRecoveryHead: preserve the merged person's local data.</summary>
+/// <summary>WPF MergedAccountRecoveryHead (App.xaml.cs:416-419): the one place this head seeds contract D's swap seams,
+/// called from <see cref="AccountSeed.Seed"/> once the providers exist. Preserves the merged person's local data.</summary>
 internal static class MergedAccountRecoveryHead
 {
     private static readonly System.Threading.SemaphoreSlim AuthGate = new(1, 1);
@@ -28,9 +28,9 @@ internal static class MergedAccountRecoveryHead
         });
         MergedAccountRecovery.Finished = (canonical, reauthed) => Dispatcher.UIThread.Post(() =>
         {
-            var shell = MainShellWindow.Current;
+            var shell = AccountSeed.RecoveryShell();
             // WPF MainWindow.Login.cs:51-58: UpdateQuickLoginUI also repaints the banner; the section repaints provider and linking rows.
-            shell?.UpdateQuickLoginUI();
+            shell?.UpdateQuickLoginUI(accountChanged: true);
             shell?.AppSettingsPage?.SectionAccount.Refresh();
             if (reauthed)
             {
@@ -43,7 +43,7 @@ internal static class MergedAccountRecoveryHead
                 Glyph = "🔗",
                 Title = Loc.Get("account_merged_signin_title"),
                 Summary = Loc.Get("account_merged_signin_summary"),
-                Open = () => _ = OpenSignInAsync(),
+                Open = () => { if (AccountSeed.RecoveryShell() is { } s) _ = s.OpenLoginAfterMergedSwap(); },
             };
             // There may be no shell yet, or the launcher or a game may own the screen.
             if (shell == null || !shell.IsVisible || shell.WindowState == global::Avalonia.Controls.WindowState.Minimized
@@ -56,7 +56,9 @@ internal static class MergedAccountRecoveryHead
         V2AuthService.MergedRecovery = MergedAccountRecovery.TryHandleAsync;
         AiService.MergedAccountHook = response => MergedAccountRecovery.TryHandleAsync(response);
     }
-    // WPF App.xaml.cs:4581-4590 serializes upgrades and rechecks the session inside the gate.
+
+    // WPF App.ReauthenticateAfterMergedSwapAsync + EnsureAuthTokenAsync (App.xaml.cs:3851-3930): serialized, rechecked
+    // inside the gate, providers in order Patreon, Discord, SubscribeStar.
     internal static async Task<bool> ReauthenticateAsync()
     {
         await AuthGate.WaitAsync();
@@ -71,6 +73,7 @@ internal static class MergedAccountRecoveryHead
         }
         finally { AuthGate.Release(); }
     }
+
     private static async Task<bool> ExchangeAsync(Func<string?> getToken,
         Func<V2AuthService, string, Task<V2AuthService.V2AuthResponse>> authenticate)
     {
@@ -79,28 +82,21 @@ internal static class MergedAccountRecoveryHead
             var token = getToken();
             if (string.IsNullOrEmpty(token)) return false;
             var result = await authenticate(AccountSeed.NewV2(), token);
-            // WPF App.xaml.cs:4578-4581 adopts the user even without a token; only a token ends the loop.
+            // WPF App.xaml.cs:3873-3877 adopts the user even without a token; only a token ends the loop.
             if (!result.Success || result.User == null) return false;
             var now = DateTime.UtcNow;
-            ProfileAdopt.ApplyUserData(CoreSettings.Current, result.User, result.AuthToken, now);
+            AccountSeed.ApplyLoginUserData(CoreSettings.Current, result.User, result.AuthToken, now);   // keeps a pending Descent migration's ledger, as LoginDialog
             InviteRules.ApplyGrant(CoreSettings.Current, InviteRules.ParseUtc(result.User.InviteGrantUntilRaw), now);
             CoreAccount.UnifiedUserId = result.User.UnifiedId;
-            if (!string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken)) CoreSettings.Current.MergedSignInPending = false;
+            var minted = !string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken);
+            if (minted) CoreSettings.Current.MergedSignInPending = false;
             CoreSettings.Save();
-            return !string.IsNullOrEmpty(result.User.UnifiedId) && !string.IsNullOrEmpty(result.AuthToken);
+            return minted;
         }
         catch (Exception ex)
         {
             Serilog.Log.Warning(ex, "Merged account provider sign-in failed");
             return false;
         }
-    }
-    private static async Task OpenSignInAsync()
-    {
-        var shell = MainShellWindow.Current;
-        if (shell == null) return;
-        if (await MessageDialog.ConfirmAsync(shell, Loc.Get("account_merged_signin_title"),
-            Loc.Get("account_merged_signin_body")))
-            await shell.OpenUnifiedLoginDialog();
     }
 }
