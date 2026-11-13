@@ -33,7 +33,7 @@ public sealed class ProfileWardrobeTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AppA>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");

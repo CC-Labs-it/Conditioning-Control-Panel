@@ -262,8 +262,14 @@ namespace ConditioningControlPanel
         /// subscribes once, to Core, on every head.</summary>
         public static event EventHandler<ModPackage>? ModChanged;
 
+        // Advances even when no view is subscribed, so reattached views can detect
+        // an active package being replaced under the same mod ID.
+        private static long _modRevision;
+        public static long ModRevision => System.Threading.Interlocked.Read(ref _modRevision);
+
         public static void RaiseModChanged(object? sender, ModPackage package)
         {
+            System.Threading.Interlocked.Increment(ref _modRevision);
             try { ModChanged?.Invoke(sender, package); } catch { /* a subscriber's fault is not the switch's */ }
         }
 

@@ -57,6 +57,15 @@ and checks that a WPF run with a missing tab exits 3 without JSON. The job is re
 It takes each metric's median across runs (per-tab median and p95 too), applies the rule above, prints a Markdown table and exits 1 on a
 regression, missing reports, missing/extra tabs or invalid measurements. Tab keys are <code>NavCheck.TabPanels</code>; WPF's legacy
 <code>ExclusivesTab</code> goes through <code>ShowTab(&quot;exclusives&quot;)</code> to the lazy Premium page, whose visibility is checked.</p>
+<h2 id="discord-remote-first-show">Discord and Remote Control first-show work</h2>
+<p>Discord retains achievement ids while its all-achievements expander is folded, populates
+on expansion with keyed lookups, and reuses items across repeated expansion. Remote Control
+loads hero art on a worker at WPF's 800px cap, retains the brush across reattachment unless a
+mod-change revision intervened, and
+rejects stale mod completions. Both views are constructed with the shell. Focused headless
+coverage is in <code>TabFirstShowWorkTests</code>; the directory test awaits art readiness.</p>
+<p>No Windows median or p95 improvement is claimed from headless tests. Each must satisfy
+Avalonia ≤ WPF × 1.10 + 20 ms when measured on the same Windows runner (job <code>perf-bench-windows</code>).</p>
 <h2 id="results">Results</h2>
 
 <table>
@@ -81,6 +90,31 @@ Measured on windows-latest (rgate 41830667836, ~/ccp-port/evidence/perf-combined
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-11-11, cloud Linux, test syntax correction on parent <code>217dae076</code>, base
+<code>e62cb9ecd005</code>: Core, Avalonia and Avalonia test projects built in Release;
+Core tests 4650 passed / 5 skipped; 21 focused headless tests passed. Fail-proof: disabling the mod-revision check made the same-ID
+reattachment test fail (expected 2 image loads, actual 1); the production guard was restored.
+No real-window timing was taken. Windows median and p95 for this revision remain pending the
+CI <code>perf-bench-windows</code> artifact.</li>
+<li>2026-11-11, same-ID mod adoption correction on parent <code>b6cc602ea</code>, base
+<code>e62cb9ecd005</code>: added a headless regression for asset replacement while detached
+and a mod-change revision to invalidate the retained hero art. The cloud execution environment
+failed to start; builds, tests, fail-proof and Windows timing were not run for this revision.
+Await GitHub CI, including <code>perf-bench-windows</code>, before drawing a performance conclusion.</li>
+<li>2026-11-04, cloud Linux, Discord null-achievement-ID correction on parent
+<code>fc45e646</code>, compared against <code>e62cb9ecd005</code>: a headless regression
+reproduced the null-key exception before the guard; 20 affected headless tests passed
+after it. This is correctness evidence only; no real-window timing or new Windows benchmark
+measurement was taken. Windows median and
+p95 for this revision remain pending the CI <code>perf-bench-windows</code> artifact.</li>
+<li>2026-10-31, cloud Linux, Discord/Remote lane re-cut onto <code>74ac6ce3d</code> (one
+fast-forward merge commit following <code>613c4848b</code>): Release Core/Avalonia/test builds
+passed; Core tests 4636 passed / 5 existing skips, focused headless tests 19 passed, restored
+Rain browser tests 21 passed. Fail-proof mutations (eager gallery and premature readiness)
+failed both focused tests as expected; real implementations restored. No real-window timing
+run or Windows artifact for this revision. Windows median/p95:
+<strong>pending</strong>, not a pass. Await the separately landed comparison prerequisite and
+GitHub CI <code>perf-bench-windows</code> evidence.</li>
 <li>2026-10-23, CI ubuntu-latest under xvfb (job perf-bench-linux, run 39869706826, snapshot 10ae4e753), Release, sandboxed profile:
 startup 12860 ms, working set 909 MB, tab switch median 108-237 ms on 23 tabs, <strong>ExclusivesTab 801 ms median / 821 ms p95</strong>.
 Artifact <code>perf-bench-linux</code>.</li>

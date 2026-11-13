@@ -101,6 +101,7 @@ public sealed partial class AccountSeedTests
                 Assert.Contains("GET /user/lookup?display_name=Nyx", wire.Seen);
                 Assert.Equal("Offline", Text("TxtProfileViewerOnline"));      // the lookup's fresh presence
                 Assert.True(F<Border>("StaffBadge").IsVisible && F<Border>("WhitelistBadge").IsVisible);
+                F<Expander>("ProfileAllAchievementsExpander").IsExpanded = true;
                 var tiles = ((IEnumerable<ProfileAchievementTile>)F<ItemsControl>("ProfileAchievementGrid").ItemsSource!).ToList();
                 Assert.Equal(new[] { "plastic_initiation", "dumb_bimbo" }, tiles.Select(t => t.Id));
 
