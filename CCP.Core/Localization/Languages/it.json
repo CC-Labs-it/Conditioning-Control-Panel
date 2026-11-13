@@ -37,6 +37,7 @@
   "rt_engine_browser": "Apri nel browser",
   "rt_engine_browser_warning": "Panico non può chiudere una scheda del browser.",
   "rt_engine_progress": "Download: {0}%",
+  "rt_engine_downloading": "Download in corso...",
   "rt_engine_unavailable": "Il download del motore non è disponibile in questa versione.",
   "rt_engine_network": "Download non riuscito. Controlla la connessione.",
   "rt_engine_checksum": "Il controllo del motore non corrisponde.",

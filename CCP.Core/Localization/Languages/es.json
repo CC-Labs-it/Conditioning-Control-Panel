@@ -42,6 +42,7 @@
   "rt_engine_browser": "Abrir en el navegador",
   "rt_engine_browser_warning": "Pánico no puede cerrar una pestaña del navegador.",
   "rt_engine_progress": "Descargando: {0}%",
+  "rt_engine_downloading": "Descargando...",
   "rt_engine_unavailable": "La descarga del motor no está disponible en esta versión.",
   "rt_engine_network": "Falló la descarga. Revisa la conexión.",
   "rt_engine_checksum": "La suma de verificación del motor no coincide.",

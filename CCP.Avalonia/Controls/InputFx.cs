@@ -39,8 +39,19 @@ public static class InputFx
     public static double GetGlowBlur(Control c) => c.GetValue(GlowBlurProperty);
     public static void SetGlowBlur(Control c, double v) => c.SetValue(GlowBlurProperty, v);
 
+    // WPF ComboBoxItem moves its highlight and keyboard navigation anchor on pointer entry.
+    public static readonly AttachedProperty<bool> FocusOnPointerEntryProperty =
+        AvaloniaProperty.RegisterAttached<ComboBoxItem, bool>("FocusOnPointerEntry", typeof(InputFx));
+    public static bool GetFocusOnPointerEntry(ComboBoxItem item) => item.GetValue(FocusOnPointerEntryProperty);
+    public static void SetFocusOnPointerEntry(ComboBoxItem item, bool value) => item.SetValue(FocusOnPointerEntryProperty, value);
+
     static InputFx()
     {
+        FocusOnPointerEntryProperty.Changed.AddClassHandler<ComboBoxItem>((item, e) =>
+        {
+            item.PointerEntered -= OnComboItemPointerEntered;
+            if (e.NewValue is true) item.PointerEntered += OnComboItemPointerEntered;
+        });
         IsEnabledProperty.Changed.AddClassHandler<TextBox>((box, e) =>
         {
             box.PropertyChanged -= OnBoxChanged;
@@ -63,6 +74,11 @@ public static class InputFx
         GlowOpacityProperty.Changed.AddClassHandler<Border>((b, _) => PaintBorder(b));
         GlowBlurProperty.Changed.AddClassHandler<Border>((b, _) => { if (GetGlowOpacity(b) > 0) PaintBorder(b); });
         GlowColorProperty.Changed.AddClassHandler<Border>((b, _) => { if (GetGlowOpacity(b) > 0) PaintBorder(b); });
+    }
+
+    private static void OnComboItemPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is ComboBoxItem { IsEnabled: true } item) item.Focus(NavigationMethod.Pointer);
     }
 
     private static void PaintBorder(Border border)

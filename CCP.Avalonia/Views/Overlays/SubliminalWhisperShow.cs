@@ -30,7 +30,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static Action? _stopWhisper;
         private static bool _deferredReset;
         private static int _gen;   // bumped by StopAll: anything scheduled before it is stale
-        private static int _oneShotGen;
+        // WPF SubliminalService.cs:78,196,623: a custom (AI command / enhancement) card carries the owner it was
+        // dispatched under; StopOneShots retires that owner without stopping ambient playback, the rule Speak uses.
+        private static object _oneShotOwner = new();
         private static readonly object OneShotGate = new();
 
         /// <summary>WPF <c>_audioPath</c>: BaseDirectory/Resources/sub_audio.</summary>
@@ -50,18 +52,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         };
         /// <summary>The AI command's card (WPF FlashSubliminalCustom) may carry its own opacity.</summary>
         internal static Action<string, int?> DrawWithOpacity = (text, opacity) =>
+            PostOneShot(() => { if (opacity == null) DrawNow(text); else Present(text, opacity); });
+
+        // WPF SubliminalService.cs:612-620: Stop, or retiring the owner, drops arrivals waiting on the UI queue too.
+        private static void PostOneShot(Action draw)
         {
             var gen = Volatile.Read(ref _gen);
-            var oneShot = Volatile.Read(ref _oneShotGen);
+            var owner = Volatile.Read(ref _oneShotOwner);
             Dispatcher.UIThread.Post(() =>
             {
-                // WPF SubliminalService.cs:612-620: Stop (and a one-shot retirement) drops arrivals waiting on the UI queue too.
-                if (Volatile.Read(ref _gen) != gen || Volatile.Read(ref _oneShotGen) != oneShot) return;
-                if (opacity == null) DrawNow(text);
-                else Present(text, opacity);
-                SubliminalOverlay.MarkOneShot(oneShot);
+                if (Volatile.Read(ref _gen) != gen || !ReferenceEquals(owner, Volatile.Read(ref _oneShotOwner))) return;
+                SubliminalOverlay.WithOwner(owner, draw);
             });
-        };
+        }
 
         // Speak uses the one-shot generation, independently of ambient subliminals.
         private static object _speakOwner = new();
@@ -82,10 +85,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else Dispatcher.UIThread.Post(() => SubliminalOverlay.CloseOwned(owner));
         }
 
-        private static void Present(string text, int? opacity)
+        internal static Action<string, int?, int?> DrawWithDuration = (text, opacity, duration) =>
+            PostOneShot(() => Present(text, opacity, duration));
+
+        private static void Present(string text, int? opacity, int? duration = null)
         {
             if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
-                SubliminalOverlay.Show(host, text, opacity);
+                SubliminalOverlay.Show(host, text, opacity, duration);
         }
 
         internal static Action<int, Action> After = (ms, then) => Task.Delay(ms).ContinueWith(_ => then());
@@ -102,10 +108,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF SubliminalService.cs:196: retire custom arrivals without stopping ambient playback.
         internal static void StopOneShots()
         {
-            int retired;
-            lock (OneShotGate) retired = Interlocked.Increment(ref _oneShotGen) - 1;
-            if (Dispatcher.UIThread.CheckAccess()) SubliminalOverlay.CloseOneShot(retired);
-            else Dispatcher.UIThread.Post(() => SubliminalOverlay.CloseOneShot(retired));
+            object owner;
+            lock (OneShotGate) owner = Interlocked.Exchange(ref _oneShotOwner, new object());
+            if (Dispatcher.UIThread.CheckAccess()) SubliminalOverlay.CloseOwned(owner);
+            else Dispatcher.UIThread.Post(() => SubliminalOverlay.CloseOwned(owner));
         }
 
         /// <summary><see cref="After"/>, dropped when a Stop lands in between.</summary>
@@ -132,19 +138,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF FlashSubliminalCustom for the AI command: trim, cap, remove tags, then
         /// haptic anticipation and a silent card (10 XP), even when the ambient scheduler is off.</summary>
-        internal static void Custom(string text, int? opacity = null)
+        internal static void Custom(string text, int? opacity = null, int? durationMs = null, bool suppressHaptic = false)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
             text = text.Trim();
             if (text.Length > 200) text = text[..200];
             text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
             var phrase = text;
-            var oneShot = Volatile.Read(ref _oneShotGen);
-            HapticThenDraw(phrase, () =>
+            // Captured at dispatch: an owner retired during the haptic lead-in never draws.
+            var owner = Volatile.Read(ref _oneShotOwner);
+            Action draw = () =>
             {
                 lock (OneShotGate)
-                    if (Volatile.Read(ref _oneShotGen) == oneShot) DrawWithOpacity(phrase, opacity);
-            });
+                {
+                    if (!ReferenceEquals(owner, Volatile.Read(ref _oneShotOwner))) return;
+                    if (durationMs.HasValue) DrawWithDuration(phrase, opacity, durationMs); else DrawWithOpacity(phrase, opacity);
+                }
+            };
+            if (suppressHaptic) draw(); else HapticThenDraw(phrase, draw);
             CoreProgression.AddXP(10, "Subliminal");
         }
 

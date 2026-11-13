@@ -22,6 +22,17 @@ public sealed class RaceEngineFetcherTests : IDisposable
         using var output = new MemoryStream();
         using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
         {
+            foreach (var licence in new[] { "LICENSE", "LICENSES.chromium.html" })
+            {
+                if (licence == name) continue;
+                using var licenceWriter = new StreamWriter(zip.CreateEntry(licence).Open());
+                licenceWriter.Write("licence");
+            }
+            if (name == "LICENSE" && mode != 0)
+            {
+                using var engine = new StreamWriter(zip.CreateEntry("electron").Open());
+                engine.Write("test engine");
+            }
             var entry = zip.CreateEntry(name);
             entry.ExternalAttributes = mode << 16;
             using var writer = new StreamWriter(entry.Open());
@@ -80,6 +91,33 @@ public sealed class RaceEngineFetcherTests : IDisposable
         Assert.Equal(path, await fetcher.FetchAsync(Pin(bytes)));
         Assert.Equal(1, handler.Calls);
         Assert.Empty(Directory.GetDirectories(Root, ".fetch-*"));
+    }
+    [Fact]
+    public async Task InstalledRequiresExecutableAndMatchingReceipt()
+    {
+        var bytes = Zip();
+        using var http = new HttpClient(new Handler(bytes));
+        var fetcher = new RaceEngineFetcher(http, data);
+        var pin = Pin(bytes);
+        Assert.False(fetcher.IsInstalled(pin));
+        var exe = await fetcher.FetchAsync(pin);
+        Assert.True(fetcher.IsInstalled(pin));
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(exe)!, ".verified-sha256"), "wrong");
+        Assert.False(fetcher.IsInstalled(pin));
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(exe)!, ".verified-sha256"), pin.Sha256);
+        File.Delete(exe);
+        Assert.False(fetcher.IsInstalled(pin));
+    }
+    [Fact]
+    public async Task MissingLicencesRejectsArchive()
+    {
+        using var output = new MemoryStream();
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
+        using (var writer = new StreamWriter(zip.CreateEntry("electron").Open())) writer.Write("engine");
+        var bytes = output.ToArray();
+        using var http = new HttpClient(new Handler(bytes));
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RaceEngineFetcher(http, data).FetchAsync(Pin(bytes)));
+        Assert.Empty(Directory.GetFileSystemEntries(Root));
     }
     [Fact]
     public async Task BadChecksumNeverUnpacksAndKeepsOldVersion()
@@ -179,6 +217,73 @@ public sealed class RaceEngineFetcherTests : IDisposable
         Directory.CreateDirectory(old);
         await Assert.ThrowsAsync<InvalidDataException>(() => new RaceEngineFetcher(http, data).FetchAsync(Pin(bytes)));
         Assert.Equal(new[] { old }, Directory.GetDirectories(Root));
+    }
+    [Theory]
+    [InlineData("LICENSE", false)]
+    [InlineData("LICENSES.chromium.html", true)]
+    public async Task InvalidLicenceDoesNotPromoteOrPrune(string name, bool empty)
+    {
+        var bytes = ZipWithInvalidLicence(name, empty);
+        using var http = new HttpClient(new Handler(bytes));
+        var old = Path.Combine(Root, "electron-old");
+        Directory.CreateDirectory(old);
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RaceEngineFetcher(http, data).FetchAsync(Pin(bytes)));
+        Assert.False(Directory.Exists(Path.Combine(Root, Pin(bytes).DirectoryName)));
+        Assert.True(Directory.Exists(old));
+    }
+    [Fact]
+    public async Task SymlinkLicenceDoesNotPromoteOrPrune()
+    {
+        var bytes = Zip("LICENSE", 0xa1ff);
+        using var http = new HttpClient(new Handler(bytes));
+        var old = Path.Combine(Root, "electron-old");
+        Directory.CreateDirectory(old);
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RaceEngineFetcher(http, data).FetchAsync(Pin(bytes)));
+        Assert.False(Directory.Exists(Path.Combine(Root, Pin(bytes).DirectoryName)));
+        Assert.True(Directory.Exists(old));
+    }
+    [Fact]
+    public async Task CachedReceiptWithoutLicenceIsNotReused()
+    {
+        var bytes = Zip();
+        using var handler = new Handler(bytes);
+        using var http = new HttpClient(handler);
+        var fetcher = new RaceEngineFetcher(http, data);
+        var path = await fetcher.FetchAsync(Pin(bytes));
+        File.Delete(Path.Combine(Path.GetDirectoryName(path)!, "LICENSE"));
+        Assert.Equal(path, await fetcher.FetchAsync(Pin(bytes)));
+        Assert.Equal(2, handler.Calls);
+        Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "LICENSE")));
+    }
+    [Fact]
+    public async Task CachedSymlinkLicenceIsNotReused()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var bytes = Zip();
+        using var handler = new Handler(bytes);
+        using var http = new HttpClient(handler);
+        var fetcher = new RaceEngineFetcher(http, data);
+        var path = await fetcher.FetchAsync(Pin(bytes));
+        var licence = Path.Combine(Path.GetDirectoryName(path)!, "LICENSE");
+        File.Delete(licence);
+        File.CreateSymbolicLink(licence, Path.Combine(Path.GetDirectoryName(path)!, "LICENSES.chromium.html"));
+        Assert.Equal(path, await fetcher.FetchAsync(Pin(bytes)));
+        Assert.Equal(2, handler.Calls);
+        Assert.Null(new FileInfo(licence).LinkTarget);
+    }
+    private static byte[] ZipWithInvalidLicence(string name, bool empty)
+    {
+        using var output = new MemoryStream();
+        using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
+        {
+            foreach (var item in new[] { "electron", "LICENSE", "LICENSES.chromium.html" })
+            {
+                if (item == name && !empty) continue;
+                using var writer = new StreamWriter(zip.CreateEntry(item).Open());
+                if (item != name) writer.Write("content");
+            }
+        }
+        return output.ToArray();
     }
     [Theory]
     [InlineData("../outside")]

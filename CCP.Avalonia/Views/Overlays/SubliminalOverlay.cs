@@ -43,7 +43,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
         internal static event Action? Displayed;
         private static bool _warnedUnavailable;
-        private static int? _oneShot;
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
 
@@ -98,7 +97,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void ClearCards()
         {
-            _oneShot = null;
             foreach (var retire in RetireHosted) retire();
             RetireHosted.Clear();
             _visibleOwner = null;
@@ -111,15 +109,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Hosts.Clear();
         }
 
-        internal static void MarkOneShot(int generation) => _oneShot = generation;
-        internal static void CloseOneShot(int retired)
-        {
-            if (_oneShot == retired) ClearCards();
-        }
-
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
-        public static void Show(Visual host, string text, int? opacity = null)
+        public static void Show(Visual host, string text, int? opacity = null, int? durationMs = null)
         {
             if (!X11Overlay.IsAvailable)
             {
@@ -134,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _visibleOwner = _drawingOwner;
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
-            var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
+            var hold = Hold(s.SubliminalDuration, durationMs);
             var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
@@ -164,6 +156,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Run(alpha, hold);
             }
         }
+
+        internal static TimeSpan Hold(int frames, int? durationMs) => TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(frames, durationMs));
 
         /// <summary>Native focus request; tests substitute it without touching a desktop.</summary>
         internal static Action<Window> ActivateCard = w => RequestFocus(w, NativeFocus);
