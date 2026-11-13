@@ -55,6 +55,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
         };
 
+        // Speak uses the one-shot generation, independently of ambient subliminals.
+        private static object _speakOwner = new();
+        internal static void DrawSpeak(string text)
+        {
+            var owner = Volatile.Read(ref _speakOwner);
+            var gen = Volatile.Read(ref _gen);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!ReferenceEquals(owner, Volatile.Read(ref _speakOwner)) || gen != Volatile.Read(ref _gen)) return;
+                SubliminalOverlay.WithOwner(owner, () => DrawNow(text));
+            });
+        }
+        internal static void StopSpeak()
+        {
+            var owner = Interlocked.Exchange(ref _speakOwner, new object());
+            if (Dispatcher.UIThread.CheckAccess()) SubliminalOverlay.CloseOwned(owner);
+            else Dispatcher.UIThread.Post(() => SubliminalOverlay.CloseOwned(owner));
+        }
+
         private static void Present(string text, int? opacity)
         {
             if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
