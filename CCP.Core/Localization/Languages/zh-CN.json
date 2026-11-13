@@ -1,4 +1,6 @@
 {
+  "deeper_editor_haptic_test_row_off": "触觉选项卡中的 Deeper 行已关闭。请开启后再测试模式。",
+  "deeper_editor_haptic_test_premium": "设备测试需要 Premium 权限。",
   "scheduler_started_title": "计划已启用",
   "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",

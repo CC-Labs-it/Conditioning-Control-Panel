@@ -69,7 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             _seeded = true;
 
             Service.StepChanged += (s, step) => CoreTutorial.RaiseStepChanged(s, Project(step));
-            Service.TutorialFinished += (s, e) => CoreTutorial.RaiseFinished(s, e.Completed);
+            Service.TutorialFinished += (s, e) => { _shellOverlay = null; CoreTutorial.RaiseFinished(s, e.Completed); };
         }
 
         /// <summary>The seam's Start: a WPF TutorialType name. An unknown name starts nothing.</summary>
@@ -111,17 +111,21 @@ namespace ConditioningControlPanel.Avalonia.Tours
             overlay.Closed += (_, _) =>
             {
                 if (ReferenceEquals(_shellOverlay, overlay)) _shellOverlay = null;
-                // Through the shell's one rule: never back over the remote overlay or a leash gate.
-                if (browser != null) shell.RestoreBrowser();
+                // Through the shell's one rule: never back over the remote overlay or a leash gate;
+                // never while another tour card is staged on the same shell.
+                if (browser != null && _shellOverlay?.StageWindow != shell) shell.RestoreBrowser();
             };
             overlay.Show();
         }
 
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
+        internal static bool EndingInstantly { get; private set; }
         internal static void OnPanic()
         {
+            EndingInstantly = true;
             try { Views.Deeper.DeeperEditorWindow.StopTutorialsForPanic(); } catch { /* still skip below */ }
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            finally { TutorialOverlay.CloseForPanic(); EndingInstantly = false; }
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>

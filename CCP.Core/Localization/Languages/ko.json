@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "연결된 햅틱 기기가 없습니다. 설정에서 기기를 연결한 후 테스트하세요.",
+  "deeper_editor_haptic_test_row_off": "햅틱 탭의 Deeper 행이 꺼져 있습니다. 패턴을 테스트하려면 켜세요.",
+  "deeper_editor_haptic_test_premium": "기기 테스트에는 Premium 이용 권한이 필요합니다.",
   "scheduler_started_title": "일정 활성화",
   "scheduler_started_body": "일정에 따라 세션이 자동으로 시작되었습니다.",
   "scheduler_ended_title": "일정",

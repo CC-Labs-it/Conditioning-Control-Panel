@@ -1830,7 +1830,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             return null;
         }
 
-        private void SelectHaptic(HapticTrack track, HapticEvent ev)
+        internal void SelectHaptic(HapticTrack track, HapticEvent ev)
         {
             _selectedRegion = null;
             _selectedHaptic = ev;
@@ -2446,6 +2446,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // contents in place rather than closing it.
                 if (ValidationDetailsPopup?.IsOpen == true) PopulateValidationPopup();
             }
+        }
+
+        // WPF DeeperEditorWindow.xaml.cs:4370-4389: transient text on the validation strip (haptic-test notes),
+        // shown for <paramref name="ms"/> then faded back to the validation state.
+        private DispatcherTimer? _stripMessageTimer;
+        private bool _stripFading;
+        private void ShowStripMessage(string text, string brushKey, int ms)
+        {
+            if (_stripMessageTimer == null)
+            {
+                _stripMessageTimer = new DispatcherTimer();
+                _stripMessageTimer.Tick += (_, _) =>
+                {
+                    if (!_stripFading)
+                    {
+                        _stripFading = true;
+                        TxtValidationSummary.Transitions = new global::Avalonia.Animation.Transitions
+                        {
+                            new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(400) }
+                        };
+                        TxtValidationSummary.Opacity = 0;
+                        _stripMessageTimer.Interval = TimeSpan.FromMilliseconds(400);
+                        return;
+                    }
+                    _stripMessageTimer.Stop();
+                    TxtValidationSummary.Transitions = null;
+                    TxtValidationSummary.Opacity = 1;
+                    RefreshValidation();
+                };
+            }
+            _stripMessageTimer.Stop();
+            _stripFading = false;
+            TxtValidationSummary.Transitions = null;
+            TxtValidationSummary.Opacity = 1;
+            TxtValidationClean.IsVisible = false;
+            TxtValidationSummary.IsVisible = true;
+            TxtValidationSummary.Text = text;
+            TxtValidationSummary.Foreground = Res(brushKey);
+            TxtValidationSummary.Cursor = null;
+            TxtValidationSummary.TextDecorations = null;
+            _stripMessageTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, ms - 400));
+            _stripMessageTimer.Start();
         }
 
         private void TxtValidationSummary_PointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -3283,6 +3325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void TeardownPreview()
         {
             StopBrowserPreview();
+            _stripMessageTimer?.Stop();
             try { _playheadTimer?.Stop(); } catch { }
             try { _validationTimer?.Stop(); } catch { }
             try { _htFetchCts?.Cancel(); _htFetchCts?.Dispose(); } catch { }
