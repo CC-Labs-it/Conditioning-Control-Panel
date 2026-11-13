@@ -52,6 +52,7 @@ public sealed partial class FriendsDrawer
         bell.Click += (_, _) => {
             CoreSettings.Current.FriendNotificationsEnabled = !CoreSettings.Current.FriendNotificationsEnabled;
             try { CoreSettings.Save(); } catch { }
+            FriendsSfx.Click();
             Refresh();
         };
         Refresh();

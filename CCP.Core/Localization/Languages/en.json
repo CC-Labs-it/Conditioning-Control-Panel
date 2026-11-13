@@ -39,6 +39,7 @@
   "rt_engine_browser": "Open in browser",
   "rt_engine_browser_warning": "Panic cannot close a browser tab.",
   "rt_engine_progress": "Downloading: {0}%",
+  "rt_engine_downloading": "Downloading...",
   "rt_engine_unavailable": "Race engine download is unavailable in this build.",
   "rt_engine_network": "Race engine download failed. Check the connection.",
   "rt_engine_checksum": "Race engine download failed its checksum.",

@@ -57,8 +57,11 @@ trap 'rm -rf "$WORK"' EXIT
 # CCP.Core/Services/Awareness/AwarenessAngleCards.cs:247-248 - the embedded fail-closed angle deck.
 # Its <EmbeddedResource> moved into CCP.Core.csproj with the class (awareness-core-a), so the read
 # resolves; Tests/CCP.Core.Tests/AwarenessAngleCardTests.TheEmbeddedDeckIsPresentAndRich fails without it.
+# Linux-only statx checks licence file type; the call is guarded by OperatingSystem.IsLinux().
+# CCP.Core/Services/Race/RaceEngineFetcher.cs:150
 cat > "$WORK/baseline.txt" <<'EOF'
 CCP.Core/Models/Quest.cs:336
+CCP.Core/Services/Race/RaceEngineFetcher.cs:150
 CCP.Core/Services/Awareness/AwarenessAngleCards.cs:247
 CCP.Core/Services/Awareness/AwarenessAngleCards.cs:248
 EOF

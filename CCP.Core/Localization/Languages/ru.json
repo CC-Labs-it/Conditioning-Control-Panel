@@ -42,6 +42,7 @@
   "rt_engine_browser": "Открыть в браузере",
   "rt_engine_browser_warning": "Паника не может закрыть вкладку браузера.",
   "rt_engine_progress": "Загрузка: {0}%",
+  "rt_engine_downloading": "Загрузка...",
   "rt_engine_unavailable": "В этой сборке загрузка движка недоступна.",
   "rt_engine_network": "Ошибка загрузки. Проверьте соединение.",
   "rt_engine_checksum": "Контрольная сумма движка не совпала.",

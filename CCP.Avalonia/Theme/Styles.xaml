@@ -1011,6 +1011,7 @@
     <Setter Property="Padding" Value="8,6"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="fx:InputFx.FocusOnPointerEntry" Value="True"/>
     <Setter Property="HorizontalContentAlignment" Value="Left"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="Template">
@@ -1028,10 +1029,10 @@
         </Border>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:pointerover">
+    <Style Selector="^:focus">
       <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     </Style>
-    <Style Selector="^:pointerover /template/ Border#Bd">
+    <Style Selector="^:focus /template/ Border#Bd">
       <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
     </Style>
     <Style Selector="^:selected">
@@ -1078,7 +1079,8 @@
         <Grid ColumnDefinitions="*,Auto">
           <Border x:Name="Background" Grid.ColumnSpan="2" CornerRadius="{TemplateBinding CornerRadius}"
                   Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"/>
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  fx:InputFx.GlowColor="{DynamicResource PinkColor}" fx:InputFx.GlowBlur="10"/>
           <Panel x:Name="ArrowHost" Grid.Column="1">
             <Path x:Name="Arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
                   Stroke="{DynamicResource TextSecondaryBrush}" StrokeLineCap="Round" StrokeJoin="Round"/>
@@ -1129,6 +1131,7 @@
     </Style>
     <Style Selector="^:dropdownopen /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="fx:InputFx.GlowOpacity" Value="0.35"/>
     </Style>
     <Style Selector="^:dropdownopen /template/ Path#Arrow">
       <Setter Property="Stroke" Value="{DynamicResource PinkBrush}"/>
