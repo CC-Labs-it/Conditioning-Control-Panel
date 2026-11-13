@@ -37,6 +37,7 @@
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
     <!-- Where a subliminal card sits while a mandatory video is up (ccp-bugs #1422): pure z-order rule, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\Subliminal\SubliminalOverVideo.cs" Link="Services\Subliminal\SubliminalOverVideo.cs" />
+    <Compile Include="..\ConditioningControlPanel\Services\Deeper\PlayheadExtrapolator.cs" Link="Services\Deeper\PlayheadExtrapolator.cs" />
     <!-- The audio player's order rules (list, loop, shuffle): no UI, no audio, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\AudioPlayer\AudioPlaylistRules.cs" Link="Services\AudioPlayer\AudioPlaylistRules.cs" />
     <PackageReference Include="Avalonia" Version="12.1.6" />

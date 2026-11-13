@@ -109,6 +109,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CornerGifOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                if (!systemInitiated) _ = MaybePromptMandatoryVideoEnhancement(this, () => CoreEngine.IsRunning,   // WPF StartStop.cs:443
+                    () => Platform.WebcamTracker.Instance.IsRunning, () => Named<Tabs.SettingsTabView>("SettingsTab")?.BtnWebcamTracking_Click(null, new()));
             });
         }
 

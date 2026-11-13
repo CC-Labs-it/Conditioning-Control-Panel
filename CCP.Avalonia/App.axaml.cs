@@ -285,6 +285,11 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Debug("Chime failed: {E}", ex.Message); }
         }
 
+        // WPF App.xaml.cs:677: the real effects dispatcher. Webcam events are not seeded here: each
+        // binder passes its own adapter (browser card, mandatory video) and the player window seeds its own.
+        internal static void SeedDeeperEnhancements() =>
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Platform.Deeper.BrowserEnhancementDispatcher();
+
         // WPF App.xaml.cs:3218: subscribe at construction time and return the exact detach.
         internal static void SeedHapticPlaybackTime()
         {
@@ -1138,6 +1143,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreWebcam.IsAvailableProvider = () => true;
                 CoreWebcam.RevokeConsentAction = Platform.WebcamTracker.RevokeConsent;
                 _gazeDrift = new Platform.GazeDriftCorrection(Platform.WebcamTracker.Instance, Settings.Current);
+                SeedDeeperEnhancements();
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
