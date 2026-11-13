@@ -127,6 +127,64 @@ namespace ConditioningControlPanel.Avalonia
         internal static AutoSettingsBackup? CloudAutoBackup { get; private set; }
 
         /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
+        /// <summary>WPF GamificationBridge.cs:114-136,299-358: restore the best available chat
+        /// count once, silently, after both the brain and achievements are ready.</summary>
+        internal static void BackfillCompanionChatCount(AchievementEngine? achievements,
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain? brain)
+        {
+            if (achievements == null || brain == null || achievements.Progress.CompanionChatBackfilled) return;
+            var wasSuppressed = achievements.SuppressPopups;
+            achievements.SuppressPopups = true;
+            try
+            {
+                var readSomething = false;
+                var restoredTurns = 0;
+                try
+                {
+                    restoredTurns = brain.Session.Turns.Count(t => t != null &&
+                        t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.UserChat);
+                    readSomething = true;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Chat backfill: turn-log read failed: {Error}", ex.Message); }
+
+                var relationshipTurns = 0;
+                try
+                {
+                    if (brain.Memory is ConditioningControlPanel.Services.Companion.Brain.MemoryStore store)
+                        relationshipTurns = store.Relationships.Values.Sum(r => r?.ChatTurnsTotal ?? 0);
+                    readSomething = true;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Chat backfill: relationship read failed: {Error}", ex.Message); }
+
+                if (!readSomething) return;
+                var progress = achievements.Progress;
+                progress.CompanionChatBackfilled = true;
+                progress.CompanionMessages = Math.Max(progress.CompanionMessages, Math.Max(restoredTurns, relationshipTurns));
+                achievements.IsDirty = true;
+                if (progress.CompanionMessages > 0) achievements.TryUnlock("pleased_to_meet_you");
+                if (progress.CompanionMessages >= AchievementRules.PillowTalkMessages) achievements.TryUnlock("pillow_talk");
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Companion chat backfill failed"); }
+            finally { achievements.SuppressPopups = wasSuppressed; }
+        }
+
+        /// <summary>An empty backfill only sets the one-shot latch. Keep it in memory until a real
+        /// achievement change saves it, so the autosave tick does not create or rewrite the file.</summary>
+        internal static void DeferEmptyBackfillSave(AchievementEngine engine, bool dirtyBeforeBackfill)
+        {
+            if (!dirtyBeforeBackfill && engine.Progress.CompanionChatBackfilled && engine.Progress.CompanionMessages == 0)
+                engine.IsDirty = false;
+        }
+
+        /// <summary>WPF AchievementService.cs:98-105 autosaves dirty progress every 30 seconds.
+        /// This head saves a non-empty backfill now; a failed write stays dirty for the autosave and exit retries.</summary>
+        internal static void SaveNonEmptyChatBackfill(AchievementEngine engine, bool wasBackfilled)
+        {
+            if (!wasBackfilled && engine.Progress.CompanionChatBackfilled
+                && engine.Progress.CompanionMessages > 0 && engine.IsDirty)
+                engine.Save();
+        }
+
         internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
         {
             try { timer?.Stop(); }
@@ -1264,6 +1322,11 @@ namespace ConditioningControlPanel.Avalonia
                 _achievementSaveTimer?.Stop();
                 _achievementSaveTimer = StartAchievementAutosave(Achievements, CheckSeasonActivity);
                 WireAchievementUnlocks(Achievements);
+                var chatBackfillWasComplete = Achievements.Progress.CompanionChatBackfilled;
+                var dirtyBeforeChatBackfill = Achievements.IsDirty;
+                BackfillCompanionChatCount(Achievements, Brain);   // WPF GamificationBridge.Start:132
+                DeferEmptyBackfillSave(Achievements, dirtyBeforeChatBackfill);
+                SaveNonEmptyChatBackfill(Achievements, chatBackfillWasComplete);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.

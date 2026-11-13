@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Services
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll, _bubbleWait, _cascadeDefer;
         private bool _deferIsReplay;   // the held request carries a verdict replay: dropping it must run AfterEnd
+        private bool _waitEndsRun;     // the bubble-count wait carries a verdict replay: a failed replay must run AfterEnd
 
         /// <summary>WPF VideoService.cs:1916,2226: hold/coalesce for at most 90 s; recheck scheduled eligibility.</summary>
         public Func<bool>? CascadeIsRaining { get; set; }
@@ -603,6 +604,8 @@ namespace ConditioningControlPanel.Services
                 var retryPath = PickNext() ?? LastVideoPath;
                 if (retryPath == null || !Trigger(strict, retryPath)) AfterEnd();
                 else if (_cascadeDefer != null && !_playing) _deferIsReplay = true;   // held behind GIF rain
+                // WPF VideoService.cs:7930-7968: a failed replay must finish the run, even after queueing.
+                else if (_bubbleWait != null && !_playing) _waitEndsRun = true;
             });
         }
 
@@ -613,18 +616,33 @@ namespace ConditioningControlPanel.Services
             {
                 if (!ReferenceEquals(mine, _bubbleWait)) return;
                 Dispose(ref _bubbleWait);
+                var endsRun = _waitEndsRun;
+                _waitEndsRun = false;
                 try
                 {
-                    if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)) return;
-                    if (_host.BubbleCountActive) WaitForBubbleCount(strict, path, scheduled);
-                    else if (!Trigger(strict, path, scheduled: scheduled) && scheduled) ScheduleNext();
+                    if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled))
+                    {
+                        if (endsRun) AfterEnd();
+                        return;
+                    }
+                    if (_host.BubbleCountActive)
+                    {
+                        WaitForBubbleCount(strict, path, scheduled);
+                        _waitEndsRun = endsRun;
+                    }
+                    else if (!Trigger(strict, path, scheduled: scheduled))
+                    {
+                        if (endsRun) AfterEnd();
+                        else if (scheduled) ScheduleNext();
+                    }
                 }
                 catch (Exception ex)
                 {
                     // WPF VideoService.cs:2356-2363,2990-2998: contain selection/trigger failures.
                     Log.Error(ex, "VideoService: deferred trigger failed - re-arming scheduled playback");
                     _playing = false;
-                    if (scheduled) ScheduleNext();
+                    if (endsRun) AfterEnd();
+                    else if (scheduled) ScheduleNext();
                 }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _bubbleWait = created;
@@ -636,6 +654,7 @@ namespace ConditioningControlPanel.Services
         {
             _feedDefer.Reset(); // A panic cannot leave a held trigger behind.
             Dispose(ref _bubbleWait);
+            _waitEndsRun = false;
             var heldReplay = DropDefer();
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
