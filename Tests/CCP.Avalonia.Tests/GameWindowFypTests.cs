@@ -210,9 +210,14 @@ public sealed class GameWindowFypTests
         Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)init["assets"]!.Single()["url"]);
         Assert.Equal(new Uri((string)init["assets"]![0]!["url"]!).Authority, w.PageUrl!.Authority);
         sent.Clear();
-        w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}");
+        var oldSupport = GameWindow.FypGhostSupport;   // pinned: the real verdict depends on the desktop
+        GameWindow.FypGhostSupport = () => "unsupported";
+        try { w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}"); }
+        finally { GameWindow.FypGhostSupport = oldSupport; }
         Assert.Equal(new[] { "clickThrough", "ghost-unavailable" }, sent.Select(o => (string?)o["type"]));
         Assert.False((bool)sent[0]["on"]!);
+        Assert.Equal("unsupported", (string?)sent[1]["reason"]);
+        Assert.False(w.IsFypGhosted);
         sent.Clear();
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
         Wait(w.FypEyeTask!);

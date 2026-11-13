@@ -493,6 +493,39 @@ public sealed class BlinkTrainerSessionTests
         });
     }
 
+    [Fact]
+    public void FypPanicLadder_StopsTrainerAndCamera()
+    {
+        WithSession((_, _) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll);
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var feed = new ConditioningControlPanel.Avalonia.Views.Games.GameWindow(
+                ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Games["fyp"]);
+            try
+            {
+                s.PanicKeyEnabled = true;
+                s.PanicKey = "F8";
+                s.PanicOverridesAll = false;
+                feed.Show();
+                Assert.True(WebcamTracker.Instance.Start());
+                Assert.True(BlinkTrainerSession.Start(shell));
+                shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
+                Assert.False(feed.IsVisible);
+                Assert.False(BlinkTrainerSession.IsRunning);
+                Assert.Empty(BlinkTrainerSession.Windows);
+                Assert.True(WaitUntil(() => !WebcamTracker.Instance.IsRunning));
+            }
+            finally
+            {
+                feed.Close();
+                shell.Close();
+                (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll) = old;
+            }
+        });
+    }
+
     /// <summary>WPF ApplyBlinkTrainerLiveVideo: a video pick hides both images and plays on the stage;
     /// an image pick stops it; hiding the page parks everything (no subscription, video or tick);
     /// the help button carries the BlinkTrainer card (WPF MainWindow.Presets.cs:118).</summary>

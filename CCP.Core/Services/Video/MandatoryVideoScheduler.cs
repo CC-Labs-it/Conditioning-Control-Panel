@@ -433,7 +433,16 @@ namespace ConditioningControlPanel.Services
                 {
                     // WPF :2048: stop and live disable invalidate the held trigger.
                     if (!_running || !CoreSettings.Current.MandatoryVideosEnabled) return;
-                    if (!Trigger(strictOverride)) Rearm();
+                    try
+                    {
+                        if (!Trigger(strictOverride)) Rearm();
+                    }
+                    catch (Exception ex)
+                    {
+                        // A replay that throws (unreadable library) must not leave the schedule dead (#3776).
+                        Log.Error(ex, "VideoService: feed replay failed - re-arming scheduler");
+                        if (!_playing) Rearm();
+                    }
                 }, Rearm);
                 // Keep the base's empty-library rearm policy when a hold expires.
                 void Rearm() { if (_scheduler == null && !_playing) ScheduleNext(); }
