@@ -247,6 +247,30 @@ public sealed class X11VideoEscapePartATests
     }
 
     [Fact]
+    public void LeashedPanicPressStillReachesThePanicRoute()
+    {
+        var code = X11PanicKey.BoundKeycode;
+        var leashed = X11PanicKey.Leashed;
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey);
+        (s.PanicKeyEnabled, s.PanicKey) = (false, "Escape");
+        X11PanicKey.BindKeycodeForTest(9);
+        try
+        {
+            bool down = false;
+            int requests = 0, panic = 0;
+            X11PanicKey.Leashed = () => false;
+            X11PanicKey.RouteRawKey(true, 9, 9, ref down, () => { requests++; return true; }, () => panic++);
+            Assert.Equal((1, 0), (requests, panic));   // the video owns a plain press
+            X11PanicKey.RouteRawKey(false, 9, 9, ref down, () => true, () => panic++);
+            X11PanicKey.Leashed = () => true;
+            X11PanicKey.RouteRawKey(true, 9, 9, ref down, () => { requests++; return true; }, () => panic++);
+            Assert.Equal((2, 1), (requests, panic));   // leashed: the hold-to-cut press still runs
+        }
+        finally { X11PanicKey.BindKeycodeForTest(code); X11PanicKey.Leashed = leashed; (s.PanicKeyEnabled, s.PanicKey) = saved; }
+    }
+
+    [Fact]
     public void DuplicateDownIsOneVideoPressUntilRelease()
     {
         var code = X11PanicKey.BoundKeycode;

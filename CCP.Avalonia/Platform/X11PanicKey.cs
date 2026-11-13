@@ -291,8 +291,16 @@ internal static class X11PanicKey
     {
         bool videoOwnsPress = false;
         RouteVideoEscape(press, code, escapeCode, ref down, () => videoOwnsPress = queue());
-        if (!videoOwnsPress) Route(press, code, onPress);
+        // Under a leash the panic press also starts the hold-to-cut: the sub can cut the leash
+        // any time, so a video that took the Escape never keeps it from the panic route.
+        if (!videoOwnsPress || Leashed()) Route(press, code, onPress);
     }
+
+    /// <summary>Is this account on a leash right now (listener thread; tests swap it)?</summary>
+    internal static Func<bool> Leashed = () =>
+    {
+        try { return LeashHead.Service?.Snapshot.Me != null; } catch { return false; }
+    };
 
     // XI2 raw events reach the listener even when another X11 client has focus. WPF gives
     // a non-strict video Escape when panic is disabled or Lockdown prevents it from running.
