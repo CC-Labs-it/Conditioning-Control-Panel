@@ -185,8 +185,8 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
-        /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
+        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp or RainDown: the spec's size, the chaos
+        /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT) and ambient wobble.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
             double scaling, Chaos.EffectBubbleSpec spec)
         {
@@ -199,7 +199,8 @@ namespace ConditioningControlPanel.Services
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
-            b.Y = (areaY + areaH) / scaling;
+            b._bottom = (areaY + areaH) / scaling + 50;
+            b.Y = spec.Motion == Chaos.ChaosMotion.RainDown ? areaY / scaling - b.Size : (areaY + areaH) / scaling;
             if (spec.SpawnAtPxX is double px && spec.SpawnAtPxY is double py)
             {
                 b.X = b._startX = px / scaling - b.Size / 2;
@@ -311,9 +312,11 @@ namespace ConditioningControlPanel.Services
                     X = _startX + offset;
                     return Y > _bottom ? Result.Missed : Result.Alive;
                 default:
-                    Y -= _speed;
+                    // Chaos FloatUp or RainDown (WPF :4212: a live that escapes detonates).
+                    bool rain = Spec?.Motion == Chaos.ChaosMotion.RainDown;
+                    Y += rain ? _speed : -_speed;
                     X = _startX + offset;
-                    if (Y >= _top) return Result.Alive;
+                    if (rain ? Y <= _bottom : Y >= _top) return Result.Alive;
                     return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;
             }
         }

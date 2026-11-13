@@ -27,6 +27,22 @@ public class ChaosLiveBubbleTests
     }
 
     [Fact]
+    public void Rain_enters_above_the_screen_moves_down_and_leaves_at_the_bottom()
+    {
+        var spec = new EffectBubbleSpec { VariantId = "flash", SizePx = 150, Motion = ChaosMotion.RainDown };
+        var field = new AmbientBubbleField();
+        var bubble = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, spec);
+        field.Bubbles.Add(bubble);
+        Assert.Equal(-150, bubble.Y);
+        field.Step();
+        Assert.True(bubble.Y > -150);
+        int missed = 0;
+        for (int i = 0; i < 100_000 && field.Bubbles.Count > 0; i++) missed += field.Step();
+        Assert.Equal(1, missed);
+        Assert.Empty(field.Bubbles);
+    }
+
+    [Fact]
     public void The_fuse_burns_32ms_a_step_and_fuse_out_detonates_once()
     {
         var (f, b, log) = Field(Live(320));
