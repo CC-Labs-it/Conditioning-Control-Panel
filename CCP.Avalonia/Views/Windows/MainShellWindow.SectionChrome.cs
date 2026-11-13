@@ -13,8 +13,7 @@
 // frame line, the 28 px glow band and the lift in the hue.
 //
 // The edge lift laps at Full and rests at Reduced; the edge fog (EdgeParticles, AmbientFxCanvas.EdgeFog)
-// runs at Full and Reduced and thins the band under it. Still missing: the depth painters the wash feeds
-// (PaintDepthHome) and the "Moved" redirects and their note.
+// runs at Full and Reduced and thins the band under it. Still missing: the "Moved" redirects and their note.
 
 using System;
 using System.Linq;
@@ -131,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintDepthRail(hue); // WPF MainWindow.SectionChrome.cs:166
                 PaintBannerDepth(hue);
                 PaintDepthHud(hue);
+                Named<Tabs.SettingsTabView>("SettingsTab")?.PaintDepthHome(hue);
                 Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView>("QuestsTab")?.PaintDepthQuests(hue);
                 var level = CoreSettings.Current.MotionLevel;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
