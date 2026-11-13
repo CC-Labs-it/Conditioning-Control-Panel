@@ -194,6 +194,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 double durationSec = Math.Max(1, (double?)o["durationSec"] ?? 60);
                 double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
                 var pay = RacePayout(score, durationSec, skillMult);
+                // WPF CaucusHostService.cs:447 (Sparkles B1): the race runs against the track, so it claims a medal
+                // against its own XP ceiling (the same scale as baseXp).
+                DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.Claim(Platform.SparklesHead.Service, "caucus", "solo",
+                    ConditioningControlPanel.Services.Sparkles.Claims.SparklesResult.ForMedal(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.RatioMedal(score / 5.0, 250.0 * (durationSec / 60.0))),
+                    TimeSpan.FromSeconds(durationSec)));
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = RaceBankSparks(new ChaosMeta.ChaosRunRewardInput(
                     RunDurationSec: durationSec, DifficultyMult: 1.0, SparkGainMult: 1.0, Score: score / 5.0,

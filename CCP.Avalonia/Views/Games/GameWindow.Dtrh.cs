@@ -347,6 +347,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var booking = DtrhRunWire.Book(o, hostElapsed);
+                // WPF DtrhHostService.cs:622 (Sparkles B1): a descent that reached its own ending claims a medal
+                // against this run's XP ceiling. A left descent pays nothing.
+                if (!((bool?)o["abandoned"] ?? false))
+                    DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.Claim(SparklesHead.Service, "dtrh", "solo",
+                        ConditioningControlPanel.Services.Sparkles.Claims.SparklesResult.ForMedal(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.RatioMedal(booking.Score, 250.0 * (booking.DurationSec / 60.0) * booking.DiffMult)),
+                        TimeSpan.FromSeconds(booking.DurationSec), new JObject { ["difficulty"] = booking.Difficulty }));
                 double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;

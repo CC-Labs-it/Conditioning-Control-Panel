@@ -45,6 +45,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         };
         internal Window? WarningOwner { get; init; }
         internal IntakeRun Run { get; } = new();
+        private DateTime _openedUtc;
+        /// <summary>The intake claim's slip delivery (tests await it).</summary>
+        internal System.Threading.Tasks.Task SparklesPending { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
         internal WebHost Web { get; } = new();
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
 
@@ -62,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened += (_, _) =>
             {
                 lock (OpenWindows) { if (OpenWindows.Contains(this)) return; OpenWindows.Add(this); }
+                _openedUtc = Now;
                 StartLifecycle();
             };
             Closed += (_, _) =>
@@ -173,8 +177,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF IntakeHostService.OnQuizResult: achievements, pass, draft, then the app and the page are told.</summary>
         private void OnQuizResult(JObject o)
         {
+            bool firstResult = !Run.ResultReceived;
             var run = Run.AcceptResult(o);
             if (run == null) return;
+            // WPF IntakeHostService.cs:504 (Sparkles B1): one claim per opened intake, graded by its marks.
+            if (firstResult && _openedUtc != default)
+                SparklesPending = SparklesHead.Deliver(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.Claim(SparklesHead.Service, "intake", "solo",
+                    ConditioningControlPanel.Services.Sparkles.Claims.SparklesResult.ForMedal(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.IntakeMedal(run.TotalScore, run.MaxScore, IntakeRun.TopMarksPercent)),
+                    Now - _openedUtc), msg => Post(msg), () => _closed);
             var (session, path) = IntakeRun.Complete(run, SessionsFolder,
                 () => App.IntakePass.ConsumeForCompletedIntake(),
                 (_, passed, perfect, category) => App.Achievements?.TrackQuizCompleted(passed, perfect, category));
