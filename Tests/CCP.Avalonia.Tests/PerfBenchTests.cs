@@ -120,7 +120,8 @@ public sealed class PerfBenchTests
             global::ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
             shell.RefreshExclusivesTab(); // Tier/day rollover's production repaint entry point.
             Assert.False(veil.IsVisible);
-            Assert.NotSame(before, art.Source);
+            // The trunk keeps decoded vault art (38a3e1aacc), so the repaint may reuse the same bitmap.
+            Assert.NotNull(art.Source);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.False(veil.IsVisible); // No tab switch is required after tray restore.
