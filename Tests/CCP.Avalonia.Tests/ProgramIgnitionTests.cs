@@ -408,7 +408,6 @@ public sealed class ProgramIgnitionTests
             Assert.Equal(0, xp.Opacity);
             Assert.Equal(0, ((TranslateTransform)xp.RenderTransform!).Y);
             Assert.False(seal.IsVisible);
-            Assert.Equal(1, ((ScaleTransform)tab.FindControl<StackPanel>("ProgramsSealStamp")!.RenderTransform!).ScaleX);
         }
         finally
         {

@@ -545,7 +545,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 scale.ScaleX = scale.ScaleY = t <= .3
                     ? 1.35 - .35 * ProgramBackOut(t / .3, .5)
                     : 1 + .06 * (t - .3) / (SealSeconds - .3);
-            }, () => { host.Opacity = 0; host.IsVisible = false; scale.ScaleX = scale.ScaleY = 1; });
+            }, () => { host.Opacity = 0; host.IsVisible = false; });
             QueueProgramBurst(Find<Border>("ProgramsSealRing"), ProgramHeat.BurstCount(1), accent);
             Serilog.Log.Information("[FX] program chapter sealed: {Chapter}", chapter.Name);
         }
