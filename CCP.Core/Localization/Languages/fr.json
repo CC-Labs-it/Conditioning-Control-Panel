@@ -42,6 +42,8 @@
   "lockcard_voice_hint_model_failed": "Modèle vocal trouvé, mais impossible à charger. Supprime les modèles supplémentaires dans {0}, puis redémarre.",
   "lockcard_voice_hint_model_missing": "Le modèle vocal n'est pas encore installé. Les cartes de verrouillage utiliseront la saisie en attendant. Décompresse vosk-model-small-en-us-0.15 dans {0}",
   "chaos_body_buzz_spreads": "frissons corporels : le courant se propage",
+  "chaos_freeze_event": "gelé. le champ reste immobile",
+  "chaos_freeze_banner": "Gel",
   "chaos_toy_buzz": "ça vibre. maintiens et balaie",
   "chaos_toy_snap_all": "libéré. tout.",
   "chaos_toy_snap_live": "libéré. toutes les bulles actives ont cédé",

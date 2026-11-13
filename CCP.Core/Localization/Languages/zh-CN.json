@@ -41,6 +41,8 @@
   "lockcard_voice_hint_model_failed": "已找到语音模型，但无法加载。请删除添加到 {0} 的额外模型，然后重启。",
   "lockcard_voice_hint_model_missing": "尚未安装语音模型。在此之前，锁定卡片将使用打字。请将 vosk-model-small-en-us-0.15 解压到 {0}。",
   "chaos_body_buzz_spreads": "全身酥麻：电流扩散开来",
+  "chaos_freeze_event": "冻结。场域静止",
+  "chaos_freeze_banner": "冻结",
   "chaos_toy_buzz": "振动中。按住并扫过",
   "chaos_toy_snap_all": "解除了。全部。",
   "chaos_toy_snap_live": "解除了。所有活跃气泡都已松开",

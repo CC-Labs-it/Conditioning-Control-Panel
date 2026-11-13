@@ -42,6 +42,8 @@
   "lockcard_voice_hint_model_failed": "Modelo de fala encontrado, mas não foi possível carregá-lo. Remova os modelos extras de {0} e reinicie.",
   "lockcard_voice_hint_model_missing": "O modelo de fala ainda não está instalado. Os cartões de bloqueio usarão digitação por enquanto. Extraia vosk-model-small-en-us-0.15 em {0}",
   "chaos_body_buzz_spreads": "formigamento: a corrente se espalha",
+  "chaos_freeze_event": "congelado. o campo para",
+  "chaos_freeze_banner": "Congelar",
   "chaos_toy_buzz": "vibrando. segure e deslize",
   "chaos_toy_snap_all": "liberado. tudo.",
   "chaos_toy_snap_live": "liberado. todas as bolhas ativas cederam",

@@ -472,6 +472,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.HoldChaos = false;
             ClearEStim();
+            Field.FreezeChaos = false;
+            Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
@@ -637,7 +639,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
                 b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
                 b.Spec.IsLive ? 1.3 : 1.0);
-            PlayChaosCue(null, 1f);   // WPF onBenignPop: PlayPopSound(false)
+            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : null, b.Spec.IsFreeze ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -928,6 +930,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             private readonly BubbleOverlayWindow _w;
             public Layer(BubbleOverlayWindow w) { _w = w; IsHitTestVisible = false; }
 
+            private static readonly IBrush FreezeAura = new RadialGradientBrush
+            {
+                Center = RelativePoint.Center, GradientOrigin = RelativePoint.Center,
+                GradientStops = { new GradientStop(Color.FromArgb(0, 150, 210, 255), 0.30),
+                    new GradientStop(Color.FromArgb(190, 150, 210, 255), 0.66),
+                    new GradientStop(Color.FromArgb(0, 150, 210, 255), 1.0) }
+            };
+
             public override void Render(DrawingContext dc)
             {
                 var k = _w.K;
@@ -945,6 +955,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1)))
                     {
+                        if (b.Spec != null && BubbleOverlay.Field.FreezeChaos)
+                        {
+                            using (dc.PushOpacity(BubbleOverlay.Field.FreezeAuraOpacity))
+                                dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), (size + 6 * k) / 2, (size + 6 * k) / 2);
+                        }
                         if (b.Spec != null && teaseImage == null)   // WPF skips tint for a variant sprite
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);

@@ -42,6 +42,8 @@
   "lockcard_voice_hint_model_failed": "음성 모델을 찾았지만 불러오지 못했습니다. {0}에 추가한 모델을 삭제한 뒤 다시 시작하세요.",
   "lockcard_voice_hint_model_missing": "음성 모델이 아직 설치되지 않았습니다. 그동안 잠금 카드는 글자 입력을 사용합니다. vosk-model-small-en-us-0.15를 {0}에 압축 해제하세요.",
   "chaos_body_buzz_spreads": "온몸이 찌릿: 전류가 퍼진다",
+  "chaos_freeze_event": "얼었다. 필드가 멈춘다",
+  "chaos_freeze_banner": "동결",
   "chaos_toy_buzz": "진동 중. 누른 채로 쓸기",
   "chaos_toy_snap_all": "해제. 모두.",
   "chaos_toy_snap_live": "해제. 모든 활성 방울이 풀렸다",

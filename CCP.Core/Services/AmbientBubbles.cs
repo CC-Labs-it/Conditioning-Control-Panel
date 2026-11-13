@@ -306,8 +306,9 @@ namespace ConditioningControlPanel.Services
         private static uint Argb(double opacity, byte r, byte g, byte b) =>
             ((uint)Math.Round(Math.Clamp(opacity, 0, 1) * 255) << 24) | ((uint)r << 16) | ((uint)g << 8) | b;
 
-        public double CenterX => X + Size / 2;
-        public double CenterY => Y + Size / 2;
+        public double FreezeOffsetX, FreezeOffsetY;
+        public double CenterX => X + Size / 2 + FreezeOffsetX;
+        public double CenterY => Y + Size / 2 + FreezeOffsetY;
 
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
@@ -434,6 +435,19 @@ namespace ConditioningControlPanel.Services
         public Action<int>? LuckyProc;
         /// <summary>WPF SetChaosFrozen: a held Chaos run's live bubbles do not move (a pop burst still plays).</summary>
         public bool HoldChaos;
+        /// <summary>Freeze holds motion and fuses while allowing defuse channels and pop animations.</summary>
+        public bool FreezeChaos;
+        /// <summary>WPF BubbleService.cs:255,4323: 200 ms impact jitter in DIPs.</summary>
+        public double FreezeVibrateRemainingMs;
+        private double _freezePulsePhase;
+        public double FreezeAuraOpacity => FreezeChaos ? 0.1125 + 0.0875 * Math.Sin(_freezePulsePhase) : 0;
+
+        public void ClearFreezeVisuals()
+        {
+            FreezeVibrateRemainingMs = 0;
+            _freezePulsePhase = 0;
+            foreach (var bubble in Bubbles) bubble.FreezeOffsetX = bubble.FreezeOffsetY = 0;
+        }
         /// <summary>WPF ChaosMouseHeld + CursorPx: the player's press, in global DIPs, for a defuse channel.</summary>
         public bool Held;
         public double CursorX = double.PositiveInfinity, CursorY = double.PositiveInfinity;
@@ -494,11 +508,19 @@ namespace ConditioningControlPanel.Services
         {
             var missed = 0;
             var now = Clock();
+            if (FreezeChaos) _freezePulsePhase += 0.18;
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
+                if (FreezeChaos && FreezeVibrateRemainingMs > 0 && b.Spec != null && !b.AmbientTrigger)
+                {
+                    b.FreezeOffsetX = (Random.NextDouble() - 0.5) * 8;
+                    b.FreezeOffsetY = (Random.NextDouble() - 0.5) * 8;
+                }
+                else b.FreezeOffsetX = b.FreezeOffsetY = 0;
                 if (HoldChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping) { b.CancelChannel(); continue; }
+                if (FreezeChaos && b.Spec != null && !b.AmbientTrigger && !b.Popping && !b.Channeling) continue;
                 var r = b.Step(Held, CursorX, CursorY, now);
                 if (r == AmbientBubble.Result.Alive) continue;
                 if (r == AmbientBubble.Result.Shattered) { ChaosBrittleShattered?.Invoke(b); continue; }
@@ -508,6 +530,7 @@ namespace ConditioningControlPanel.Services
                 if (r == AmbientBubble.Result.Missed) missed++;
                 Bubbles.RemoveAt(i);
             }
+            FreezeVibrateRemainingMs = Math.Max(0, FreezeVibrateRemainingMs - 32);
             return missed;
         }
     }
