@@ -80,7 +80,7 @@ public partial class EnhancementPlayerWindow
                 _ = _player._videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(playing ? "l.play();" : "l.pause();"));
             else return;
             _player._isPlaying = playing;
-            _player._txtPlayPauseGlyph.Kind = playing ? FluentIcons.Common.Symbol.Pause : FluentIcons.Common.Symbol.Play;
+            _player._txtPlayPauseGlyph.Kind = playing ? IconKind.Pause : IconKind.Play;
             _player._txtStatus.Text = ConditioningControlPanel.Localization.Loc.Get(playing ? "deeper_player_status_playing" : "deeper_player_status_stopped");
             _player.UpdateStatusPill();
         }

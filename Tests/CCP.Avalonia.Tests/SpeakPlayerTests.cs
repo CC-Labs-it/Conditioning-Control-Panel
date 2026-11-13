@@ -23,6 +23,7 @@ public class SpeakPlayerTests
     {
         public double PositionSeconds { get; set; }
         public double DurationSeconds => 20;
+        public double? PlaybackDurationSeconds => 20;
         public int Volume { get; set; }
         public bool Playing;
         public event Action? Ended;
@@ -51,7 +52,7 @@ public class SpeakPlayerTests
             listen, stopListening ?? (() => { }), show ?? (_ => { }), hide ?? (() => { }), flash);
 
     [Fact]
-    public Task ReplacementRetiresQueuedAndDisplayedSpeakCards() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ReplacementRetiresQueuedAndDisplayedSpeakCards() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var oldDraw = SubliminalWhisperShow.DrawNow;
         using var media = new Media(); var audio = media.Audio;
@@ -62,6 +63,9 @@ public class SpeakPlayerTests
         try
         {
             player.Show(); player.OpenLocalMediaFile(media.Path);
+            // The trunk player starts audio only after its waveform load (#4751), off the UI thread.
+            for (int i = 0; i < 500 && !audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(audio.Playing);
             var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
                 new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
                     EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent } } };
@@ -82,7 +86,6 @@ public class SpeakPlayerTests
             Assert.True(cards[2].IsVisible);
         }
         finally { player.Close(); SubliminalOverlay.CloseAll(); SubliminalWhisperShow.DrawNow = oldDraw; }
-        return Task.CompletedTask;
     });
 
     [Fact]
