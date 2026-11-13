@@ -116,6 +116,11 @@
   "chaos_announce_resist": "+1 RESISTANCE",
   "chaos_first_sin_demo": "the first sin is shielded this once",
   "chaos_duo_demo": "a gold card. your toys learned to work together.",
+  "Chaos_Ripple_Denied": "🌊 still water... gathering {0}",
+  "Chaos_Ripple_Gathering": "gathering... {0}",
+  "Chaos_Ripple_Teach": "🌊 that's the ripple. it gathers back on its own",
+  "Chaos_Ripple_Skips": "🌊 the stone skips - three waves",
+  "Chaos_Ripple_Cast": "🌊 ripple",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",
@@ -9179,5 +9184,15 @@
   "chaos_resistance_regrows": "resistance regrows",
   "she_wake_unavailable_tooltip": "The optional sherpa-onnx wake engine is not available in this version. The built-in recognizer is used.",
   "she_wake_unavailable_status": "The optional wake engine is not available in this version. Using the built-in recognizer.",
-  "she_wake_calibration_unavailable": "Wake word calibration is not available in this version."
+  "she_wake_calibration_unavailable": "Wake word calibration is not available in this version.",
+  "chaos_expiry_label": "FADED",
+  "chaos_expiry_halved": "💨 {0} faded… streak halved to x{1}",
+  "chaos_expiry_gone": "💨 {0} faded away",
+  "chaos_expiry_name_lucky": "lucky bubble",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminal",
+  "chaos_expiry_name_pink": "pink_filter",
+  "chaos_expiry_name_spiral": "spiral",
+  "chaos_expiry_name_braindrain": "braindrain",
+  "chaos_expiry_name_gif": "gif cascade"
 }

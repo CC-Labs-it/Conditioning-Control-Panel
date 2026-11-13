@@ -1535,6 +1535,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
 
+            public static void PlayRippleCast() => PlayFirstAvailable(new[] { "chaos/ripple_cast.mp3", "chaos/snap.mp3" }, 0.6f);
+
             /// <summary>First candidate that exists on disk wins; a miss in all of them is
             /// silence, never an exception.</summary>
             private static void PlayFirstAvailable(string[] candidates, float scale)

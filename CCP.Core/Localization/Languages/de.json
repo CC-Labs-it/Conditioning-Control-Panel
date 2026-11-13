@@ -119,6 +119,11 @@
   "chaos_announce_resist": "+1 WIDERSTAND",
   "chaos_first_sin_demo": "die erste Sünde ist dieses Mal geschützt",
   "chaos_duo_demo": "eine goldene Karte. deine Spielzeuge haben gelernt zusammenzuarbeiten.",
+  "Chaos_Ripple_Denied": "🌊 stilles Wasser... sammelt sich {0}",
+  "Chaos_Ripple_Gathering": "sammelt sich... {0}",
+  "Chaos_Ripple_Teach": "🌊 das ist die Welle. sie sammelt sich von selbst",
+  "Chaos_Ripple_Skips": "🌊 der Stein springt - drei Wellen",
+  "Chaos_Ripple_Cast": "🌊 Welle",
   "deeper_submission_badge_published": "Veröffentlicht",
   "deeper_submission_badge_published_tip": "Diese Erweiterung ist im Community-Katalog live.",
   "deeper_submission_badge_pending": "Ausstehend",
@@ -8436,5 +8441,15 @@
   "account_merged_signin_body": "Deine beiden Konten wurden zu einem zusammengeführt. Melde dich erneut an, um fortzufahren.\n\nDein lokaler Fortschritt bleibt erhalten.",
   "she_wake_unavailable_tooltip": "Die optionale sherpa-onnx-Weckerkennung ist in dieser Version nicht verfügbar. Die integrierte Erkennung wird verwendet.",
   "she_wake_unavailable_status": "Die optionale Weckerkennung ist in dieser Version nicht verfügbar. Die integrierte Erkennung wird verwendet.",
-  "she_wake_calibration_unavailable": "Die Kalibrierung des Weckworts ist in dieser Version nicht verfügbar."
+  "she_wake_calibration_unavailable": "Die Kalibrierung des Weckworts ist in dieser Version nicht verfügbar.",
+  "chaos_expiry_label": "VERBLASST",
+  "chaos_expiry_halved": "💨 {0} verblasst… Serie halbiert auf x{1}",
+  "chaos_expiry_gone": "💨 {0} ist verblasst",
+  "chaos_expiry_name_lucky": "Glücksblase",
+  "chaos_expiry_name_flash": "Blitz",
+  "chaos_expiry_name_subliminal": "Subliminal",
+  "chaos_expiry_name_pink": "Pinkfilter",
+  "chaos_expiry_name_spiral": "Spirale",
+  "chaos_expiry_name_braindrain": "Brain Drain",
+  "chaos_expiry_name_gif": "GIF-Kaskade"
 }

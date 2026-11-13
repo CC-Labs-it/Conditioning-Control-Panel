@@ -126,6 +126,9 @@ public sealed class ChaosToyEffectsTests
             Setup();
             var meta = ChaosMeta.State;
             bool awarded = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            // This test isolates the first-play award: the snap and taste firsts must not pay here.
+            bool snapped = !meta.FirstTimesAwarded.Add(ChaosFirstTimes.Snap);
+            bool tasted = !meta.FirstTimesAwarded.Add(ChaosFirstTimes.Taste);
             int sparks = meta.Sparks;
             try
             {
@@ -163,6 +166,8 @@ public sealed class ChaosToyEffectsTests
                 ChaosRunHost.ForceShutdown();
                 meta.Sparks = sparks;
                 if (!awarded) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+                if (!snapped) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Snap);
+                if (!tasted) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
                 ChaosMeta.Save();
             }
             return Task.CompletedTask;

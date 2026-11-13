@@ -119,6 +119,11 @@
   "chaos_announce_resist": "+1 RESISTÊNCIA",
   "chaos_first_sin_demo": "o primeiro pecado está protegido desta vez",
   "chaos_duo_demo": "uma carta dourada. seus brinquedos aprenderam a trabalhar juntos.",
+  "Chaos_Ripple_Denied": "🌊 água parada... recarregando {0}",
+  "Chaos_Ripple_Gathering": "recarregando... {0}",
+  "Chaos_Ripple_Teach": "🌊 essa é a onda. ela recarrega sozinha",
+  "Chaos_Ripple_Skips": "🌊 a pedra salta - três ondas",
+  "Chaos_Ripple_Cast": "🌊 onda",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Este aprimoramento está publicado no catálogo da comunidade.",
   "deeper_submission_badge_pending": "Pendente",
@@ -8436,5 +8441,15 @@
   "account_merged_signin_body": "Suas duas contas foram unificadas. Entre novamente para continuar.\n\nSeu progresso local será mantido.",
   "she_wake_unavailable_tooltip": "O mecanismo opcional de ativação sherpa-onnx não está disponível nesta versão. O reconhecedor integrado é usado.",
   "she_wake_unavailable_status": "O mecanismo opcional de ativação não está disponível nesta versão. O reconhecedor integrado é usado.",
-  "she_wake_calibration_unavailable": "A calibração da palavra de ativação não está disponível nesta versão."
+  "she_wake_calibration_unavailable": "A calibração da palavra de ativação não está disponível nesta versão.",
+  "chaos_expiry_label": "DESVANECIDA",
+  "chaos_expiry_halved": "💨 {0} sumiu… sequência reduzida a x{1}",
+  "chaos_expiry_gone": "💨 {0} sumiu",
+  "chaos_expiry_name_lucky": "bolha da sorte",
+  "chaos_expiry_name_flash": "flash",
+  "chaos_expiry_name_subliminal": "subliminar",
+  "chaos_expiry_name_pink": "filtro rosa",
+  "chaos_expiry_name_spiral": "espiral",
+  "chaos_expiry_name_braindrain": "brain drain",
+  "chaos_expiry_name_gif": "cascata de GIFs"
 }
