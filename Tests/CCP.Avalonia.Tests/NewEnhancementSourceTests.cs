@@ -155,13 +155,13 @@ public sealed class NewEnhancementSourceTests
     });
 
     // Bind the existing Avalonia native-storage seam; no second picker abstraction in the head.
-    private sealed class Factory(IStorageProvider provider) : IStorageProviderFactory
+    internal sealed class Factory(IStorageProvider provider) : IStorageProviderFactory
     {
         internal TopLevel? Owner;
         public IStorageProvider CreateProvider(TopLevel owner) { Owner = owner; return provider; }
     }
 
-    private static IDisposable BindStorageProvider(IStorageProviderFactory factory)
+    internal static IDisposable BindStorageProvider(IStorageProviderFactory factory)
     {
         var type = typeof(AvaloniaObject).Assembly.GetType("Avalonia.AvaloniaLocator")!;
         var locator = type.GetProperty("CurrentMutable")!.GetValue(null)!;

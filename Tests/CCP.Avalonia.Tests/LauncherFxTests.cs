@@ -380,6 +380,7 @@ public sealed class LauncherFxTests
     [Fact]
     public void TileDepth_SlidesArtAgainstPointer_TintsTitle_AndReturnsHome() => Run(MotionLevel.Full, (_, w, _) =>
     {
+        Step(w, 1); // Measure hover after the show entrance has settled.
         var tile = Tile(w);
         var title = tile.GetVisualDescendants().OfType<TextBlock>().Single(t => t.FontSize == 19);
         var brush = (SolidColorBrush)title.Foreground!;
