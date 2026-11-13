@@ -262,8 +262,14 @@ public sealed class SharedDeeperThemeTests
     public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
-        var oldMotion = CoreSettings.Current.MotionLevel;
-        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var settings = CoreSettings.Current;
+        var oldMotion = settings.MotionLevel;
+        var oldGentle = settings.GentleVisuals;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        settings.MotionLevel = MotionLevel.Full;
+        settings.GentleVisuals = false;
+        ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+        ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
         static double Base(AvaloniaObject o, StyledProperty<double> p) => o.GetBaseValue(p) is { HasValue: true } v ? v.Value : double.NaN;
         try
         {
@@ -391,7 +397,13 @@ public sealed class SharedDeeperThemeTests
             }
             finally { shell?.Close(); CoreSettings.ServiceProvider = oldProvider; }
         }
-        finally { CoreSettings.Current.MotionLevel = oldMotion; }
+        finally
+        {
+            settings.MotionLevel = oldMotion;
+            settings.GentleVisuals = oldGentle;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
         await Task.CompletedTask;
     });
 }
