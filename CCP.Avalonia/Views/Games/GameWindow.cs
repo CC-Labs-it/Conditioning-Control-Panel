@@ -150,18 +150,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
-            var window = new GameWindow(spec);
-            if (spec.Id == GlassroadId && UseLinuxRaceCard())
+            if (spec.Id == FypId) OpenFypVisit();
+            try
             {
-                window.ShowRaceCard();
-                window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                var window = new GameWindow(spec);
+                if (spec.Id == GlassroadId && UseLinuxRaceCard())
+                {
+                    window.ShowRaceCard();
+                    window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                }
+                else window.Load(Server(), room);
+                window.Show();
+                // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
+                if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
+                    window.AttachJustDropOwner(shell);
+                return window;
             }
-            else window.Load(Server(), room);
-            window.Show();
-            // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
-            if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
-                window.AttachJustDropOwner(shell);
-            return window;
+            catch
+            {
+                if (spec.Id == FypId) CloseFypVisit();
+                throw;
+            }
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
@@ -171,6 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
@@ -194,7 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
