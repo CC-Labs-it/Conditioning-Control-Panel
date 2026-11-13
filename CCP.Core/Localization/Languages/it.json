@@ -2883,6 +2883,7 @@
   "setting_auto_connect_on_startup": "Connetti all'avvio",
   "tooltip_automatically_connect_to_your_haptic_device_w": "Collega in automatico il toy quando si avvia l'app",
   "label_status": "Stato:",
+  "label_browser_crashed_restart": "Browser bloccato - scegli un sito per riavviare",
   "label_disconnected": "Disconnesso",
   "label_no_devices": "Nessun dispositivo",
   "label_intensity": "Intensità:",

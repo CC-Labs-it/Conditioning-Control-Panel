@@ -78,7 +78,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var host = BrowserView;
                 if (host == null) return false;
-                if (!host.Navigate(new Uri(url))) return false;   // even when equal: WPF #867, re-click goes home
+                var target = new Uri(url);
+                if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
+                if (!host.Navigate(target)) return false;   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }

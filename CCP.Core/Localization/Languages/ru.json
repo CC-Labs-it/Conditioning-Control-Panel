@@ -2014,6 +2014,7 @@
   "setting_auto_connect_on_startup": "Автоподключение при запуске",
   "tooltip_automatically_connect_to_your_haptic_device_w": "Автоматически подключаться к тактильному устройству при запуске приложения",
   "label_status": "Статус:",
+  "label_browser_crashed_restart": "Браузер завершил работу - выберите сайт для перезапуска",
   "label_disconnected": "Отключено",
   "label_no_devices": "Нет устройств",
   "label_intensity": "Интенсивность:",
