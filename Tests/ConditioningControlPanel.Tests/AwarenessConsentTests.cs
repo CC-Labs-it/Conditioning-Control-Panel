@@ -153,7 +153,9 @@ public class AwarenessConsentTests
         // guards is a term going MISSING from an expression.
         var source = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserver.cs");
 
-        Assert.Contains("HasEntitlement && s.UseAwarenessV2", source, StringComparison.Ordinal);
+        Assert.Contains("return AwarenessObserverPolicy.IsEnabled(s, HasEntitlement);", source, StringComparison.Ordinal);
+        var policy = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserverPolicy.cs");
+        Assert.Contains("settings != null && hasEntitlement && settings.UseAwarenessV2", policy, StringComparison.Ordinal);
         Assert.Contains("App.Patreon?.HasPremiumAccess == true", source, StringComparison.Ordinal);
         // The free day has to be OR'd in or the ? box would advertise a door it cannot open.
         Assert.Contains("IsFreeToday(\"awareness\")", source, StringComparison.Ordinal);

@@ -243,8 +243,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 {
                     var s = App.Settings?.Current;
                     if (s == null) return false;
-                    return HasEntitlement && s.UseAwarenessV2 && s.AwarenessModeEnabled &&
-                           s.AwarenessConsentGiven && s.AwarenessConsentShownV2;
+                    return AwarenessObserverPolicy.IsEnabled(s, HasEntitlement);
                 }
                 catch { return false; }
             }
