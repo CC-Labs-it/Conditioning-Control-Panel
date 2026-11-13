@@ -150,6 +150,64 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("[Session] Could not delete {Journal}: {E}", name, ex.Message); }
         }
 
+        /// <summary>
+        /// The settings cloud backup runs on every save (5 min debounce), so one taken while a
+        /// session or a ramp ran carried the session's values: Hydra, ducking, a stronger pink
+        /// filter and the rest. A welcome-back restore on a new install or another PC then made
+        /// them the user's own. This lays every journal still on disk over the backup JSON,
+        /// newest first like <see cref="HealOnLaunch"/>, so the oldest (the user's own) value
+        /// wins. Only keys the backup already carries are written, so an excluded key stays out.
+        /// The files stay where they are. Returns how many values it wrote.
+        /// </summary>
+        public static int OverlayOnBackup(JObject backup, string dir)
+        {
+            var found = new List<(JObject Json, IReadOnlyList<string> Allowed, long At)>();
+            foreach (var (name, allowed) in new[] { (FileName, Fields), (RampFileName, RampFields) })
+            {
+                try
+                {
+                    var path = Path.Combine(dir, name);
+                    if (!File.Exists(path)) continue;
+                    var o = JObject.Parse(File.ReadAllText(path));
+                    found.Add((o, allowed, (long?)o["at"] ?? 0));
+                }
+                catch (Exception ex) { Log.Debug("[Session] {Journal} not read for the backup: {E}", name, ex.Message); }
+            }
+            var written = 0;
+            foreach (var j in found.OrderByDescending(j => j.At))
+                written += OverlayOnBackup(backup, j.Json, j.Allowed);
+            return written;
+        }
+
+        /// <summary>One journal over the backup JSON. Pure.</summary>
+        internal static int OverlayOnBackup(JObject backup, JObject journal, IReadOnlyList<string> allowed)
+        {
+            var written = 0;
+            if (journal["fields"] is JObject fields)
+            {
+                foreach (var name in allowed)
+                {
+                    if (fields[name] is not { } token || backup.Property(name) == null) continue;
+                    backup[name] = token.DeepClone();
+                    written++;
+                }
+            }
+            if (journal["mod"] != null
+                && string.Equals((string?)journal["mod"], (string?)backup[nameof(AppSettings.ActiveModId)], StringComparison.Ordinal))
+            {
+                foreach (var (key, prop) in new[]
+                {
+                    ("subliminal_pool", nameof(AppSettings.SubliminalPool)),
+                    ("bouncing_text_pool", nameof(AppSettings.BouncingTextPool)),
+                    ("lock_card_pool", nameof(AppSettings.LockCardPhrases)),
+                })
+                {
+                    if (journal[key] is JObject pool && backup.Property(prop) != null) backup[prop] = pool.DeepClone();
+                }
+            }
+            return written;
+        }
+
         /// <summary>Launch: a journal left behind means a session or a ramp never stopped cleanly.
         /// Put the user's own values back, newest journal first, and delete them. True when
         /// anything was healed.</summary>

@@ -75,6 +75,11 @@ namespace ConditioningControlPanel
         private static int _sharedTargetCount = 0;
         private static List<LibVLCSharp.Shared.MediaPlayer> _allMediaPlayers = new();
 
+        /// <summary>ccp-bugs#1571: real watch time for the video quests, one per game. Replaced in
+        /// ShowOnAllMonitors; every reader takes the lock.</summary>
+        private static BubbleCountWatchCredit _watch = new();
+        private static double NowSeconds() => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+
         /// <summary>
         /// Routing decision for the game being started, taken ONCE in <see cref="ShowOnAllMonitors"/>
         /// and copied into every window's <c>_useBrowser</c> as it is constructed. A static handover
@@ -256,6 +261,7 @@ namespace ConditioningControlPanel
             _allMediaPlayers.Clear();
             _sharedBubbleCount = 0;
             _sharedTargetCount = 0;
+            _watch = new BubbleCountWatchCredit();
 
             VideoDiag.Log("BUBBLE", $"BEGIN {Path.GetFileName(videoPath)} (difficulty={difficulty}, strict={strictMode})");
 
@@ -420,6 +426,7 @@ namespace ConditioningControlPanel
                 _isCleaningUp = true;
             }
 
+            CreditWatchTime("panic");
             try
             {
                 App.Logger?.Information("BubbleCountWindow.ForceCloseAll: Closing {Count} windows, {Players} players",
@@ -625,10 +632,18 @@ namespace ConditioningControlPanel
                     // Everything that needs a LIVE audio output hangs off Playing, subscribed BEFORE
                     // Play(): a fast start can raise Playing inside the Play() call itself.
                     var player = _mediaPlayer;
+                    var watch = _watch;
                     int audioRouted = 0; // Playing can fire again after a restart - route once
+                    // #1571 review: the furthest position caps the credit, so a stall that the
+                    // safety timer ends credits what played, not the clip.
+                    player.TimeChanged += (s, args) =>
+                    {
+                        lock (watch) watch.NotePosition(args.Time / 1000.0);
+                    };
                     player.Playing += (s, args) =>
                     {
                         VideoDiag.Log("BUBBLE", "PLAYING (aout is live)");
+                        lock (watch) watch.MarkPlaying(NowSeconds());
                         if (Interlocked.Exchange(ref audioRouted, 1) != 0) return;
                         // Anything heavier than a property set goes off the LibVLC event thread.
                         Task.Run(() =>
@@ -965,6 +980,7 @@ namespace ConditioningControlPanel
                     }
                     case "playing":
                         _browserPlayingSeen = true;
+                        if (_isPrimary) { var w = _watch; lock (w) w.MarkPlaying(NowSeconds()); }
                         StopBrowserFirstFrameWatch();
                         VideoDiag.Log("BUBBLE", "browser PLAYING (page reported the first frame)");
                         break;
@@ -1380,18 +1396,35 @@ namespace ConditioningControlPanel
                 window._bubbleAnimTimer = null;
             }
 
-            // Track video watch time
-            if (_isPrimary && _videoDurationSeconds > 0)
-            {
-                App.Logger?.Information("BubbleCount video watched: {Duration}s", _videoDurationSeconds);
-                App.Achievements?.TrackVideoWatched(_videoDurationSeconds);
-            }
+            // Track video watch time: real seconds since the first frame (#1571)
+            if (_isPrimary) CreditWatchTime("ended");
 
             // Show result window (only from primary)
             if (_isPrimary)
             {
                 ShowResultWindow();
             }
+        }
+
+        /// <summary>
+        /// ccp-bugs#1571: credit the real watch time of this game to the video quests, once. Called
+        /// when the clip ends and on every close (Escape, panic, failure), so a game left early still
+        /// counts what was watched. The credit is posted: panic must not wait on a stats save.
+        /// </summary>
+        private static void CreditWatchTime(string why)
+        {
+            try
+            {
+                double clip = _allWindows.FirstOrDefault(w => w._isPrimary)?._videoDurationSeconds ?? 0;
+                var watch = _watch;
+                double sec;
+                lock (watch) sec = watch.Take(NowSeconds(), clip);
+                if (sec < 1.0) return;
+                App.Logger?.Information("BubbleCount video watched: {Watched:F1}s of {Clip:F1}s ({Why})", sec, clip, why);
+                Application.Current?.Dispatcher?.BeginInvoke(DispatcherPriority.Normal,
+                    new Action(() => App.Achievements?.TrackVideoWatched(sec)));
+            }
+            catch (Exception ex) { App.Logger?.Debug("BubbleCount watch credit: {E}", ex.Message); }
         }
 
         private void ShowResultWindow()
@@ -1429,6 +1462,7 @@ namespace ConditioningControlPanel
                 _isCleaningUp = true;
             }
 
+            CreditWatchTime("close");
             try
             {
                 VideoDiag.Log("BUBBLE", $"CLOSE begin (success={success}) - {_allWindows.Count} window(s), {_allMediaPlayers.Count} player(s)");

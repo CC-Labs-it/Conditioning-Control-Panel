@@ -45,7 +45,7 @@ public sealed class HeaderQuestStampsTests
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.PerformanceMode = true;
-        CoreSettings.Current.SuppressPerkNotifications = true;
+        CoreSettings.Current.PerkEffects = ConditioningControlPanel.Models.PerkEffectsMode.NoCards;
         CoreSettings.Current.MotionLevel = motion;
         quests.Progress.DailyQuests = new List<ActiveQuest> { new("pop_parade_d"), new("flash_rush_d"), new("spiral_sink_d") };
         quests.Progress.WeeklyQuest = new ActiveQuest("flash_monsoon_w");

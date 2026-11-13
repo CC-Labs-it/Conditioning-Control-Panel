@@ -362,6 +362,7 @@ internal static class ChaosTunnelService
             App.Audio?.ApplyPreferredDevice(_ambOut);
             _ambOut.Init(new LoopStream(_ambReader));
             _ambOut.Play();
+            global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("chaos-tunnel-ambient", path);
             _ambPaused = false;
         }
         catch (Exception ex) { App.Logger?.Debug("ChaosTunnel.StartAmbient: {E}", ex.Message); }

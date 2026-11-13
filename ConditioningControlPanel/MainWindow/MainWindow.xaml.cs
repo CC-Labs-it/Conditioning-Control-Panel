@@ -330,6 +330,11 @@ namespace ConditioningControlPanel
                 WakeBambiUp();
             };
 
+            // ccp-bugs #1562: "On at launch" re-arms Awareness. If access is not confirmed yet the
+            // Patreon validation path starts it later; the entitlement lapse switches it off.
+            if (App.Settings.Current.AwarenessStartOnLaunch)
+                App.Settings.Current.KeywordTriggersEnabled = true;
+
             // Initialize global keyboard hook (only if panic key is enabled)
             _keyboardHook = new GlobalKeyboardHook();
             App.PanicHook = _keyboardHook;   // #875: lock cards ask this whether a panic escape really exists
@@ -337,6 +342,7 @@ namespace ConditioningControlPanel
             _keyboardHook.KeyReleased += OnLeashKeyReleased;
             _keyboardHook.KeyPressedWithVkCode += (key, vkCode) => App.KeywordTriggers?.OnKeyPressed(key, vkCode);
             App.KeywordTriggers?.SetSessionActiveCallback(() => _sessionEngine?.IsRunning == true);
+            App.KeywordTriggers?.SetSessionPausedCallback(() => _sessionEngine?.IsRunning == true && _sessionEngine.IsPaused);
             if (App.Settings.Current.KeywordTriggersEnabled && KeywordTriggerService.HasAccess())
                 App.KeywordTriggers?.Start();
             if (App.Settings.Current.PanicKeyEnabled || App.Settings.Current.KeywordTriggersEnabled)

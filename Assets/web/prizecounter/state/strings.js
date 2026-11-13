@@ -20,6 +20,7 @@ export const LEX = {
   shop_owned: 'Owned',
   shop_prime: 'Prime',
   shop_prime_reason: 'Prime members can buy this one.',
+  shop_link_discord: 'Link Discord first',
   shop_short: 'Short by {0} Sparkles',
   shop_soon: 'On the shelf soon.',
   shop_gone: 'Gone from this week\'s shelf.',

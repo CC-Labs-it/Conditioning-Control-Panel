@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:ctrl="clr-namespace:ConditioningControlPanel.Controls"
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              mc:Ignorable="d"
              d:DesignHeight="1400" d:DesignWidth="1000">
     <!-- CIRCE'S TAB, the lock-themed page (owner-approved mockup, 2026-09-22, "the mockup is
@@ -949,6 +950,24 @@
                                                        Foreground="{DynamicResource TextSecondaryBrush}"/>
                                         </StackPanel>
                                     </Grid>
+                                    <!-- ccp-bugs #1566: red lands on trigger bubbles more often. Folded:
+                                         opens by itself when the weight is off its default of 1. -->
+                                    <feat:MoreFold x:Name="NatashaFold" Margin="2,0,8,4">
+                                        <Grid Margin="0,2,0,2" ToolTip="{loc:Str chaster_natasha_trigger_weight_hint}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{loc:Str chaster_natasha_trigger_weight}" FontSize="12.5" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextLightBrush}"/>
+                                            <Slider Grid.Column="1" x:Name="SliderNatashaTriggerWeight" Minimum="1" Maximum="10" Value="1"
+                                                    IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="10,0"
+                                                    ValueChanged="SliderNatashaTriggerWeight_Changed"/>
+                                            <TextBlock Grid.Column="2" x:Name="TxtNatashaTriggerWeight" Text="1x" MinWidth="28" FontSize="12.5"
+                                                       FontWeight="Bold" Foreground="#FF8FA3" VerticalAlignment="Center" TextAlignment="Right"/>
+                                        </Grid>
+                                    </feat:MoreFold>
                                 </StackPanel>
                             </Border>
                             <Border x:Name="EarnBoard" Grid.Column="2" Style="{StaticResource CirceCard}" Padding="14,12,6,6"
@@ -1030,7 +1049,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="{loc:Str chaster_limit_day}" FontSize="13" Foreground="{DynamicResource TextLightBrush}"
                                            VerticalAlignment="Center" Margin="0,0,16,0"/>
-                                <Slider x:Name="SliderDayLimit" Grid.Column="1" Minimum="15" Maximum="720" TickFrequency="15"
+                                <Slider x:Name="SliderDayLimit" Grid.Column="1" Minimum="15" Maximum="1440" TickFrequency="15"
                                         IsSnapToTickEnabled="True" SmallChange="15" LargeChange="60" VerticalAlignment="Center"
                                         ValueChanged="LimitSlider_ValueChanged"/>
                                 <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">

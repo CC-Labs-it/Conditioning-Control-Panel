@@ -185,7 +185,7 @@ public class PlayDoorRenderTests
         "SlotGaze", "SlotFocusGaze", "SlotBlinkTrainer",
         "SlotGradedIntake", "SlotFyp", "SlotLockdown", "SlotLoom",
         // nav rework 2026-10-06: the five games whose only panel door was the Premium page
-        "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp",
+        "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotRacingThoughtsClassic", "SlotWebApp",
     };
 
     [Fact]
@@ -216,7 +216,7 @@ public class PlayDoorRenderTests
             "BtnPlayRemoteControl",
             "BtnPlayGazeMinigame", "BtnPlayGradedIntake", "BtnPlayBlinkTrainer",
             "BtnPlayFyp", "BtnPlayLockdown", "BtnPlayLoom",
-            "BtnPlayBackRoom", "BtnPlayDtrh", "BtnPlayArcademy", "BtnPlayRacingThoughts", "BtnPlayWebApp",
+            "BtnPlayBackRoom", "BtnPlayDtrh", "BtnPlayArcademy", "BtnPlayRacingThoughts", "BtnPlayRacingThoughtsClassic", "BtnPlayWebApp",
         };
 
         OnStaThread(() =>
