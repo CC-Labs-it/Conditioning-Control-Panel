@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
@@ -47,6 +49,22 @@ internal static class Win32Overlay
     // WPF ChaosWindowZ.cs:47-53: unpinned windows leave the topmost band.
     internal static bool SetStacking(IntPtr hwnd, bool topmost) =>
         PositionWindow(hwnd, new IntPtr(topmost ? -1 : -2), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
+    [DllImport("user32.dll")] internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetTopWindow(IntPtr hwnd);
+
+    internal static bool SlotAboveVideo(IntPtr card, IReadOnlyList<(IntPtr, IntPtr)> videos)
+    {
+        if (videos.Count == 0) return true;
+        var band = new List<IntPtr>();
+        var seen = new HashSet<IntPtr>();
+        for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && seen.Count < 1024 && seen.Add(h); h = GetWindow(h, 2 /* GW_HWNDNEXT */))
+            if ((GetWindowLong(h, GwlExStyle) & WsExTopmost) != 0) band.Add(h);
+        var slot = SubliminalOverVideo.ResolveSlot(band, videos, card, MonitorFromWindow(card, 2));
+        return slot.Kind == SubliminalOverVideo.SlotKind.Keep || SetWindowPos(card,
+            slot.Kind == SubliminalOverVideo.SlotKind.Below ? slot.InsertAfter : new IntPtr(-1),
+            0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
 
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
