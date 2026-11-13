@@ -332,13 +332,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 }
                 _ordinarySpawns++;
                 ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
-                BubbleOverlay.SpawnChaos(spec);
+                // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
+                BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
                 if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
                 {
                     ChaosMeta.MarkDiscovered("bubble:prism");
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
-                        treatOnly: _state.PrismTreatOnly));
+                        treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
                 }
             }
             if (_spawnTimer != null)

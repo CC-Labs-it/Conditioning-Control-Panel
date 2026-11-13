@@ -379,6 +379,78 @@ public sealed class ProgramIgnitionTests
         Assert.Equal(1, tab.CompletionBursts);
     });
 
+    // Restack b120 (includes #3498). WPF ProgramsFx.cs:929-936,1095-1101.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FiniteMomentsSettleImmediatelyOnOffOrMinimiseAndNeverReplay(bool minimise) => WithRun(lastDay: false, (shell, tab, svc, program) =>
+    {
+        svc.TodayRecord!.DayCompleted = true;
+        svc.ActiveEnrollment!.CompletedChapterIds.Add(program.Chapters[0].Id);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Step(.18);
+        var wave = tab.FindControl<Rectangle>("TodayWave")!;
+        var xp = tab.FindControl<TextBlock>("TxtTodayXpFloat")!;
+        var seal = tab.FindControl<Grid>("ProgramsSealHost")!;
+        Assert.Equal(.75, wave.Opacity, 3);
+        Assert.True(xp.Opacity > 0);
+        Assert.True(seal.IsVisible);
+        try
+        {
+            if (minimise) shell.WindowState = WindowState.Minimized;
+            else
+            {
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            }
+            Assert.Equal(0, wave.Opacity);
+            Assert.Equal(0, xp.Opacity);
+            Assert.Equal(0, ((TranslateTransform)xp.RenderTransform!).Y);
+            Assert.False(seal.IsVisible);
+        }
+        finally
+        {
+            shell.WindowState = WindowState.Normal;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Step(.18);
+        Assert.Equal(0, wave.Opacity);
+        Assert.Equal(0, xp.Opacity);
+        Assert.False(seal.IsVisible);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GraduationAccentSettlesToGoldOnOffOrMinimise(bool minimise) => WithRun(lastDay: false, (shell, tab, svc, _) =>
+    {
+        svc.ActiveEnrollment!.State = ProgramEnrollmentState.Graduated;
+        tab.RefreshPrograms();
+        var brush = (ISolidColorBrush)tab.FindControl<Border>("ProgramsGraduatedCard")!.BorderBrush!;
+        var gold = Color.FromRgb(0xFF, 0xD7, 0x00);
+        Assert.NotEqual(gold, brush.Color);
+        try
+        {
+            if (minimise) shell.WindowState = WindowState.Minimized;
+            else
+            {
+                CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            }
+            Assert.Equal(gold, brush.Color);
+        }
+        finally
+        {
+            shell.WindowState = WindowState.Normal;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        }
+    });
+
     [Fact]
     public void PendingTaskCompletionsSurviveConsecutiveRebuildsOnce() => WithRun(true, (_, tab, svc, _) =>
     {

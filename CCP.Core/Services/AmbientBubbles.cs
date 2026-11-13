@@ -352,10 +352,35 @@ namespace ConditioningControlPanel.Services
         public double CenterX => X + Size / 2 + FreezeOffsetX;
         public double CenterY => Y + Size / 2 + FreezeOffsetY;
 
+        /// <summary>WPF BubbleService.cs:3277-3286 hit disc for a chaos bubble: plain bubbles grow with
+        /// the run's hitbox scale (and x1.4 for a live one under the magnet), clamped 1-2; precision
+        /// pickups keep their natural disc.</summary>
+        public static double ChaosHitSize(Chaos.EffectBubbleSpec spec, double size, double hitboxScale, bool liveMagnet)
+        {
+            bool plain = !spec.IsDarter && !spec.IsFreeze && !spec.IsGolden && !spec.IsHeart
+                && !spec.IsDroplet && !spec.IsPrism && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle;
+            if (!plain) return size;
+            double mult = Math.Clamp(hitboxScale, 1, 2);
+            if (liveMagnet && spec.IsLive) mult = Math.Clamp(mult * 1.4, 1, 2);
+            return Math.Max(size, Math.Round(size * mult));
+        }
+
+        private double _hitSize;
+        /// <summary>WPF _hitSize: sampled at spawn, independent of later sprite animation. Unset = the sprite size.</summary>
+        public double HitSize => _hitSize > 0 ? _hitSize : Size;
+
+        /// <summary>WPF ChaosModeService.cs:371,378: the spawn samples the current boon and upgrade.</summary>
+        public void ApplyChaosHitbox(double hitboxScale, bool liveMagnet)
+        {
+            if (Spec == null) return;
+            var hit = ChaosHitSize(Spec, Size, hitboxScale, liveMagnet);
+            _hitSize = hit > Size ? hit : 0;
+        }
+
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
         {
-            double dx = x - CenterX, dy = y - CenterY, r = Size / 2;
+            double dx = x - CenterX, dy = y - CenterY, r = HitSize / 2;
             return dx * dx + dy * dy <= r * r;
         }
 

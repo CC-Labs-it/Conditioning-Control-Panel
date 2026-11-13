@@ -120,9 +120,98 @@ public sealed class InputChromeThemeTests
             Assert.Same(Application.Current!.FindResource(typeof(CheckBox)), check.Theme);
             Assert.Same(Application.Current.FindResource(typeof(ListBoxItem)), list.ItemContainerTheme);
         }
-        finally { goon.Close(); }
+        finally
+        {
+            goon.Close();
+        }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task DeeperEditorCombosUseTheirKeyedRows() => Run(_ =>
+    {
+        // WPF DeeperEditorWindow.xaml:432 assigns EditorComboBoxItem to the actual input.
+        var editor = new global::ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow(
+            new global::ConditioningControlPanel.Models.Deeper.Enhancement { MediaType = global::ConditioningControlPanel.Models.Deeper.MediaTypes.Audio }, null);
+        try
+        {
+            var combo = editor.FindControl<ComboBox>("CmbHapticPattern")!;
+            // This editor tab starts hidden. Retain the real input and its resolved local themes.
+            var theme = (ControlTheme)editor.FindResource("EditorComboBox")!;
+            Assert.Same(theme, combo.Theme);
+            editor.Content = combo.Parent is Panel panel ? Detach(panel, combo) : throw new InvalidOperationException();
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            combo.IsDropDownOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            var row = (ComboBoxItem)combo.ContainerFromIndex(0)!;
+            Assert.Same(editor.FindResource("EditorComboBoxItem"), row.Theme);
+            Assert.Equal(new Thickness(8, 5), row.Padding);
+            Assert.Equal(new CornerRadius(4), Part<Border>(row, "Bd").CornerRadius);
+            ((IPseudoClasses)row.Classes).Set(":pointerover", true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Colour(editor, "DeeperMenuItemHoverBgBrush"), ((ISolidColorBrush)Part<Border>(row, "Bd").Background!).Color);
+            row.IsSelected = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Colour(editor, "DeeperAccentTransparent40Brush"), ((ISolidColorBrush)Part<Border>(row, "Bd").Background!).Color);
+            Assert.Empty(row.GetVisualDescendants().OfType<Ellipse>());
+        }
+        finally
+        {
+            editor.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF Inputs.xaml:191 and DeeperEditorWindow.xaml:449: IsHighlighted includes keyboard focus.
+    [Theory]
+    [InlineData(true)]
+    public Task ArrowKeysHighlightUnselectedRowsAndKeepSelectedPrecedence(bool deeper) => Run(window =>
+    {
+        var editor = deeper ? new global::ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow(
+            new global::ConditioningControlPanel.Models.Deeper.Enhancement { MediaType = global::ConditioningControlPanel.Models.Deeper.MediaTypes.Audio }, null) : null;
+        try
+        {
+            var combo = new ComboBox { ItemsSource = new[] { "one", "two", "three" }, SelectedIndex = 0, Width = 220 };
+            if (editor != null) combo.Theme = (ControlTheme)editor.FindResource("EditorComboBox")!;
+            window.Content = combo;
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            window.MouseMove(new Point(490, 390));
+            combo.Focus();
+            window.KeyPress(Key.Down, RawInputModifiers.Alt, PhysicalKey.ArrowDown, "");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(combo.IsDropDownOpen);
+            window.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, "");
+            Dispatcher.UIThread.RunJobs();
+            var focused = (ComboBoxItem)combo.ContainerFromIndex(1)!;
+            var selected = (ComboBoxItem)combo.ContainerFromIndex(0)!;
+            Assert.True(focused.IsFocused);
+            Assert.False(focused.IsSelected);
+            Assert.False(focused.IsPointerOver);
+            Assert.Equal(Colour(window, deeper ? "DeeperMenuItemHoverBgBrush" : "TransparentPink20Brush"), ((ISolidColorBrush)Part<Border>(focused, "Bd").Background!).Color);
+            Assert.Equal(Colour(window, "TextLightBrush"), ((ISolidColorBrush)focused.Foreground!).Color);
+            window.KeyPress(Key.Up, RawInputModifiers.None, PhysicalKey.ArrowUp, "");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(selected.IsFocused);
+            Assert.True(selected.IsSelected);
+            Assert.Equal(Colour(window, deeper ? "DeeperAccentTransparent40Brush" : "TransparentPink40Brush"), ((ISolidColorBrush)Part<Border>(selected, "Bd").Background!).Color);
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(combo.IsDropDownOpen);
+        }
+        finally
+        {
+            editor?.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    private static Control Detach(Panel panel, Control child)
+    {
+        panel.Children.Remove(child);
+        return child;
+    }
 
     private static ControlTheme Res(string key) => (ControlTheme)Application.Current!.FindResource(key)!;
     private static T Part<T>(Visual host, string name) where T : Control =>
@@ -134,7 +223,14 @@ public sealed class InputChromeThemeTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var window = new Window { Width = 500, Height = 400 };
-        try { await body(window); }
-        finally { window.Close(); Dispatcher.UIThread.RunJobs(); }
+        try
+        {
+            await body(window);
+        }
+        finally
+        {
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
     });
 }

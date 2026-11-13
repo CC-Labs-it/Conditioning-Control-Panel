@@ -731,7 +731,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF SpawnChaosBubble (FloatUp, RainDown, Chaperone roaming). Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null,
-            Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp)
+            Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp, double hitboxScale = 1, bool liveMagnet = false)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
@@ -751,6 +751,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, motion);
             }
+            b.ApplyChaosHitbox(hitboxScale, liveMagnet);
             Field.Bubbles.Add(b);
             if (spec.IsTease) LoadTeaseFace(b);
             ChaosRunHost.RefreshRippleInput();
@@ -1074,7 +1075,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // physical pixel row, clipped to this screen. Keep the buffer across frames.
                 var cx = b.CenterX * Scaling - Bounds.X;
                 var cy = b.CenterY * Scaling - Bounds.Y;
-                var r = b.Size * Scaling / 2;
+                var r = b.HitSize * Scaling / 2;   // WPF hit disc, not the sprite (#3500)
                 var first = Math.Max(0, (int)Math.Ceiling(cy - r));
                 var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
                 for (var y = first; y <= last; y++)

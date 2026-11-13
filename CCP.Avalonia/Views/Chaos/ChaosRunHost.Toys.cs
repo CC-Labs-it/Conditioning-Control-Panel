@@ -113,12 +113,8 @@ internal static partial class ChaosRunHost
             if (b.Spec == null || b.Spec.IsFreeze || b.Popping) continue;
             var screen = _overlay.Screens.All.ElementAtOrDefault(b.Screen);
             double scale = screen?.Scaling ?? 1;
-            var spec = b.Spec;
-            bool plain = !spec.IsDarter && !spec.IsGolden && !spec.IsHeart && !spec.IsDroplet
-                && !spec.IsPrism && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle;
-            double hitMult = Math.Clamp(_state!.Config.HitboxScale, 1, 2);
-            if (_state.MagnetEnabled && spec.IsLive) hitMult = Math.Clamp(hitMult * 1.4, 1, 2);
-            double radius = plain ? Math.Max(b.Size, Math.Round(b.Size * hitMult)) / 2 : b.Size / 2;
+            // Same disc rule as spawn (AmbientBubble.ChaosHitSize), read with the live run state.
+            double radius = AmbientBubble.ChaosHitSize(b.Spec, b.Size, _state!.Config.HitboxScale, _state.MagnetEnabled) / 2;
             double dx = pointer.At.X / scale - b.CenterX, dy = pointer.At.Y / scale - b.CenterY;
             if (dx * dx + dy * dy > radius * radius) continue;
             BubbleOverlay.PopChaos(b);
