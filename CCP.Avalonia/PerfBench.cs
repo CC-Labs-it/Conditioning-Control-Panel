@@ -16,7 +16,9 @@ namespace ConditioningControlPanel.Avalonia
     /// <summary>
     /// --perf-bench &lt;out.json&gt;: startup, per-tab switch latency and working set on the REAL windowing
     /// platform (headless numbers say nothing about startup). Cycles NavCheck's tab list through ShowTab, the
-    /// call every rail handler makes, and times each switch to the next frame the render thread finished.
+    /// call every rail handler makes, and times each switch twice: to the handoff (the UI thread has finished the
+    /// frame, WPF's stop point and the one the parity rule compares) and to the frame drawn and presented
+    /// (median_ms/p95_ms, information only).
     /// Exit 0 with the JSON written; 3 on a tab that is missing or does not show; 4 on a timeout.
     /// Shape <c>ccp-perf-bench/1</c> is shared with the WPF head's twin (docs/avalonia-perf.html).
     /// </summary>
@@ -67,10 +69,11 @@ namespace ConditioningControlPanel.Avalonia
             w.Opened += (_, _) => opened.TrySetResult();
             w.Show();
             await opened.Task.WaitAsync(FrameTimeout);
-            var startupMs = await NextFrame(w, SinceMain);
+            var (_, startupMs) = await NextFrame(w, SinceMain);
             var sinceProcessMs = (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
 
-            var samples = tabs.Select(_ => new List<double>()).ToArray();
+            var handoff = tabs.Select(_ => new List<double>()).ToArray();
+            var drawn = tabs.Select(_ => new List<double>()).ToArray();
             var sw = new Stopwatch();
             for (var cycle = 0; cycle <= Cycles; cycle++)       // cycle 0 is the discarded warm-up
                 for (var i = 0; i < tabs.Length; i++)
@@ -81,8 +84,8 @@ namespace ConditioningControlPanel.Avalonia
                         Console.Error.WriteLine($"perf-bench: tab {tabs[i]} is missing or did not show");
                         return 3;
                     }
-                    var ms = await NextFrame(w, sw);
-                    if (cycle > 0) samples[i].Add(ms);
+                    var (handoffMs, drawnMs) = await NextFrame(w, sw);
+                    if (cycle > 0) { handoff[i].Add(handoffMs); drawn[i].Add(drawnMs); }
                 }
 
             // Idle Home: what the frame clocks ask the render loop for with nobody touching anything. Each
@@ -109,28 +112,43 @@ namespace ConditioningControlPanel.Avalonia
                 working_set_mb = Math.Round(proc.WorkingSet64 / 1048576.0, 1),
                 cycles = Cycles,
                 idle_home_frame_requests_per_s = Math.Round(idleRequests, 1),
-                tabs = tabs.Select((t, i) => new
-                {
-                    tab = t,
-                    median_ms = Math.Round(Percentile(samples[i], 50), 2),
-                    p95_ms = Math.Round(Percentile(samples[i], 95), 2),
-                }).ToArray(),
+                tabs = tabs.Select((t, i) => TabRow(t, handoff[i], drawn[i])).ToArray(),
             }, new JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(outPath, json);
             Console.WriteLine(json);
             return 0;
         }
 
-        /// <summary>Elapsed ms on <paramref name="clock"/> when the render thread has drawn the next frame:
-        /// the frame callback runs before that tick's layout and commit, so its batch carries the change.</summary>
-        private static Task<double> NextFrame(TopLevel w, Stopwatch clock)
+        /// <summary>One <c>ccp-perf-bench/1</c> tab row. median_ms/p95_ms keep their original meaning (frame drawn
+        /// and presented); the handoff_* fields were added later, so older readers still parse the row.</summary>
+        internal static object TabRow(string tab, List<double> handoff, List<double> drawn) => new
+        {
+            tab,
+            median_ms = Math.Round(Percentile(drawn, 50), 2),
+            p95_ms = Math.Round(Percentile(drawn, 95), 2),
+            handoff_median_ms = Math.Round(Percentile(handoff, 50), 2),
+            handoff_p95_ms = Math.Round(Percentile(handoff, 95), 2),
+        };
+
+        /// <summary>Elapsed ms on <paramref name="clock"/> at two stop points of the next frame. The frame callback
+        /// runs before that tick's layout and commit, so its batch carries the change.
+        /// Handoff: a Background hop posted from that callback runs once the UI thread's render pass is done,
+        /// the same point as the WPF twin (CompositionTarget.Rendering, then a Background hop). Avalonia may
+        /// still hold the commit back while an earlier batch is in flight, so this is a lower bound of it.
+        /// Drawn: the render thread has drawn and presented the batch.</summary>
+        internal static async Task<(double Handoff, double Drawn)> NextFrame(TopLevel w, Stopwatch clock)
         {
             var compositor = ElementComposition.GetElementVisual(w)?.Compositor
                 ?? throw new InvalidOperationException("the window has no compositor");
-            var done = new TaskCompletionSource<double>();
-            w.RequestAnimationFrame(_ => compositor.RequestCompositionBatchCommitAsync().Rendered
-                .ContinueWith(_ => done.TrySetResult(clock.Elapsed.TotalMilliseconds), TaskScheduler.Default));
-            return done.Task.WaitAsync(FrameTimeout);
+            var handoff = new TaskCompletionSource<double>();
+            var drawn = new TaskCompletionSource<double>();
+            w.RequestAnimationFrame(_ =>
+            {
+                Dispatcher.UIThread.Post(() => handoff.TrySetResult(clock.Elapsed.TotalMilliseconds), DispatcherPriority.Background);
+                compositor.RequestCompositionBatchCommitAsync().Rendered
+                    .ContinueWith(_ => drawn.TrySetResult(clock.Elapsed.TotalMilliseconds), TaskScheduler.Default);
+            });
+            return (await handoff.Task.WaitAsync(FrameTimeout), await drawn.Task.WaitAsync(FrameTimeout));
         }
 
         /// <summary>Median interpolates the middle pair; other percentiles are nearest-rank.</summary>
