@@ -51,7 +51,7 @@ public sealed class TubeTriggerModeTests
             for (var i = 1; i < settings.CustomTriggers[0].Length; i++) loops[^1]();
             var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(
                 Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
-            Assert.Equal("My Video", link.Content);
+            Assert.Equal("My Video", Assert.IsType<TextBlock>(link.Content).Text);
             Assert.Equal(new[] { "Watch ", " now" }, text.Inlines.OfType<Run>().Select(r => r.Text));
             string? opened = null;
             CompanionLinkLauncher.Navigate = url => { opened = url; return Task.FromResult<bool?>(true); };
@@ -118,7 +118,7 @@ public sealed class TubeTriggerModeTests
                 var text = tube.FindControl<TextBlock>("TxtSpeech")!;
                 var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(
                     Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
-                Assert.Equal(expected, link.Content);
+                Assert.Equal(expected, Assert.IsType<TextBlock>(link.Content).Text);
             }
             finally
             {
@@ -253,7 +253,7 @@ public sealed class TubeTriggerModeTests
             for (var i = 1; i < "Before Watch [Local](file:///tmp/a) after".Length; i++) linkedTyping.Tick();
             Assert.True(linkedTyping.Stopped());
             var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
-            Assert.Equal("Watch", link.Content);
+            Assert.Equal("Watch", Assert.IsType<TextBlock>(link.Content).Text);
             Assert.Equal(new[] { "Before ", " ", "Local", " after" }, text.Inlines!.OfType<Run>().Select(r => r.Text));
             var previousNavigate = CompanionLinkLauncher.Navigate;
             string? opened = null;

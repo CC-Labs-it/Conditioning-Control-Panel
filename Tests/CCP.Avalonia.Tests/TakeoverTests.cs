@@ -628,6 +628,7 @@ public sealed class TakeoverTests
 
             tube.Giggle("preset one");
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } frame) frame();
             Assert.Equal("preset one", text.Text);
             Assert.Equal(history, tube.ChatHistory.Count);
 
