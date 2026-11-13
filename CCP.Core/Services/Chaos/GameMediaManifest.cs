@@ -128,6 +128,36 @@ namespace ConditioningControlPanel.Services.Chaos
             };
         }
 
+        // WPF BackRoomMedia.cs:151-170, 275-311, 419-445. Remote clips are already
+        // materialized on the head's asset origin; an empty remote pool falls back to local.
+        internal static object BreakoutDeal(Manifest library, string? reqId, int seed, int count,
+            string source, int ratio, IReadOnlyList<Entry> remote)
+        {
+            var local = library.Images
+                .Where(e => e.Url.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || e.Url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.Url, StringComparer.Ordinal).ToList();
+            var localRng = new Random(seed);
+            for (int i = local.Count - 1; i > 0; i--) { int j = localRng.Next(i + 1); (local[i], local[j]) = (local[j], local[i]); }
+            var online = remote.ToList();
+            var onlineRng = new Random(unchecked(seed * 23 + 5));
+            for (int i = 0; i < online.Count; i++) { int j = onlineRng.Next(i, online.Count); (online[i], online[j]) = (online[j], online[i]); }
+            if (source == "online" && online.Count > 0) local.Clear();
+            var picks = new List<(Entry Entry, string Src)>();
+            var rng = new Random(unchecked(seed * 7 + 11));
+            int li = 0, ri = 0;
+            while (source != "bundled" && picks.Count < count && (li < local.Count || ri < online.Count))
+            {
+                bool useRemote = source == "online" || (source == "mixed" && rng.Next(100) < Math.Clamp(ratio, 0, 100));
+                if (source is not ("online" or "mixed")) ri = online.Count;
+                if (useRemote && ri < online.Count) picks.Add((online[ri++], "online"));
+                else if (li < local.Count) picks.Add((local[li++], "pool"));
+                else if (ri < online.Count) picks.Add((online[ri++], "online"));
+            }
+            return new { type = "media", reqId, seed, source,
+                gifs = picks.Select((p, i) => new { key = "g" + i, url = p.Entry.Url, w = 0, h = 0, src = p.Src }).ToArray(),
+                words = Array.Empty<object>() };
+        }
+
         private static IEnumerable<string> Walk(string dir, int depth)
         {
             if (depth > MaxWalkDepth) yield break;

@@ -60,6 +60,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // InitializeComponent, not AvaloniaXamlLoader.Load: only the generated one assigns the
             // x:Name fields this code-behind reads.
             InitializeComponent();
+            void PaintArt()
+            {
+                var art = Helpers.ModArt.TryLoad("features/awareness.png", 800);
+                if (art == null) return;
+                ImgAwarenessFeature.Source = art;
+                AwarenessHeroArt.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right };
+                AwarenessSideArt.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+            }
+            void ModChanged(object? sender, ConditioningControlPanel.Models.ModPackage mod) =>
+                global::Avalonia.Threading.Dispatcher.UIThread.Post(PaintArt);
+            AttachedToVisualTree += (_, _) => { CoreMods.ModChanged += ModChanged; PaintArt(); };
+            DetachedFromVisualTree += (_, _) => CoreMods.ModChanged -= ModChanged;
 
             // WPF's Slider.ValueChanged forwards to MainWindow, which writes the setting AND the
             // label. Wired here rather than in XAML so the seed below can move the sliders before
