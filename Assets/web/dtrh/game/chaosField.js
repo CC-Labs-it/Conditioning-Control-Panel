@@ -22,6 +22,8 @@
  * Pop/chime SFX stay in-page (audioBus); chaos stingers go native from chaosRun.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import { motionOff, motionScale } from '../shared/motion.js';
 import { SHARD_CAP, RAIN_CAP, shardCount, breathPhase, dimLevels } from './fieldFeel.js';
 import { attachLife } from './bubbleLife.js';
@@ -976,7 +978,7 @@ export function createChaosField({ hud, fx, canChannel, onBenignPopped, onFreeze
     if (text) el.textContent = text;
     else {
       const img = document.createElement('img');
-      img.src = 'https://ccp.art/announce/dvd.png';
+      img.src = artBase() + 'announce/dvd.png';
       img.alt = '';
       img.addEventListener('error', () => { el.textContent = '📀 PORN DVD'; el.classList.add('cf-dvd--text'); img.remove(); });
       el.appendChild(img);
