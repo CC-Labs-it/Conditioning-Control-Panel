@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,6 +11,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -95,13 +97,59 @@ public sealed class InputMenuThemeTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task DeeperFileMenuUsesTheKeyedDividerBrush() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow();
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            var menu = editor.GetVisualDescendants().OfType<Menu>().Single();
+            var file = (MenuItem)menu.Items[0]!;
+            file.IsSubMenuOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            var dividers = file.Items.OfType<Separator>().ToArray();
+            Assert.Equal(2, dividers.Length);
+            foreach (var divider in dividers)
+            {
+                Assert.Same(Application.Current!.FindResource("InputSeparatorTheme"), divider.Theme);
+                Assert.Equal(new Thickness(6, 4), divider.Margin);
+                Assert.Equal(1, divider.Height);
+                Assert.Equal(Colour(editor, "GlassBorderBrush"), ((ISolidColorBrush)divider.Background!).Color);
+                var line = divider.GetVisualDescendants().OfType<Border>().Single();
+                Assert.Equal(Colour(editor, "GlassBorderBrush"), ((ISolidColorBrush)line.Background!).Color);
+            }
+            var standalone = editor.FindControl<StackPanel>("RuleRegionDetails")!.Children.OfType<Separator>().Single();
+            Assert.Equal(Colour(editor, "DeeperAccentTransparent40Brush"), ((ISolidColorBrush)standalone.Background!).Color);
+            dividers[0].Background = Brushes.Red;
+            Assert.Equal(Colors.Red, ((ISolidColorBrush)dividers[0].Background!).Color);
+        }
+        finally
+        {
+            editor.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    private static void Setup()
+    {
+        if (Application.Current is not null) return;
+        var fonts = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options(systemEmoji: false);
+        var mappings = new Dictionary<string, FontFamily>(fonts.FontFamilyMappings!);
+        mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+        fonts.FontFamilyMappings = mappings;
+        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(fonts).UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
     private static Color Colour(Window window, string key) => ((ISolidColorBrush)window.FindResource(key)!).Color;
 
     private static Task Run(Func<Window, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        Setup();
         var window = new Window { Width = 500, Height = 400 };
         try { await body(window); }
         finally

@@ -111,6 +111,10 @@
         <Style Selector="Separator">
             <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>
         </Style>
+        <!-- Inputs.xaml:695: the keyed menu divider wins over the editor's implicit tint. -->
+        <Style Selector="Menu Separator">
+            <Setter Property="Background" Value="{DynamicResource GlassBorderBrush}"/>
+        </Style>
         <!-- EditorMenuItem + TimelineCtxMenuItem collapse to this: Fluent's MenuItem popup is
              already dark, so only the foreground carries over. -->
         <Style Selector="MenuItem">
