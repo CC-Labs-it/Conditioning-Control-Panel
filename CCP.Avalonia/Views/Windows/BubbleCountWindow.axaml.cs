@@ -417,9 +417,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF BubbleCountWindow.xaml.cs:736-748: keep every window's target and the
             // active spawn cadence in step with the corrected clock.
             foreach (var window in _allWindows) window._targetBubbleCount = _targetBubbleCount;
+            // Same cadence as StartBubbleSpawning (a spawn timer, not a frame loop).
             if (_bubbleSpawnTimer != null)
                 _bubbleSpawnTimer.Interval = TimeSpan.FromMilliseconds(
-                    _videoDurationSeconds * 1000 / Math.Max(1, _targetBubbleCount) * 0.7);
+                    (_videoDurationSeconds * 1000) / Math.Max(1, _targetBubbleCount) * 0.7);
             StartSafetyTimer(_videoDurationSeconds);
         }
 
