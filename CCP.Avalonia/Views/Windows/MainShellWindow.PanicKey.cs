@@ -229,7 +229,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var game = Games.GameWindow.EscapePauseInFront();
+                // The Linux race shell's session window is never shown, so the shell's focus stands in for IsActive.
+                var game = Games.GameWindow.EscapePauseInFront() ?? Games.LinuxRaceHost.InFrontWindow;
                 var page = game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
                 bool ready = game?.KeptEscapeReady == true;
                 var intake = game == null ? IntakeHostWindow.InFront() : null;
@@ -295,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF MainWindow.xaml.cs:878-881,2329-2330: panic-off and Lockdown retain
         // the leash-only route. Decision C still limits the consuming grab to effects/holds.
-        private static bool PanicRouteWanted => CoreSettings.Current.PanicKeyEnabled || LeashHoldLeashed;
+        internal static bool PanicRouteWanted => CoreSettings.Current.PanicKeyEnabled || LeashHoldLeashed;
 
         // Decision C: unlike WPF's non-consuming hook (MainWindow.Leash.cs:434-437),
         // a portal grab must not last the whole leash. Only finish an already-live hold.
