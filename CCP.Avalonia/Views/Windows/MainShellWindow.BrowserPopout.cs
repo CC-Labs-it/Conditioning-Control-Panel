@@ -81,7 +81,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void CloseBrowserSurfaces()
         {
             DisposeBrowserFullscreen();
-            if (BrowserView is { Source: not null } host) host.Navigate(new Uri("about:blank"));
+            if (BrowserView is { } host)
+            {
+                host.CancelBrowserZoom();
+                if (host.Source != null) host.Navigate(new Uri("about:blank"));
+            }
             _browserPopoutWindow?.Close();
         }
 
