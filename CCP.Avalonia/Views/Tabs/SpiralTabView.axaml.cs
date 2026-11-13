@@ -228,6 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _embedGaveUp;
 
         private SpiralRoomState _state = SpiralRoomState.Waiting;
+        internal SpiralRoomState RoomState => _state;   // test seam
 
         // ---- first light (WPF SpiralTabView.xaml.cs:188-192) ----
         private bool _firstLight;
