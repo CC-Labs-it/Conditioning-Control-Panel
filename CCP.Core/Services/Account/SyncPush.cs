@@ -407,7 +407,7 @@ namespace ConditioningControlPanel.Services
                     var reply = JObject.Parse(json);
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
-                    if (AdoptFromResponse(s, reply)) _adopted = true;
+                    if (AdoptFromResponse(s, reply, id)) _adopted = true;
                     ClaimWebXp(s, reply, allowUnread, session, id);
                     ApplyQuestResets(s, id, session, reply);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
@@ -496,11 +496,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// WPF SyncProfileAsync:1897-1954, in its order: the force_skills_reset (clear the tree, take the server's points,
         /// or level x PointsPerLevel; ack pending until a response no longer carries the flag), else skill points
-        /// MergeMax; the unlocked-skills union (skipped on level_reset, whose own branch unions); then the cloud loadout
+        /// wallet-net spend adoption (V2WalletNet, the named lower rule) or MergeMax; the unlocked-skills union (skipped on level_reset, whose own branch unions); then the cloud loadout
         /// into an EMPTY local one only (WPF AdoptCloudCosmetics). Does not save. True when the response carried both
         /// skill_points and unlocked_skills, i.e. the server's skills are now known.
         /// </summary>
-        internal bool AdoptFromResponse(AppSettings s, JObject reply)
+        internal bool AdoptFromResponse(AppSettings s, JObject reply, string? syncAccount = null)
         {
             bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k);
             int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
@@ -517,11 +517,20 @@ namespace ConditioningControlPanel.Services
                 s.PendingSkillsResetAck = false;   // the server flag was cleared by our ack
             else if (points is int p)
             {
-                var max = SparklePoints.MergeMax(p, s.SkillPoints);
-                if (max != s.SkillPoints)
+                // WPF V2WalletNet (#3834): a wallet_net drop adopts a spend made on another device; else raise-only.
+                var live = CoreSettings.Current; var account = syncAccount ?? s.UnifiedId;
+                if (!string.IsNullOrEmpty(account))
                 {
-                    Log.Information("V2 Sync: Skill points server={Server}, local={Local} - taking max ({Max})", p, s.SkillPoints, max);
-                    s.SkillPoints = max;
+                    var same = string.Equals(live.UnifiedId, account, StringComparison.Ordinal);
+                    int? seen = live.WalletNetSeen.TryGetValue(account, out var stored) ? stored : null;
+                    var step = global::ConditioningControlPanel.Services.Prizes.V2WalletNet.Decide(same, global::ConditioningControlPanel.Services.Prizes.V2WalletNet.ParseNet(reply["wallet_net"]), seen, p, live.SkillPoints);
+                    if (step.NextSp != live.SkillPoints)
+                    {
+                        Log.Information("V2 Sync: Skill points server={Server}, local={Local} - now {Next}", p, live.SkillPoints, step.NextSp);
+                        live.SkillPoints = step.NextSp;
+                    }
+                    if (same && step.StoreNet is { } net && seen != net)
+                        live.WalletNetSeen = new Dictionary<string, int>(live.WalletNetSeen) { [account] = net };
                 }
             }
             var skills = reply["unlocked_skills"] as JArray;
