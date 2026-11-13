@@ -25,7 +25,7 @@ internal static partial class ChaosRunHost
 
     /// <summary>The toys <see cref="FireToyEffect"/> can run on this head (#4225). Keep it in step with
     /// the switch below: an inert toy must not spend its charge or cooldown.</summary>
-    internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim";
+    internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim" or "freeze_trigger";
 
     // WPF ChaosModeService.cs:2697-2709,2736-2749,2779-2780.
     private static bool FireToyEffect(ChaosToyState toy)
@@ -60,6 +60,15 @@ internal static partial class ChaosRunHost
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
                 if (s.Config.ColorFlashesEnabled) _fx?.Pulse(Color.FromRgb(150, 220, 255), 0.35);
                 s.PushEvent(Loc.Get(maxed ? "chaos_toy_snap_all" : "chaos_toy_snap_live"));
+                return true;
+            case "freeze_trigger":
+                // WPF ChaosModeService.cs:2718-2727 (hand-ported from #4244): the same freeze as a
+                // caught pickup; the capstone also snaps every live bubble. ChaosToyRules spent the
+                // charge and set the 3 s anti-doubletap cooldown.
+                ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.6f);
+                ActivateFreeze();
+                if (maxed) BubbleOverlay.Field.DefuseAllLive(BubbleOverlay.BounceShield);
+                s.PushEvent($"{toy.Glyph} {Loc.Get("chaos_freeze_trigger_feed")}");
                 return true;
             case "porn_dvd":
             {
@@ -100,8 +109,8 @@ internal static partial class ChaosRunHost
                 return true;
             }
             default:
-                // ponytail: freeze and rabbit motion/aim need their BubbleService
-                // mechanics ported; do not award first_play for an inert toy.
+                // ponytail: rabbit motion/aim need their BubbleService mechanics
+                // ported; do not award first_play for an inert toy.
                 return false;
         }
     }
@@ -170,6 +179,7 @@ internal static partial class ChaosRunHost
                 "snap_field" => _snapRemaining > 0,
                 "porn_dvd" => dvdLive,
                 "e_stim" => BubbleOverlay.EStimCharges > 0,
+                "freeze_trigger" => _freezeRemainingSec > 0,
                 _ => false,
             };
         if (_dvdBannerOn && !dvdLive)

@@ -162,6 +162,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static bool _dvdBannerOn;
         private static int _lastComboBigFired;
         private static double _freezeRemainingSec;
+        // WPF ChaosModeService.cs:2406-2475, :2813-2817, :2958-2979: the Pendulum's slow-mo window
+        // (hand-ported from #4303). Run clock, so it holds through pauses like the freeze.
+        internal const double SlowMoFactor = 0.12;
+        private static double _slowMoRemainingSec, _pendulumFireAt;
+        private static int _pendulumWave;
+        private static bool _pendulumFired, _pendulumSlowActive, _slowMoCueOn;
+        internal static double SlowMoRemainingSec => _slowMoRemainingSec;
+        /// <summary>WPF :1703: x3 pay rides only the pendulum's own swing, and only with Focus Here.</summary>
+        internal static double PendulumMultiplier =>
+            _pendulumSlowActive && _state?.PendulumPayMult > 1 ? _state.PendulumPayMult : 1.0;
+        private static double SpawnSlowFactor => _slowMoRemainingSec > 0 ? SlowMoFactor : 1.0;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
         private static int _pendingWave, _runsAtStart, _draftsThisRun;
         private static bool _scriptThreat, _scriptSnapped, _scriptDraft, _sinRigged, _sinPending;
@@ -276,6 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer.Start();
 
             _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
+            _pendulumWave = 0;   // WPF :402: the swing re-rolls its beat for wave 1
             if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired);
             RefreshRippleInput();
             _ripplePointer?.Dispose();   // never two grabs if a run restarts without EndField
@@ -310,14 +322,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     SpawnChaperone(effIntensity);
                     if (_spawnTimer != null)
-                        _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                        _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
                     return;
                 }
                 // WPF :1301 (after the Chaperone roll at :1264): a Tease replaces the ordinary slot, never the scripted first run.
                 if (TrySpawnTease(cfg, effIntensity))
                 {
                     if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
-                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
                     return;
                 }
 
@@ -352,7 +364,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             if (_spawnTimer != null)
                 _spawnTimer.Interval = TimeSpan.FromMilliseconds(
-                    ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                    ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
         }
 
         internal static bool TrySpawnTease(ChaosRunConfig cfg, double intensity)
@@ -487,7 +499,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             FirstTime(ChaosFirstTimes.Taste);   // WPF ChaosModeService :1844
             if (spec.VariantId == "subliminal") ChaosLessons.Tick("intrusive_thoughts");   // WPF OnTreatPopped
             bool focusWasLow = _state.FocusLow;
-            double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+            double pts = ChaosFieldMath.ApplyTreatPop(_state, spec, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
             if (focusWasLow)
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 34,
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
@@ -540,7 +552,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
-        /// Chain window and Playing with Fire's brink gold. Pendulum is 1.0 until its boon lands.</summary>
+        /// Chain window, Playing with Fire's brink gold and the Pendulum's scoring window.</summary>
         internal static void OnDefused(AmbientBubble b)
         {
             var spec = b.Spec;
@@ -558,7 +570,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             FirstTime(ChaosFirstTimes.Snap);
             ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, b.DefusedViaChannel);
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
-                b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: 1.0, ChaosFieldMath.ChanceFlip(_state, Rng));
+                b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
             // WPF ChaosLessonHooks.cs:161, 250: live rain remains busy after its spawn window.
             if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
@@ -842,6 +854,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _spawnTimer?.Stop();
             _spawnTimer = null;
+            EndSlowMo();
             EndFreeze();
             Volatile.Write(ref _rippleTarget, null);
             _ripplePointer?.Dispose();
@@ -919,6 +932,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _freezeRemainingSec -= ChaosRunEngine.TICK_SEC;
                 if (_freezeRemainingSec <= 0) EndFreeze();
             }
+            if (_slowMoRemainingSec > 0)
+            {
+                _slowMoRemainingSec -= ChaosRunEngine.TICK_SEC;
+                if (_slowMoRemainingSec <= 0) EndSlowMo();
+            }
+            TickPendulum();
             _hud?.SetCursorOnLive(BubbleOverlay.CursorOnLive);
             // WPF ChaosModeService.cs:984-989: gather only while the run clock advances.
             if (_state.RippleCooldown > 0)
@@ -1398,10 +1417,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _freezeRemainingSec = 0;
             BubbleOverlay.Field.FreezeChaos = false;
             BubbleOverlay.Field.ClearFreezeVisuals();
-            EffectPayload.GlobalDurationMult = 1.0;
+            if (_slowMoRemainingSec <= 0) EffectPayload.GlobalDurationMult = 1.0;   // WPF :3070: keep a running slow-mo
             ChaosEffectBannerOverlay.End("freeze");
             _fx?.EndEdgeHold();
             ChaosOverlayWindow.ChaosSfx.Play("freeze_shatter", 0.5f);
+        }
+
+        /// <summary>WPF ChaosModeService.cs:2958-2979: at a random beat of every loop the field dips into
+        /// a 2.5 s slow-mo, announced on top; with Focus Here it is an x3 scoring window.</summary>
+        private static void TickPendulum()
+        {
+            if (_state == null || !_spawning || !_state.Config.PendulumSwing) return;
+            if (_state.WaveIndex != _pendulumWave)
+            {
+                _pendulumWave = _state.WaveIndex;
+                _pendulumFireAt = 0.15 + Rng.NextDouble() * 0.65;
+                _pendulumFired = false;
+            }
+            if (_pendulumFired || _state.WaveProgress < _pendulumFireAt || _freezeRemainingSec > 0 || _slowMoRemainingSec > 0) return;
+            _pendulumFired = true;
+            ActivateSlowMo(2.5, pendulum: true);
+            ChaosOverlayWindow.ChaosSfx.Play("ticktock", 0.45f);   // silent until the asset ships, as WPF
+            bool scoring = _state.PendulumPayMult > 1;
+            ChaosAnnouncerOverlay.Announce(Loc.Get(scoring ? "chaos_pendulum_focus" : "chaos_pendulum_swing"),
+                ChaosAnnounceKind.PowerUp, artKey: scoring ? "focus_here" : "pendulum",
+                subText: scoring ? Loc.Get("chaos_pendulum_focus_sub") : null);
+            _state.PushEvent(Loc.Get("chaos_pendulum_swing"));
+        }
+
+        /// <summary>WPF ActivateSlowMo (:2414): the chaos field drifts and burns slower, spawns stretch,
+        /// payloads linger. A refresh never replays the warp-in cue.</summary>
+        internal static void ActivateSlowMo(double durationSec, bool pendulum)
+        {
+            if (!_spawning) return;
+            _slowMoRemainingSec = durationSec;
+            _pendulumSlowActive = pendulum;
+            BubbleOverlay.Field.ChaosTimeScale = SlowMoFactor;
+            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("chaos_pendulum_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
+                artKey: pendulum ? "pendulum" : "slowmo");
+            EffectPayload.GlobalDurationMult = 1.0 / SlowMoFactor;
+            if (!_slowMoCueOn) ChaosOverlayWindow.ChaosSfx.Play("time_slow_in", 0.5f);
+            _slowMoCueOn = true;
+        }
+
+        /// <summary>WPF EndSlowMo (:2465). Idempotent; run end, panic and the overlay closing reach it.</summary>
+        private static void EndSlowMo()
+        {
+            _slowMoRemainingSec = 0;
+            _pendulumSlowActive = false;
+            BubbleOverlay.Field.ChaosTimeScale = 1.0;
+            ChaosEffectBannerOverlay.End("slowmo");
+            if (_slowMoCueOn) ChaosOverlayWindow.ChaosSfx.Play("time_slow_out", 0.45f);
+            _slowMoCueOn = false;
+            if (_freezeRemainingSec <= 0) EffectPayload.GlobalDurationMult = 1.0;
         }
 
         /// <summary>WPF TickActiveToys: cooldowns and temporary effect windows.</summary>
