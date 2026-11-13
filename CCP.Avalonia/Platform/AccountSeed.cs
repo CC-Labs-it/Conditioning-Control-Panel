@@ -231,6 +231,12 @@ internal static class AccountSeed
             Prizes = PrizeOwnership.Feed,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
+            // WPF DescentMigrationService.RaiseStageCeremonyDue (:421-440): the companion carries the moment,
+            // scripted copy, no sound, no AI badge.
+            StageCeremonyDue = stage => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(
+                ConditioningControlPanel.Localization.Loc.GetF("descent_stage_drip",
+                    ConditioningControlPanel.Services.Descent.DescentStageCopy.RomanNumeral(stage)),
+                playSound: false, aiGenerated: false),
         };
 
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
