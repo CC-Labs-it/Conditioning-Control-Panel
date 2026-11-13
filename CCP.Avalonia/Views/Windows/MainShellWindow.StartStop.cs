@@ -155,6 +155,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            // Direct Core stops (a remote panic) also freeze the session clock. A session's own Stop
+            // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
+            App.Sessions?.Pause();
             Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
             Services.EngineCrashSentinel.Clear();
             EmiEngineStopped(); // WPF StartStop.cs:570-579
