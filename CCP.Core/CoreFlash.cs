@@ -24,6 +24,9 @@ namespace ConditioningControlPanel
         /// <summary>True while the head's previous burst is still going (WPF <c>_isBusy</c>).</summary>
         public static volatile Func<bool>? IsBusyProvider;
 
+        /// <summary>Head preparation when the ambient schedule starts.</summary>
+        public static volatile Action? StartProvider;
+
         /// <summary>Head cleanup on every Stop, including point-fired bursts while idle.</summary>
         public static volatile Action? StopProvider;
 
@@ -64,6 +67,8 @@ namespace ConditioningControlPanel
                 _timer ??= new Timer(OnTick, null, Timeout.Infinite, Timeout.Infinite);
                 ArmLocked();
             }
+            try { StartProvider?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Flash start provider failed"); }
             CoreDiscord.Service?.SetFlashActivity(); // WPF FlashService.Start:543
             Log.Information("Flash schedule started");
         }

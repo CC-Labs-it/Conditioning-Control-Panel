@@ -35,6 +35,38 @@ public sealed class BubbleCountBrowserTests {
         Assert.False(BrowserVideoGate.ShouldUseBrowser(game.Clip));
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task ReplacingOrClosingGameKeepsRemixGateBusyUntilBrowserStops() => AvaloniaTestDispatcher.RunAsync(() => {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var oldVideo = CoreEngine.Video;
+        var oldBusy = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy;
+        var observed = new System.Collections.Generic.List<bool>();
+        try {
+            CoreEngine.Video = null;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy = false;
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.RemixVideoBusy());
+            BrowserVideoSurface.Create = () => new BrowserVideoSurface(script => {
+                if (script.Contains("?.pause()")) observed.Add(ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.RemixVideoBusy());
+                return Task.FromResult<string?>("true");
+            });
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, false, _ => { });
+            Assert.Single(BubbleCountWindow.OpenWindows);
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, false, _ => { });
+            Assert.Contains(true, observed); // orphan disposal happens before publishing idle
+            observed.Clear();
+            Assert.Single(BubbleCountWindow.OpenWindows).Close();
+            Assert.Contains(true, observed); // the closing player's pause still holds the gate
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.RemixVideoBusy());
+        }
+        finally {
+            BubbleCountWindow.ForceCloseAll();
+            CoreEngine.Video = oldVideo;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy = oldBusy;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("ended")]
     [InlineData("error")]

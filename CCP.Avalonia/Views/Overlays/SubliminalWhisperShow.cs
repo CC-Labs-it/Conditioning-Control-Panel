@@ -74,10 +74,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             else Dispatcher.UIThread.Post(() => SubliminalOverlay.CloseOwned(owner));
         }
 
-        private static void Present(string text, int? opacity)
+        internal static Action<string, int?, int?> DrawWithDuration = (text, opacity, duration) =>
+        {
+            var gen = Volatile.Read(ref _gen);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (Volatile.Read(ref _gen) == gen) Present(text, opacity, duration);
+            });
+        };
+
+        private static void Present(string text, int? opacity, int? duration = null)
         {
             if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
-                SubliminalOverlay.Show(host, text, opacity);
+                SubliminalOverlay.Show(host, text, opacity, duration);
         }
 
         internal static Action<int, Action> After = (ms, then) => Task.Delay(ms).ContinueWith(_ => then());
@@ -115,14 +124,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF FlashSubliminalCustom for the AI command: trim, cap, remove tags, then
         /// haptic anticipation and a silent card (10 XP), even when the ambient scheduler is off.</summary>
-        internal static void Custom(string text, int? opacity = null)
+        internal static void Custom(string text, int? opacity = null, int? durationMs = null, bool suppressHaptic = false)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
             text = text.Trim();
             if (text.Length > 200) text = text[..200];
             text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]*>", "");
             var phrase = text;
-            HapticThenDraw(phrase, () => DrawWithOpacity(phrase, opacity));
+            Action draw = () => { if (durationMs.HasValue) DrawWithDuration(phrase, opacity, durationMs); else DrawWithOpacity(phrase, opacity); };
+            if (suppressHaptic) draw(); else HapticThenDraw(phrase, draw);
             CoreProgression.AddXP(10, "Subliminal");
         }
 
