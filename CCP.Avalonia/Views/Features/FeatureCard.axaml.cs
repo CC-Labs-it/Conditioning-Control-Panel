@@ -90,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>Raised by the toggle gesture (right-click by default; inverted on dashboard toggle tiles).</summary>
         public event EventHandler<RoutedEventArgs> ToggleRequested { add => AddHandler(ToggleRequestedEvent, value); remove => RemoveHandler(ToggleRequestedEvent, value); }
 
-        private readonly Border _rootBorder, _imgIconMute, _depthSocket, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
+        private readonly Border _rootBorder, _imgIconMute, _depthSocket, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost, _v2BadgeHost;
         private readonly Grid _contentRoot, _teaseHost;
         private readonly TextBlock _txtTitle, _txtGlyph, _txtTeaseGlyph, _txtLockLabel, _txtTierBadge;
         private readonly Button _btnHelp;
@@ -118,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _activeBorder = this.FindControl<Border>("ActiveBorder")!;
             _lockedOverlay = this.FindControl<Border>("LockedOverlay")!;
             _tierBadgeHost = this.FindControl<Border>("TierBadgeHost")!;
+            _v2BadgeHost = this.FindControl<Border>("V2BadgeHost")!;
             _contentRoot = this.FindControl<Grid>("ContentRoot")!;
             _teaseHost = this.FindControl<Grid>("TeaseHost")!;
             _txtTitle = this.FindControl<TextBlock>("TxtTitle")!;
@@ -183,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty) ApplyActiveState();
             else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
+            else if (change.Property == ShowV2BadgeProperty) _v2BadgeHost.IsVisible = ShowV2Badge;
             else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyMute(0); }
         }
 
@@ -313,9 +315,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             bool mute = Services.CardMuteRule.ShouldMute(DimWhenInactive, PaintActive, IsLocked, _hovered && !DashboardDepth, TeaseTier > 0);
             _txtTitle.Opacity = mute ? 0.72 : 1.0;
-            _imgIconMute.Transitions = ms > 0
-                ? new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ms), Easing = new QuadraticEaseOut() } }
-                : null;
+            // Keep a running fade when retargeting (WPF ApplyMute :579 starts from the displayed
+            // opacity); replacing Transitions cancels it and the grey layer jumps.
+            var duration = TimeSpan.FromMilliseconds(ms);
+            if (ms <= 0) _imgIconMute.Transitions = null;
+            else if (_imgIconMute.Transitions is not [DoubleTransition fade] || fade.Duration != duration || fade.Property != OpacityProperty)
+                _imgIconMute.Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = duration, Easing = new QuadraticEaseOut() } };
             _imgIconMute.Opacity = mute ? 1.0 : 0.0;
         }
 
@@ -463,6 +468,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public static readonly StyledProperty<bool> DimWhenInactiveProperty =
             AvaloniaProperty.Register<FeatureCard, bool>(nameof(DimWhenInactive));
         public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
+        public static readonly StyledProperty<bool> ShowV2BadgeProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(ShowV2Badge));
+        /// <summary>WPF ShowV2Badge (FeatureCard.xaml.cs:264): the champagne "v2" pill while the
+        /// feature owns a Back Room v2 style. Opt-in and reversible; callers own the ownership read.</summary>
+        public bool ShowV2Badge { get => GetValue(ShowV2BadgeProperty); set => SetValue(ShowV2BadgeProperty, value); }
 
         private bool IsInHelp(object? source) =>
             source is Visual src && (src == _btnHelp || _btnHelp.IsVisualAncestorOf(src));
