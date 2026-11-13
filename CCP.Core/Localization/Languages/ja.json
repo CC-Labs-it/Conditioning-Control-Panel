@@ -5106,6 +5106,8 @@
   "blink_trainer_calibration_label": "キャリブレーション",
   "blink_trainer_calibration_none": "未キャリブレーション",
   "blink_trainer_calibration_btn": "キャリブレーション",
+  "toast_legacy_calibration": "複数のモニターに対応するには、キャリブレーションを更新する必要があります。",
+  "toast_legacy_calibration_action": "再調整",
   "blink_trainer_calibration_quick": "クイック再調整",
   "blink_trainer_status_ready": "準備はいい？",
   "blink_trainer_status_running": "実行中。残り {0}。",

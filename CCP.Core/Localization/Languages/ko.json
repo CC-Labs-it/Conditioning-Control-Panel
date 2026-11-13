@@ -5106,6 +5106,8 @@
   "blink_trainer_calibration_label": "보정",
   "blink_trainer_calibration_none": "보정 안 됨",
   "blink_trainer_calibration_btn": "보정",
+  "toast_legacy_calibration": "다중 모니터를 지원하려면 보정을 업데이트해야 합니다.",
+  "toast_legacy_calibration_action": "다시 보정",
   "blink_trainer_calibration_quick": "빠른 재보정",
   "blink_trainer_status_ready": "준비됐으면 언제든지.",
   "blink_trainer_status_running": "진행 중. {0} 남음.",

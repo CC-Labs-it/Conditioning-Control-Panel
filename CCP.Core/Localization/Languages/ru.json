@@ -5106,6 +5106,8 @@
   "blink_trainer_calibration_label": "Калибровка",
   "blink_trainer_calibration_none": "Не откалибровано",
   "blink_trainer_calibration_btn": "Калибровать",
+  "toast_legacy_calibration": "Для поддержки нескольких мониторов нужно обновить калибровку.",
+  "toast_legacy_calibration_action": "Повторить калибровку",
   "blink_trainer_calibration_quick": "Быстрая рекал.",
   "blink_trainer_status_ready": "Готово. Начинай, когда захочешь.",
   "blink_trainer_status_running": "Идёт. Осталось {0}.",

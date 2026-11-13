@@ -5106,6 +5106,8 @@
   "blink_trainer_calibration_label": "Étalonnage",
   "blink_trainer_calibration_none": "Non étalonné",
   "blink_trainer_calibration_btn": "Étalonner",
+  "toast_legacy_calibration": "Ton étalonnage doit être mis à jour pour prendre en charge plusieurs écrans.",
+  "toast_legacy_calibration_action": "Réétalonner",
   "blink_trainer_calibration_quick": "Recal. rapide",
   "blink_trainer_status_ready": "Prêt quand tu veux.",
   "blink_trainer_status_running": "En cours. Il reste {0}.",

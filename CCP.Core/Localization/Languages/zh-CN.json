@@ -4851,6 +4851,8 @@
   "blink_trainer_calibration_label": "校准",
   "blink_trainer_calibration_none": "未校准",
   "blink_trainer_calibration_btn": "校准",
+  "toast_legacy_calibration": "需要更新校准以支持多个显示器。",
+  "toast_legacy_calibration_action": "重新校准",
   "blink_trainer_calibration_quick": "快速重新校准",
   "blink_trainer_status_ready": "随时可以开始",
   "blink_trainer_status_running": "进行中。还剩 {0}。",

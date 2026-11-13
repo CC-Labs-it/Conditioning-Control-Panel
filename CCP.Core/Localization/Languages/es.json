@@ -5106,6 +5106,8 @@
   "blink_trainer_calibration_label": "Calibración",
   "blink_trainer_calibration_none": "Sin calibrar",
   "blink_trainer_calibration_btn": "Calibrar",
+  "toast_legacy_calibration": "Tu calibración debe actualizarse para usar varios monitores.",
+  "toast_legacy_calibration_action": "Recalibrar",
   "blink_trainer_calibration_quick": "Recal. rápida",
   "blink_trainer_status_ready": "Lista cuando tú lo estés.",
   "blink_trainer_status_running": "En marcha. Quedan {0}.",
