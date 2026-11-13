@@ -103,11 +103,13 @@ public sealed class CoreStandInTests
     {
         var tab = new PresetsTabView();
         var panel = tab.FindControl<WrapPanel>("PresetCardsPanel")!;
-        var shown = panel.Children.OfType<Border>().Where(b => b.Tag is string).Select(b => (string)b.Tag!).ToArray();
-        var expected = ConditioningControlPanel.Models.Preset.GetDefaultPresets()
-            .Concat(ConditioningControlPanel.CoreSettings.Current.UserPresets).Select(p => p.Id).ToArray();
-        Assert.NotEmpty(expected);
-        Assert.Equal(expected, shown);
+        var chips = panel.Children.OfType<Border>().Where(b => b.Tag is string).ToArray();
+        var presets = ConditioningControlPanel.Models.Preset.GetDefaultPresets()
+            .Concat(ConditioningControlPanel.CoreSettings.Current.UserPresets).ToArray();
+        Assert.NotEmpty(presets);
+        Assert.Equal(presets.Select(p => p.Id), chips.Select(b => (string)b.Tag!));
+        Assert.Equal(presets.Select(p => PresetNaming.DisplayName(p)), chips.Select(b =>
+            Assert.IsType<StackPanel>(b.Child).Children.OfType<TextBlock>().Single().Text));
 
         var export = tab.FindControl<Button>("BtnExportPreset")!;
         Assert.False(export.IsEnabled);
@@ -226,7 +228,7 @@ public sealed class CoreStandInTests
     {
         if (Application.Current is null)
         {
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();

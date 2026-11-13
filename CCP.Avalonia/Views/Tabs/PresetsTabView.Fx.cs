@@ -107,7 +107,12 @@ public partial class PresetsTabView
         if (IsVisible && SessionRackPanel != null)
         {
             SyncCustomSessionsFromDisk();
-            RepaintSessionRack();
+            if (_presetsModDirty && IsEffectivelyVisible)
+            {
+                _presetsModDirty = false;
+                RefreshPresetsModVisuals(refreshRack: true);
+            }
+            else RepaintSessionRack();
             Shell?.RefreshTakeawayShelf(); // WPF TabFxPresetsQuestsAchievements.cs:286, before StaggerPresetCards.
         }
         if (IsVisible && _fxWindow != null) StaggerZones();
