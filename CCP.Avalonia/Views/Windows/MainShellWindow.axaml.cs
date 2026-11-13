@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AvaloniaXamlLoader.Load(this);
             Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
             Closed += (_, _) => _directoryPillView.Dispose();
+            Opened += (_, _) => StartChatHotkey();
             InitializeLanguageSelector();
             InitializeQuestStamps(); // WPF header quest roster; releases service events on Closed.
 
