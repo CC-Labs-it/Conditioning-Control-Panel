@@ -126,6 +126,45 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             Attach();
         }
 
+        private bool _chaosRunActive, _reattachAfterChaos, _hiddenForChaos;
+
+        // WPF AvatarTubeWindow.Windowing.cs:1624-1688.
+        public void SetChaosRunActive(bool active) => RunOnAvatar(() =>
+        {
+            if (_chaosRunActive == active) return;
+            _chaosRunActive = active;
+            try
+            {
+                if (active)
+                {
+                    if (Views.Chaos.ChaosHubWindow.IsStoryModeEnabled &&
+                        Views.Chaos.ChaosRunHost.ActiveMode == ConditioningControlPanel.Services.Chaos.ChaosPlayMode.Story)
+                    {
+                        _hiddenForChaos = IsVisible;
+                        if (_hiddenForChaos) Hide();
+                    }
+                    else if (_isAttached)
+                    {
+                        _reattachAfterChaos = true;
+                        SetAttached(false);
+                        var screen = Screens.Primary;
+                        if (screen != null)
+                        {
+                            var wa = screen.WorkingArea;
+                            var margin = (int)Math.Round(12 * screen.Scaling);
+                            Position = new PixelPoint(wa.X + margin, wa.Bottom - (int)Math.Round(Math.Max(120, Bounds.Height) * screen.Scaling) - margin);
+                        }
+                    }
+                }
+                else
+                {
+                    if (_hiddenForChaos) { _hiddenForChaos = false; Show(); }
+                    if (_reattachAfterChaos) { _reattachAfterChaos = false; SetAttached(true); }
+                }
+            }
+            catch (Exception ex) { Log.Debug("Chaos companion handoff: {E}", ex.Message); }
+        });
+
         public void Detach() => RunOnAvatar(() => SetAttached(false));
 
         public void Attach() => RunOnAvatar(() => SetAttached(true));
