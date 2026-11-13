@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    live in ChaosHubWindow.Reveals.cs. Reveal visibility clamps and
     ///    the CCP_CHAOS_DEBUG strip remain unported.
     ///  - The menu flipbook and motion live in ChaosHubWindow.Menu.cs. The Skia fog,
-    ///    per-frame glint masks and blooms, and NAudio menu music remain unported.
+    ///    per-frame glint masks and blooms remain unported; the menu music lives in ChaosHubWindow.Music.cs.
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
     ///    <c>MouseLeftButtonDown</c> -> <c>PointerPressed</c>; <c>StateChanged</c> ->
     ///    <c>GetObservable(WindowStateProperty)</c>; <c>ToolTip =</c> -> <c>ToolTip.SetTip</c>;
@@ -1967,6 +1967,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var mode = (sender as Control)?.Tag?.ToString() == "FreeDesktop"
                 ? ChaosPlayMode.FreeDesktop : ChaosPlayMode.Story;
+            _fallingIn = true;
             SaveToSettings();
             Close();
             var cfg = ChaosRunConfig.FromSettings();
@@ -2000,19 +2001,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _dollhouseView.IsVisible = true;
         }
 
-        /// <summary>Straight into a descent. WPF also detached the companion for the handoff
-        /// (<c>App.AvatarWindow?.SetChaosRunActive(true)</c>).
-        /// <para>ponytail: NOT a Core move - <c>App.AvatarWindow</c> is an
-        /// <c>AvatarTubeWindow</c>, a window, and windows do not move to Core. What this needs is
-        /// on this head: <c>SetChaosRunActive</c> on
-        /// CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs (it has no such member yet) and
-        /// an owner holding the live instance.</para></summary>
-        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) => FallIn();
+        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) { StopMenuMusic(); BeginCompanionHandoff(); FallIn(); }
 
         private void Menu_Dollhouse_Click(object? sender, RoutedEventArgs e)
         {
             // WPF also spawned the loadout sidebar here (App.Chaos.ShowLoadoutSidebar).
             // ponytail: needs ChaosService, wired when it moves to Core.
+            EnterRunContext();
             ShowDollhouseView();
             ShowTab("loadout");
         }
@@ -2194,13 +2189,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // ============================ menu music ============================
 
-        /// <summary>WPF drove a NAudio loop with fades and a master-volume hook. There is still
-        /// no looping-audio capability on this head — <c>CoreAudio</c> is one-shot only — so the
-        /// track does not play. The MUTE STATE is real: read from and written to
-        /// <c>AppSettings.ChaosMenuMusicMuted</c>, so the icon is right the moment the hub opens
-        /// and the choice outlives the window, exactly as in WPF.
-        /// ponytail: needs a looping/fading audio seam for the track itself.</summary>
-        private void UpdateMuteIcon(bool muted) => _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
+        private void UpdateMuteIcon(bool muted)
+        {
+            _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
+            InitializeMenuMusic();
+        }
 
         private void BtnMenuMute_Click(object? sender, RoutedEventArgs e)
         {
@@ -2208,6 +2201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CoreSettings.Current.ChaosMenuMusicMuted = muted;
             CoreSettings.Save();
             UpdateMuteIcon(muted);
+            FadeMenuMusic(muted ? 0 : 0.5, 12);
         }
 
         // ============================ window chrome (move / fullscreen) ============================
@@ -2226,11 +2220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void SetFullscreen(bool on) => WindowState = on ? WindowState.Maximized : WindowState.Normal;
 
-        /// <summary>WPF also detached the companion tube while maximized (it is anchored to the
-        /// main window). ponytail: same head-side blocker as <see cref="Menu_FallIn_Click"/> -
-        /// <c>SetChaosRunActive</c> on CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs,
-        /// plus an owner for the live instance. Nothing here is waiting on Core.</summary>
-        private void OnHubStateChanged(WindowState state) => _optFullscreen.IsChecked = state == WindowState.Maximized;
+        private void OnHubStateChanged(WindowState state) { _optFullscreen.IsChecked = state == WindowState.Maximized; UpdateCompanionForHubState(state); }
 
         /// <summary>Re-open the spoiler-free rules card on demand, modal over the dollhouse
         /// (WPF ChaosHubWindow.xaml.cs:2942-2948). Never touches SeenIntroGuide.</summary>

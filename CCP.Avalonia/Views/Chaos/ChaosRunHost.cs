@@ -62,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// </summary>
     internal static partial class ChaosRunHost
     {
+        internal static ChaosPlayMode ActiveMode { get; private set; } = ChaosPlayMode.Story;
         private static ChaosRunState? _state;
         private static ChaosHudWindow? _hud;
         private static ChaosOverlayWindow? _overlay;
@@ -113,12 +114,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_active) return;
             if (!isRestart) SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.ChaosMode, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
-            var cfg = config ?? ChaosRunConfig.FromSettings();
             try
             {
+                var cfg = config ?? ChaosRunConfig.FromSettings();
+                ActiveMode = cfg.PlayMode;
                 ChaosRunState.IconResolver = ChaosBoonArt.Resolve;
                 _state = new ChaosRunState(cfg);
                 _active = true;
+                ChaosHubWindow.SetCompanionActive(true);
                 _lastHeatTint = -1;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
@@ -133,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             catch (Exception ex)
             {
                 Log.Error(ex, "ChaosRunHost.StartRun failed");
+                if (!_active) ChaosHubWindow.SetCompanionActive(false);
                 ForceShutdown();
             }
         }
@@ -1096,6 +1100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            ChaosHubWindow.SetCompanionActive(false);
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();
