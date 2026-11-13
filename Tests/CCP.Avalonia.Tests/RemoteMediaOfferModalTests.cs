@@ -236,19 +236,35 @@ public sealed class RemoteMediaOfferModalTests
             settingsProp.SetValue(null, service);
             CoreSettings.ServiceProvider = () => service;
             RemoteMediaOffer.Park("custom-assets-path-missing");
+            StartupLadder.ModalWindowReady = () => shell?.IsVisible == true;   // reset by WithOffer
             shell = new MainShellWindow();
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
-            Assert.True(dialog.IsVisible);
+            // The trunk's age gate is a StartupLadder modal: it opens after the ladder's settle delay.
+            var clock = Assert.IsType<StartupLadder.TestClock>(StartupLadder.Time);
+            Assert.Equal(0, opened()); // the parked offer waits while the gate is queued
+            ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog? dialog = null;
+            for (var i = 0; i < 20 && dialog == null; i++)
+            {
+                clock.Advance(StartupLadder.ModalPoll);
+                Dispatcher.UIThread.RunJobs();
+                dialog = shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().SingleOrDefault();
+            }
+            Assert.NotNull(dialog);
+            Assert.True(dialog!.IsVisible);
             Assert.Equal(0, opened());
             RemoteMediaOffer.Offer("flashes", shell);
             Assert.Equal(0, opened());
-            // Other startup cards can occupy the passive settle window; isolate this offer's release.
-            StartupLadder.ResetForTests();
 
             dialog.FindControl<Button>(accept ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
+            // A passive card held behind the gate takes its turn once the ladder drains.
+            for (var i = 0; i < 20 && opened() == 0; i++)
+            {
+                clock.Advance(StartupLadder.ModalPoll);
+                StartupLadder.PumpHeld();
+                Dispatcher.UIThread.RunJobs();
+            }
             Assert.Equal(accept, s.HasAcceptedAgeVerification);
             Assert.Equal(accept ? 1 : 0, opened());
         }
