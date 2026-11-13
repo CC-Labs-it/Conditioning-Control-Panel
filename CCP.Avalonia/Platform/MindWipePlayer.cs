@@ -1,6 +1,8 @@
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Threading;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -63,6 +65,64 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreMindWipe.UpdateSettingsProvider = UpdateSettings;
             CoreMindWipe.ReloadClipsProvider = ReloadClips;
             CoreMindWipe.ClipCountProvider = () => ClipCount;
+            WatchMaster();
+        }
+
+        // WPF MindWipeService.cs:136-160,173-174: whatever is sounding follows the master dial live, whoever moves it.
+        private AppSettings? _masterSettings;
+        private SettingsService? _masterService;
+
+        internal void WatchMaster()
+        {
+            UnwatchMaster();
+            lock (_lock)
+            {
+                _masterSettings = CoreSettings.Current;
+                _masterSettings.PropertyChanged += OnSettingChanged;
+                _masterService = CoreSettings.Service;
+                if (_masterService != null) _masterService.CurrentReplaced += OnSettingsReplaced;
+            }
+        }
+
+        internal void UnwatchMaster()
+        {
+            lock (_lock)
+            {
+                if (_masterSettings != null) _masterSettings.PropertyChanged -= OnSettingChanged;
+                if (_masterService != null) _masterService.CurrentReplaced -= OnSettingsReplaced;
+                _masterSettings = null;
+                _masterService = null;
+            }
+        }
+
+        private void OnSettingChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(AppSettings.MasterVolume))
+                lock (_lock) ApplyGain();
+        }
+
+        // A cloud restore or reset swaps the settings object: follow it, and its level.
+        private void OnSettingsReplaced()
+        {
+            lock (_lock)
+            {
+                if (_masterSettings == null) return;
+                _masterSettings.PropertyChanged -= OnSettingChanged;
+                _masterSettings = CoreSettings.Current;
+                _masterSettings.PropertyChanged += OnSettingChanged;
+                ApplyGain();
+            }
+        }
+
+        /// <summary>The level heard: the feature's own beneath the master (WPF CurrentGain, MindWipeService.cs:136).</summary>
+        internal double CurrentGain => MindWipeSchedule.EffectiveVolume(CoreSettings.Current.MasterVolume, _volume);
+
+        // Under _lock. A disposed voice must not keep the other one from following the dial.
+        private void ApplyGain()
+        {
+            var gain = CurrentGain;
+            try { if (_oneShot != null) _oneShot.Volume = gain; } catch (Exception ex) { Log.Debug(ex, "MindWipe: one-shot gain"); }
+            try { if (_loop != null) _loop.Volume = gain; } catch (Exception ex) { Log.Debug(ex, "MindWipe: loop gain"); }
         }
 
         internal void ReloadClips()
@@ -133,8 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 _frequency = MindWipeSchedule.ClampFrequency(frequencyPerHour);
                 _volume = MindWipeSchedule.ClampVolume(volume);
-                if (_oneShot != null) _oneShot.Volume = _volume;
-                if (_loop != null) _loop.Volume = _volume;
+                ApplyGain();
             }
         }
 
@@ -168,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 if (_clips.Length == 0) return;
                 clip = _clips[_random.Next(_clips.Length)];
-                volume = _volume;
+                volume = CurrentGain;
             }
             IVoice? voice = null;
             voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
@@ -177,7 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             displaced?.Dispose();
             // WPF App.xaml.cs:750-752: a played one-shot feeds the memory favourite.
             if (voice != null) App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
-            Log.Debug("MindWipe: Playing {File} at volume {Vol}%", Path.GetFileName(clip), volume * 100);
+            Log.Debug("MindWipe: Playing {File} at {Heard}% after master", Path.GetFileName(clip), Math.Round(volume * 100));
         }
 
         internal void StartLoop(double volume)
@@ -192,7 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             IVoice? voice = null;
             // A loop that dies (decode error, device gone) is no longer looping: IsLooping says so.
-            voice = _play(clip, _volume, true, () =>
+            voice = _play(clip, CurrentGain, true, () =>
             {
                 ITimer? dead = null;
                 lock (_lock) if (ReferenceEquals(_loop, voice)) { _loop = null; dead = _cleanSlate; _cleanSlate = null; }
@@ -206,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
             }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
             lock (_lock) { _loop = voice; _cleanSlate = check; }
-            Log.Information("MindWipe: Loop started with {File} at {Vol}% volume", Path.GetFileName(clip), volume * 100);
+            Log.Information("MindWipe: Loop started with {File} at {Vol}% volume, {Heard}% after master", Path.GetFileName(clip), volume * 100, Math.Round(CurrentGain * 100));
         }
 
         internal void StopLoop()

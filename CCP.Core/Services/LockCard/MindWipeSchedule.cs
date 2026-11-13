@@ -38,6 +38,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>Volume as a 0..1 fraction - the unit every mind-wipe call site uses.</summary>
         public static double ClampVolume(double volume) => Math.Clamp(volume, 0, 1);
 
+        /// <summary>WPF MindWipeService.EffectiveVolume (MindWipeService.cs:120): the heard level is the feature's
+        /// own level beneath the master dial, a linear product, so master 0 is silence (ccp-bugs #1432).</summary>
+        public static double EffectiveVolume(int masterVolume, double ownVolume) =>
+            double.IsNaN(ownVolume) ? 0 : Math.Clamp(masterVolume, 0, 100) / 100.0 * Math.Clamp(ownVolume, 0, 1);
+
         /// <summary>
         /// Chance of firing in one tick at a steady rate. At the 180/hour maximum this is 0.5,
         /// i.e. a coin flip every ten seconds.
