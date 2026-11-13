@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.UI;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
@@ -15,6 +16,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class LauncherWindow
 {
     private double _entranceTime = -1;
+
+    // WPF MotionFx.StaggerIn fades over 220 ms; Gentle visuals lift that rise to its 300 ms floor.
+    private static double EntranceFadeSeconds => GentleVisuals.RiseMs(220) / 1000.0;
 
     private void StartEntrance()
     {
@@ -35,7 +39,7 @@ public partial class LauncherWindow
         if (!Env.AllowTransitions) { SettleEntrance(); return false; }
         _entranceTime += dt;
         PaintEntrance();
-        if (_entranceTime >= 0.5) { SettleEntrance(); return false; }
+        if (_entranceTime >= 6 * 0.04 + Math.Max(EntranceFadeSeconds, 0.26)) { SettleEntrance(); return false; }
         return true;
     }
 
@@ -45,7 +49,7 @@ public partial class LauncherWindow
         foreach (var tile in GamesGrid.Children.OfType<Border>())
         {
             double elapsed = _entranceTime < 0 ? 1 : Math.Max(0, _entranceTime - Math.Min(i, 6) * 0.04);
-            double fade = Math.Clamp(elapsed / 0.22, 0, 1);
+            double fade = Math.Clamp(elapsed / EntranceFadeSeconds, 0, 1);
             double rise = Math.Clamp(elapsed / 0.26, 0, 1);
             tile.Opacity = 1 - (1 - fade) * (1 - fade);
             if (tile.RenderTransform is TransformGroup group && group.Children.LastOrDefault() is TranslateTransform slide)
