@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -17,11 +19,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// or blinking while looking near it, pops it through the bubble's own pop pipeline (sound, XP,
     /// quests, haptics). Follows the camera, never powers it (WPF EvaluateDesiredState).
     ///
-    /// <para>ponytail: the two-stage refine overlay and debug cursor remain unported.</para>
+    /// <para>The debug cursor remains unported.</para>
     ///
     /// <para>Coordinates: OnGazeMove is GAZE space (DIPs local to the calibrated monitor); bubbles are
     /// global DIPs (screen px / scaling). The conversion is the calibrated monitor's origin, a pure
-    /// translation (WPF CalOriginDips), resolved from the live display set.</para>
+    /// translation (WPF CalOriginDips), here read from the saved MonitorBounds.</para>
     /// </summary>
     internal sealed class GazeFocus
     {
@@ -38,6 +40,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                                            && WebcamConsent.IsCurrent(CoreSettings.Current);
         /// <summary>The bubble's own pop (WPF Bubble.PopByGaze -> Pop). Tests swap it.</summary>
         internal Action<AmbientBubble> PopBubble = BubbleOverlay.Pop;
+        internal Func<IReadOnlyList<object>, IReadOnlyList<Rect>, GazeRefineOverlay?> MakeRefine = GazeRefineOverlay.Open;
+        private GazeRefineOverlay? _refine;
+        private List<object>? _refineTargets;
+        private DateTimeOffset _opened, _chipStart, _outside, _lost, _suppressedUntil;
+        private int _chip = -1;
+        private DateTimeOffset _lastRaise = DateTimeOffset.MinValue;
+        internal Action<GazeRefineOverlay> RaiseRefine = p => X11Overlay.Raise(p);
 
         private DispatcherTimer? _timer;
         private Point? _lastGazePoint;
@@ -49,6 +58,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private MandatoryVideoOverlay.Target? _currentVideo;
         private DateTimeOffset _lastLingerBoost = DateTimeOffset.MinValue;
         private AppSettings? _settings;
+
+        // WPF GazeFocusService.cs:1004-1010: base-score choices for a future refine panel.
+        // These are recomputed on every target scan and never activate a target themselves.
+        internal List<object> RefineCandidates { get; } = new();
+        private readonly List<(object Target, GazeScore Score)> _scored = new();
 
         public bool IsActive { get; private set; }
         public int DwellMs { get; set; } = DefaultDwellMs;
@@ -143,6 +157,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!IsActive) return;
             Unsubscribe();
             if (_timer != null) { _timer.Stop(); _timer.Tick -= OnTimerTick; _timer = null; }
+            CloseRefine(false);
+            _suppressedUntil = DateTimeOffset.MinValue;
+            RefineCandidates.Clear();
+            _scored.Clear();
             ClearTarget();
             SetCursorLock(null); // WPF GazeFocusService.cs:290
             _lastGazePoint = null;
@@ -197,7 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 var now = Clock.GetUtcNow();
-                if (now < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) return;
+                if (_refine != null || now < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) return;
                 var target = FindBestTarget(p);
                 if (target is null) return;
                 ClearTarget(); // WPF: a blink on video clicks nothing but still clears the dwell and cools down
@@ -215,14 +233,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             try
             {
-                if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { ClearTarget(); SetCursorLock(null); return; }
+                if (_refine != null) { TickRefine(); return; }
+                if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { RefineCandidates.Clear(); _scored.Clear(); ClearTarget(); SetCursorLock(null); return; }
                 var target = FindBestTarget(p);
                 if (target == null) { ClearTarget(); SetCursorLock(null); return; }
                 SetCursorLock(TargetBounds(target));
                 if (target is AmbientBubble b) AdvanceBubbleDwell(b);
                 else AdvanceOtherDwell(target);
             }
-            catch (Exception ex) { Log.Debug("GazeFocus tick error: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GazeFocus tick error: {Error}", ex.Message); if (_refine != null) CloseRefine(true); }
         }
 
         // WPF GazeFocusService.cs:531-592: lock every live target, in tracker-local DIPs.
@@ -259,11 +278,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             object? best = null;
             double bestScore = ScoreThreshold;
+            var scored = _scored;
+            scored.Clear();
+            RefineCandidates.Clear();
             void Consider(object target, Rect r, bool flash, bool sticky)
             {
                 if (r.Width <= 0 || r.Height <= 0 || !TargetOnCalibratedScreen(r)) return;
                 var d = DistanceFromRectEdge(r.X, r.Y, r.Width, r.Height, p.X, p.Y);
-                var score = (flash ? FlashBaseScore(d) : BubbleBaseScore(d)) + (sticky ? StickyBonus : 0);
+                var baseScore = flash ? FlashBaseScore(d) : BubbleBaseScore(d);
+                scored.Add((target, new GazeScore(baseScore, r.X, r.Y, r.Width, r.Height)));
+                var score = baseScore + (sticky ? StickyBonus : 0);
                 if (score > bestScore) { bestScore = score; best = target; }
             }
             var s = CoreSettings.Current;
@@ -284,6 +308,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (s.VideoGazeClickEnabled)
                 foreach (var t in MandatoryVideoOverlay.Instance.GazeTargets)
                     Consider(t, t.GazeBounds, false, ReferenceEquals(_currentVideo, t));
+            var lead = AmbiguousLeader(scored, x => x.Score);
+            if (lead >= 0 && ReferenceEquals(scored[lead].Target, best))
+            {
+                foreach (var choice in RefineChoices(scored, x => x.Score))
+                {
+                    // A linger-only flash must never be offered as a pop choice (WPF :687-691).
+                    if (choice.Target is FlashOverlayWindow && !s.FlashGazePopEnabled) continue;
+                    RefineCandidates.Add(choice.Target);
+                }
+                if (RefineCandidates.Count < 2) RefineCandidates.Clear();
+            }
             return best;
         }
 
@@ -324,6 +359,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 flash.SetGazeDwellProgress(elapsed / DwellMs);
             }
             if (elapsed < DwellMs) return;
+            if (TryRaiseRefine()) return;
             var f = _currentFlash; var v = _currentVideo;
             ClearTarget();
             if (f != null) FlashOverlay.Pop(f, fromGaze: true);
@@ -343,9 +379,89 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var elapsedMs = (now - _dwellStartedAt).TotalMilliseconds;
             b.Scale = 1.0 + Math.Clamp(elapsedMs / DwellMs, 0, 1) * 0.25;   // WPF SetGazeDwellProgress inflate
             if (elapsedMs < DwellMs) return;
+            if (TryRaiseRefine()) return;
             _currentBubble = null;
             Pop(b);
             _cooldownUntil = now.AddMilliseconds(CooldownMs);
+        }
+
+        // WPF GazeFocusService.cs:605-870: the panel owns input until selection or cancellation.
+        private bool TryRaiseRefine()
+        {
+            if (Clock.GetUtcNow() < _suppressedUntil || RefineCandidates.Count < 2 || Views.Windows.WebcamCalibrationWindow.IsShowing) return false;
+            var choices = new List<object>();
+            var bounds = new List<Rect>();
+            foreach (var target in RefineCandidates)
+                if (Alive(target) && TargetBounds(target) is { Width: > 0, Height: > 0 } r) { choices.Add(target); bounds.Add(r); if (choices.Count == MaxRefineCandidates) break; }
+            if (choices.Count < 2) return false;
+            try
+            {
+                var panel = MakeRefine(choices, bounds);
+                if (panel == null) return false;
+                _refine = panel;
+                _refineTargets = choices;
+                _opened = Clock.GetUtcNow(); _outside = _lost = _lastRaise = DateTimeOffset.MinValue; _chip = -1;
+                ClearTarget(); SetCursorLock(null);
+                return true;
+            }
+            catch (Exception ex) { Log.Debug("Gaze refine open failed: {Error}", ex.Message); CloseRefine(true); return false; }
+        }
+
+        private bool Alive(object target)
+        {
+            if (target is AmbientBubble b) return BubblesGazeEnabled && b.Clickable && !b.Popping && BubbleOverlay.Field.Bubbles.Contains(b);
+            if (target is FlashOverlayWindow f) return CoreSettings.Current.FlashGazePopEnabled && !f.IsFadingOut && f.Exit == null && FlashOverlay.Active.Exists(x => ReferenceEquals(x.Window, f));
+            if (target is MandatoryVideoOverlay.Target v) return CoreSettings.Current.VideoGazeClickEnabled && MandatoryVideoOverlay.Instance.GazeTargets.Contains(v) && v.GazeBounds is { Width: > 0, Height: > 0 };
+            return false;
+        }
+
+        private void TickRefine()
+        {
+            var panel = _refine!; var now = Clock.GetUtcNow();
+            if ((now - _lastRaise).TotalMilliseconds >= 200) { RaiseRefine(panel); _lastRaise = now; }
+            if ((now - _opened).TotalMilliseconds >= 6000) { CloseRefine(true); return; }
+            int alive = 0;
+            foreach (var target in _refineTargets!) if (Alive(target)) alive++;
+            if (alive < 2) { CloseRefine(false); return; }
+            if (_faceLost || _lastGazePoint is not { } p)
+            {
+                if (_lost == DateTimeOffset.MinValue) _lost = now;
+                else if ((now - _lost).TotalMilliseconds >= 1200) { CloseRefine(true); return; }
+                panel.Progress(-1, 0); _chip = -1; SetCursorLock(null); return;
+            }
+            _lost = DateTimeOffset.MinValue;
+            int hit = panel.HitTestChip(p);
+            if (hit < 0)
+            {
+                panel.Progress(-1, 0); _chip = -1; SetCursorLock(null);
+                if (panel.EscapeBounds.Contains(p)) { _outside = DateTimeOffset.MinValue; return; }
+                if (_outside == DateTimeOffset.MinValue) _outside = now;
+                else if ((now - _outside).TotalMilliseconds >= 700) CloseRefine(true);
+                return;
+            }
+            _outside = DateTimeOffset.MinValue;
+            SetCursorLock(panel.ChipBounds(hit));
+            if (_chip != hit) { _chip = hit; _chipStart = now; }
+            var elapsed = (now - _chipStart).TotalMilliseconds;
+            panel.Progress(hit, elapsed / 550);
+            if (elapsed < 550) return;
+            var selected = _refineTargets![hit];
+            CloseRefine(false);
+            if (Alive(selected))
+            {
+                if (selected is AmbientBubble b) Pop(b);
+                else if (selected is FlashOverlayWindow f) FlashOverlay.Pop(f, fromGaze: true);
+                else if (selected is MandatoryVideoOverlay.Target v) v.Hit();
+            }
+            _cooldownUntil = now.AddMilliseconds(CooldownMs);
+        }
+
+        private void CloseRefine(bool suppress)
+        {
+            var panel = _refine; _refine = null; _refineTargets = null; _chip = -1;
+            if (suppress) _suppressedUntil = Clock.GetUtcNow().AddMilliseconds(4000);
+            try { panel?.Close(); } catch (Exception ex) { Log.Debug("Gaze refine close failed: {Error}", ex.Message); }
+            SetCursorLock(null);
         }
 
         private void Pop(AmbientBubble b)
