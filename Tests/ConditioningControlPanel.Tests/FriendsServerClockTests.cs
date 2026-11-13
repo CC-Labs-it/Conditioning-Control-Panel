@@ -65,6 +65,8 @@ public class FriendsServerClockTests
     public void The_knock_countdown_of_a_fresh_invite_reads_about_five_minutes_on_a_fast_pc_clock()
     {
         Assert.True(PackUriBootstrap.Failure == null, PackUriBootstrap.Failure);
+        // Theme bootstrap is unrelated to the invite's age and can be slow on a cold runner.
+        WpfRenderHarness.EnsureApplication();
         try
         {
             var serverNow = PcFast(TimeSpan.FromMinutes(2));
