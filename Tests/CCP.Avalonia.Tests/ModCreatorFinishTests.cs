@@ -117,6 +117,47 @@ public sealed class ModCreatorFinishTests
     }
 
     [Fact]
+    public Task FramingSurvivesLoadAndExportUntilImageSwapOrClear() => RunAsync(async (w, dir) =>
+    {
+        const string key = "features/fyp.png";
+        const string surface = "railChip";
+        var image = Path.Combine(dir, "fyp.png");
+        var replacement = Path.Combine(dir, "other.png");
+        using (var bitmap = new WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96))) bitmap.Save(image);
+        File.Copy(image, replacement);
+        var manifest = new ConditioningControlPanel.Models.ModManifest { ArtFraming = new() {
+            [key] = new() { [surface] = new ConditioningControlPanel.Services.ModArtFraming
+                { CenterX = 0.123456, CenterY = 0.8, Zoom = 1.23456 } } } };
+        w.PopulateFromManifest(manifest);
+        await (Task)Call(w, "SetImageSlot", key, image, false)!;
+        var output = w.BuildManifestFromForm().ArtFraming![key][surface];
+        Assert.Equal(0.1235, output.CenterX);
+        Assert.Equal(0.8, output.CenterY);
+        Assert.Equal(1.2346, output.Zoom);
+        await (Task)Call(w, "SetImageSlot", key, replacement, true)!;
+        Assert.Null(w.BuildManifestFromForm().ArtFraming);
+        w.PopulateFromManifest(manifest);
+        Call(w, "ClearImageSlot", key);
+        await (Task)Call(w, "SetImageSlot", key, image, false)!;
+        Assert.Null(w.BuildManifestFromForm().ArtFraming);
+    });
+
+    [Fact]
+    public void FramingRulesClampAndDiscardUnknownPairs()
+    {
+        var input = new Dictionary<string, Dictionary<string, ConditioningControlPanel.Services.ModArtFraming>> {
+            ["features/fyp.png"] = new() {
+                ["railChip"] = new() { CenterX = double.NaN, CenterY = 2, Zoom = -2 },
+                ["unknown"] = new() { Zoom = 2 } } };
+        var result = ModArtFramingRules.ReadManifestSection(input);
+        var clean = Assert.Single(result["features/fyp.png"]);
+        Assert.Equal("railChip", clean.Key);
+        Assert.Equal(0.5, clean.Value.CenterX);
+        Assert.Equal(1, clean.Value.CenterY);
+        Assert.Equal(1, clean.Value.Zoom);
+    }
+
+    [Fact]
     public void TutorialStepsNavigateToTheirCreatorSection()
     {
         Run((w, _) =>

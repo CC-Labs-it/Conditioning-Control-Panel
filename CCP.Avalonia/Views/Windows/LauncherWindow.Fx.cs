@@ -220,6 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// pending exit runs at once (WPF Crossfade: RootGrid never stays under 1, the hide still happens).</summary>
         private void FxPark()
         {
+            SettleEntrance();
             ParkComets();
             _fxClock.Stop();
             StopSheens();
@@ -270,6 +271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         SpiralSmallTurn.Angle = _spiralSmall;
                     }
                 }
+                busy |= StepEntrance(dt);
                 busy |= StepDepth(dt);
                 // WPF Edge.cs:124 gates the breath on transitions only. On the CPU path it repaints the whole
                 // launcher 30 times a second (render thread pinned, lane perf): between flares and glints the
@@ -408,7 +410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var fx = new TileFx { Tile = tile, Hue = hue, Title = title, TitleRest = title.Color, ArtSlide = artSlide };
             if (art != null) DecorateArt(art);
             tile.RenderTransformOrigin = RelativePoint.Center;
-            tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt } };
+            tile.RenderTransform = new TransformGroup { Children = { fx.Scale, fx.Tilt, new TranslateTransform() } };
             if (Env.AllowGlow(Env.CurrentTier))
             {
                 fx.Glow = shadow;

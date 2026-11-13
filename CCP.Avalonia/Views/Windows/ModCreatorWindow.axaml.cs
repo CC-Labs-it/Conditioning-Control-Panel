@@ -356,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var btn = new Button
                 {
-                    Content = label,
+                    Content = key == "eventaudio" ? Loc.Get("mod_event_title") : label,
                     Tag = key,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
                     Padding = new Thickness(13, 9, 13, 9),
@@ -423,15 +423,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildReplacementsSection();
 
             // The nine newer content types are one partial-class file per panel in the WPF head
-            // and one port layer each here. Their sidebar entries stay, so each gets a panel
-            // saying so rather than a button that does nothing.
+            // and one port layer each here. Deferred panels keep their sidebar entries.
             BuildUiArtSection();
             BuildPoolsSection();
             BuildPersonalitiesSection();
             BuildAdvancedSection();
             BuildBarksSection();
             BuildDeferredSection("mantras", "Mantras", "ModCreatorWindow.Mantras.cs");
-            BuildDeferredSection("eventaudio", "Event Audio", "ModCreatorWindow.EventAudio.cs");
+            BuildEventAudioSection();
             BuildDeferredSection("portraits", "Portraits", "ModCreatorWindow.Portraits.cs");
             BuildDeferredSection("emotes", "Animated Emotes", "ModCreatorWindow.Emotes.cs");
         }
@@ -452,19 +451,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // ─── Side-file seams ─────────────────────────────────────
-        // Barks is wired below. Remaining panel partials (Mantras/EventAudio/Portraits/Emotes) join
+        // Barks and Event Audio are wired below. Remaining panel partials (Mantras/Portraits/Emotes) join
         // when each is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private void WriteSideFilesTo(string resourcesDir) => WriteBarksTo(resourcesDir);
-        private void LoadSideFilesFrom(string resourcesDir) => LoadBarksFrom(resourcesDir);
-        private void ClearSideFileState() => ClearBarksSection();
+        private void WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); WriteEventAudioTo(resourcesDir); }
+        private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); LoadEventAudioFrom(resourcesDir); }
+        private void ClearSideFileState() { ClearBarksSection(); ClearEventAudioSection(); }
 
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
             ApplyPoolsToManifest(manifest);
             ApplyPersonalitiesToManifest(manifest);
             ApplyAdvancedToManifest(manifest);
+            manifest.ArtFraming = ModArtFramingRules.BuildManifestSection(_artFraming, _imageSlots);
         }
 
         private void PopulatePanelSectionsFromManifest(ModManifest manifest)
@@ -472,6 +472,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PopulatePoolsFromManifest(manifest);
             PopulatePersonalitiesFromManifest(manifest);
             PopulateAdvancedFromManifest(manifest);
+            PopulateArtFramingFromManifest(manifest);
         }
 
         private void ClearPanelSections()
@@ -479,6 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ClearPoolsSection();
             ClearPersonalitiesSection();
             ClearAdvancedSection();
+            _artFraming.Clear();
         }
 
         private Border CreateSectionPanel(string key)
@@ -1984,19 +1986,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.Get("mod_art_large_title"), Loc.GetF("mod_art_large",
                     Path.GetFileName(filePath), ModImageSlotRules.FormatSize(size)), okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"));
         }
-
-        /// <summary>
-        /// WPF drops the crop stored for a slot whose image just changed or was cleared - left
-        /// behind, it silently re-attaches to whatever the author picks next, and to a manifest that
-        /// no longer ships the file it was measured against.
-        ///
-        /// <para>ponytail: correctly empty TODAY rather than blocked. The framing dictionary lives in
-        /// ConditioningControlPanel/Windows/ModCreatorWindow.ArtFraming.cs and there is no port of it
-        /// here, so nothing in this window holds a crop to drop - ApplyPanelSectionsToManifest never
-        /// writes ModManifest.ArtFraming either. The body arrives with that panel; the call sites
-        /// (SetImageSlot, ClearImageSlot) are already in the WPF places.</para>
-        /// </summary>
-        private void DropArtFraming(string key) { }
 
         private void ClearImageSlot(string key)
         {

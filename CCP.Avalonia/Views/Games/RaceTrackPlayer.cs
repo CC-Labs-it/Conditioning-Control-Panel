@@ -263,15 +263,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             finally { try { File.Delete(wav); } catch { } }
         }
 
-        private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, string? sout = null)
+        internal static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct, string? sout = null, TimeSpan? start = null, TimeSpan? end = null, LibVLC? decoder = null)
         {
             // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
             ct.ThrowIfCancellationRequested();
-            var vlc = LibVlcAudio.Shared ?? throw new InvalidOperationException(GameWindow.RaceNoAudioMessage);
+            var vlc = decoder ?? LibVlcAudio.Shared ?? throw new InvalidOperationException(GameWindow.RaceNoAudioMessage);
             using var done = new ManualResetEventSlim(false);
             bool failed = false;
             using var media = new Media(vlc, source, FromType.FromPath);
             media.AddOption(sout ?? SoutFor(dest));
+            if (start.HasValue) media.AddOption(":start-time=" + start.Value.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (end.HasValue) media.AddOption(":stop-time=" + end.Value.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
             media.AddOption(":no-sout-video");
             media.AddOption(":sout-keep");
             using var player = new MediaPlayer(media);
@@ -301,7 +303,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>The "data" chunk of a mono 16-bit PCM WAV as floats in [-1, 1). A header the muxer never
         /// patched (size 0 or past the end) reads to the end of the file.</summary>
-        internal static float[] ReadMono16(byte[] wav)
+        internal static float[] ReadMono16(byte[] wav, int sampleRate = 16000)
         {
             if (wav.Length < 12 || BitConverter.ToUInt32(wav, 0) != 0x46464952 || BitConverter.ToUInt32(wav, 8) != 0x45564157)
                 throw new InvalidDataException("the track would not decode");
@@ -314,7 +316,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 pos += 8;
                 if (id == 0x20746D66 && size >= 16)           // "fmt "
                     fmtOk = BitConverter.ToUInt16(wav, pos) == 1 && BitConverter.ToUInt16(wav, pos + 2) == 1
-                            && BitConverter.ToUInt32(wav, pos + 4) == 16000 && BitConverter.ToUInt16(wav, pos + 14) == 16;
+                            && BitConverter.ToUInt32(wav, pos + 4) == sampleRate && BitConverter.ToUInt16(wav, pos + 14) == 16;
                 else if (id == 0x61746164)                    // "data"
                 {
                     if (!fmtOk) break;

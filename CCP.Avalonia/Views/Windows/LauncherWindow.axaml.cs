@@ -96,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildTiles();
             HookVeil();
             HookFx();
+            HookPress(PanelCta);
             HookLinks();
             PaintSoundButton();
         }
@@ -106,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 BuildTiles();
+                StartEntrance();
                 RefreshAccount();
                 RefreshMod();
                 RefreshStatus();
@@ -311,7 +313,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
         {
-            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            if (e.ClickCount == 2)
+            {
+                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+                e.Handled = true;
+            }
+            else
+            {
+                if (WindowState == WindowState.Maximized)
+                {
+                    var point = this.PointToScreen(e.GetPosition(this));
+                    double scale = RenderScaling;
+                    WindowState = WindowState.Normal;
+                    Position = new PixelPoint(point.X - LauncherPlacement.ToPx(Width / 2, scale),
+                        point.Y - LauncherPlacement.ToPx(15, scale));
+                }
+                try { BeginMoveDrag(e); } catch (InvalidOperationException) { }
+            }
         }
 
         private void BtnMinimize_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -466,6 +485,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
                 Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
                 BuildTiles();
+                StartEntrance();
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] tile refresh on {Trigger} failed", trigger); }
         }
@@ -586,6 +606,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             FriendsChip.UpdatePill();
             RefreshStats();
             BuildTiles();
+            StartEntrance();
         }
 
         internal void BuildTiles()
@@ -733,6 +754,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 TextTrimming = TextTrimming.CharacterEllipsis, Height = LauncherGridLayout.BlurbHeight,
             });
             var play = PlayButton(hue, locked, needsAccount);
+            HookPress(play);
             // ponytail: no LockdownVeil on this head yet (WPF's swallows every tile click); this refusal stands in for it.
             play.Click += (_, _) => { if (!MainShellWindow.LockdownActive) Play(card); };
             text.Children.Add(play);

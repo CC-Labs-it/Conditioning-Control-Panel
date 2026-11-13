@@ -24,7 +24,7 @@
 // Import picker/drop and promotion are in MainShellWindow.DeeperImport.cs.
 // Shell entry points, import and watcher: MainShellWindow.DeeperImport.cs / DeeperHub.cs.
 // Tour: DeeperHub.cs. First-visit pulse: TabTransitions.cs.
-// Browser discovery/match and mandatory-video startup nudge remain unported.
+// Browser discovery/match remains unported; the startup nudge is MainShellWindow.VideoEnhanceNudge.cs.
 // WPF references: MainWindow.DeeperTab.cs:120,137,604-689,704-826.
 //
 // NOT BLOCKED, RESTORED: BtnDeeperNewEnhancement_Click. It used to be listed on the line above with

@@ -138,8 +138,10 @@ public sealed class GlowRenderProofTests
         return x1 < 0 ? default : new PixelRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
     }
 
-    [Fact]
-    public Task PadlockGlowIsTheGlyphsBakedShadow() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(650)]
+    [InlineData(900)]
+    public Task PadlockGlowIsTheGlyphsBakedShadow(int height) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -156,7 +158,7 @@ public sealed class GlowRenderProofTests
             CoreEntitlement.HasPremiumProvider = null;
             CoreEntitlement.HasLabProvider = null;
             CoreEntitlement.IsFreeTodayProvider = null;
-            w = new MainShellWindow { Width = 1400, Height = 900 };
+            w = new MainShellWindow { Width = 1400, Height = height };
             w.Show();
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
@@ -166,6 +168,10 @@ public sealed class GlowRenderProofTests
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
+            // IsEffectivelyVisible does not account for ScrollViewer clipping. Include the halo
+            // in the requested rectangle so the screen proof samples the actual card.
+            lockGlyph.BringIntoView(new Rect(-24, -24, lockGlyph.Bounds.Width + 48, lockGlyph.Bounds.Height + 48));
+            Dispatcher.UIThread.RunJobs();
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;
             Assert.True(glow.IsVisible, "the padlock glow is not shown - the proof proves nothing");
             Assert.Null(lockGlyph.Effect);                                    // no live Effect on the glyph
