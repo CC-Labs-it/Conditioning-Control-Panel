@@ -134,6 +134,20 @@ namespace ConditioningControlPanel.Services.Audio
             return name.Length <= MaxNameChars ? name : name.Substring(0, MaxNameChars);
         }
 
+        /// <summary>
+        /// Pure: "FlashService.ShowImages" from a caller's source path and member (ccp-bugs #1564).
+        /// The type file's name only, never the build machine's path.
+        /// </summary>
+        public static string DuckCaller(string? callerFile, string? callerMember)
+        {
+            var file = callerFile ?? "";
+            var slash = file.LastIndexOfAny(new[] { '\\', '/' });
+            if (slash >= 0) file = file.Substring(slash + 1);
+            if (file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) file = file.Substring(0, file.Length - 3);
+            if (string.IsNullOrEmpty(file)) file = "unknown";
+            return string.IsNullOrEmpty(callerMember) ? file : file + "." + callerMember;
+        }
+
         /// <summary>Test seam.</summary>
         internal void Clear()
         {

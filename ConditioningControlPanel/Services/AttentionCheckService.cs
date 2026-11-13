@@ -316,6 +316,7 @@ namespace ConditioningControlPanel.Services
                 // without bundling an audio asset; voice-pass can swap for
                 // a themed sound at ship.
                 try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+                global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("system:attention-check", "Asterisk");
 
                 _tickTimer?.Stop();
                 _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TickMs) };

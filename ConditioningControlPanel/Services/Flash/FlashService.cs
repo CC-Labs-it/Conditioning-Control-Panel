@@ -1898,19 +1898,23 @@ namespace ConditioningControlPanel.Services
                 // Glow is a DropShadow blur (expensive at scale) — gate it behind the global
                 // glow toggle AND the performance tier (disabled entirely under Performance),
                 // and cap the blur radius so 25+ simultaneous flashes don't each run a 60px blur.
-                var sparkleBoostTier = App.SkillTree?.GetSparkleBoostTier() ?? 0;
+                // Perk effects Off (owner, 2026-11-05): no lucky gold and no Sparkle Boost pink.
+                // The 10x and the boost XP are already paid; Natasha's red halo is not a perk.
+                var perkFx = App.PerkEffectsShown;
+                var luckyFx = isLucky && perkFx;
+                var sparkleBoostTier = perkFx ? (App.SkillTree?.GetSparkleBoostTier() ?? 0) : 0;
                 bool glowEnabled = (App.Settings?.Current?.FlashGlowEnabled ?? true)
                                    && PerformanceProfile.AllowGlow(perfTier);
-                if ((glowEnabled && (isLucky || sparkleBoostTier > 0)) || natashaGlow)
+                if ((glowEnabled && (luckyFx || sparkleBoostTier > 0)) || natashaGlow)
                 {
-                    var glowColor = isLucky
+                    var glowColor = luckyFx
                         ? System.Windows.Media.Color.FromRgb(0xFF, 0xD7, 0x00) // Gold
                         : natashaGlow
                         ? System.Windows.Media.Color.FromRgb(Chaster.NatashasFavourite.R, Chaster.NatashasFavourite.G, Chaster.NatashasFavourite.B)
                         : System.Windows.Media.Color.FromRgb(0xFF, 0x69, 0xB4); // Hot pink
 
                     double blurRadius, glowOpacity;
-                    if (isLucky)
+                    if (luckyFx)
                     {
                         blurRadius = 60;
                         glowOpacity = 0.9;
@@ -1922,7 +1926,7 @@ namespace ConditioningControlPanel.Services
                     }
 
                     // Natasha's red is a thin halo, under the lucky gold and the sparkle pink.
-                    if (natashaGlow && !isLucky && (sparkleBoostTier == 0 || !glowEnabled))
+                    if (natashaGlow && !luckyFx && (sparkleBoostTier == 0 || !glowEnabled))
                     {
                         blurRadius = Chaster.NatashasFavourite.HaloBlurDip;
                         glowOpacity = Chaster.NatashasFavourite.HaloOpacity;
@@ -1982,7 +1986,7 @@ namespace ConditioningControlPanel.Services
                     window.Background = System.Windows.Media.Brushes.Transparent;
                     content = border;
                     window.GlowEffect = glowEffect;   // tracked so SafeCloseFlashWindow can stop its animations + free the native blur target
-                    if (natashaGlow && !isLucky) glowEffect.BeginAnimation(DropShadowEffect.OpacityProperty, NatashaBlink(glowOpacity));
+                    if (natashaGlow && !luckyFx) glowEffect.BeginAnimation(DropShadowEffect.OpacityProperty, NatashaBlink(glowOpacity));
 
                     // Host mode expands the bookkeeping rect (the gaze rect) to match the glow-expanded
                     // visual. Per-window mode must NOT resize the window here: the shell is already
@@ -1999,7 +2003,7 @@ namespace ConditioningControlPanel.Services
                     }
 
                     // Pulsing golden animation for lucky procs
-                    if (isLucky)
+                    if (luckyFx)
                     {
                         // Pulse relative to the (capped) base radius so the cap is respected.
                         var blurAnim = new DoubleAnimation(blurRadius, blurRadius * 1.6, TimeSpan.FromMilliseconds(400))
@@ -2068,7 +2072,7 @@ namespace ConditioningControlPanel.Services
                             true, true, MotionFx.Level, _random)
                         : ResolveMotionStyle(settings, inheritMotion);
                     SpawnLayerVisual(window, imageData, monitor,
-                        layerGlowColor, layerGlowRadius, layerGlowOpacity, isLucky, window.MotionStyle,
+                        layerGlowColor, layerGlowRadius, layerGlowOpacity, luckyFx, window.MotionStyle,
                         roundedWpf && ownsFlashV2);
 
                     if (!suppressHaptic)
@@ -4443,7 +4447,7 @@ namespace ConditioningControlPanel.Services
         /// pool that actually played could be a fraction of the list the library showed, small enough
         /// that one clip came back on every single flash.</para>
         ///
-        /// <para>Mirrors <c>AvatarTubeWindow.GetRandomVoiceLinePath</c>, which has always taken the
+        /// <para>Mirrors the old <c>AvatarTubeWindow.GetRandomVoiceLinePath</c>, which always took the
         /// filtered list with an unfiltered fallback. Caller holds <see cref="_lockObj"/>.</para>
         /// </summary>
         private List<string> BuildVoiceLinePool()

@@ -455,19 +455,17 @@ namespace ConditioningControlPanel.Services
             }
 
             // Include custom phrases in VoiceLine category that have audio
-            var customPhrases = settings?.CustomCompanionPhrases ?? new List<CustomCompanionPhrase>();
-            foreach (var custom in customPhrases)
-            {
-                if (custom.Category == VoiceLineCategory && custom.Enabled && !string.IsNullOrEmpty(custom.AudioFileName))
-                {
-                    var fullPath = Path.Combine(CompanionAudioFolder, custom.AudioFileName);
-                    if (File.Exists(fullPath))
-                        result.Add(fullPath);
-                }
-            }
+            result.AddRange(GetEnabledCustomVoiceLineFiles());
 
             return result;
         }
+
+        /// <summary>
+        /// Only the player's OWN enabled VoiceLine phrases that have a clip on disk (no built-in flash
+        /// lines). The idle timer speaks these (<see cref="Companion.IdleVoiceLines"/>).
+        /// </summary>
+        public List<string> GetEnabledCustomVoiceLineFiles() =>
+            Companion.IdleVoiceLines.OwnClips(App.Settings?.Current?.CustomCompanionPhrases, CompanionAudioFolder, File.Exists);
 
         /// <summary>
         /// Returns the custom phrase text for a voice line audio path, or null if it's a built-in voice line.

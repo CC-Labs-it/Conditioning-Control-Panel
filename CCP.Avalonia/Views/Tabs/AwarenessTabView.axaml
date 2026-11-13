@@ -140,7 +140,8 @@
                             <Border CornerRadius="99" Background="#8C131320" VerticalAlignment="Center"
                                     BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                                     Padding="12,5,12,5">
-                                <CheckBox x:Name="ChkAwarenessMaster" sessionLock:SessionLock.Owned="True"
+                                <!-- WPF 7.2.3 a31c8002b (#1533): not session-locked, so Awareness always turns off. -->
+                                <CheckBox x:Name="ChkAwarenessMaster"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           IsCheckedChanged="ChkAwarenessMaster_Changed">
                                     <ToolTip.Tip>

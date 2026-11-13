@@ -775,8 +775,8 @@ namespace ConditioningControlPanel
         private static void SeedAskSeams()
         {
             Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
-            Services.Companion.Asks.CompanionAskService.ShowCardSurface = card =>
-                AvatarWindow?.RunOnAvatar(() => AvatarWindow?.ShowAskCard(card));
+            Services.Companion.Asks.CompanionAskService.ShowCardSurface = (card, unprompted) =>
+                AvatarWindow?.RunOnAvatar(() => AvatarWindow?.ShowAskCard(card, unprompted));
             Services.Companion.Asks.CompanionAskService.SaySurface = text =>
             {
                 var avatar = AvatarWindow;
@@ -794,6 +794,10 @@ namespace ConditioningControlPanel
                 if (BrowserMedia?.IsPlaying == true || BrowserMedia?.IsTakeover == true) return true;
                 if (Lockdown?.IsActive == true) return true;
                 if (Mantra?.IsActive == true) return true;
+                // A Deeper audio session and a running Takeover action own the user too (ccp-bugs #1569:
+                // ask cards fired over a Deeper session).
+                if (DeeperHost?.IsRunning == true) return true;
+                if (Autonomy?.IsActionInProgress == true) return true;
                 if (RemoteControl?.ControllerConnected == true) return true;
                 return Current?.Windows.OfType<Window>().Any(w => w.IsVisible && w is LockCardWindow) == true;
             };
@@ -902,6 +906,8 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // Switched off by the owner (2026-11-07): no "Media without the download" card.
+                if (!Services.Startup.PopupSwitches.RemoteMediaOffer) return;
                 var settings = Settings?.Current;
                 if (settings == null) return;
 
@@ -1358,7 +1364,15 @@ namespace ConditioningControlPanel
         /// startup-order accident can never silently mute the app.
         /// </summary>
         public static bool PerkNotificationsSuppressed
-            => Settings?.Current?.SuppressPerkNotifications == true;
+            => !Models.PerkEffectsRules.ShowsCards(Settings?.Current?.PerkEffects ?? Models.PerkEffectsMode.Full);
+
+        /// <summary>
+        /// False only when Perk effects is Off (owner, 2026-11-05): no Pink Rush screen wash, no
+        /// lucky gold glow, no lucky or Sparkle Boost sparkles. Same null-safe, read-at-raise-time
+        /// contract as <see cref="PerkNotificationsSuppressed"/>; payouts never read it.
+        /// </summary>
+        public static bool PerkEffectsShown
+            => Models.PerkEffectsRules.ShowsVisuals(Settings?.Current?.PerkEffects ?? Models.PerkEffectsMode.Full);
 
         /// <summary>
         /// Whether a conditioning session is currently running. Set by MainWindow.
@@ -1836,6 +1850,27 @@ namespace ConditioningControlPanel
         /// Used to delay tutorial until update is handled.
         /// </summary>
         public static bool IsUpdateDialogActive { get; set; } = false;
+
+        /// <summary>The update this launch's background check found, or null. The launcher's
+        /// "Update ready" chip reads it (ccp-bugs #1580): players who go straight into a game never
+        /// reach the panel, where the startup-ladder dialog waits.</summary>
+        public static AppUpdateInfo? PendingUpdate { get; private set; }
+
+        /// <summary>Raised on the UI thread when <see cref="PendingUpdate"/> changes.</summary>
+        public static event Action? PendingUpdateChanged;
+
+        /// <summary>True once the update dialog has been shown this launch (launcher chip or the
+        /// ladder), so the queued ladder copy never asks a second time.</summary>
+        private static bool _updateOffered;
+
+        /// <summary>The launcher chip's door: the SAME in-app dialog and updater the ladder shows,
+        /// never a browser URL. No-op while a dialog or install is already running.</summary>
+        public static void OfferPendingUpdate(Window owner)
+        {
+            var info = PendingUpdate;
+            if (info == null || IsUpdateDialogActive || _isCheckingForUpdates || Current is not App app) return;
+            app.ShowUpdateNotification(info, owner);
+        }
 
         /// <summary>
         /// Flag to prevent concurrent update checks
@@ -2416,6 +2451,7 @@ namespace ConditioningControlPanel
             // the 100-line app-log tail, and a hard power reset can roll a buffered write back.
             // Its own file + WriteThrough per line survives both. See VideoDiag.
             Services.VideoDiag.Start(Dispatcher);
+            Services.Diagnostics.RenderFailureReport.WarmAdapters();
 
             splash?.SetProgress(0.1, "Initializing...");
 
@@ -5395,6 +5431,11 @@ namespace ConditioningControlPanel
                     // First, show the update button immediately (this always works)
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
+                        // The launcher's chip lights from this (#1580).
+                        PendingUpdate = updateInfo;
+                        try { PendingUpdateChanged?.Invoke(); }
+                        catch (Exception chipEx) { Logger?.Warning(chipEx, "Failed to light the launcher update chip"); }
+
                         try
                         {
                             var mainWindow = Application.Current.MainWindow as MainWindow;
@@ -5426,6 +5467,13 @@ namespace ConditioningControlPanel
                     {
                         try
                         {
+                            // Already answered from the launcher's chip: never ask twice in one launch.
+                            if (_updateOffered)
+                            {
+                                Logger?.Information("Update dialog already shown from the launcher; ladder copy skipped");
+                                return;
+                            }
+
                             var mainWindow = (owner as MainWindow) ?? MainWindowRef ?? Application.Current.MainWindow as MainWindow;
 
                             if (mainWindow == null)
@@ -5499,6 +5547,7 @@ namespace ConditioningControlPanel
             {
                 Logger?.Information("Showing update notification dialog for version {Version}", updateInfo.Version);
                 IsUpdateDialogActive = true;
+                _updateOffered = true;
 
                 owner.Activate();
                 owner.Focus();
@@ -6013,6 +6062,12 @@ namespace ConditioningControlPanel
                 // Log to main logger
                 Logger?.Error(ex, "UNHANDLED {Source} EXCEPTION: {Message}", source, ex.Message);
 
+                // A render-thread failure never names its window or device (ccp-bugs #1565 #1570 #1585):
+                // carry the GPU, monitors and visible windows so the next report can.
+                var renderBlock = Services.Diagnostics.UiThreadExit.IsRenderFailure(ex) && ex is not OutOfMemoryException
+                    ? Services.Diagnostics.RenderFailureReport.Build()
+                    : "";
+
                 // Also write to dedicated crash log with full details
                 var crashLogPath = Path.Combine(UserDataPath, "logs", "crash.log");
                 var crashInfo = $@"
@@ -6034,7 +6089,7 @@ Inner Exception: {(ex.InnerException != null ? ex.InnerException.Message : "None
 Application State:
 - IsRunning: {Current != null}
 - Dispatcher Shutdown: {(Current?.Dispatcher?.HasShutdownStarted ?? true)}
-================================================================================
+{renderBlock}================================================================================
 ";
                 // Redact BEFORE the text touches the disk. crash.log is the one file users open
                 // by hand and paste into Discord, and it carried the full "C:\Users\<name>" of

@@ -90,6 +90,7 @@ public sealed class TrackPlayer : IDisposable, ITrackTransport
             _endedFired = false;
             ApplyVolume();
             _out.Play();
+            global::ConditioningControlPanel.Services.Audio.EngineOffAudioLog.Note("race-track", _reader.FileName);
         }
         catch (Exception ex) { App.Logger?.Warning("TrackPlayer.Play: {E}", ex.Message); }
     }

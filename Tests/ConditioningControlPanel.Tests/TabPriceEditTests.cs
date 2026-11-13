@@ -118,6 +118,84 @@ public class TabPriceEditTests
         Assert.All(ids.Where(TabPriceEdit.Editable), id => Assert.True(TabMenuCopy.HasFixedFigure(id)));
     }
 
+    /// <summary>WhoWho372 (2026-11-05): "skipping a session adds at least a day". A row goes to
+    /// a whole day, never past it, and the day limit goes to a whole day too.</summary>
+    [Theory]
+    [InlineData("24:00:00", 86400)]
+    [InlineData("1440", 86400)]
+    [InlineData("23:59:59", 86399)]
+    [InlineData("48:00:00", 86400)]
+    [InlineData("100000", 86400)]
+    public void A_row_takes_up_to_a_whole_day(string text, int seconds)
+    {
+        Assert.Equal(24 * 3600, TabPriceEdit.MaxSeconds);
+        Assert.Equal(24 * 3600, TabLimits.MaxDailySeconds);
+        var o = TabPriceEdit.With(null, "program_skipped", TabPriceEdit.Parse(text));
+        Assert.Equal(seconds, TabPriceEdit.Effective("program_skipped", o));
+        Assert.Equal(-seconds, TabPriceEdit.Effective("lockcard", TabPriceEdit.With(null, "lockcard", TabPriceEdit.Parse(text))));
+    }
+
+    [Fact]
+    public void A_day_row_books_the_day_limit_and_a_raised_limit_books_the_day()
+    {
+        var o = TabPriceEdit.With(null, "program_skipped", 24 * 3600);
+        var on = new HashSet<string> { "program_skipped" };
+        var seconds = TabPrices.Resolve("program_skipped", on, overrides: o);
+        Assert.Equal(24 * 3600, seconds);
+        var run = new DateTime(2026, 11, 5, 8, 0, 0, DateTimeKind.Utc);
+        var noon = new DateTime(2026, 11, 5, 12, 0, 0);
+
+        var small = new TabState();
+        Assert.Equal(3 * 3600, CircesTab.Book(small, "program_skipped", seconds, run, noon, run, false).AppliedSeconds);
+
+        var big = new TabState();
+        var day = TabLimits.FromMinutes(24 * 60, 48 * 60);
+        Assert.Equal(24 * 3600, CircesTab.Book(big, "program_skipped", seconds, run, noon, run, false, day).AppliedSeconds);
+        Assert.Equal(24 * 3600, CircesTab.PlanPush(big, false, day, noon).Seconds);
+    }
+
+    [Theory]
+    [InlineData(3600, 3 * 3600, false, false)]      // the old ceiling: no word
+    [InlineData(3601, 3 * 3600, true, false)]
+    [InlineData(4 * 3600, 3 * 3600, true, true)]
+    [InlineData(30 * 60, 15 * 60, false, true)]     // under an hour, still over a small day
+    [InlineData(-4 * 3600, 3 * 3600, true, false)]  // an earn-back is never cut by the day limit
+    [InlineData(3 * 3600, 3 * 3600, true, false)]   // exactly the day: books whole
+    public void The_warning_says_a_lot_past_an_hour_and_names_the_day_limit_past_it(int seconds, int day, bool big, bool overDay)
+    {
+        var w = TabPriceEdit.WarningFor(seconds, day);
+        Assert.Equal(big, w.Big);
+        Assert.Equal(overDay, w.OverDay);
+        Assert.Equal(big || overDay, w.Any);
+    }
+
+    [Fact]
+    public void The_warning_text_is_one_line_with_the_day_limit_in_it()
+    {
+        static string? Loc(string key) => key switch
+        {
+            "chaster_price_warn_big" => "Big.",
+            "chaster_price_warn_day" => "Day {0}.",
+            _ => key,
+        };
+        Assert.Equal("", TabPriceEdit.WarningText(TabPriceEdit.WarningFor(600, 3 * 3600), 3 * 3600, Loc));
+        Assert.Equal("Big.", TabPriceEdit.WarningText(TabPriceEdit.WarningFor(2 * 3600, 3 * 3600), 3 * 3600, Loc));
+        Assert.Equal("Big. Day 3:00:00.", TabPriceEdit.WarningText(TabPriceEdit.WarningFor(24 * 3600, 3 * 3600), 3 * 3600, Loc));
+        Assert.Equal("Day 15:00.", TabPriceEdit.WarningText(TabPriceEdit.WarningFor(30 * 60, 15 * 60), 15 * 60, Loc));
+    }
+
+    [Fact]
+    public void Preview_reads_the_box_like_a_commit()
+    {
+        var d = TabPrices.Find("program_skipped")!.Seconds;
+        Assert.Equal(86400, TabPriceEdit.Preview("program_skipped", "24:00:00", null));
+        Assert.Equal(d, TabPriceEdit.Preview("program_skipped", "", null));
+        Assert.Equal(d, TabPriceEdit.Preview("program_skipped", "abc", null));          // not a time: the figure in force
+        var o = TabPriceEdit.With(null, "program_skipped", 7200);
+        Assert.Equal(7200, TabPriceEdit.Preview("program_skipped", "abc", o));
+        Assert.Equal(-86400, TabPriceEdit.Preview("lockcard", "99:00:00", null));     // earn-back keeps its sign
+    }
+
     private sealed class MemoryStore : IChasterTokenStore
     {
         public ChasterStoredTokens? Tokens;

@@ -92,7 +92,12 @@ namespace ConditioningControlPanel.Services
             }
 
             var fileName = Path.GetFileName(filePath);
-            var destPath = GetUniqueDestPath(destFolder, fileName);
+            var destPath = GetUniqueDestPath(destFolder, fileName, new FileInfo(filePath).Length);
+            if (destPath == null)
+            {
+                result.Skipped++; // the same file is already there (#1515)
+                return;
+            }
 
             try
             {
@@ -204,7 +209,12 @@ namespace ConditioningControlPanel.Services
             Directory.CreateDirectory(destFolder);
 
             var fileName = Path.GetFileName(filePath);
-            var destPath = GetUniqueDestPath(destFolder, fileName);
+            var destPath = GetUniqueDestPath(destFolder, fileName, new FileInfo(filePath).Length);
+            if (destPath == null)
+            {
+                result.Skipped++; // the same file is already there (#1515)
+                return;
+            }
 
             try
             {
@@ -287,23 +297,50 @@ namespace ConditioningControlPanel.Services
                                 ? Path.Combine(baseDestFolder, packName)
                                 : Path.Combine(baseDestFolder, packName, entryDir);
 
-                            Directory.CreateDirectory(destFolder);
-
-                            var fileName = Path.GetFileName(entry.Name);
-                            var destPath = GetUniqueDestPath(destFolder, fileName);
-
-                            // Extract to destination
-                            entry.ExtractToFile(destPath, overwrite: false);
-
-                            if (IsVideo(ext))
+                            // Zip Slip guard: an entry or pack name holding ".." (or a rooted path)
+                            // must never write outside the asset folder.
+                            // Each write is guarded by a StartsWith on the Path.GetFullPath result it
+                            // then uses (the shape CodeQL recognises); IsInsideFolder is the same rule
+                            // for tests.
+                            var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDestFolder)) + Path.DirectorySeparatorChar;
+                            var destFolderFull = Path.GetFullPath(destFolder);
+                            if (!destFolderFull.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
                             {
-                                result.VideosImported++;
-                                Log.Debug("Extracted video from ZIP: {Pack}/{File}", packName, fileName);
+                                Log.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
+                                result.Skipped++;
                             }
-                            else if (IsImage(ext))
+                            else
                             {
-                                result.ImagesImported++;
-                                Log.Debug("Extracted image from ZIP: {Pack}/{File}", packName, fileName);
+                                Directory.CreateDirectory(destFolderFull);
+
+                                var fileName = Path.GetFileName(entry.Name);
+                                var destPath = GetUniqueDestPath(destFolderFull, fileName, entry.Length);
+                                var destFull = destPath == null ? null : Path.GetFullPath(destPath);
+                                if (destFull == null)
+                                {
+                                    result.Skipped++; // the same file is already there (#1515)
+                                }
+                                else if (!destFull.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    Log.Warning("Skipped ZIP entry outside the asset folder: {Entry}", entry.FullName);
+                                    result.Skipped++;
+                                }
+                                else
+                                {
+                                    // Extract to destination
+                                    entry.ExtractToFile(destFull, overwrite: false);
+
+                                    if (IsVideo(ext))
+                                    {
+                                        result.VideosImported++;
+                                        Log.Debug("Extracted video from ZIP: {Pack}/{File}", packName, fileName);
+                                    }
+                                    else if (IsImage(ext))
+                                    {
+                                        result.ImagesImported++;
+                                        Log.Debug("Extracted image from ZIP: {Pack}/{File}", packName, fileName);
+                                    }
+                                }
                             }
                         }
                     }
@@ -333,6 +370,16 @@ namespace ConditioningControlPanel.Services
                 result.Errors.Add($"Invalid or corrupted ZIP file: {Path.GetFileName(zipPath)}");
                 Log.Warning("Invalid ZIP file: {Path}", zipPath);
             }
+        }
+
+        /// <summary>
+        /// True when <paramref name="candidate"/> resolves to <paramref name="root"/> or a folder below it.
+        /// </summary>
+        internal static bool IsInsideFolder(string root, string candidate)
+        {
+            var rootFull = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate)) + Path.DirectorySeparatorChar;
+            return full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -377,27 +424,33 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Gets a unique destination path, adding a number suffix if file exists.
+        /// Gets a unique destination path, adding a number suffix if the name is taken. Returns
+        /// null when the file is already there: the name, or one of its numbered copies from an
+        /// earlier import, holds a file of the same byte size (ccp-bugs #1515, importing a pack
+        /// twice made name_1 copies of every file). A same-named file of another size still gets
+        /// the next free number.
         /// </summary>
-        private static string GetUniqueDestPath(string folder, string fileName)
+        internal static string? GetUniqueDestPath(string folder, string fileName, long sourceLength)
         {
             var destPath = Path.Combine(folder, fileName);
-
-            if (!File.Exists(destPath))
-                return destPath;
-
-            // File exists, generate unique name
             var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
             var ext = Path.GetExtension(fileName);
             var counter = 1;
 
             while (File.Exists(destPath))
             {
+                if (SameSize(destPath, sourceLength)) return null;
                 destPath = Path.Combine(folder, $"{nameWithoutExt}_{counter}{ext}");
                 counter++;
             }
 
             return destPath;
+        }
+
+        private static bool SameSize(string path, long length)
+        {
+            try { return new FileInfo(path).Length == length; }
+            catch (Exception) { return false; } // unreadable: treat as different, keep both
         }
 
         private static string? GetDestinationFolder(string extension)

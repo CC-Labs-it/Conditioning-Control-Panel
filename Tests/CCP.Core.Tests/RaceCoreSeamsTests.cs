@@ -21,16 +21,18 @@ public class RaceCoreSeamsTests
         var saved = RacingAccess.IsGrantedProvider;
         try
         {
+            // WPF 7.2.3: the purchase door is open (Classic is free with every track), so the
+            // door hands over every track; the store still answers PurchasedTracks (Back Room rows).
             RacingAccess.IsGrantedProvider = null;
-            Assert.False(RacingAccess.CanLaunch);
-            Assert.Empty(RacingAccess.OwnedTracks);
+            Assert.True(RacingAccess.CanLaunch);
+            Assert.Equal(PrizeGrants.RacingTrackMax + 1, RacingAccess.OwnedTracks.Length);
+            Assert.Empty(RacingAccess.PurchasedTracks);
 
             RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
-            Assert.True(RacingAccess.CanLaunch);
-            Assert.Equal(new[] { 3 }, RacingAccess.OwnedTracks);
+            Assert.Equal(new[] { 3 }, RacingAccess.PurchasedTracks);
 
             RacingAccess.IsGrantedProvider = _ => throw new InvalidOperationException("store down");
-            Assert.False(RacingAccess.CanLaunch);
+            Assert.Empty(RacingAccess.PurchasedTracks);
         }
         finally { RacingAccess.IsGrantedProvider = saved; }
     }
@@ -44,7 +46,7 @@ public class RaceCoreSeamsTests
         try
         {
             RacingAccess.IsGrantedProvider = id => { asked.Add(id); return false; };
-            _ = RacingAccess.OwnedTracks;
+            _ = RacingAccess.PurchasedTracks;
         }
         finally { RacingAccess.IsGrantedProvider = saved; }
         Assert.Equal(Enumerable.Range(0, PrizeGrants.RacingTrackMax + 1).Select(PrizeGrants.RacingTrack), asked);

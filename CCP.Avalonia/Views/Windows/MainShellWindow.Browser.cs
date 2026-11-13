@@ -250,12 +250,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// full sign-out that pushes nothing and wipes the quest file (AccountSeed.Logout(accountDeleted: true)).</summary>
         internal async System.Threading.Tasks.Task DeleteProfileAsync()
         {
-            var button = ProfilePage?.FindControl<Button>("BtnDeleteProfile");
+            // WPF MainWindow.Browser.cs:1826-1828: both doors (Profile bin, Settings > Data) are off during the request.
+            Button?[] doors = { ProfilePage?.FindControl<Button>("BtnDeleteProfile"), AppSettingsPage?.SectionData.BtnDeleteAccount };
             try
             {
                 if (!await new Dialogs.DisplayNameDialog("delete").ShowDialog<bool>(this)) return;
 
-                if (button != null) button.IsEnabled = false;
+                foreach (var d in doors) if (d != null) d.IsEnabled = false;
                 var (success, error) = await CoreAccount.DeleteAccountAsync();
                 if (success)
                 {
@@ -274,7 +275,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             finally
             {
-                if (button != null) button.IsEnabled = true;
+                foreach (var d in doors) if (d != null) d.IsEnabled = true;
             }
         }
     }

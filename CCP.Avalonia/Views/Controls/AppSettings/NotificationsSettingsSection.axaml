@@ -44,9 +44,13 @@
                                    Foreground="{StaticResource SectionHueNotificationsBrush}"
                                    Text="{loc:Str label_suppress_perk_notifications}"
                                    Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
-                        <CheckBox Grid.Column="1" x:Name="ChkSuppressPerkNotifications"
-                                  Theme="{StaticResource ToggleStyle}" IsChecked="False"
-                                  VerticalAlignment="Center"/>
+                        <!-- WPF 7.2.3 296207d57: Perk effects Full / No cards / Off, index = PerkEffectsMode. -->
+                        <ComboBox Grid.Column="1" x:Name="CmbPerkEffects" Width="130" FontSize="11"
+                                  Theme="{StaticResource DarkComboBoxStyle}" VerticalAlignment="Center">
+                            <ComboBoxItem><TextBlock Text="{loc:Str perk_effects_full}"/></ComboBoxItem>
+                            <ComboBoxItem><TextBlock Text="{loc:Str perk_effects_no_cards}"/></ComboBoxItem>
+                            <ComboBoxItem><TextBlock Text="{loc:Str perk_effects_off}"/></ComboBoxItem>
+                        </ComboBox>
                     </Grid>
                     <TextBlock Text="{loc:Str set2_suppress_perk_notifications_hint}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11"

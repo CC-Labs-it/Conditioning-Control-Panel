@@ -10,7 +10,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 public class BrainDrainAudioTests
 {
-    private sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) => new Timer();
         private sealed class Timer : ITimer

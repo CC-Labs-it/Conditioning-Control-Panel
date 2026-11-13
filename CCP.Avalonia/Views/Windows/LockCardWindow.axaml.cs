@@ -691,7 +691,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // #1547 (WPF 7.2.2): a strict card with a live panic key names it; when it IS Escape, say
             // Escape still ends the card (panic always does), not "only the panic key (Escape)".
             var panicKey = CoreSettings.Current.PanicKey;
-            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey);
+            // #1582 (WPF 7.2.3): a strict card with panic switched off closes on Escape by design; say why.
+            var strictPanicOff = _strictMode && !CoreSettings.Current.PanicKeyEnabled;
+            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey, strictPanicOff);
             if (hintKey == LockCardStrictCopy.HintOnlyPanicKey) SetPlain(_txtEscHint, Loc.GetF(hintKey, panicKey ?? "?"));
             else SetLocalized(_txtEscHint, hintKey);
         }

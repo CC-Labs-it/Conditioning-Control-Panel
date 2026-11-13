@@ -4350,6 +4350,10 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.CollageRunWithCcp),
             // A path on this PC: means nothing elsewhere, and names the user's folders.
             nameof(AppSettings.CollageOwnImagePath),
+            // The #692 wallpaper breadcrumb and its fit: this PC's desktop, kept only until it is put back.
+            // Never deliberately backed up; a restore landing mid-session would swap them for stale ones.
+            nameof(AppSettings.WallpaperOriginalPath),
+            nameof(AppSettings.WallpaperOriginalStyle),
             nameof(AppSettings.ModPersonalityPreset),
             // Conversion rows (C9): machine-local stamps and the last server tier reading.
             // A restore must not bring back a stale reading or re-open a once-ever row.
@@ -4424,6 +4428,8 @@ namespace ConditioningControlPanel.Services
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
             restored.CollageRunWithCcp = current.CollageRunWithCcp;
             restored.CollageOwnImagePath = current.CollageOwnImagePath;
+            restored.WallpaperOriginalPath = current.WallpaperOriginalPath;
+            restored.WallpaperOriginalStyle = current.WallpaperOriginalStyle;
             // Conversion state lives on this PC only (it is left out of the backup): a restore must
             // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
             restored.InboxStamps = current.InboxStamps;
@@ -4533,6 +4539,11 @@ namespace ConditioningControlPanel.Services
                     // JSON names may differ in case from the C# names; match case-insensitively.
                     if (IsExcludedFromBackup(key)) obj.Remove(key);
                 }
+
+                // A session or ramp still running keeps the user's own values in its journal; the
+                // backup carries those, never the session's Hydra / ducking / pink (perly, #1488).
+                try { SessionSettingsJournal.OverlayOnBackup(obj, App.UserDataPath); }
+                catch (Exception ex) { App.Logger?.Debug("Settings backup: session journal overlay failed: {E}", ex.Message); }
 
                 // Gzip + base64 under the server's 1 MB body limit. The unbounded per-file asset
                 // lists are trimmed first; still too big and the backup is skipped rather than sent

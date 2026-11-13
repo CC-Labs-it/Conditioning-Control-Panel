@@ -705,6 +705,7 @@ namespace ConditioningControlPanel
             // Show cloud settings backup section if user has a cloud identity
             AppSettingsTab.CloudSettingsBackupSection.Visibility = hasUnifiedId ? Visibility.Visible : Visibility.Collapsed;
             AppSettingsTab.DataPrivacySection.Visibility = hasUnifiedId ? Visibility.Visible : Visibility.Collapsed;
+            AppSettingsTab.SectionData.RefreshDeleteAccountRow();
             if (hasUnifiedId)
             {
                 _ = UpdateBackupStatus();
@@ -858,6 +859,9 @@ namespace ConditioningControlPanel
         /// <param name="userAsked">Called from the Inbox row, which is the user asking for it.</param>
         internal void OfferAchievementSharingAfterDiscordLink(bool userAsked = false)
         {
+            // Switched off by the owner (2026-11-07): no unasked prompt. The Discord page's checkbox
+            // stays, and a row the user opens (userAsked) still asks.
+            if (!userAsked && !Services.Startup.PopupSwitches.DiscordSharePrompt) return;
             var s = App.Settings?.Current;
             if (s == null) return;
 
@@ -1159,6 +1163,9 @@ namespace ConditioningControlPanel
             {
                 var patreon = App.Patreon;
                 if (patreon?.HasPremiumAccess != true) { TierOnNoticePass(mayShow: false); return; }
+                // Switched off by the owner (2026-11-07): no celebration card, big or small. The
+                // tier is still recorded (TierOnNoticePass), so the small card never fires late.
+                if (!Services.Startup.PopupSwitches.TierCelebration) { TierOnNoticePass(mayShow: false); return; }
                 // An invite week is a free trial, not a purchase: celebrating it would spend the
                 // tier-1 seen-flag and the friend's real subscription later would get no card.
                 if (patreon.IsInviteWeekOnly) { TierOnNoticePass(mayShow: false); return; }
@@ -1220,7 +1227,7 @@ namespace ConditioningControlPanel
                     settings.LastKnownEffectiveTier = verdict.Record;
                     App.Settings?.Save();
                 }
-                if (!verdict.Owed || !mayShow) return;
+                if (!verdict.Owed || !mayShow || !Services.Startup.PopupSwitches.TierCelebration) return;
                 // The once-ever celebration still owed for this tier says it instead (no two cards).
                 if (TierCelebration.IsOwed(settings.SeenFeatureIntros, current, onRise: true)) return;
                 var title = Loc.Get(TierOnNotice.TitleKey(current));

@@ -160,6 +160,17 @@ public sealed class TubeQuickMenuTests
     });
 
     [Fact]
+    public void SharedMenuBrushesCanBeUsedAcrossThreads()
+    {
+        // Static tube helpers can initialize the window type on a worker before the UI opens it.
+        foreach (var name in new[] { "MenuRed", "MenuGreen", "MenuPatreon", "MenuLocked" })
+        {
+            var field = typeof(AvatarTubeWindow).GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.IsType<global::Avalonia.Media.Immutable.ImmutableSolidColorBrush>(field.GetValue(null));
+        }
+    }
+
+    [Fact]
     public Task EngineItemStartsAndPanicStopsWhatItStarted() => WithShell((shell, tube) =>
     {
         CoreSettings.Current.FlashEnabled = true;
