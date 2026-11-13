@@ -825,6 +825,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
+            // The field cannot yet place or move a summoned darter. Do not spend the whistle.
+            if (toy.Id == "rabbit_caller")
+            {
+                if (_spawning && !_manualPaused && !_lessonCardPaused && _overlay is { IsVisible: true })
+                    ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
+                return;
+            }
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && _overlay is { IsVisible: true });
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
             if (r == ChaosToyRules.UseResult.Fired && FireToyEffect(toy))
