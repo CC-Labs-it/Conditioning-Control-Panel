@@ -468,6 +468,30 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
+    public async Task Resume_routes_to_head_and_reports_panic()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        string? refusal = "panic";
+        var calls = 0;
+        r.ResumeSession = _ => { calls++; return refusal; };
+        await r.StartAsync("full");
+        Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"resume_session\"}]}");
+        await r.PollOnceAsync();
+        var status = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["last_executed"]!;
+        Assert.Equal("fail", (string?)status["status"]);
+        Assert.Equal("panic", (string?)status["reason"]);
+        Assert.Equal(1, calls);
+        Assert.Empty(_ran);
+        refusal = null;
+        Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"resume_session\"}]}");
+        await r.PollOnceAsync();
+        status = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["last_executed"]!;
+        Assert.Equal("ok", (string?)status["status"]);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public void Lockdown_refuses_only_enable_strict_lock()
     {
         Assert.Null(RemoteCommandGate.Screen("enable_strict_lock", lockdownActive: false));
@@ -1068,6 +1092,139 @@ public sealed class RemoteRelayTests
             Assert.Empty(spoken);                          // never fall back to an audible phrase
         }
         finally { (CoreSubliminal.ShowProvider, CoreSubliminal.CustomShowProvider) = old; }
+    }
+
+    [Theory]
+    [InlineData("end", false)]
+    [InlineData("panic", false)]
+    [InlineData("disconnect", false)]
+    [InlineData("end", true)]
+    public async Task Melt_verbs_restore_the_wearers_setting_and_player(string end, bool own)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, s.StopEffectsOnRemoteDisconnect, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        var starts = 0; var stops = 0;
+        try
+        {
+            s.BrainDrainEnabled = own; s.StopEffectsOnRemoteDisconnect = true;
+            CoreEngine.StartBrainDrain = () => starts++;
+            CoreEngine.StopBrainDrain = () => stops++;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, Cmd("1", "start_brain_drain")); await r.PollOnceAsync();
+            Assert.True(s.BrainDrainEnabled); Assert.Equal(1, starts);
+            if (end == "end") await r.StopAsync();
+            else if (end == "panic") RemoteCommands.StopEffects(true);
+            else { Poll(f, "{\"controller_connected\":false}"); await r.PollOnceAsync(); }
+            Assert.Equal(own, s.BrainDrainEnabled);
+            if (!own) Assert.True(stops > 0);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.BrainDrainEnabled, s.StopEffectsOnRemoteDisconnect, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = saved;
+        }
+    }
+
+    [Fact]
+    public void Melt_stop_verb_turns_the_setting_and_player_off()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, CoreEngine.StopBrainDrain);
+        var stops = 0;
+        try
+        {
+            s.BrainDrainEnabled = true; CoreEngine.StopBrainDrain = () => stops++;
+            Assert.Null(RemoteCommands.Execute("stop_brain_drain", null));
+            Assert.False(s.BrainDrainEnabled); Assert.Equal(1, stops);
+        }
+        finally { (s.BrainDrainEnabled, CoreEngine.StopBrainDrain) = saved; }
+    }
+
+    [Fact]
+    public async Task Melt_stop_hands_the_wearers_on_value_and_player_back_at_end()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        var starts = 0; var stops = 0;
+        try
+        {
+            s.BrainDrainEnabled = true; s.AudioOnlySession = false;
+            CoreEngine.StartBrainDrain = () => starts++; CoreEngine.StopBrainDrain = () => stops++;
+            CoreEngine.Start(); starts = 0;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, Cmd("1", "stop_brain_drain")); await r.PollOnceAsync();
+            Assert.False(s.BrainDrainEnabled); Assert.Equal(1, stops);
+            await r.StopAsync();
+            Assert.True(s.BrainDrainEnabled); Assert.Equal(1, starts);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = saved;
+        }
+    }
+
+    [Fact]
+    public async Task Melt_panic_restores_enabled_setting_without_restarting_player()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        var playing = false; var starts = 0;
+        try
+        {
+            s.BrainDrainEnabled = true;
+            CoreEngine.StartBrainDrain = () => { starts++; playing = true; };
+            CoreEngine.StopBrainDrain = () => playing = false;
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, Cmd("1", "stop_brain_drain")); await r.PollOnceAsync();
+            RemoteCommands.StopEffects(true);
+            Assert.True(s.BrainDrainEnabled);
+            Assert.False(playing); Assert.Equal(0, starts);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.BrainDrainEnabled, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = saved;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Melt_session_end_stops_idle_player_but_preserves_wearers_running_engine(bool running)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        var playing = false;
+        try
+        {
+            s.BrainDrainEnabled = true; s.AudioOnlySession = false;
+            CoreEngine.StartBrainDrain = () => playing = true;
+            CoreEngine.StopBrainDrain = () => playing = false;
+            if (running) CoreEngine.Start();
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, Cmd("1", "start_brain_drain")); await r.PollOnceAsync();
+            Assert.True(playing);
+            await r.StopAsync();
+            Assert.True(s.BrainDrainEnabled);
+            Assert.Equal(running, playing);
+            Assert.Equal(running, CoreEngine.IsRunning);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.BrainDrainEnabled, s.AudioOnlySession, CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = saved;
+        }
     }
 
 }

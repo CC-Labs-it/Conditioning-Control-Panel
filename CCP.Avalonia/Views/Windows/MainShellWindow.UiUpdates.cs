@@ -103,6 +103,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeStatPills()
         {
             UpdateStatPills();
+            void Repaint() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!_statPillsClosed) UpdateStatPills();
+            });
+            void OnMod(object? sender, ModPackage mod) => Repaint();
+            void OnLanguage(object? sender, EventArgs e) => Repaint();
+            CoreMods.ModChanged += OnMod;
+            LocalizationManager.Instance.LanguageChanged += OnLanguage;
+            Closed += (_, _) =>
+            {
+                CoreMods.ModChanged -= OnMod;
+                LocalizationManager.Instance.LanguageChanged -= OnLanguage;
+            };
             // WPF MainWindow.xaml.cs:3716: signed-in startup fetch, after the window has loaded.
             // WPF runs both once from Loaded (MainWindow.xaml.cs:3716/3794). Opened fires again on every
             // tray restore (Hide/Show), so the handler removes itself.
@@ -219,6 +232,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// rebuilds the active XP chips on each refresh, including the 30 s backstop.</summary>
         internal void UpdateStatPills()
         {
+            void Tip(string name, string skill, string key)
+            {
+                if (Named<Border>(name) is { } pill)
+                    ToolTip.SetTip(pill, App.Mods?.GetStatPillTooltip(skill) ?? Loc.Get(key));
+            }
+            Tip("PillConditioningTime", "pink_hours", "tooltip_total_conditioning_time_pink_hours_skill");
+            Tip("PillOnlineUsers", "hive_mind", "tooltip_bimbos_online_now_hive_mind_skill");
+            Tip("PillRankPercentile", "popular_girl", "tooltip_your_rank_percentile_popular_girl_skill");
             UpdateMicPill(); // Privacy backstop on the same 30 s timer as WPF.
             RefreshXPBarBonuses();
             var s = CoreSettings.Current;

@@ -93,15 +93,21 @@ namespace ConditioningControlPanel.Services.Remote
 
         /// <summary>WPF HandBackWearerVisuals: spiral, pink, their opacities and Melt go back to the wearer's
         /// own where they still hold what the controller wrote. Saves when anything moved.</summary>
-        public static int HandBackAllButStrict()
+        public static int HandBackAllButStrict(bool playerStopped = false)
         {
             var s = CoreSettings.Current;
             int n;
+            var brainDrainBefore = s.BrainDrainEnabled;
             lock (Gate)
             {
                 if (_holdings == null) return 0;
                 n = _holdings.HandBackAllButStrict(s);
                 RemoteHoldings.Save(Dir(), _holdings);
+            }
+            if (!playerStopped && brainDrainBefore != s.BrainDrainEnabled)
+            {
+                if (s.BrainDrainEnabled) CoreEngine.StartBrainDrain?.Invoke();
+                else CoreEngine.StopBrainDrain?.Invoke();
             }
             if (n > 0)
             {

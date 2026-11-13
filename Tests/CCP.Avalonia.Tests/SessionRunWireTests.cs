@@ -25,6 +25,35 @@ namespace CCP.Avalonia.Tests;
 /// and opens the Ended Early recap by itself.</summary>
 public sealed class SessionRunWireTests
 {
+    [Fact]
+    public Task Remote_resume_refuses_local_panic_and_resumes_other_pauses() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = new MainShellWindow();
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        var relay = RemoteControlTabView.Relay.Value;
+        try
+        {
+            runner.Start(new Session { Id = "remote_resume", Name = "Resume", DurationMinutes = 60 });
+            runner.Pause();
+            shell.NoteLocalPanicPause();
+            Assert.Equal("panic", relay.ResumeSession!(() => true));
+            Assert.True(runner.IsPaused);
+            runner.Resume();
+            runner.Pause();
+            Assert.Null(relay.ResumeSession!(() => true));
+            Assert.False(runner.IsPaused);
+        }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.Stop();
+            AvApp.Sessions = null;
+            shell.Close();
+        }
+        Assert.Null(relay.ResumeSession);
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(true, "Yes, stop session")] // WPF MainWindow.Presets.cs:2098
     [InlineData(false, "Stop the session")] // WPF MainWindow.StartStop.cs:85
