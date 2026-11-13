@@ -1,0 +1,61 @@
+# The only VLC plugins the runtime ships, relative to lib/vlc/plugins. build.sh fails if one is
+# missing and check.sh fails if the tree holds anything else. No GPL-only module, no PipeWire
+# output, no X11/GL/Wayland window: the app renders through vmem (VlcFrameSink).
+# Inputs: files (FromPath) and LibVLCSharp StreamMediaInput (imem, the quiz drone).
+access/libfilesystem_plugin.so
+access/libimem_plugin.so
+stream_filter/libcache_read_plugin.so
+stream_filter/libcache_block_plugin.so
+# Containers. rawaud = the quiz drone's raw f32 stream. asf = .wmv, ts = .ts (dvbpsi), avformat =
+# FFmpeg's demuxers for what VLC 3 has no native one for, .flv first (WPF MiniPlayerWindow.xaml.cs:16).
+demux/libmp4_plugin.so
+demux/libasf_plugin.so
+demux/libts_plugin.so
+demux/libavformat_plugin.so
+demux/libmkv_plugin.so
+demux/libavi_plugin.so
+demux/libes_plugin.so
+demux/libogg_plugin.so
+demux/libwav_plugin.so
+demux/libps_plugin.so
+demux/libflacsys_plugin.so
+demux/librawaud_plugin.so
+# Decoders. avcodec = FFmpeg (H.264/HEVC/AAC/VP9/...); the rest are VLC's preferred natives.
+codec/libavcodec_plugin.so
+codec/libmpg123_plugin.so
+codec/libvorbis_plugin.so
+codec/libopus_plugin.so
+codec/libflac_plugin.so
+codec/libvpx_plugin.so
+codec/libdav1d_plugin.so
+codec/libaraw_plugin.so
+packetizer/libpacketizer_copy_plugin.so
+packetizer/libpacketizer_h264_plugin.so
+packetizer/libpacketizer_hevc_plugin.so
+packetizer/libpacketizer_av1_plugin.so
+packetizer/libpacketizer_mpeg4audio_plugin.so
+packetizer/libpacketizer_mpeg4video_plugin.so
+packetizer/libpacketizer_mpegaudio_plugin.so
+packetizer/libpacketizer_mpegvideo_plugin.so
+packetizer/libpacketizer_flac_plugin.so
+# Audio path. pulse/alsa = --aout=pulse,alsa,jack,none; adummy = --smoke; amem = callbacks.
+audio_output/libpulse_plugin.so
+audio_output/libalsa_plugin.so
+audio_output/libadummy_plugin.so
+audio_output/libamem_plugin.so
+audio_filter/libaudio_format_plugin.so
+audio_filter/libsoxr_plugin.so
+audio_filter/libugly_resampler_plugin.so
+audio_filter/libscaletempo_plugin.so
+audio_filter/libremap_plugin.so
+audio_filter/libsimple_channel_mixer_plugin.so
+audio_filter/libtrivial_channel_mixer_plugin.so
+audio_mixer/libfloat_mixer_plugin.so
+audio_mixer/libinteger_mixer_plugin.so
+# Video path: decoded frames -> RV32 into app memory.
+video_chroma/libswscale_plugin.so
+video_chroma/libchain_plugin.so
+video_chroma/libi420_rgb_plugin.so
+video_chroma/libi422_i420_plugin.so
+video_output/libvmem_plugin.so
+logger/libconsole_logger_plugin.so
