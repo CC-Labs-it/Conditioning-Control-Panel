@@ -11,6 +11,8 @@ using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using Avalonia.Platform;
+using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -47,6 +49,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         internal const string PbpId = "piecebypiece";
+
+        // WPF PieceByPieceHostService.cs:200-215: isolate the board from other web surfaces
+        // and let its effects stingers play before a click. Linux adapters expose profile paths
+        // but no autoplay-policy setting; do not claim that policy there.
+        private static void ConfigurePbpEnvironment(WebViewEnvironmentRequestedEventArgs args)
+        {
+            var folder = Path.Combine(CorePaths.UserData, "browser_data_piecebypiece_avalonia");
+            try { Directory.CreateDirectory(folder); } catch (Exception ex) { Diag.Swallowed(ex); }
+            switch (args)
+            {
+                case WindowsWebView2EnvironmentRequestedEventArgs windows:
+                    windows.UserDataFolder = folder;
+                    windows.AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required";
+                    break;
+                case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                    gtk.BaseDataDirectory = folder;
+                    gtk.BaseCacheDirectory = Path.Combine(folder, "cache");
+                    break;
+                case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                    wpe.DataDirectory = folder;
+                    wpe.CacheDirectory = Path.Combine(folder, "cache");
+                    break;
+            }
+        }
 
         /// <summary>One client for the app session (WPF :119). 30 s covers the events long poll.</summary>
         private static readonly Lazy<HttpClient> PbpHttp = new(() =>
