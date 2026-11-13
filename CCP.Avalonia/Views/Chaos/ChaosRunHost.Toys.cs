@@ -128,8 +128,8 @@ internal static partial class ChaosRunHost
     private static void TickToyEffects()
     {
         if (_state == null) return;
-        // WPF ChaosModeService.cs:2994-3005. Freeze is not yet exposed by this head.
-        if (_state.IntrusiveThoughtsSec > 0)
+        // WPF ChaosModeService.cs:2994-3005: no new thought while a freeze holds the field.
+        if (_state.IntrusiveThoughtsSec > 0 && _freezeRemainingSec <= 0)
         {
             _thoughtAccumSec += ChaosRunEngine.TICK_SEC;
             if (_thoughtAccumSec >= 5)
