@@ -48,6 +48,24 @@ public sealed class ReleaseEvidenceTests : IDisposable
         // build-tarball.sh copies them under set -e, so a fixture without them stops the build).
         foreach (var shipped in new[] { "packaging/linux/conditioning-control-panel.sh", "packaging/linux/rt-engine-check.sh", "packaging/linux/RT-ENGINE-NOTICES.txt" })
             Write(shipped, File.ReadAllText(Path.Combine(Repo(), shipped)));
+        // The notices step (restack b47, includes #4610) reads the restored packages: every listed package is named
+        // and the four with upstream licence files carry them, so the fixture restores those too.
+        Write("packaging/linux/THIRD-PARTY-NOTICES.txt", File.ReadAllText(Path.Combine(Repo(), "packaging/linux/THIRD-PARTY-NOTICES.txt")));
+        var listed = new[] { "microsoft.netcore.app.runtime.linux-x64", "microsoft.netcore.app.host.linux-x64", "skiasharp",
+            "skiasharp.nativeassets.linux", "harfbuzzsharp", "harfbuzzsharp.nativeassets.linux", "microsoft.ml.onnxruntime",
+            "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia", "avalonia.controls.webview" };
+        foreach (var (pkg, file) in new[] {
+            ("microsoft.netcore.app.runtime.linux-x64", "LICENSE.TXT"), ("microsoft.netcore.app.runtime.linux-x64", "THIRD-PARTY-NOTICES.TXT"),
+            ("skiasharp.nativeassets.linux", "LICENSE.txt"), ("skiasharp.nativeassets.linux", "THIRD-PARTY-NOTICES.txt"),
+            ("harfbuzzsharp.nativeassets.linux", "LICENSE.txt"), ("harfbuzzsharp.nativeassets.linux", "THIRD-PARTY-NOTICES.txt"),
+            ("microsoft.ml.onnxruntime", "LICENSE"), ("microsoft.ml.onnxruntime", "ThirdPartyNotices.txt") })
+            Write(Path.Combine("packages", pkg, "1.0.0", file), pkg + " " + file + " fixture");
+        Write("CCP.Avalonia/obj/project.assets.json", System.Text.Json.JsonSerializer.Serialize(new
+        {
+            packageFolders = new System.Collections.Generic.Dictionary<string, object> { [Path.Combine(root, "packages") + "/"] = new { } },
+            libraries = listed.ToDictionary(p => p + "/1.0.0", _ => (object)new { }),
+            project = new { frameworks = new System.Collections.Generic.Dictionary<string, object> { ["net10.0"] = new { } } },
+        }));
         // Only the expensive publish/download boundaries are substituted. The packaging script,
         // archive extraction and runtime model discovery are real.
         Write(".github/scripts/fetch-vosk-model.sh", "echo \"$(dirname \"$0\")/../../model/vosk-model-small-en-us-0.15\"\n");
@@ -70,6 +88,9 @@ public sealed class ReleaseEvidenceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(install, "LICENSE")));
         Assert.True(File.Exists(Path.Combine(install, "libvosk.so")));
         Assert.True(File.Exists(Path.Combine(install, "conditioning-control-panel.sh")));
+        var notices = File.ReadAllText(Path.Combine(install, "THIRD-PARTY-NOTICES.txt"));
+        Assert.Contains("skiasharp.nativeassets.linux 1.0.0", notices);
+        Assert.Contains("microsoft.ml.onnxruntime ThirdPartyNotices.txt fixture", notices);
     }
 
     [Fact]

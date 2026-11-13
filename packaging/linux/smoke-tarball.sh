@@ -17,6 +17,12 @@ test -x "$app/conditioning-control-panel.sh"
 test -f "$app/libvosk.so"
 id=io.github.CodeBambi.ConditioningControlPanel
 test -f "$app/LICENSE"
+# Every bundled native needs a notice (packaging/linux/THIRD-PARTY-NOTICES.txt names each .so).
+test -f "$app/RT-ENGINE-NOTICES.txt"
+for so in "$app"/*.so; do
+  grep -qF "$(basename "$so")" "$app/THIRD-PARTY-NOTICES.txt" ||
+    { echo "$(basename "$so") has no entry in THIRD-PARTY-NOTICES.txt" >&2; exit 1; }
+done
 test -f "$app/share/applications/$id.desktop"
 test -f "$app/share/applications/$id.Player.desktop"
 test -f "$app/share/applications/$id.Editor.desktop"

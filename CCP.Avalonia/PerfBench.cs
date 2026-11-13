@@ -85,6 +85,15 @@ namespace ConditioningControlPanel.Avalonia
                     if (cycle > 0) samples[i].Add(ms);
                 }
 
+            // Idle Home: what the frame clocks ask the render loop for with nobody touching anything. Each
+            // request is one composed frame, so this is the idle render rate the clocks cause (r72 idle-render-cap).
+            Show(w, "SettingsTab");
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            var idleFrom = Interlocked.Read(ref Controls.Fx.TopLevelFrameSource.FrameRequests);
+            sw.Restart();
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            var idleRequests = (Interlocked.Read(ref Controls.Fx.TopLevelFrameSource.FrameRequests) - idleFrom) / sw.Elapsed.TotalSeconds;
+
             for (var i = 0; i < 2; i++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
             using var proc = Process.GetCurrentProcess();
             proc.Refresh();
@@ -99,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia
                 startup_since_process_ms = Math.Round(sinceProcessMs, 1),
                 working_set_mb = Math.Round(proc.WorkingSet64 / 1048576.0, 1),
                 cycles = Cycles,
+                idle_home_frame_requests_per_s = Math.Round(idleRequests, 1),
                 tabs = tabs.Select((t, i) => new
                 {
                     tab = t,
