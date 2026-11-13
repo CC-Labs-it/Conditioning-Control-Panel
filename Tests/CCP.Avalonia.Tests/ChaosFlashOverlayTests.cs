@@ -353,9 +353,12 @@ public sealed class ChaosFlashOverlayTests
         try
         {
             var (frames, delay) = SpiralOverlay.Decode(gif, 0, maxFrames: 2);   // 3 frames x 30 ms -> every 2nd
-            Assert.Equal(2, frames.Count);
-            Assert.Equal(TimeSpan.FromMilliseconds(60), delay);
-            foreach (var f in frames) f.Dispose();
+            try
+            {
+                Assert.Equal(2, frames.Count);
+                Assert.Equal(TimeSpan.FromMilliseconds(60), delay);
+            }
+            finally { foreach (var f in frames) f.Dispose(); }
         }
         finally { Directory.Delete(dir, true); }
     });
