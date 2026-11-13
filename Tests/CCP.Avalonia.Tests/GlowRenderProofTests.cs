@@ -160,6 +160,9 @@ public sealed class GlowRenderProofTests
             w.Show();
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
+            // P08: settle the tab entrance and the leaving tab's 100 ms compositor fade (b30) before reading
+            // pixels; on a loaded runner either one still covers the padlock when the frames are captured.
+            w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);

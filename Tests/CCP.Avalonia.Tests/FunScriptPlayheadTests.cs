@@ -55,8 +55,12 @@ public sealed class FunScriptPlayheadTests
     public void The_welcome_back_sheet_flushes_a_parked_media_offer_when_it_closes()
     {
         // WPF parks the offer behind every startup modal (App.xaml.cs:909-914); each one flushes on close.
-        Assert.Matches(@"finally\s*\{\s*MainShellWindow\.IsStartupDialogShowing = false;\s*RemoteMediaOffer\.FlushPending\(\);",
+        // The sheet is a startup-ladder modal (#4281): the ladder clears the flag and flushes after every modal.
+        // Src blanks string literals and comments, so the modal key reads as a space here.
+        Assert.Matches(@"StartupLadder\.EnqueueModal\(\s*,\s*\d+,\s*\(\) => ShowSheet\(content\)\);",
             Src("Platform", "WelcomeBackOffer.cs"));
+        Assert.Matches(@"finally\s*\{\s*_modalUp = false;\s*Views\.Windows\.MainShellWindow\.IsStartupDialogShowing = false;\s*RemoteMediaOffer\.FlushPending\(\);",
+            Src("Platform", "StartupLadder.cs"));
     }
 
     [Fact]
