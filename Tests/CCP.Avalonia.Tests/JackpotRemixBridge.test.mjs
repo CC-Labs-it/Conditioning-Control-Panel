@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const source = readFileSync('Assets/web/remix/jackpot.js', 'utf8').replace(/^import .*;\n/gm, '');
+const source = readFileSync('Assets/web/remix/jackpot.js', 'utf8').replace(/^import .*;\r?\n/gm, '');
 
 for (const native of [false, true]) test(`remix bridge ${native ? 'WebView2' : 'WebKit'}`, () => {
     const messages = [];
