@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Gaze.ActiveChanged += OnGazeActiveChanged;
             SyncFocusGazeToggle(CoreSettings.Current.FocusGazeEnabled);
             CoreMods.ModChanged += OnModChangedRepaintArt;
+            RefreshHeroArt();
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
             RefreshPlayCards();
@@ -143,8 +144,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 try
                 {
                     if (this.FindControl<Border>(plateName) is not { } plate) continue;
-                    if (ModArt.TryLoad(art, decodeWidth) is not { } bmp) continue;
-                    plate.Background = new ImageBrush(bmp) { Stretch = fit };
+                    if (ModArt.TryLoad(art, out var modApplied, decodeWidth) is not { } bmp) continue;
+                    var brush = new ImageBrush(bmp) { Stretch = fit };
+                    // WPF MainWindow.xaml.cs:2954-2989 maps only these Play surfaces.
+                    string? surface = art switch
+                    {
+                        "features/piecebypiece.png" or "features/dtrh.png" => null,
+                        "features/remote_control.png" => ModArtFramingRegistry.SurfacePlayCardTall,
+                        "features/loom.png" => ModArtFramingRegistry.SurfaceLoomStrip,
+                        _ => ModArtFramingRegistry.SurfacePlayCard,
+                    };
+                    if (surface != null)
+                    {
+                        ModArtFraming? framing = null;
+                        var map = modApplied ? CoreMods.ActiveModPackage?.Manifest.ArtFraming : null;
+                        if (map != null)
+                            foreach (var entry in map)
+                            {
+                                if (entry.Value == null || !string.Equals(entry.Key.Replace('\\', '/'), art, StringComparison.OrdinalIgnoreCase)) continue;
+                                foreach (var item in entry.Value)
+                                    if (string.Equals(item.Key, surface, StringComparison.OrdinalIgnoreCase)) { framing = item.Value; break; }
+                                break;
+                            }
+                        var aspect = bmp.Size.Height > 0 ? bmp.Size.Width / bmp.Size.Height : 0;
+                        var viewbox = ModArtFramingRegistry.ResolveViewbox(art, surface, modApplied, aspect, framing);
+                        brush.SourceRect = new RelativeRect(viewbox.X, viewbox.Y, viewbox.Width, viewbox.Height, RelativeUnit.Relative);
+                    }
+                    plate.Background = brush;
                 }
                 catch (Exception ex)
                 {

@@ -165,6 +165,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
             runner.Pause();
+            // WPF SessionEngine.cs:536 App.Overlay.Stop(): a pause drops voice holds, as the button does above.
+            SpiralOverlay.Stop();
+            PinkFilterOverlay.Stop();
             PinkFilterOverlay.Refresh(this);
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
