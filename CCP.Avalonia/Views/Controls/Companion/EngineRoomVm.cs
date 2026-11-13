@@ -22,8 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// heads cannot drift; the active transport follows the setting through Core AiServiceStrategy.
     ///
     /// <para>The live-actions collection is shared with the command sink, and remains observable.
-    /// The BYO API key box writes only to the secret store. Login has
-    /// no account tab deep link here yet, so LoginCommand stays null.</para>
+    /// The BYO API key box writes only to the secret store.</para>
     /// </summary>
     public sealed class EngineRoomVm : INotifyPropertyChanged
     {
@@ -39,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public EngineRoomVm(Control host)
         {
             _host = host;
+            LoginCommand = new RelayCommand(() => Window?.ShowTab("patreon")); // WPF EngineRoomRuntimeVm.cs:47
             TestConnectionCommand = new RelayCommand(() => _ = TestConnectionAsync());
             SetupLocalCommand = new RelayCommand(() => _ = SetupLocalAsync());
             SamplerSettingsCommand = new RelayCommand(() => { if (!_preview) _ = (host as EngineRoomDrawer)?.OpenSamplerSettingsAsync(); });
@@ -153,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public IReadOnlyList<string> LiveActions => App.AiLiveActions;
         public string LiveActionsPlaceholder => Loc.Get("companion_engine_live_actions_placeholder");
 
-        public ICommand? LoginCommand => null;
+        public ICommand LoginCommand { get; }
         public ICommand TestConnectionCommand { get; }
         public ICommand SetupLocalCommand { get; }
         public ICommand SamplerSettingsCommand { get; }

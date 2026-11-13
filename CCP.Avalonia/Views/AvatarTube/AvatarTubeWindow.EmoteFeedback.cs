@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>
         /// WPF ShowEmoteFeedback (AvatarTubeWindow.ChatInput.cs:957): the remote-emote bubble, "Sending..."
         /// while pending, then <c>Sent: "&lt;text&gt;"</c> (40 chars + "..."). Never over an AI bubble or a pending
-        /// reply; cuts any preset line and its queue; no sound, no chat history; up one second longer than a
+        /// reply; cuts any preset line and its queue; only the preset cue, no chat history; up one second longer than a
         /// preset line.
         /// </summary>
         public void ShowEmoteFeedback(string text, bool isPending)

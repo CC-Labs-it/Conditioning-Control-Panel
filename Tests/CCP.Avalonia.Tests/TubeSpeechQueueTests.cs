@@ -70,6 +70,7 @@ public sealed class TubeSpeechQueueTests
             tube.Giggle("two");
             tube.Giggle("three");
             Dispatcher.UIThread.RunJobs();
+            while (tube.TypewriterFrame is { } frame1) frame1();
             Assert.Equal("one", text.Text);          // nothing was up: immediate
             Assert.Equal(2, tube.QueuedSpeechCount); // the rest wait, not replace
 
@@ -78,10 +79,12 @@ public sealed class TubeSpeechQueueTests
             Assert.Equal(2.0, delays[0].Delay.TotalSeconds, 1);   // MinSpeechDelaySeconds after a preset
             Assert.NotEqual("two", text.Text);
             delays[0].Fire();
+            while (tube.TypewriterFrame is { } frame2) frame2();
             Assert.Equal("two", text.Text);
 
             tube.EndSpeechBubble();
             delays[1].Fire();
+            while (tube.TypewriterFrame is { } frame3) frame3();
             Assert.Equal("three", text.Text);
             Assert.Equal(0, tube.QueuedSpeechCount);
 
@@ -95,12 +98,14 @@ public sealed class TubeSpeechQueueTests
             Assert.Equal(3, delays.Count);
             Assert.Equal(0.5, delays[2].Delay.TotalSeconds, 3);
             delays[2].Fire();
+            while (tube.TypewriterFrame is { } frame4) frame4();
             Assert.Equal("four", text.Text);
             tube.EndSpeechBubble();
             // ... and once the gap has passed it speaks at once.
             clock.Now += TimeSpan.FromSeconds(2.1);
             tube.Giggle("five");
             Assert.Equal(3, delays.Count);
+            while (tube.TypewriterFrame is { } frame5) frame5();
             Assert.Equal("five", text.Text);
 
             // An AI line earns 2 + 5 s, plus 0.02 s a char past 100 (WPF Speech.cs:157).
