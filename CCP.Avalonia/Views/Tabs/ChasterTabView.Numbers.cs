@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void NumbersInit()
         {
-            StatRun.PointerReleased += (_, _) => ToggleBill();
+            StatRun.PointerReleased += (_, _) => { ToggleBill(); FxTagTug(); };
             CapTrack.SizeChanged += (_, _) => LayoutCap(animate: false);
         }
 

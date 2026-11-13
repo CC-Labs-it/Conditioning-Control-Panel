@@ -145,6 +145,49 @@ public sealed class ChasterMenuLimitsTests
         await Task.CompletedTask;
     }));
 
+    [Fact]
+    public Task TagTugAndCalendarBobFollowMotionAndVisibility() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, window) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        try
+        {
+            await chaster.RefreshLockAsync();
+            tab.Refresh();
+            settings.MotionLevel = MotionLevel.Full;
+            settings.PerformanceMode = false;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Click(window, tab.FindControl<Border>("StatRun")!);
+            time.Advance(TimeSpan.FromMilliseconds(102));
+            BeatLoop.StepAll();
+            Assert.Equal(8, tab.TagDrop, 2);
+            time.Advance(TimeSpan.FromMilliseconds(238));
+            BeatLoop.StepAll();
+            Assert.Equal(0, tab.TagDrop, 3);
+            var calendar = tab.FindControl<Border>("CalendarTag")!;
+            calendar.IsVisible = true;
+            Assert.True(tab.CalendarBobRunning);
+            time.Advance(TimeSpan.FromSeconds(1.1));
+            BeatLoop.StepAll();
+            Assert.Equal(3, tab.CalendarBob, 3);
+            calendar.IsVisible = false;
+            Assert.False(tab.CalendarBobRunning);
+            Assert.Equal(0, tab.CalendarBob, 3);
+            settings.MotionLevel = MotionLevel.Off;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            calendar.IsVisible = true;
+            Assert.False(tab.CalendarBobRunning);
+            Click(window, tab.FindControl<Border>("StatRun")!);
+            time.Advance(TimeSpan.FromMilliseconds(102));
+            BeatLoop.StepAll();
+            Assert.Equal(0, tab.TagDrop, 3);
+        }
+        finally { BeatLoop.Time = oldTime; }
+        await Task.CompletedTask;
+    }));
+
     // WPF ChasterTabView.xaml:444-491: the clickable tag remains cream at rest, hover and press.
     [Fact]
     public Task PaperTagKeepsItsPaperAndInkOnHoverAndPress() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
