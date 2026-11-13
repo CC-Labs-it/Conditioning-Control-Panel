@@ -35,6 +35,9 @@ public sealed class EmiDeskTossTests
     {
         Setup();
         var played = new List<string>();
+        var moments = new List<(string Id, object? Context)>();
+        var oldMoment = EmiDeskWindow.TossMoment;
+        EmiDeskWindow.TossMoment = (id, ctx) => moments.Add ( (id, ctx) );
         var oldProvider = CoreAudio.PlayOneShotProvider;
         int oldVolume = CoreSettings.Current.MasterVolume;
         var clock = new SteppedClock();
@@ -67,6 +70,7 @@ public sealed class EmiDeskTossTests
             desk.MouseMove(c + new Point(40, 0));
             Assert.Equal(new[] { "emi-sfx-toss:ui_equip.mp3" }, played);
             Assert.Contains(EmiTossRules.PickupFace, faces);
+            Assert.Equal("dragged", Assert.Single(moments).Id);
 
             // The wobble tick's frames, flying fast for longer than FLING_MS, then let go.
             toss.Invoke(desk, new object[] { 0.016, 5000.0 });
@@ -79,6 +83,12 @@ public sealed class EmiDeskTossTests
             Assert.NotNull(squash);                                  // the landing owns the squash slot
 
             Assert.True(desk.ChainLive);
+            Assert.DoesNotContain(moments, m => m.Id == "flung");
+            while (desk.ChainLive) { desk.ChainPlayer.ElapsePendingHold(); Dispatcher.UIThread.RunJobs(); }
+            Assert.Equal("flung", moments[^1].Id);
+            Assert.Equal(st.FlingsTotal >= 20, EmiLineEngine.ToCtx(moments[^1].Context)["flings20"]);
+            Assert.Equal(st.FlingsTotal >= 50, EmiLineEngine.ToCtx(moments[^1].Context)["flings50"]);
+            desk.PlayChain("dizzy");
             Assert.Equal("@_@", desk.Face);
             desk.CancelChain(); // finish the throw before testing a separate gentle drop
 
@@ -93,6 +103,7 @@ public sealed class EmiDeskTossTests
             Assert.NotSame(squash, typeof(EmiDeskWindow).GetField("_squashAnim", Priv)!.GetValue(desk));
 
             // WPF's LandChain: ^_^, then her rest face, not the startled pickup face forever.
+            Assert.DoesNotContain(moments, m => m.Id == "dropped");
             Assert.Equal("^_^", desk.Face);
             Assert.NotSame(idleArt, art.Source);
             Assert.NotNull(art.Source);
@@ -106,6 +117,8 @@ public sealed class EmiDeskTossTests
             desk.ChainPlayer.ElapsePendingHold();
             Dispatcher.UIThread.RunJobs();
             Assert.False(desk.ChainLive);
+            Assert.Equal("dropped", moments[^1].Id);
+            Assert.Contains((string)EmiLineEngine.ToCtx(moments[^1].Context)["zoneRow"]!, new[] { "top", "mid", "bottom" });
             Assert.Equal("idle", typeof(EmiDeskWindow).GetField("_pose", Priv)!.GetValue(desk));
             Assert.Same(idleArt, art.Source);
             var sheet = EmiChains.BodyPath("celebration")!;
@@ -137,6 +150,7 @@ public sealed class EmiDeskTossTests
         }
         finally
         {
+            EmiDeskWindow.TossMoment = oldMoment;
             desk?.Close();
             CoreAudio.PlayOneShotProvider = oldProvider;
             CoreSettings.Current.MasterVolume = oldVolume;
@@ -144,6 +158,71 @@ public sealed class EmiDeskTossTests
             EmiDeskWindow.TossClock = TimeProvider.System;
             st.FlingsTotal = flings;
             st.WinLeftPx = left; st.WinTopPx = top; st.Monitor = monitor;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task DropWhileChainLiveAndFlingThresholdsAndZones() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var moments = new List<(string Id, object? Context)>();
+        var oldMoment = EmiDeskWindow.TossMoment;
+        var clock = new SteppedClock();
+        var state = EmiState.Current;
+        int oldFlings = state.FlingsTotal;
+        var (left, top, monitor) = (state.WinLeftPx, state.WinTopPx, state.Monitor);
+        EmiDeskWindow? desk = null;
+        try
+        {
+            EmiDeskWindow.TossMoment = (id, ctx) => moments.Add((id, ctx));
+            EmiDeskWindow.TossClock = clock;
+            desk = new EmiDeskWindow();
+            desk.Show();
+            Dispatcher.UIThread.RunJobs();
+            var pickup = typeof(EmiDeskWindow).GetMethod("OnPickedUp", Priv)!;
+            var putdown = typeof(EmiDeskWindow).GetMethod("OnPutDown", Priv)!;
+            var frame = typeof(EmiDeskWindow).GetMethod("NoteTossFrame", Priv)!;
+            var zone = typeof(EmiDeskWindow).GetMethod("TossZoneRow", Priv)!;
+            var area = desk.Screens.Primary!.WorkingArea;
+            foreach (var (fraction, expected) in new[] { (0.15, "top"), (0.5, "mid"), (0.85, "bottom") })
+            {
+                var body = desk.BodyScreenRect;
+                int delta = (int)Math.Round(area.Y + area.Height * fraction - (body.Y + body.Height / 2));
+                desk.Position = new PixelPoint(desk.Position.X, desk.Position.Y + delta);
+                Assert.Equal(expected, zone.Invoke(desk, null));
+            }
+            desk.PlayChain("dizzy");
+            pickup.Invoke(desk, null);
+            putdown.Invoke(desk, null);
+            Assert.Equal("dropped", moments[^1].Id);
+            Assert.True(desk.ChainLive);
+            desk.CancelChain();
+            foreach (int initial in new[] { 18, 19, 48, 49 })
+            {
+                state.FlingsTotal = initial;
+                pickup.Invoke(desk, null);
+                frame.Invoke(desk, new object[] { 0.016, 5000.0 });
+                clock.Now += TimeSpan.FromMilliseconds(130).Ticks;
+                frame.Invoke(desk, new object[] { 0.016, 5000.0 });
+                int before = moments.Count;
+                putdown.Invoke(desk, null);
+                Assert.Equal(before, moments.Count);
+                while (desk.ChainLive) { desk.ChainPlayer.ElapsePendingHold(); Dispatcher.UIThread.RunJobs(); }
+                Assert.Equal("flung", moments[^1].Id);
+                var ctx = EmiLineEngine.ToCtx(moments[^1].Context);
+                Assert.Equal(initial + 1 >= 20, ctx["flings20"]);
+                Assert.Equal(initial + 1 >= 50, ctx["flings50"]);
+                clock.Now += TimeSpan.TicksPerSecond;
+            }
+        }
+        finally
+        {
+            desk?.Close();
+            EmiDeskWindow.TossMoment = oldMoment;
+            EmiDeskWindow.TossClock = TimeProvider.System;
+            state.FlingsTotal = oldFlings;
+            state.WinLeftPx = left; state.WinTopPx = top; state.Monitor = monitor;
         }
         return Task.CompletedTask;
     });
