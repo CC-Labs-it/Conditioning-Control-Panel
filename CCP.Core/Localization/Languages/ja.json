@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "プレーヤーを開けませんでした",
+  "media_drop_editor_error_title": "エディターを開けませんでした",
+  "media_drop_player_error_fmt": "Deeper Player を開けませんでした: {0}: {1}",
+  "media_drop_editor_error_fmt": "Deeper Editor を開けませんでした: {0}: {1}",
   "Chaos_EStim_Conduct": "チャージ済み - 次の{0}回は電流が流れます",
   "Chaos_EStim_Chain": "チャージ済み - 次の{0}回は連鎖します",
   "Chaos_EStim_Arc": "電流が流れました（残り{0}回）",

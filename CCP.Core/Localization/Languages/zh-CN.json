@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "无法打开播放器",
+  "media_drop_editor_error_title": "无法打开编辑器",
+  "media_drop_player_error_fmt": "无法打开 Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "无法打开 Deeper Editor: {0}: {1}",
   "Chaos_EStim_Conduct": "已充能 - 接下来戳破的{0}个气泡会导电",
   "Chaos_EStim_Chain": "已充能 - 接下来戳破的{0}个气泡会引发连锁",
   "Chaos_EStim_Arc": "电流跃动（剩余{0}次）",
