@@ -13,6 +13,9 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+/// <summary>Runs alone: it fills the shared BubbleOverlay.Field and waits 800 ms for the hops to land; a parallel chaos class
+/// popping a bubble in that gap counted 9 instead of 8 (restack wave 2 run 3, Linux shard 0).</summary>
+[Collection(RunsAloneCollection.Name)]
 public class ChaosBodyBuzzTests
 {
     [Fact]
