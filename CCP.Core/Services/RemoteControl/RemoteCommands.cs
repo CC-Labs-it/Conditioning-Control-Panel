@@ -215,8 +215,12 @@ namespace ConditioningControlPanel.Services
                 // WPF ReleaseRemoteHoldings (RemoteControlService.cs:964, :1125, :1154): the wearer's run keeps its
                 // services, autonomy and cards; only what the controller holds goes back.
                 RemoteHaptics.Stop();
-                Remote.RemoteWearer.HandBackAllButStrict();
+                var handedBack = Remote.RemoteWearer.HandBackAllButStrict();
                 Remote.RemoteWearer.ReleaseSafetyState();
+                // WPF ReleaseRemoteHoldings ends with App.Overlay.RefreshOverlays(): the wearer's own pink/spiral repaint.
+                if (handedBack > 0)
+                    try { RefreshOverlays?.Invoke(); }
+                    catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay restore refresh failed"); }
                 return;
             }
             if (force) ResetAutonomy();

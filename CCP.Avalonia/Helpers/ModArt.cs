@@ -67,12 +67,21 @@ namespace ConditioningControlPanel.Avalonia.Helpers
 
             var overridePath = CoreModArt.OverridePath(resourceName);
             // A launch's first loads come decoded off the UI thread when the last launch listed them (StartupArt).
-            if (StartupArt.Take(new("o", resourceName, decodeWidth), overridePath, out var warm)) return warm;
-            return Load(resourceName, overridePath, decodeWidth);
+            if (StartupArt.Take(new("o", resourceName, decodeWidth), overridePath, out var warm))
+            {
+                // The warm decode ran Load with this same override path (Play framing reads modApplied).
+                modApplied = warm != null && overridePath != null && File.Exists(overridePath);
+                return warm;
+            }
+            return Load(resourceName, overridePath, decodeWidth, out modApplied);
         }
 
-        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth)
+        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth) =>
+            Load(resourceName, overridePath, decodeWidth, out _);
+
+        private static Bitmap? Load(string resourceName, string? overridePath, int? decodeWidth, out bool modApplied)
         {
+            modApplied = false;
             if (overridePath != null)
             {
                 try
