@@ -100,6 +100,7 @@ public sealed class PanicSurfacesTests
         "roster-personality",
         "intake",
         "leash-task",
+        "personality-studio",
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",
