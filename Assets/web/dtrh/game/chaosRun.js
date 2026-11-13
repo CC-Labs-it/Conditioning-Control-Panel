@@ -29,6 +29,8 @@
  * NOT ported - Story mode is disabled in the WPF game too (placeholder only).
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import { VARIANTS, ALL_IDS, NAME_OF, pick, build, buildGolden, buildPlain, buildHeart, buildGoldDroplet,
   buildMaterial,
   buildHeavy, buildPrism, buildBrittle, buildEcho, buildEchoChild, buildTease,
@@ -404,7 +406,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
    * as a field of stamps with the retinted wall showing between, not one full-bleed
    * stretch. Faded over the retint on the same gate (a draft room leaks nothing
    * before the roulette lands). */
-  const biomeWallFor = (bio) => (bio && bio.id ? { mode: 'biome', url: `https://ccp.art/biomes/${bio.id}.png`, repeat: 3, dot: true } : null);
+  const biomeWallFor = (bio) => (bio && bio.id ? { mode: 'biome', url: `${artBase()}biomes/${bio.id}.png`, repeat: 3, dot: true } : null);
   /** The chamber's effective style/profile/weather: biome override or classic. */
   const styleForWaveNow = (waveIndex) => {
     const b = biomeAt(waveIndex);
@@ -1943,7 +1945,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function spawnCondensation() {
     ctx.spawner.spawnPickup({
       kind: 'condensation',
-      spriteUrl: 'https://ccp.art/bubbles/gold_droplet.png',
+      spriteUrl: artBase() + 'bubbles/gold_droplet.png',
       w: 1.1, aheadDepth: 45, ttlSec: 14, glowColor: 0xffd700,
       onClick: (rec, sx, sy) => {
         if (!st || state !== 'running') return;
@@ -1968,7 +1970,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     sfx('rabbit_spawn', 0.4);
     ctx.spawner.spawnPickup({
       kind: 'whiterabbit',
-      spriteUrl: 'https://ccp.art/bubbles/darter.png',
+      spriteUrl: artBase() + 'bubbles/darter.png',
       w: 1.7, aheadDepth: 26, ttlSec: 9,
       speed: ctx.nav.getSpeed() + 5,   // always a little quicker than you
       glowColor: 0xffffff,
@@ -3467,7 +3469,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // banner, with the grey how-it-plays note under the flavour line
     hudUi.announce(`${r.numeral} · ${r.name.toUpperCase()}`, 'depth', 3000, {
       artKey: 'depth',
-      artUrl: b ? `https://ccp.art/biomes/${b.id}.png` : null,
+      artUrl: b ? `${artBase()}biomes/${b.id}.png` : null,
       subText: b ? `${b.glyph} ${b.name} — ${b.tagline}` : r.subtitle,
       hint: b ? b.mechHint || null : null,
     });
@@ -4325,7 +4327,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
           if (draftRevealBiome) {
             const b = draftRevealBiome;
             hudUi.announce(b.name.toUpperCase(), 'depth', 5200, {
-              artUrl: `https://ccp.art/biomes/${b.id}.png`, artBig: true,
+              artUrl: `${artBase()}biomes/${b.id}.png`, artBig: true,
               subText: `${b.glyph} ${b.tagline}`,
               hint: b.mechHint || null,
             });

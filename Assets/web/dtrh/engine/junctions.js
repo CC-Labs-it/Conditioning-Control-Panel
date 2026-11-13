@@ -54,13 +54,15 @@
  * cut, the camera park) moved into roomGeom()/J.geom.
  * ==========================================================================*/
 
+import { artBase } from '../shared/artBase.js';
+
 import * as THREE from 'three';
 import { RADIUS, FOG_COLOR, FOG_DENSITY } from './tunnel.js';
 import { makeGlowTex, makeFrameTex, makeNamePanelTex } from './powerupDrops.js';
 import { intToHex } from './settings.js';
 import { loadTexture } from '../shared/assets.js';
 
-const ART = 'https://ccp.art/';   // power-up card art CDN (matches powerupDrops.js)
+const ART = artBase();   // power-up card art CDN (matches powerupDrops.js)
 
 const VEIN_LEN = 150;        // world units each diverging corridor runs (the "first few chunks")
 const VEIN_RADIUS = RADIUS * 0.88; // narrower than the bore: two bore-width veins can NOT coexist at

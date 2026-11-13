@@ -55,7 +55,9 @@ public class PrizeCounterHostTests
         Assert.DoesNotContain("EnsureCoreWebView2Async", src);
         // The page plays the kept press (host-escape.js), wired before the page mounts.
         var page = Read("Assets", "web", "prizecounter", "index.html");
-        Assert.True(page.IndexOf("createHostEscape()", StringComparison.Ordinal) < page.IndexOf("mountPrizeCounter(createHost()", StringComparison.Ordinal));
+        // The port page builds the host first (shared carrier, WebKitGTK too), then mounts it.
+        Assert.True(page.IndexOf("createHostEscape()", StringComparison.Ordinal) is >= 0 and var esc
+            && esc < page.IndexOf("mountPrizeCounter(host", StringComparison.Ordinal));
     }
 
     [Fact]
