@@ -35,6 +35,7 @@ public partial class MainShellWindow
         }
         ArmVat(glass, read.Cap);
         glass.SetLip(read.Lip);
+        PositionVatTickGlyphs(); // WPF MainWindow.ProfileVat.cs:280: the MAX tick moves with the lip
         if (_vatOnScreen) MaybeShowFeatureIntro("descent-vat", "discord"); // WPF MainWindow.ProfileVat.cs:300
         var step = _faucetHold.Fold(read, glass.IsPouring);
         switch (step.Action)
@@ -57,6 +58,7 @@ public partial class MainShellWindow
         tap.Margin = new Thickness(left, top, 0, 0);
         tap.IsVisible = true;
         glass.ExternalSpoutXFraction = (left + 27) / w;
+        PositionVatTickGlyphs(); // WPF MainWindow.ProfileFaucet.cs:176
         if (FaucetControl<Canvas>("ProfileVatSparks") is { } sparks) { sparks.Width = w; sparks.Height = h; }
         if (FaucetControl<Grid>("ProfileVatChargeRing") is { } ring)
             ring.Margin = new Thickness(left - 2, top + 1, 0, 0);
@@ -64,6 +66,8 @@ public partial class MainShellWindow
             chip.Margin = new Thickness(0, Math.Round(h * .175) + 8, 0, 0);
         if (_faucetWired) return;
         _faucetWired = true;
+        // The canvas answers tick positions from its laid-out size: re-hang the legend when it changes.
+        glass.SizeChanged += (_, _) => { if (_vatArmed) PositionVatTickGlyphs(); };
         tap.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(tap).Properties.IsLeftButtonPressed) return;
@@ -87,6 +91,24 @@ public partial class MainShellWindow
             e.Handled = true; _faucetKeyHeld = false; CancelFaucetCharge(true);
         };
         _faucetChargeBeat = new BeatLoop(tap, seconds => AdvanceFaucetCharge(seconds * 1000)) { OnParked = () => CancelFaucetCharge() };
+    }
+    /// <summary>WPF MainWindow.ProfileFaucet.cs:189-217: the moon, mortarboard and crown hang just inside
+    /// their tick lines, from the canvas's own tick maths; a mark with no line (no lip, no layout) hides.</summary>
+    private void PositionVatTickGlyphs()
+    {
+        if (VatGlass is not { } glass) return;
+        double innerX = glass.TickInnerX;
+        Place("ProfileVatTickDrain", VatGlassCanvas.VatTickMark.Drain);
+        Place("ProfileVatTickCap", VatGlassCanvas.VatTickMark.Cap);
+        Place("ProfileVatTickMax", VatGlassCanvas.VatTickMark.Max);
+        void Place(string name, VatGlassCanvas.VatTickMark mark)
+        {
+            if (FaucetControl<IconGlyph>(name) is not { } glyph) return;
+            double? y = glass.TickCenterY(mark);
+            glyph.IsVisible = y != null && innerX > 0;
+            if (glyph.IsVisible)
+                glyph.Margin = new Thickness(Math.Round(innerX - 3 - glyph.Size), Math.Round(y!.Value - glyph.Size / 2), 0, 0);
+        }
     }
     private void UpdateFaucetPresentation() // WPF MainWindow.ProfileFaucet.cs:296-361. Existing localized copy, still waiting badge.
     {

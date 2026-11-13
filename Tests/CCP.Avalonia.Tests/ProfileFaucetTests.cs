@@ -174,4 +174,48 @@ public sealed class ProfileFaucetTests
         }
         finally { shell?.Close(); service.Reset(); CoreHaptics.Service = priorHaptics; if (action == "intro") { MainShellWindow.IsStartupDialogShowing = false; StartupLadder.ResetForTests(); FeatureIntroPopup.ResetForTests(); } }
     });
+
+    /// <summary>WPF MainWindow.ProfileFaucet.cs:189-217,236 (restack b39, from #3671): the tick legend hangs
+    /// on the jar's own tick lines once it is armed and goes away with it.</summary>
+    [Fact]
+    public Task TickLegendFollowsTheArmedJar() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = new ConditioningControlPanel.Services.SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        var s = CoreSettings.Current;
+        s.AvatarEnabled = false; s.PerformanceMode = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.UnifiedId = "faucet-ticks"; s.OfflineMode = false; s.VatPouredTodayXp = 0; s.VatPouredAccount = "";
+        CoreSecrets.RetrieveProvider = _ => "test-token";
+        CoreSecrets.StoreProvider = (_, _) => { };
+        var reply = DescentReader.ParseWire("{\"descent\":{\"devotion_days\":3,\"vat\":{\"cap\":4000,\"today_xp\":1000,\"fill_lip_pct\":120}}}")!;
+        var service = new DescentService(_ => Task.FromResult<JObject?>(reply));
+        AvApp.Descent = service;
+        MainShellWindow? shell = null;
+        try
+        {
+            await service.RefreshAsync("seed", force: true);
+            shell = new MainShellWindow(); shell.Show(); shell.Activate();
+            shell.ShowTab("discord"); Dispatcher.UIThread.RunJobs();
+            var page = shell.ProfilePage!;
+            Assert.True(page.FindControl<VatGlassCanvas>("ProfileVatGlass")!.IsVisible);
+            foreach (var name in new[] { "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
+            {
+                var glyph = page.FindControl<IconGlyph>(name)!;
+                Assert.True(glyph.IsVisible, name);
+                Assert.True(glyph.Margin.Left > 0, name);
+            }
+            // Drain (20%) sits below Cap (100%), which sits below the lip's MAX.
+            double Y(string n) => page.FindControl<IconGlyph>(n)!.Margin.Top;
+            Assert.True(Y("ProfileVatTickDrain") > Y("ProfileVatTickCap"));
+            Assert.True(Y("ProfileVatTickCap") > Y("ProfileVatTickMax"));
+            s.OfflineMode = true; service.Reset(); Dispatcher.UIThread.RunJobs();
+            foreach (var name in new[] { "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
+                Assert.False(page.FindControl<IconGlyph>(name)!.IsVisible, name);
+        }
+        finally { shell?.Close(); service.Reset(); }
+    });
 }
