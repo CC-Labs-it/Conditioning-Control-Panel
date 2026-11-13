@@ -36,11 +36,13 @@
     <Compile Include="..\ConditioningControlPanel.Tests\InviteClaimNoticeTests.cs" Link="InviteClaimNoticeTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\SourceRoots.cs" Link="SourceRoots.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\WpfBootstrapWait.cs" Link="WpfBootstrapWait.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\AwarenessEntitlementWiringTests.cs" Link="AwarenessEntitlementWiringTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\LockdownDoseRecoverySharingTests.cs" Link="LockdownDoseRecoverySharingTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />

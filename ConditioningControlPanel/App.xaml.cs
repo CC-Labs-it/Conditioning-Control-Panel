@@ -281,6 +281,13 @@ namespace ConditioningControlPanel
             // The UI-thread seam. Core code that must touch the UI thread (a settings serialize
             // racing an edit, a mod collection mutation) hops through here instead of reaching for
             // System.Windows.Application.Current.Dispatcher, which Core cannot name.
+            Services.Awareness.AwarenessObserver.EntitlementProvider = () =>
+                Patreon?.HasPremiumAccess == true || DailyFree?.IsFreeToday("awareness") == true;
+            Services.Awareness.AwarenessObserver.PostToUi = action =>
+            {
+                var dispatcher = Current?.Dispatcher;
+                if (dispatcher != null && !dispatcher.HasShutdownStarted) dispatcher.BeginInvoke(action);
+            };
             CoreDispatch.PostProvider = action =>
             {
                 var d = Current?.Dispatcher;
@@ -3119,11 +3126,12 @@ namespace ConditioningControlPanel
                     lineSource: new Services.Awareness.BrainAwarenessLineSource(),
                     memory: awarenessMemory);
 
+                var awarenessAppState = new Services.Awareness.AppStateProbe();
                 Awareness = new Services.Awareness.AwarenessObserver(
-                    awarenessLedger,
-                    awarenessScorer,
-                    arbiter,
-                    awarenessMemory);
+                    awarenessLedger, awarenessScorer, arbiter, awarenessMemory, null,
+                    new Services.Awareness.Win32ForegroundProbe(), new Services.Awareness.Win32InputProbe(),
+                    new Services.Awareness.WasapiMicrophoneProbe(), new Services.Awareness.SmtcMediaWatcher(),
+                    awarenessAppState, null, attachAppState: awarenessAppState.Attach);
                 observerRef = Awareness;
 
                 // The trust surface's seam: the privacy panel renders the real last frame and erases
