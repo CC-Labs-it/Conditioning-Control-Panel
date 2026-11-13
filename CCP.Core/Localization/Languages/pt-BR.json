@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "primeiro sabor",
+  "chaos_bonus_first_snap": "primeiro estalo",
+  "chaos_bonus_first_whisper": "primeiro sussurro",
+  "chaos_bonus_first_yes": "primeiro sim",
+  "chaos_bonus_first_play": "primeira brincadeira",
   "media_drop_player_error_title": "Não foi possível abrir o reprodutor",
   "media_drop_editor_error_title": "Não foi possível abrir o editor",
   "media_drop_player_error_fmt": "Não foi possível abrir Deeper Player: {0}: {1}",

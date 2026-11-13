@@ -43,8 +43,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.EnsureCreated: {E}", ex.Message); }
         });
 
-        /// <summary>The vibe started: show the glow + trail and follow the pointer (WPF :57).</summary>
-        public static void Start() => Dispatcher.UIThread.Post(() =>
+        /// <summary>The vibe started: show the glow + trail and follow the pointer (WPF :57). Inline on the
+        /// UI thread (the toy press is there), so a panic close right after it cannot be undone by a queued
+        /// Start (#3506); posted otherwise.</summary>
+        public static void Start()
+        {
+            if (Dispatcher.UIThread.CheckAccess()) StartNow();
+            else Dispatcher.UIThread.Post(StartNow);
+        }
+
+        private static void StartNow()
         {
             try
             {
@@ -68,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 w.BeginFollow();
             }
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.Start: {E}", ex.Message); }
-        });
+        }
 
         /// <summary>The vibe ended: stop following and hide; the window stays for the next buzz (WPF :82).</summary>
         public static void Stop() => Dispatcher.UIThread.Post(() => { try { _active?.EndFollow(); } catch { } });

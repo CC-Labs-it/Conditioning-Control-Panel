@@ -1,4 +1,9 @@
 {
+  "chaos_bonus_first_taste": "첫 맛",
+  "chaos_bonus_first_snap": "첫 스냅",
+  "chaos_bonus_first_whisper": "첫 속삭임",
+  "chaos_bonus_first_yes": "첫 수락",
+  "chaos_bonus_first_play": "첫 놀이",
   "media_drop_player_error_title": "플레이어를 열 수 없습니다",
   "media_drop_editor_error_title": "편집기를 열 수 없습니다",
   "media_drop_player_error_fmt": "Deeper Player를 열 수 없습니다: {0}: {1}",

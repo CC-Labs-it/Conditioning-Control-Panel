@@ -23,6 +23,10 @@ internal static partial class ChaosRunHost
     // Same desktop pointer seam as the existing cursor/trail surfaces; null off X11.
     internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadToyPointer = X11Pointer.Read;
 
+    /// <summary>The toys <see cref="FireToyEffect"/> can run on this head (#4225). Keep it in step with
+    /// the switch below: an inert toy must not spend its charge or cooldown.</summary>
+    internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim";
+
     // WPF ChaosModeService.cs:2697-2709,2736-2749,2779-2780.
     private static bool FireToyEffect(ChaosToyState toy)
     {
@@ -107,12 +111,11 @@ internal static partial class ChaosRunHost
     {
         if (_vibeRemaining <= 0 || !_spawning || _manualPaused || _lessonCardPaused || _overlay is not { IsVisible: true }) return;
         if (ReadToyPointer() is not { } pointer || (!_vibeHover && !pointer.Pressed)) return;
-        // Bubble coordinates use each target screen's scale, just like hit-testing the field.
+        // WPF BubbleService.cs:4336-4337: the bubble owner's scale (its index is target-filtered, #3505).
         foreach (var b in BubbleOverlay.Field.Bubbles.ToArray())
         {
             if (b.Spec == null || b.Spec.IsFreeze || b.Popping) continue;
-            var screen = _overlay.Screens.All.ElementAtOrDefault(b.Screen);
-            double scale = screen?.Scaling ?? 1;
+            double scale = BubbleOverlay.ScaleFor(b);
             // Same disc rule as spawn (AmbientBubble.ChaosHitSize), read with the live run state.
             double radius = AmbientBubble.ChaosHitSize(b.Spec, b.Size, _state!.Config.HitboxScale, _state.MagnetEnabled) / 2;
             double dx = pointer.At.X / scale - b.CenterX, dy = pointer.At.Y / scale - b.CenterY;
