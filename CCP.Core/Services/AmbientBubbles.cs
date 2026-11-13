@@ -228,6 +228,11 @@ namespace ConditioningControlPanel.Services
                     b._vx = (fromLeft ? 1 : -1) * b._speed * 1.15;
                     break;
             }
+            if (spec.SpawnAtPxX is double px && spec.SpawnAtPxY is double py)
+            {
+                b.X = b._startX = px / scaling - b.Size / 2;
+                b.Y = py / scaling - b.Size / 2;
+            }
             return b;
         }
 

@@ -173,6 +173,39 @@ public sealed class MandatoryVideoSchedulerTests
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
+    [Theory]
+    [InlineData("end")]
+    [InlineData("ended")]
+    [InlineData("force")]
+    [InlineData("stop")]
+    [InlineData("retry")]
+    public void VideoEnded_fires_once_after_the_clip_closes(string ending) => With(6, false, () =>
+    {
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSettings.Current.AttentionChecksEnabled = true;
+        try
+        {
+            var host = new Host();
+            var video = new MandatoryVideoScheduler(host, new FakeClock(), () => Clips);
+            int ended = 0;
+            video.VideoEnded += () =>
+            {
+                Assert.False(video.IsPlaying);
+                Assert.Equal(1, host.Closes);
+                ended++;
+            };
+            Assert.True(video.Trigger());
+            if (ending == "retry") video.NoteSpawn();
+            if (ending == "end") video.End();
+            else if (ending is "ended" or "retry") video.Ended(); // natural end or an attention retry
+            else if (ending == "force") video.ForceCleanup();
+            else video.Stop();
+            video.End(); video.ForceCleanup(); // idle cleanup must not notify twice
+            Assert.Equal(1, ended);
+        }
+        finally { CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
+
     [Fact]
     public void Idle_panic_contains_a_host_close_failure()
     {
