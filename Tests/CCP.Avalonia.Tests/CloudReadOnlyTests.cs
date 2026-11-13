@@ -78,7 +78,7 @@ public sealed partial class AccountSeedTests
         "LastConfirmedServerXpAccount", "LastConfirmedServerXpSeason", "PatreonTier", "UnifiedId", "UserDisplayName",
         "HasLinkedPatreon", "HasLinkedDiscord", "IsSeason0Og", "PatreonPremiumValidUntil", "PatreonLabValidUntil",
         "PendingDescentMigrationChoice", "DescentMigrationCompleted", "DescentMigrationChoice", "DescentMigrationOffered",
-        "DescentCycleXpBonus", "DescentCycle",
+        "DescentCycleXpBonus", "DescentCycle", "MergedSignInPending",
     };
 
     private static JToken Get(AppSettings s, string n) =>
@@ -175,7 +175,9 @@ public sealed partial class AccountSeedTests
                         .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog();
+                CoreSettings.Current.MergedSignInPending = true;
                 dialog.Succeed(new V2AuthService.V2User { UnifiedId = "u1", Level = 1, Xp = 0 }, "tok", null, false);
+                Assert.False(CoreSettings.Current.MergedSignInPending);
                 await dialog.ProfileLoad;
             });
             Assert.Equal(5, s.PlayerLevel);                     // the login path did load and adopt

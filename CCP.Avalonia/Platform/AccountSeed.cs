@@ -152,12 +152,12 @@ internal static class AccountSeed
 
     /// <summary>WPF App.xaml.cs:2267 restore: the unified id persisted from the previous session. Unlike WPF,
     /// only when something can still prove it (an auth token, or a signed-in provider): with no Secret Service
-    /// the token is gone after a restart, and showing "signed in" with nothing behind it is worse than signed out.</summary>
+    /// the token is gone after a restart, so the identity is not restored except for a pending merged swap.</summary>
     internal static void RestoreSession()
     {
         var id = CoreSettings.Current.UnifiedId;
         if (string.IsNullOrEmpty(id)) return;
-        if (string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
+        if (!CoreSettings.Current.MergedSignInPending && string.IsNullOrEmpty(CoreSettings.Current.AuthToken)
             && Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true && SubscribeStar?.IsAuthenticated != true)
         {
             Log.Information("Stored UnifiedUserId not restored: no auth token and no signed-in provider");
@@ -175,14 +175,17 @@ internal static class AccountSeed
     {
         var id = CoreAccount.UnifiedUserId;
         if (string.IsNullOrEmpty(id) || CoreSettings.Current.OfflineMode) return;
+        // A pending merge: a provider mints the token (WPF App.xaml.cs:4690,4757); when none can, restore-session does (WPF :4805).
+        var unproven = CoreSettings.Current.MergedSignInPending && !await MergedAccountRecoveryHead.ReauthenticateAsync();
         v2 ??= NewV2();
         // If a provider already authenticated, it validated the session (and owns the load in WPF).
-        if (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true)
+        if (unproven || (Patreon?.IsAuthenticated != true && Discord?.IsAuthenticated != true))
         {
             Log.Information("Validating restored session for {Id}...", id);
             var outcome = await v2.ValidateRestoredSessionAsync(id);
-            if (outcome == V2AuthService.RestoreOutcome.Cleared) CoreAccount.UnifiedUserId = null;
+            if (outcome == V2AuthService.RestoreOutcome.Cleared) { CoreAccount.UnifiedUserId = null; CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
             if (outcome != V2AuthService.RestoreOutcome.Validated) return;
+            if (unproven && !string.IsNullOrEmpty(CoreSettings.Current.AuthToken)) { CoreSettings.Current.MergedSignInPending = false; CoreSettings.Save(); }
         }
         await LoadProfileAsync(v2);
     }
@@ -440,6 +443,7 @@ internal static class AccountSeed
         Discord?.Logout();
         SubscribeStar?.Logout();
         CoreAccount.UnifiedUserId = null;
+        CoreSettings.Current.MergedSignInPending = false;
         var s = CoreSettings.Current;
         s.UnifiedId = null;
         s.AuthToken = null;
