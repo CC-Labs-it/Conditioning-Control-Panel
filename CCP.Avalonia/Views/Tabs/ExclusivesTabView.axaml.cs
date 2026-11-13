@@ -69,6 +69,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
         }
 
+        private readonly HashSet<VaultCardAura> _auras = new();
+        private BeatLoop? _auraMotion;
+        private long _auraStart;
+        private bool _vaultLoaded;
+        internal bool AuraRunning => _auraMotion?.IsRunning == true;
+
+        internal void AuraFrame()
+        {
+            if (!AuraRunning) return;
+            double t = FxAdorner.Time.GetElapsedTime(_auraStart).TotalSeconds;
+            foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t, full: AmbientFxCanvas.Env.Level == MotionLevel.Full);
+        }
+
+        private void Aura_Loaded(object? sender, RoutedEventArgs e)
+        {
+            if (sender is VaultCardAura aura && _auras.Add(aura) && _motion == null && _auraMotion == null) aura.Rest();
+        }
+
+        private void Aura_Unloaded(object? sender, RoutedEventArgs e)
+        {
+            if (sender is VaultCardAura aura) { aura.Rest(); _auras.Remove(aura); }
+        }
+
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
         public static readonly StyledProperty<double> CardHeightProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardHeight), Services.UI.ExclusiveShelfFit.BaseHeight);
         public static readonly StyledProperty<double> GroupHeadWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(GroupHeadWidth), double.NaN);
@@ -154,6 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Platform.EntitlementRefresh.Changed += RefreshJustSubscribed;
             RefreshJustSubscribed();
+            _vaultLoaded = true;
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged += RefreshVaultMotion;
@@ -250,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
             Platform.EntitlementRefresh.Changed -= RefreshJustSubscribed;
+            _vaultLoaded = false;
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= RefreshVaultMotion;
@@ -271,6 +296,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_ambientNeedsRefresh) RefreshVaultMotion();
             QueueVaultZones();
             RefreshJustSubscribed();
+            // WPF MainWindow.Exclusives.cs:1022; Core retains the retry and sandbox gates.
+            _ = App.DailyFree?.RefreshAsync();
             RetintVaultChrome();
             RefreshHeaderArt();
             // WPF MainWindow.Exclusives.cs:969: Plans repaints plates and its throttled invites.
@@ -398,7 +425,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Shelf cards currently wearing a sheen. Test seam.</summary>
         internal int SheenCount => _sheens.Values.Count(s => s != null);
 
-        /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
+        /// <summary>Starts/stops ambient and aura clocks while visible and attached (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
             bool want = IsVisible && _plansActive && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
@@ -421,6 +448,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
+            // WPF MainWindow.Exclusives.Flair.cs:107-110: aura motion ignores the performance tier.
+            bool auraOnly = _vaultLoaded && IsVisible && _plansActive && this.IsAttachedToVisualTree()
+                && AmbientFxCanvas.Env.Level != MotionLevel.Off && !want;
+            if (!auraOnly) { _auraMotion?.Stop(); _auraMotion = null; }
+            else if (_auraMotion == null)
+            {
+                _auraStart = FxAdorner.Time.GetTimestamp();
+                _auraMotion = new BeatLoop(this, _ => AuraFrame());
+                _auraMotion.Start();
+            }
+            if (!want && !auraOnly) foreach (var aura in _auras) aura.Rest();
             foreach (var part in _fxParts) Dress(part);
         }
 
@@ -429,6 +467,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_motion == null) return;
             double t = FxAdorner.Time.GetElapsedTime(_motionStart).TotalSeconds;
+            foreach (var aura in _auras) if (aura.IsVisible) aura.Frame(t);
             _kenBurns.ScaleX = _kenBurns.ScaleY = Breath(t, 26, 1.0, 1.07);
             if (LitPlate != null) LitPlate.Opacity = Breath(t, 3.4, 0.75, 1.0);
             double glow = Breath(t, 3.4, 0.35, 0.9), fade = Breath(t, 1.9, 0.72, 1.0), swell = Breath(t, 1.9, 1.0, 1.06);
@@ -659,6 +698,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public IBrush EdgeBrush => Tier > 0 ? Livery(Tier) : FreeToday ? EdgeFree : new SolidColorBrush(ExclusivesTabView.WithAlpha(ExclusivesTabView.VaultPartner(), 0x4D));
         public Thickness EdgeThickness => new(Tier > 0 ? 3 : FreeToday ? 2 : 1);
 
+        // WPF MainWindow.Exclusives.Flair.cs:160-182: owned or daily-free doors wear the group aura.
+        public bool IsMine => !IsLocked;
+        public Color GroupHue => ExclusiveGroupRow.HueOf(Services.UI.PremiumShelfOrder.GroupOf(Feature.Key, Feature.Tier));
+        public int AuraSeed => (ExclusiveFeature.All.ToList().IndexOf(Feature) + 1) * 7 + Feature.Key.Length;
+        public Thickness AuraMargin => new(-EdgeThickness.Left);
+
         /// <summary>VaultLivery.EdgeFree: gold means "open for one day only".</summary>
         internal static IBrush EdgeFree => Brush("#E6FFD27A");
 
@@ -688,7 +733,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Services.UI.PremiumGroup.Prime => "prime",
             _ => "free",
         };
-        private Color Hue => Group switch
+        private Color Hue => HueOf(Group);
+        internal static Color HueOf(Services.UI.PremiumGroup group) => group switch
         {
             Services.UI.PremiumGroup.Basic => BasicGold,
             Services.UI.PremiumGroup.Prime => PrimeCyan,

@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia
         public static SettingsService? Settings { get; private set; }
 
         /// <summary>The daily-free service (WPF App.DailyFree), or null on the headless render path.</summary>
-        internal static DailyFreeService? DailyFree { get; private set; }
+        internal static DailyFreeService? DailyFree { get; set; }
 
         /// <summary>The haunted-UI layer that rides a running lockdown (WPF App.Possession; Core director,
         /// this head's effects and attribution). Arms only when a lockdown starts with Possession on.</summary>
@@ -341,6 +341,7 @@ namespace ConditioningControlPanel.Avalonia
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
             Controls.AmbientFxCanvas.Env.ApplyPalette(Mods);
+            Platform.Win32Window.RegisterDarkTitleBars();
         }
 
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's
