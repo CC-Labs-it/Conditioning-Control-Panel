@@ -378,7 +378,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Score += 140 * _state.TotalMult;
                 _state.Combo++;
                 _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
-                App.Achievements?.TrackBubblePopped();
+                CreditPop();
                 ChaosLessons.Tick("freeze_trigger");
                 _state.PushEvent(Loc.Get("chaos_freeze_event"));   // WPF :2391 prefixes a snowflake; no emoji in event lines
                 CheckComboMilestone();
@@ -394,6 +394,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosLessons.Tick("taking_chances");   // WPF ChaosLessonHooks.OnPrismPopped
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
                 Pulse(Color.FromRgb(0xC8, 0xA8, 0xFF), 0.40);
+                CreditPop();   // WPF ChaosModeService.cs:1844
                 CheckComboMilestone();
                 return;
             }
@@ -406,10 +407,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 34,
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
+            CreditPop();   // WPF ChaosModeService.cs:1873
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
             BodyBuzz(b);
             CheckComboMilestone();
+        }
+
+        /// <summary>WPF AchievementService.TrackBubblePopped (:570-609): a Chaos pop counts toward the lifetime
+        /// total (its 100-pop Sparkle) and credits quests, as an ambient pop does in BubbleOverlay.Pop.</summary>
+        private static void CreditPop()
+        {
+            App.Achievements?.TrackBubblePopped();
+            try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Serilog.Log.Debug("chaos pop quest credit: {E}", ex.Message); }
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
@@ -439,6 +449,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF ChaosLessonHooks.cs:161, 250: live rain remains busy after its spawn window.
             if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
+            CreditPop();   // WPF ChaosModeService.cs:2025
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
                 int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(5, 10));

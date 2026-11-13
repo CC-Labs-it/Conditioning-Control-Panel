@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -244,10 +246,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             TxtAvatarHint.IsVisible = true;
         }
 
-        private void ShowPortrait(IImage? source)
+        internal void ShowPortrait(IImage? source)
         {
+            ImgPreview.Transitions = null;
             ImgPreview.Source = source;
             TxtPreviewGlyph.IsVisible = source == null;
+            if (source == null || !AmbientFxCanvas.Env.AllowTransitions)
+            {
+                ImgPreview.ClearValue(OpacityProperty);
+                return;
+            }
+            ImgPreview.Opacity = 0.2;
+            ImgPreview.Transitions = new Transitions
+            {
+                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(160)) }
+            };
+            ImgPreview.Opacity = 1;
         }
 
         // ------------------------------------------------------------------ personality

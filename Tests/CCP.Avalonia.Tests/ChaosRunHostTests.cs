@@ -1631,4 +1631,47 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF ChaosModeService.cs:1844/1873/2025 + AchievementService.cs:570-609: prism, treat and defuse
+    /// pops each count toward the lifetime pop total (the 100-pop Sparkle) and credit quests (#3240).</summary>
+    [Fact]
+    public async Task Chaos_treat_prism_and_defuse_pops_count_toward_lifetime_pops_and_quests()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var prop = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+            var (achWas, firerWas) = (prop.GetValue(null), EffectPayload.Firer);
+            var dir = System.IO.Directory.CreateTempSubdirectory("ccp-chaos-pops-").FullName;
+            var questsWas = global::ConditioningControlPanel.Avalonia.App.Quests;
+            using var quests = new QuestService(null, dir);
+            quests.Progress.DailyQuests = new List<ConditioningControlPanel.Models.ActiveQuest> { new("pop_parade_d") };
+            global::ConditioningControlPanel.Avalonia.App.Quests = quests;
+            try
+            {
+                var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(dir, "a.json")));
+                prop.SetValue(null, engine);
+                EffectPayload.Firer = null;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                Assert.Equal(1, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload(), IsPrism = true } });
+                Assert.Equal(2, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                ChaosRunHost.OnDefused(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                Assert.Equal(3, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                Assert.Equal(3, engine.Progress.TotalBubblesPopped);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                global::ConditioningControlPanel.Avalonia.App.Quests = questsWas;
+                prop.SetValue(null, achWas);
+                EffectPayload.Firer = firerWas;
+                FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

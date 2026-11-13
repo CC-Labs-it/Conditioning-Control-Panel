@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         private Action? _refreshFloating;
+        internal Action<Window> ApplyFloatingPassive { get; set; } = X11Overlay.SetPassive;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null)
         {
@@ -479,6 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var frame = DecorateFloating(w);
                 w.Opened += (_, _) =>
                 {
+                    ApplyFloatingPassive(w);
                     var floatingFrame = new FloatingVideoFrame(w, frame: frame, audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
                     _refreshFloating += floatingFrame.Refresh;
                     w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;

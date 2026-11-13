@@ -376,6 +376,18 @@ public sealed class SharedDeeperThemeTests
     }
 
     [Fact]
+    public Task HudPlankFullMotionIsIndependentOfPriorGentleSetting() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldGentle = CoreSettings.Current.GentleVisuals;
+        try
+        {
+            CoreSettings.Current.GentleVisuals = true;
+            await HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease();
+        }
+        finally { CoreSettings.Current.GentleVisuals = oldGentle; }
+    });
+
+    [Fact]
     public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();

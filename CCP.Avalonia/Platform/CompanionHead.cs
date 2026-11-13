@@ -4,6 +4,7 @@ using ConditioningControlPanel.Services.Companion;
 using Serilog;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -21,7 +22,8 @@ internal static class CompanionHead
     private static IDisposable? _drainTimer, _activeTimer;
     private static CommunityPromptService? _prompts;
 
-    internal static bool Started => _drainTimer != null;
+    internal static bool Started => _activeTimer != null;
+    internal static IDisposable? DrainTimer => _drainTimer;
 
     internal static void Start()
     {
@@ -40,20 +42,49 @@ internal static class CompanionHead
                         new MessageDialog(Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count), false));
             });
         };
+        // Resolve the live head per call: a captured hook keeps working after Stop/Start and no-ops while stopped.
         CoreModsHooks.SwitchCompanion = id =>
         {
-            if (ReferenceEquals(_prompts, prompts)) CompanionCore.SwitchCompanion(id, prompts);
+            if (_prompts is { } live) CompanionCore.SwitchCompanion(id, live);
         };
 
-        // ponytail: WPF runs this timer only under Brain Parasite; here DrainTick returns at once for other perks.
+        CompanionCore.Switched += OnSwitched;
+        _activeTimer = DispatcherTimer.Run(() => { try { CompanionCore.UpdateActiveTime(); } catch { } return true; }, TimeSpan.FromMinutes(1));
+        UpdateDrainTimer();
+    }
+
+    internal static bool SetPerk(CompanionBonusType perk)
+    {
+        if (!CompanionPerks.TrySelect(CoreSettings.Current, perk)) return false;
+        CoreSettings.Save();
+        UpdateDrainTimer();
+        return true;
+    }
+
+    private static void OnSwitched(CompanionId _) => UpdateDrainTimer();
+
+    private static void UpdateDrainTimer()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            var prompts = _prompts;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (prompts != null && ReferenceEquals(_prompts, prompts)) UpdateDrainTimer();
+            });
+            return;
+        }
+        _drainTimer?.Dispose();
+        _drainTimer = null;
+        if (!Started || CompanionCore.ActivePerk != CompanionBonusType.XPDrain) return;
         _drainTimer = DispatcherTimer.Run(() => { try { CompanionCore.DrainTick(DateTime.UtcNow); } catch (Exception ex) { Log.Debug("Drain tick: {E}", ex.Message); } return true; },
             TimeSpan.FromSeconds(CompanionCore.DrainIntervalSeconds));
-        _activeTimer = DispatcherTimer.Run(() => { try { CompanionCore.UpdateActiveTime(); } catch { } return true; }, TimeSpan.FromMinutes(1));
     }
 
     /// <summary>Stops both timers (tests; the hooks are the caller's to restore).</summary>
     internal static void Stop()
     {
+        CompanionCore.Switched -= OnSwitched;
         _drainTimer?.Dispose();
         _activeTimer?.Dispose();
         _drainTimer = _activeTimer = null;

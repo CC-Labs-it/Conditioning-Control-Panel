@@ -1565,6 +1565,24 @@ namespace ConditioningControlPanel.Avalonia
             engine.Unlocked += (_, a) => Dispatcher.UIThread.Post(() => ShowAchievementPopup(a));
             engine.Unlocked += (_, a) => ShowWardrobeRewardToasts(a);
             engine.Unlocked += (_, a) => AnnounceAchievement(a, discord ?? Platform.AccountSeed.Discord);
+            engine.BubbleMilestone += total => Dispatcher.UIThread.Post(() => ShowBubbleMilestonePopup(total));
+        }
+
+        /// <summary>WPF AchievementService.ShowBubbleMilestoneNotification (AchievementService.cs:468-490): the
+        /// same card the race shows for a crossed hundred (GameWindow.Race.cs RaceCreateMilestonePopup).</summary>
+        internal static Func<int, Views.Windows.AchievementPopup> CreateBubbleMilestonePopup = total =>
+        {
+            var popup = new Views.Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", total / 100 * 100),
+                Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                headerText: Loc.Get("achievement_bubble_milestone_header"));
+            global::Avalonia.Controls.ControlExtensions.FindControl<Controls.IconGlyph>(popup, "TxtHeaderIcon")!.Kind = IconKind.Sparkle;
+            return popup;
+        };
+
+        internal static void ShowBubbleMilestonePopup(int total)
+        {
+            try { CreateBubbleMilestonePopup(total).Show(); }
+            catch (Exception ex) { Serilog.Log.Warning("Bubble milestone popup: {E}", ex.Message); }
         }
 
         /// <summary>WPF PlayAchievementSound + the DiscordShareAchievements post (App.xaml.cs:4180-4205).
