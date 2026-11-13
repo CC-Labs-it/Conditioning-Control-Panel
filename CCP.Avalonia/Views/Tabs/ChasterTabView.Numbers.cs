@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void NumbersInit()
         {
-            StatRun.PointerReleased += (_, _) => ToggleBill();
+            StatRun.PointerReleased += (_, _) => { ToggleBill(); FxTagTug(); };
             CapTrack.SizeChanged += (_, _) => LayoutCap(animate: false);
         }
 
@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var chaster = ChasterHead.Service;
             if (chaster == null) return;
             var balance = chaster.BalanceSeconds;
+            RefreshTag(balance); // WPF ChasterTabView.xaml.cs:231
             TxtBalance.Text = balance == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(balance);
             TxtBalance.Foreground = FigureBrush(balance);
             TxtBalanceCaption.Text = Loc.Get(balance < 0 ? "chaster_credit_caption" : "chaster_balance_caption");

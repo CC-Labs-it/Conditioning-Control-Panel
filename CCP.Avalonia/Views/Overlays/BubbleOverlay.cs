@@ -38,9 +38,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
     /// <para>ponytail: Bubbles v2 motions (Rain/Spiral In),
-    /// Brain Drain, Natasha's red bubble, the avatar egg, lucky gold glow/sparkles
+    /// Brain Drain, Natasha's red bubble, the avatar egg, the lucky gold glow
     /// and the milestone popup remain unported.
-    /// Gaze pops, pop haptics, mod pop audio and achievement credit are wired.
+    /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
     internal static class BubbleOverlay
@@ -1206,8 +1206,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             dc.DrawText(hint, new Point(box.X + 8 * k, box.Y + 2 * k));
                         }
                     }
+                    // WPF BubbleService.cs:3477, :3517, :3791: sparkles are above the sprite,
+                    // outside its breathe/rotate transform, with particle alpha times field fade.
+                    foreach (var sp in b.Sparkles)
+                    {
+                        if (sp.Alpha <= 0) continue;
+                        using (dc.PushOpacity(Math.Clamp(sp.Alpha * b.Fade, 0, 1)))
+                            dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
+                                new Point((b.X + sp.X - ox) * k, (b.Y + sp.Y - oy) * k),
+                                sp.Size * k / 2, sp.Size * k / 2);
+                    }
                 }
             }
+            private static readonly IBrush GoldSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFFD700));
+            private static readonly IBrush PinkSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFF69B4));
         }
     }
 }
