@@ -1625,6 +1625,8 @@ namespace ConditioningControlPanel.Avalonia
         {
             try { new Views.Windows.AchievementPopup(a.Name, a.FlavorText, a.ImageName).Show(); }
             catch (Exception ex) { Serilog.Log.Error(ex, "Failed to show achievement popup for: {Name}", a.Name); }
+            // WPF App.xaml.cs:3701: file quietly, independently of the toast.
+            Views.Windows.MainShellWindow.Current?.PostPatronGalleryRow(a);
         }
 
         private string ResolveEffectiveAssetsPath()

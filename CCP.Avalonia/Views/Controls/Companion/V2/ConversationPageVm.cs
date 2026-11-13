@@ -263,6 +263,8 @@ internal sealed class ConversationPageVm : CompanionObservable
             {
                 Notice = Loc.Get(ConversationRules.FailureNoticeKey(result.Failure));
                 CanRetry = result.Retryable || result.Failure == AiFailureKind.Cancelled;
+                // WPF ConversationPageVm.cs:294 (ConversionSignals.CompanionCapHit): the offer waits until the conversation is gone.
+                if (result.Failure == AiFailureKind.DailyLimit) Views.Windows.MainShellWindow.Current?.OnCompanionCapHit();
             }
         }
         catch (OperationCanceledException) { Notice = Loc.Get("companion_v2_cancelled"); CanRetry = true; }
