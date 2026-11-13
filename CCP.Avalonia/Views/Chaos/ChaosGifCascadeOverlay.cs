@@ -35,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Tests drive <see cref="Frame"/> themselves; the frame clock stays off (P08).</summary>
         internal static bool ManualFramesForTests;
         internal static bool Refused;
+        internal static long RunId { get; private set; }
         private static ChaosGifCascadeOverlay? _active;
         private static int _generation;
         internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
@@ -83,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!w.IsVisible) w.Show();   // idles hidden between cascades
             if (!SkipPlatformChecksForTests) X11Overlay.Raise(w);   // WPF ChaosWindowZ.RaiseAboveVideo / ForceTopmost
             w.Restart(files, spawnRatePerSec, durationSec, gifSize, fallSpeed, opacity, startScale);
+            RunId++;
             Log.Information("GifCascade: raining (pool={N}, spread=[{L:F0}..{R:F0}])",
                 files.Count, w._cascade.SpawnLeft, w._cascade.SpawnLeft + w._cascade.SpawnWidth);
         }
@@ -98,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             _generation++;
             Refused = false;
+            RunId++;
             try { _active?.CloseNow(); } catch (Exception ex) { Log.Debug("GifCascade.CloseActive: {E}", ex.Message); }
         }
 
