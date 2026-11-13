@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// answers "the built-in default" on a head with no mod layer, so the ctor touches no disk.
     ///
     /// Preview playback is stoppable through CoreAudio. UI Art uses the existing image slots, and text
-    /// Barks, Mantras and Event Audio are ported partials. Portraits, Emotes and the Art Framing editor remain deferred.
+    /// Barks, Mantras, Event Audio and Animated Emotes are ported partials. Portraits and the Art Framing editor remain deferred.
     /// </summary>
     public partial class ModCreatorWindow : Window
     {
@@ -432,7 +432,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildMantrasSection();
             BuildEventAudioSection();
             BuildDeferredSection("portraits", "Portraits", "ModCreatorWindow.Portraits.cs");
-            BuildDeferredSection("emotes", "Animated Emotes", "ModCreatorWindow.Emotes.cs");
+            BuildEmotesSection();
         }
 
         /// <summary>
@@ -451,13 +451,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // ─── Side-file seams ─────────────────────────────────────
-        // Barks, Mantras and Event Audio are wired below. Remaining panel partials (Portraits/Emotes) join
-        // when each is ported. In the WPF head these three aggregate hooks let export write each
+        // Barks, Mantras, Event Audio and Emotes are wired below. The remaining panel partial (Portraits) joins
+        // when it is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private async Task WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); WriteEventAudioTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_skipped_title"), string.Join("\n", skipped)); }
-        private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); _ = LoadMantrasFrom(resourcesDir); LoadEventAudioFrom(resourcesDir); }
-        private void ClearSideFileState() { ClearBarksSection(); ClearMantrasSection(); ClearEventAudioSection(); }
+        private async Task WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); WriteEventAudioTo(resourcesDir); WriteEmotesTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_skipped_title"), string.Join("\n", skipped)); }
+        private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); _ = LoadMantrasFrom(resourcesDir); LoadEventAudioFrom(resourcesDir); LoadEmotesFrom(resourcesDir); }
+        private void ClearSideFileState() { ClearBarksSection(); ClearMantrasSection(); ClearEventAudioSection(); ClearEmotesSection(); }
 
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
