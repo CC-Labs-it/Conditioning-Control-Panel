@@ -115,6 +115,21 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <!-- Loop short videos until the minimum: changes what the minimum does to a
+                                 shorter clip (skip it, or replay it), so it is owned like the sliders. -->
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_loop_short}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{loc:Str setting_video_loop_short}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkVideoLoopShort" Style="{StaticResource ToggleStyle}"
+                                          feat:SessionLock.Owned="True" VerticalAlignment="Center"
+                                          Checked="ChkVideoLoopShort_Changed" Unchecked="ChkVideoLoopShort_Changed"/>
+                            </Grid>
+                            <TextBlock Text="{loc:Str tooltip_video_loop_short}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_video_cut_random_start}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

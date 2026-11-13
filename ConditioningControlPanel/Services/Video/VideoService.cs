@@ -63,6 +63,9 @@ namespace ConditioningControlPanel.Services
         private DispatcherTimer? _maxLenCapTimer;
         private long _cutStartMs;
         private Video.VideoPlaybackClock? _cutClock;
+        // "Loop short videos": how many times this run's clip plays (1 = once, as always). Fixed at
+        // the start of the run (LibVLC :input-repeat) or at the page's meta (browser).
+        private int _loopPasses = 1;
         private MediaElement? _fallbackMedia;
 
         // ---- UI-thread wedge watchdog (freeze/lockout rescue, #529/#532 storm) ----
@@ -3164,6 +3167,7 @@ namespace ConditioningControlPanel.Services
             // and never cleared, so a clip that died before LengthChanged inherited the previous
             // clip's length and was credited with it on the skip path (#767).
             _duration = 0;
+            _loopPasses = 1;
             _playRate = Video.GentleWindowRules.PlaybackRate(Safety.GentleVisuals.On, Safety.GentleVisuals.Speed);
             _hits = _total = 0;
             _spawnTimes.Clear();
@@ -3290,6 +3294,13 @@ namespace ConditioningControlPanel.Services
             }
 
             App.Logger?.Information("VideoService: StartVideoPlayback called for {File}", Path.GetFileName(path));
+
+            // "Loop short videos": LibVLC needs the pass count before the Media exists, so it comes
+            // from the duration cache. An unknown length plays once, as the queue filter falls open.
+            _loopPasses = Video.VideoMinLoop.Passes(LoopShortClipApplies(path),
+                App.Settings?.Current?.VideoMinDurationSeconds ?? 0,
+                (long)Math.Round((MetadataCache?.TryGetDuration(path) ?? 0) * 1000));
+            if (_loopPasses > 1) VideoDiag.Log("VIDEO", $"short clip - plays {_loopPasses} times to reach the minimum");
 
             // Every step from here to the first frame is bracketed (#750-#753): the reporters' crash
             // lands somewhere in this window with an empty crash.log, so the LAST breadcrumb in the
@@ -3969,6 +3980,13 @@ namespace ConditioningControlPanel.Services
             if (!(App.Settings?.Current?.VideoForceHardwareDecoding ?? false))
             {
                 media.AddOption(":avcodec-hw=none");
+            }
+
+            // "Loop short videos": VLC replays the input itself, with no EndReached between passes,
+            // so the run ends once. Every screen gets the same count and stays in step.
+            if (_loopPasses > 1)
+            {
+                media.AddOption($":input-repeat={_loopPasses - 1}");
             }
 
             // Everything that needs a live aout hangs off Playing, and the handler is subscribed
@@ -5384,6 +5402,7 @@ namespace ConditioningControlPanel.Services
                 if (mediaElement.NaturalDuration.HasTimeSpan)
                 {
                     _duration = mediaElement.NaturalDuration.TimeSpan.TotalSeconds;
+                    _loopPasses = 1;   // the MediaElement fallback plays once: "loop short videos" is LibVLC and browser only
                     if (_maxLenCapTimer != null && App.Settings?.Current?.VideoCutRandomStart == true)
                     {
                         _cutStartMs = Video.VideoLengthCap.StartOffsetMs(App.Settings.Current.VideoMaxDurationSeconds,
@@ -6846,6 +6865,9 @@ namespace ConditioningControlPanel.Services
             _fallbackSafetyTimer?.Stop();
             _fallbackSafetyTimer = null;
 
+            // "Loop short videos": the run is every pass, not one, or the guillotine cuts the loop.
+            videoDurationSeconds = Video.VideoMinLoop.SafetySeconds(videoDurationSeconds, _loopPasses);
+
             // Extend stuck detection timeout so long videos aren't killed prematurely
             // Gentle visuals: a slowed clip runs longer on the wall clock (rate 1 = unchanged).
             var wallSeconds = Video.GentleWindowRules.WallSeconds(videoDurationSeconds, _playRate);
@@ -6990,6 +7012,21 @@ namespace ConditioningControlPanel.Services
             _fallbackArm.Remaining = TimeSpan.Zero;
 
             App.Logger?.Debug("VideoService: Fallback safety timer started for {Duration}s", MaxVideoFallbackSeconds);
+        }
+
+        /// <summary>"Loop short videos until the minimum time" for this clip (Video.VideoMinLoop.Applies).</summary>
+        private bool LoopShortClipApplies(string? path)
+        {
+            var s = App.Settings?.Current;
+            if (s == null || !s.MandatoryVideoLoopShortClips || s.VideoMinDurationSeconds <= 0 || string.IsNullOrEmpty(path)) return false;
+            bool enhanced = false;
+            if (s.VideoEnhanceIfPossible)
+            {
+                try { enhanced = Deeper.EnhancementResolver.ResolveForLocalMedia(path).Enhancement != null; }
+                catch (Exception ex) { Diag.Swallowed(ex, "loop short clip enhancement probe"); enhanced = true; }
+            }
+            return Video.VideoMinLoop.Applies(true, s.VideoMinDurationSeconds, IsFloating, SegmentArmed, enhanced,
+                credited: Video.ScrolllerCredit.For(path) != null);
         }
 
         /// <summary>
@@ -8842,7 +8879,9 @@ namespace ConditioningControlPanel.Services
                         _ = MetadataCache.GetOrComputeDurationAsync(f);
                         return true;
                     }
-                    if (minSec > 0 && dur.Value < minSec) return false;
+                    // "Loop short videos" on: a short clip stays in the pool and replays in place.
+                    if (Video.VideoMinLoop.FilterDropsShortClip(App.Settings?.Current?.MandatoryVideoLoopShortClips == true,
+                            minSec, IsFloating, dur.Value)) return false;
                     return true;
                 }).ToList();
                 App.Logger?.Debug("VideoService: {Before} -> {After} after duration filter [{Min}s, {Max}s]",

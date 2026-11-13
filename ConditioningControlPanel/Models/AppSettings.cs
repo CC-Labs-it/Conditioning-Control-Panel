@@ -1559,6 +1559,16 @@ namespace ConditioningControlPanel.Models
             set { _videoMinDurationSeconds = Math.Max(0, value); OnPropertyChanged(); }
         }
 
+        // On: a clip shorter than the minimum is kept and replayed in place until the minimum has
+        // played, then ends once (Services/Video/VideoMinLoop). Off (default, and for every older
+        // settings file, which has no such key): the minimum only skips shorter clips, as before.
+        private bool _mandatoryVideoLoopShortClips = false;
+        public bool MandatoryVideoLoopShortClips
+        {
+            get => _mandatoryVideoLoopShortClips;
+            set { _mandatoryVideoLoopShortClips = value; OnPropertyChanged(); }
+        }
+
         private int _videoMaxDurationSeconds = 0;
         public int VideoMaxDurationSeconds
         {
