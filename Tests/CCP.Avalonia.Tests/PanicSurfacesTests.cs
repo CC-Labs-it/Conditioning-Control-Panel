@@ -148,6 +148,7 @@ public sealed class PanicSurfacesTests
         "program-moments",
         "program-session",
         "remote-haptics",
+        "wallpaper",
         "takeover",
         "program-session",
         "browser-media",

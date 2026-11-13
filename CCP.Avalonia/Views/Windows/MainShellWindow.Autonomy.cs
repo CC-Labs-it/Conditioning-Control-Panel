@@ -9,7 +9,7 @@
 // and available, else a preset phrase through the tube), Mind Wipe (only once CoreMindWipe is
 // seeded). Never picked here (CanPerform false, exactly as WPF skips an unavailable action):
 // Spiral/Brain Drain pulses are not WPF candidates. Web Video needs the browser media/fullscreen
-// service; Wallpaper needs the platform wallpaper service. Spoken Mantra uses the voice funnel.
+// service. Local wallpaper uses WallpaperHost. Spoken Mantra uses the voice funnel.
 // Banner, countdown, event audio and diagnostic Test are wired. Force Start is a collapsed WPF
 // debug control. Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AutonomyActionType.Subliminal => CoreSubliminal.ShowProvider != null,
             AutonomyActionType.LockCard => CoreLockCard.ShowHandler != null,
             AutonomyActionType.Video => CoreEngine.Video != null,
+            AutonomyActionType.WallpaperShuffle => Platform.WallpaperHead.Service != null,
             AutonomyActionType.StartBubbles => CoreBubbles.StartAction != null,
             AutonomyActionType.BouncingText => CoreBouncingText.StartAction != null,
             // WPF SelectAction's mantraOk: engine up and idle, no prompt in flight, the tube shown and the
@@ -122,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (announced) TakeoverAnnouncerOverlay.Announce(AutonomyScheduler.TakeoverEffectLabel(a));
             switch (a)
             {
+                case AutonomyActionType.WallpaperShuffle: _ = TriggerWallpaperChangeAsync(); break;
                 case AutonomyActionType.Flash: CoreFlash.ShowProvider?.Invoke(); break;
                 case AutonomyActionType.Subliminal:
                     if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
@@ -149,6 +151,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
             }
+        }
+
+        private int _wallpaperGen, _wallpaperStopGen;
+        /// <summary>WPF Services/AutonomyService.cs:1158-1165 + WallpaperService.cs:130: one local shuffle, reverted
+        /// after the pulse unless Keep is on; a newer pulse or a stop cancels the older revert.</summary>
+        internal async System.Threading.Tasks.Task TriggerWallpaperChangeAsync()
+        {
+            var host = Platform.WallpaperHead.Service;
+            if (host == null) return;
+            var stopGen = _wallpaperStopGen;
+            if (!await host.ShuffleAsync() || stopGen != _wallpaperStopGen) return;
+            var gen = ++_wallpaperGen;
+            if (CoreSettings.Current.WallpaperEnabled) return;
+            PulseTimer(() =>
+            {
+                if (gen == _wallpaperGen && !CoreSettings.Current.WallpaperEnabled)
+                    _ = host.DeactivateAsync();
+            }, TimeSpan.FromSeconds(CoreSettings.Current.WallpaperPulseSeconds));
         }
 
         /// <summary>WPF PulsePinkFilter: boost the tint for 30 s, then hand it back. Skipped while a
@@ -248,6 +268,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void CancelAutonomyPulses()
         {
             _pulseGen++;
+            _wallpaperGen++;
+            _wallpaperStopGen++;
+            if (!CoreSettings.Current.WallpaperEnabled) _ = Platform.WallpaperHead.Service?.DeactivateAsync();
             if (_bubblesPulse) { _bubblesPulse = false; CoreBubbles.Stop(); }
             if (_bouncingPulse) { _bouncingPulse = false; CoreBouncingText.Stop(); }
             EndPinkPulse(cancelled: true);

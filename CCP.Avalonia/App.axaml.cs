@@ -693,6 +693,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
@@ -1542,6 +1543,7 @@ namespace ConditioningControlPanel.Avalonia
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
+            try { Platform.WallpaperHead.Service?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 
