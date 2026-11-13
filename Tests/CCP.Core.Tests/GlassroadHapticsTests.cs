@@ -77,12 +77,14 @@ public class GlassroadHapticsTests
     [Fact]
     public void Stop_ClearsRaceLayer_LeavesOtherLayers()
     {
-        using var service = new ConditioningControlPanel.Services.HapticService(new HapticSettings { Enabled = true });
         var old = ConditioningControlPanel.CoreHaptics.Service;
         var oldPremium = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
         try
         {
+            // The service starts its mixer in the constructor. Open the gate before that loop
+            // can observe the previous entitlement and clear the layers under test.
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
+            using var service = new ConditioningControlPanel.Services.HapticService(new HapticSettings { Enabled = true });
             ConditioningControlPanel.CoreHaptics.Service = service;
             service.SetLayer(HapticLayer.Race, 0.8);
             service.SetLayer(HapticLayer.Video, 0.3);
