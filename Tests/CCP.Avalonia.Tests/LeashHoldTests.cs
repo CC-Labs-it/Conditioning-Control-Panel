@@ -572,4 +572,32 @@ public sealed class LeashHoldTests
         var word = rows[0].GetLogicalDescendants().OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-step-word");
         Assert.Equal(Loc.Get("leash_step_seen"), word.Text);
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RaceShellEscape_HoldsUntilItsKeyUp_ThenTheProbeWhenTheShellLetsGo(bool focusLost) => WithPortalShell(() => true, (shell, clock) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        using var p = LinuxRaceHostTests.StartCat();
+        var (provider, key) = (ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Shell, CoreSettings.Current.PanicKey);
+        var host = new ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost(new ConditioningControlPanel.Avalonia.Views.Games.GameWindow(), p, _ => { }, () => false);
+        try
+        {
+            (CoreSettings.Current.PanicKey, ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Shell) = ("Escape", () => shell);
+            void Press(int seq) { host.ReadFrame(new Newtonsoft.Json.Linq.JObject { ["type"] = "shell-escape", ["sequence"] = seq, ["displayBackend"] = "wayland" }); Dispatcher.UIThread.RunJobs(); }
+            Press(1);
+            X11PanicKey.PanicReleased?.Invoke(); Dispatcher.UIThread.RunJobs();   // XWayland's synthesized release is not this key's
+            for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.True(LeashHoldRing.IsShown);
+            host.Receive(new Newtonsoft.Json.Linq.JObject { ["type"] = "shell-escape-up" });
+            Assert.False(LeashHoldRing.IsShown);
+            Press(2);   // Escape down again, then the shell lets go of it without a key-up: the key probe carries the hold
+            if (focusLost) host.Receive(new Newtonsoft.Json.Linq.JObject { ["type"] = "shell-focus", ["active"] = false });
+            else { host.Dispose(); host.Dispose(); Assert.Null(ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Current); }
+            for (int t = 250; t <= 5000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.NotNull(LeashCutConfirmWindow.Current);
+        }
+        finally { host.Dispose(); (ConditioningControlPanel.Avalonia.Views.Games.LinuxRaceHost.Shell, CoreSettings.Current.PanicKey) = (provider, key); }
+    });
 }
