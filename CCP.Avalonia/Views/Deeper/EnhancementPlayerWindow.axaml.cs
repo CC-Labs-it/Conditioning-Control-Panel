@@ -139,6 +139,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
         private string? _audioPath;
         private int _audioLoad;
+        private bool _audioDurationRemembered;
+        internal Action<string?, double> RememberAudioDuration = MediaDurationCache.Remember;
         private bool _closing;
 
 
@@ -680,6 +682,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             StopAudio();
             var load = _audioLoad;
             _audioPath = path;
+            _audioDurationRemembered = false;
             _txtAudioPath.Text = path;
             _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
             ShowMediaPaneFor(MediaTypes.Audio);
@@ -1011,6 +1014,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 _currentSec = _localAudio.PositionSeconds;
                 _durationSec = _localAudio.DurationSeconds;
+                if (!_audioDurationRemembered && _durationSec > 0 && double.IsFinite(_durationSec))
+                {
+                    _audioDurationRemembered = true;
+                    RememberAudioDuration(_audioPath, _durationSec);
+                }
             }
 
             _txtCurrent.Text = FormatTime(_currentSec);
@@ -1154,6 +1162,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             _loadedEnhancement = enh;
             _loadedFilePath = path;
+            var name = string.IsNullOrEmpty(enh?.Metadata?.Name) ? "(untitled)" : enh.Metadata.Name;
+            Title = enh == null ? Loc.Get("deeper_player_title")
+                : string.Format(Loc.Get("deeper_player_window_title_fmt"), name);
 
             if (enh == null)
             {
