@@ -1415,6 +1415,7 @@ namespace ConditioningControlPanel.Avalonia
                 shell.Opened += (_, _) => shell.StartQuickRecalHotkey();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
                 Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
+                Views.Windows.EmiDesk.EmiDeskService.Instance.WireAppEvents(shell.Autonomy, Platform.PulseMicSource.Speech, dailyFree);
                 // Do-not-disturb reads the foreground app: user32 on Windows (as WPF DoNotDisturbGuard), X elsewhere.
                 ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
                 // Linux: one toast naming the distro's install command for any missing runtime library
@@ -1681,6 +1682,7 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
