@@ -902,6 +902,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
+                Platform.AudioSyncHost.Start(CoreHaptics.Service, Settings.Current.Haptics.AudioSync);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
                 StartRichPresence();
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
@@ -1655,6 +1656,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopBrainDrainQuestMinutes(); } catch { }
             try { Platform.BrainDrainPlayer.Instance?.Stop(); } catch { }
             try { MantraChant.Dispose(); } catch { } // WPF App.xaml.cs:6529
+            try { Platform.AudioSyncHost.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { Platform.WallpaperHead.Service?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }
