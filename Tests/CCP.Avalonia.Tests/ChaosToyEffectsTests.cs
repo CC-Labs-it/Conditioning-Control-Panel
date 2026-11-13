@@ -280,8 +280,8 @@ public sealed class ChaosToyEffectsTests
             try
             {
                 ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
-                Equip("e_stim", 1);
-                ChaosRunHost.UseToyById("e_stim");
+                Equip("freeze_trigger", 1);   // still inert (e_stim is wired since restack b64)
+                ChaosRunHost.UseToyById("freeze_trigger");
                 Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
                 var toy = Equip("vibe_popping", 1);
                 var live = Spawn(true);

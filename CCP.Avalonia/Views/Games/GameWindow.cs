@@ -150,18 +150,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow); }
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
-            var window = new GameWindow(spec);
-            if (spec.Id == GlassroadId && UseLinuxRaceCard())
+            if (spec.Id == FypId) OpenFypVisit();
+            try
             {
-                window.ShowRaceCard();
-                window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                var window = new GameWindow(spec);
+                if (spec.Id == GlassroadId && UseLinuxRaceCard())
+                {
+                    window.ShowRaceCard();
+                    window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                }
+                else window.Load(Server(), room);
+                window.Show();
+                // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
+                if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
+                    window.AttachJustDropOwner(shell);
+                return window;
             }
-            else window.Load(Server(), room);
-            window.Show();
-            // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
-            if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
-                window.AttachJustDropOwner(shell);
-            return window;
+            catch
+            {
+                if (spec.Id == FypId) CloseFypVisit();
+                throw;
+            }
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
@@ -171,6 +180,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
@@ -178,6 +188,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Content = Web;
             Web.WebMessage += OnPageMessage;
+            PropertyChanged += (_, e) =>
+            {
+                if (!IsBreakout || e.Property != WindowStateProperty) return;
+                RoomMinimizedChanged(WindowState == WindowState.Minimized);
+            };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             if (IsDtrh)
@@ -187,9 +202,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
-            Activated += (_, _) => FunnelPageMessage.OnAppActivated();   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _closing = true; CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) DisableFypEyes(); StopBreakoutAccessWatch(); _raceRooms.Clear(); };
+            Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
+            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
@@ -270,6 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "media-request":
                     // WPF BackRoomBridge.cs:208 -> OnMediaRequestAsync: the station's pictures for this sit-down.
                     // The walk touches every library file, so it runs off the UI thread (WPF OffUi); the reply is posted back.
+                    if (IsBreakout) { HandleBreakoutMedia(o); break; }
                     var reqId = (string?)o["reqId"];
                     int count = GameMediaManifest.MediaCount(o["count"]?.Type == JTokenType.Integer ? (int?)o["count"] : null);
                     // The library is walked once per window, like WPF's FlashService snapshot, not on every sit-down.
@@ -282,6 +298,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         catch (Exception ex) { Log.Debug("[Game] media deal failed: {E}", ex.Message); deal = GameMediaManifest.Deal(new(), reqId, 0, count); }
                         Dispatcher.UIThread.Post(() => Post(deal));
                     });
+                    break;
+                case "fx-release" when IsBreakout:
+                    _backRoomFx?.Release((string?)o["token"] ?? "", (string?)o["station"] ?? "");
+                    break;
+                case "station-close" when IsBreakout:
+                    _backRoomFx?.ReleaseStation((string?)o["station"] ?? "");
+                    break;
+                case "fx" when IsBreakout:
+                    if (!_shellExiting && !_closing && !_roomMinimized) FireRoomFx(o);
+                    else Post(new { type = "fx-ack", token = (string?)o["token"], fired = Array.Empty<string>(),
+                        skipped = new[] { new { prim = (string?)o["fxId"] ?? "", why = "busy" } } });
                     break;
                 case "fx":
                     // WPF BackRoomBridge.OnFx (:479) answers every fx with one fx-ack, or the page waits out its 4 s
@@ -302,6 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
+                    _backRoomFx?.CancelAll();
                     _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;
@@ -351,6 +379,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var motion = CoreSettings.Current.MotionLevel;
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
+            var settings = CoreSettings.Current;
+            frame["intensity"] = ConditioningControlPanel.Services.BackRoom.BackRoomWire.IntensityWire(settings, motion);
+            frame["intensityChoice"] = ConditioningControlPanel.Services.BackRoom.BackRoomWire.IntensityChoiceWire(settings);
+            frame["gates"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.GatesWire(settings));
+            frame["media"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.MediaWire(settings));
+            frame["sp"] = settings.SkillPoints;
+            frame["invertLook"] = settings.BackRoomInvertLook;
             return frame;
         }
 

@@ -1,10 +1,15 @@
 using System;
 using System.Linq;
+using System.IO;
+using System.Threading;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -18,15 +23,26 @@ namespace CCP.Avalonia.Tests;
 public sealed class EmiDeskSettingsSpeechTests
 {
     private const string Lines = """{"version":1,"moments":{"firstContact":{"priority":3,"pools":["greeting"],"limit":{"per":"ever","max":1}},"desktopFirstBoot":{"priority":3,"pools":["boot"]},"resized":{"priority":3,"pools":["spicy"]},"panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]},"dismissed":{"hold":true,"holdMs":6000,"pools":["sulk"]},"wordless":{"priority":3,"pools":["face"]}},"pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],"boot":[{"id":"boot","t":"desktop hello","spice":0}],"spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],"quiet":[{"id":"quiet","t":"","spice":0}],"sulk":[{"id":"sulk","t":"","spice":0,"face":"T_T"}],"face":[{"id":"face","t":"","spice":0,"face":"o_o"}]}}""";
-    private static Task InDesk(Func<EmiDeskService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static async Task DrainEmiSave()
+    {
+        var timerField = typeof(EmiState).GetField("_saveTimer", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var timer = (Timer?)timerField.GetValue(null);
+        timerField.SetValue(null, null);
+        if (timer != null) await timer.DisposeAsync();
+        Dispatcher.UIThread.RunJobs();
+    }
+    private static Task InDesk(Func<EmiDeskService, Task> body, bool isolated = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        await DrainEmiSave();
+        var state = EmiState.Current;
+        var stateJson = JsonConvert.SerializeObject(state);
         var previous = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
-        var desk = EmiDeskService.Instance;
+        var desk = isolated ? new EmiDeskService() : EmiDeskService.Instance;
         var previousEngine = desk.LineEngine;
         CoreSettings.ServiceProvider = () => settings;
         desk.LineEngine = EmiLineEngine.FromJson(Lines);
@@ -43,10 +59,154 @@ public sealed class EmiDeskSettingsSpeechTests
             desk.Window?.ShutDown();
             Dispatcher.UIThread.RunJobs();
             desk.LineEngine = previousEngine;
+            await DrainEmiSave();
+            JsonConvert.PopulateObject(stateJson, state, new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
+            EmiState.SaveNow();
             settings.SaveImmediate();
             CoreSettings.ServiceProvider = previous;
         }
     });
+    [Fact]
+    public Task FypOpen_DrawsRealAskAndPinsOnlyOnYes() => InDesk(async desk =>
+    {
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var state = EmiState.Current;
+        var pins = state.Pins.ToList();
+        var bedtime = state.BedtimeUntil;
+        try
+        {
+            state.Pins.Clear();
+            state.BedtimeUntil = DateTime.MinValue;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreSettings.Current.EmiDeskOffers = true;
+            CoreSettings.Current.EmiDeskSpice = 2;
+            var lines = JObject.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "emi", "desk-lines.json")));
+            var moment = (JObject)lines["moments"]!["fypOpened"]!;
+            moment["priority"] = 3; moment["scripted"] = true; moment["askOdds"] = 1;
+            moment.Remove("limit");
+            desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
+            var window = desk.Window!;
+            for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+            Assert.False(window.Transiting);
+            desk.Fire("fypOpened");
+            Assert.True(window.AskLive);
+            Assert.Equal("put the feed up top?", window.BubbleText);
+            var border = window.BubbleHost.Children.OfType<Border>().Single();
+            var panel = Assert.IsType<StackPanel>(border.Child);
+            var chips = Assert.IsType<StackPanel>(panel.Children[1]);
+            Assert.Equal(2, chips.Children.Count);
+            Assert.Empty(state.Pins);
+            Assert.IsType<Button>(chips.Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(window.AskLive);
+            Assert.Empty(state.Pins);
+            desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
+            desk.Fire("fypOpened");
+            Assert.True(window.AskLive);
+            Assert.IsType<Button>(chips.Children[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(window.AskLive);
+            Assert.Equal("fyp", state.Pins[0]);
+            Assert.False(EmiLineEngine.EffectFeasibleProbe!("pinTop:fyp"));
+            state.Pins.Clear();
+            desk.LineEngine = EmiLineEngine.FromJson(lines.ToString());
+            desk.Fire("fypOpened");
+            Assert.True(window.AskLive);
+            desk.PanicSilence();
+            Assert.False(window.AskLive);
+            Assert.Empty(state.Pins);
+        }
+        finally
+        {
+            state.Pins.Clear(); state.Pins.AddRange(pins); state.BedtimeUntil = bedtime;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
+
+    [Fact]
+    public async Task DeskHelperRestoresEmiStateAndItsPendingSave()
+    {
+        string before = "";
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            before = JsonConvert.SerializeObject(EmiState.Current);
+            return Task.CompletedTask;
+        });
+        await InDesk(desk =>
+        {
+            Assert.NotEqual(before, JsonConvert.SerializeObject(EmiState.Current));
+            EmiState.SaveSoon(); // keep a fresh debounce armed at helper teardown
+            return Task.CompletedTask;
+        });
+        int count = 0;
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Assert.True(JToken.DeepEquals(JToken.Parse(before), JToken.Parse(JsonConvert.SerializeObject(EmiState.Current))));
+            count = EmiState.Current.SummonCount;
+            EmiState.Current.SummonCount = count + 100; // the next test changes memory without requesting a save
+            return Task.CompletedTask;
+        });
+        try
+        {
+            await Task.Delay(800); // an undrained debounce would write the next test's value
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                Assert.True(JToken.DeepEquals(JToken.Parse(before), JToken.Parse(System.IO.File.ReadAllText(EmiState.FilePath))));
+                return Task.CompletedTask;
+            });
+        }
+        finally
+        {
+            await AvaloniaTestDispatcher.RunAsync(() => { EmiState.Current.SummonCount = count; return Task.CompletedTask; });
+        }
+    }
+    [Theory]
+    [InlineData("hotkey", "hotkey 3 False")]
+    [InlineData("tour", "rail 3 True")]
+    [InlineData("rail", "rail 3 False")]
+    public Task SummonGreetingCarriesRouteAndElapsedMinutes(string why, string expected) => InDesk(async desk =>
+    {
+        desk.Window!.ShutDown();
+        var oldClock = desk.UtcNow;
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        desk.UtcNow = () => now;
+        desk.LineEngine = EmiLineEngine.FromJson("""{"version":1,"moments":{"firstContact":{"priority":3,"pools":["g"]}},"pools":{"g":[{"id":"g","t":"{via} {minutes} {touring}","spice":0}]}}""");
+        try
+        {
+            await desk.Summon(why);
+            now = now.AddMinutes(3);
+            desk.GreetingDue();
+            for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
+            Assert.Equal(expected, desk.Window!.BubbleText);
+        }
+        finally { desk.UtcNow = oldClock; }
+    });
+
+    [Fact]
+    public Task RegisteredHotkeySummonsWithHotkeyContext() => InDesk(async desk =>
+    {
+        desk.Window!.ShutDown();
+        var shared = EmiDeskService.Instance;
+        bool sharedArmed = shared.HotkeyArmed;
+        Assert.NotSame(shared, desk);
+        var oldRegister = desk.RegisterChord;
+        Action? press = null;
+        desk.RegisterChord = (_, _, callback) => { press = callback; return true; };
+        desk.LineEngine = EmiLineEngine.FromJson("""{"version":1,"moments":{"firstContact":{"priority":3,"pools":["g"]}},"pools":{"g":[{"id":"g","t":"{via}","spice":0}]}}""");
+        try
+        {
+            desk.ApplyHotkey();
+            Assert.True(desk.HotkeyArmed);
+            Assert.Equal(sharedArmed, shared.HotkeyArmed);
+            Assert.NotNull(press);
+            press!();
+            Dispatcher.UIThread.RunJobs();
+            await Task.Yield();
+            desk.GreetingDue();
+            for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
+            Assert.Equal("hotkey", desk.Window!.BubbleText);
+        }
+        finally { desk.RegisterChord = oldRegister; }
+    }, isolated: true);
+
     [Fact]
     public Task SpicePickerChangesWhichLinesReachTheWidget() => InDesk(desk =>
     {

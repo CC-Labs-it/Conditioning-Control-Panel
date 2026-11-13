@@ -131,11 +131,15 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 // thread swaps it, and never while a frame is in flight.
                 if (_back?.Width != size) { _back?.Dispose(); _back = new SKBitmap(new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul)); }
                 var back = _back;
+                // The frame in flight holds this control only weakly: a closed window must not stay rooted
+                // (with its whole shell) by a draw that a busy thread pool or a queued post has not finished.
+                var self = new WeakReference<AnimatedLogoImage>(this);
                 _render = Task.Run(() =>
                 {
                     using (var canvas = new SKCanvas(back)) renderer.Draw(canvas, size, size, phase, drive);
                     return back;
-                }).ContinueWith(t => Dispatcher.UIThread.Post(() => Publish(t)), TaskScheduler.Default);
+                }).ContinueWith(t => Dispatcher.UIThread.Post(() => { if (self.TryGetTarget(out var logo)) logo.Publish(t); }),
+                    TaskScheduler.Default);
             }
             catch (Exception ex) { _failed = true; Stop(); Log.Debug("logo animation fallback: {E}", ex.Message); }
         }

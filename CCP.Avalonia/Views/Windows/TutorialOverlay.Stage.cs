@@ -7,6 +7,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Tours;
 using HeadStep = ConditioningControlPanel.Avalonia.Tours.TutorialStep;
@@ -44,6 +45,60 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static readonly TimeSpan FadeOutDuration = TimeSpan.FromMilliseconds(200);
         private static Transitions OpacityFade(TimeSpan d) =>
             new() { new DoubleTransition { Property = OpacityProperty, Duration = d } };
+        private Window? _tutorialMainWindow;
+        private OverlayLayer? _mainDimLayer;
+        private Border? _mainDim;
+        private IDisposable? _mainDimBoundsSub;
+
+        // WPF TutorialOverlay.xaml.cs:360-396 covers the main window even when the card is
+        // on a dialog. This in-window portion also works on Wayland without taking focus.
+        private void UpdateMainWindowDim(bool blockClicks)
+        {
+            if (!_live || !IsOnStage || !blockClicks || _tutorialMainWindow == null ||
+                ReferenceEquals(_tutorialMainWindow, _targetWindow))
+            {
+                RemoveMainWindowDim();
+                return;
+            }
+            if (_mainDim != null) return;
+            OverlayLayer? layer = null;
+            try { layer = OverlayLayer.GetOverlayLayer(_tutorialMainWindow); } catch { /* template not applied */ }
+            if (layer == null) return;
+            _mainDimLayer = layer;
+            _mainDim = new Border { Background = new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0)),
+                Width = layer.Bounds.Width, Height = layer.Bounds.Height };
+            layer.Children.Add(_mainDim);
+            _mainDimBoundsSub = layer.GetObservable(BoundsProperty).Subscribe(new MainDimBoundsObserver(this));
+            _tutorialMainWindow.Closed += OnMainWindowClosed;
+        }
+
+        private sealed class MainDimBoundsObserver(TutorialOverlay overlay) : IObserver<Rect>
+        {
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
+            public void OnNext(Rect bounds)
+            {
+                if (overlay._mainDim is not { } dim) return;
+                dim.Width = bounds.Width;
+                dim.Height = bounds.Height;
+            }
+        }
+
+        private void OnMainWindowClosed(object? sender, EventArgs e)
+        {
+            RemoveMainWindowDim();
+            _tutorialMainWindow = null;
+        }
+
+        private void RemoveMainWindowDim()
+        {
+            _mainDimBoundsSub?.Dispose();
+            _mainDimBoundsSub = null;
+            if (_tutorialMainWindow != null) _tutorialMainWindow.Closed -= OnMainWindowClosed;
+            if (_mainDimLayer != null && _mainDim != null) _mainDimLayer.Children.Remove(_mainDim);
+            _mainDimLayer = null;
+            _mainDim = null;
+        }
 
         /// <summary>The tour's card left the screen (finished, skipped, panic, host closed). Hides
         /// Window.Closed: a live overlay is never a shown window, so the base event would never fire.</summary>
@@ -141,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void Detach()
         {
+            RemoveMainWindowDim();
             try { _layerBoundsSub?.Dispose(); } catch { }
             _layerBoundsSub = null;
             if (_targetWindow != null)
@@ -169,6 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TutorialHead.EndingInstantly || _stage == null || !IsOnStage) { Teardown(); return; }
             _fadingOut = true;
             _closed = true;
+            // The tour has ended: hand the main window its input back now, not after the card's fade.
+            RemoveMainWindowDim();
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
             UnsubscribeAdvanceTrigger();
@@ -196,6 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnStageWindowClosed(object? sender, EventArgs e)
         {
+            RemoveMainWindowDim();
             // Scripted host swaps may close the old dialog before opening the next one.
             Dispatcher.UIThread.Post(() =>
             {

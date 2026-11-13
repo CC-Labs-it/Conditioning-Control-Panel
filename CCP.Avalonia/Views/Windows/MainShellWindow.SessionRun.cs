@@ -7,8 +7,6 @@
 // BtnPauseSession_Click (:2021) too.
 // ponytail: remaining gaps include remote gates and punch-card/Bark/profile-sync hooks.
 // Video teardown is synchronous (MandatoryVideoOverlay.CloseAll); playback gets WPF's 3s recap wait.
-// ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
-// "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
 
 using System;
 using System.Threading.Tasks;
@@ -16,6 +14,7 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -41,12 +40,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (selected is null || !selected.IsAvailable) return;
 
             // WPF's text here is not localised (MainWindow.Presets.cs:1572); kept verbatim.
-            var confirmed = await MessageDialog.ConfirmAsync(this, $"🌅 Start {selected.Name}?",
+            var dialog = new MessageDialog($"🌅 Start {selected.GetModeAwareName()}?",
                 $"Duration: {selected.DurationMinutes} minutes\n\n" +
                 "Your current settings will be temporarily replaced.\n" +
                 "They will be restored when the session ends." +
-                "\n\nReady to begin?");
-            if (confirmed) StartSession(selected);
+                "\n\nReady to begin?", showCancel: true, cancelText: "Not yet");
+            // WPF uses fixed English copy; render its play marker with the head's Fluent icon.
+            var startText = LocalizationManager.Instance.GetEnglish("btn_start_session");
+            var yes = dialog.FindControl<Button>("BtnOk")!;
+            yes.Content = new IconLabel { Text = startText ?? "Start Session", Kind = startText == null ? IconKind.Play : null };
+            yes.IsDefault = false;
+            if (await dialog.ShowDialogSafe<bool?>(this) == true) StartSession(selected);
         }
 
         /// <summary>WPF StartSession: the engine start (through the portal wrapper, so the panic key is
@@ -65,6 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         WarnIfFlashLibraryEmpty();
                     App.Achievements?.CheckRelapse();
                     StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
+                    _suppressSessionSummaryUntil = DateTime.MinValue;
                     runner.Start(session);
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
                     Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session); // WPF SessionEngine.cs:247
@@ -100,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // ShowStyledDialog (MainWindow.Presets.cs:695-813) sets no default/cancel
             // and does not assign initial button focus. Enter/Space must not confirm on open.
             var dialog = new MessageDialog(Loc.Get(titleKey),
-                Loc.GetF(bodyKey, session.Icon ?? "", session.Name ?? "",
+                Loc.GetF(bodyKey, session.Icon ?? "", session.GetModeAwareName(),
                     $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}",
                     $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}",
                     potentialXP, runner.PauseCount > 0 ? Loc.GetF("msg_plus_pause_penalty_0", runner.XPPenalty) : ""),
@@ -118,8 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Action<Action> ResumeEffect = StartEffect;
 
         /// <summary>WPF BtnPauseSession_Click: resume at once; a pause asks first (it costs 100 XP)
-        /// unless SkipPauseXpWarning. ponytail: MessageDialog has no "don't ask again" box, so the opt-out
-        /// is only settable from the WPF head. Lockdown refuses the pause, never the resume (LockdownPauseRule).</summary>
+        /// unless SkipPauseXpWarning. Lockdown refuses the pause, never the resume (LockdownPauseRule).</summary>
         private async void BtnPauseSession_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (App.Sessions is not { IsRunning: true } runner) return;
@@ -146,10 +150,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
                 return;
             }
-            var confirmed = CoreSettings.Current.SkipPauseXpWarning || await MessageDialog.ConfirmAsync(this,
-                Loc.Get("title_pause_session_confirm"),
-                Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
-            if (!confirmed || !runner.IsRunning) return;
+            if (!CoreSettings.Current.SkipPauseXpWarning)
+            {
+                var dialog = new MessageDialog(Loc.Get("title_pause_session_confirm"),
+                    Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty),
+                    showCancel: true, okText: Loc.Get("btn_yes_pause"), cancelText: Loc.Get("btn_keep_going"));
+                var checkbox = dialog.FindControl<CheckBox>("DontAskAgain")!;
+                checkbox.Content = new TextBlock { Text = Loc.Get("chk_dont_ask_again") };
+                checkbox.IsVisible = true;
+                dialog.FindControl<Button>("BtnOk")!.IsDefault = false;
+                var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
+                if (!confirmed || !runner.IsRunning) return;
+                if (checkbox.IsChecked == true)
+                {
+                    CoreSettings.Current.SkipPauseXpWarning = true;
+                    CoreSettings.Save();
+                }
+            }
             runner.Pause();
             // WPF SessionEngine.cs:530 -> OverlayService.Stop:471: pause drops sustained holds too.
             SpiralOverlay.Stop();
@@ -192,14 +209,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             && ConditioningControlPanel.Services.Safety.PanicAftermath.RemoteResumeRefused(
                 _panicPause, runner.CurrentSession, runner.RunNumber, runner.IsPaused, runner.PauseCount);
 
-        internal void ResumeSessionFromRemote()
+        internal void ResumeSessionFromRemote() => ResumeSessionFromRemote(() => true);
+
+        internal void ResumeSessionFromRemote(Func<bool> stillCurrent)
         {
             // WPF :1392: a remote or voice resume cannot undo a local panic's pause.
             if (LocalPanicHoldsSession) return;
             if (App.Sessions is not { IsRunning: true, IsPaused: true }) return;
             StartEffect(() =>
             {
-                if (LocalPanicHoldsSession
+                if (!stillCurrent() || LocalPanicHoldsSession
                     || App.Sessions is not { IsRunning: true, IsPaused: true } runner) return;
                 runner.Resume();
                 PinkFilterOverlay.Refresh(this);
@@ -283,17 +302,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OnSessionLogReady + ShowSessionSummaryWhenClear: the recap opens by itself,
         /// completed or ended early. Raised on the runner's thread; hops to the UI thread.</summary>
-        private SessionCompleteWindow? _liveSessionRecap;
+        internal SessionCompleteWindow? _liveSessionRecap;
 
         /// <summary>Set by <see cref="EndProgramSessionQuietly"/>; the next recap is skipped once.</summary>
-        private bool _suppressNextSessionSummary;
+        internal DateTime _suppressSessionSummaryUntil;
 
         internal Func<TimeSpan, Task> SessionSummaryDelay = delay => Task.Delay(delay);
 
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
             if (_windowClosed || _exitRequested) return;
-            if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
+            if (DateTime.UtcNow < _suppressSessionSummaryUntil) { _suppressSessionSummaryUntil = DateTime.MinValue; return; }
             var log = e.Log;
             Dispatcher.UIThread.Post(async () =>
             {
@@ -322,8 +341,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         dialog.ShowActivated = false;
                         if (IsVisible) dialog.Show(this); else dialog.Show();
                     }
-                    else if (IsVisible) _ = dialog.ShowDialogSafe(this);
-                    else dialog.Show();   // shell in the tray: an owned modal needs a visible owner
+                    else
+                    {
+                        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
+                        {
+                            if (!dialog.IsVisible) return;
+                            dialog.Topmost = false;
+                            dialog.Activate();
+                        }, DispatcherPriority.Render);
+                        if (IsVisible) _ = dialog.ShowDialogSafe(this);
+                        else dialog.Show();   // shell in the tray: an owned modal needs a visible owner
+                    }
                 }
                 catch (Exception ex) { Log.Error(ex, "Failed to show post-session log dialog"); }
             }, DispatcherPriority.Background);

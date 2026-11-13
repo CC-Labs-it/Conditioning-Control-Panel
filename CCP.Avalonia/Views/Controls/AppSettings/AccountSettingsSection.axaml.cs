@@ -76,19 +76,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             EventHandler<PatreonTier> tier = (_, _) => Post();
             Action chasterChanged = () => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshChaster);
             ChasterService? chaster = null;
+            ProviderSubscription? patreon = null, substar = null;
             AttachedToVisualTree += (_, _) =>
             {
                 LocalizationManager.Instance.LanguageChanged += changed;
-                if (AccountSeed.Patreon is { } p) p.TierChanged += tier;
-                if (AccountSeed.SubscribeStar is { } ss) ss.TierChanged += tier;
+                AccountSeed.GraceClosed += Post;
+                patreon = AccountSeed.Patreon; substar = AccountSeed.SubscribeStar;
+                if (patreon != null) patreon.TierChanged += tier;
+                if (substar != null) substar.TierChanged += tier;
                 if ((chaster = ChasterHead.Service) is { } c) { c.ProfileChanged += chasterChanged; c.LinkChanged += chasterChanged; c.LockChanged += chasterChanged; }
                 Refresh();
             };
             DetachedFromVisualTree += (_, _) =>
             {
                 LocalizationManager.Instance.LanguageChanged -= changed;
-                if (AccountSeed.Patreon is { } p) p.TierChanged -= tier;
-                if (AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= tier;
+                AccountSeed.GraceClosed -= Post;
+                if (patreon != null) patreon.TierChanged -= tier;
+                if (substar != null) substar.TierChanged -= tier;
+                patreon = substar = null;
                 if (chaster is { } c) { c.ProfileChanged -= chasterChanged; c.LinkChanged -= chasterChanged; c.LockChanged -= chasterChanged; }
                 chaster = null;
                 _linkCts?.Cancel(); // a Link waiting on the browser frees its callback port with the page
@@ -105,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // WPF MainWindow/MainWindow.Exclusives.cs:296 -> ShowVaultPage -> RefreshVaultCore: gates can move between visits.
             if (PlansView.PlansActive) PlansView.RefreshVault();
         }
-        private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
+        private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (VisualRoot != null) Refresh(); });
 
         /// <summary>Repaints the account/tier card from the account seam. Never throws.</summary>
         internal void RefreshTierBadge()
@@ -309,6 +314,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         private async void BtnPatreonLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("patreon", Find<Button>("BtnPatreonLogin"), "TxtBtnPatreonLogin"));
         private async void BtnSubscribeStarLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("substar", Find<Button>("BtnSubscribeStarLogin"), "TxtBtnSubscribeStarLogin"));
         private async void BtnDiscordLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("discord", Find<Button>("BtnDiscordLogin"), "TxtBtnDiscordLogin"));
+        internal Func<Task>? ReconnectPatreonOverride;
+        internal Task ReconnectPatreonAsync() => ReconnectPatreonOverride?.Invoke()
+            ?? Guard(LinkAsync("patreon", Find<Button>("BtnLinkPatreon"), "TxtBtnLinkPatreon"));
+
         private async void BtnLinkPatreon_Click(object? sender, RoutedEventArgs e) => await Guard(LinkAsync("patreon", Find<Button>("BtnLinkPatreon"), "TxtBtnLinkPatreon"));
         private async void BtnLinkDiscord_Click(object? sender, RoutedEventArgs e) => await Guard(LinkAsync("discord", Find<Button>("BtnLinkDiscord"), "TxtBtnLinkDiscord"));
 

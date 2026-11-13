@@ -86,7 +86,7 @@ public partial class SettingsTabView
         }
     }
 
-    private void RefreshMysteryFace()
+    internal void RefreshMysteryFace()
     {
         string? key = TodayFreeKey();
         CardMystery.Title = Loc.Get("mosaic_free_today");
@@ -99,7 +99,7 @@ public partial class SettingsTabView
             "dtrh" => "Down the Rabbit Hole", _ => Loc.Get("mosaic_daily_gift"),
         };
         int tier = CoreEntitlement.HasPremium ? 0 : key switch
-        { "dtrh" => 2, "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1, _ => 0 };
+        { "dtrh" or "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1, _ => 0 };
         MysteryRevealBadge.Tier = tier;
         MysteryRevealBadge.FreeToday = tier > 0;
         // Repaint on mod changes as well as day/override changes; no decoding on a beat.
@@ -113,7 +113,8 @@ public partial class SettingsTabView
         };
         var brush = MysteryRevealFace.GetLogicalDescendants().OfType<Border>()
             .Select(b => b.Background).OfType<ImageBrush>().First();
-        brush.Source = ModArt.TryLoad("features/" + art + ".png", 512) ?? ModArt.TryLoad("features/mysterybox.png", 512);
+        brush.Source = ModArt.TryLoad("features/" + art + ".png", 512)
+            ?? Windows.MainShellWindow.ModTileVariant("mysterybox", 512);
     }
 
     internal void RequestMysteryFace(bool reveal)

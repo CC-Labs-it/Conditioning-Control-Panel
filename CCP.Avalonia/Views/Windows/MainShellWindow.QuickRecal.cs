@@ -92,6 +92,8 @@ public partial class MainShellWindow
         _quickRecalRegistration = null;
         _cameraHotkeyRegistration?.Dispose();
         _cameraHotkeyRegistration = null;
+        _portalCameraHotkey?.Dispose();
+        _portalCameraHotkey = null;
         WebcamQuickRecalWindow.HotkeyHint = () => null;
     }
 

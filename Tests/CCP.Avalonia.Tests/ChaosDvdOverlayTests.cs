@@ -308,4 +308,47 @@ public sealed class ChaosDvdOverlayTests
         });
     }
 
+    [Fact]
+    public async Task PerLogoWindowsSamplePinOnBirthAndReuseAndBoundThePool()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var saved = (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, CoreSettings.Current.ChaosDvdSharedHost, CoreSettings.Current.ChaosPinOnTop);
+            var host = new Window();
+            try
+            {
+                host.Show();
+                CoreSettings.Current.ChaosDvdSharedHost = false;
+                CoreSettings.Current.ChaosPinOnTop = false;
+                ChaosDvdOverlay.CanOverlay = () => true;
+                ChaosDvdOverlay.PrepareWindow = (_, _) => true;
+                ChaosDvdOverlay.FrameSourceFor = _ => new SteppedFrames();
+                ChaosDvdOverlay.PlaySfx = (_, _) => { };
+                for (var i = 0; i < 10; i++) ChaosDvdOverlay.Launch(host, 1, 1, 1, count: 2);
+                var windows = ChaosDvdOverlay.Windows.ToArray();
+                Assert.True(windows.Length > 12);
+                Assert.All(windows, w => Assert.False(w.Topmost));
+                ChaosDvdOverlay.Advance(2);
+                ChaosDvdOverlay.Advance(0.3);
+                Assert.Equal(12, ChaosDvdOverlay.Windows.Count);
+                var pooled = ChaosDvdOverlay.Window!;
+                CoreSettings.Current.ChaosPinOnTop = true;
+                ChaosDvdOverlay.Launch(host, 1, 1, 1);
+                Assert.Same(pooled, ChaosDvdOverlay.Window);
+                Assert.True(pooled.Topmost);
+                ChaosDvdOverlay.CloseActive();
+                Assert.Empty(ChaosDvdOverlay.Windows);
+                Assert.All(windows, w => Assert.False(w.IsVisible));
+            }
+            finally
+            {
+                ChaosDvdOverlay.CloseActive();
+                (ChaosDvdOverlay.CanOverlay, ChaosDvdOverlay.PrepareWindow, ChaosDvdOverlay.FrameSourceFor, ChaosDvdOverlay.PlaySfx, CoreSettings.Current.ChaosDvdSharedHost, CoreSettings.Current.ChaosPinOnTop) = saved;
+                host.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
 }

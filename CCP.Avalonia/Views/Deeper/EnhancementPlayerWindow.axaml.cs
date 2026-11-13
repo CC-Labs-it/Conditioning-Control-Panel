@@ -109,8 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
     ///         host's <c>Bind</c> and the rule engine are in Core too, but this head has no
-    ///         <c>IPlaybackTimeSource</c> for the web pane and seeds no
-    ///         <c>EnhancementHostService.DispatcherFactory</c>/<c>WebcamProvider</c>, so a loaded
+    ///         <c>IPlaybackTimeSource</c> for the web pane (App seeds the dispatcher; the webcam adapter is seeded in .Webcam.cs), so a loaded
     ///         enhancement's rules never fire here.</item>
     ///   <item><b>WebView2.</b> The WPF pane hosted a <c>wv2:WebView2</c> driven through
     ///         <c>CoreWebView2</c>. <see cref="Controls.WebHost"/> covers more of that than the
@@ -722,7 +721,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        // WPF MainWindow.xaml.cs:2046 and player:2527: panic pauses every player, including pending opens.
+        // WPF MainWindow.xaml.cs:2067 and player:2527: panic pauses every player, including pending opens.
         internal static void PanicPauseAll()
         {
             foreach (var p in OpenPlayers.ToArray())
@@ -1758,9 +1757,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (w <= 0 || _miniTotalSeconds <= 0) return;
             var frac = Math.Clamp(xInCanvas / w, 0, 1);
             _currentSec = frac * _miniTotalSeconds;
+            // WPF EnhancementPlayerWindow.Mission3.cs:777-789 clamps audio to its duration.
+            if (_localAudio != null)
+            {
+                _currentSec = Math.Clamp(_currentSec, 0, _durationSec);
+                _localAudio.PositionSeconds = _currentSec;
+            }
             UpdateMiniPlayheadX();
-            // WPF EnhancementPlayerWindow.xaml.cs:2855: seek the current transport.
-            if (_localAudio != null) _localAudio.PositionSeconds = _currentSec;
             if (_isVideoMode && _videoNavigated)
             {
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke(

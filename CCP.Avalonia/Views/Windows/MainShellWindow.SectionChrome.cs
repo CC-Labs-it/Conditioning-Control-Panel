@@ -12,10 +12,9 @@
 // The section edge (PaintSectionEdge, WPF MainWindow.SectionEdge.cs, 8f4bb7814) is here too: the
 // frame line, the 28 px glow band and the lift in the hue.
 //
-// The edge lift laps at Full and rests at Reduced. Still missing: the edge fog the band thins for
-// (AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthHome), the "Moved" redirects and their note, and the "Cloud sync
-// issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
+// The edge lift laps at Full and rests at Reduced; the edge fog (EdgeParticles, AmbientFxCanvas.EdgeFog)
+// runs at Full and Reduced and thins the band under it. Still missing: the depth painters the wash feeds
+// (PaintDepthHome) and the "Moved" redirects and their note.
 
 using System;
 using System.Linq;
@@ -91,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var section = NavSections.SectionForTab(tab);
                 var pageLabel = section == NavSections.Settings ? CurrentSettingsSectionLabel() : null;
                 PageStrip?.Show(section, tab, pageLabel);
+                PageFavorites?.OnNavigated(section);
                 UpdateNavTitle(section, tab, pageLabel);
                 PaintSectionWash(section);
 
@@ -160,7 +160,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             Opened += (_, _) =>
             {
-                Named<EdgeParticles>("SectionEdgeParticles")?.Mount(NavStripRules.Accent(_washSection ?? NavSections.Home));
+                // WPF InitializeSectionEdge (SectionEdge.cs :94): the first paint mounts the fog strips.
+                PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
                 AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
                 AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome;
             };
@@ -177,7 +178,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
                 PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
-                Named<EdgeParticles>("SectionEdgeParticles")?.Refresh();
                 PageStrip?.UpdateSheenClock();
                 if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
                 if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
@@ -189,12 +189,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug("Motion chrome refresh failed: {E}", ex.Message); }
         }
 
-        /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105) with no fog running (the full band):
-        /// the 3 px line at 0xE6, each band's edge alpha balanced for brightness
-        /// (SectionEdgeRules.GlowAlpha), the lift the hue toward white, hidden at Motion Off.</summary>
+        /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105): the fog strips (Mount re-checks the gate), the 3 px
+        /// line at 0xE6, each band's edge alpha balanced for brightness (SectionEdgeRules.GlowAlpha), 16 px at 70%
+        /// while the fog runs (FogBand/FogBandShare), the lift the hue toward white, hidden at Motion Off.</summary>
         private void PaintSectionEdge(global::Avalonia.Media.Color hue, Models.MotionLevel level, int ms)
         {
-            Named<EdgeParticles>("SectionEdgeParticles")?.Retint(hue);
+            var fog = Named<EdgeParticles>("SectionEdgeParticles");
+            fog?.Mount(hue, ms);
+            bool fogLive = fog?.FogLive == true;
+            byte glowAlpha = (byte)Math.Round(NavStripRules.EdgeGlowAlpha(hue) * (fogLive ? SectionEdgeFogBandShare : 1));
             if (Named<Border>("GlassWindowEdge") is { } line)
             {
                 Fade(line, Border.BorderBrushProperty, ms);
@@ -202,7 +205,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (Named<Panel>("SectionEdgeGlow") is { } glow)
                 foreach (var band in glow.Children.OfType<Border>())
-                    PaintFill(band, NavStripRules.WithAlpha(hue, NavStripRules.EdgeGlowAlpha(hue) / 255.0), ms);
+                {
+                    double depth = fogLive ? SectionEdgeFogBand : SectionEdgeGlowBand;
+                    if (band.VerticalAlignment is global::Avalonia.Layout.VerticalAlignment.Top or global::Avalonia.Layout.VerticalAlignment.Bottom) band.Height = depth;
+                    else band.Width = depth;
+                    PaintFill(band, NavStripRules.WithAlpha(hue, glowAlpha / 255.0), ms);
+                }
             if (Named<SectionEdgeLift>("SectionEdgeLift") is { } lift)
             {
                 lift.Paint(NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
@@ -237,6 +245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF SectionEdgeRules: the line's alpha (about 90%) and the lift's pull to white.</summary>
         internal const byte SectionEdgeLineAlpha = 0xE6;
         internal const double SectionEdgeLiftWhite = 0.35;
+        /// <summary>WPF SectionEdgeRules :28/:61/:63: the band's depth, and under the fog its depth and alpha share.</summary>
+        internal const double SectionEdgeGlowBand = 28, SectionEdgeFogBand = 16, SectionEdgeFogBandShare = 0.7;
 
         /// <summary>WPF PaintSectionInk (:194): publish the four section colors and brushes together.
         /// Avalonia resource notifications have no key filter: eight individual writes re-resolved
@@ -429,19 +439,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private string? _navBaseTitle;
+        private (string? Section, string Tab, string? Page) _navTitleParts = (null, "settings", null);
+        private bool _syncIssueTitle;
+
+        internal void OnSyncHealthChanged(object? sender, int failures)
+        {
+            void Apply()
+            {
+                if (_windowClosed) return;
+                if (failures >= 3) _syncIssueTitle = true;
+                else if (failures == 0) _syncIssueTitle = false;
+                else return;
+                UpdateNavTitle(_navTitleParts.Section, _navTitleParts.Tab, _navTitleParts.Page);
+            }
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) Apply();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(Apply);
+        }
+
 
         /// <summary>WPF UpdateNavTitle (:364): "Conditioning Control Panel - Play › Lobby", the fourth
         /// "you are here" cue. Home's dashboard names only the section.</summary>
         internal void UpdateNavTitle(string? section, string tab, string? pageLabel)
         {
             _navBaseTitle ??= Title;
+            _navTitleParts = (section, tab, pageLabel);
             var sectionLabel = section == null ? null : Loc.Get(NavSections.Find(section)?.LabelKey ?? string.Empty);
             var page = pageLabel ?? (section == NavSections.Home && (string.IsNullOrEmpty(tab) || tab == "settings")
                 ? null : Loc.Get(NavStripTable.PageLabelKey(tab) ?? string.Empty));
-            Title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
+            var title = string.IsNullOrEmpty(sectionLabel) ? _navBaseTitle
                 : string.IsNullOrEmpty(page)
                     ? $"{_navBaseTitle} - {sectionLabel}"
                     : $"{_navBaseTitle} - {sectionLabel} {Loc.Get("nav_crumb_sep")} {page}";
+            Title = _syncIssueTitle ? $"{title} - {Loc.Get("cloud_sync_issue")}" : title;
         }
 
         /// <summary>The label of the Settings section whose pill is checked (null if none). WPF :340.</summary>

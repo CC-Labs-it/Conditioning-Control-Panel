@@ -70,9 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The one relay client (WPF App.RemoteControl). Commands run through Core's gate and table.
         /// Tests swap in a fake-relay client before opening the shell.</summary>
-        internal static Lazy<RemoteRelay> Relay = new(() => App.WireRemoteQuestProgress(new RemoteRelay(
+        internal static Lazy<RemoteRelay> Relay = new(() => Platform.ChasterHead.WireRemoteNotes(App.WireRemoteQuestProgress(new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
-            ExecuteRemoteCommand, RemoteCommands.StopEffects)));
+            ExecuteRemoteCommand, RemoteCommands.StopEffects))));
 
         internal static string? ExecuteRemoteCommand(string action, Newtonsoft.Json.Linq.JObject? parameters)
         {
@@ -83,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 owner.PauseSessionFromRemote();
                 return null;
             }
-            return RemoteCommands.Execute(action, parameters);
+            return Platform.ChasterHead.ExecuteRemote(action, parameters);
         }
 
         private readonly ObservableCollection<string> _log = new();

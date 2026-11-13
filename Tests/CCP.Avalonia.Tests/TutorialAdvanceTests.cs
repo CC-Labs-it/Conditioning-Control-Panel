@@ -204,6 +204,26 @@ public sealed class TutorialAdvanceTests
         }));
 
     [Fact]
+    public Task SavedEventDoesNotAdvanceAnotherTourAfterClosingOverlay() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var button = new Button();
+        button.Click += (_, _) => CoreTutorialEvents.Emit("FileSaved");
+        return WithCard("iht_save", button, (overlay, _, index) =>
+        {
+            CoreTutorialEvents.Emit("FileSaved");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(index, CoreTutorial.CurrentStepIndex);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            overlay.Close();
+            TutorialHead.Service.Start(TutorialType.DeeperEditorInteractiveHTPart2);
+            while (TutorialHead.Service.CurrentStep!.Id != "iht_savedialog") TutorialHead.Service.Next();
+            var nextTourIndex = TutorialHead.Service.CurrentStepIndex;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(nextTourIndex, TutorialHead.Service.CurrentStepIndex);
+        });
+    });
+
+    [Fact]
     public Task SliderAdvancesOnlyOnReleaseInsideRequestedRange() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var slider = new Slider { Minimum = 0, Maximum = 1, Value = 0.1 };

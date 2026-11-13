@@ -49,6 +49,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -88,6 +89,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            if (Platform.AccountSeed.Sync is { } sync)
+            {
+                sync.SyncHealthChanged += OnSyncHealthChanged;
+                Closed += (_, _) => sync.SyncHealthChanged -= OnSyncHealthChanged;
+                OnSyncHealthChanged(sync, sync.ConsecutiveSyncFailures);
+            }
+            void RefreshSyncTitle(object? sender, EventArgs e)
+            {
+                if (_syncIssueTitle) OnSyncHealthChanged(sender, 3);
+            }
+            ConditioningControlPanel.Localization.LocalizationManager.Instance.LanguageChanged += RefreshSyncTitle;
+            Closed += (_, _) => ConditioningControlPanel.Localization.LocalizationManager.Instance.LanguageChanged -= RefreshSyncTitle;
             Closed += (_, _) => Platform.FriendsLanding.Stop(); // WPF Services/Friends/FriendsLanding.cs:75-82: ownerless notices must not hold exit.
             Closed += (_, _) => _directoryPillView.Dispose();
             Opened += (_, _) => StartChatHotkey();
@@ -109,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // see MainShellWindow.FirstRun.cs, which owns both halves.
             HookFirstRun();
             HookDisplayNameAsk();
+            HookProfileLoaded();
 
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
@@ -132,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeProfileBubble(); // MainShellWindow.ProfileBubble.cs (WPF MainWindow ctor): face + reactions
             InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
+            InitializeDailyGiftRows();
             InitializeInboxBadge(); // MainShellWindow.Inbox.cs (WPF MainWindow.Inbox.cs:27)
             InitializeIntakePassNudge();
             InitializeServerAnnouncement(); // MainShellWindow.Announcement.cs (WPF MainWindow.Marquee.cs:688)
@@ -184,6 +199,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
             OnceOpened(ArmPendingRegistration);
             Opened += (_, _) => WireOnlineMeterPill();   // MainShellWindow.OnlineMeter.cs (WPF WireOnlineMeter)
+            // WPF MainWindow.xaml.cs:3852: an offer parked at startup surfaces once a window exists.
+            OnceOpened(() => Platform.RemoteMediaOffer.FlushPending(this));
+            // WPF MainWindow.xaml.cs:3619-3649: offer an update for pre-multi-monitor calibration.
+            Opened += (_, _) =>
+            {
+                try
+                {
+                    var cal = Platform.WebcamTracker.Instance.Calibration;
+                    if (cal?.MonitorBounds != null && string.IsNullOrEmpty(cal.MonitorBounds.DeviceName))
+                        App.Notifications.ShowSticky(WebcamCalibrationWindow.LegacyNoticeKey,
+                            Loc.Get("toast_legacy_calibration"), Helpers.NotificationType.Warning,
+                            Loc.Get("toast_legacy_calibration_action"), async () =>
+                            {
+                                try { await WebcamCalibrationWindow.ShowDialogWithRecalibrate(this); }
+                                catch (Exception ex) { Serilog.Log.Warning(ex, "Recalibrate toast: failed to open calibration window"); }
+                            });
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Recalibrate-suggest check failed: {Error}", ex.Message); }
+            };
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open
@@ -213,7 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // MainWindow.Settings.cs's BtnExit_Click: the real exit, not the X-to-tray close.
-        internal void BtnExit_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnExit_Click(object? sender, RoutedEventArgs e)
         {
             if (LockdownActive)   // WPF MainWindow.Settings.cs:451: say so, then refuse
             {
@@ -221,6 +255,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ConditioningControlPanel.Localization.Loc.Get("msg_you_are_in_lockdown_mode_nthere_is_no_escape"));
                 return;
             }
+            if (CoreEngine.IsRunning && !await Dialogs.MessageDialog.ConfirmAsync(this,
+                ConditioningControlPanel.Localization.Loc.Get("title_confirm_exit"),
+                ConditioningControlPanel.Localization.Loc.Get("msg_engine_is_running_stop_and_exit"),
+                okText: ConditioningControlPanel.Localization.Loc.Get("btn_yes"),
+                cancelText: ConditioningControlPanel.Localization.Loc.Get("btn_no"))) return;
             RequestExit();
         }
     }

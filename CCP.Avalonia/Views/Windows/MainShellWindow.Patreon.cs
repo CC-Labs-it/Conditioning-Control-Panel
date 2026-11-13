@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -57,7 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
         /// must not wipe a patron's settings. Keyword and window awareness reconcile below and the lapse
-        /// stops the mantra chant; OCR, autonomy and the haptics mixer remain follow-ups here.</summary>
+        /// stops mantra chant and Takeover; OCR and the haptics mixer remain follow-ups here.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -65,7 +66,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (CoreEntitlement.HasPremiumProvider is null) return;
+                if (NoteDailyGiftUse(CoreSettings.Current)) CoreSettings.Save();
                 var cleared = Services.EntitlementLapse.Enforce(CoreSettings.Current);
+                if (MaybePostRelockRow(CoreSettings.Current)) CoreSettings.Save();
                 foreach (var f in cleared) Serilog.Log.Information("Entitlement lapsed: {Feature} switched off", f);
                 _lapseUnsaved |= cleared.Count > 0;
                 if (persist && _lapseUnsaved)
@@ -76,6 +79,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF MainWindow.Patreon.cs:108 - the lapse stops the engine, not just the flag.
                 if (cleared.Contains("mantra-chant")) App.MantraChant.Stop(); // WPF MainWindow.Patreon.cs:196
                 if (cleared.Contains("awareness-mode")) App.WindowAwareness.Stop();
+                if (cleared.Contains("takeover"))
+                {
+                    Autonomy.Stop();
+                    TakeoverAnnouncerOverlay.CloseActive();
+                    FollowTakeoverQuestTick(false);
+                    UpdateAutonomyButtonState(false);
+                }
                 // WPF Patreon.cs:152 - the mirror case: entitlement resolving late re-arms what the
                 // settings (and consent) already ask for. Start() re-checks everything itself.
                 var s = CoreSettings.Current;
@@ -87,6 +97,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!Platform.KeywordTriggerHead.Engine.IsActive || !Platform.KeywordAudioRuntime.HasAccess)
                     Platform.KeywordTriggerHead.Sync();
                 if (cleared.Count == 0) return;
+                SyncAwareness();
+                SyncHero();
                 Named<Tabs.BambiTakeoverTabView>("BambiTakeoverTab")?.SyncFromSettings();
                 Named<Tabs.AwarenessTabView>("AwarenessTab")?.SyncAwarenessTabUi();
                 StudioRack?.HapticsPanel.LoadHapticsSettingsToUi();   // haptics Enabled may just have been cleared
@@ -152,10 +164,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 whitelisted: p?.IsWhitelisted == true).Prominent;
         }
 
-        /// <summary>WPF StartPatreonReconnectFromGate. This head's Account Patreon button is empty, so the repair is
-        /// the unified sign-in (which re-links Patreon). A seam so tests do not open the real dialog.</summary>
+        /// <summary>WPF StartPatreonReconnectFromGate: open Account and link Patreon.</summary>
         internal System.Func<System.Threading.Tasks.Task>? ReconnectFromGateOverride;
-        private System.Threading.Tasks.Task ReconnectFromGate() => ReconnectFromGateOverride?.Invoke() ?? OpenUnifiedLoginDialog();
+        private System.Threading.Tasks.Task ReconnectFromGate()
+        {
+            if (ReconnectFromGateOverride != null) return ReconnectFromGateOverride();
+            var account = AppSettingsPage?.SectionAccount;
+            var button = account?.FindControl<Button>("BtnLinkPatreon");
+            if (button == null || !button.IsEnabled) return System.Threading.Tasks.Task.CompletedTask;
+            OpenAppSettingsSection("account");
+            return account.ReconnectPatreonAsync();
+        }
 
         /// <summary>WPF App.xaml.cs:512 ShowDeniedHandler: the Reconnect toast for a patron whose grant died here,
         /// otherwise the refusal with "See tiers" opening the vault card at the tier this door needs.</summary>

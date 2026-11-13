@@ -142,6 +142,12 @@ internal static class X11PanicKey
     internal static void RoutePress(int keycode, Action onPress, Action<int>? keyword)
     {
         Route(true, keycode, onPress);
+        RouteKeyword(keycode, keyword);
+    }
+
+    // After the panic (or the video Escape) has had the press: keyword input never blocks either.
+    internal static void RouteKeyword(int keycode, Action<int>? keyword)
+    {
         try { keyword?.Invoke(keycode); }
         catch (Exception ex) { Log.Warning(ex, "Keyword input failed"); }
     }
@@ -219,13 +225,14 @@ internal static class X11PanicKey
     {
         var ev = Marshal.AllocHGlobal(XEventSize);
         string? boundName = null;
+        bool escapeDown = false;
+        var escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
         void Resolve()
         {
             var name = currentKey();
             if (name == boundName) return;
             boundName = name;
-            _boundCode = KeycodeOf(display, name);
-            if (_boundCode == 0) Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
+            _boundCode = ResolveKeycode(name, n => KeycodeOf(display, n));
         }
         Resolve();
         while (true)
@@ -237,6 +244,7 @@ internal static class X11PanicKey
                 {
                     // Layout/keymap change: refresh Xlib's cache and re-resolve the keycode.
                     XRefreshKeyboardMapping(ev);
+                    escapeCode = XKeysymToKeycode(display, KeysymOf("Escape"));
                     boundName = null;
                     Resolve();
                     continue;
@@ -244,17 +252,25 @@ internal static class X11PanicKey
                 if (Marshal.ReadInt32(ev) != GenericEvent || Marshal.ReadInt32(ev, CookieExtension) != opcode) continue;
                 if (!XGetEventData(display, ev)) continue;
                 int keycode = -1;
+                ulong eventTime = 0;
                 var evType = Marshal.ReadInt32(ev, CookieEvType);
                 if (evType is XI_RawKeyPress or XI_RawKeyRelease or XI_RawButtonPress)
-                    keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
+                {
+                    var data = Marshal.ReadIntPtr(ev, CookieData);
+                    keycode = Marshal.ReadInt32(data, RawDetail);
+                    if (evType is XI_RawKeyPress or XI_RawKeyRelease)
+                        eventTime = (ulong)Marshal.ReadInt64(data, 40); // XIRawEvent.time
+                }
                 XFreeEventData(display, ev);
                 if (keycode < 0) continue;
                 if (evType == XI_RawButtonPress) { RouteCountdownPress(evType, keycode); continue; }
 
                 Resolve();
-                if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
+                RouteRawKey(evType == XI_RawKeyPress, keycode, escapeCode, ref escapeDown,
+                    () => QueueVideoEscape(eventTime), onPress);
+                if (evType == XI_RawKeyRelease) continue;
                 var keyword = KeywordPress;
-                RoutePress(keycode, onPress, keyword == null ? null : code => keyword(display, code));
+                RouteKeyword(keycode, keyword == null ? null : code => keyword(display, code));
                 // Preserve the base safety order: panic posts before countdown completion.
                 RouteCountdownPress(evType, keycode);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
@@ -269,6 +285,52 @@ internal static class X11PanicKey
                 Log.Warning(ex, "Panic key: listener event failed");
             }
         }
+    }
+
+    internal static void RouteRawKey(bool press, int code, int escapeCode, ref bool down, Func<bool> queue, Action onPress)
+    {
+        bool videoOwnsPress = false;
+        RouteVideoEscape(press, code, escapeCode, ref down, () => videoOwnsPress = queue());
+        // Under a leash the panic press also starts the hold-to-cut: the sub can cut the leash
+        // any time, so a video that took the Escape never keeps it from the panic route.
+        if (!videoOwnsPress || Leashed()) Route(press, code, onPress);
+    }
+
+    /// <summary>Is this account on a leash right now (listener thread; tests swap it)?</summary>
+    internal static Func<bool> Leashed = () =>
+    {
+        try { return LeashHead.Service?.Snapshot.Me != null; } catch { return false; }
+    };
+
+    // XI2 raw events reach the listener even when another X11 client has focus. WPF gives
+    // a non-strict video Escape when panic is disabled or Lockdown prevents it from running.
+    internal static void RouteVideoEscape(bool press, int code, int escapeCode, ref bool down, Action queue)
+    {
+        if (escapeCode == 0 || code != escapeCode) return;
+        if (!press) { down = false; return; }
+        if (down) return;
+        down = true;
+        var s = CoreSettings.Current;
+        if (Services.Safety.PanicPolicy.EscapeDismissesVideo(true, false, false,
+                s.PanicKeyEnabled, s.PanicKey, Views.Windows.MainShellWindow.LockdownActive)) queue();
+    }
+
+    internal static bool QueueVideoEscape(ulong? timestamp = null)
+    {
+        var video = Views.Overlays.MandatoryVideoOverlay.Instance;
+        var generation = video.EscapeGeneration;
+        var s = CoreSettings.Current;
+        if (generation != video.EscapeGeneration || EscapeClaim.SurfaceOwnsEscape(timestamp)
+            || !Services.Safety.PanicPolicy.EscapeDismissesVideo(video.WantsGlobalEscape,
+                Views.Windows.LockCardWindow.IsAnyOpen(), Views.Windows.SettingsPaletteWindow.IsOpen,
+                s.PanicKeyEnabled, s.PanicKey, Views.Windows.MainShellWindow.LockdownActive)
+            || generation != video.EscapeGeneration) return false;
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (generation == video.EscapeGeneration && !EscapeClaim.SurfaceOwnsEscape(timestamp))
+                Win32Input.EscapeDoor();
+        });
+        return true;
     }
 
     // WPF/Avalonia Key names (the setting stores Key.ToString()) whose X keysym name differs.
@@ -295,6 +357,32 @@ internal static class X11PanicKey
         ["BrowserHome"] = "XF86HomePage", ["LaunchMail"] = "XF86Mail", ["SelectMedia"] = "XF86AudioMedia",
         ["LaunchApplication1"] = "XF86MyComputer", ["LaunchApplication2"] = "XF86Calculator",
     };
+
+    /// <summary>The bound key cannot fire on this desktop (no keysym, or none on this layout): the key name,
+    /// raised on the listener thread once per key name (start, rebind; a keymap change that leaves it dead does
+    /// not repeat it). WPF's hook hears any bound key (GlobalKeyboardHook.cs:165), so a dead key here is news the
+    /// user must see, not only a log line. Handlers post, never work.</summary>
+    internal static volatile Action<string?>? Unhearable;
+
+    /// <summary>The keycode for <paramref name="name"/> via <paramref name="keycodeOf"/>; 0 = cannot fire,
+    /// which is logged AND raised on <see cref="Unhearable"/>, so a dead panic key is never silent.</summary>
+    internal static int ResolveKeycode(string? name, Func<string?, int> keycodeOf)
+    {
+        var code = keycodeOf(name);
+        if (code != 0) { _unhearableName = null; _unhearableSent = false; return code; }
+        Log.Warning("Panic key: '{Key}' has no X keycode; only the tray can panic", name);
+        if (!_unhearableSent || name != _unhearableName)
+        {
+            try { Unhearable?.Invoke(name); }
+            catch (Exception ex) { Log.Warning(ex, "Panic key: unhearable notice failed"); }   // never into the listener loop
+        }
+        _unhearableName = name;
+        _unhearableSent = true;
+        return 0;
+    }
+
+    private static string? _unhearableName;
+    private static bool _unhearableSent;
 
     /// <summary>The X keysym for a stored key name ("Escape", "F8", "A", "D1", "NumPad0", "OemTilde"); 0 when unknown.</summary>
     internal static ulong KeysymOf(string? name) => string.IsNullOrWhiteSpace(name) ? 0 : XStringToKeysym(XKeyName(name));

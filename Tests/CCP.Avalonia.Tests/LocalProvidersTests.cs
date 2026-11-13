@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,6 +22,8 @@ using ConditioningControlPanel.Services.AIService;
 using ConditioningControlPanel.Services.Companion.Brain;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
+using Key = ConditioningControlPanel.Avalonia.Platform.CompanionApiKey;
+using Secrets = ConditioningControlPanel.Avalonia.Platform.SecretStore;
 using Mode = ConditioningControlPanel.Views.Controls.Companion.CompanionProviderMode;
 
 namespace CCP.Avalonia.Tests;
@@ -66,9 +69,9 @@ public sealed class LocalProvidersTests
         return (listener, baseUrl, hits);
     }
 
-    private static SettingsService FreshSettings()
+    private static SettingsService FreshSettings(SettingsService? service = null)
     {
-        var service = new SettingsService();
+        service ??= new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         CoreSettings.Current.AiChatEnabled = true;
         CoreSettings.Current.OfflineMode = false;
@@ -77,6 +80,176 @@ public sealed class LocalProvidersTests
         CoreSettings.Current.CompanionPrompt.ChatMemoryEnabled = true;
         return service;
     }
+
+    [Fact]
+    public Task DrawerKeyReachesDiagnosticsAndChatAndClearStopsSending() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        FreshSettings();
+        var oldRead = CoreSecrets.RetrieveProvider;
+        var oldStore = CoreSecrets.StoreProvider;
+        var oldUnprotect = OpenAiCompatibleService.ApiKeyUnprotect;
+        var (listener, baseUrl, hits) = StartFake();
+        try
+        {
+            // This test exercises a successful persistent write, not the sandbox fallback.
+            Secrets.OsWriteOverride = (_, _) => true;
+            ConditioningControlPanel.Avalonia.Platform.SecretStore.Seed();
+            ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Store("sk-existing");
+            var drawer = new EngineRoomDrawer();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("sk-existing", CoreSecrets.Retrieve("companion_openai"));
+            var vm = (EngineRoomVm)drawer.DataContext!;
+            var keyBox = drawer.FindControl<TextBox>("CustomKeyBox")!;
+            Assert.True(string.IsNullOrEmpty(keyBox.Text));
+            vm.CustomEndpoint = baseUrl + "/v1";
+            vm.CustomModel = "fake-gpt";
+            keyBox.Text = "sk-byo-test";
+            Dispatcher.UIThread.RunJobs();
+            var p = CoreSettings.Current.CompanionPrompt;
+            Assert.Equal("secret:companion_openai", p.OpenAiCompatibleApiKey);
+            Assert.DoesNotContain("sk-byo-test", Newtonsoft.Json.JsonConvert.SerializeObject(p));
+            vm.Sync();
+            Assert.Equal("", vm.CustomApiKey);
+            Assert.Equal("sk-byo-test", OpenAiCompatibleService.ApiKeyUnprotect!(p.OpenAiCompatibleApiKey));
+            using var transport = new OpenAiCompatibleService();
+            Assert.True((await transport.TestEndpointAsync()).Success);
+            Assert.True((await transport.SendAsync(new[] { new ChatMessage("user", "hello") }, AiCallOptions.Chat)).IsAiGenerated);
+            lock (hits)
+            {
+                Assert.Equal(2, hits.Count);
+                Assert.All(hits, h => Assert.Equal("Bearer sk-byo-test", h.Auth));
+            }
+            keyBox.Text = "";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("", p.OpenAiCompatibleApiKey);
+            Assert.Null(CoreSecrets.Retrieve("companion_openai"));
+            Assert.False((await transport.TestEndpointAsync()).Success);
+            Assert.False((await transport.SendAsync(new[] { new ChatMessage("user", "hello") }, AiCallOptions.Chat)).IsAiGenerated);
+            lock (hits) Assert.Equal(2, hits.Count);
+        }
+        finally
+        {
+            CoreSecrets.Store("companion_openai", null);
+            CoreSecrets.RetrieveProvider = oldRead;
+            CoreSecrets.StoreProvider = oldStore;
+            OpenAiCompatibleService.ApiKeyUnprotect = oldUnprotect;
+            listener.Stop();
+            listener.Close();
+            CoreSettings.ServiceProvider = null;
+        }
+    });
+
+    [Fact]
+    public void LegacyKeysKeepWpfFallbackAndUnreadableBlobsFailClosed()
+    {
+        Assert.Equal("sk-legacy", ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read("sk-legacy"));
+        Assert.Null(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read(Convert.ToBase64String(new byte[] { 1, 2, 3 })));
+        Assert.Null(ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read(""));
+        if (OperatingSystem.IsWindows())
+        {
+            var blob = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(
+                Encoding.UTF8.GetBytes("sk-wpf-fixture"), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
+            Assert.Equal("sk-wpf-fixture", ConditioningControlPanel.Avalonia.Platform.CompanionApiKey.Read(blob));
+        }
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("sk-legacy")]
+    [InlineData("secret:companion_openai")]
+    public Task FailedKeyStoreShowsNoticeAndPreservesSavedValueAcrossRestart(string saved) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = FreshSettings();
+        var disk = new Dictionary<string, string?> { [Key.Name] = "sk-saved" };
+        var failWrite = true;
+        Secrets.OsWriteOverride = (name, value) =>
+        {
+            if (failWrite) return false;
+            disk[name] = value;
+            return true;
+        };
+        Secrets.OsReadOverride = name => (true, disk.GetValueOrDefault(name));
+        Secrets.Sandboxed = false; // both OS calls are faked; never touch the real keyring
+        Key.SessionKey = null;
+        var cache = (System.Collections.Concurrent.ConcurrentDictionary<string, string?>)typeof(Secrets)
+            .GetField("_cache", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        cache.Clear();
+        Secrets.Seed();
+        var p = CoreSettings.Current.CompanionPrompt;
+        p.OpenAiCompatibleApiKey = saved;
+        var (listener, baseUrl, hits) = StartFake();
+        try
+        {
+            var drawer = new EngineRoomDrawer();
+            var vm = (EngineRoomVm)drawer.DataContext!;
+            vm.Provider = Mode.Custom;
+            vm.IsExpanded = true;
+            vm.CustomEndpoint = baseUrl + "/v1";
+            vm.CustomModel = "fake-gpt";
+            var box = drawer.FindControl<TextBox>("CustomKeyBox")!;
+            var notice = drawer.FindControl<TextBlock>("CustomKeyNotice")!;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(notice.IsVisible);
+            box.Text = "sk-session";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(vm.CustomKeySessionOnly);
+            Assert.True(notice.IsVisible);
+            Assert.Equal(Loc.Get("companion_engine_api_key_session_only"), notice.Text);
+            Assert.NotEqual("companion_engine_api_key_session_only", notice.Text);
+            Assert.Equal(saved, p.OpenAiCompatibleApiKey);
+            Assert.Equal("sk-saved", disk[Key.Name]);
+            using var transport = new OpenAiCompatibleService();
+            Assert.True((await transport.TestEndpointAsync()).Success); // works even when saved is empty
+            lock (hits) Assert.Equal("Bearer sk-session", Assert.Single(hits).Auth);
+
+            // A failed clear also lasts only for the session and leaves the saved key intact.
+            box.Text = "";
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(notice.IsVisible);
+            Assert.Null(Key.Read(saved));
+            Assert.False((await transport.TestEndpointAsync()).Success);
+            service.SaveImmediate(suppressCloudBackup: true); // even an unrelated save keeps the old value
+            Assert.DoesNotContain("sk-session", File.ReadAllText(Path.Combine(TestUserDataProfile.Root, "settings.json")));
+
+            // Simulate a new process: drop session state/cache and load settings plus the fake OS store.
+            Key.SessionKey = null;
+            cache.Clear();
+            Secrets.NotRemembered = false;
+            Secrets.ClearFailed = false;
+            var restarted = new SettingsService();
+            CoreSettings.ServiceProvider = () => restarted;
+            Assert.Equal(saved, CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey);
+            var reopened = new EngineRoomDrawer();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(reopened.FindControl<TextBlock>("CustomKeyNotice")!.IsVisible);
+            Assert.Equal(saved == Key.Reference ? "sk-saved" : saved == "" ? null : saved, Key.Read(saved));
+            Assert.Equal(saved != "", (await transport.TestEndpointAsync()).Success);
+            lock (hits)
+                if (saved != "") Assert.Equal("Bearer " + (saved == Key.Reference ? "sk-saved" : saved), hits.Last().Auth);
+
+            // A later successful write clears the notice and updates both persistence locations.
+            failWrite = false;
+            reopened.FindControl<TextBox>("CustomKeyBox")!.Text = "sk-recovered";
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(reopened.FindControl<TextBlock>("CustomKeyNotice")!.IsVisible);
+            Assert.Equal(Key.Reference, CoreSettings.Current.CompanionPrompt.OpenAiCompatibleApiKey);
+            Assert.Equal("sk-recovered", disk[Key.Name]);
+        }
+        finally
+        {
+            listener.Stop();
+            listener.Close();
+            cache.Clear();
+        }
+    });
 
     [Theory]
     [InlineData(AiProviderType.Local)]
@@ -191,7 +364,9 @@ public sealed class LocalProvidersTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var service = FreshSettings();
+        var service = new SettingsService();
+        var originalSettings = Newtonsoft.Json.JsonConvert.SerializeObject(service.Current);
+        FreshSettings(service);
         CoreSettings.Current.Welcomed = true;
         CoreSettings.Current.HasAcceptedAgeVerification = true;
         var (listener, baseUrl, _) = StartFake();
@@ -205,6 +380,9 @@ public sealed class LocalProvidersTests
         AvApp.Brain = new CompanionBrain(AvApp.Ai, memory: memory,
             store: new CompanionSessionStore(sessionPath, Path.Combine(dir, "legacy.json")));
         var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var previousBark = CoreBark.UiAction;
+        var actions = new List<string?>();
+        CoreBark.UiAction = action => actions.Add(action);
         try
         {
             shell.Show();
@@ -228,16 +406,36 @@ public sealed class LocalProvidersTests
             }
 
             await Answer("BtnCancel");
+            Assert.Contains("reset_memory", actions);
             Assert.Equal(2, AvApp.Brain.Session.Count);
             Assert.True(File.Exists(sessionPath));
 
-            await Answer("BtnOk");
+            var room = shell.RoomView()!;
+            var hero = room.FindControl<CompanionHeroCard>("HeroZone")!.ViewModel!;
+            var engine = (EngineRoomVm)room.FindControl<EngineRoomDrawer>("EngineZone")!.DataContext!;
+            var chat = room.FindControl<ChatThresholdView>("ChatZone")!.ViewModel!;
+            var attention = room.FindControl<AttentionGaugeView>("AttentionZone")!.ViewModel!;
+            chat.Detach();
+            Assert.False(chat.IsAttached);
+            var ai = AvApp.Ai;
+            AvApp.Ai = null;
+            CoreSettings.Current.CompanionPrompt.AiProvider = AiProviderType.OpenAiCompatible;
+            CoreSettings.Current.CompanionPrompt.DailyRequestLimit = 10;
+            CoreSettings.Current.AvatarEnabled = !hero.IsCompanionShown;
+            CoreSettings.Current.CompanionPrompt.AiModel = "changed-model";
+            try { await Answer("BtnOk"); }
+            finally { AvApp.Ai = ai; }
+            Assert.True(chat.IsAttached);
+            Assert.Equal(0, attention.Fraction);
+            Assert.Equal(CoreSettings.Current.AvatarEnabled, hero.IsCompanionShown);
+            Assert.Equal("changed-model", engine.OllamaModel);
             Assert.Equal(0, AvApp.Brain.Session.Count);
             Assert.False(File.Exists(sessionPath) && File.ReadAllText(sessionPath).Contains("purple ribbon"));
             Assert.Contains(memory.GetFacts(), f => f.Text == "likes purple ribbons");
         }
         finally
         {
+            CoreBark.UiAction = previousBark;
             foreach (var w in shell.OwnedWindows.ToList()) w.Close();
             shell.RequestExit();
             Dispatcher.UIThread.RunJobs();
@@ -246,6 +444,8 @@ public sealed class LocalProvidersTests
             memory.Dispose();
             AvApp.Ai?.Dispose();
             (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
+            Newtonsoft.Json.JsonConvert.PopulateObject(originalSettings, service.Current,
+                new Newtonsoft.Json.JsonSerializerSettings { ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace });
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
             Directory.Delete(dir, true);

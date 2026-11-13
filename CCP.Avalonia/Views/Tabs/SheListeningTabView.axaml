@@ -302,7 +302,7 @@
                                     <!-- Reliable wake (sherpa-onnx KWS) - open-source, offline, no key; far
                                          better at the OOV name "Bambi". TxtSL_WakeEngineStatus is code-painted
                                          (status + live calibration progress). -->
-                                    <Grid Background="Transparent" ToolTip.Tip="Optional but recommended. Drop the open-source sherpa-onnx keyword-spotting model into Resources\Models\sherpa-kws\ to use a purpose-built wake-word engine — much more reliable than the built-in recognizer for her name, fully offline, no account or key. Without it, the built-in recognizer is used. See the README in that folder.">
+                                    <Grid Background="Transparent" ToolTip.Tip="{loc:Str she_wake_unavailable_tooltip}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
@@ -316,7 +316,7 @@
                                             </StackPanel>
                                             <TextBlock x:Name="TxtSL_WakeEngineStatus" FontSize="11"
                                                        Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0" TextWrapping="Wrap"
-                                                       Text="Drop the sherpa-onnx KWS model into Resources\Models\sherpa-kws\ to enable (see the README there)."/>
+                                                       Text="{loc:Str she_wake_unavailable_status}"/>
                                         </StackPanel>
                                         <Button x:Name="BtnSL_Calibrate" Grid.Column="1"
                                                 FontSize="11" Padding="10,4" VerticalAlignment="Center"

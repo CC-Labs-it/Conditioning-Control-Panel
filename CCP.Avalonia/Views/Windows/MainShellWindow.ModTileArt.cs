@@ -17,7 +17,13 @@ public partial class MainShellWindow
     private const int TileDecodeWidth = 768, WideTileDecodeWidth = 1024;
 
     // The event is authoritative: uninstalling the active mod also activates CCP Default.
-    private void OnModChangedFeatureImages(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(LoadFeatureImages);
+    // WPF MainWindow.xaml.cs:3854/3869 hangs the tile art AND the accent palette off it, since
+    // that route never reaches ApplyActiveModChange (restack b78, from #3465).
+    private void OnModChangedFeatureImages(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
+    {
+        LoadFeatureImages();
+        RefreshThemeAwareElements();
+    });
 
     private void LoadFeatureImages()
     {
@@ -46,7 +52,7 @@ public partial class MainShellWindow
         catch (Exception ex) { Log.Warning(ex, "Failed to load Home feature images"); }
     }
 
-    private static Bitmap? ModTileVariant(string baseName, int width)
+    internal static Bitmap? ModTileVariant(string baseName, int width)
     {
         foreach (var path in ModTileArt.Candidates(baseName, CoreMods.ActiveModId))
             if (ModArt.TryLoad(path, width) is { } image) return image;

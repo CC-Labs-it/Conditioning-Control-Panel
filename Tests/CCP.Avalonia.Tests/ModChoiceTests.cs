@@ -31,6 +31,72 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ModChoiceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task WelcomeBackOffersTheBackupsMissingFlavourAndHonoursTheChoice(bool restore) => Run(async (shell, svc, server) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("welcome-flavour-");
+        var backup = new AppSettings { ActiveModId = BuiltInMods.BambiSleepId, FlashEnabled = false };
+        var settings = CoreSettings.Current;
+        settings.FlashEnabled = true;
+        var old = (CoreAccount.UnifiedUserId, settings.UnifiedId,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Present,
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell);
+        try
+        {
+            settings.UnifiedId = CoreAccount.UnifiedUserId = "welcome-test";
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.RunModal = show => show();
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell = () => shell;
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup = () => WelcomeBackRestoreTests.ClientFor(backup);
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose = content =>
+            {
+                Assert.True(content.Plan.ShowFlavourRow);
+                Assert.Equal("mod-bambi", content.Plan.FlavourPackId);
+                Assert.False(string.IsNullOrWhiteSpace(content.BackupModName));
+                Assert.Equal(content.BackupModName, content.FlavourModName);
+                Assert.False(string.IsNullOrWhiteSpace(content.FlavourSizeText));
+                return Task.FromResult((restore, true));
+            };
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Arm(true, dir.FullName);
+            await ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.TryOfferAsync("test");
+            await WaitFor(() => svc.IsInstalled("mod-bambi") && AvApp.Mods!.ActiveModId == BuiltInMods.BambiSleepId);
+            Assert.Equal(!restore, CoreSettings.Current.FlashEnabled);
+            Assert.Equal(1, server.PackGets);
+            Assert.Null(PendingModChoice.Pending);
+            shell.ActivateChosenMod(BuiltInMods.CCPDefaultId, MainShellWindow.ModChoiceTrigger.Immediate);
+            await ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.BringFlavourAsync(BuiltInMods.BambiSleepId, "mod-bambi");
+            Assert.Equal(BuiltInMods.BambiSleepId, AvApp.Mods!.ActiveModId); // installed: immediate, no second download
+            Assert.Equal(1, server.PackGets);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.ResetForTests();
+            (CoreAccount.UnifiedUserId, settings.UnifiedId,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.NewBackup,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Choose,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Present,
+                ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.Shell) = old;
+            dir.Delete(true);
+        }
+    });
+
+    // WPF App.xaml.cs:5183-5214: a welcome-back choice uses the wizard's pending activation path.
+    [Fact]
+    public Task WelcomeBackFlavourRecordsDownloadsAndActivates() => Run(async (shell, svc, server) =>
+    {
+        var task = ConditioningControlPanel.Avalonia.Platform.WelcomeBackOffer.BringFlavourAsync(BuiltInMods.BambiSleepId, "mod-bambi");
+        Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        await task;
+        await WaitFor(() => AvApp.Mods!.ActiveModId == BuiltInMods.BambiSleepId);
+        Assert.True(svc.IsInstalled("mod-bambi"));
+        Assert.Equal(1, server.PackGets);
+        Assert.Null(PendingModChoice.Pending);
+    });
+
     [Fact]
     public Task HeaderComboSwitchesTheModSavesAndRethemes() => Run(async (shell, svc, server) =>
     {
@@ -177,6 +243,18 @@ public sealed class ModChoiceTests
         manager.Close();
         await WaitFor(() => !shell.OwnedWindows.OfType<ModManagerDialog>().Any());
         Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
+    });
+
+    [Fact]   // WPF MainWindow.xaml.cs:3869: the palette hangs off ModChanged too (restack b78, from #3465)
+    public Task ExternalModChangeRethemesWithoutApplyActiveModChange() => Run(async (shell, svc, server) =>
+    {
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);   // the uninstall route: no ApplyActiveModChange
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Color.Parse(AvApp.Mods.GetAccentColorHex()), (Color)Application.Current!.Resources["PinkColor"]!);
+        AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Color.Parse(AvApp.Mods.GetAccentColorHex()), (Color)Application.Current.Resources["PinkColor"]!);
+        await Task.CompletedTask;
     });
 
     [Fact]
@@ -466,7 +544,9 @@ public sealed class ModChoiceTests
 
     private static async Task WaitFor(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        // A hang guard, not a tolerance: it returns on completion. The pack service itself retries a
+        // download after 3 s and an install after 5 s, so one transient retry on a loaded runner outlasts 10 s.
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!condition() && DateTime.UtcNow < deadline)
         {
             Dispatcher.UIThread.RunJobs();

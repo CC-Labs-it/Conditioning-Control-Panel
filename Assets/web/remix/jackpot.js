@@ -40,7 +40,9 @@ const MAX_TILES = 8;
 const DEFAULT_SECONDS = 3;
 const SEED_WALK = 400;
 
-const host = (typeof chrome !== 'undefined' && chrome.webview) ? chrome.webview : null;
+const nativeHost = (typeof chrome !== 'undefined' && chrome.webview) ? chrome.webview : null;
+const host = nativeHost || (typeof window.invokeCSharpAction === 'function' ? new EventTarget() : null);
+if (host && !nativeHost) host.postMessage = (msg) => window.invokeCSharpAction(JSON.stringify(msg));
 const post = (msg) => { if (host) host.postMessage(msg); else console.log('[jackpot]', msg); };
 const log = (msg, level) => post({ type: 'log', level: level || 'debug', msg: String(msg) });
 
@@ -167,6 +169,8 @@ function onMessage(msg) {
   if (msg.type === 'build') { build(msg); return; }
   if (msg.type === 'cancel') { const c = builds.get(msg.id); if (c) c.abort(); }
 }
+
+window.__ccpRemixPush = onMessage;
 
 if (host) {
   host.addEventListener('message', (e) => onMessage(e.data));

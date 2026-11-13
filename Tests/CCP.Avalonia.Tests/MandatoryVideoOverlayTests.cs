@@ -23,6 +23,35 @@ namespace CCP.Avalonia.Tests;
 /// closes it. Skips where ffmpeg (to make the clip) or libvlc is missing.</summary>
 public sealed class MandatoryVideoOverlayTests
 {
+    [Theory]
+    [InlineData(true, 0.75)]
+    [InlineData(false, 0.0)]
+    public Task BrowserSurfaceControlsUseTheInjectedInvokerAndKeepMirrorsSilent(bool primary, double expected) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var scripts = new System.Collections.Generic.List<string>();
+            var surface = new BrowserVideoSurface(script => { scripts.Add(script); return Task.FromResult<string?>("true"); });
+            surface.Start("http://localhost/clip.mp4", primary, 50);
+            surface.View.OnNavigationCompleted(new Uri("about:blank"));
+            scripts.Clear();
+            surface.Pause();
+            surface.Resume();
+            surface.Seek(-10);
+            surface.Seek(2500);
+            surface.SetVolume(75);
+            Assert.Equal(expected, surface.Volume);
+            Assert.Equal(new[] { "window.ccpVideo?.pause();", "window.ccpVideo?.resume();",
+                "window.ccpVideo?.seek(0);", "window.ccpVideo?.seek(2500);",
+                $"window.ccpVideo?.volume({System.Text.Json.JsonSerializer.Serialize(expected)});" }, scripts);
+            surface.Dispose();
+            var count = scripts.Count;
+            surface.Resume();
+            surface.Seek(1);
+            surface.SetVolume(100);
+            Assert.Equal(count, scripts.Count);
+            return Task.CompletedTask;
+        });
+
     [Fact]
     public void NoVideosDialogBlamesTheLengthFilterWhenItEmptiedTheLibrary()
     {
@@ -378,12 +407,14 @@ public sealed class MandatoryVideoOverlayTests
         var clip = Path.Combine(dir, "clip.y4m");
         try
         {
-            // A raw YUV4MPEG2 clip written here (CI has libvlc but no ffmpeg): 160x90, 25 fps, 10 s.
+            // A raw YUV4MPEG2 clip written here (CI has libvlc but no ffmpeg): 160x90, 25 fps, 60 s.
+            // Restack b77 (#3327): the test closes each run itself; a short clip can reach EOF on a loaded
+            // CI box before the mute/close assertions run.
             using (var f = File.Create(clip))
             {
                 f.Write(System.Text.Encoding.ASCII.GetBytes("YUV4MPEG2 W160 H90 F25:1 Ip A1:1 C420jpeg\n"));
                 var frame = new byte[160 * 90 * 3 / 2];
-                for (var n = 0; n < 250; n++)
+                for (var n = 0; n < 25 * 60; n++)
                 {
                     Array.Fill(frame, (byte)(n % 200 + 30), 0, 160 * 90);
                     Array.Fill(frame, (byte)128, 160 * 90, frame.Length - 160 * 90);

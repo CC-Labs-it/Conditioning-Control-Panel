@@ -30,5 +30,5 @@ package() {
 exec /opt/conditioning-control-panel/conditioning-control-panel.sh "$@"
 EOF
   cp -a ConditioningControlPanel/share "$pkgdir/usr/"
-  install -Dm644 ConditioningControlPanel/LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 ConditioningControlPanel/{LICENSE,THIRD-PARTY-NOTICES.txt,RT-ENGINE-NOTICES.txt} -t "$pkgdir/usr/share/licenses/$pkgname/"
 }

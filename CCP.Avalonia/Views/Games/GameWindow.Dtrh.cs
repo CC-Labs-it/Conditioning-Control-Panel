@@ -78,6 +78,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) return Open.FirstOrDefault(w => w.IsDtrh && w.IsActive);
         }
 
+        internal static void CloseDtrhForModSwitch()
+        {
+            _dtrhPanicEpoch++; // cancel a queued recovery of the old mod
+            GameWindow[] windows;
+            lock (Open) windows = Open.Where(w => w.IsDtrh).ToArray();
+            foreach (var window in windows) window.CloseDtrhForPanic();
+        }
+
         // WPF PostKeptEscape (:119): GameWindow.Escape.cs, shared with the race, the board and Breakout.
 
         /// <summary>WPF OnPageMessage (:321). True = claimed; false falls through to the shell frames.</summary>
@@ -136,6 +144,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 default:
                     return false;
             }
+        }
+
+        /// <summary>WPF MainWindow.xaml.cs:1741: DtRH takes an unclaimed ladder press before the Back Room.</summary>
+        internal static bool HandleDtrhPanic()
+        {
+            GameWindow? w;
+            lock (Open) w = Open.FirstOrDefault(w => w.IsDtrh);
+            if (w == null) return false;
+            _dtrhPanicEpoch++; // a queued heartbeat recovery must not relaunch after panic
+            w.CloseDtrhForPanic();
+            return true;
         }
 
         /// <summary>WPF DtrhHostService.cs:250-266: panic asks a ready page to settle its run.

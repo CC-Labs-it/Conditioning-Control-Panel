@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     {
         private bool _isShelfStacked;
         private bool _shelfApplied;
+        private Services.ProviderSubscription? _patreon, _substar;
 
         public CompanionRoomView()
         {
@@ -50,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             HeroZone.ViewModel?.Sync();
             ChatZone.ViewModel?.Sync();
             AttentionZone.ViewModel?.Sync();
+            (EngineZone.DataContext as EngineRoomVm)?.Sync();
         }
 
         /// <summary>The preview harness's page state: WPF MockCompanionRoomVm's zone bag plus its
@@ -100,6 +102,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             base.OnAttachedToVisualTree(e);
             Claim(true);
+            _patreon = Platform.AccountSeed.Patreon; _substar = Platform.AccountSeed.SubscribeStar;
+            if (_patreon != null) _patreon.TierChanged += OnTierChanged;
+            if (_substar != null) _substar.TierChanged += OnTierChanged;
+            Platform.AccountSeed.GraceClosed += PostEntitlement;
+            SyncBrain();
 
             foreach (var v in this.GetSelfAndVisualAncestors())
                 _visibilityWatch.Add(v.GetObservable(IsVisibleProperty).Subscribe(new VisibilityObserver(this)));
@@ -107,6 +114,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            if (_patreon != null) _patreon.TierChanged -= OnTierChanged;
+            if (_substar != null) _substar.TierChanged -= OnTierChanged;
+            Platform.AccountSeed.GraceClosed -= PostEntitlement;
+            _patreon = _substar = null;
             foreach (var d in _visibilityWatch) d.Dispose();
             _visibilityWatch.Clear();
             // WPF OnUnloaded: Claim(null) + ParkClocks.
@@ -114,6 +125,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             ParkClocks();
             base.OnDetachedFromVisualTree(e);
         }
+
+        private void OnTierChanged(object? sender, Models.PatreonTier tier) => PostEntitlement();
+        private void PostEntitlement() => Dispatcher.UIThread.Post(() => { if (VisualRoot != null) SyncBrain(); });
 
         /// <summary>
         /// WPF CompanionRoomView.Claim / CompanionRoomRuntimeVm.Navigator: a torn-down page is never

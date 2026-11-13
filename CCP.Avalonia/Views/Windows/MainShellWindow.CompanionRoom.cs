@@ -1,7 +1,7 @@
 // Ported write surface: WPF MainWindow/MainWindow.CompanionRoom.cs.
 // Awareness refreshes follow the controls after the v2 tab reparenting.
-// Part B: secure BYO key writer/reader and full v2 observer integration.
-// SetCustomApiKey blocked: no DPAPI twin; writing OpenAiCompatibleApiKey here stores the key in the clear.
+// Part B: full v2 observer integration.
+// BYO key: EngineRoomVm writes it through Platform.CompanionApiKey (secret store); startup seeds the transport reader.
 
 using System;
 using System.Linq;
@@ -50,13 +50,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 hero.ViewModel?.Sync();
         }
 
-        /// <summary>WPF SetAvatarMuted: persist the shared voice gate and re-read the tube menu.</summary>
+        /// <summary>WPF SetAvatarMuted: persist the shared voice gate, then the live in-memory mute and the tube menu
+        /// (WPF MainWindow.CompanionRoom.cs:99 SetMuteAvatar).</summary>
         internal void SetAvatarMuted(bool muted)
         {
             if (_roomLoading) return;
             CoreSettings.Current.AvatarMuted = muted;
             CoreSettings.Save();
-            _avatarTubeWindow?.UpdateQuickMenuState(); // audio-only: leave the speech bubble alone.
+            _avatarTubeWindow?.SetMuteAvatar(muted); // audio-only: re-reads the menu, leaves the speech bubble alone.
             SyncHero();
         }
 
@@ -279,10 +280,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// "Clear conversation" (WPF MainWindow.CompanionRoom.cs:353): drops the thread, leaves what she
         /// knows. ForgetThread, not ForgetConversation, for the reason WPF gives (pinned and Boundary facts).
-        /// The bark echo is not here: this head has no bark engine (CoreBark is a doorbell).
         /// </summary>
         internal async System.Threading.Tasks.Task ClearCompanionConversationAsync()
         {
+            CoreBark.NotifyUiAction("reset_memory");
             var message = string.Join(Environment.NewLine + Environment.NewLine,
                 Loc.Get("companion_engine_clear_conversation_confirm"),
                 Loc.Get("companion_engine_clear_conversation_confirm_body"),
@@ -302,6 +303,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (App.Brain == null)
                     (App.Ai as ConditioningControlPanel.Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
                 _avatarTubeWindow?.ChatHistory.Clear();
+                RoomView()?.SyncBrain();
                 Log.Information("Companion conversation cleared from the Engine Room");
             }
             catch (Exception ex)

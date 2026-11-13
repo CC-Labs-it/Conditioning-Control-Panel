@@ -99,6 +99,27 @@ internal static class ChasterHead
         };
     }
 
+    /// <summary>WPF RemoteControlService.cs:1280,1401: book only commands that ran.</summary>
+    internal static RemoteRelay WireRemoteNotes(RemoteRelay relay)
+    {
+        relay.CommandReceived += (_, action) => Safe(() =>
+        {
+            if (action == "trigger_flash") Service?.Note("remote_media");
+            else if (action == "trigger_video") Service?.Note("remote_video");
+        });
+        return relay;
+    }
+
+    /// <summary>WPF RemoteControlService.cs:1401 also books a video trigger dropped during playback.
+    /// The relay calls this only after its gate and leave/panic checks, on the command thread.</summary>
+    internal static string? ExecuteRemote(string action, Newtonsoft.Json.Linq.JObject? parameters)
+    {
+        var overlappingVideo = action == "trigger_video" && CoreEngine.Video?.IsPlaying == true;
+        var reason = RemoteCommands.Execute(action, parameters);
+        if (overlappingVideo && reason != null) Safe(() => Service?.Note("remote_video"));
+        return reason;
+    }
+
     private static readonly HashSet<ChasterService> Attached = new();
 
     /// <summary>WPF ChasterHooks.cs:65-69: a finished program day pays back, a missed one costs. Reads

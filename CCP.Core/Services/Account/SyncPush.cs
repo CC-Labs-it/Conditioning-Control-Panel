@@ -118,6 +118,10 @@ namespace ConditioningControlPanel.Services
         public Func<DateTime> UtcNow = () => DateTime.UtcNow;
 
         // Failure backoff (release/6.11.5, WPF ProfileSyncService.NoteSyncFailureForBackoff). Touched only inside _gate.
+        public event EventHandler<int>? SyncHealthChanged;
+        public int ConsecutiveSyncFailures { get; private set; }
+
+        private bool _hasSyncError;
         private int _backoffFailures;
         private DateTime? _blockedUntilUtc;
         private string? _backoffToken;
@@ -130,6 +134,9 @@ namespace ConditioningControlPanel.Services
 
         private void NoteFailureForBackoff(int? status, string? tokenUsed)
         {
+            _hasSyncError = true;
+            ConsecutiveSyncFailures++;
+            SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
             _backoffFailures++;
             var wait = SyncFailureBackoff.Delay(_backoffFailures);
             _blockedUntilUtc = UtcNow() + wait;
@@ -299,6 +306,9 @@ namespace ConditioningControlPanel.Services
                 if (watermark > 0 && totalXp < watermark)
                 {
                     Log.Error("[XP watermark] Sync REFUSED — would push {Xp} XP, below the {Watermark} XP last agreed", (int)totalXp, (int)watermark);
+                    _hasSyncError = true;
+                    ConsecutiveSyncFailures++;
+                    SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
                     return false;
                 }
                 var id = s.UnifiedId!;
@@ -354,10 +364,24 @@ namespace ConditioningControlPanel.Services
                 if (!response.IsSuccessStatusCode)
                 {
                     // Contract D: merged tombstone; the head's recovery re-signs in and reloads.
-                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json)) return false;
+                    if (V2AuthService.MergedRecovery is { } merged && await merged(response, json))
+                    {
+                        // WPF records the deferred merge as an error without starting backoff.
+                        _hasSyncError = true;
+                        ConsecutiveSyncFailures++;
+                        SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
+                        return false;
+                    }
                     // 429, and a 409 no recovery handled: cool down rather than retry on every trigger.
                     if (response.StatusCode is (HttpStatusCode)429 or HttpStatusCode.Conflict)
                     {
+                        // WPF retains LastSyncError on 429 and counts it in the finally block.
+                        if (response.StatusCode == HttpStatusCode.Conflict || _hasSyncError)
+                        {
+                            _hasSyncError = true;
+                            ConsecutiveSyncFailures++;
+                            SyncHealthChanged?.Invoke(this, ConsecutiveSyncFailures);
+                        }
                         LastSyncTime = UtcNow();
                         Log.Warning("V2 Profile sync refused by server ({Status}), will retry after the cooldown", (int)response.StatusCode);
                         return false;
@@ -369,6 +393,12 @@ namespace ConditioningControlPanel.Services
                 LastSyncTime = UtcNow();
                 Interlocked.Increment(ref _syncSuccesses);
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
+                _hasSyncError = false;
+                if (ConsecutiveSyncFailures > 0)
+                {
+                    ConsecutiveSyncFailures = 0;
+                    SyncHealthChanged?.Invoke(this, 0);
+                }
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);
@@ -377,7 +407,7 @@ namespace ConditioningControlPanel.Services
                     var reply = JObject.Parse(json);
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
-                    if (AdoptFromResponse(s, reply)) _adopted = true;
+                    if (AdoptFromResponse(s, reply, id)) _adopted = true;
                     ClaimWebXp(s, reply, allowUnread, session, id);
                     ApplyQuestResets(s, id, session, reply);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
@@ -466,11 +496,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// WPF SyncProfileAsync:1897-1954, in its order: the force_skills_reset (clear the tree, take the server's points,
         /// or level x PointsPerLevel; ack pending until a response no longer carries the flag), else skill points
-        /// MergeMax; the unlocked-skills union (skipped on level_reset, whose own branch unions); then the cloud loadout
+        /// wallet-net spend adoption (V2WalletNet, the named lower rule) or MergeMax; the unlocked-skills union (skipped on level_reset, whose own branch unions); then the cloud loadout
         /// into an EMPTY local one only (WPF AdoptCloudCosmetics). Does not save. True when the response carried both
         /// skill_points and unlocked_skills, i.e. the server's skills are now known.
         /// </summary>
-        internal bool AdoptFromResponse(AppSettings s, JObject reply)
+        internal bool AdoptFromResponse(AppSettings s, JObject reply, string? syncAccount = null)
         {
             bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k);
             int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
@@ -487,11 +517,20 @@ namespace ConditioningControlPanel.Services
                 s.PendingSkillsResetAck = false;   // the server flag was cleared by our ack
             else if (points is int p)
             {
-                var max = SparklePoints.MergeMax(p, s.SkillPoints);
-                if (max != s.SkillPoints)
+                // WPF V2WalletNet (#3834): a wallet_net drop adopts a spend made on another device; else raise-only.
+                var live = CoreSettings.Current; var account = syncAccount ?? s.UnifiedId;
+                if (!string.IsNullOrEmpty(account))
                 {
-                    Log.Information("V2 Sync: Skill points server={Server}, local={Local} - taking max ({Max})", p, s.SkillPoints, max);
-                    s.SkillPoints = max;
+                    var same = string.Equals(live.UnifiedId, account, StringComparison.Ordinal);
+                    int? seen = live.WalletNetSeen.TryGetValue(account, out var stored) ? stored : null;
+                    var step = global::ConditioningControlPanel.Services.Prizes.V2WalletNet.Decide(same, global::ConditioningControlPanel.Services.Prizes.V2WalletNet.ParseNet(reply["wallet_net"]), seen, p, live.SkillPoints);
+                    if (step.NextSp != live.SkillPoints)
+                    {
+                        Log.Information("V2 Sync: Skill points server={Server}, local={Local} - now {Next}", p, live.SkillPoints, step.NextSp);
+                        live.SkillPoints = step.NextSp;
+                    }
+                    if (same && step.StoreNet is { } net && seen != net)
+                        live.WalletNetSeen = new Dictionary<string, int>(live.WalletNetSeen) { [account] = net };
                 }
             }
             var skills = reply["unlocked_skills"] as JArray;

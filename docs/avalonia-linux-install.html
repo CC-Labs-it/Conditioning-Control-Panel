@@ -96,10 +96,11 @@ libwebkit2gtk-4.1.so.0 + libjavascriptcoregtk-4.1 + libsoup-3.0/2.4); webkitgtk-
 <tr><td>Sign-in token store</td><td>libsecret</td><td>libsecret-1-0</td><td>libsecret</td></tr>
 <tr><td>TLS for every HTTPS call (.NET 10 loads OpenSSL 3 or older; Fedora 45 ships OpenSSL 4, <code>libssl.so.4</code>, and the app aborts at start with &quot;No usable version of libssl was found&quot;, distro-check 2026-11-04; the tarball launcher <code>conditioning-control-panel.sh</code> checks for <code>libssl.so.3</code> first and names the package instead)</td><td>openssl (3.x, base system)</td><td>libssl3 (base system)</td><td>Fedora 45: openssl3-libs (compat <code>libssl.so.3</code>); Fedora 44: openssl-libs (base system)</td></tr>
 <tr><td>Overlays, panic key (X11/XInput2)</td><td>libx11 libxi</td><td>libx11-6 libxi6</td><td>libX11 libXi</td></tr>
+<tr><td>X11 session management (libICE.so.6, libSM.so.6): required, the app aborts at start with <code>DllNotFoundException: libICE.so.6</code> without them (minimal Tumbleweed, #4468). They cannot be made optional on Avalonia 12.1.5: <code>X11PlatformOptions.EnableSessionManagement</code> is ignored, <code>AvaloniaX11Platform.Initialize</code> constructs <code>X11PlatformLifetimeEvents</code> unconditionally (ilspy, re-proven in the Tumbleweed distro-check image 2026-11-11 with the option set false). <code>install.sh</code> probes them</td><td>libice libsm</td><td>libice6 libsm6</td><td>libICE libSM</td></tr>
 </table>
 <p>.NET: publish self-contained, so no runtime dependency.
 openSUSE names (used by <code>packaging/linux/distro-check</code>): libwebkit2gtk-4_1-0, libWPEWebKit-2_0-1 libWPEBackend-fdo-1_0-1
-libwpe-1_0-1, libvlc5 vlc-noX, libsecret-1-0, libX11-6 libXi6.
+libwpe-1_0-1, libvlc5 vlc-noX, libsecret-1-0, libX11-6 libXi6 libICE6 libSM6.
 Measured 2026-10-10 on stock images (<code>distro-check</code>, ~/ccp-port/evidence/distro-check/findings.md): the WPE row is NOT
 installable on Ubuntu 24.04 (no WPE at all), Ubuntu 22.04 / Debian 12 (WebKit only as libwpewebkit-1.0-3 / -1.1-0) or
 Fedora 44 (none); Arch extra ships all three (<code>pacman -Si</code> 2026-10-10; the image check reported otherwise). libvlc5 / vlc-libs ship only <code>libvlc.so.5</code>,
@@ -151,10 +152,13 @@ mismatch, a <code>depends=</code> entry the host lacks (<code>pacman -T</code>) 
 <code>ldd</code> over every bundled <code>.so</code>: all owning packages are inside the <code>pactree</code> closure of <code>depends=</code> (zlib via
 zlib-ng-compat's provide); only <code>liblttng-ust.so.0</code> (optional .NET tracing) is unresolved (<code>aur-native-deps.txt</code>).
 A clean-container proof of <code>depends=</code> sufficiency is still owed: the host has far more than the closure installed.</li>
-<li><strong>Flatpak:</strong> no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker is down, so the manifest is still unbuilt.
+<li><strong>Flatpak:</strong> at the time (10-07) no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker was down, so the manifest was unbuilt.
 Substitute proof: the extracted tarball run inside the installed <code>org.gnome.Platform//50</code> runtime (<code>flatpak run --command=...</code>) passes every smoke check except LibVLC (<code>libvlc</code> absent), which is exactly the module the manifest
 bundles (<code>flatpak-runtime-smoke.log</code>). The runtime has webkit2gtk-4.1, javascriptcoregtk-4.1, soup-3, libsecret, libX11,
-libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>).</li>
+libXi, libpulse, ICU and <code>parec</code>; it lacks libvlc and the WPE trio (<code>flatpak-runtime-libs.txt</code>).
+Superseded since: the manifest has been built, installed and smoked with flatpak-builder on 2026-10-30 (7.1.15, with a live start)
+and 2026-11-04 (port/7.2, 7.2.1, headless); see the linux-package-flatpak row in docs/avalonia-parity.html and
+~/ccp-port/evidence/linux-package/flatpak-20261030/ and preview-72-20261104/.</li>
 <li><strong>Desktop/metainfo:</strong> <code>desktop-file-validate</code> clean; <code>appstreamcli validate --pedantic</code> passes with two pedantic notes
 (uppercase in the component id, which is the fixed app id, and no <code>&lt;releases&gt;</code>) (<code>validate.txt</code>).</li>
 </ul>

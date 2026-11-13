@@ -16,6 +16,30 @@ namespace CCP.Avalonia.Tests;
 public sealed class PinkRushTests
 {
     [Fact]
+    public void StartCountsWithoutPinkRush() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var s = CoreSettings.Current;
+        var skills = s.UnlockedSkills;
+        var count = s.NightTimeUsageCount;
+        var now = PinkRushHost.Now;
+        try
+        {
+            s.UnlockedSkills = new();
+            s.NightTimeUsageCount = 0;
+            PinkRushHost.Now = () => new DateTime(2026, 1, 1, 23, 30, 0);
+            PinkRushHost.Start();
+            Assert.Equal(2, s.NightTimeUsageCount);
+        }
+        finally
+        {
+            PinkRushHost.Stop();
+            PinkRushHost.Now = now;
+            s.UnlockedSkills = skills;
+            s.NightTimeUsageCount = count;
+        }
+    });
+
+    [Fact]
     public async Task EngineArmsTheRollTheWindowPaysThreeTimesAndPanicEndsIt()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

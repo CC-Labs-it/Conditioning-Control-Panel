@@ -84,6 +84,14 @@ public sealed class LauncherFxTests
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
 
+    // WPF LauncherWindow.Fx.cs:258-268: the shown launcher starts all four ambient layers.
+    [Fact]
+    public void Ambient_IncludesEmbers() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var ambient = w.FindControl<ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas>("Ambient")!;
+        Assert.True((ambient.Layers & ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.Embers) != 0);
+    });
+
     // WPF LauncherWindow.xaml.cs:626-645, MotionFx.cs:151-166/198-214.
     [Fact]
     public void Badge_WobblesEveryEightSeconds_PopsAndParks() => Run(MotionLevel.Full, (_, w, _) =>
@@ -372,6 +380,7 @@ public sealed class LauncherFxTests
     [Fact]
     public void TileDepth_SlidesArtAgainstPointer_TintsTitle_AndReturnsHome() => Run(MotionLevel.Full, (_, w, _) =>
     {
+        Step(w, 1); // Measure hover after the show entrance has settled.
         var tile = Tile(w);
         var title = tile.GetVisualDescendants().OfType<TextBlock>().Single(t => t.FontSize == 19);
         var brush = (SolidColorBrush)title.Foreground!;

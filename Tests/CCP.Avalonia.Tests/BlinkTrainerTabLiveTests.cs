@@ -44,6 +44,26 @@ public sealed class BlinkTrainerTabLiveTests
         }
     });
 
+    /// <summary>A refresh keeps the bound consent and status-action labels while their keys hold
+    /// (restack b38, from #3670): the bindings follow language changes, nothing re-templates.</summary>
+    [Fact]
+    public void RefreshKeepsTheBoundActionLabels() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var tab = new BlinkTrainerTabView();
+        tab.Refresh();
+        var consent = tab.FindControl<Button>("BtnBlinkTrainerManageConsent")!;
+        var action = tab.FindControl<Button>("BlinkTrainerStatusAction")!;
+        var (consentLabel, actionLabel) = (consent.Content, action.Content);
+        Assert.NotNull(consentLabel);
+        tab.Refresh();
+        Assert.Same(consentLabel, consent.Content);
+        Assert.Same(actionLabel, action.Content);
+    });
+
     [Fact]
     public void ShowingTheTab_LoadsSettings_GatesAndDemos_AndStatusFollowsFolders()
     {

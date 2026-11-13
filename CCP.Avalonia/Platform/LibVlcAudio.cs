@@ -68,6 +68,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Throws when libvlc is not installed; the caller then leaves CoreAudio unseeded.</summary>
         public LibVlcAudio(params string[] options)
         {
+            InitializeNative();
+            // No global --no-video: video shares this instance. Audio media opt out per item instead.
+            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
+            Shared ??= _vlc;
+            _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
+        }
+
+        internal static void InitializeNative()
+        {
             // Windows ships libvlc beside the exe; a single-file publish has no
             // assembly location for LibVLCSharp to probe from, so point it there as WPF's VideoService does. Linux: system libvlc.
             // publish\libvlc (CopyLibVLCAfterPublish), else the build output's libvlc\win-x64.
@@ -76,10 +85,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 .FirstOrDefault(d => System.IO.File.Exists(System.IO.Path.Combine(d, "libvlc.dll")));
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
-            // No global --no-video: video shares this instance. Audio media opt out per item instead.
-            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
-            Shared ??= _vlc;
-            _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
         /// <summary>This instance's LibVLC (the Windows session test plays through the real output).</summary>
@@ -237,6 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         // Preparation never starts playback. Brain Drain arbitrates Play with Stop under its gate,
         // as WPF Services/LockCard/BrainDrainService.cs:377-388 does after decoder creation.
+        internal interface IPausableVoice : MindWipePlayer.IVoice { void SetPaused(bool paused); }
         internal interface IPreparedVoice : MindWipePlayer.IVoice { bool Play(); }
         internal IPreparedVoice? PrepareVoice(string path, Action onEnded) =>
             string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : NewVoice(path, onEnded);
@@ -252,11 +258,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return voice.Play() ? voice : null;
         }
 
-        private Voice NewVoice(string path, Action onEnded)
+        internal static Action<MediaPlayer>? ConfigureLoopVoice;
+        internal static Action? BeforeLoopPlay;
+        private Voice NewVoice(string path, Action onEnded, bool loop = false)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            return new Voice(new MediaPlayer(media), media, onEnded);
+            var player = new MediaPlayer(media);
+            if (loop) ConfigureLoopVoice?.Invoke(player);
+            return new Voice(player, media, onEnded);
         }
 
         internal static Action<MediaPlayer> RouteVoice = ApplyPreferredDevice;
@@ -264,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : IPreparedVoice
         {
             private int _vol, _done;
+            private bool _pauseRequested;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
             internal Action<long>? Started;
             internal volatile bool Failed;
@@ -280,14 +291,50 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 player.Playing += (_, _) =>
                 {
                     Apply();
-                    if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
+                    bool first = Interlocked.Exchange(ref started, 1) == 0;
+                    // Never call back into libvlc from its Playing event thread.
+                    ThreadPool.QueueUserWorkItem(_ =>
+                    {
+                        long length = 0;
+                        try
+                        {
+                            lock (player)
+                            {
+                                if (_done != 0) return;
+                                if (first) length = Math.Max(0, player.Length);
+                                if (_pauseRequested && player.IsPlaying) player.SetPause(true);
+                            }
+                            if (first) Fire(() => Started?.Invoke(length));
+                        }
+                        catch (Exception ex) { Log.Debug(ex, "[Audio] voice started"); }
+                    });
                 };
+                player.Paused += (_, _) => ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    // A rapid resume can precede completion of LibVLC's asynchronous pause.
+                    try { lock (player) if (_done == 0 && !_pauseRequested && player.State == VLCState.Paused) player.SetPause(false); }
+                    catch (Exception ex) { Log.Debug(ex, "[Audio] pending resume"); }
+                });
                 player.EndReached += (_, _) => Dispose();
                 player.EncounteredError += (_, _) => { Failed = true; Dispose(); };
                 if (player.Play()) return true;
                 Failed = true;
                 Dispose();
                 return false;
+            }
+            internal void SetPaused(bool paused)
+            {
+                try
+                {
+                    lock (player)
+                    {
+                        if (_done != 0) return;
+                        _pauseRequested = paused;
+                        // SetPause can be ignored while opening. Playing applies the pending request.
+                        if (player.IsPlaying || player.State == VLCState.Paused) player.SetPause(paused);
+                    }
+                }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] voice pause"); }
             }
             public void Dispose()
             {
@@ -304,13 +351,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>Copies of one clip, each started <see cref="OverlapMs"/> before the previous ends.
         /// Ends (onEnded) when a copy fails and nothing else is playing.</summary>
-        private sealed class LoopVoice(LibVlcAudio audio, string path, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class LoopVoice(LibVlcAudio audio, string path, Action onEnded) : IPausableVoice
         {
-            private const int OverlapMs = 120;   // WPF CROSSFADE_OVERLAP_SECONDS
+            private const int OverlapMs = 120;
             private readonly object _gate = new();
             private readonly List<Voice> _live = new();
             private Timer? _next;
-            private bool _done;
+            private long _scheduledAt, _remainingMs;
+            private int _timerGeneration;
+            private bool _done, _paused, _restartPending;
             private double _vol;
 
             public double Volume { set { lock (_gate) { _vol = value; foreach (var v in _live) v.Volume = value; } } }
@@ -321,25 +370,76 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     if (_done) return false;
+                    if (_paused) { _restartPending = true; return true; }
+                    _restartPending = false;
                     v = null!;
-                    v = audio.NewVoice(path, () => Retire(v));
+                    v = audio.NewVoice(path, () => Retire(v), loop: true);
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);
+                    BeforeLoopPlay?.Invoke();
+                    return v.Play();
                 }
-                return v.Play();
             }
 
-            /// <summary>WPF: interval = length - overlap, at least 100 ms. Unknown length: back to back.</summary>
             private void Schedule(long lengthMs)
             {
                 if (lengthMs <= 0) return;
                 lock (_gate)
                 {
                     if (_done) return;
-                    _next?.Dispose();
-                    _next = new Timer(_ => Start(), null, Math.Max(100, lengthMs - OverlapMs), Timeout.Infinite);
+                    CancelTimer();
+                    _remainingMs = Math.Max(100, lengthMs - OverlapMs);
+                    if (!_paused) ArmTimer();
                 }
+            }
+
+            // _gate protects the timer generation: an already queued callback cannot start a
+            // second copy after pause, resume or disposal.
+            private void CancelTimer()
+            {
+                _timerGeneration++;
+                _next?.Dispose();
+                _next = null;
+            }
+
+            private void ArmTimer()
+            {
+                var generation = ++_timerGeneration;
+                _scheduledAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                _next = new Timer(_ =>
+                {
+                    lock (_gate)
+                    {
+                        if (_done || _paused || generation != _timerGeneration) return;
+                        _next?.Dispose();
+                        _next = null;
+                        _remainingMs = 0;
+                    }
+                    Start();
+                }, null, _remainingMs, Timeout.Infinite);
+            }
+
+            public void SetPaused(bool paused)
+            {
+                Voice[] live;
+                bool restart;
+                lock (_gate)
+                {
+                    if (_done || _paused == paused) return;
+                    _paused = paused;
+                    if (paused && _next != null)
+                    {
+                        _remainingMs = Math.Max(1, _remainingMs - (long)System.Diagnostics.Stopwatch.GetElapsedTime(_scheduledAt).TotalMilliseconds);
+                        CancelTimer();
+                    }
+                    restart = !paused && _restartPending;
+                    if (!paused && !restart && _remainingMs > 0) ArmTimer();
+                    if (restart) { CancelTimer(); _remainingMs = 0; _restartPending = false; }
+                    live = _live.ToArray();
+                }
+                foreach (var v in live) v.SetPaused(paused);
+                if (restart && !Start()) { lock (_gate) _done = true; Fire(onEnded); }
             }
 
             private void Retire(Voice v)
@@ -349,7 +449,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     _live.Remove(v);
                     if (_done || _live.Count > 0) return;
-                    if (v.Failed) dead = _done = true; else restart = true;
+                    if (v.Failed) dead = _done = true;
+                    else if (_paused) _restartPending = true;
+                    else { CancelTimer(); _remainingMs = 0; restart = true; }
                 }
                 if (dead) { Fire(onEnded); return; }
                 if (restart && !Start()) { lock (_gate) _done = true; Fire(onEnded); }
@@ -358,7 +460,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             public void Dispose()
             {
                 Voice[] live;
-                lock (_gate) { _done = true; _next?.Dispose(); _next = null; live = _live.ToArray(); _live.Clear(); }
+                lock (_gate) { _done = true; CancelTimer(); live = _live.ToArray(); _live.Clear(); }
                 foreach (var v in live) v.Dispose();
                 Fire(onEnded);
             }

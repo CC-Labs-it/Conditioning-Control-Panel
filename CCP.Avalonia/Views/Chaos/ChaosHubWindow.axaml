@@ -26,9 +26,7 @@
          CheckBox}}" (Resources/Theme/Inputs)      implicit CheckBox on this head to inherit from
        OptChk LayoutTransform 1.35              -> ONE LayoutTransformControl around the column
                                                    (Avalonia has no LayoutTransform per control)
-       skia:SKElement MenuLogoFx / MenuFog      -> no SkiaSharp on this head and no package may be
-                                                   added from a view layer. The logo slot draws the
-                                                   static wordmark frame; the fog layer is inert.
+       skia:SKElement MenuFog                   -> fog layer is inert.
        bare <Slider> / <ComboBox>               -> Theme="{StaticResource PinkSlider}" /
                                                    "{StaticResource DarkComboBoxStyle}". WPF got
                                                    these from the app-wide IMPLICIT styles in
@@ -49,6 +47,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:chaos="clr-namespace:ConditioningControlPanel.Avalonia.Views.Chaos"
         x:Class="ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow"
         Title="the Dollhouse"
         SystemDecorations="None"
@@ -691,10 +690,9 @@
                     </Border>
                     <!-- two stacked image layers (rounded image-brush borders) so frames can crossfade;
                          both share the breathing motion via the wrapping MenuArtMotion grid.
-                         ponytail: needs ChaosArt for the menu flipbook frames, wired when it moves
-                         to Core — both brushes have no Source on this head, so the gradient shows. -->
+                         the menu code supplies the frames and drives the crossfade. -->
                     <Grid x:Name="MenuArtMotion" RenderTransformOrigin="50%,50%">
-                        <Border CornerRadius="22">
+                        <Border x:Name="MenuArtBaseBox" CornerRadius="22">
                             <Border.Background><ImageBrush Stretch="UniformToFill"/></Border.Background>
                         </Border>
                         <Border x:Name="MenuArtTopBox" CornerRadius="22" Opacity="0">
@@ -714,13 +712,12 @@
 
                 <!-- title (drag region) — neon logo wordmark, centered above the buttons -->
                 <StackPanel Grid.Row="0" x:Name="MenuTitleBar" Background="Transparent">
-                    <!-- WPF: skia:SKElement MenuLogoFx, the wordmark rendered in Skia so the authored
-                         glint FX is true additive light on the logo's real pixels. ponytail: needs
-                         SkiaSharp; the static frame (the wordmark itself, no glint sweep) is drawn
-                         here at the same 314x224 so the menu keeps its title block. -->
                     <Border x:Name="MenuLogoFx" IsHitTestVisible="False"
                             Width="314" Height="224" HorizontalAlignment="Center" Margin="0,48,0,0">
-                        <StackPanel VerticalAlignment="Center">
+                        <Grid>
+                        <Image x:Name="MenuLogoImage" Stretch="Uniform"/>
+                        <chaos:ChaosHubLogoFx x:Name="MenuLogoGlint"/>
+                        <StackPanel x:Name="MenuLogoFallback" VerticalAlignment="Center">
                             <TextBlock Text="DOWN THE" Foreground="White" FontSize="34" FontWeight="Bold"
                                        HorizontalAlignment="Center">
                                 <TextBlock.Effect><DropShadowEffect Color="#FFE84393" BlurRadius="26" OffsetX="0" OffsetY="0" Opacity="0.9"/></TextBlock.Effect>
@@ -731,6 +728,7 @@
                             </TextBlock>
                             <fx:IconGlyph Kind="AnimalRabbit" Variant="Filled" Size="36" HorizontalAlignment="Center" Margin="0,8,0,0"/>
                         </StackPanel>
+                        </Grid>
                     </Border>
                     <TextBlock Text="· the dollhouse ·" Foreground="{StaticResource Pink}" FontFamily="Consolas, Courier New"
                                FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" Margin="0,2,0,0"/>

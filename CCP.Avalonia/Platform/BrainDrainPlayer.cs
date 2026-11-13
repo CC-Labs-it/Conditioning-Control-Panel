@@ -66,7 +66,7 @@ internal sealed class BrainDrainPlayer
         long generation, runGeneration;
         lock (_gate)
         {
-            if (!_running || _busy || CoreAudio.IsOutputSuppressed || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
+            if (!_running || _busy || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
             _busy = true; generation = ++_generation; runGeneration = _runGeneration;
         }
         LibVlcAudio.IPreparedVoice? voice = null;
@@ -76,6 +76,12 @@ internal sealed class BrainDrainPlayer
             var path = clips.Length == 0 ? null : clips[Random.Shared.Next(clips.Length)];
             if (path != null)
             {
+                lock (_gate)
+                {
+                    if (!_running || generation != _generation) return;
+                    // WPF BrainDrainService.cs:309-313: the trigger counts even if audio fails.
+                    App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBrainDrain);
+                }
                 // WPF schedules decoder work and immediately notifies (BrainDrainService.cs:309-313).
                 // Deliver on the UI thread so the bark mouth does not queue past Stop.
                 _dispatch(() =>
@@ -84,7 +90,8 @@ internal sealed class BrainDrainPlayer
                         if (_running && runGeneration == _runGeneration)
                             try { Triggered?.Invoke(this, EventArgs.Empty); } catch { }
                 });
-                voice = _prepare(path, () =>
+                // WPF PlayAudio returns early on a suppressed endpoint; the trigger still fires.
+                if (!CoreAudio.IsOutputSuppressed) voice = _prepare(path, () =>
                 {
                     lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
                 });

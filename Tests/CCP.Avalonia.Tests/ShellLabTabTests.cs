@@ -95,6 +95,16 @@ public sealed class ShellLabTabTests
     });
 
     [Fact]
+    public void EmptyMonitorNameUsesThePositionFallback() => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var screen = Display(new Window().Screens.All.First(), 1, new PixelRect(-2560, 0, 2560, 1440), false);
+        typeof(Screen).GetProperty(nameof(Screen.DisplayName))!.SetValue(screen, "");
+        Assert.Equal("-2560,0", WebcamScreens.Name(screen));
+        Assert.Same(screen, WebcamScreens.Resolve(new[] { screen }, "-2560,0"));
+    });
+
+    [Fact]
     public void MonitorFallbackAndGazeClampUseLiveScreenIdentityAndDpi() => AvaloniaTestDispatcher.Run(() =>
     {
         LabWebcamStatusTests.Setup();

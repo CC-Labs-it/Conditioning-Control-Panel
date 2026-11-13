@@ -362,8 +362,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
         /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
         /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
+        /// <param name="flash">Plan with the flash rules instead (<see cref="FlashFrames"/>): <paramref name="fitLongSide"/>
+        /// is the display long side, capped at 2048, and <paramref name="maxFrames"/> is ignored.</param>
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
-            List<TimeSpan>? frameDurations = null)
+            List<TimeSpan>? frameDurations = null, bool flash = false)
         {
             var frames = new List<Bitmap>();
             try
@@ -374,13 +376,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var info = codec.FrameInfo;
                 var plan = SpiralFrames.Plan(codec.Info.Width, codec.Info.Height, count,
                     codec.FrameCount > 0 ? codec.FrameInfo[0].Duration : 50);
-                if (fitLongSide > 0 && Math.Max(plan.Width, plan.Height) > fitLongSide)
+                var decodeCount = count;
+                if (flash)
+                {
+                    var f = FlashFrames.Plan(codec.Info.Width, codec.Info.Height, count, fitLongSide);
+                    (plan.Width, plan.Height, plan.Frames, plan.Step, decodeCount) = (f.Width, f.Height, f.Keep, f.Step, f.DecodeCount);
+                }
+                else if (fitLongSide > 0 && Math.Max(plan.Width, plan.Height) > fitLongSide)
                 {
                     var k = fitLongSide / (double)Math.Max(plan.Width, plan.Height);
                     plan.Width = Math.Max(1, (int)Math.Round(plan.Width * k));
                     plan.Height = Math.Max(1, (int)Math.Round(plan.Height * k));
                 }
-                if (maxFrames > 0 && plan.Frames > maxFrames)
+                if (!flash && maxFrames > 0 && plan.Frames > maxFrames)
                 {
                     var step = (int)Math.Ceiling(count / (double)maxFrames);
                     plan.DelayMs = plan.DelayMs / plan.Step * step;
@@ -389,7 +397,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
                 using var scaled = new SKBitmap(new SKImageInfo(plan.Width, plan.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-                for (var i = 0; i < count && (frameDurations != null
+                long keptMs = 0;
+                var keptTimed = 0;
+                for (var i = 0; i < decodeCount && (frameDurations != null
                     ? i < (long)plan.Frames * plan.Step : frames.Count < plan.Frames); i++)
                 {
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
@@ -406,12 +416,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         frameDurations[^1] += TimeSpan.FromMilliseconds(ms > 0 ? ms : 100);
                     }
                     if (i % plan.Step != 0) continue;
+                    if (i < info.Length && info[i].Duration > 0) { keptMs += info[i].Duration; keptTimed++; }
                     canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
                 }
                 Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, CornerGifPlanner.LogWhere(path));
-                return (frames, TimeSpan.FromMilliseconds(plan.DelayMs));
+                return (frames, TimeSpan.FromMilliseconds(flash ? FlashFrames.DelayMs(keptMs, keptTimed, plan.Step) : plan.DelayMs));
             }
             catch (Exception ex)
             {

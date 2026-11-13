@@ -8,8 +8,8 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: HypnoTube, Melt (start/stop_brain_drain),
-    /// wallpaper and the session verbs have no Core entry point yet; they refuse until their services move.
+    /// ponytail: HypnoTube,
+    /// wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
     {
@@ -48,11 +48,24 @@ namespace ConditioningControlPanel.Services
         public static Action? RefreshOverlays;
         public static bool OverlayRunning { get; private set; }
         public static bool OverlaysStopped { get; private set; }
+        private static int _overlayStopGeneration;
+        public static int OverlayStopGeneration => Volatile.Read(ref _overlayStopGeneration);
         public static void ReleaseOverlayStop() => OverlaysStopped = false;
+
+        // WPF RemoteControlService.cs:1204 starts the overlay when a controller joins.
+        public static void EnsureOverlayRunning()
+        {
+            if (OverlayRunning && !OverlaysStopped) return;
+            OverlayRunning = true;
+            OverlaysStopped = false;
+            try { RefreshOverlays?.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay start failed"); }
+        }
 
         public static void StopOverlays()
         {
-            if (!OverlayRunning && !OverlaysStopped) return;
+            Interlocked.Increment(ref _overlayStopGeneration);
+            if (!OverlayRunning && OverlaysStopped) return;
             OverlayRunning = false;
             OverlaysStopped = true;
             try { RefreshOverlays?.Invoke(); }
@@ -153,6 +166,16 @@ namespace ConditioningControlPanel.Services
                     if (CoreSubliminal.CustomShowProvider is not { } custom) return NotOnThisBuild;
                     custom(customText);
                     return null;
+                case "start_brain_drain":
+                case "stop_brain_drain":
+                    var on = action == "start_brain_drain";
+                    if (on && CoreEngine.StartBrainDrain == null) return NotOnThisBuild;
+                    Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.BrainDrain, on ? 1 : 0);
+                    s.BrainDrainEnabled = on;
+                    if (on) CoreEngine.StartBrainDrain?.Invoke(); else CoreEngine.StopBrainDrain?.Invoke();
+                    RefreshOverlays?.Invoke();
+                    CoreSettings.Save();
+                    return null;
                 case "start_flash": s.FlashEnabled = true; CoreFlash.Start(); return null;
                 case "stop_flash": CoreFlash.Stop(); return null;
                 case "start_subliminal": s.SubliminalEnabled = true; CoreSubliminal.Start(); return null;
@@ -236,17 +259,21 @@ namespace ConditioningControlPanel.Services
             CoreAudio.Unduck();
             // Keep the base's wearer restoration; never clear the subject's saved switches.
             if (force || !CoreEngine.IsRunning) StopOverlays();
+            var playerStopped = force || !CoreEngine.IsRunning;
             if (force) CoreEngine.Stop();
             else
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
+                if (playerStopped)
+                    try { CoreEngine.StopBrainDrain?.Invoke(); }
+                    catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Brain Drain stop failed"); }
             }
             CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.
-            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict();
+            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict(playerStopped);
             Remote.RemoteWearer.ReleaseSafetyState(); // WPF RemoteControlService.cs:1036-1043: safety before head refresh
             if (restoredVisuals > 0)
                 try { RefreshOverlays?.Invoke(); }

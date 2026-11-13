@@ -118,6 +118,7 @@ public sealed class PanicSurfacesTests
         "help-tooltips",
         "chaster-hold",
         "chaos",
+        "chaos-hub-music",
         "chaos-flash",
         "gif-cascade",
         "chaos-announcer",
@@ -132,6 +133,7 @@ public sealed class PanicSurfacesTests
         "settings-palette",
         "perfect-week-bonus",
         "keyword-triggers",
+        "audio-sync",
         "haptics",
         "help-video",
         "intake",
@@ -207,6 +209,8 @@ public sealed class PanicSurfacesTests
         ("chaos", "engine", "WPF GameSurfaces.cs:50 'chaos' closes before the tail"),
         // WPF :1808 KillAllAudio (App.xaml.cs:1780 Mantra.Dispose) runs before StopEngine (:1827).
         ("mantra", "engine", "audio killed before the engine stop"),
+        // Cancel pending audio-sync preparation before the hardware panic stop.
+        ("audio-sync", "haptics", "audio-sync work ends before toys are zeroed"),
         // WPF :1786 remote haptics and :1992 haptics PanicStop come before StopEngine (:1827).
         ("haptics", "engine", "toys to zero before the engine stop"),
         ("remote-haptics", "engine", "toys to zero before the engine stop"),

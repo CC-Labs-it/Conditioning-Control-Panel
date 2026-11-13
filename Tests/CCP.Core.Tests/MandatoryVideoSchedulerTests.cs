@@ -20,6 +20,8 @@ public sealed class MandatoryVideoSchedulerTests
         public bool Floating;
         public bool Lockdown;
         public bool IsFloating(bool strict) => Floating && !strict && !Lockdown;
+        public int FloatingTriggers;
+        public bool TryFloatingTrigger(bool userInitiated) { FloatingTriggers++; return userInitiated; }
         public bool BubbleCountActive { get; set; }
         public int Closes, Freezes;
         public bool ThrowOnFreeze;
@@ -39,6 +41,25 @@ public sealed class MandatoryVideoSchedulerTests
         public Action? Then;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { Messages.Add(verdict); Then = then; }
     }
+
+    [Theory]
+    [InlineData(true, false, false, 1)]
+    [InlineData(false, false, false, 0)]
+    [InlineData(true, true, false, 0)]
+    [InlineData(true, false, true, 0)]
+    public void Playing_trigger_only_reaches_floating_host(bool floating, bool strict, bool lockdown, int calls)
+        => With(20, strict, () =>
+    {
+        var host = new Host { Floating = floating, Lockdown = lockdown };
+        var video = new MandatoryVideoScheduler(host, new FakeClock(), () => Clips);
+        try
+        {
+            Assert.True(video.Trigger());
+            Assert.Equal(calls == 1, video.Trigger(userInitiated: true));
+            Assert.Equal(calls, host.FloatingTriggers);
+        }
+        finally { video.ForceCleanup(); }
+    });
 
     [Theory]
     [InlineData(false, false, false)]
@@ -107,6 +128,33 @@ public sealed class MandatoryVideoSchedulerTests
             Assert.Equal(stays, CoreFlash.IsRunning);
         }
         finally { v.ForceCleanup(); CoreFlash.Stop(); }
+    });
+
+    [Theory]
+    [InlineData(true, false, 0)]
+    [InlineData(false, false, 1)]
+    [InlineData(true, true, 1)]
+    public void Bubbles_follow_presentation_at_show(bool floating, bool strict, int expected) => With(20, strict, () =>
+    {
+        var pause = CoreBubbles.PauseAction;
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var pauses = 0;
+        CoreBubbles.PauseAction = () => pauses++;
+        CoreSubliminal.BambiFreezeProvider = null;
+        var clock = new FakeClock();
+        var video = new MandatoryVideoScheduler(new Host { Floating = floating }, clock, () => Clips);
+        try
+        {
+            Assert.True(video.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(expected, pauses);
+        }
+        finally
+        {
+            video.ForceCleanup();
+            CoreBubbles.PauseAction = pause;
+            CoreSubliminal.BambiFreezeProvider = freeze;
+        }
     });
 
     [Theory]

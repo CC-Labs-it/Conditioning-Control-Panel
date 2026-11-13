@@ -314,6 +314,68 @@ public sealed class ChasterTab2Tests
         await Task.CompletedTask;
     }));
 
+    private sealed class RemoteNoteRelay : System.Net.Http.HttpMessageHandler
+    {
+        internal string Poll = "{}";
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            var body = request.RequestUri!.AbsolutePath.EndsWith("/start") ? "{\"code\":\"ABC123\"}" : Poll;
+            Poll = "{}";
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent(body) });
+        }
+    }
+
+    [Fact]
+    public Task RemoteCommandsBookOnlyLandedMedia() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _, s) =>
+    {
+        s.ChasterTabEnabled = true;
+        s.ChasterPrices = new List<string> { "remote_media", "remote_video" };
+        var booked = new List<string>();
+        chaster.Booked += (id, _) => booked.Add(id);
+        using var server = new RemoteNoteRelay();
+        using var relay = ChasterHead.WireRemoteNotes(new RemoteRelay(() => "token", () => "subject", "test",
+            (action, _) => action == "show_spiral" ? "refused" : null, _ => { }, server) { AutoPoll = false });
+        Assert.Equal("ABC123", await relay.StartAsync("light"));
+        server.Poll = "{\"commands\":[{\"id\":\"1\",\"action\":\"trigger_flash\"},{\"id\":\"2\",\"action\":\"trigger_video\"},{\"id\":\"3\",\"action\":\"show_spiral\"}]}";
+        await relay.PollOnceAsync();
+        Assert.Equal(new[] { "remote_media", "remote_video" }, booked);
+    }));
+
+    private sealed class RemoteVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    [Fact]
+    public Task OverlappingRemoteVideoBooksEvenWhenPlaybackRefusesIt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _, s) =>
+    {
+        s.ChasterTabEnabled = true;
+        s.ChasterPrices = new List<string> { "remote_video" };
+        var booked = new List<string>();
+        chaster.Booked += (id, _) => booked.Add(id);
+        var previous = CoreEngine.Video;
+        using var video = new MandatoryVideoScheduler(new RemoteVideoHost());
+        using var server = new RemoteNoteRelay();
+        using var relay = ChasterHead.WireRemoteNotes(new RemoteRelay(() => "token", () => "subject", "test",
+            ChasterHead.ExecuteRemote, _ => { }, server) { AutoPoll = false });
+        try
+        {
+            CoreEngine.Video = video;
+            Assert.True(video.Trigger(path: "test.mp4"));
+            Assert.Equal("ABC123", await relay.StartAsync("light"));
+            server.Poll = "{\"commands\":[{\"id\":\"1\",\"action\":\"trigger_video\"}]}";
+            await relay.PollOnceAsync();
+            Assert.Equal(new[] { "remote_video" }, booked);
+            CoreEngine.Video = null;
+            server.Poll = "{\"commands\":[{\"id\":\"2\",\"action\":\"trigger_video\"}]}";
+            await relay.PollOnceAsync();
+            Assert.Single(booked);
+        }
+        finally { video.ForceCleanup(); CoreEngine.Video = previous; }
+    }));
+
     /// <summary>WPF ChasterHooks.cs:65-69: a program day completed books program_done, a missed one program_skipped.</summary>
     [Theory]
     [InlineData("DayMissed", "program_skipped")]

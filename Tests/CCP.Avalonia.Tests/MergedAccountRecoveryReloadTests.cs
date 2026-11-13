@@ -67,6 +67,7 @@ public class MergedAccountRecoveryReloadTests
         MergedAccountRecoveryHead.Seed();
         var (shown, shownOnUi) = (0, false);
         WelcomeBackOffer.Present = _ => { shownOnUi = Dispatcher.UIThread.CheckAccess(); shown++; return Task.CompletedTask; };
+        WelcomeBackOffer.NewBackup = WelcomeBackRestoreTests.NoBackupClient; // never the real proxy
         WelcomeBackOffer.Arm(true, directory.FullName);
         try
         {

@@ -7,8 +7,9 @@
 // a queued stop the UI thread never runs is torn down off-thread after 2 s.
 // The optional Pause key and the EscapeClaim surfaces ride Platform/Win32Input (Windows only).
 // Windows: Platform/Win32PanicKey (WH_KEYBOARD_LL on its own thread) feeds the same HandlePanicKeyPress.
-// ponytail: a rebind while a portal session is open keeps the OLD trigger until the effects stop and
-// the next effect re-binds; re-bind on PanicKey change if that matters.
+// A rebind applies while a portal session is open, as WPF's hook reads the key per press: the 2 s portal
+// watch closes the session and binds the new key (RebindPortalIfKeyChanged). A key X cannot hear warns the
+// user once (X11PanicKey.Unhearable) instead of going silently dead.
 
 using System;
 using System.ComponentModel;
@@ -42,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
+            X11PanicKey.Unhearable = WarnUnhearable;
             return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
         }
 
@@ -145,6 +147,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
+            // WPF MainWindow.xaml.cs:1734: a live Chaos descent outranks both game handoffs.
+            // This head stops Chaos through the normal stop pass, including during its countdown.
+            if (rung == PanicPolicy.Rung.RunLadder && !Chaos.ChaosRunHost.IsActive)
+            {
+                // WPF MainWindow.xaml.cs:1741,1763: DtRH before the Back Room, including Breakout.
+                if (Games.GameWindow.HandleDtrhPanic()
+                    || Games.GameWindow.HandleBreakoutPanic(now))
+                {
+                    StopCameraForPanic(); // decision C: every panic that stops a surface stops the camera
+                    return;
+                }
+            }
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
             // stop tail with the exit ladder NOT armed (and no grace pause), in BOTH modes: override
             // (MainWindow.xaml.cs:1627) and ladder (:1720 RunPanicStopTail(advanceExitLadder: false)).
@@ -271,6 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static Task? _portalBind;
         private static bool _portalFailed, _portalAllowed;
         private static DispatcherTimer? _portalWatch;
+        private static readonly System.Collections.Generic.Queue<Action> PortalStartQueue = new();
 
         // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
         internal static bool KeepPortalBound =>
@@ -285,7 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool PortalLeashSafetyNeeded => PortalHoldLive;
 
         private static bool AnyEffectRunning =>
-            CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
+            PortalStartQueue.Count > 0 || CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
             || Views.Overlays.BlinkTrainerSession.IsRunning;
 
         /// <summary>Every desktop-effect start goes through here. <paramref name="start"/> must re-check
@@ -369,19 +384,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static void StartEffect(Action start)
         {
-            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || (!PanicRouteWanted && !PortalLeashSafetyNeeded)
-                || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))))
+            if (PortalStartQueue.Count == 0 && ((!_portalAllowed && PortalPanicShortcut.BindForTests == null)
+                || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed
+                || (!PanicRouteWanted && !PortalLeashSafetyNeeded)
+                || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))))))
             {
                 start();
                 return;
             }
+            PortalStartQueue.Enqueue(start);
+            if (PortalStartQueue.Count != 1) return;
             _portalBind ??= BindPortalAsync();
-            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(start), TaskScheduler.Default);
+            // Post as soon as binding completes, including an already-completed bind. Leaving the
+            // continuation on the thread pool can keep the portal alive after the last effect stops.
+            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                while (PortalStartQueue.Count > 0)
+                {
+                    try { PortalStartQueue.Dequeue()(); }
+                    catch (Exception ex) { Serilog.Log.Error(ex, "Deferred effect start failed"); }
+                }
+            }), System.Threading.CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
+
+        /// <summary>The bound panic key cannot fire on this desktop (listener thread): say so, never only in the
+        /// log. The tray's Stop everything still works.</summary>
+        internal static void WarnUnhearable(string? key) => Dispatcher.UIThread.Post(() =>
+            App.Notifications.Show(Loc.GetF("panic_key_unhearable", key ?? ""), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(12)));
+
+        // The key the open (or opening) portal session was asked for.
+        private static string? _portalKey;
+        private static bool _portalRebinding;
+        internal static string? PortalKeyForTest => _portalKey;
 
         private static async Task BindPortalAsync()
         {
-            var trigger = await PortalPanicShortcut.BindAsync(CoreSettings.Current.PanicKey, Loc.Get("panic_portal_description"),
+            var key = _portalKey = CoreSettings.Current.PanicKey;
+            var trigger = await PortalPanicShortcut.BindAsync(key, Loc.Get("panic_portal_description"),
                 () =>
                 {
                     Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
@@ -412,12 +451,51 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Shared with the headless tests so they exercise the real idle-release poll.
         internal static void ReleasePortalWhenUnused(MainShellWindow? shell = null)
         {
-            if (KeepPortalBound) return;
+            if (KeepPortalBound) { RebindPortalIfKeyChanged(shell); return; }
             _portalWatch?.Stop();
             _portalWatch = null;
             _portalBind = null;
             _ = PortalPanicShortcut.UnbindAsync();
             (shell ?? Current)?.PanicRoutes.Forget();   // the next press reaches XInput2 alone, inside a fast double press
+        }
+
+        /// <summary>WPF reads the panic key on every press (MainWindow.xaml.cs:943-960), so a rebind is live at once.
+        /// The portal grab holds the key it was opened for: once the capture is over and no hold rides the old key,
+        /// close that session and bind the new one, serialised with <see cref="SyncPanicEnabled"/>. XInput2 keeps
+        /// hearing X11 windows throughout (it re-resolves per event); a refused re-bind is the same notice as a
+        /// first refusal, and the run stays on XInput2 alone.</summary>
+        internal static void RebindPortalIfKeyChanged(MainShellWindow? shell = null)
+        {
+            if (_portalRebinding || !NeedsPortalRebind()) return;
+            _portalRebinding = true;
+            _ = RebindPortalAsync(shell);
+        }
+
+        private static bool NeedsPortalRebind() =>
+            PortalPanicShortcut.IsBound && !_portalFailed && !PortalHoldLive && !CapturingPanicKey
+            && !string.Equals(_portalKey, CoreSettings.Current.PanicKey, StringComparison.Ordinal);
+
+        private static async Task RebindPortalAsync(MainShellWindow? shell)
+        {
+            await PanicBindingSync.WaitAsync();
+            try
+            {
+                if (_portalBind != null) await _portalBind;
+                if (!NeedsPortalRebind() || !KeepPortalBound) return;
+                Serilog.Log.Information("Panic key: rebound to '{Key}' while the portal is bound; re-binding", CoreSettings.Current.PanicKey);
+                _portalWatch?.Stop();
+                _portalWatch = null;
+                await PortalPanicShortcut.UnbindAsync();
+                _portalBind = null;
+                (shell ?? Current)?.PanicRoutes.Forget();   // the old session can no longer echo an XInput2 press
+                StartEffect(() => { });
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Panic key: portal re-bind failed"); }
+            finally
+            {
+                _portalRebinding = false;
+                PanicBindingSync.Release();
+            }
         }
 
         /// <summary>WPF LockCardService.Stop(dismissOpenCards: true).</summary>

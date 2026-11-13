@@ -297,30 +297,32 @@ public sealed class ProfileBubbleParityTests : IDisposable
     {
         var shell = Shell();
         var field = typeof(MainShellWindow).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)!;
-        void Fire()
+        var otherField = typeof(MainShellWindow).GetField(feature == "flash" ? "_profileBubbleLastShimmer" : "_profileBubbleLastWobble", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        shell.ProfileBubbleUtcNow = () => now;
+        void Fire(string which)
         {
-            if (feature == "flash") DisplayFlash(shell); else DisplaySubliminal();
+            if (which == "flash") DisplayFlash(shell); else DisplaySubliminal();
             Dispatcher.UIThread.RunJobs();
         }
         try
         {
-            Fire();
-            var first = (DateTime)field.GetValue(shell)!;
-            Assert.True(first > DateTime.UtcNow.AddSeconds(-1));
-            Fire();
-            Assert.Equal(first, field.GetValue(shell));
-            // Just inside the throttle stays suppressed; just outside is accepted.
-            var recent = DateTime.UtcNow.AddMilliseconds(-interval + 100);
-            field.SetValue(shell, recent);
-            Fire();
-            Assert.Equal(recent, field.GetValue(shell));
-            field.SetValue(shell, DateTime.UtcNow.AddMilliseconds(-interval - 100));
-            Fire();
-            var accepted = (DateTime)field.GetValue(shell)!;
-            Assert.True(accepted > DateTime.UtcNow.AddSeconds(-1));
+            Fire(feature);
+            Assert.Equal(now, field.GetValue(shell));
+            Fire(feature);
+            Assert.Equal(now, field.GetValue(shell));
+            // The other feature has its own throttle.
+            Fire(feature == "flash" ? "subliminal" : "flash");
+            Assert.Equal(now, otherField.GetValue(shell));
+            now = now.AddMilliseconds(interval - 1);
+            Fire(feature);
+            Assert.Equal(now.AddMilliseconds(-interval + 1), field.GetValue(shell));
+            now = now.AddMilliseconds(1);
+            Fire(feature);
+            Assert.Equal(now, field.GetValue(shell));
             shell.Close();
             field.SetValue(shell, DateTime.MinValue);
-            Fire();
+            Fire(feature);
             Assert.Equal(DateTime.MinValue, field.GetValue(shell));
         }
         finally { FlashOverlay.CloseAll(final: false); SubliminalOverlay.CloseAll(); shell.Close(); Dispatcher.UIThread.RunJobs(); }

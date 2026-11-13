@@ -1513,15 +1513,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <c>CoreSettings.Current.MasterVolume</c>, which is the same property WPF reads. The
         /// candidate lists and scales below are copied cue for cue.
         ///
-        /// <para>ponytail: the one half still missing is the MOD OVERRIDE. WPF resolves through
-        /// <c>ModResourceResolver.ResolveAudioPath</c>, which probes the active mod's
-        /// <c>resources/sounds/</c> (with a .wav/.mp3 swap) before falling back to
-        /// ContentLocator. <c>CoreModArt.OverridePath</c> is NOT that seam - App.xaml.cs seeds it
-        /// from <c>ModResourceResolver.ResolveUri</c>, the IMAGE chain - so a mod's replacement
-        /// cue is not heard here. It needs a sounds twin of that provider in
-        /// CCP.Core/CoreModArt.cs, seeded from <c>ResolveAudioPath</c>; a stock install already
-        /// sounds right.</para>
-        ///
         /// <para>Unseeded <c>CoreAudio</c> is silence, which is what this head is until a backend
         /// lands - and exactly what the stub gave. Nothing here can be louder than the user's
         /// master volume, and a missing file is still a silent no-op.</para>
@@ -1539,6 +1530,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                      : new[] { "chaos/thud.mp3", "bubbles/Pop2.mp3" },
                 rare ? 0.6f : 0.65f);
 
+            /// <summary>WPF ChaosSfx.PlayWaveClear: the burst as a wave boundary clears the field.</summary>
+            public static void PlayWaveClear() => PlayFirstAvailable(new[] { "chaos/wave_clear.mp3", "lvup.mp3" }, 0.8f);
+
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
 
             /// <summary>First candidate that exists on disk wins; a miss in all of them is
@@ -1551,7 +1545,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     {
                         // Reject traversal before touching the disk, as ResolveAudioPath does.
                         if (rel.Contains("..") || System.IO.Path.IsPathRooted(rel)) continue;
-                        var path = ContentLocator.Resolve(System.IO.Path.Combine(
+                        var path = CoreModArt.AudioOverridePath(rel) ?? ContentLocator.Resolve(System.IO.Path.Combine(
                             "Resources", "sounds", rel.Replace('/', System.IO.Path.DirectorySeparatorChar)));
                         if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
                         CoreAudio.PlayOneShot(path, Volume(scale), "chaos-sfx");

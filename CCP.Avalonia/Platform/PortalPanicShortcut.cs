@@ -183,7 +183,7 @@ internal static class PortalPanicShortcut
     /// connection is <see cref="Program.AppId"/>, so KDE files the panic shortcut under the app rather
     /// than the launching terminal. Must precede every other portal call on the connection. False when
     /// refused (Flatpak: the portal already knows the id) or absent (xdg-desktop-portal before 1.19).</summary>
-    private static async Task<bool> RegisterAsync(DBusConnection bus)
+    internal static async Task<bool> RegisterAsync(DBusConnection bus)
     {
         try
         {
@@ -199,13 +199,13 @@ internal static class PortalPanicShortcut
     }
 
     /// <summary>trigger_description of our shortcut in a BindShortcuts result (a(sa{sv})).</summary>
-    private static string TriggerOf(Dictionary<string, VariantValue> results)
+    internal static string TriggerOf(Dictionary<string, VariantValue> results, string id = Id)
     {
         if (!results.TryGetValue("shortcuts", out var list)) return "";
         for (var i = 0; i < list.Count; i++)
         {
             var shortcut = list.GetItem(i);
-            if (shortcut.GetItem(0).GetString() != Id) continue;
+            if (shortcut.GetItem(0).GetString() != id) continue;
             var props = shortcut.GetItem(1);
             for (var j = 0; j < props.Count; j++)
             {
@@ -244,7 +244,7 @@ internal static class PortalPanicShortcut
 
     /// <summary>One portal Request round trip: subscribe to the Response on the predicted request
     /// path BEFORE calling (the portal may answer before the call returns), then call and await.</summary>
-    private static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
+    internal static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
         DBusConnection bus, string member, string signature, BodyWriter writeBody)
     {
         var token = "ccp" + Guid.NewGuid().ToString("N");
@@ -269,10 +269,10 @@ internal static class PortalPanicShortcut
     // and the original then serialises a header whose body length/offset do not match what was
     // written. dbus-broker answers "invalid body" by disconnecting ("Connection closed by peer").
     // By-ref delegates keep one writer.
-    private delegate void BodyWriter(ref MessageWriter w, string token);
-    private delegate void BodyWriterNoToken(ref MessageWriter w);
+    internal delegate void BodyWriter(ref MessageWriter w, string token);
+    internal delegate void BodyWriterNoToken(ref MessageWriter w);
 
-    private static MessageBuffer CallHeader(DBusConnection bus, string path, string iface, string member, string? signature,
+    internal static MessageBuffer CallHeader(DBusConnection bus, string path, string iface, string member, string? signature,
         BodyWriterNoToken? body = null)
     {
         var w = bus.GetMessageWriter();

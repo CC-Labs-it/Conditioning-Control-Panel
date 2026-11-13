@@ -37,7 +37,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // WPF UiUpdates.cs:134: a mod switch also repaints the ? box's reveal art.
         private void OnTileTitlesModChanged(object? sender, ModPackage mod) =>
-            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { ApplyTileTitles(); RefreshMysteryFace(); });
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _mysteryArtKey = null;
+                ApplyTileTitles();
+            });
 
         private void OnTileTitlesLanguageChanged(object? sender, EventArgs e) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(ApplyTileTitles);
@@ -45,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF ApplyModFeatureNames, mosaic part. The Vault's title uses the Exclusives tab's own key.</summary>
         internal void ApplyTileTitles()
         {
+            RefreshMysteryFace();
             CardFlash.Title = MLCard("Flash Images", "section_flash_images");
             CardSubliminal.Title = MLCard("Subliminals", "section_subliminals_2");
             CardBouncingText.Title = MLCard("Bouncing Text", "label_bouncing_text");

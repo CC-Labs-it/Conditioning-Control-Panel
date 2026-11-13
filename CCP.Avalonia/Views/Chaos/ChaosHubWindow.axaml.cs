@@ -42,11 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - <c>BuildBench</c> is inlined over Core <c>ChaosBench</c>; first-open reveal flashes
     ///    live in ChaosHubWindow.Reveals.cs. Reveal visibility clamps and
     ///    the CCP_CHAOS_DEBUG strip remain unported.
-    ///  - The whole Skia menu scene (fog, per-frame glint masks, blooms, the crossfading
-    ///    flipbook) and the NAudio menu music are gone: no SkiaSharp and no NAudio on this head,
-    ///    and a view layer may not add a package. <c>SetupMenuMotion</c>'s breathing/wobble/glow
-    ///    loop has no faithful Avalonia twin without re-authoring it, so it is a stub and the
-    ///    static frame renders — see the note on that method.
+    ///  - The menu flipbook and motion live in ChaosHubWindow.Menu.cs. The Skia fog,
+    ///    per-frame glint masks and blooms remain unported; the menu music lives in ChaosHubWindow.Music.cs.
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
     ///    <c>MouseLeftButtonDown</c> -> <c>PointerPressed</c>; <c>StateChanged</c> ->
     ///    <c>GetObservable(WindowStateProperty)</c>; <c>ToolTip =</c> -> <c>ToolTip.SetTip</c>;
@@ -105,16 +102,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
+        internal static Action<string, float> PlayCue = ChaosOverlayWindow.ChaosSfx.Play;
+        private bool _uiSoundsReady;
+
         public ChaosHubWindow()
         {
+            AddHandler(Button.ClickEvent, (_, _) => { if (_uiSoundsReady) PlayCue("ui_click", 0.3f); }, RoutingStrategies.Bubble, true);
             // Init runs WPF's on-load refunds/sanitize, which can save. A render draws the
             // in-memory state instead, so --render-all never writes a real profile.
             if (!RenderProof.Rendering) ChaosMeta.Init();
             AvaloniaXamlLoader.Load(this);
+            var logo = ChaosArt.TryLoad(ChaosArt.FilePath("menu_logo.png"));
+            Part<Image>("MenuLogoImage").Source = logo;
+            Part<StackPanel>("MenuLogoFallback").IsVisible = logo == null;
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
-            Closed += (_, _) => { UnlockCards.Stop(); StopRevealFlashes(); };
+            Closed += (_, _) =>
+            {
+                UnlockCards.Stop();
+                StopRevealFlashes();
+                foreach (var timer in _balanceAnims.Values) timer.Stop();
+                _balanceAnims.Clear();
+                _balanceTickOwner = null;
+                StopMenuArt();
+            };
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
@@ -227,8 +239,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ShowTab("loadout");
             _btnMenuStory.IsEnabled = StoryModeEnabled;   // greyed until story ships
             UpdateMuteIcon(CoreSettings.Current.ChaosMenuMusicMuted);
+            SetupMenuMotion();   // before ShowMenuView, which starts the menu art
             ShowMenuView();      // the main menu is the landing view; the dollhouse waits behind it
-            SetupMenuMotion();   // ponytail stub — see the method
+            _uiSoundsReady = true;
             Opened += (_, _) => IntroShown = OnHubOpenedReveals();   // WPF ChaosHubWindow.xaml.cs:81 Loaded
         }
 
@@ -379,6 +392,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private int _shownSparks = -1, _shownGold = -1;
         private readonly Dictionary<TextBlock, DispatcherTimer> _balanceAnims = new();
+        private DispatcherTimer? _balanceTickOwner;
 
         private void RefreshTopBar()
         {
@@ -454,14 +468,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosBench.Items.Count(i => !ChaosBench.IsOwned(i) && !ChaosBench.IsRankShort(i) && !ChaosBench.IsHazy(i) && Live.Gold >= i.Cost);
 
         /// <summary>Roll a top-bar balance from its last shown value to the new one (~500ms) so
-        /// spending visibly *costs* — first paint just snaps. WPF layered a soft tick cue under
-        /// it; ChaosSfx is a head service, so the sound is dropped.</summary>
+        /// spending visibly *costs* — first paint just snaps. WPF layers a soft tick cue under it.</summary>
         private void AnimateBalance(TextBlock tb, int from, int to)
         {
             if (_balanceAnims.TryGetValue(tb, out var old))
             {
                 old.Stop();
                 _balanceAnims.Remove(tb);
+                if (ReferenceEquals(_balanceTickOwner, old)) _balanceTickOwner = null;
             }
             if (from < 0 || from == to || !IsLoaded)
             {
@@ -470,10 +484,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
 
             const int DURATION_MS = 500, FRAME_MS = 33;
-            int elapsed = 0;
+            int elapsed = 0, lastTick = -90;
 
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(FRAME_MS) };
             _balanceAnims[tb] = timer;
+            _balanceTickOwner ??= timer;
             timer.Tick += (_, _) =>
             {
                 elapsed += FRAME_MS;
@@ -481,11 +496,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     timer.Stop();
                     _balanceAnims.Remove(tb);
+                    if (ReferenceEquals(_balanceTickOwner, timer)) _balanceTickOwner = null;
                     tb.Text = to.ToString("N0");
                     return;
                 }
                 double eased = 1 - Math.Pow(1 - elapsed / (double)DURATION_MS, 3);
                 tb.Text = ((int)Math.Round(from + (to - from) * eased)).ToString("N0");
+                if (ReferenceEquals(_balanceTickOwner, timer) && elapsed - lastTick >= 90)
+                {
+                    lastTick = elapsed;
+                    PlayCue("count_tick", 0.4f);
+                }
             };
             timer.Start();
         }
@@ -778,6 +799,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var id = (sender as Button)?.Tag?.ToString();
             if (string.IsNullOrEmpty(id)) return;
             Shelf.ToggleHabit(id!);
+            PlayCue(ChaosMeta.IsUpgradeActive(id!) ? "ui_equip" : "ui_unequip", 0.45f);
             BuildHabits();
             BuildLoadoutTiles();
         }
@@ -1945,6 +1967,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var mode = (sender as Control)?.Tag?.ToString() == "FreeDesktop"
                 ? ChaosPlayMode.FreeDesktop : ChaosPlayMode.Story;
+            _fallingIn = true;
             SaveToSettings();
             Close();
             var cfg = ChaosRunConfig.FromSettings();
@@ -1967,28 +1990,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuLeftCol.IsVisible = true;
             _menuArtPanel.IsVisible = true;
             _menuOptions.IsVisible = false;
+            StartMenuArt();
             RefreshTopBar();   // keep the menu chips current
         }
 
         private void ShowDollhouseView()
         {
+            StopMenuArt();
             _menuView.IsVisible = false;
             _dollhouseView.IsVisible = true;
         }
 
-        /// <summary>Straight into a descent. WPF also detached the companion for the handoff
-        /// (<c>App.AvatarWindow?.SetChaosRunActive(true)</c>).
-        /// <para>ponytail: NOT a Core move - <c>App.AvatarWindow</c> is an
-        /// <c>AvatarTubeWindow</c>, a window, and windows do not move to Core. What this needs is
-        /// on this head: <c>SetChaosRunActive</c> on
-        /// CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs (it has no such member yet) and
-        /// an owner holding the live instance.</para></summary>
-        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) => FallIn();
+        private void Menu_FallIn_Click(object? sender, RoutedEventArgs e) { StopMenuMusic(); BeginCompanionHandoff(); FallIn(); }
 
         private void Menu_Dollhouse_Click(object? sender, RoutedEventArgs e)
         {
             // WPF also spawned the loadout sidebar here (App.Chaos.ShowLoadoutSidebar).
             // ponytail: needs ChaosService, wired when it moves to Core.
+            EnterRunContext();
             ShowDollhouseView();
             ShowTab("loadout");
         }
@@ -1999,6 +2018,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void Menu_Options_Click(object? sender, RoutedEventArgs e)
         {
+            StopMenuArt();
             _optFullscreen.IsChecked = WindowState == WindowState.Maximized;
             _menuLeftCol.IsVisible = false;
             _menuArtPanel.IsVisible = false;
@@ -2010,6 +2030,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuOptions.IsVisible = false;
             _menuLeftCol.IsVisible = true;
             _menuArtPanel.IsVisible = true;
+            StartMenuArt();
         }
 
         private void Menu_Exit_Click(object? sender, RoutedEventArgs e) => Close();
@@ -2166,34 +2187,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ShowMenuView();
         }
 
-        // ============================ menu art motion ============================
-
-        /// <summary>
-        /// WPF put almost-imperceptible life on the menu art: a slow breathing zoom of the
-        /// ImageBrush's RelativeTransform, a tiny rotate, and a pulsing pink glow on the border,
-        /// all as looping WPF <c>DoubleAnimation</c>s started with <c>BeginAnimation</c>.
-        ///
-        /// ponytail: no faithful twin here. Avalonia has no <c>BeginAnimation</c>, animating a
-        /// brush's RelativeTransform needs the whole thing re-authored as Avalonia Animations,
-        /// and the art the motion exists to move (ChaosArt's menu frames) is not on this head
-        /// anyway. The static frame renders instead — 1.02 baseline zoom, no drift, steady glow.
-        /// Restore it together with the Skia menu scene.
-        /// </summary>
-        private void SetupMenuMotion() { }
-
-        /// <summary>WPF advanced the crossfading flipbook on a click and restarted the dwell
-        /// timer. ponytail: needs the ChaosArt frames + the Skia scene, wired with them.</summary>
-        private void MenuArt_Click(object? sender, PointerPressedEventArgs e) { }
-
         // ============================ menu music ============================
 
-        /// <summary>WPF drove a NAudio loop with fades and a master-volume hook. There is still
-        /// no looping-audio capability on this head — <c>CoreAudio</c> is one-shot only — so the
-        /// track does not play. The MUTE STATE is real: read from and written to
-        /// <c>AppSettings.ChaosMenuMusicMuted</c>, so the icon is right the moment the hub opens
-        /// and the choice outlives the window, exactly as in WPF.
-        /// ponytail: needs a looping/fading audio seam for the track itself.</summary>
-        private void UpdateMuteIcon(bool muted) => _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
+        private void UpdateMuteIcon(bool muted)
+        {
+            _menuMuteIcon.Kind = muted ? IconKind.SpeakerMute : IconKind.Speaker2;
+            InitializeMenuMusic();
+        }
 
         private void BtnMenuMute_Click(object? sender, RoutedEventArgs e)
         {
@@ -2201,6 +2201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CoreSettings.Current.ChaosMenuMusicMuted = muted;
             CoreSettings.Save();
             UpdateMuteIcon(muted);
+            FadeMenuMusic(muted ? 0 : 0.5, 12);
         }
 
         // ============================ window chrome (move / fullscreen) ============================
@@ -2219,11 +2220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void SetFullscreen(bool on) => WindowState = on ? WindowState.Maximized : WindowState.Normal;
 
-        /// <summary>WPF also detached the companion tube while maximized (it is anchored to the
-        /// main window). ponytail: same head-side blocker as <see cref="Menu_FallIn_Click"/> -
-        /// <c>SetChaosRunActive</c> on CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs,
-        /// plus an owner for the live instance. Nothing here is waiting on Core.</summary>
-        private void OnHubStateChanged(WindowState state) => _optFullscreen.IsChecked = state == WindowState.Maximized;
+        private void OnHubStateChanged(WindowState state) { _optFullscreen.IsChecked = state == WindowState.Maximized; UpdateCompanionForHubState(state); }
 
         /// <summary>Re-open the spoiler-free rules card on demand, modal over the dollhouse
         /// (WPF ChaosHubWindow.xaml.cs:2942-2948). Never touches SeenIntroGuide.</summary>

@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
         internal static event Action? Displayed;
         internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
+        // Test seam: headless has no click-through overlays, so the burst would stop before loading.
+        internal static Func<bool> OverlaysAvailable = () => X11Overlay.IsAvailable;
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static int _generation;
 
@@ -74,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false)
         {
             if (_busy) return;
-            if (!X11Overlay.IsAvailable)
+            if (!OverlaysAvailable())
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: this platform cannot show click-through overlays, so flashes are skipped");
                 _warnedUnavailable = true;
@@ -103,6 +105,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
                     _warnedEmpty = true;
+                    // Outside the warn-once flag: the offer keeps its own once-per-launch budget (WPF FlashService.cs:971).
+                    Platform.RemoteMediaOffer.Offer("flashes");
                     return;
                 }
 
@@ -175,7 +179,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 GifFrames.Remove(bmp);
                 w.Animate(gif.Frames, GifFrameDelay(gif.Delay, s.FlashGifSpeedMultiplier));
             }
-            if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, MouseClickable(s, clickable))) return false;
+            _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
             if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
             return true;
@@ -453,10 +458,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static readonly List<FlashOverlayWindow> Exiting = new();
         private static FlashExitStyle? _lastExitStyle;
 
-        /// <summary>WPF FlashService.cs:84-92 StayUntilPopped: no solid host on this head, so Click alone
-        /// decides MouseClickable; only the ambient tick is not point-fired.</summary>
+        /// <summary>WPF FlashService.cs:81-92: solid hosting without the unified host cannot receive mouse clicks.</summary>
+        internal static bool MouseClickable(AppSettings s, bool clickable) =>
+            clickable && (s.UnifiedOverlayHost || !s.FlashSolidMode);
+
+        /// <summary>Only an ambient flash the mouse can pop stays until popped.</summary>
         internal static bool Stays(AppSettings s, bool ambient) =>
-            FlashStayRule.Applies(s.FlashStayUntilPopped, s.FlashClickable, pointFired: !ambient);
+            FlashStayRule.Applies(s.FlashStayUntilPopped, MouseClickable(s, s.FlashClickable), pointFired: !ambient);
 
         /// <summary>WPF FlashService.cs:1557-1568: FlashDuration + 1 s (or the caller's override + 1 s),
         /// and the 10-minute safety lifetime for a flash that stays until popped.</summary>
@@ -613,15 +621,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return result;
         }
 
-        /// <summary>An animated GIF/WebP decoded at its display size, under WPF's flash frame budget
-        /// (FlashService LoadGifFrames / AnimatedWebp.DecodeFrames: at most 60 frames, 30 MB kept).
+        /// <summary>An animated GIF/WebP decoded at its display size (at most 2048 px), under WPF's flash
+        /// frame budget and delay (Core <see cref="FlashFrames"/>: FlashService LoadGifFrames /
+        /// AnimatedWebp.DecodeFrames, at most 60 frames, 30 MB kept but never under 10, 600 decoded).
         /// Answers the first frame, with the rest recorded in <see cref="GifFrames"/>; null when the
         /// decode came back with fewer than two frames, and the caller decodes a still.</summary>
         private static Bitmap? DecodeAnimated(string path, PixelRect rect)
         {
-            var frameBytes = Math.Max(1L, (long)rect.Width * rect.Height * 4);
-            var maxFrames = (int)Math.Clamp(30L * 1024 * 1024 / frameBytes, 2, 60);
-            var (frames, delay) = SpiralOverlay.Decode(path, Math.Max(rect.Width, rect.Height), maxFrames);
+            var (frames, delay) = SpiralOverlay.Decode(path, Math.Max(rect.Width, rect.Height), flash: true);
             if (frames.Count < 2)
             {
                 foreach (var f in frames) f.Dispose();

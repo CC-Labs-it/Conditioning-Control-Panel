@@ -49,6 +49,7 @@ public sealed class WelcomeBackLogoTests
             {
                 WelcomeBackOffer.ResetForTests();
                 WelcomeBackOffer.Present = c => { shown.Add(c); return Task.CompletedTask; };
+                WelcomeBackOffer.NewBackup = WelcomeBackRestoreTests.NoBackupClient; // never the real proxy
             }
 
             // Not a fresh device: never armed.

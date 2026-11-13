@@ -396,6 +396,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!c.IsEffectivelyEnabled || !c.IsHitTestVisible) return false;
+                // WPF IsHitTestVisible is effective (a passive ancestor makes the subtree passive); Avalonia's is local.
+                for (Visual? a = c.GetVisualParent(); a != null; a = a.GetVisualParent())
+                    if (a is global::Avalonia.Input.InputElement { IsHitTestVisible: false }) return false;
                 if (c.Bounds.Width <= 0 || c.Bounds.Height <= 0) return false;
                 if (!TryWindowBounds(c, out var r)) return false;
                 if (r.Width < MinTargetPx || r.Height < MinTargetPx) return false;

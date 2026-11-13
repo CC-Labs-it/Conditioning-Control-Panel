@@ -21,6 +21,7 @@ using Avalonia.Threading;
 using Serilog;
 
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
@@ -62,8 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - <b>Settings.</b> The persisted edge (<c>ChaosHudOnRight</c>) and the panic-key hint
     ///    read and write <c>CoreSettings.Current</c>, one for one with the <c>App.Settings</c>
     ///    pair WPF used, so the side switch survives a restart again.
-    ///  - <c>Mouse.GetPosition</c> has no Avalonia twin (there is no global cursor query), so the
-    ///    collapse grace tests the LAST SEEN pointer position instead; see CursorInHudGrace.
+    ///  - Win32 and X11 pointer probes supply desktop coordinates for the collapse grace.
     ///  - <c>SystemParameters.WorkArea</c> -> <c>Screens</c>; <c>Left</c>/<c>Top</c> ->
     ///    <c>Position</c> (physical pixels, so the DIP sizes are scaled by <c>screen.Scaling</c>).
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>IsMouseOver</c> -> <c>IsPointerOver</c>;
@@ -237,8 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             OnMultiplierChanged();                             // seed the multiplier size/heat
             StartLustShimmer();                                // sweeping sheen on the heat bar
 
-            // The pointer position the grace test reads. Avalonia cannot ask the platform where
-            // the cursor is, so the window has to remember where it last saw it.
+            // Remember the last local position for diagnostics.
             PointerMoved += (_, e) => _lastPointer = e.GetPosition(this);
 
             // Never outlive the window. The collapse re-check RE-ARMS itself while the cursor sits in
@@ -413,6 +412,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private DispatcherTimer? _collapseRecheck;
         private DispatcherTimer? _openDwell;
         private Point _lastPointer;
+        /// <summary>Tests replace the desktop pointer probe; null = the platform probe.</summary>
+        internal Func<PixelPoint?>? ReadPointer;
+        /// <summary>Tests: whether an X surface holds the pointer when <see cref="ReadPointer"/> is replaced.</summary>
+        internal bool XSurfaceHasPointerForTests = true;
+        internal static bool? WaylandOverride;
+        private readonly bool _wayland = WaylandOverride ?? (OperatingSystem.IsLinux() &&
+            (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) ||
+             string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)));
+
+        private PixelPoint? ReadDesktopPointer(out bool xSurfaceHasPointer)
+        {
+            xSurfaceHasPointer = true;
+            if (ReadPointer is { } read) { xSurfaceHasPointer = XSurfaceHasPointerForTests; return read(); }
+            if (OperatingSystem.IsWindows()) return Win32Overlay.CursorPosition();
+            return X11Pointer.Read(out xSurfaceHasPointer)?.At;
+        }
 
         // Opening is intent-gated: a brush-past on the way to a bubble near the edge shouldn't fling
         // the panel open. Hovering the strip ARMS a ~1s dwell; it expands only if the cursor is still
@@ -463,6 +478,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void Hud_MouseLeave(object? sender, PointerEventArgs e)
         {
             _lastPointer = e.GetPosition(this);
+            ScheduleCollapseRecheck();
+        }
+
+        private void ScheduleCollapseRecheck()
+        {
             if (_pinnedOpen || !_expanded) return;
             double sinceOpen = (DateTime.UtcNow - _expandedAt).TotalMilliseconds;
             double wait = Math.Max(LEAVE_RECHECK_MS, EXPAND_GRACE_MS - sinceOpen);
@@ -481,15 +501,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         if (_pinnedOpen || !_expanded) return;
                         // #1050 field diagnostics: one Debug line per re-check so a repro log says which
                         // of the two questions disagreed (hit-test vs geometry) and where the panel was.
-                        bool over = _panel.IsPointerOver, grace = CursorInHudGrace();
-                        Log.Debug("ChaosHud collapse re-check: expanded={E} slideX={X:F0} cursor={C} panelOver={O} inGrace={G}",
-                            _expanded, _panelSlide.X, _lastPointer, over, grace);
-                        if (grace)
+                        bool over = _panel.IsPointerOver, grace = CursorInHudGrace(out bool positionKnown);
+                        Log.Debug("ChaosHud collapse re-check: expanded={E} slideX={X:F0} cursor={C} panelOver={O} inGrace={G} positionKnown={K}",
+                            _expanded, _panelSlide.X, _lastPointer, over, grace, positionKnown);
+                        if (grace || !positionKnown)
                         {
-                            // Still on (or within the hysteresis halo of) the HUD. Keep POLLING rather than
-                            // returning: the halo extends past the window, so no further pointer-exit will
-                            // ever arrive to re-arm us, and a cursor parked just outside the edge would
-                            // otherwise pin the sidebar open forever.
+                            // Poll while inside the halo or the position is unknown. A fresh position
+                            // is needed because no further pointer-exit may arrive outside the window.
                             _collapseRecheck.Interval = TimeSpan.FromMilliseconds(LEAVE_RECHECK_MS);
                             _collapseRecheck.Start();
                             return;
@@ -530,27 +548,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// laid-out bounds, grown by a hysteresis margin - which no popup, transform or visibility
         /// flip can answer wrongly.</para>
         ///
-        /// <para>ponytail: WPF asked <c>Mouse.GetPosition(this)</c>, which answers even while the
-        /// pointer is outside the window. Avalonia has no global cursor query, so this reads the
-        /// LAST SEEN pointer position instead. Inside the window they agree; once the pointer has
-        /// left, the halo test is answered against where it crossed the edge rather than where it
-        /// is now, so a cursor that leaves and stops dead just outside can hold the panel open for
-        /// one extra re-check tick. Needs a platform cursor probe to close.</para>
+        /// <para>Use the current desktop pointer where available. If it is unavailable, the
+        /// collapse timer waits for a fresh position instead of trusting popup-sensitive hit tests.
+        /// On Wayland an X11 query keeps the last X position once a native surface takes the
+        /// pointer, and XWayland then reports no root child: that position is stale, so only the
+        /// window's own hover can hold the halo open (WPF has no twin; hand-ported from #4754).</para>
         /// </summary>
-        private bool CursorInHudGrace()
+        internal bool CursorInHudGrace() => CursorInHudGrace(out _);
+
+        private bool CursorInHudGrace(out bool positionKnown)
         {
+            positionKnown = false;
             try
             {
-                return CursorInGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
-                                     _lastPointer, LEAVE_GRACE_MARGIN_DIP);
+                var screen = ReadDesktopPointer(out bool xSurface);
+                positionKnown = screen is not null;
+                Point? cursor = screen is { } position ? this.PointToClient(position) : null;
+                if (cursor is { } current) _lastPointer = current;
+                return CursorInHudGrace(ElementBoundsInWindow(_panel), ElementBoundsInWindow(_strip),
+                                        cursor, _panel.IsPointerOver, _wayland, xSurface);
             }
             catch
             {
-                // Never collapse on a transform/layout hiccup: the pinned-open and dwell paths can
-                // reopen it, but a spurious collapse mid-run is what was reported.
                 return true;
             }
         }
+
+        /// <summary>Pure half of <see cref="CursorInHudGrace()"/>: on Wayland a position no X surface
+        /// confirms is stale and never counts; the window's own hover still does.</summary>
+        internal static bool CursorInHudGrace(Rect panel, Rect strip, Point? cursor, bool over,
+            bool wayland = false, bool xSurfaceHasPointer = true) =>
+            CursorInGrace(panel, strip, wayland && !xSurfaceHasPointer ? null : cursor, LEAVE_GRACE_MARGIN_DIP, over);
 
         /// <summary>An element's bounds in this window's coordinate space, honouring render transforms
         /// (the panel rides a TranslateTransform). An empty rect when the element is not laid out.
@@ -572,13 +600,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// union of two (possibly empty) rects grown by <paramref name="margin"/> on every side? Empty
         /// rects contribute nothing, and two empty rects answer false. Avalonia's Rect is a struct with
         /// no Rect.Empty sentinel, so "empty" is a zero-or-negative extent here.</summary>
-        internal static bool CursorInGrace(Rect a, Rect b, Point cursor, double margin)
+        internal static bool CursorInGrace(Rect a, Rect b, Point? cursor, double margin, bool over = false)
         {
+            if (cursor is null) return over;
             if (margin < 0) margin = 0;
             static bool Empty(Rect r) => r.Width <= 0 || r.Height <= 0;
             var union = Empty(a) ? b : (Empty(b) ? a : a.Union(b));
             if (Empty(union)) return false;
-            return union.Inflate(margin).Contains(cursor);
+            return union.Inflate(margin).Contains(cursor.Value);
         }
 
         private void Collapse()

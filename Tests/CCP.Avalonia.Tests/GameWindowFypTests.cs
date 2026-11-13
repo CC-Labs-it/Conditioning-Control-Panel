@@ -78,6 +78,67 @@ public sealed class GameWindowFypTests
         });
     }
 
+    [Fact]
+    public void EmiMoments_FreshVisitRefocusAndClose() => Run((_, _) =>
+    {
+        var oldMoment = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment;
+        var oldClock = GameWindow.FypUtcNow;
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var moments = new List<(string, object?)>();
+        ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment = (name, context) => moments.Add((name, context));
+        GameWindow.FypUtcNow = () => now;
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            var window = GameWindow.Launch("fyp")!;
+            Assert.NotNull(window);
+            Assert.Same(window, GameWindow.Launch("fyp"));
+            Assert.Equal(new[] { "fypOpened" }, moments.Select(m => m.Item1));
+            now = now.AddSeconds(185);
+            window.Close();
+            GameWindow.CloseAllForPanic();
+            Assert.Equal(new[] { "fypOpened", "fypClosed" }, moments.Select(m => m.Item1));
+            Assert.Equal(3, (int)JObject.FromObject(moments[1].Item2!)["minutes"]!);
+            var server = GameWindow.Server;
+            try
+            {
+                GameWindow.Server = () => throw new InvalidOperationException("setup failed");
+                Assert.Throws<InvalidOperationException>(() => GameWindow.Launch("fyp"));
+                GameWindow.CloseAllForPanic();
+                Assert.Equal(new[] { "fypOpened", "fypClosed", "fypOpened", "fypClosed" }, moments.Select(m => m.Item1));
+                Assert.Equal(0, (int)JObject.FromObject(moments[3].Item2!)["minutes"]!);
+            }
+            finally { GameWindow.Server = server; }
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment = oldMoment;
+            GameWindow.FypUtcNow = oldClock;
+        }
+    });
+
+    [Fact]
+    public void BrowserFailure_ClosesVisitOnce() => Run((_, _) =>
+    {
+        var oldMoment = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment;
+        var moments = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment = (name, _) => moments.Add(name);
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            var window = GameWindow.Launch("fyp")!;
+            window.Web.OnBrowserProcessFailed();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(new[] { "fypOpened", "fypClosed" }, moments);
+            window.Web.OnBrowserProcessFailed();
+            GameWindow.CloseAllForPanic();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.Equal(new[] { "fypOpened", "fypClosed" }, moments);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Moment = oldMoment; }
+    });
+
     // WPF VideoService.cs:1982: the video host uses the same visible-feed predicate as Bubble Count.
     [Fact]
     public void MandatoryVideoHost_TracksVisibleFeed_AndPanicClearsIt() => Run((shell, _) =>

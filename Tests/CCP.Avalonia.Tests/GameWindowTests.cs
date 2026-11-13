@@ -14,11 +14,14 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Services.Webcam;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -115,6 +118,71 @@ public sealed partial class GameWindowTests
         finally { w.Close(); Directory.Delete(root, true); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Breakout_PanicLadder_ClosesOnSecondPressOrResumes(bool resume) => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        var tracker = WebcamTracker.Instance;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        try
+        {
+            s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = false;
+            s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+            launcher.Hide();
+            var w = GameWindow.Launch("breakoutdemo")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.True(tracker.Start(), tracker.LastError);
+            var now = DateTime.Now;
+            shell.HandlePanicKeyPress(now);
+            Assert.True(w.IsVisible);
+            Assert.True(SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(5)));
+            Assert.True(WebcamConsent.IsCurrent(s));
+            var frame = Assert.Single(sent, x => (string?)x["type"] == "suspend");
+            Assert.True((bool)frame["on"]!);
+            Assert.Equal("panic", (string?)frame["reason"]);
+            Assert.Equal(0, shell.PanicPressCountForTest);
+            if (resume)
+            {
+                w.ResumeBreakoutAfterPanic(now.AddSeconds(2));
+                Assert.Single(sent);
+                w.ResumeBreakoutAfterPanic(now.AddSeconds(3));
+                Assert.False((bool)sent.Last()["on"]!);
+                Assert.Equal("panic", (string?)sent.Last()["reason"]);
+                Assert.True(w.IsVisible);
+            }
+            else
+            {
+                Assert.True(tracker.Start(), tracker.LastError); // manually restarted after press 1
+                shell.HandlePanicKeyPress(now.AddSeconds(1));
+                Assert.False(w.IsVisible);
+                Assert.True(SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(5)));
+                Assert.Equal(0, shell.PanicPressCountForTest);
+            }
+        }
+        finally
+        {
+            tracker.Stop();
+            SpinWait.SpinUntil(() => !tracker.IsClosing, TimeSpan.FromSeconds(20));
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+        }
+    });
+
+    [Fact]
+    public void Breakout_OverridePanicClosesImmediately() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = true;
+        launcher.Hide();
+        var w = GameWindow.Launch("breakoutdemo")!;
+        shell.HandlePanicKeyPress(DateTime.Now);
+        Assert.False(w.IsVisible);
+        Assert.Equal(0, shell.PanicPressCountForTest);
+    });
+
     [Fact]
     public void Play_OpensTheGameHost_AndPanicClosesIt() => Run((shell, launcher) =>
     {
@@ -160,6 +228,8 @@ public sealed partial class GameWindowTests
             File.WriteAllBytes(Path.Combine(lib, "images", "still.png"), new byte[] { 1 });   // not an animation
             CorePaths.EffectiveAssetsProvider = () => lib;
             var w = GameWindow.Launch("breakoutdemo")!;
+            w.RainBridgeFactory = () => new ConditioningControlPanel.Avalonia.Views.BackRoom.BackRoomRainBridge(
+                (a, b, c, d, e, f) => { }, () => { }, () => false, () => false, () => 100);
             Assert.Same(w, GameWindow.Launch("breakoutdemo"));   // focused, never relaunched
             Assert.Contains("backroom/stations/breakout/play.html", w.PageUrl!.AbsolutePath);
             Assert.Contains("desktop=1&demo=1", w.PageUrl.Query);   // 3 levels even before init (access.js)
@@ -190,8 +260,13 @@ public sealed partial class GameWindowTests
             var ack = sent.Last();
             Assert.Equal("fx-ack", (string?)ack["type"]);
             Assert.Equal("t7", (string?)ack["token"]);
-            Assert.Empty(ack["fired"]!);
-            Assert.Equal("unknown", (string?)ack["skipped"]!.Single()["why"]);
+            Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+            Assert.All(ack["skipped"]!, skip => Assert.Equal("unknown", (string?)skip["why"]));
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"t8\",\"fxId\":\"fx.unknown\",\"station\":\"breakout\"}");
+            var unknown = sent.Last();
+            Assert.Equal("t8", (string?)unknown["token"]);
+            Assert.Empty(unknown["fired"]!);
+            Assert.Equal("unknown", (string?)unknown["skipped"]!.Single()["why"]);
             w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
             Dispatcher.UIThread.RunJobs();
             Assert.False(GameWindow.IsAnyOpen());
@@ -891,6 +966,30 @@ public sealed partial class GameWindowTests
 
     // ---- Racing Thoughts own tracks (WPF CaucusHostService.cs :353-368, :736-1035) ----
 
+    // Restack b76 (#3286). WPF CaucusHostService.cs:383,435: both paths stop the file clock.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Race_RunEndAndExit_StopTheAudio(bool exit) => RunRace("rt.original.03", (_, _, _) =>
+        WithTrackFiles((_, _) => Tone(1), paths =>
+    {
+        var player = new FakeTrackPlayer();
+        try
+        {
+            var w = OpenRetiredRace();
+            w.RacePickFile = () => Task.FromResult<string?>(paths[0]);
+            w.RaceNewPlayer = () => player;
+            w.HandleMessage("{\"type\":\"track-pick\"}");
+            Settle(w);
+            w.HandleMessage("{\"type\":\"track-play\"}");
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage(exit ? "{\"type\":\"exit\"}" : "{\"type\":\"run-ended\"}");
+            Assert.False(player.IsPlaying);
+            Assert.False(w.RaceTrackClockRunning);
+        }
+        finally { GameWindow.CloseAllForPanic(); }
+    }));
+
     private sealed class FakeTrackPlayer : IRaceTrackPlayer
     {
         public readonly List<string> Calls = new();
@@ -1230,6 +1329,35 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void Dtrh_ModSwitchRequestsEndWithoutClosingOtherGames() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        using var snapshot = new CoreModsSnapshot();
+        var oldSettings = CoreSettings.ServiceProvider;
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.StartMods();
+            var w = GameWindow.Launch("dtrh")!;
+            var other = GameWindow.Launch("breakoutdemo")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            var target = global::ConditioningControlPanel.Avalonia.App.Mods!.ActiveModId == BuiltInMods.SissyHypnoId
+                ? BuiltInMods.BambiSleepId : BuiltInMods.SissyHypnoId;
+            global::ConditioningControlPanel.Avalonia.App.Mods.ActivateMod(target);
+            Assert.Contains(sent, x => (string?)x["type"] == "end-run");
+            Assert.True(other.IsVisible);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent();
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
+    [Fact]
     public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {
         RunDtrh(lab: false, (_, _, _, denied) =>
@@ -1301,6 +1429,129 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    /// <summary>WPF MainWindow.xaml.cs:1731-1766: a live descent takes priority over either game handoff.</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Chaos_ActiveDescentPanicOutranksOpenGames(bool withDtrh, bool countdown) => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled, oldOverride) = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
+            var breakout = GameWindow.Launch("breakoutdemo")!;
+            var frames = new List<JObject>();
+            breakout.Posted += json => frames.Add(JObject.Parse(json));
+            var dtrh = withDtrh ? GameWindow.Launch("dtrh")! : null;
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            var overlay = ChaosRunHost.Overlay!;
+            if (!countdown) overlay.FinishCountdown();
+            ChaosRunHost.StopTimerForTests();
+            Assert.True(ChaosRunHost.IsActive);
+            Assert.Equal(!countdown, ChaosRunHost.IsDescending);
+
+            shell.HandlePanicKeyPress(DateTime.Now);
+            Assert.False(ChaosRunHost.IsActive);
+            overlay.FinishCountdown(); // a queued start must not revive the run after panic
+            Assert.False(ChaosRunHost.IsDescending);
+            Assert.False(breakout.IsVisible);
+            Assert.DoesNotContain(frames, f => (string?)f["type"] == "suspend");
+            if (dtrh != null) Assert.False(dtrh.IsVisible);
+            Assert.Equal(0, shell.PanicPressCountForTest);
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride);
+        }
+    });
+
+    /// <summary>WPF MainWindow.xaml.cs:1742-1769: DtRH takes an unclaimed ladder press before Breakout.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicTakesPriorityOverOpenBreakout(bool ready) => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled, oldOverride) = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
+            var breakout = GameWindow.Launch("breakoutdemo")!;
+            var breakoutFrames = new List<JObject>();
+            breakout.Posted += json => breakoutFrames.Add(JObject.Parse(json));
+            var dtrh = GameWindow.Launch("dtrh")!;
+            var dtrhFrames = new List<JObject>();
+            dtrh.Posted += json => dtrhFrames.Add(JObject.Parse(json));
+            if (ready) dtrh.HandleMessage("{\"type\":\"ready\"}");
+            dtrhFrames.Clear();
+            var now = DateTime.Now;
+
+            shell.HandlePanicKeyPress(now);
+            Assert.True(breakout.IsVisible);
+            Assert.DoesNotContain(breakoutFrames, f => (string?)f["type"] == "suspend");
+            Assert.Equal(0, shell.PanicPressCountForTest);
+            if (ready)
+            {
+                var end = Assert.Single(dtrhFrames);
+                Assert.Equal("end-run", (string?)end["type"]);
+                Assert.Equal("host", (string?)end["reason"]);
+                dtrh.HandleMessage("{\"type\":\"exit-done\"}");
+            }
+            Assert.False(dtrh.IsVisible);
+
+            shell.HandlePanicKeyPress(now.AddSeconds(1));
+            var suspend = Assert.Single(breakoutFrames, f => (string?)f["type"] == "suspend");
+            Assert.True((bool)suspend["on"]!);
+            Assert.True(breakout.IsVisible);
+            Assert.Equal(0, shell.PanicPressCountForTest);
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PanicHandoffStopsCamera(bool ready) => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var tracker = WebcamTracker.Instance;
+        var old = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll, s.WebcamConsentGiven,
+            s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
+            s.WebcamConsentGiven = true; s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlinkTrainerSessionTests.BlackFrames();
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            if (ready) w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            Assert.True(tracker.Start(), tracker.LastError);
+            shell.HandlePanicKeyPress(DateTime.Now);
+            Assert.True(SpinWait.SpinUntil(() => !tracker.IsRunning, TimeSpan.FromSeconds(5)));
+            Assert.True(WebcamConsent.IsCurrent(s));
+            Assert.Equal(0, shell.PanicPressCountForTest);
+            if (ready)
+            {
+                Assert.Equal("end-run", (string?)Assert.Single(sent)["type"]);
+                w.HandleMessage("{\"type\":\"exit-done\"}");
+            }
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            tracker.Stop();
+            SpinWait.SpinUntil(() => !tracker.IsClosing, TimeSpan.FromSeconds(20));
+            (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll, s.WebcamConsentGiven,
+                s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+        }
+    });
 
     [Fact]
     public void Dtrh_PanicRequestsEndAndPageSettlesOnlyOnce() => RunDtrh(lab: true, (shell, xp, runs, _) =>

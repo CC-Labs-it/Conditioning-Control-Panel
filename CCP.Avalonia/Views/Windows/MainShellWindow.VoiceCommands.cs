@@ -5,7 +5,7 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (keyword triggers, deeper) are left out of the grammar.
+// seam here (keyword triggers) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
             "video_pause" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PausePrimary,
             "video_resume" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PlayPrimary,
+            "deeper" when CoreEngine.StartBrainDrain != null => () => CoreEngine.StartBrainDrain?.Invoke(),
             "shake_once" => () => Deeper.ScreenShake.Shake(60, 1200),
             "pause" => PauseSessionFromRemote,
             "resume" => ResumeSessionFromRemote,
@@ -148,7 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "mantra" => () => { }, // Core returns this intent to the existing spoken-mantra funnel.
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
-            "takeover_on" => () => Autonomy.Start(),
+            "takeover_on" => () => StartAutonomyFromUser(),
             "takeover_off" => () => Autonomy.Stop(),
             "mute" => () => ApplyVoiceMute(true),
             "unmute" => () => ApplyVoiceMute(false),
@@ -218,6 +219,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Warning(ex, "RefreshVoiceInputModes failed"); }
         }
+
+        /// <summary>True while the user has the wake word or push-to-talk armed: the mic Graded Intake
+        /// borrows (IntakeMicBorrow, WPF AutonomyService.UserDrivenVoiceArmed).</summary>
+        internal bool UserDrivenVoiceArmed => _wakeLoopCts != null || _pttArmed;
 
         /// <summary>WPF StopVoiceInput (privacy pill, "stop listening", a voice lock card taking the mic):
         /// cut any capture and stand both modes down until the next reconcile.</summary>
