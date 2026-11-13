@@ -113,6 +113,12 @@ public sealed class TubeFloatingTests
         Assert.Equal(0, bob.Y);
     });
 
+    // V1 emote sets now play on the tube, and a set's emotes.json layout may scale the avatar
+    // (avatar0 ships 0.79, as WPF applies it); the configured scale is kept times that multiplier.
+    private static double SetScale(AvatarTubeWindow tube) => (double)typeof(AvatarTubeWindow)
+        .GetMethod("RainLayout", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+        .Invoke(tube, new object[] { "scale", 1.0 })!;
+
     [Fact]
     public Task OpeningPreservesConfiguredScaleWhileBobbing() => Run(tube =>
     {
@@ -121,8 +127,9 @@ public sealed class TubeFloatingTests
         tick(0.016);
         var at = Assert.IsAssignableFrom<global::Avalonia.Media.ITransform>(image.RenderTransform)
             .Value.Transform(new Point(10, 20));
-        Assert.Equal(16.5, at.X, 8);
-        Assert.Equal(33 + Math.Sin(0.05) * 4, at.Y, 8);
+        var set = SetScale(tube);   // the emote set's own layout multiplier (WPF CirceEmotes.cs:1358)
+        Assert.Equal(16.5 * set, at.X, 8);
+        Assert.Equal(33 * set + Math.Sin(0.05) * 4, at.Y, 8);
     }, avatarScale: 1.65);
 
     [Fact]
@@ -137,12 +144,13 @@ public sealed class TubeFloatingTests
         tube.Attach();
         var at = Assert.IsAssignableFrom<global::Avalonia.Media.ITransform>(image.RenderTransform)
             .Value.Transform(new Point(10, 20));
-        Assert.Equal(13.5, at.X, 8);
-        Assert.Equal(27 + Math.Sin(0.05) * 4, at.Y, 8);
+        var set = SetScale(tube);
+        Assert.Equal(13.5 * set, at.X, 8);
+        Assert.Equal(27 * set + Math.Sin(0.05) * 4, at.Y, 8);
         Assert.Same(tick, tube.FloatingFrame);
         tick(0.032);
         at = image.RenderTransform!.Value.Transform(new Point(10, 20));
-        Assert.Equal(27 + Math.Sin(0.1) * 4, at.Y, 8);
+        Assert.Equal(27 * set + Math.Sin(0.1) * 4, at.Y, 8);
     }, avatarScale: 1.65);
 
     [Fact]
