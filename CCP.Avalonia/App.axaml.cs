@@ -697,7 +697,7 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
-                RecoverEngineCrash();
+                RecoverEngineCrash(() => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("crashRecovered", null));
                 Platform.EntitlementRefresh.Install();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
@@ -1566,14 +1566,23 @@ namespace ConditioningControlPanel.Avalonia
             Platform.ToneWav.DeleteFiles();
         }
 
-        internal static void RecoverEngineCrash() => Services.EngineCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+        /// <summary>Launch: consume a sentinel the last session left (the shell's OnEngineStarted marks it,
+        /// OnEngineStopped clears it, WPF MainWindow.StartStop.cs:426,582) and, only when one was found,
+        /// let EMI say so (WPF App.xaml.cs:2424,2856 "crashRecovered").</summary>
+        internal static void RecoverEngineCrash(Action? fire = null)
+        {
+            if (Services.EngineCrashSentinel.ConsumeAndReport(Serilog.Log.Logger) && fire != null)
+                try { fire(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI crash recovery failed"); }
+        }
+
+        internal static void ClearEngineCrashOnExit() => Services.EngineCrashSentinel.Clear();
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
             Platform.LoginStreakHead.ClearProfile();
-            Services.EngineCrashSentinel.Clear();
+            ClearEngineCrashOnExit();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
