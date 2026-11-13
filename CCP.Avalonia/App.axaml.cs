@@ -667,6 +667,21 @@ namespace ConditioningControlPanel.Avalonia
 
         private Platform.GazeDriftCorrection? _gazeDrift;
 
+        internal static void RepairLaunchSettings(SettingsService settings)
+        {
+            // WPF App.xaml.cs:380,463,2952,3282: re-clones must see the live AI availability (the one seed).
+            CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
+            var presets = new KeywordTriggerPresetService();
+            try { presets.SyncInstalledCustomSources(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
+            foreach (var id in settings.PendingPresetReinstalls.ToList())
+            {
+                try { presets.InstallPreset(id, presets.ChasterTimeWasAllowed(id)); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Pending preset reinstall failed for {Id}", id); }
+            }
+            settings.PendingPresetReinstalls.Clear();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -681,6 +696,7 @@ namespace ConditioningControlPanel.Avalonia
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
                 desktop.Exit += OnDesktopExit;
+                RecoverEngineCrash();
                 Platform.EntitlementRefresh.Install();
 
                 // Real settings on this head: SettingsService now lives in Core and reads and
@@ -716,6 +732,8 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                try { InstallDateRecorder.EnsureRecorded(Settings, CorePaths.UserData, AppDomain.CurrentDomain.BaseDirectory); }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Install date recording failed"); }
                 // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
@@ -874,6 +892,11 @@ namespace ConditioningControlPanel.Avalonia
                     // WPF MainWindow.JustDrop.cs:66: the Just Drop door flag, 9 s after startup.
                     Views.Windows.MainShellWindow.JustDropAvailabilityCheck = Services.JustDrop.JustDropService.RefreshAvailabilityAsync;
                 }
+                // A restored profile can pay a web claim during startup, before later splash steps.
+                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                _achievementSaveTimer?.Stop();
+                _achievementSaveTimer = StartAchievementAutosave(Achievements);
+                SeedAchievementXp(Achievements);
                 if (Platform.AccountSeed.Seed())
                 {
                     // Unit 7c, with the logout clear: the push, XP banking and its two triggers (WPF
@@ -912,6 +935,7 @@ namespace ConditioningControlPanel.Avalonia
                         await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
+                RepairLaunchSettings(Settings);
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
                 // Once the active mod is known (its overrides key the entries): decode the art the last
@@ -1058,7 +1082,6 @@ namespace ConditioningControlPanel.Avalonia
                     recapVideo.VideoStarted += () => MediaHistory?.RecordVideo(recapVideo.LastVideoPath);
                 //
                 SeedModeration();
-                CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
                 // echo is attached by Platform.BarkHead.Start below; command executor and
@@ -1088,7 +1111,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Achievements: the Core engine over the same achievements.json WPF uses, seeded the
                 // way WPF App.xaml.cs:384/:394 seeds the two unlock seams. Unlocked is raised on the
                 // caller's thread; the popup hops to the UI thread as WPF's DispatcherHelper does.
-                Achievements = new AchievementEngine(new AchievementStore(AchievementsPath));
+                // The engine itself is created before AccountSeed.Seed (restack b08, #4544).
                 Platform.LoginStreakHead.Start(Achievements, CoreSettings.Current);
                 var seasonEngine = Achievements;
                 void CheckSeasonActivity()
@@ -1365,8 +1388,15 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
         /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
-        /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
-        /// silent). Returns the LevelUp handler so a test can detach it.</summary>
+        // WPF ProgressionService.cs:104,162: achievements count settled XP from awards and claims.
+        internal static Action<ProgressionBank.XpAward> SeedAchievementXp(AchievementEngine engine)
+        {
+            Action<ProgressionBank.XpAward> onXp = award => engine.TrackXPEarned(award.Amount);
+            ProgressionBank.XPAwarded += onXp;
+            return onXp;
+        }
+
+        /// <summary>WPF ProgressionService.cs:285 and App.xaml.cs:3174. Returns the handler for tests.</summary>
         internal static Action<int> SeedLevelAchievements(AchievementEngine engine)
         {
             Action<int> onLevel = engine.CheckLevelAchievements;
@@ -1535,11 +1565,14 @@ namespace ConditioningControlPanel.Avalonia
             Platform.ToneWav.DeleteFiles();
         }
 
+        internal static void RecoverEngineCrash() => Services.EngineCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
             Platform.LoginStreakHead.ClearProfile();
+            Services.EngineCrashSentinel.Clear();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.

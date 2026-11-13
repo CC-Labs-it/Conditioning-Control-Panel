@@ -167,6 +167,59 @@ internal static class AccountSeed
         }
     }
 
+    // WPF MainWindow.Login.cs:155-187. The failed-read fallback has its own guards.
+    internal static async Task PostLoginAsync(Func<Task<bool>>? load = null, AchievementEngine? achievements = null)
+    {
+        var uid = CoreSettings.Current.UnifiedId;
+        Sync?.StartHeartbeat();
+        await Task.Delay(500);
+        if (CoreSettings.Current.UnifiedId != uid || string.IsNullOrEmpty(uid)) return;
+        achievements ??= App.Achievements;
+        if (achievements != null) achievements.SuppressPopups = true;
+        try
+        {
+            load ??= () => LoadProfileAsync();
+            var loaded = await load();
+            if (!loaded && CoreSettings.Current.UnifiedId == uid)
+                loaded = await load();
+            // WPF Login.cs:170-181 calls sync even after a failed read.
+            if (CoreSettings.Current.UnifiedId == uid && Sync is { } sync)
+            {
+                if (loaded || sync.Loaded) await sync.PushAsync("after login");
+                else
+                {
+                    var session = sync.SessionVersion;
+                    await sync.PushAfterFailedReadAsync();
+                    _ = RetryProfileReadAsync(sync, uid, session);
+                }
+            }
+        }
+        finally
+        {
+            if (achievements != null) achievements.SuppressPopups = false;
+        }
+    }
+
+    private static async Task RetryProfileReadAsync(SyncPush sync, string uid, int session)
+    {
+        var settings = CoreSettings.Current;
+        var delay = 1;
+        while (ReferenceEquals(Sync, sync) && sync.SessionVersion == session && !sync.Loaded
+            && ReferenceEquals(CoreSettings.Current, settings) && settings.UnifiedId == uid && !settings.OfflineMode)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delay));
+            if (!ReferenceEquals(Sync, sync) || sync.SessionVersion != session || sync.Loaded
+                || !ReferenceEquals(CoreSettings.Current, settings) || settings.UnifiedId != uid || settings.OfflineMode) return;
+            if (await LoadProfileAsync())
+            {
+                if (ReferenceEquals(Sync, sync) && sync.SessionVersion == session && settings.UnifiedId == uid)
+                    sync.Nudge("after profile recovery");
+                return;
+            }
+            delay = Math.Min(delay * 2, 60);
+        }
+    }
+
     /// <summary>The sync configuration used by desktop startup and account tests.</summary>
     internal static SyncPush NewSync(Func<IEnumerable<string>?> unlocked, Func<bool> running, HttpMessageHandler? http = null)
         => new(unlocked, running, http, Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
@@ -335,6 +388,8 @@ internal static class AccountSeed
     {
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
+        var syncAtRead = Sync;
+        var session = syncAtRead?.SessionVersion;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
         PrizeOwnership.Feed.NoteAccount(id);
         var streakGeneration = LoginStreakHead.ProfileGeneration;
@@ -346,7 +401,8 @@ internal static class AccountSeed
         }
         // The request may finish after logout or an account/settings switch (or a streak profile clear).
         if (!ReferenceEquals(s, CoreSettings.Current) || s.UnifiedId != id || s.OfflineMode
-            || streakGeneration != LoginStreakHead.ProfileGeneration) return false;
+            || streakGeneration != LoginStreakHead.ProfileGeneration
+            || !ReferenceEquals(Sync, syncAtRead) || syncAtRead?.SessionVersion != session) return false;
         // WPF ProfileSyncService: the profile read seeds ownership before the garage opens (#3854).
         PrizeOwnership.Feed.Apply(id, user.UnifiedId, user.Prizes, "V2 profile");
         LoginStreakHead.ProfileLoaded(id, user.Stats);
