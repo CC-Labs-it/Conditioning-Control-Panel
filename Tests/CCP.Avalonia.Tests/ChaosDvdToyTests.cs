@@ -180,7 +180,7 @@ public sealed class ChaosDvdToyTests
                 ChaosDvdOverlay.Advance(0.05);
                 Assert.Equal(1, pops);
                 Assert.Equal(1, snaps);
-                Assert.True(live.Deflating);
+                Assert.True(live.Popping && !live.Deflating);   // a swept snap bursts (WPF Pop)
                 Assert.False(rabbit.Popping || freeze.Popping || tease.Popping || brittle.Popping || far.Popping);
                 ChaosDvdOverlay.Advance(0.05);
                 Assert.Equal(2, pops + snaps); // no duplicate rewards

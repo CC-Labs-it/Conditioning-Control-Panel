@@ -489,7 +489,7 @@ public sealed class ChaosRunHostTests
                 Assert.Equal((1, 0), (treats, snaps));
                 BubbleOverlay.StepPlayerRipples();
                 Assert.Equal((1, 1), (treats, snaps));
-                Assert.True(live.Deflating);
+                Assert.True(live.Popping && !live.Deflating);   // a swept snap bursts (WPF Pop)
                 Assert.False(excluded.Popping);
                 BubbleOverlay.StepPlayerRipples();
                 BubbleOverlay.StepPlayerRipples();

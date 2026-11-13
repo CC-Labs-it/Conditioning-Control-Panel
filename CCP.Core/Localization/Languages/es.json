@@ -8445,6 +8445,7 @@
   "chaos_expiry_label": "DESVANECIDA",
   "chaos_expiry_halved": "💨 {0} se desvaneció… racha reducida a x{1}",
   "chaos_expiry_gone": "💨 {0} se desvaneció",
+  "chaos_aftermath_event": "⚡ secuela: el aire aún chisporrotea",
   "chaos_expiry_name_lucky": "burbuja de la suerte",
   "chaos_expiry_name_flash": "destello",
   "chaos_expiry_name_subliminal": "subliminal",

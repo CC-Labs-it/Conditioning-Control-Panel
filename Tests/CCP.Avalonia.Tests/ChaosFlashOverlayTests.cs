@@ -258,6 +258,27 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
+    public Task RemoteUrlNeverReachesTheFileDecoder() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        if (!OperatingSystem.IsLinux()) return Task.CompletedTask;
+        // On Linux this URL is also a valid relative file name. A file probe would decode it.
+        var host = Guid.NewGuid().ToString("N") + ".invalid";
+        var dir = Path.Combine("https:", host);
+        var file = Path.Combine(dir, "poster.gif");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllBytes(file, Convert.FromBase64String(TinyGif));
+            var (frames, _) = ChaosFlashOverlay.Decode($"https://{host}/poster.gif", 640, false);
+            try { Assert.Empty(frames); }
+            finally { foreach (var frame in frames) frame.Dispose(); }
+        }
+        finally { Directory.Delete(dir, true); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public void StageIncludesNegativeOriginsAndVerticalOffsets()
     {
         Assert.Equal(new PixelRect(-1600, -200, 3520, 1280),
