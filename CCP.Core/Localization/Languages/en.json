@@ -34,6 +34,7 @@
   "lockcard_voice_hint_no_mic": "No microphone detected. Lock cards will use typing until one is connected.",
   "lockcard_voice_hint_model_failed": "Speech model found but it would not load. Remove any extra model you added under {0}, then restart.",
   "lockcard_voice_hint_model_missing": "Speech model not installed yet. Lock cards will use typing until it is. Unzip vosk-model-small-en-us-0.15 into {0}",
+  "chaos_body_buzz_spreads": "body buzz: the current spreads",
   "chaos_toy_buzz": "it buzzes. hold and sweep",
   "chaos_toy_snap_all": "snapped. all of it.",
   "chaos_toy_snap_live": "snapped. every live one let go",

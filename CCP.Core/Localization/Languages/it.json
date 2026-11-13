@@ -32,6 +32,7 @@
   "lockcard_voice_hint_no_mic": "Nessun microfono rilevato. Le schede di blocco useranno la digitazione finché non ne colleghi uno.",
   "lockcard_voice_hint_model_failed": "Modello vocale trovato, ma non caricato. Rimuovi i modelli aggiuntivi da {0}, poi riavvia.",
   "lockcard_voice_hint_model_missing": "Il modello vocale non è ancora installato. Le schede di blocco useranno la digitazione nel frattempo. Estrai vosk-model-small-en-us-0.15 in {0}",
+  "chaos_body_buzz_spreads": "brividi nel corpo: la corrente si diffonde",
   "chaos_toy_buzz": "vibra. tieni premuto e scorri",
   "chaos_toy_snap_all": "liberato. tutto.",
   "chaos_toy_snap_live": "liberato. tutte le bolle attive hanno ceduto",

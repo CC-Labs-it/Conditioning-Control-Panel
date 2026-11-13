@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion other than FloatUp and RainDown, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
+    /// motion other than FloatUp and RainDown, treat rot, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
     /// first-time bonus and ripple-denial pop text.
@@ -269,6 +269,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ShowPopScore(pts);
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            BodyBuzz(b);
             CheckComboMilestone();
         }
 
