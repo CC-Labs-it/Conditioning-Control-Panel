@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbFont.SelectionBoxItemTemplate = new FuncDataTemplate<string>((name, _) => new TextBlock
             {
                 Text = name,
-                FontFamily = CmbFont.Items.OfType<ComboBoxItem>().First(item => Equals(item.Tag, name)).FontFamily,
+                FontFamily = CmbFont.Items.OfType<ComboBoxItem>().FirstOrDefault(item => Equals(item.Tag, name))?.FontFamily ?? FontFamily.Default,
             });
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
