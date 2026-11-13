@@ -39,6 +39,7 @@ internal static class SecretStore
     {
         CoreSecrets.RetrieveProvider = Retrieve;
         CoreSecrets.StoreProvider = Store;
+        Services.AIService.OpenAiCompatibleService.ApiKeyUnprotect = CompanionApiKey.Read;
     }
 
     internal static string? Retrieve(string name)
@@ -49,25 +50,29 @@ internal static class SecretStore
         return value;
     }
 
-    internal static void Store(string name, string? value)
+    internal static void Store(string name, string? value) => StoreWithStatus(name, value);
+
+    // The drawer must distinguish a saved key from the memory-only fallback.
+    internal static bool StoreWithStatus(string name, string? value)
     {
         if (string.IsNullOrEmpty(value)) value = null;
         _cache[name] = value;
-        if (OsWrite(name, value)) return;
+        if (OsWrite(name, value)) return true;
         if (value is null)
         {
             // Memory-only runs (sandbox, no Secret Service) wrote nothing to the OS store: the memory clear is the clear.
             // So does a run whose Secret Service never answered at all (owner WSLg log: a startup logout said
             // "logout not complete" over a keyring that was never there): nothing was stored there this session.
-            if (Sandboxed || NotRemembered || Libsecret.Gate.NeverReached) return;
+            if (Sandboxed || NotRemembered || Libsecret.Gate.NeverReached) return false;
             Log.Warning("Could not clear {Name} from the secret store", name);
             ClearFailed = true;
-            return;
+            return false;
         }
         // A sandbox is memory-only on purpose, not a missing Secret Service: no warning, no "no secret store" notice.
-        if (Sandboxed) return;
+        if (Sandboxed) return false;
         Log.Warning("No usable secret store: {Name} is kept in memory for this run only", name);
         NotRemembered = true;
+        return false;
     }
 
     // Test-owned Linux store; never connects to a session bus.

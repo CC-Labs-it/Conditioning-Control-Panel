@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: the awareness arbiter lands with its host;
-    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source; tier latches key on the raw account tier (CoreAccount.CurrentTier).
     /// </summary>
     public sealed class BarkEngine
     {
@@ -190,8 +190,8 @@ namespace ConditioningControlPanel.Services.Bark
                     if (winner == null) { Log.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger); return false; }
                     pool = ResolvePool(winner);
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
-                    if (!fire) { Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", trigger, winner.Id, reason); return false; }
-                    Log.Information("[BARK] {Decision} trigger={Trigger} rule={Rule} class={Class} variant#={Idx}", DryRun ? "dry-run WOULD FIRE" : "FIRE", trigger, winner.Id, winner.Class, idx);
+                    if (!fire) { LogDecision(trigger, winner, pool, false, idx, reason); return false; }
+                    LogDecision(trigger, winner, pool, true, idx, reason);
                     if (Speak == null) return false;
                     CommitFire(winner, idx, pool);
                 }
@@ -231,7 +231,8 @@ namespace ConditioningControlPanel.Services.Bark
                 var picks = gated.Count > 0 && _rng.NextDouble() < 0.35 ? gated : unused;
                 winner = picks[_rng.Next(picks.Count)];
                 pool = ResolvePool(winner);
-                (var fire, idx, _) = EvaluateGate(winner, pool, false);
+                (var fire, idx, var reason) = EvaluateGate(winner, pool, false);
+                LogDecision("Idle", winner, pool, fire, idx, reason);
                 if (!fire || Speak == null) return false;
                 CommitFire(winner, idx, pool);
             }
@@ -243,6 +244,18 @@ namespace ConditioningControlPanel.Services.Bark
             if (DryRun) return;
             CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
             CoreSettings.Save(suppressCloudBackup: true);
+        }
+
+        /// <summary>WPF LogDecision (BarkService.cs:2006): metadata and the line's length, never its text.</summary>
+        private void LogDecision(string trigger, BarkRule rule, List<BarkVariant> pool, bool fire, int idx, string reason)
+        {
+            if (fire)
+                Log.Information("[BARK] {Decision} trigger={Trigger} rule={Rule} class={Class} mood={Mood} priority={Priority} variant#={Idx} lineChars={Chars}",
+                    DryRun ? "dry-run WOULD FIRE" : "FIRE", trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, idx,
+                    idx >= 0 && idx < pool.Count ? pool[idx].Text?.Length ?? 0 : -1);
+            else
+                Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
+                    trigger, rule.Id, rule.Class, rule.Priority, reason);
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
@@ -392,7 +405,7 @@ namespace ConditioningControlPanel.Services.Bark
             _firedOnceSession.Contains(rule.Id)
             || (rule.Scope != BarkScope.Session && CoreSettings.Current.IsBarkFired(LatchKey(rule)));
 
-        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@None" : rule.Id;
+        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@" + CoreAccount.CurrentTier : rule.Id;
 
         /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)

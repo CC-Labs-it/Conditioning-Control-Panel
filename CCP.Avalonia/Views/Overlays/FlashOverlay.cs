@@ -179,7 +179,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 GifFrames.Remove(bmp);
                 w.Animate(gif.Frames, GifFrameDelay(gif.Delay, s.FlashGifSpeedMultiplier));
             }
-            if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, clickable)) return false;
+            if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, MouseClickable(s, clickable))) return false;
+            _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
             if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
             return true;
@@ -457,10 +458,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static readonly List<FlashOverlayWindow> Exiting = new();
         private static FlashExitStyle? _lastExitStyle;
 
-        /// <summary>WPF FlashService.cs:84-92 StayUntilPopped: no solid host on this head, so Click alone
-        /// decides MouseClickable; only the ambient tick is not point-fired.</summary>
+        /// <summary>WPF FlashService.cs:81-92: solid hosting without the unified host cannot receive mouse clicks.</summary>
+        internal static bool MouseClickable(AppSettings s, bool clickable) =>
+            clickable && (s.UnifiedOverlayHost || !s.FlashSolidMode);
+
+        /// <summary>Only an ambient flash the mouse can pop stays until popped.</summary>
         internal static bool Stays(AppSettings s, bool ambient) =>
-            FlashStayRule.Applies(s.FlashStayUntilPopped, s.FlashClickable, pointFired: !ambient);
+            FlashStayRule.Applies(s.FlashStayUntilPopped, MouseClickable(s, s.FlashClickable), pointFired: !ambient);
 
         /// <summary>WPF FlashService.cs:1557-1568: FlashDuration + 1 s (or the caller's override + 1 s),
         /// and the 10-minute safety lifetime for a flash that stays until popped.</summary>

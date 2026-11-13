@@ -397,7 +397,7 @@
                          Exclude inherits, so the badge and everything in it stays out of the Wave 2
                          auto-tagger's deck. Visibility, the clock and the click are all owned by
                          MainWindow.Lab.cs (OnLockdownActivated / OnLockdownTick / LockdownBadge_Click). -->
-                    <Border x:Name="LockdownBadge"
+                    <Border x:Name="LockdownBadge" poss:PossessionTree.Exclude="True"
                             IsVisible="False"
                             VerticalAlignment="Center"
                             Background="#DC143C" CornerRadius="12" Padding="11,4"

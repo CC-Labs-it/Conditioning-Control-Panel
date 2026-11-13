@@ -150,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 {
                     lock (Gate)
                     {
-                        var ms = (long)(Math.Max(0, value) * 1000);
+                        var ms = (long)(Math.Clamp(value, 0, DurationSeconds) * 1000);
                         if (Live) { player.Time = ms; _pendingMs = 0; }
                         else _pendingMs = ms;
                     }
