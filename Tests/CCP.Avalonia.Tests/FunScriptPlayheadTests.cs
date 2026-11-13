@@ -123,7 +123,8 @@ public sealed class FunScriptPlayheadTests
     {
         // This lane's overlay hooks (WPF VideoService.cs:3410/7944): start after Play, stop before the player stops.
         var player = Src("Views", "Overlays", "MandatoryVideoOverlay.cs");
-        Assert.Matches(@"_player\.Play\(_media\);\s*try\s*\{\s*CoreHaptics\.Service\?\.FunScript.OnVideoStarted\(path\)", player);
+        // #4663 starts the enhancement sidecar between Play and the script hook; the hook still follows Play.
+        Assert.Matches(@"_player\.Play\(_media\);\s*(?:BeginEnhancement\(path\);\s*)?try\s*\{\s*CoreHaptics\.Service\?\.FunScript.OnVideoStarted\(path\)", player);
         // The teardown stops the native player through the playback seam (IMandatoryPlayback.Stop).
         var stopHook = player.IndexOf("FunScript.OnVideoStopped()", System.StringComparison.Ordinal);
         Assert.True(stopHook >= 0 && stopHook < player.IndexOf("_playback.Stop()", System.StringComparison.Ordinal));
