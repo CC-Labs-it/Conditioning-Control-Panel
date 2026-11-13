@@ -861,7 +861,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try { RaiseOverlayWindow(w); } catch (Exception ex) { Log.Debug("Chaos video restack: {E}", ex.Message); }
             }
             ChaosFieldFxOverlay.RaiseActive();
-            Raise(ChaosSkiaFxOverlay.Active);
+            if (ChaosSkiaFxOverlay.Active is { } skiaFx) foreach (var host in skiaFx.Hosts) Raise(host);   // every per-monitor host (restack b123 #4247)
             foreach (var w in ChaosPopText.Pool.All) Raise(w);
             RaiseDvdAboveVideo();
             ChaosEffectBannerOverlay.RaiseActive();

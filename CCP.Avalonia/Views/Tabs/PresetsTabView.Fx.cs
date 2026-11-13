@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +26,6 @@ public partial class PresetsTabView
     private Control? _sheenHost;
     private Window? _fxWindow;
     private CancellationTokenSource? _entranceCancellation;
-    private readonly Dictionary<Control, CancellationTokenSource> _entranceSlides = new();
 
     private void InitializeFocalFx()
     {
@@ -174,19 +172,10 @@ public partial class PresetsTabView
         scale.ScaleX = scale.ScaleY = target;
     }
 
-    private void LiftSessionRow(Control row, bool on)
+    private static void LiftSessionRow(Control row, bool on)
     {
         var slide = CardTransforms(row)?.Children.OfType<TranslateTransform>().FirstOrDefault();
         if (slide == null) return;
-        // WPF MainWindow.TabFxPresetsQuestsAchievements.cs:439, :447: hover replaces the
-        // entrance's Y animation. Avalonia RunAsync otherwise masks the new base/transition value.
-        if (_entranceSlides.Remove(row, out var entrance))
-        {
-            var current = slide.Y;
-            entrance.Cancel();
-            entrance.Dispose();
-            slide.Y = current;
-        }
         slide.Transitions = Env.AllowTransitions ? new Transitions
         {
             new DoubleTransition { Property = TranslateTransform.YProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
@@ -211,8 +200,6 @@ public partial class PresetsTabView
         _entranceCancellation?.Cancel();
         _entranceCancellation?.Dispose();
         _entranceCancellation = null;
-        foreach (var slide in _entranceSlides.Values) slide.Dispose();
-        _entranceSlides.Clear();
     }
     private void StaggerZones()
     {
@@ -227,9 +214,7 @@ public partial class PresetsTabView
                 if (CardTransforms(card) == null) continue;
                 var delay = TimeSpan.FromMilliseconds(40 * Math.Min(index++, 6));
                 _ = EnterAsync(card, delay, 220, OpacityProperty, 0, 1, _entranceCancellation.Token);
-                var slide = CancellationTokenSource.CreateLinkedTokenSource(_entranceCancellation.Token);
-                _entranceSlides.Add(card, slide);
-                _ = EnterAsync(card, delay, 260, TranslateTransform.YProperty, 10, 0, slide.Token);
+                _ = EnterAsync(card, delay, 260, TranslateTransform.YProperty, 10, 0, _entranceCancellation.Token);
             }
         }
     }

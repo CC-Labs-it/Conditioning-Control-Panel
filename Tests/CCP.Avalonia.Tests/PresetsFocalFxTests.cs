@@ -245,23 +245,6 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
-    public Task HoverReplacesTheRowEntranceWhileMotionIsOn() => WithPresets((host, view, animation) =>
-    {
-        // WPF LiftSessionRow (:439, :447) replaces the entrance Y animation; a running RunAsync would mask it.
-        view.IsVisible = false; Settle(animation);
-        view.IsVisible = true; Settle(animation);
-        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
-        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
-        Assert.True(slide.Y > 0); // The entrance is actually in progress.
-        host.MouseMove(Center(host, row)); Settle(animation);
-        var start = animation.Now;
-        animation.Step(start + 200); Settle(animation); // the 150 ms lift is done, the 260 ms entrance is not
-        Assert.Equal(-2, slide.Y, 3);
-        animation.Step(start + 600); Settle(animation);
-        Assert.Equal(-2, slide.Y, 3);
-    });
-
-    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view, animation) =>
     {
         view.IsVisible = false; Settle(animation);
