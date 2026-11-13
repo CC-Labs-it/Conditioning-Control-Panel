@@ -8915,5 +8915,8 @@
   "chaos_resistance_regrows": "抵抗力恢复",
   "account_merged_signin_title": "你的账户已合并",
   "account_merged_signin_summary": "请重新登录以继续。",
-  "account_merged_signin_body": "你的两个账户已合并为一个。请重新登录以继续。\n\n本地进度会保留。"
+  "account_merged_signin_body": "你的两个账户已合并为一个。请重新登录以继续。\n\n本地进度会保留。",
+  "she_wake_unavailable_tooltip": "此版本不支持可选的 sherpa-onnx 唤醒引擎。将使用内置识别器。",
+  "she_wake_unavailable_status": "此版本不支持可选的唤醒引擎。将使用内置识别器。",
+  "she_wake_calibration_unavailable": "此版本不支持唤醒词校准。"
 }

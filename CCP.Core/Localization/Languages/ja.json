@@ -8410,5 +8410,8 @@
   "chaos_resistance_regrows": "抵抗力が回復",
   "account_merged_signin_title": "アカウントが統合されました",
   "account_merged_signin_summary": "続けるにはもう一度サインインしてください。",
-  "account_merged_signin_body": "2つのアカウントが1つに統合されました。続けるにはもう一度サインインしてください。\n\nローカルの進行状況は保持されます。"
+  "account_merged_signin_body": "2つのアカウントが1つに統合されました。続けるにはもう一度サインインしてください。\n\nローカルの進行状況は保持されます。",
+  "she_wake_unavailable_tooltip": "オプションの sherpa-onnx 起動エンジンはこのバージョンでは利用できません。内蔵の認識機能を使用します。",
+  "she_wake_unavailable_status": "オプションの起動エンジンはこのバージョンでは利用できません。内蔵の認識機能を使用します。",
+  "she_wake_calibration_unavailable": "起動ワードの調整はこのバージョンでは利用できません。"
 }
