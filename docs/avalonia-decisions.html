@@ -173,6 +173,7 @@ always stops the engine as well.</li>
 </ul>
 <h2 id="2026-09-30-lockdown--emergency-exit-avalonia-portlockdown-core">2026-09-30: Lockdown / Emergency Exit (avalonia-port/lockdown-core)</h2>
 <p>2026-10-31: The web host now exists. The temporary notice-only behavior below is superseded by the shared WPF game scripts and host-owned verdicts. Phrase instructions remain available. See <a href="lockdown-exit-games.html">implementation evidence and live-validation limits</a>.</p>
+<p>2026-11-11 (live safety S18): the leftover phrase-steps notice under the slab is removed (with <code>lockdown_ee_phrase_steps_fmt</code> in all ten languages). WPF BtnEmergencyExit_Click (ConditioningControlPanel/Views/Tabs/LockdownTabView.xaml.cs:355-365) only calls EmergencyExitHostService.Open() and shows no text; the secret phrase and the timer remain the guaranteed exits. The notice rules below are historical.</p>
 <ul>
 <li>Question: the WPF Emergency Exit opens WebView2 exit games (EmergencyExitHostService), not portable yet. What does the slab do on Avalonia?</li>
 <li>Options: (A) keep the slab, fire the tripwire + Chaster hold, show the phrase steps; (B) hide the slab.</li>
@@ -186,7 +187,7 @@ always stops the engine as well.</li>
 <li>Question: WPF LockdownService measured Remaining / ElapsedFraction / LastActiveDuration against DateTime.Now, so a DST fall-back or a clock set back lengthened a running lockdown (an hour, on the fall-back night).</li>
 <li>Choice: the Core LockdownService reads an injectable UTC clock (<code>UtcNow</code>, default DateTime.UtcNow), so both heads get it; a safety fix, not a parity divergence to undo. Tripwire timestamps (EscapeAttempt.At) stay local.</li>
 <li>Also under this rule: the Emergency Exit notice always states the real time left, even with HideLockdownTimer (the notice is the way out; hiding its clock would hide the exit).</li>
-<li>Tests: <code>LockdownTests.RemainingFollowsAMonotonicUtcClockNotTheWallClock</code>, <code>TheSlabTripsTheWireHoldsChasterAndShowsTheRealTimeEvenWhenTheTimerIsHidden</code>, <code>TheTimerRunningOutEndsTheLockdown</code> (fail-proven); WPF source pins in LockdownEmergencyExitTests updated.</li>
+<li>Tests: <code>LockdownTests.RemainingFollowsAMonotonicUtcClockNotTheWallClock</code>, <code>TheSlabTripsTheWireHoldsChasterAndShowsTheRealTimeEvenWhenTheTimerIsHidden</code> (renamed TheSlabTripsTheWireHoldsChasterAndShowsNoNoticeLikeWpf on 2026-11-11, notice removed), <code>TheTimerRunningOutEndsTheLockdown</code> (fail-proven); WPF source pins in LockdownEmergencyExitTests updated.</li>
 <li>Advisor: reviewer (lockdown-core review).</li>
 </ul>
 <h2 id="2026-09-30-awareness-legacy-observer-applies-the-privacy-rules-on-avalonia-only">2026-09-30: Awareness legacy observer applies the privacy rules on Avalonia only</h2>
@@ -1354,8 +1355,10 @@ GStreamer's registry scan). The panel and the startup toast say to restart CCP a
 to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
 would make <code>new AudioContext()</code> throw in our pages and stop video.</li>
 <li>Wayland: Avalonia is pinned to X11 (XWayland), and the GTK adapter's <code>ForceX11GdkBackend</code> (default true) forces GDK_BACKEND=x11
-around GTK init. Untested: NVIDIA's proprietary driver is widely reported to give blank WebKitGTK views; <code>WEBKIT_DISABLE_DMABUF_RENDERER=1</code>
-is the user-side switch. Fractional/HiDPI scale between GTK and Avalonia is not measured.</li>
+around GTK init. NVIDIA (live-safety S18, RTX 4080, WebKitGTK 2.54.2): blank views, "Failed to create GBM buffer", until
+<code>WEBKIT_DISABLE_DMABUF_RENDERER=1</code>. The launcher and <code>Program.Main</code> (libc <code>setenv</code>: .NET's own copy is invisible to WebKit)
+set it when <code>/proc/driver/nvidia/version</code> or <code>/sys/module/nvidia</code> exists and the user has not set it (<code>LinuxWebKitEnv</code>).
+Not unconditional: with it WebKit turns off GPU acceleration for every web view, which the WebGL pages would pay for on Mesa. Fractional/HiDPI scale between GTK and Avalonia is not measured.</li>
 <li>Residuals: airspace (Avalonia popups under the X11 child), a shutdown-only SIGABRT seen once, and Avalonia 12.1 surfaces no
 web-process-terminated event, so a future web-process crash would again freeze a page silently.</li>
 <li>Follow-up: drop the WPE <code>LinuxDependencies</code> entry, <code>linux_dep_wpe_unavailable</code> and the Flatpak WPE line once WPEPlatform lands or WPE is retired.</li>

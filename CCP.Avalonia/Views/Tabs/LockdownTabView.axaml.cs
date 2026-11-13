@@ -307,7 +307,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _lockdownTimerClickCount = 0;
             TxtLockdownExit.IsVisible = false;
             TxtLockdownExit.Text = "";
-            TxtEmergencyExitNotice.IsVisible = false;
             // The rung readout is Possession's (MainShellWindow.Possession.cs, WPF Lab.cs:884-986): it shows,
             // paints and clears itself on the same Lockdown events, so the panel swap never touches it here
             // (a hide here, queued after its paint, blanked it for the whole run; WPF's tab never touches it).
@@ -496,10 +495,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BtnEmergencyExit_Click(object? sender, RoutedEventArgs e)
         {
             if (Lockdown is not { IsActive: true } ld) return;
+            // WPF BtnEmergencyExit_Click (LockdownTabView.xaml.cs:355-365) only opens the games: no notice.
             Views.Windows.EmergencyExitWindow.Open(TopLevel.GetTopLevel(this) as Window, ld);
-            // The real time left even under HideLockdownTimer: this notice is the way out, it must not hide it.
-            TxtEmergencyExitNotice.Text = Loc.GetF("lockdown_ee_phrase_steps_fmt", SessionClockLabel.LockdownClock(ld.Remaining, false));
-            TxtEmergencyExitNotice.IsVisible = true;
         }
     }
 }

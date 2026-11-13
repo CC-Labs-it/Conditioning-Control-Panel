@@ -613,15 +613,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return result;
         }
 
-        /// <summary>An animated GIF/WebP decoded at its display size, under WPF's flash frame budget
-        /// (FlashService LoadGifFrames / AnimatedWebp.DecodeFrames: at most 60 frames, 30 MB kept).
+        /// <summary>An animated GIF/WebP decoded at its display size (at most 2048 px), under WPF's flash
+        /// frame budget and delay (Core <see cref="FlashFrames"/>: FlashService LoadGifFrames /
+        /// AnimatedWebp.DecodeFrames, at most 60 frames, 30 MB kept but never under 10, 600 decoded).
         /// Answers the first frame, with the rest recorded in <see cref="GifFrames"/>; null when the
         /// decode came back with fewer than two frames, and the caller decodes a still.</summary>
         private static Bitmap? DecodeAnimated(string path, PixelRect rect)
         {
-            var frameBytes = Math.Max(1L, (long)rect.Width * rect.Height * 4);
-            var maxFrames = (int)Math.Clamp(30L * 1024 * 1024 / frameBytes, 2, 60);
-            var (frames, delay) = SpiralOverlay.Decode(path, Math.Max(rect.Width, rect.Height), maxFrames);
+            var (frames, delay) = SpiralOverlay.Decode(path, Math.Max(rect.Width, rect.Height), flash: true);
             if (frames.Count < 2)
             {
                 foreach (var f in frames) f.Dispose();

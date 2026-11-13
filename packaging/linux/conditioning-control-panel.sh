@@ -34,4 +34,12 @@ if [ "$CCP_SKIP_OPENSSL_CHECK" != 1 ] && ! has_ssl; then
     } >&2
     exit 1
 fi
+# NVIDIA: WebKitGTK's DMA-BUF renderer cannot allocate GBM buffers there, so web views stay blank. Same rule as
+# CCP.Core LinuxWebKitEnv (Program.Main repeats it for non-tarball runs); a value the user set, even empty or 0, wins.
+# CCP_NVIDIA_PROBE is a test seam.
+if [ -z "${WEBKIT_DISABLE_DMABUF_RENDERER+x}" ]; then
+    for p in ${CCP_NVIDIA_PROBE-/proc/driver/nvidia/version /sys/module/nvidia}; do
+        [ -e "$p" ] && { export WEBKIT_DISABLE_DMABUF_RENDERER=1; break; }
+    done
+fi
 exec "$here/CCP.Avalonia" "$@"

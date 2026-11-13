@@ -8387,7 +8387,6 @@
   "spoiler_warning3_no": "Keep it secret",
   "panic_camera_stopped": "Camera stopped. Start tracking to resume.",
   "sl_mantras_not_on_this_build": "Spoken mantras aren't available on this build yet. Voice commands work: call her, then say a command.",
-  "lockdown_ee_phrase_steps_fmt": "The exit games are not on this build yet. The way out: tap the timer digits 5 times, each within a second of the last, then type \"let me out\" and press Enter. Time left: {0}",
   "help_heading_what_it_does": "What it does",
   "help_heading_tips": "Tips",
   "help_heading_how_it_works": "How it works",

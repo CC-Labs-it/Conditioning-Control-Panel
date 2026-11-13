@@ -151,7 +151,7 @@ public sealed class LockdownVeilTests
         var tab = shell.Named<LockdownTabView>("LockdownTab")!;
         tab.BtnEmergencyExit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
-        Assert.True(tab.TxtEmergencyExitNotice.IsVisible);
+        Assert.NotNull(EmergencyExitWindow.Current);
 
         // No ticks on a hidden launcher (P01).
         launcher.Hide();
