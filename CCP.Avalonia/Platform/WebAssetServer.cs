@@ -384,10 +384,16 @@ public sealed class WebAssetServer : IDisposable
             return file != null && new DirectoryInfo(ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder).LinkTarget == null
                 && new FileInfo(file).LinkTarget == null ? file : null;
         }
-        bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
+        bool art = rel.StartsWith("__art__/", StringComparison.Ordinal);
+        if (art)
+        {
+            root = Path.Combine(AppContext.BaseDirectory, "assets", "Chaos") + Path.DirectorySeparatorChar;
+            rel = rel["__art__/".Length..];
+        }
+        bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal) && !art;
         bool whisper = rel.StartsWith(PbpWhisperClips.SubAudioHost + "/", StringComparison.Ordinal)
             || rel.StartsWith(PbpWhisperClips.WordsHost + "/", StringComparison.Ordinal);
-        if (whisper)
+        if (whisper && !art)
         {
             int slash = rel.IndexOf('/');
             string? folder = rel[..slash] == PbpWhisperClips.SubAudioHost ? SubAudioRoot() : WordsRoot();
@@ -414,7 +420,7 @@ public sealed class WebAssetServer : IDisposable
         if (!Inside(full, root)) return null;
         if (!File.Exists(full))
         {
-            if (asset || whisper || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
+            if (art || asset || whisper || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
                 return null;
             root = Path.GetFullPath(content).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             if (HoldsUserData(root)) return null;
