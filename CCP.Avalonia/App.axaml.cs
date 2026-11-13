@@ -1338,7 +1338,8 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.BouncingTextOverlay.Stop();
             Views.Overlays.ChaosFlashOverlay.CloseActive();
             Views.Overlays.CornerGifOverlay.StopAll();
-            Views.Overlays.SpiralOverlay.Stop();       // WPF StopEngine -> App.Overlay.Stop(); panic and exit too; drops the voice hold
+            Views.Overlays.SpiralOverlay.Stop();
+            if (final) Views.Overlays.SpiralOverlay.CloseAll();
             Views.Overlays.PinkFilterOverlay.Stop();   // WPF MainWindow.StartStop.cs:527 Overlay.Stop
         }
 

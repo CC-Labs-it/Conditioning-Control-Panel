@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Threading;
+using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 
@@ -11,19 +12,22 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class BrainDrainPlayer
 {
     internal static BrainDrainPlayer? Instance;
+    internal event EventHandler? Triggered;
     private readonly Func<string, Action, LibVlcAudio.IPreparedVoice?> _prepare;
     private readonly TimeProvider _time;
     private readonly Func<double> _roll;
+    private readonly Action<Action> _dispatch;
     private readonly object _gate = new();
     private ITimer? _timer;
     private MindWipePlayer.IVoice? _voice;
     private bool _busy, _running;
-    private long _generation;
+    private long _generation, _runGeneration;
     private AppSettings? _settings;
     private SettingsService? _service;
     internal BrainDrainPlayer(Func<string, Action, LibVlcAudio.IPreparedVoice?> prepare,
-        TimeProvider? time = null, Func<double>? roll = null)
-    { _prepare = prepare; _time = time ?? TimeProvider.System; _roll = roll ?? Random.Shared.NextDouble; }
+        TimeProvider? time = null, Func<double>? roll = null, Action<Action>? dispatch = null)
+    { _prepare = prepare; _time = time ?? TimeProvider.System; _roll = roll ?? Random.Shared.NextDouble;
+      _dispatch = dispatch ?? (action => Dispatcher.UIThread.Post(action)); }
     internal bool IsRunning { get { lock (_gate) return _running; } }
     internal void Start()
     {
@@ -59,21 +63,32 @@ internal sealed class BrainDrainPlayer
     private static double Gain() => BrainDrainAudioPolicy.Volume(CoreSettings.Current.MasterVolume, CoreSettings.Current.BrainDrainVolume);
     internal void Tick(TimeSpan interval)
     {
-        long generation;
+        long generation, runGeneration;
         lock (_gate)
         {
             if (!_running || _busy || CoreAudio.IsOutputSuppressed || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
-            _busy = true; generation = ++_generation;
+            _busy = true; generation = ++_generation; runGeneration = _runGeneration;
         }
         LibVlcAudio.IPreparedVoice? voice = null;
         try
         {
             var clips = BrainDrainAudioPolicy.Discover(BrainDrainAudioPolicy.AudioFolder, BrainDrainAudioPolicy.LegacyFolder);
             var path = clips.Length == 0 ? null : clips[Random.Shared.Next(clips.Length)];
-            if (path != null) voice = _prepare(path, () =>
+            if (path != null)
             {
-                lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
-            });
+                // WPF schedules decoder work and immediately notifies (BrainDrainService.cs:309-313).
+                // Deliver on the UI thread so the bark mouth does not queue past Stop.
+                _dispatch(() =>
+                {
+                    lock (_gate)
+                        if (_running && runGeneration == _runGeneration)
+                            try { Triggered?.Invoke(this, EventArgs.Empty); } catch { }
+                });
+                voice = _prepare(path, () =>
+                {
+                    lock (_gate) if (generation == _generation) { _voice = null; _busy = false; ++_generation; }
+                });
+            }
             bool started = false;
             lock (_gate)
             {
@@ -99,7 +114,7 @@ internal sealed class BrainDrainPlayer
         lock (_gate)
         {
             wasRunning = _running;
-            _running = _busy = false; ++_generation;
+            _running = _busy = false; ++_generation; ++_runGeneration;
             _timer?.Dispose(); _timer = null;
             if (_settings != null) _settings.PropertyChanged -= Changed;
             if (_service != null) _service.CurrentReplaced -= Replaced;
