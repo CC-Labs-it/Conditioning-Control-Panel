@@ -65,6 +65,47 @@ public sealed class IntakePassNudgeTests
 
     private static string Week => IntakePassService.CurrentWeekKey();
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task EmergencyExitStandsDownWithoutSpendingTheLaunchSlot(bool quiet) => Run(() =>
+    {
+        if (quiet) StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
+        {
+            if (w is AnnouncementPopup popup) opened.Add(popup);
+        });
+        using var lockdown = new LockdownService();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            EmergencyExitWindow.Open(null, lockdown);
+            Assert.NotNull(EmergencyExitWindow.Current);
+            shell.CheckIntakePassNudge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(opened);
+            Assert.Empty(StartupLadder.Inbox.Items);
+
+            EmergencyExitWindow.Current!.Close();
+            Assert.Null(EmergencyExitWindow.Current);
+            shell.CheckIntakePassNudge();
+            Dispatcher.UIThread.RunJobs();
+            if (quiet) Assert.Single(StartupLadder.Inbox.Items);
+            else Assert.Single(opened);
+        }
+        finally
+        {
+            EmergencyExitWindow.Current?.Close();
+            lockdown.Deactivate();
+            foreach (var popup in opened) popup.Close();
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task QuietLaunchParksTheNudgeAndDismissStampsTheWeek() => Run(() =>
     {

@@ -82,12 +82,7 @@
                 <Border Grid.Row="0" Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                         BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2" Margin="0,0,0,12">
                     <Grid>
-                        <!-- MOD-ART CARRIER. On WPF, MainWindow.xaml.cs (descImageMap) writes
-                             AwarenessTab.ImgAwarenessFeature.Source when a mod overrides
-                             features/awareness.png, and the hero/side plates take their
-                             ImageSource from it by ElementName binding. This head ships no
-                             bitmap yet, so the carrier stays as a zero-size Image with no
-                             Source and the two plates draw the hue wash. -->
+                        <!-- Mod-aware carrier shared by the two plates. -->
                         <Image x:Name="ImgAwarenessFeature" Width="0" Height="0" IsVisible="False"
                                Source="avares://CCP.Avalonia/Resources/features/awareness.png"/>
 
@@ -97,7 +92,7 @@
                              what this head drew before rather than to a hole. -->
                         <Border CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
                                 Background="{StaticResource TabHueWashBrush}">
-                            <Border CornerRadius="0,16,16,0">
+                            <Border x:Name="AwarenessHeroArt" CornerRadius="0,16,16,0">
                                 <Border.Background>
                                     <ImageBrush Source="avares://CCP.Avalonia/Resources/features/awareness.png"
                                                 Stretch="UniformToFill" AlignmentX="Right"/>
@@ -635,7 +630,7 @@
                          Pinned to the top with a fixed height - this is a very tall page and a
                          stretched plate would be a 2000px column of upscaled art. WPF
                          AwarenessTabView.xaml:625-648: the feature art is the plate's background. -->
-                    <Border hover:HoverPop.IsEnabled="True" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
+                    <Border x:Name="AwarenessSideArt" hover:HoverPop.IsEnabled="True" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                             BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                             VerticalAlignment="Top" Height="520">
                         <Border.Background>
