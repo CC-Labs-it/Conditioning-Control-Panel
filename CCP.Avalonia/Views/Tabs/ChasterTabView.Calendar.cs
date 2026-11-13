@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: the calendar (:434-560),
 // CalendarSpan (:451), BuildCalendar (:466), Cell (:511), Cross (:576), on Core LockCalendar.
 // ponytail: the cross is two straight marker strokes plus the splat (WPF bends them), the padlock stamp is a glyph not the padlock art mask, the key is the key glyph on gold not
-// the foil sticker, tonight's tag bob (Fx.cs) is not ported.
+// the foil sticker. Tonight's tag and its bob live in Tag.cs and TagFx.cs.
 using System;
 using System.Collections.Generic;
 using System.Linq;
