@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Échec de l’ouverture du lecteur",
+  "media_drop_editor_error_title": "Échec de l’ouverture de l’éditeur",
+  "media_drop_player_error_fmt": "Impossible d’ouvrir Deeper Player : {0} : {1}",
+  "media_drop_editor_error_fmt": "Impossible d’ouvrir Deeper Editor : {0} : {1}",
   "Chaos_EStim_Conduct": "charge prête - tes {0} prochaines bulles conduisent",
   "Chaos_EStim_Chain": "charge prête - tes {0} prochaines bulles déclenchent des chaînes",
   "Chaos_EStim_Arc": "le courant jaillit (reste {0})",

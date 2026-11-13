@@ -1,4 +1,8 @@
 {
+  "media_drop_player_error_title": "Impossibile aprire il lettore",
+  "media_drop_editor_error_title": "Impossibile aprire l’editor",
+  "media_drop_player_error_fmt": "Impossibile aprire Deeper Player: {0}: {1}",
+  "media_drop_editor_error_fmt": "Impossibile aprire Deeper Editor: {0}: {1}",
   "Chaos_EStim_Conduct": "carica pronta - le prossime {0} bolle conducono",
   "Chaos_EStim_Chain": "carica pronta - le prossime {0} bolle creano catene",
   "Chaos_EStim_Arc": "la corrente scocca (restano {0})",

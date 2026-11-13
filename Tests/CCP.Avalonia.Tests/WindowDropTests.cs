@@ -507,6 +507,28 @@ public sealed class WindowDropTests
         }
     });
 
+    // WPF MainWindow.DeeperTab.cs:610-616, 662-669: a launch failure names its window, type and message.
+    [Fact]
+    public void DroppedMediaErrorsHaveTranslatedFormatsInEveryLanguage()
+    {
+        try
+        {
+            foreach (var language in new[] { "en", "de", "es", "fr", "it", "pt-BR", "ru", "ja", "ko", "zh-CN" })
+            {
+                LocalizationManager.Instance.SetLanguage(language);
+                foreach (var play in new[] { true, false })
+                {
+                    var error = MainShellWindow.DroppedMediaError(play, new IOException("probe"));
+                    Assert.Contains("IOException", error.Message); Assert.Contains("probe", error.Message);
+                    Assert.DoesNotContain("media_drop_", error.Title);
+                    if (language != "en")
+                    { Assert.DoesNotContain("Could not open", error.Message); Assert.DoesNotContain("Open ", error.Title); }
+                }
+            }
+        }
+        finally { LocalizationManager.Instance.SetLanguage("en"); }
+    }
+
     // ---- harness ----------------------------------------------------------------------
 
     private static Task Run(Func<MainShellWindow, string, string, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>

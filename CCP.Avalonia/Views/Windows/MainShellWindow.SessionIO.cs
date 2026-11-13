@@ -71,6 +71,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        /// <summary>WPF MainWindow.DeeperTab.cs:610-616, 662-669: the Player and Editor launch
+        /// failures each name their window, the exception type and its message.</summary>
+        internal static (string Title, string Message) DroppedMediaError(bool play, Exception ex) =>
+            (Loc.Get(play ? "media_drop_player_error_title" : "media_drop_editor_error_title"),
+             Loc.GetF(play ? "media_drop_player_error_fmt" : "media_drop_editor_error_fmt", ex.GetType().Name, ex.Message));
+
         private AssetImportService? _assetImportService;
 
         internal static string[] DroppedPaths(DragEventArgs e) =>
@@ -143,7 +149,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     // WPF MainWindow.DeeperTab.cs:610-616, 662-669: report launch failures.
                     Log.Error(ex, "Failed to open dropped media in Deeper");
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("dlg_media_drop_title"), ex.Message);
+                    var error = DroppedMediaError(choice == Dialogs.MediaDropChoice.Play, ex);
+                    await Dialogs.MessageDialog.ShowAsync(this, error.Title, error.Message);
                 }
                 return;
             }
@@ -210,6 +217,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 _assetImportService ??= new AssetImportService();
                 var result = await Task.Run(() => _assetImportService.ImportAsync(paths));
+                // WPF MainWindow.SessionIO.cs:1814-1818 (RefreshVideosPath): the dealt video queue
+                // must see the new files.
+                if (result.VideosImported > 0) CoreEngine.Video?.ReloadAssets();
                 ShowTab("assets");
                 Log.Information("Asset import complete: {Summary}", result.GetSummary());
                 await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_import_complete"), result.GetSummary());

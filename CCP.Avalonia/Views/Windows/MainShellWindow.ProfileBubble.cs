@@ -11,7 +11,7 @@
 //
 // Flash / subliminal reactions subscribe to guarded overlay display notifications, as WPF
 // MainWindow.ProfileBubble.cs:92-94 subscribes to the service display events.
-// ponytail: still missing vs WPF - the spiral row (shell-profile-spiral, no DescentService here).
+// The spiral row is wired in MainShellWindow.ProfileSpiral.cs.
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
 // Controls are reached with Named<T>(name): the window loads with AvaloniaXamlLoader.Load.
@@ -175,6 +175,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
 
+                RefreshProfileMenuSpiral();
+
                 if (Named<Button>("ProfileMenuAccountBtn") is { } account)
                     account.Content = loggedIn ? Loc.Get("btn_logout") : Loc.Get("account_chip_sign_in");
             }
@@ -326,6 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// so they come off when the window closes, P41) and the first paint.</summary>
         private void InitializeProfileBubble()
         {
+            InitializeProfileSpiral();
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(OnBubbleXPChanged);
             Action<int> levelUp = _ => Dispatcher.UIThread.Post(OnBubbleLevelUp);
             EventHandler<Achievement> unlocked = (_, _) => Dispatcher.UIThread.Post(OnBubbleAchievementUnlocked);
