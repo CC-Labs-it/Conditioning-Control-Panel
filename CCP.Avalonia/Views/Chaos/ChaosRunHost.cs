@@ -563,7 +563,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
                 Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
-            // WPF ChaosModeService.cs:2035-2036: every snap emits Size Queen.
+            // WPF ChaosModeService.cs:2035-2040 (#3502, #4305): a brink snap leaves Aftermath residue.
+            if (_state.AftermathEnabled && fuseSecLeft <= 1.5)
+            {
+                BubbleOverlay.AddChaosResidue(b);
+                _state.PushEvent(IconLabel.ForKey("chaos_aftermath_event").Source);
+            }
+            // WPF ChaosModeService.cs:2041-2043: every snap emits Size Queen.
             if (_state.RippleEnabled) BubbleOverlay.TriggerChaosRipple(b);
             if (lastBreath > 1)
             {
@@ -574,7 +580,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
             CheckComboMilestone();
-            // ponytail: slow_fuses/blindfold lessons, aftermath and
+            // ponytail: slow_fuses/blindfold lessons and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 
@@ -841,6 +847,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (window.IsVisible) RaiseOverlayWindow(window);
         }
 
+        /// <summary>WPF ChaosModeService.cs:745-774 (hand-ported from #4245 and #4525): over a playing
+        /// mandatory video, lift the ambient band first (field and Skia FX, pop text, DVD, banner,
+        /// announcer, cursor glow, e-stim, vibe trail), then the chrome, bubbles and attention assets.
+        /// Existing visible windows only; nothing is activated.</summary>
+        internal static void RaiseGameLayerAboveVideo(Action? raiseWave = null)
+        {
+            if (!_spawning || !CoreSettings.Current.ChaosPinOnTop) return;
+            void Raise(Window? w)
+            {
+                if (w is not { IsVisible: true }) return;
+                try { RaiseOverlayWindow(w); } catch (Exception ex) { Log.Debug("Chaos video restack: {E}", ex.Message); }
+            }
+            ChaosFieldFxOverlay.RaiseActive();
+            Raise(ChaosSkiaFxOverlay.Active);
+            foreach (var w in ChaosPopText.Pool.All) Raise(w);
+            RaiseDvdAboveVideo();
+            ChaosEffectBannerOverlay.RaiseActive();
+            Raise(ChaosAnnouncerOverlay.Active);
+            Raise(ChaosCursorGlowOverlay.Active);
+            ChaosEStimOverlay.RaiseActive();
+            ChaosVibeTrailOverlay.RaiseActive();
+            KeepChromeTopmost(raiseWave);
+        }
+
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
         internal static void Tick()
         {
@@ -849,8 +879,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (++_chromeTicks >= 4)
             {
                 _chromeTicks = 0;
-                if (CoreEngine.Video?.IsPlaying == true) RaiseDvdAboveVideo();
-                KeepChromeTopmost();
+                // WPF :943-951: the whole game layer rides over a playing video, else just the chrome.
+                if (CoreEngine.Video?.IsPlaying == true) RaiseGameLayerAboveVideo();
+                else KeepChromeTopmost();
             }
             double elapsed = ChaosRunEngine.Advance(_state);
             if (_state.Config.ScriptedFirstRun && TickScriptedDraft()) return;
