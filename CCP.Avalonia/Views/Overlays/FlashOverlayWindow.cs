@@ -612,7 +612,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             // WPF moves alpha by dt/fadeSeconds per frame, so a ramp takes |to-from| x fade:
             // at Opacity 50% the fade is half as long, not a slower full-length one.
-            var span = fade * Math.Abs(to - from);
+            // WPF FlashService.cs:3199-3200,3254: Gentle visuals lengthen that rate to the gentle
+            // fade (never shorten it), on the way in and out (restack b79, from #3469).
+            var span = ConditioningControlPanel.Services.Safety.GentleVisuals.Fade(fade) * Math.Abs(to - from);
             var steps = Math.Max(1, (int)Math.Ceiling(Math.Abs(to - from) * 32));
             for (var i = 1; i <= steps; i++)
             {
