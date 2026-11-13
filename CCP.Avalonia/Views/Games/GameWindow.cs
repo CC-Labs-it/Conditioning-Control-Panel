@@ -308,6 +308,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
+                case "breakout-wall" when IsBreakout:
+                    // WPF BackRoomHostService.cs:511 (Sparkles B1): one medal per cleared wall, the Story Demo included.
+                    DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.BreakoutWall(o), SparklesHead.Service));
+                    break;
                 case "ready":
                     IsReady = true;
                     Post(InitMessage());   // WPF BackRoomHostService.BuildInit (:566); no manifest frame for Breakout

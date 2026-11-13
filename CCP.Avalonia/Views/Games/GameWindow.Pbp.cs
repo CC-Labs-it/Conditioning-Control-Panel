@@ -148,6 +148,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "boot-error":
                         PbpBootFailedThisSession = true;
                         return false;
+                    case "pbp:game-over":
+                        // WPF PieceByPieceHostService.cs:424 (Sparkles B1): vs Computer solo, online with the match id as proof.
+                        DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Chess(o), SparklesHead.Service));
+                        return true;
                     case "pbp:exit":
                         Close();
                         return true;
