@@ -372,6 +372,11 @@ public sealed class DeeperRowsTests
     public Task PanicStoppedLocalVideoRestartsOnlyOnExplicitPlay() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        // These cases drive the web-engine fallback (WPF's only video path). LibVLC owns local video first
+        // (b51 #4296): on a runner with libvlc installed its parse of this 16-byte clip runs on its own
+        // clock, so the browser source was still null at the first assert. Pin "LibVLC cannot open it".
+        var openVideo = DeeperLocalAudio.OpenVideo;
+        DeeperLocalAudio.OpenVideo = (_, _) => Task.FromResult<IDeeperLocalAudio?>(null);
         var dir = Directory.CreateTempSubdirectory("ccp-panic-video-").FullName;
         var path = Path.Combine(dir, "clip.mp4");
         File.WriteAllBytes(path, new byte[16]);
@@ -424,7 +429,7 @@ public sealed class DeeperRowsTests
             Assert.DoesNotContain(scripts, js => js.Contains("l.play();"));
             Assert.Equal("about:blank", editor.BrowserPreview.Source!.ToString());
         }
-        finally { editor.Close(); Directory.Delete(dir, true); }
+        finally { editor.Close(); Directory.Delete(dir, true); DeeperLocalAudio.OpenVideo = openVideo; }
     });
 
     [Theory]
@@ -433,6 +438,11 @@ public sealed class DeeperRowsTests
     public Task SeekAroundRecoveryPreservesTheRequestedPosition(bool seekAfterPlay) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        // These cases drive the web-engine fallback (WPF's only video path). LibVLC owns local video first
+        // (b51 #4296): on a runner with libvlc installed its parse of this 16-byte clip runs on its own
+        // clock, so the browser source was still null at the first assert. Pin "LibVLC cannot open it".
+        var openVideo = DeeperLocalAudio.OpenVideo;
+        DeeperLocalAudio.OpenVideo = (_, _) => Task.FromResult<IDeeperLocalAudio?>(null);
         var dir = Directory.CreateTempSubdirectory("ccp-panic-seek-").FullName;
         var path = Path.Combine(dir, "clip.mp4");
         File.WriteAllBytes(path, new byte[16]);
@@ -483,7 +493,7 @@ public sealed class DeeperRowsTests
             await (Task)poll.Invoke(editor, null)!;
             Assert.Contains(scripts, js => js.Contains("l.currentTime=7;l.play();"));
         }
-        finally { editor.Close(); Directory.Delete(dir, true); }
+        finally { editor.Close(); Directory.Delete(dir, true); DeeperLocalAudio.OpenVideo = openVideo; }
     });
 
     [Fact]
