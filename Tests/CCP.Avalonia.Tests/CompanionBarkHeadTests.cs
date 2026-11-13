@@ -113,6 +113,31 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Fact]
+    public void BrainDrainTriggerReachesBarkAndStopDetaches() => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var old = BrainDrainPlayer.Instance;
+        var player = new BrainDrainPlayer((_, _) => null);
+        BrainDrainPlayer.Instance = player;
+        var rule = Rule("BrainDrainTriggered", "reacted");
+        rule.ClassRaw = "safety";
+        var e = Seeded(rule, out var spoken);
+        int count = 0;
+        e.BarkSpoken += (_, _) => count++;
+        try
+        {
+            BarkHead.WireSources(e);
+            var field = typeof(BrainDrainPlayer).GetField("Triggered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            ((System.EventHandler?)field.GetValue(player))?.Invoke(player, System.EventArgs.Empty);
+            Assert.Equal("reacted", spoken());
+            Assert.Equal(1, count);
+            BarkHead.Stop();
+            Assert.Null(field.GetValue(player));
+        }
+        finally { BarkHead.Stop(); BrainDrainPlayer.Instance = old; }
+    });
+
     [Theory]
     [InlineData("LevelUp", "LevelUp")]
     [InlineData("Awarded", "XPChanged")]
