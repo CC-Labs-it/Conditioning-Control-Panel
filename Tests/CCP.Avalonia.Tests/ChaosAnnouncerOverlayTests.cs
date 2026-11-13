@@ -128,12 +128,21 @@ public sealed class ChaosAnnouncerOverlayTests
     [Fact]
     public async Task A_run_announces_its_last_ten_seconds_once_and_teardown_closes_it()
     {
-        await Run(_ =>
+        await Run(clock =>
         {
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown();
-            for (int i = 0; i < 4 * 49; i++) ChaosRunHost.Tick();   // 49 s
-            Assert.Null(ChaosAnnouncerOverlay.Active);
+            for (int i = 0; i < 4 * 49; i++)   // 49 s
+            {
+                ChaosRunHost.Tick();
+                // The last loop (40 s) has its own banner (WPF ChaosModeService.cs:1460, #3541): let it play out.
+                while (ChaosAnnouncerOverlay.IsShowing)
+                {
+                    Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+                    Step(clock, 10000);
+                }
+            }
+            Assert.False(ChaosAnnouncerOverlay.IsShowing);
             for (int i = 0; i < 8; i++) ChaosRunHost.Tick();         // 51 s: inside T-10 s
             var w = ChaosAnnouncerOverlay.Active!;
             Assert.Equal("the hole is closing…", w.Current!.Text);

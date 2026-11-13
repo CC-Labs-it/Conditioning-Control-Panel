@@ -41,7 +41,7 @@ public sealed class PresetsTabCornerGifWireTests
         var s = CoreSettings.Current;
         var saved = (s.CornerGifOverlays, s.SessionCornerGifAllowed, s.PanicKeyEnabled, s.PanicKey);
         var handlers = (CoreCornerGif.RefreshHandler, CoreCornerGif.SessionShowHandler, CoreCornerGif.SessionCloseHandler,
-            CoreCornerGif.StandaloneActiveProvider, CoreCornerGif.SpiralOverlayActiveProvider);
+            CoreCornerGif.SessionOpacityHandler, CoreCornerGif.SessionPositionHandler, CoreCornerGif.StandaloneActiveProvider, CoreCornerGif.SpiralOverlayActiveProvider);
         var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
         try
         {
@@ -85,10 +85,15 @@ public sealed class PresetsTabCornerGifWireTests
             Assert.False(CornerGifOverlay.HasActiveOverlays);                 // the session slot is not a standalone one
             Assert.False(File.Exists(CornerGifOverlay.SentinelPath));         // nor does it arm the standalone sentinel
 
-            // #474 live edits: a corner pick moves it, the debounced opacity re-shows it.
+            // WPF #474: a corner pick moves the existing animated window.
+            CornerGifOverlay.Advance(CornerGifOverlay.SessionSlot);
+            var frameBeforeMove = CornerGifOverlay.FrameIndexFor(CornerGifOverlay.SessionSlot);
+            var beforeMove = w;
             tab.RbCornerBL.IsChecked = true;
             await Settle();
             w = CornerGifOverlay.WindowFor(CornerGifOverlay.SessionSlot)!;
+            Assert.Same(beforeMove, w);
+            Assert.Equal(frameBeforeMove, CornerGifOverlay.FrameIndexFor(CornerGifOverlay.SessionSlot));
             Assert.Equal((screen.Bounds.X, screen.Bounds.Bottom - (int)Math.Round(200 * k)), (w.Position.X, w.Position.Y));
             tab.SliderCornerGifOpacity.Value = 80;
             tab.FlushCornerGifEdit();   // the 400 ms debounce's tick
@@ -127,8 +132,66 @@ public sealed class PresetsTabCornerGifWireTests
             CornerGifOverlay.SkipPlatformChecksForTests = false;
             CornerGifOverlay.ManualFramesForTests = false;
             (CoreCornerGif.RefreshHandler, CoreCornerGif.SessionShowHandler, CoreCornerGif.SessionCloseHandler,
-                CoreCornerGif.StandaloneActiveProvider, CoreCornerGif.SpiralOverlayActiveProvider) = handlers;
+                CoreCornerGif.SessionOpacityHandler, CoreCornerGif.SessionPositionHandler, CoreCornerGif.StandaloneActiveProvider, CoreCornerGif.SpiralOverlayActiveProvider) = handlers;
             (s.CornerGifOverlays, s.SessionCornerGifAllowed, s.PanicKeyEnabled, s.PanicKey) = saved;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public Task OpacitySliderUpdatesImmediatelyWithoutRestartingTheGif_WhileSizeWaits() => Run(async (shell, tab) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-corner-opacity-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        var s = CoreSettings.Current;
+        var allowed = s.SessionCornerGifAllowed;
+        var handlers = (CoreCornerGif.SessionShowHandler, CoreCornerGif.SessionCloseHandler,
+            CoreCornerGif.SessionOpacityHandler, CoreCornerGif.SessionPositionHandler, CoreCornerGif.StandaloneActiveProvider, CoreCornerGif.SpiralOverlayActiveProvider);
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        try
+        {
+            CornerGifOverlay.StopAll();
+            CornerGifOverlay.SkipPlatformChecksForTests = true;
+            CornerGifOverlay.ManualFramesForTests = true;
+            CornerGifOverlay.Seed(() => shell);
+            s.SessionCornerGifAllowed = true;
+            var session = new Session { Id = "opacity", Name = "Opacity", DurationMinutes = 5,
+                Settings = new SessionSettings { CornerGifEnabled = true, CornerGifPath = gif,
+                    CornerGifSize = 200, CornerGifOpacity = 50 } };
+            runner.Start(session);
+            // Edits during asynchronous decoding must reach the first frame too.
+            tab.RbCornerTR.IsChecked = true;
+            tab.SliderCornerGifOpacity.Value = 65;
+            await Settle();
+            var window = CornerGifOverlay.WindowFor(CornerGifOverlay.SessionSlot)!;
+            Assert.Equal(0.65, window.Spiral.Opacity, 3);
+            var screen = shell.Screens.Primary ?? shell.Screens.All[0];
+            Assert.Equal((screen.Bounds.Right - (int)Math.Round(200 * screen.Scaling), screen.Bounds.Y), (window.Position.X, window.Position.Y));
+            CornerGifOverlay.Advance(CornerGifOverlay.SessionSlot);
+            int frame = CornerGifOverlay.FrameIndexFor(CornerGifOverlay.SessionSlot);
+            tab.SliderCornerGifSize.Value = 250;
+            tab.SliderCornerGifOpacity.Value = 80;
+            Assert.Same(window, CornerGifOverlay.WindowFor(CornerGifOverlay.SessionSlot));
+            Assert.Equal(frame, CornerGifOverlay.FrameIndexFor(CornerGifOverlay.SessionSlot));
+            Assert.Equal(0.8, window.Spiral.Opacity, 3);
+            Assert.Equal(200, session.Settings.CornerGifSize);
+            Assert.Equal(80, session.Settings.CornerGifOpacity);
+            tab.FlushCornerGifEdit();
+            await Settle();
+            Assert.Equal(250, session.Settings.CornerGifSize);
+            Assert.Equal(0.8, CornerGifOverlay.WindowFor(CornerGifOverlay.SessionSlot)!.Spiral.Opacity, 3);
+        }
+        finally
+        {
+            runner.Stop();
+            AvApp.Sessions = null;
+            CornerGifOverlay.StopAll();
+            CornerGifOverlay.SkipPlatformChecksForTests = false;
+            CornerGifOverlay.ManualFramesForTests = false;
+            (CoreCornerGif.SessionShowHandler, CoreCornerGif.SessionCloseHandler, CoreCornerGif.SessionOpacityHandler,
+                CoreCornerGif.SessionPositionHandler, CoreCornerGif.StandaloneActiveProvider, CoreCornerGif.SpiralOverlayActiveProvider) = handlers;
+            s.SessionCornerGifAllowed = allowed;
             Directory.Delete(dir, true);
         }
     });
