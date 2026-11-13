@@ -468,7 +468,7 @@ public sealed partial class FriendsDrawer : Border
         {
             bool block = c.What == "block";
             var keep = Pill(Loc.Get("friends_confirm_keep"), Raised, Text, "friends-confirm-keep");
-            keep.Click += (_, _) => { _confirm = null; Render(); };
+            keep.Click += (_, _) => { FriendsSfx.Click(); _confirm = null; Render(); };   // WPF FriendsDrawer.Blocked.cs:112
             var yes = Pill(Loc.Get(block ? "friends_menu_block" : "friends_confirm_yes_remove"), Red, Text, "friends-confirm-yes");
             yes.Margin = new Thickness(6, 0, 0, 0);
             yes.Click += async (_, _) => await ConfirmAsync(f.Id, f.Name, c.What);
@@ -493,7 +493,7 @@ public sealed partial class FriendsDrawer : Border
         var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
         more.HorizontalAlignment = HorizontalAlignment.Stretch;
         more.HorizontalContentAlignment = HorizontalAlignment.Center;
-        more.Click += (_, _) => Menu(f).Open(more);
+        more.Click += (_, _) => { FriendsSfx.Click(); Menu(f).Open(more); };   // WPF FriendsDrawer.cs:686
         card.Children.Add(more);
         if (_picker != null)
         {
@@ -537,7 +537,8 @@ public sealed partial class FriendsDrawer : Border
     internal async Task RunMenuAsync(Friend f, string what)
     {
         if (_svc == null) return;
-        if (what is "remove" or "block") { _confirm = (f.Id, what); _openId = f.Id; Render(); return; }
+        // WPF AskConfirm (FriendsDrawer.Blocked.cs:75): the question opens with a click.
+        if (what is "remove" or "block") { FriendsSfx.Click(); _confirm = (f.Id, what); _openId = f.Id; Render(); return; }
         ActResult r = ActResult.TryLater;
         try { r = await _svc.SetSquelchAsync(f.Id, what == "squelch"); }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] menu {What} failed: {E}", what, ex.Message); }
@@ -775,7 +776,7 @@ public sealed partial class FriendsDrawer : Border
         else ShowActResult("blocked:" + b.Id, r);
         return r;
     }
-    internal void ToggleBlocked() { _showBlocked = !_showBlocked; Render(); }
+    internal void ToggleBlocked() { FriendsSfx.Click(); _showBlocked = !_showBlocked; Render(); }   // WPF FriendsDrawer.Blocked.cs:185
     private void RenderFoot(FriendsSnapshot snap)
     {
         var settings = Pill(GlyphContent(IconKind.Settings, Loc.Get("friends_settings"), glyphFg: null), Brushes.Transparent, Muted, "friends-settings");   // WPF E713
@@ -809,6 +810,7 @@ public sealed partial class FriendsDrawer : Border
             copy.Click += async (_, _) =>
             {
                 try { await (TopLevel.GetTopLevel(this)?.Clipboard?.SetTextAsync(code) ?? Task.CompletedTask); } catch { return; }
+                FriendsSfx.Click();   // WPF FriendsDrawer.cs:980 CopyCode
                 copied.Text = Loc.Get("friends_copied");
                 copied.Foreground = Mint;
                 _copyReset?.Dispose();
@@ -836,8 +838,9 @@ public sealed partial class FriendsDrawer : Border
         bool good = FriendsDrawerRules.IsGood(r);
         _addResult.Text = Loc.Get(FriendsDrawerRules.AddResultKey(r));
         _addResult.Foreground = good ? Mint : Gold;
-        if (good) _codeBox.Text = "";
-        else _addGo.IsEnabled = FriendsDrawerRules.NormaliseCode(_codeBox.Text).Length == FriendsDrawerRules.CodeLength;
+        // WPF FriendsDrawer.cs:1120-1130: accepted on a good result, denied otherwise.
+        if (good) { FriendsSfx.Accepted(); _codeBox.Text = ""; }
+        else { FriendsSfx.Denied(); _addGo.IsEnabled = FriendsDrawerRules.NormaliseCode(_codeBox.Text).Length == FriendsDrawerRules.CodeLength; }
         await SafeRefreshAsync();
         return r;
     }

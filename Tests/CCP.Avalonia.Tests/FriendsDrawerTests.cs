@@ -1210,6 +1210,33 @@ public sealed partial class FriendsDrawerTests
         finally { original.Restore(); }
     });
 
+    /// <summary>WPF AskConfirm (FriendsDrawer.Blocked.cs:75) and ToggleBlocked (:185): opening the Remove
+    /// question and the foot's Blocked button each click (restack b38, from #3666).</summary>
+    [Fact]
+    public Task AskingToRemoveAndTogglingBlockedClick() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var saved = new CueState();
+        saved.Quiet();
+        var tags = new List<string>();
+        try
+        {
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            CoreModArt.AudioOverridePathProvider = _ => typeof(FriendsDrawerTests).Assembly.Location;
+            FriendsLanding.SfxGate = new();
+            FriendsLanding.SfxNow = SfxStep;
+            CoreSettings.Current.MasterVolume = 50;
+            await d.RunMenuAsync(svc.Snapshot.Friends.First(f => f.Id == "u_on"), "remove");
+            Assert.Equal("u_on", d.OpenId);
+            d.ToggleBlocked();
+            Assert.Equal(new[] { "friends-click", "friends-click" }, tags);
+        }
+        finally { saved.Restore(); }
+    });
+
     [Fact]
     public Task SquelchAndUnsquelchPlayOnlyTheWireResultCue() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
