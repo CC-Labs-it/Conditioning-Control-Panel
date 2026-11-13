@@ -205,21 +205,24 @@ public sealed class FypFeedDeferTests
             var picks = 0;
             var v = new MandatoryVideoScheduler(host, clock,
                 () => ++picks == 1 ? throw new System.IO.IOException("unreadable video folder") : Clips);
+            var dnd = CoreSettings.Current.DndSuppressVideos;
             try
             {
+                CoreSettings.Current.DndSuppressVideos = false; // the real foreground app must not reschedule the tick
+                CoreSettings.Current.VideosPerHour = 20;      // the cap: every interval is 144 to 216 s
                 v.Start();
-                clock.Advance(TimeSpan.FromSeconds(4400));    // the scheduled tick lands while the feed is up
+                clock.Advance(TimeSpan.FromSeconds(216));     // the scheduled tick lands while the feed is up
                 Assert.Equal(0, picks);
                 feed = false;
                 clock.Advance(TimeSpan.FromSeconds(1));       // the replay throws
                 Assert.Equal(1, picks);
                 Assert.False(v.IsPlaying);
-                clock.Advance(TimeSpan.FromSeconds(4400));    // the next normal interval
+                clock.Advance(TimeSpan.FromSeconds(216));     // the next normal interval
                 Assert.True(v.IsPlaying);
                 clock.Advance(MandatoryVideoScheduler.PreRoll);
                 Assert.Single(host.Shown);
             }
-            finally { v.ForceCleanup(); v.Stop(); }
+            finally { v.ForceCleanup(); v.Stop(); CoreSettings.Current.DndSuppressVideos = dnd; }
         });
     }
 
