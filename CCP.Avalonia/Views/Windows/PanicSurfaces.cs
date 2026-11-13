@@ -152,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
             new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
+            new("inbox-notice", _ => Dialogs.InboxNoticeCard.CloseForPanic()),   // dismiss without running its actions; WPF ConditioningControlPanel/Dialogs/InboxNoticeCard.cs:35 closes it action-free on Escape
             // WPF MainWindow.xaml.cs:2101 "audio unduck": other apps come back up. That pass runs before WPF's StopEngine;
             // After: engine mirrors StopEngineCore's unduck (StartStop.cs:547). Panic only: the plain Stop does not unduck here yet.
             new("audio-duck", _ => Platform.LibVlcAudio.Instance?.ForceUnduck(), After: ["engine"]),

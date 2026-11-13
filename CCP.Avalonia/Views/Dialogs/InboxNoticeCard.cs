@@ -22,6 +22,12 @@ public sealed class InboxNoticeCard : Window, IPassiveStartupSurface
     /// <summary>The one card on screen, for the shell's tests and the startup presenter.</summary>
     internal static InboxNoticeCard? Open => _open;
 
+    /// <summary>Panic (PanicSurfaces "inbox-notice"): close the card without running either action.</summary>
+    internal static void CloseForPanic()
+    {
+        try { _open?.Close(); } catch (InvalidOperationException) { }
+    }
+
     private InboxNoticeCard()
     {
         Title = "CC Labs";

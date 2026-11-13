@@ -169,6 +169,7 @@ public sealed class PanicSurfacesTests
         "video-test-error",
         "chaster-booked-pop",
         "attention-test",
+        "inbox-notice",
         "audio-duck",
         "descent-fuse",
         "deeper-player-fullscreen",
