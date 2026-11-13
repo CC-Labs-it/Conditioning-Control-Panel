@@ -122,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     OnRaceRunEnded(o);
                     return true;
                 case "exit":
+                    RaceStopTrack();   // WPF CaucusHostService.cs:383
                     _raceExiting = true;   // the shell arms the 1200 ms close (WPF ArmExitWatchdog)
                     return false;
                 default:
@@ -186,6 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void OnRaceRunEnded(JObject o)
         {
             if (!_raceRun.TryEnd()) return;
+            RaceStopTrack();   // WPF CaucusHostService.cs:435
             try
             {
                 double score = Math.Max(0, (double?)o["score"] ?? 0);
