@@ -18,6 +18,8 @@ test -f "$app/libvosk.so"
 id=io.github.CodeBambi.ConditioningControlPanel
 test -f "$app/LICENSE"
 test -f "$app/share/applications/$id.desktop"
+test -f "$app/share/applications/$id.Player.desktop"
+test -f "$app/share/applications/$id.Editor.desktop"
 test -f "$app/share/icons/hicolor/256x256/apps/$id.png"
 test -f "$app/share/metainfo/$id.metainfo.xml"
 # Sandboxed profile: never the user's real settings or keyring.
