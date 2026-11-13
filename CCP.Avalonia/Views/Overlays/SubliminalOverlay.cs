@@ -43,8 +43,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
             solidMode && !stealsFocus && liveVideoWindows == 0;
 
-        internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold)
+        internal static bool ShowHosted(PixelRect bounds, string text, double alpha, TimeSpan hold,
+            Action<Action, TimeSpan>? schedule = null)
         {
+            schedule ??= (action, delay) => DispatcherTimer.RunOnce(action, delay);
             if (!Hosts.TryGetValue(bounds, out var lease))
             {
                 lease = SharedOverlayHost.Acquire(bounds);
@@ -64,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 lease.Canvas.Children.Remove(card);
             };
             RetireHosted.Add(retire);
-            void Step(double value, TimeSpan at) => DispatcherTimer.RunOnce(() =>
+            void Step(double value, TimeSpan at) => schedule(() =>
             {
                 if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
             }, at);
@@ -77,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Step(alpha * i / steps, fade * i / steps);
                 Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
             }
-            DispatcherTimer.RunOnce(() =>
+            schedule(() =>
             {
                 retire();
                 RetireHosted.Remove(retire);
