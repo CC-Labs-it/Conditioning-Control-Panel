@@ -168,7 +168,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!PrepareBrowserNavigation(url, true, true)) return false;
             var host = BrowserView;
-            return host == null ? false : await host.NavigateWhenReadyAsync(new Uri(url));
+            if (host == null) return false;
+            // A companion link is a link (WPF NavigateToUrlInBrowser :729): 50% once the browser exists.
+            host.SetBrowserZoom(host.BrowserZoomReady || host.BrowserZoom is not null ? 0.5 : 0.75);
+            return await host.NavigateWhenReadyAsync(new Uri(url));
         }
 
         private bool PrepareBrowserNavigation(string url, bool autoPlayFullscreen, bool userInitiated)

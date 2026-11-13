@@ -142,6 +142,17 @@ public sealed class BrowserInitialHomeTests
     });
 
     [Fact]
+    public Task CompanionLinkUsesLinkZoom() => Run((shell, page, host, mod) =>
+    {
+        shell.NavigateToUrlInBrowser("http://127.0.0.1:9/one");
+        host.BrowserZoomAdapterReady();
+        host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/one"));
+        Assert.Equal(0.75, host.BrowserZoom);
+        _ = shell.NavigateCompanionUrlAsync("http://127.0.0.1:9/two");
+        Assert.Equal(0.5, host.BrowserZoom);
+    });
+
+    [Fact]
     public Task InitialHomeUsesDefaultZoomAndReloadUsesHalf() => Run((shell, page, host, mod) =>
     {
         page.OnBrowserPromptClick();
