@@ -669,7 +669,7 @@ namespace ConditioningControlPanel.Avalonia
 
         internal static void RepairLaunchSettings(SettingsService settings)
         {
-            // WPF App.xaml.cs:463,2952,3282: re-clones must see the live AI availability.
+            // WPF App.xaml.cs:380,463,2952,3282: re-clones must see the live AI availability (the one seed).
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
             var presets = new KeywordTriggerPresetService();
             try { presets.SyncInstalledCustomSources(); }
@@ -1082,7 +1082,6 @@ namespace ConditioningControlPanel.Avalonia
                     recapVideo.VideoStarted += () => MediaHistory?.RecordVideo(recapVideo.LastVideoPath);
                 //
                 SeedModeration();
-                CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
                 // echo is attached by Platform.BarkHead.Start below; command executor and

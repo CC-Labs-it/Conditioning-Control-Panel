@@ -266,7 +266,8 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var settings = CoreSettings.Service;
-                if (settings?.RestoredFromBackup == true)
+                // A failed-read fallback never reconciles (it refuses a restored backup below).
+                if (Loaded && settings?.RestoredFromBackup == true)
                 {
                     var idBeforeRead = s.UnifiedId!;
                     var user = await new V2AuthService(() => s, _handler).GetUserProfileAsync(idBeforeRead);
