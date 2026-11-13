@@ -1197,6 +1197,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// count through the three modes exactly as WPF LockCardService.ShowLockCard does.</summary>
         internal static void ShowNext(bool isTest) => ShowNext(isTest, null);
 
+        /// <summary>The CoreLockCard.ShowHandler hop from any thread. A ForceCloseAll between the post and
+        /// the show (panic, remote teardown, engine stop) drops the card, as WPF's synchronous show would.</summary>
+        internal static void PostNext(bool isTest)
+        {
+            var gen = CloseGeneration;
+            void Request() { if (gen == CloseGeneration) EnqueueOrRun("card", () => ShowNext(isTest)); }
+            if (Dispatcher.UIThread.CheckAccess()) Request(); else Dispatcher.UIThread.Post(Request);
+        }
+
+        // WPF InteractionQueueService.TryStart: one pending request per type, in request order.
+        private static DispatcherTimer? _pendingTimer;
+        private static readonly Queue<(string Type, Action Run)> _pending = new();
+        private static bool _replaying;
+
+        private static bool OtherInteractionActive => IsAnyOpen() || PopQuizWindow.IsAnyOpen()
+            || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
+            || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0;
+
+        internal static bool DeferVideo(Action run) => Dispatcher.UIThread.Invoke(() => Defer("video", run));
+        internal static bool DeferBubble(Action run) => Dispatcher.UIThread.Invoke(() => Defer("bubble", run));
+
+        private static bool Defer(string type, Action run)
+        {
+            if (_replaying || (!OtherInteractionActive && _pending.Count == 0)) return false;
+            if (!_pending.Any(item => item.Type == type)) _pending.Enqueue((type, run));
+            if (_pendingTimer == null)
+            {
+                _pendingTimer = new DispatcherTimer { Interval = BubbleCountScheduler.QueuePoll };
+                _pendingTimer.Tick += (_, _) => RetryPendingCard();
+                _pendingTimer.Start();
+            }
+            return true;
+        }
+
+        private static void EnqueueOrRun(string type, Action run)
+        {
+            if (!Defer(type, run)) run();
+        }
+
+        internal static void RetryPendingCard()
+        {
+            if (_pending.Count == 0 || OtherInteractionActive) return;
+            var item = _pending.Dequeue();
+            if (_pending.Count == 0) { _pendingTimer?.Stop(); _pendingTimer = null; }
+            try { _replaying = true; item.Run(); }
+            finally { _replaying = false; }
+        }
+
+        private static void DropPendingCard()
+        {
+            _pending.Clear();
+            _pendingTimer?.Stop();
+            _pendingTimer = null;
+        }
+
         /// <param name="strict">Null: the player's own setting. The leash passes false (never a strict card).</param>
         internal static void ShowNext(bool isTest, bool? strict)
         {
@@ -1234,10 +1289,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         static LockCardWindow() =>
             PopQuizWindow.AllClosed += () => { var r = _heldForQuiz; _heldForQuiz = null; r?.Invoke(); };
 
+        /// <summary>Moves on every ForceCloseAll: a card posted before it is dropped (WPF shows synchronously).</summary>
+        internal static int CloseGeneration => System.Threading.Volatile.Read(ref _closeGeneration);
+        private static int _closeGeneration;
+
         /// <summary>Drop every card, solved or not - the panic exit. Strict mode does not survive
         /// this: <c>_isCompleted</c> is set first on each window so OnClosing cannot refuse.</summary>
         public static void ForceCloseAll()
         {
+            System.Threading.Interlocked.Increment(ref _closeGeneration);
+            DropPendingCard();
             _heldForQuiz = null;
             var windows = _allWindows.ToList();
             _allWindows.Clear();

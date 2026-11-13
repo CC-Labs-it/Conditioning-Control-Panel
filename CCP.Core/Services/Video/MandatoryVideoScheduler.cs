@@ -121,6 +121,9 @@ namespace ConditioningControlPanel.Services
             _feedDefer = new FypFeedDefer(_time, "VideoService", () => _host.FeedOwnsTheScreen);
         }
 
+        /// <summary>The head may queue a trigger behind another fullscreen interaction.</summary>
+        public Func<Action, bool>? DeferTrigger { get; set; }
+
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
@@ -361,6 +364,7 @@ namespace ConditioningControlPanel.Services
         public bool Trigger(bool? strictOverride = null, string? path = null, bool userInitiated = false, bool userEarned = false,
             bool scheduled = false, bool silentIfEmpty = false, bool freezeBeforePreroll = false)
         {
+            if (DeferTrigger?.Invoke(() => Trigger(strictOverride, path)) == true) return true;
             if (_playing) return false;
             // WPF VideoService.cs:2226: the cascade guard comes before the feed guard.
             if (_cascadeDefer != null) return true; // WPF: coalesce, retain the first request
