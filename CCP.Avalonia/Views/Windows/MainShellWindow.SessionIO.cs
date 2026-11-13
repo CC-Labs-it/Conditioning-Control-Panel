@@ -42,10 +42,10 @@
 //   heads call). Session/preset drops go to PresetsTabView; .ccpmod to HandleModDropAsync
 //   (MainShellWindow.ModCatalogue.cs). Play/Edit reuse Deeper; enhancements use MainShellWindow.DeeperImport.cs.
 //
-//   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
+//   The remaining camera shortcut - ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
 //   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
-//   BtnChatShortcut_Click, BtnCameraShortcut_Click, ToggleCameraCommand, OpenAvatarChat_Executed,
-//   BringToForegroundAndOpenChat, _cameraCommandBound. RoutedUICommand and ModifierKeys are WPF
+//   BtnCameraShortcut_Click, ToggleCameraCommand, OpenAvatarChat_Executed,
+//   _cameraCommandBound. RoutedUICommand and ModifierKeys are WPF
 //   types, and a DESKTOP-WIDE hotkey is a Win32 RegisterHotKey - the bucket-E problem CLAUDE.md
 //   describes, not a port. ToggleCameraCommand is additionally a camera control: see the refusal
 //   already recorded for the two device pills in MainShellWindow.LabTab.cs.

@@ -52,7 +52,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Content = Web;
             Web.WebMessage += OnPageMessage;
             // WPF DisposeAll: a closed window never leaves the mic open.
-            Opened += (_, _) => { lock (OpenWindows) OpenWindows.Add(this); StartLifecycle(); };
+            Opened += (_, _) =>
+            {
+                lock (OpenWindows) { if (OpenWindows.Contains(this)) return; OpenWindows.Add(this); }
+                StartLifecycle();
+            };
             Closed += (_, _) =>
             {
                 _closed = true;
