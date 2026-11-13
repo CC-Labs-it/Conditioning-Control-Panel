@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -208,8 +209,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Stroke = stroke,
                     StrokeThickness = StrokeDip,
                 };
-                label.Build();
-                content = label;
+                if (a.Text.StartsWith(IconMap.Chaperone, StringComparison.Ordinal))
+                {
+                    label.Text = IconText.Bare(a.Text).ToUpperInvariant();
+                    label.Build();
+                    var panel = new StackPanel { Orientation = Orientation.Horizontal };
+                    panel.Children.Add(new IconGlyph { Kind = IconKind.Heart, Variant = IconVariant.Filled,
+                        Foreground = fill, Size = FontSizeDip, VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 10, 0) });
+                    panel.Children.Add(label);
+                    content = panel;
+                }
+                else { label.Build(); content = label; }
             }
             content.HorizontalAlignment = HorizontalAlignment.Center;
             content.VerticalAlignment = VerticalAlignment.Top;

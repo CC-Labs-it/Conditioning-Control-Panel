@@ -5,6 +5,7 @@ using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
@@ -41,8 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
-    /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion other than FloatUp and RainDown, treat rot, chain reaction, cam-girl tips,
+    /// (Echo/Bound/Tease) - SpawnTick spawns treats, plain live variants and the Chaperone; every
+    /// motion other than FloatUp, RainDown and Chaperone roaming, treat rot, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
     /// first-time bonus and ripple-denial pop text.
@@ -215,6 +216,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
                     enabled = enabled.Where(id => id != "video").ToList();
 
+                if (!cfg.ScriptedFirstRun && ChaosMeta.AtLeast(ChaosRank.Tempted)
+                    && Rng.NextDouble() < ChaosTuning.CHAPERONE_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
+                {
+                    SpawnChaperone(effIntensity);
+                    if (_spawnTimer != null)
+                        _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+                    return;
+                }
+
                 EffectBubbleSpec spec;
                 if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
                     spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
@@ -239,6 +249,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_spawnTimer != null)
                 _spawnTimer.Interval = TimeSpan.FromMilliseconds(
                     ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult));
+        }
+
+        internal static AmbientBubble SpawnChaperone(double intensity)
+        {
+            var state = _state!;
+            bool debut = !ChaosMeta.State.SeenChaperone;
+            if (debut)
+            {
+                ChaosMeta.State.SeenChaperone = true;
+                ChaosMeta.Save();
+                ChaosAnnouncerOverlay.Announce($"{IconMap.Chaperone} {Loc.Get("chaos_chaperone_title")}: {Loc.Get("chaos_chaperone_hint")}", ChaosAnnounceKind.Item,
+                    artKey: "chaperone", subText: Loc.Get("chaos_chaperone_hint"));
+                state.PushEvent($"{IconMap.Chaperone} {Loc.Get("chaos_chaperone_event")}");
+            }
+            var (liveSpec, escortSpec) = ChaosBubbleVariants.BuildChaperonePair(intensity, state.FuseTimeMult,
+                state.Config.EffectIntensity, state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1.0);
+            ChaosMeta.MarkDiscovered("bubble:chaperone");
+            var live = BubbleOverlay.SpawnChaos(liveSpec);
+            var escort = BubbleOverlay.SpawnChaos(escortSpec);
+            escort.Screen = live.Screen;
+            escort.OrbitTarget = live;
+            live.InsetChaperoneBounds(escort.Size);
+            double radius = Math.Max(ChaosTuning.CHAPERONE_ORBIT_RADIUS_DIP,
+                (live.Size + escort.Size) / 2 + ChaosTuning.CHAPERONE_ORBIT_GAP_DIP);
+            escort.X = live.CenterX + radius - escort.Size / 2;
+            escort.Y = live.CenterY - escort.Size / 2;
+            live.Escort = escort;
+            return live;
         }
 
         /// <summary>WPF OnBenignPopped (:1767): the prism and ordinary-treat branches.</summary>
@@ -369,7 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Shake(0.25 + s * 0.3, 280);
                     if (_state.UnleashedEnabled)
                     {
-                        BubbleOverlay.Field.DefuseAllLive();
+                        BubbleOverlay.Field.DefuseAllLive(BubbleOverlay.BounceShield);
                         _state.PushEvent("📿 unleashed — the field lets go");
                         Pulse(Color.FromRgb(255, 215, 0), 0.50);
                     }
