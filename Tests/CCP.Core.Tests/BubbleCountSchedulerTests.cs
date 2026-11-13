@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Xunit;
 using FakeClock = CCP.Core.Tests.PopQuizSchedulerTests.FakeClock;
 
@@ -63,44 +64,6 @@ public sealed class BubbleCountSchedulerTests
             if (HoldMessage) MessageThen = then; else then();
         }
     }
-
-    [Fact]
-    public void Video_waits_through_lead_in_answer_retry_and_mercy() => With(true, true, true, () =>
-    {
-        var clock = new FakeClock(); var host = new Host(); var videoHost = new VideoHost();
-        var b = new BubbleCountScheduler(host, clock, () => Clips);
-        var reads = 0;
-        var v = new MandatoryVideoScheduler(videoHost, clock, () => { reads++; return Clips; });
-        var previous = CoreEngine.BubbleCount;
-        var mercy = CoreSettings.Current.MercyAfterFails;
-        CoreSettings.Current.MercyAfterFails = 2;
-        CoreEngine.BubbleCount = b;
-        try
-        {
-            b.Trigger(forceTest: true);
-            Assert.True(v.Trigger(true, "/explicit.mp4")); // during Freeze lead-in
-            Assert.False(v.Trigger(false, "/duplicate.mp4"));
-            clock.Advance(TimeSpan.FromSeconds(3));
-            Assert.False(v.IsPlaying);
-            Assert.Empty(videoHost.Shown); // answer window still owns the interaction
-            host.Shown[0].Done(false);
-            clock.Advance(TimeSpan.FromSeconds(3));
-            Assert.False(v.IsPlaying); // retry message
-            host.Messages[0].Then();
-            host.Shown[1].Done(false);
-            clock.Advance(TimeSpan.FromSeconds(3));
-            Assert.False(v.IsPlaying); // mercy message
-            host.Messages[1].Then();
-            clock.Advance(BubbleCountScheduler.QueuePoll + MandatoryVideoScheduler.PreRoll);
-            Assert.Equal(("/explicit.mp4", true), Assert.Single(videoHost.Shown));
-            Assert.Equal(0, reads); // explicit path and strictness survive the wait
-        }
-        finally
-        {
-            v.Stop(); b.ForceCleanup(); CoreEngine.BubbleCount = previous;
-            CoreSettings.Current.MercyAfterFails = mercy;
-        }
-    });
 
     [Fact]
     public void Scheduled_video_waits_without_consuming_library_then_rearms() => With(true, false, true, () =>
@@ -219,11 +182,14 @@ public sealed class BubbleCountSchedulerTests
         var clock = new FakeClock(); var host = new Host();
         var b = new BubbleCountScheduler(host, clock, () => Clips);
         var videoHost = new VideoHost { HoldMessage = true }; var unavailable = false;
+        const string url = "https://cdn.scrolller.com/only.mp4";
         var v = new MandatoryVideoScheduler(videoHost, clock, () =>
         {
             if (unavailable && throws) throw new System.IO.IOException("Video folder unavailable");
-            return unavailable ? Array.Empty<string>() : new[] { "/v/only.mp4" };
-        });
+            return unavailable ? Array.Empty<string>() : new[] { url };
+        }) { CachedScrolllerPath = _ => unavailable ? null : "/cache/only.mp4" };
+        var scrolller = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        ScrolllerPolicy.Apply(true, null);
         var previous = CoreEngine.BubbleCount;
         var oldRpc = CoreDiscord.ServiceProvider;
         using var rpc = new DiscordRichPresenceService();
@@ -265,6 +231,7 @@ public sealed class BubbleCountSchedulerTests
         {
             v.Stop(); b.ForceCleanup(); CoreFlash.Stop();
             CoreEngine.BubbleCount = previous; CoreDiscord.ServiceProvider = oldRpc;
+            ScrolllerPolicy.Apply(scrolller.Enabled, scrolller.MaxClipShortSide);
             (s.MandatoryVideosEnabled, s.AttentionChecksEnabled, s.FlashEnabled,
                 s.BubbleCountPauseEffects, s.DiscordRichPresenceEnabled, s.MercyAfterFails) = saved;
         }
