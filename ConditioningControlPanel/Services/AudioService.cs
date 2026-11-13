@@ -961,12 +961,19 @@ namespace ConditioningControlPanel.Services
         /// sliders is queued onto the serialized worker (#750-#753).
         /// </summary>
         /// <param name="strength">0-100 (0 = no ducking, 100 = full mute)</param>
-        public void Duck(int strength = 80)
+        public void Duck(int strength = 80,
+            [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "",
+            [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
         {
             // Don't duck if master volume is 0% - nothing to play anyway
             if ((App.Settings?.Current?.MasterVolume ?? 100) == 0) return;
 
             if (_deviceEnumerator == null) return;
+
+            // ccp-bugs #1564: a duck every ~30 s with AudioDuckingEnabled off at launch and nothing in
+            // the recent-sounds ring. Every duck that really lowers other apps now names its caller,
+            // in the ring and in the DUCK trace line, so the next report says who asked.
+            var caller = Audio.RecentSounds.DuckCaller(callerFile, callerMember);
 
             float amount;
             lock (_lockObj)
@@ -1003,7 +1010,9 @@ namespace ConditioningControlPanel.Services
             // change, no COM, so it stays inline and our own layers dip on the same frame.
             try { App.LayeredAudio?.ApplyDuck(amount); } catch (Exception ex) { Diag.Swallowed(ex); }
 
-            EnqueueDuckWork("duck", () => ApplyDuckSweep(amount, strength), trace: true);
+            try { Audio.RecentSounds.Shared.Note("duck", caller, Audio.EngineOffAudioLog.EngineRunning, false, DateTime.Now); }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+            EnqueueDuckWork("duck (" + caller + ")", () => ApplyDuckSweep(amount, strength), trace: true);
         }
 
         /// <summary>
@@ -1051,13 +1060,23 @@ namespace ConditioningControlPanel.Services
                             // stored value is the TRUE original and the live one is already ducked.
                             // Recapturing it here is how volumes used to ratchet toward 0%.
                             if (_originalVolumes.ContainsKey(processId)) continue;
-                            _originalVolumes[processId] = currentVolume;
                         }
                         var name = TryGetProcessName(processId);
-                        lock (_lockObj) { _processNames[processId] = name; }
+                        float original;
+                        lock (_lockObj)
+                        {
+                            if (!_isDucked) return;
+                            // #1531: an app still owed a parked restore is at its DUCKED level right
+                            // now; its parked original is the real one (Audio.DuckRecoveryRule).
+                            var claimed = Audio.DuckRecoveryRule.ClaimOriginal(processId, name, currentVolume,
+                                _originalVolumes, _pendingRestores, _processNames);
+                            if (claimed == null) continue;
+                            original = claimed.Value;
+                            _processNames[processId] = name;
+                        }
 
-                        // Calculate ducked volume
-                        var newVolume = currentVolume * (1.0f - amount);
+                        // Calculate ducked volume from the true original, never a ducked live level
+                        var newVolume = original * (1.0f - amount);
                         session.SimpleAudioVolume.Volume = Math.Max(0.0f, newVolume);
                         ducked++;
                     }
@@ -1531,21 +1550,30 @@ namespace ConditioningControlPanel.Services
                         if (excludeWebView2 && IsWebView2Pid(processId, webViewPids)) continue;
 
                         var currentVolume = session.SimpleAudioVolume.Volume;
-                        // Skip sessions already at 0 — most likely they're sessions we ducked in a
-                        // prior generation and the PID got recycled; treating their 0 as "original"
-                        // would silence the app forever.
-                        if (CoreAudio.IsSilentForDuckRescan(currentVolume)) continue;
 
                         lock (_lockObj)
                         {
                             if (!_isDucked) return;                                 // unducked mid-sweep
                             if (_originalVolumes.ContainsKey(processId)) continue;  // already ducked
-                            _originalVolumes[processId] = currentVolume;
+                            if (currentVolume <= 0.001f && _pendingRestores.Count == 0) continue;  // silent, nothing parked
                         }
                         var name = TryGetProcessName(processId);
-                        lock (_lockObj) { _processNames[processId] = name; }
+                        float original;
+                        lock (_lockObj)
+                        {
+                            if (!_isDucked) return;
+                            // Skip sessions already at 0 — most likely they're sessions we ducked in a
+                            // prior generation and the PID got recycled; treating their 0 as "original"
+                            // would silence the app forever (skipSilent). A parked original wins over
+                            // the live, still-ducked level (#1531, Audio.DuckRecoveryRule).
+                            var claimed = Audio.DuckRecoveryRule.ClaimOriginal(processId, name, currentVolume,
+                                _originalVolumes, _pendingRestores, _processNames, skipSilent: true);
+                            if (claimed == null) continue;
+                            original = claimed.Value;
+                            _processNames[processId] = name;
+                        }
 
-                        var newVolume = currentVolume * (1.0f - amount);
+                        var newVolume = original * (1.0f - amount);
                         session.SimpleAudioVolume.Volume = Math.Max(0.0f, newVolume);
                         newlyDucked++;
                         duckedNames.Add($"{name}:{processId}");

@@ -226,6 +226,18 @@ namespace ConditioningControlPanel.Services.Safety
         }
 
         /// <summary>
+        /// Whether Escape means anything to a mandatory video at all (ccp-bugs #1594 #1595). A full
+        /// screen video keeps Escape as its hardcoded "dismiss this video" key: it covers every
+        /// monitor, so the press can only be meant for it. A FLOATING video sits beside whatever the
+        /// user is working in, and the global hook heard every Escape typed into another app: the
+        /// first one parked the video, the next one closed it, with nothing bound to Escape. So a
+        /// floating video takes Escape only when Escape IS the panic key, where the press keeps
+        /// exactly today's panic route (the video handlers stand aside and the panic closes it).
+        /// </summary>
+        internal static bool VideoTakesEscape(bool floating, bool panicKeyEnabled, string? panicKey)
+            => !floating || EscapeIsThePanicKey(panicKeyEnabled, panicKey);
+
+        /// <summary>
         /// Whether a CCP surface that drops or closes on Escape takes this press instead of the panic
         /// (bug hunt 2026-09-29, TAB-8 / DESK-3): Escape in Circe's Tab price box ("Esc drops it")
         /// also paused the session, armed the ten minute safety hold, and a second one inside 2 s

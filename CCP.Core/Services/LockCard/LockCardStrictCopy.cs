@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Services
         internal const string HintEscCloses = "label_press_esc_to_close";
         internal const string HintOnlyPanicKey = "label_strict_only_panic_key_closes";
         internal const string HintPanicIsEscape = "label_strict_panic_is_escape";
+        internal const string HintStrictPanicOff = "label_strict_panic_off_esc_closes";
 
         internal const string ConfirmTitle = "lockcard_strict_confirm_title";
         internal const string ConfirmBody = "lockcard_strict_confirm_body";
@@ -36,10 +37,16 @@ namespace ConditioningControlPanel.Services
         /// (non-strict, or no live panic escape: Esc is the ordinary dismiss). A strict card with a
         /// live panic key names that key; when the key IS Escape it says plainly that Escape still
         /// ends the card, because it does.
+        ///
+        /// <para>ccp-bugs#1582: a STRICT card with panic switched off lets Escape close it on purpose
+        /// (a strict card is never unescapable), and "Press ESC to close" read as strict being
+        /// broken. <paramref name="strictWithPanicOff"/> says why instead. Only the switch: a panic
+        /// hook that died with the switch on keeps the plain hint, since "panic is off" would be a
+        /// lie there.</para>
         /// </summary>
-        internal static string HintKey(bool escClosesCard, string? panicKey)
+        internal static string HintKey(bool escClosesCard, string? panicKey, bool strictWithPanicOff = false)
         {
-            if (escClosesCard) return HintEscCloses;
+            if (escClosesCard) return strictWithPanicOff ? HintStrictPanicOff : HintEscCloses;
             return PanicIsEscape(panicKey) ? HintPanicIsEscape : HintOnlyPanicKey;
         }
 

@@ -116,7 +116,7 @@ public class StudioRackRenderTests
         OnStaThread(() =>
         {
             var slider = (Slider)new BrainDrainFeatureControl().FindName("SliderIntensity")!;
-            Assert.Equal(1, slider.Minimum);
+            Assert.Equal(0, slider.Minimum);   // 0 = no clips (ccp-bugs #1536)
             Assert.Equal(100, slider.Maximum);
         });
     }

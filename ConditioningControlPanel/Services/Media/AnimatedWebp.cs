@@ -264,13 +264,18 @@ internal static class AnimatedWebp
     /// UI thread only.
     /// </summary>
     public static void AttachAnimation(Image img, string path, int maxDim, int maxFrames = 48)
+        => AttachAnimation(img, path, maxDim, maxFrames, diagTag: null);
+
+    /// <summary>As <see cref="AttachAnimation(Image,string,int,int)"/>; a non-null
+    /// <paramref name="diagTag"/> logs one line when the frames land (<see cref="DescribeAttach"/>).</summary>
+    internal static void AttachAnimation(Image img, string path, int maxDim, int maxFrames, string? diagTag)
     {
         Uri? stillUri = null;
         try { stillUri = new Uri(path, UriKind.Absolute); } catch { }
 
         AttachInternal(img, maxDim, maxFrames, path, stillUri,
             (key, dim, frames) => DecodeCached(key, dim, frames,
-                () => DecodeFrames(path, dim, frames, maxMemoryMb: 24.0)));
+                () => DecodeFrames(path, dim, frames, maxMemoryMb: 24.0)), diagTag);
     }
 
     /// <summary>
@@ -282,10 +287,14 @@ internal static class AnimatedWebp
     /// off it.
     /// </summary>
     public static void AttachAnimation(Image img, Uri uri, int maxDim, int maxFrames = 48)
+        => AttachAnimation(img, uri, maxDim, maxFrames, diagTag: null);
+
+    /// <summary>As <see cref="AttachAnimation(Image,Uri,int,int)"/>, with the optional decode line.</summary>
+    internal static void AttachAnimation(Image img, Uri uri, int maxDim, int maxFrames, string? diagTag)
     {
         if (uri.IsFile)
         {
-            AttachAnimation(img, uri.LocalPath, maxDim, maxFrames);
+            AttachAnimation(img, uri.LocalPath, maxDim, maxFrames, diagTag);
             return;
         }
 
@@ -306,11 +315,32 @@ internal static class AnimatedWebp
 
         AttachInternal(img, maxDim, maxFrames, uri.ToString(), uri,
             (key, dim, frames) => DecodeCached(key, dim, frames,
-                () => DecodeFrames(new MemoryStream(bytes), dim, frames, maxMemoryMb: 24.0)));
+                () => DecodeFrames(new MemoryStream(bytes), dim, frames, maxMemoryMb: 24.0)), diagTag);
+    }
+
+    /// <summary>
+    /// The line a tagged attach logs when its frames land (ccp-bugs #1577: "the heavier the corner
+    /// GIF, the more it lags"). <paramref name="decodeMs"/> is the wait on the global decode gate
+    /// plus the decode itself (about 0 on a cache hit); <paramref name="uiWaitMs"/> is how long the
+    /// finished frames queued for the UI thread. A slow decode and a busy dispatcher then read
+    /// apart in the next report. Pure, so the wording is pinned by a test.
+    /// </summary>
+    internal static string DescribeAttach(string tag, int frames, double delayMs, int frameW, int frameH,
+        long decodeMs, long uiWaitMs, bool still)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (frames <= 0)
+            return string.Format(inv, "{0}: no animation decoded ({1}), decode {2} ms, UI wait {3} ms",
+                tag, still ? "still shown" : "nothing shown", decodeMs, uiWaitMs);
+        double fps = delayMs > 0 ? 1000.0 / delayMs : 0;
+        long keptMb = (long)frameW * frameH * 4 * frames / (1024 * 1024);
+        return string.Format(inv,
+            "{0}: {1} frames at {2}x{3}, {4:0} ms a frame ({5:0.#} fps), ~{6} MB kept, decode {7} ms, UI wait {8} ms",
+            tag, frames, frameW, frameH, delayMs, fps, keptMb, decodeMs, uiWaitMs);
     }
 
     private static void AttachInternal(Image img, int maxDim, int maxFrames, string cacheKey, Uri? stillUri,
-        Func<string, int, int, (List<BitmapSource> Frames, TimeSpan Delay)?> decode)
+        Func<string, int, int, (List<BitmapSource> Frames, TimeSpan Delay)?> decode, string? diagTag = null)
     {
         var token = new object();
         _live.Remove(img);
@@ -321,6 +351,7 @@ internal static class AnimatedWebp
         {
             (List<BitmapSource> Frames, TimeSpan Delay)? decoded = null;
             BitmapSource? still = null;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             try { decoded = decode(cacheKey, dim, maxFrames); }
             catch (Exception ex) { App.Logger?.Debug("AnimatedWebp decode {Path}: {E}", cacheKey, ex.Message); }
             if (decoded == null && stillUri != null)
@@ -338,9 +369,22 @@ internal static class AnimatedWebp
                 }
                 catch { }
             }
+            long decodeMs = clock.ElapsedMilliseconds;
 
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
+                if (diagTag != null)
+                {
+                    try
+                    {
+                        long uiWaitMs = clock.ElapsedMilliseconds - decodeMs;
+                        var f0 = decoded?.Frames is { Count: > 0 } fl ? fl[0] : null;
+                        App.Logger?.Information("{Line}", DescribeAttach(diagTag, decoded?.Frames.Count ?? 0,
+                            decoded?.Delay.TotalMilliseconds ?? 0, f0?.PixelWidth ?? 0, f0?.PixelHeight ?? 0,
+                            decodeMs, uiWaitMs, still != null));
+                    }
+                    catch { /* a log line never breaks playback */ }
+                }
                 try
                 {
                     if (!_live.TryGetValue(img, out var current) || !ReferenceEquals(current, token)) return;

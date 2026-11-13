@@ -65,6 +65,9 @@ namespace ConditioningControlPanel.Views.Tabs
         private void BtnPlayRacingThoughts_Click(object sender, RoutedEventArgs e)
             => Owner?.LaunchPlayLauncherGame("race");
 
+        private void BtnPlayRacingThoughtsClassic_Click(object sender, RoutedEventArgs e)
+            => Owner?.LaunchPlayLauncherGame("raceclassic");
+
         private void BtnPlayWebApp_Click(object sender, RoutedEventArgs e)
             => Owner?.OpenPlayWebApp();
 
