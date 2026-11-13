@@ -467,7 +467,10 @@ namespace ConditioningControlPanel.Services
                     Log.Warning("Settings backup skipped: the current backup could not be read, so its file paths could not be kept");
                     return (false, null);
                 }
-                CarryPathFields(obj, SlotSettings(slot.Backup));
+                // #4323: a slot that exists but cannot be read keeps its paths only if we do not overwrite it.
+                var slotSettings = SlotSettings(slot.Backup);
+                if (slot.Backup != null && slotSettings == null) return (false, null);
+                CarryPathFields(obj, slotSettings);
                 var encoded = SettingsBackupBudget.Encode(obj);
                 if (!encoded.Fits)
                 {
@@ -624,7 +627,11 @@ namespace ConditioningControlPanel.Services
             // Dates stay strings (WPF read backed_up_at as a string and parsed it itself).
             var root = JsonConvert.DeserializeObject<JObject>(await response.Content.ReadAsStringAsync(),
                 new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
-            return (true, root?["backup"] as JObject);
+            // #4323: only an explicit null is "no backup yet"; a missing or odd slot is a failed read, never an empty one.
+            var backup = root?["backup"];
+            if (backup == null || (backup.Type != JTokenType.Null && backup.Type != JTokenType.Object))
+                return (false, null);
+            return (true, backup as JObject);
         }
 
         private Task<HttpResponseMessage> PostAsync(string path, AppSettings settings, object body)

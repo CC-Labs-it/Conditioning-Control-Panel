@@ -1,4 +1,7 @@
 {
+  "deeper_editor_haptic_test_no_device": "Kein Haptikgerät verbunden. Verbinde zum Testen ein Gerät in den Einstellungen.",
+  "deeper_editor_haptic_test_row_off": "Die Deeper-Zeile ist im Haptik-Tab ausgeschaltet. Schalte sie für den Test ein.",
+  "deeper_editor_haptic_test_premium": "Für den Gerätetest ist Premium-Zugang erforderlich.",
   "webcam_drift_unavailable": "Globale Klicks sind auf diesem Desktop nicht verfügbar. Die Driftkorrektur ist aus.",
   "scheduler_started_title": "Zeitplan aktiv",
   "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",

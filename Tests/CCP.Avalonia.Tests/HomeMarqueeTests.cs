@@ -547,4 +547,76 @@ public sealed class HomeMarqueeTests
         Assert.Equal(dash.FindControl<RadioButton>("RbHypnoTube")!.IsChecked == true ? "hypnotube.com" : "bambicloud.com", host.Source!.Host);
         return Task.CompletedTask;
     });
+
+    // #4330: only a real mod switch moves the loaded page; a same-mod asset refresh keeps it.
+    [Fact]
+    public Task LoadedBrowserNavigatesOnlyForOnlineModSwitches() => WithShell((w, dash) =>
+    {
+        global::ConditioningControlPanel.Avalonia.App.StartMods();
+        var mods = global::ConditioningControlPanel.Avalonia.App.Mods!;
+        var host = dash.FindControl<WebHost>("BrowserWebHost")!;
+        var settings = CoreSettings.Current;
+        try
+        {
+            settings.OfflineMode = false;
+            mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Dispatcher.UIThread.RunJobs();
+            host.Navigate(new Uri("https://example.com/video"));
+            var before = host.NavigationRequests;
+            mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before + 1, host.NavigationRequests);
+            Assert.Equal(mods.GetDefaultBrowserUrl(), host.Source!.ToString());
+
+            host.Navigate(new Uri("https://example.com/keep-playing"));
+            before = host.NavigationRequests;
+            CoreMods.RaiseModChanged(mods, mods.ActiveMod);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, host.NavigationRequests);
+            Assert.Equal("https://example.com/keep-playing", host.Source!.ToString());
+
+            mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Dispatcher.UIThread.RunJobs();
+            settings.OfflineMode = true;
+            before = host.NavigationRequests;
+            mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, host.NavigationRequests);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModAssetRefreshKeepsOverrideSiteSelection() => WithShell((w, dash) =>
+    {
+        global::ConditioningControlPanel.Avalonia.App.StartMods();
+        var mods = global::ConditioningControlPanel.Avalonia.App.Mods!;
+        var host = dash.FindControl<WebHost>("BrowserWebHost")!;
+        var bambi = dash.FindControl<RadioButton>("RbBambiCloud")!;
+        var hypno = dash.FindControl<RadioButton>("RbHypnoTube")!;
+        try
+        {
+            CoreSettings.Current.OfflineMode = false;
+            mods.ActivateMod(BuiltInMods.BambiSleepId);
+            Dispatcher.UIThread.RunJobs();
+            mods.ActivateMod(BuiltInMods.SissyHypnoId);
+            Dispatcher.UIThread.RunJobs();
+            dash.FindControl<CheckBox>("ChkForceShowBambiCloud")!.IsChecked = true;
+            Assert.True(bambi.IsVisible);
+            Assert.True(w.NavigateToUrlInBrowser("https://bambicloud.com/video"));
+            Assert.True(bambi.IsChecked);
+            var before = host.NavigationRequests;
+
+            CoreMods.RaiseModChanged(mods, mods.ActiveMod);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(bambi.IsChecked);
+            Assert.False(hypno.IsChecked);
+            Assert.Equal(before, host.NavigationRequests);
+            Assert.Equal("https://bambicloud.com/video", host.Source!.ToString());
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent(); }
+        return Task.CompletedTask;
+    });
 }

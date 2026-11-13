@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void RefreshLocalizedDetails()
         {
+            RefreshPresetsList();
             RefreshLocalizedRack();
 
             if (_selectedSession is Session selected)
@@ -380,7 +381,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SessionDetailScroller.IsVisible = false;
             SessionButtonsPanel.IsVisible = false;
 
-            TxtDetailTitle.Text = CoreMods.MakeModAware(preset.Name);
+            TxtDetailTitle.Text = PresetNaming.DisplayName(preset);
             TxtDetailSubtitle.Text = CoreMods.MakeModAware(preset.Description);
             TxtDetailFlash.Text = preset.FlashEnabled
                 ? $"Enabled | {preset.FlashFrequency}/hr | ×{preset.SimultaneousImages} | Opacity: {preset.FlashOpacity}%"
@@ -619,7 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private Border PresetChip(Preset preset)
         {
-            var name = CoreMods.MakeModAware(preset.Name);
+            var name = PresetNaming.DisplayName(preset);
             var isDefault = preset.IsDefault;
             var selected = _selectedPreset?.Id == preset.Id;
 
