@@ -66,7 +66,7 @@ modules:
       - mkdir -p /app/bin && printf '#!/bin/sh\nexec /app/lib/ccp/CCP.Avalonia "$@"\n' > /app/bin/conditioning-control-panel
       - chmod 755 /app/bin/conditioning-control-panel
       - cp -a share/. /app/share/
-      - install -Dm644 LICENSE RT-ENGINE-NOTICES.txt -t /app/share/licenses/io.github.CodeBambi.ConditioningControlPanel
+      - install -Dm644 LICENSE THIRD-PARTY-NOTICES.txt RT-ENGINE-NOTICES.txt -t /app/share/licenses/io.github.CodeBambi.ConditioningControlPanel
     sources:
       - type: archive
         path: ConditioningControlPanel-linux-x64.tar.gz

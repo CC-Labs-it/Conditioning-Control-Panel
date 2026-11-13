@@ -20,7 +20,7 @@ pkg=$(ls "$tmp/build"/conditioning-control-panel-bin-"$ver"-*.pkg.tar.*)
 tar -xf "$pkg" -C "$tmp/root"
 id=io.github.CodeBambi.ConditioningControlPanel
 for f in usr/bin/conditioning-control-panel usr/share/applications/$id.desktop usr/share/metainfo/$id.metainfo.xml \
-         usr/share/icons/hicolor/256x256/apps/$id.png usr/share/licenses/conditioning-control-panel-bin/LICENSE \
+         usr/share/icons/hicolor/256x256/apps/$id.png usr/share/licenses/conditioning-control-panel-bin/LICENSE usr/share/licenses/conditioning-control-panel-bin/THIRD-PARTY-NOTICES.txt \
          opt/conditioning-control-panel/CCP.Avalonia opt/conditioning-control-panel/Resources/web; do
   test -e "$tmp/root/$f" || { echo "missing in package: /$f" >&2; exit 1; }
 done
