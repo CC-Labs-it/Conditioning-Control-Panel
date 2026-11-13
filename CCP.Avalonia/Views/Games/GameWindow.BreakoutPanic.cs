@@ -21,6 +21,7 @@ internal sealed partial class GameWindow
         }
         w._breakoutPanicSuspended = true;
         w._breakoutPanicTime = now;
+        w._backRoomFx?.CancelAll(); // WPF BackRoomHostService.cs:603: press 1 cancels every effect the room started
         w.Post(new { type = "suspend", on = true, reason = "panic" });
         return true;
     }
