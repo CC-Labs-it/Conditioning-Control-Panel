@@ -8,6 +8,8 @@ using Avalonia.Media.Imaging;
 using SkiaSharp;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Services.Flash;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;                   // AssetFolderExclusion
 using ConditioningControlPanel.Services.UI;                // MonitorTarget
@@ -22,8 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>One click-through virtual-stage window for each independent wash/hero surface. Windows
     /// remain alive between pictures, clear after fading, and hide after eight quiet seconds.
-    /// Refused without the Win32/X11 composited overlay shim. Remote stills require the unported
-    /// remote media pool; local animation decoding reuses the spiral's bounded worker path.</para>
+    /// Refused without the Win32/X11 composited overlay shim. Remote posters use the flash pool;
+    /// local animation decoding reuses the spiral's bounded worker path.</para>
     /// </summary>
     internal static class ChaosFlashOverlay
     {
@@ -76,16 +78,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (want.Length == 0) return;
             var targets = want.Select(i => screens[i].Bounds).ToArray();
             // The pick and the decode run off the UI thread: a pack pick decrypts (WPF :45-58).
-            LastShow = Wash.ShowAsync(targets, durationMs, opacity, () =>
-            {
-                var enabled = AssetFolderExclusion.Enabled(files, root, s);
-                return FlashOverlay.NextFlashPath(enabled);
-            });
+            RemoteFlashSource.EnsurePrefetch();
+            LastShow = Wash.ShowAsync(targets, durationMs, opacity, () => Pick(files, root, s));
+        }
+
+        internal static (string? Path, bool Remote) Pick(IReadOnlyList<string> files, string root, ConditioningControlPanel.Models.AppSettings s)
+        {
+            var enabled = AssetFolderExclusion.Enabled(files.ToList(), root, s);
+            var remote = FlashSourceRules.ShouldDrawRemote(s, FlashOverlay.HasLocalImages(enabled.Count), FlashOverlay.Rng)
+                ? RemoteFlashSource.TryTake(FlashOverlay.Rng) : null;
+            return remote is { } item ? (item.PosterPath, true) : (FlashOverlay.NextFlashPath(enabled), false);
         }
 
         /// <summary>A wash of one given file (tests and a future caller that picked its own).</summary>
         internal static Task ShowPath(IReadOnlyList<PixelRect> targets, string path, int durationMs, double opacity)
-            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, () => path);
+            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, () => (path, false));
 
         /// <summary>Back Room gif-full: a separate local-only surface, spanning every screen.</summary>
         public static void ShowHero(Visual host, string path, int durationMs, double opacity, bool still, Action? shown = null)
@@ -96,13 +103,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (gen != _heroPostGen || !CanShow) return;
                 var targets = ScreenList.Enumerate(host).Select(s => s.Bounds).ToArray();
-                LastHeroShow = Hero.ShowAsync(targets, durationMs, opacity, () => path, still, shown);
+                LastHeroShow = Hero.ShowAsync(targets, durationMs, opacity, () => (path, false), still, shown);
             });
         }
 
         internal static Task ShowHeroPath(IReadOnlyList<PixelRect> targets, string path, bool still, Action? shown = null)
             => Hero.ShowAsync(targets, 10000, .1, () =>
-                System.IO.Path.IsPathFullyQualified(path) ? path : null, still, shown);
+                (System.IO.Path.IsPathFullyQualified(path) ? path : null, false), still, shown);
 
         public static void StopHero()
         {
@@ -165,14 +172,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             internal double Alpha { get; private set; }
 
             internal async Task ShowAsync(IReadOnlyList<PixelRect> targets, int durationMs, double opacity,
-                Func<string?> pick, bool still = false, Action? shown = null)
+                Func<(string? Path, bool Remote)> pick, bool still = false, Action? shown = null)
             {
                 if (targets.Count == 0) return;
                 var request = ++_request;
                 var bounds = StageBounds(targets);
-                string? path;
-                try { path = await Task.Run(pick); }
+                (string? Path, bool Remote) selected;
+                try { selected = await Task.Run(pick); }
                 catch (Exception ex) { Log.Debug("ChaosFlash: pick failed: {E}", ex.Message); return; }
+                var path = selected.Path;
                 if (request != _request || path == null) return;
 
                 var gen = ++_gen;
@@ -224,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("ChaosFlash: shown callback failed: {E}", ex.Message); }
                 var (frames, delay) = await Task.Run(() =>
                 {
-                    try { return Decode(path, bounds.Width, still); }
+                    try { return Decode(path, bounds.Width, still || selected.Remote); }
                     catch (Exception ex) { Log.Debug("ChaosFlash: decode failed: {E}", ex.Message); return (new List<Bitmap>(), TimeSpan.Zero); }
                 });
                 if (gen != _gen)
@@ -234,6 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 (_frames, _index) = (frames, 0);
                 if (frames.Count == 0) return;
+                if (selected.Remote && !ScrolllerCreditChip.Hold(this, bounds)) { ClearImage(); return; }
                 foreach (var w in Windows) w.Spiral.Source = frames[0];
                 if (frames.Count > 1)
                 {
@@ -274,6 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             private void ClearImage()
             {
+                ScrolllerCreditChip.Release(this);
                 _gifTimer?.Stop();
                 _gifTimer = null;
                 foreach (var w in Windows) w.Spiral.Source = null;
