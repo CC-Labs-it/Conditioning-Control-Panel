@@ -214,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         /// <summary>Panic (PanicSurfaces "possession"): UndoAll on every runtime still alive.</summary>
         internal static void UndoAllLive()
         {
+            PossessionGhost.UndoAll();
             List<PossessionRuntime> alive = new();
             lock (Live)
             {
