@@ -90,7 +90,7 @@ public sealed class ChaosEStimChargeTests
             BubbleOverlay.Press(next, 0, 0);
             Assert.Equal(1, BubbleOverlay.EStimCharges);
             await Task.Delay(350);
-            Assert.True(a.Popping); Assert.True(b.Deflating); Assert.True(c.Popping);
+            Assert.True(a.Popping); Assert.True(b.Popping && !b.Deflating); Assert.True(c.Popping);
             Assert.False(d.Popping); Assert.False(far.Popping);
         }
         finally { BubbleOverlay.EndChaos(); ChaosEStimOverlay.CloseActive(); ChaosEStimOverlay.CanShow = oldCanShow; }
@@ -142,7 +142,7 @@ public sealed class ChaosEStimChargeTests
             BubbleOverlay.Press(source, 0, 0);
             Assert.Equal(0, BubbleOverlay.EStimCharges);
             await Task.Delay(180);
-            Assert.True(live.Deflating);
+            Assert.True(live.Popping && !live.Deflating);
             source = Bubble(0); live = Bubble(100, true); escort = Bubble(1000);
             live.Spec = new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true };
             BubbleOverlay.Field.Bubbles.AddRange(new[] { source, live, escort });

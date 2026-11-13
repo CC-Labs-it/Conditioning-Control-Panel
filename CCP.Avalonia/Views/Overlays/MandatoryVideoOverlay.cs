@@ -553,8 +553,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 void Kick()
                 {
                     if (!video.IsVisible) return;
-                    Chaos.ChaosRunHost.RaiseDvdAboveVideo();
-                    Chaos.ChaosRunHost.KeepChromeTopmost(() =>
+                    // WPF RaiseGameLayerAboveVideo: the whole game layer, chrome included (#4245).
+                    Chaos.ChaosRunHost.RaiseGameLayerAboveVideo(() =>
                     {
                         if (watch != null && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
                             Chaos.ChaosWaveTimerWindow.RaiseActive();
