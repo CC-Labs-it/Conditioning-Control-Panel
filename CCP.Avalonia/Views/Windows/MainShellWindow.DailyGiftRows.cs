@@ -14,14 +14,50 @@ public partial class MainShellWindow
     internal static Func<string, bool>? GiftIsFreeToday;
     internal static Func<DateTime> GiftToday = () => DateTime.Today;
 
-    private void InitializeDailyGiftRows() => Activated += (_, _) => DailyGiftFocus();
+    private void InitializeDailyGiftRows()
+    {
+        Activated += (_, _) => DailyGiftFocus();
+        // WPF MaybePostConversionRows also runs after a server reading: the focus read's member flag lands late.
+        void Extras() { if (IsVisible) DailyGiftFocus(); }
+        Platform.AccountSeed.ProfileExtrasApplied += Extras;
+        Closed += (_, _) => Platform.AccountSeed.ProfileExtrasApplied -= Extras;
+    }
 
     internal void DailyGiftFocus()
     {
         var s = CoreSettings.Current;
         var dirty = NoteDailyGiftUse(s);
         dirty |= MaybePostRelockRow(s);
+        dirty |= MaybePostMemberHello(s);
         if (dirty) CoreSettings.Save();
+    }
+
+    /// <summary>WPF Patreon IsFreeMember: a Patreon free member (server patreon_member) with no paid access.</summary>
+    internal static bool IsFreeMember => CoreSettings.Current.PatreonMember && !CoreAccount.HasPremiumAccess;
+
+    /// <summary>WPF MainWindow.Inbox.cs MaybePostMemberHello: once ever, for a Patreon free member with no tier
+    /// (proposal 6b / 6d): thanks, and the second Daily Gift they now get. True when a stamp changed.</summary>
+    internal bool MaybePostMemberHello(AppSettings s)
+    {
+        const string rowKey = ConversionRules.KeyFreeMemberHello;
+        if (!IsFreeMember || !ConversionRules.Owed(s.InboxStamps, rowKey, "1")) return false;
+        ConversionRules.Stamp(s.InboxStamps, rowKey, "1");
+        var title = Loc.Get("conv_member_hello_title");
+        var summary = Loc.Get("conv_member_hello_body");
+        Platform.StartupLadder.PresentOrInbox(new InboxItem
+        {
+            Key = "conv:" + rowKey, IconKey = "Gift", Title = title, Summary = summary,
+            Open = () => Dialogs.InboxNoticeCard.Present(this, title, MemberHelloBody(summary), null, null, Loc.Get("conv_ok")),
+        });
+        return true;
+    }
+
+    /// <summary>Named at open time: the second gift moves with the day, and a row can wait in the Inbox.</summary>
+    internal static string MemberHelloBody(string summary)
+    {
+        var second = App.DailyFree?.MemberKey;
+        var feature = second == null ? null : ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == second);
+        return feature == null ? summary : summary + " " + Loc.GetF("conv_member_second", Loc.Get(feature.TitleLocKey));
     }
 
     internal bool NoteDailyGiftUse(AppSettings s)

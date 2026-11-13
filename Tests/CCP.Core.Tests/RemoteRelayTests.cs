@@ -1088,6 +1088,25 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
+    public async Task More_signal_bypasses_emote_debounce_and_reports_failure()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        Assert.False(await r.SendMoreSignalAsync());
+        await r.StartAsync("light");
+        Assert.True((await r.SendEmoteAsync("hello", "", "custom")).ok);
+        Assert.True(await r.SendMoreSignalAsync());
+        var body = f.Seen.Last(s => s.Path == "/v2/remote/emote").Body;
+        Assert.Equal("uid-1", (string?)body["unified_id"]);
+        Assert.Equal("more", (string?)body["text"]);
+        Assert.Equal("", (string?)body["icon"]);
+        Assert.Equal("signal", (string?)body["kind"]);
+        f.Answer = _ => Json(HttpStatusCode.ServiceUnavailable, "{}");
+        Assert.False(await r.SendMoreSignalAsync());
+        await r.StopAsync();
+    }
+
+    [Fact]
     public async Task Emotes_post_trimmed_debounce_double_clicks_and_report_the_rate_limit()
     {
         var f = new FakeRelay();

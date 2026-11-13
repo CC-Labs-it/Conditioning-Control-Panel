@@ -163,6 +163,93 @@ public sealed class SubjectsFxTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task RaceRowsDrawTheirArtAndLookStaggerOnFirstFillAndANewOnePops() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // WPF MainWindow.Lobby.cs:146-209 and LobbyRowView.cs:27-57.
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var clock = new Clock();
+        SetClock(clock);
+        Window? window = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            var view = new AvailableSubjectsTabView();
+            Paint(view, 0);
+            window = new Window { Width = 1300, Height = 700, Content = view };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var open = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
+            var friends = view.FindControl<ItemsControl>("LobbyFriendsList")!;
+            var gates = LobbyGates.From(true, false, false);
+            static LobbyRow Race(string key, PlayerLook? look = null) =>
+                new() { Game = LobbyGame.Race, Key = key, HostName = "Host", Look = look ?? PlayerLook.None };
+            var friend = Race("friendroom01", new PlayerLook("nobody", null)) with { Friend = true };
+            view.PaintSnapshot(new LobbySnapshot(new[] { Race("aaaaaaaaaaaa") }, Array.Empty<LobbyRow>(), new[] { friend }, true), gates);
+            Dispatcher.UIThread.RunJobs();
+            // The first fill staggers every column in, not only Open.
+            Assert.Equal(0, open.ContainerFromIndex(0)!.Opacity);
+            Assert.Equal(0, friends.ContainerFromIndex(0)!.Opacity);
+            var card = (LobbyCardView)open.Items[0]!;
+            Assert.NotNull(Assert.IsType<ImageBrush>(card.ArtBrush).Source);
+            Assert.False(card.HasLook);
+            Assert.False(Tagged<Grid>(open.ContainerFromIndex(0)!, "lobby-face").IsVisible);
+            var face = (LobbyCardView)friends.Items[0]!;
+            Assert.True(face.HasLook);
+            Assert.NotNull(face.FaceBrush);
+            Assert.True(Tagged<Grid>(friends.ContainerFromIndex(0)!, "lobby-face").IsVisible);
+            Step(view, clock, 600);
+            Assert.Equal(1, friends.ContainerFromIndex(0)!.Opacity);
+
+            // A later poll: only the new table pops and rings, and nothing replays the stagger.
+            view.PaintSnapshot(new LobbySnapshot(new[] { Race("aaaaaaaaaaaa"), Race("bbbbbbbbbbbb") }, Array.Empty<LobbyRow>(), new[] { friend }, true), gates);
+            Dispatcher.UIThread.RunJobs();
+            var fresh = open.ContainerFromIndex(1)!;
+            var pop = Assert.IsType<ScaleTransform>(Tagged<Grid>(fresh, "lobby-card").RenderTransform);
+            var ring = Tagged<global::Avalonia.Controls.Shapes.Rectangle>(fresh, "lobby-ring");
+            Assert.Equal(0.9, pop.ScaleX);
+            Assert.Equal(0.9, ring.Opacity);
+            Assert.Null(Tagged<Grid>(open.ContainerFromIndex(0)!, "lobby-card").RenderTransform);
+            Assert.Equal(1, open.ContainerFromIndex(0)!.Opacity);
+            Step(view, clock, 200);
+            Assert.InRange(pop.ScaleX, 0.95, 1.05);
+            Assert.InRange(ring.Opacity, 0.01, 0.89);
+            Step(view, clock, 400);
+            Assert.Equal(1, pop.ScaleX);
+            Assert.Equal(0, ring.Opacity);
+            Assert.False(view.SubjectsFxRunning);
+
+            // Reduced keeps the pop and drops the ring; Off moves nothing.
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            view.PaintSnapshot(new LobbySnapshot(new[] { Race("cccccccccccc") }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
+            Dispatcher.UIThread.RunJobs();
+            var reduced = open.ContainerFromIndex(0)!;
+            Assert.Equal(0.9, Assert.IsType<ScaleTransform>(Tagged<Grid>(reduced, "lobby-card").RenderTransform).ScaleX);
+            Assert.Equal(0, Tagged<global::Avalonia.Controls.Shapes.Rectangle>(reduced, "lobby-ring").Opacity);
+            Step(view, clock, 600);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            view.PaintSnapshot(new LobbySnapshot(new[] { Race("dddddddddddd") }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
+            Dispatcher.UIThread.RunJobs();
+            var still = Tagged<Grid>(open.ContainerFromIndex(0)!, "lobby-card").RenderTransform as ScaleTransform;
+            Assert.True(still == null || still.ScaleX == 1);
+            Assert.False(view.SubjectsFxRunning);
+        }
+        finally
+        {
+            window?.Close();
+            SetClock(TimeProvider.System);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+        }
+        return Task.CompletedTask;
+    });
+
+    private static T Tagged<T>(Control root, string tag) where T : Control =>
+        root.GetVisualDescendants().OfType<T>().First(c => Equals(c.Tag, tag));
+
     // WPF staggers AvailableSubjectsList, which is the Lobby's Open column (MainWindow.SubjectsFx.cs:94).
     private static void Paint(AvailableSubjectsTabView view, int open)
     {
