@@ -3,8 +3,8 @@
 // escape hatch are live. WebHost also has a script channel and the card reapplies its mute script.
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
-// Missing: native engine mute (cross-origin frames), crash/init retry, document-created scripts,
-// media/audio-sync reporting, remote video takeover, autoplay and page fullscreen/mirroring.
+// Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
+// document-created scripts, media/audio-sync reporting, remote video takeover, autoplay and page fullscreen/mirroring.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
 
 using System;
@@ -155,14 +155,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) return false;
             // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
+            // The navigation may rebuild a failed adapter first (WebHost.RetryFailedConstruction).
+            var navigated = NavigateBrowser(url, linkNavigation: true);
             if (BrowserView is { HasEngine: false })
             {
-                NavigateBrowser(url, linkNavigation: true); // reports false with no engine; the fallback panel still names the URL
+                // reports false with no engine; the fallback panel still names the URL
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
                     Platform.ExternalOpener.Open(url);
                 return true;
             }
-            return NavigateBrowser(url, linkNavigation: true);
+            return navigated;
         }
 
         internal async System.Threading.Tasks.Task<bool?> NavigateCompanionUrlAsync(string url)

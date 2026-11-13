@@ -181,7 +181,7 @@ internal static class ScrolllerWebKitFilter
     private static extern IntPtr DlopenC(string file, int mode);
 
     /// <summary>The handle of a library ALREADY in the process, or zero; never loads one (RTLD_LAZY | RTLD_NOLOAD).</summary>
-    private static IntPtr LoadedLibrary(string name)
+    internal static IntPtr LoadedLibrary(string name)
     {
         const int flags = 0x1 | 0x4;
         try { return DlopenDl(name, flags); }
