@@ -54,7 +54,7 @@ public sealed class TubeTriggerModeTests
             Assert.Equal("My Video", link.Content);
             Assert.Equal(new[] { "Watch ", " now" }, text.Inlines.OfType<Run>().Select(r => r.Text));
             string? opened = null;
-            CompanionLinkLauncher.Navigate = url => { opened = url; return true; };
+            CompanionLinkLauncher.Navigate = url => { opened = url; return Task.FromResult<bool?>(true); };
             typeof(Button).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(link, null);
             Assert.Equal("https://example.com/my-video-123.html", opened);
         }

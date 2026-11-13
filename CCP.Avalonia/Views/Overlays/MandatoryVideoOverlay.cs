@@ -202,6 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _videoReveal = null;
             var muted = _userMuted;
             if (_playback != null || _surfaces.Count > 0) CloseAll();
+            _wedge?.Dispose();   // a Show that failed before any surface skipped CloseAll: never leak its 1 s timers
             _wedge = new VideoWedgeWatchdog();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
