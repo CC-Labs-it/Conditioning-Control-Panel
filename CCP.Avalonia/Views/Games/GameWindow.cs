@@ -130,6 +130,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 // WPF BreakoutHostService.LaunchFull gates even a focus of the live game.
                 if (spec.Id == "breakout" && !BreakoutGate()) return null;
                 live.HandoffRaceRoom(room);
+                // #4286: a feed the WM hid (ghost restored on hide) comes back with its door.
+                if (live.Spec.Id == FypId && !live.IsVisible) live.Show();
                 live.Activate();
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
@@ -212,6 +214,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (spec.Id == FypId)
+            {
+                // WPF FypHostService.cs:720-748 heals a source hidden or minimized by the WM.
+                // Here the source IS the ghost: return it to normal rather than leave orphaned buttons.
+                PropertyChanged += (_, e) =>
+                {
+                    if (!_fypGhosted) return;
+                    if (e.Property == IsVisibleProperty && !IsVisible) ExitFypGhost();
+                    else if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
+                        Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
+                };
+                Closed += (_, _) => ExitFypGhost();
+            }
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
                 JustDropOrdersService.Invalidate();
