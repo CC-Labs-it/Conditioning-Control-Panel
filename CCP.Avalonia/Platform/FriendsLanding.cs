@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
 /// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
 /// and releases the held queue (WPF :28-82).
-/// Request corner notices are in FriendsLanding.Notices.cs; poke and watch notices remain unported.
+/// Request and poke corner notices are in FriendsLanding.Notices.cs; watch notices remain unported.
 /// </summary>
 internal static partial class FriendsLanding
 {
@@ -164,15 +164,17 @@ internal static partial class FriendsLanding
 
     private sealed class Sink : ILandingSink
     {
-        /// <summary>WPF Sink.Poke :229: Emi says it and the word floats over the panel, pink for a tease.
-        /// Bell off, over a game, or nothing on screen: the Inbox row (the corner toast is not on this head).</summary>
+        /// <summary>WPF Sink.Poke :229-258: the corner notice with Poke back; outside a game Emi says it and the
+        /// word floats over the panel, pink for a tease. Bell off: the Inbox row and nothing else, not even the cue.</summary>
         public void Poke(InboxItem item, bool inGame)
         {
+            if (!NoticesOn) { Inbox(item); return; }
+            Sfx("bubbles/Pop3.mp3", inGame ? 0.10f : 0.16f, "friends-poke-in", incoming: true);   // WPF FriendsSfx.PokeIn
             var game = inGame ? ActiveGameWindow() : null;
             var anchor = Anchor();
-            if (!LandingRules.PokeThrowsWord(NoticesOn, game != null) || anchor == null) { Inbox(item); return; }
+            if (!ShowPoke(game ?? anchor, item)) { Inbox(item); return; }
+            if (game != null || anchor == null) return;
             var word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId));
-            FriendsSeen.Shared.Seen(Service(), item.Id);
             EmiSays(string.Format(Str("friends_land_emi_poke", "{0} says {1}"), item.FromName, word),
                 LandingRules.PokeFace(item.PokeId));
             FloatingWord.Throw(anchor, word, LandingRules.PokeIsPink(item.PokeId));
@@ -233,7 +235,9 @@ internal static partial class FriendsLanding
             if (Anchor() is { } anchor) ShowCard(anchor, item);
             else TheSink.Inbox(item);   // WPF :478 Knock -> no anchor -> the row again
         }
-        // ponytail: a poke/watch row reopens as its corner notice in WPF (FriendNotices, not on this head).
+        // WPF Reopen :481: a poke row comes back as its corner notice. Opened by hand, so whatever the bell says.
+        else if (item.Kind == SendKind.Poke && !ShowPoke(ActiveGameWindow() ?? Anchor(), item)) TheSink.Inbox(item);
+        // ponytail: a watch row reopens as its corner notice in WPF (watch notices are not on this head).
     }
 
     /// <summary>How a card ended (WPF OnKnockDone :487).</summary>
