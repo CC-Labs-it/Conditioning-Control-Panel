@@ -105,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
+        internal event Action? NavigationBeginning;
 
         /// <summary>
         /// The seam the engine's NavigationCompleted routes through, internal so a headless test
@@ -284,6 +285,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
         internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
+        internal Func<bool?>? AudioProbe { get; set; }
+        internal bool? IsPlayingAudio() => AudioProbe != null ? AudioProbe() : _web == null ? null : Platform.WebAudioProbe.IsPlaying(_web.TryGetPlatformHandle());
 
         /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
         /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
@@ -528,11 +531,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
-            if (gate is null) return;
+            if (gate is null) { NavigationBeginning?.Invoke(); return; }
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
+            if (gate(target)) { NavigationBeginning?.Invoke(); return; }
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
