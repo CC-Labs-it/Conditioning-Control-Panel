@@ -421,8 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosEStimOverlay.Disarm();
         }
 
-        private static bool EscortShielded(AmbientBubble b) => b.Spec?.IsChaperoneLive == true
-            && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort);
+        private static bool EscortShielded(AmbientBubble b) => IsShielded(b);
 
         private static void EStimClick(AmbientBubble source)
         {
