@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: Strike/Arm callers wait for charged-pop conduction and e_stim toy effects.
-// The bubble field and toy buttons exist, but their e-stim effects do not. Device output is untouched.
+// Charged player pops (BubbleOverlay.EStimClick) and the e_stim toy (ChaosRunHost.Toys) call this overlay.
+// Free synergy discharges are not ported yet. The e-stim DEVICE output is untouched.
 
 using System;
 using System.Collections.Generic;
@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+        internal static Func<TopLevel, bool, bool> SetClickThrough = X11Overlay.SetClickThrough;
+        internal static Func<Window, PixelRect, bool, bool, bool> SetOverrideRedirect = X11Overlay.SetOverrideRedirect;
 
         /// <summary>WPF ChaosEStimOverlay.cs:46,329: realize both windows once, then idle hidden.</summary>
         public static void EnsureCreated() => OnUi(() =>
@@ -78,7 +80,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ChaosEStimOverlay.cs:100,397: re-stack live windows without unhiding them.</summary>
         public static void RaiseActive()
         {
-            if (_active is { IsVisible: true } w) RaiseWindow(w);
+            if (_active is { } w)
+            {
+                if (!CoreSettings.Current.ChaosPinOnTop) w.Topmost = false;
+                else if (w.IsVisible) RaiseWindow(w);
+            }
             ChaosEStimGlow.RaiseActive();
         }
 
@@ -94,7 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     var w = Create();
                     if (w == null) return;
                     if (!w.IsVisible) w.Show();
-                    RaiseWindow(w);   // un-hiding doesn't re-stack (WPF RaiseAboveVideo)
+                    if (CoreSettings.Current.ChaosPinOnTop) RaiseWindow(w);   // un-hiding doesn't re-stack
+                    else w.Topmost = false;
                     w.BeginStrike(boltsPx);
                 }
                 catch (Exception ex) { Log.Debug("ChaosEStim.Strike: {E}", ex.Message); }
@@ -135,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -162,7 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (CoreSettings.Current.DualMonitorEnabled)
                 foreach (var s in Screens!.All) bounds = bounds.Union(s.Bounds);
             if (SkipPlatformChecksForTests) return true;
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, bounds))
+            if (!SetClickThrough(this, true) | !SetOverrideRedirect(this, bounds, false, Topmost))
             {
                 Log.Warning("ChaosEStim: the platform refused a click-through topmost overlay, no lightning");
                 return false;

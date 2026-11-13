@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns treats and plain live variants; every
-    /// motion other than FloatUp and RainDown, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
+    /// motion other than FloatUp and RainDown, treat rot, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; only the Gif Rain payload fires; the
     /// first-time bonus and ripple-denial pop text.
@@ -173,6 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             if (ChaosMeta.IsBoonActive("e_stim")) ChaosEStimOverlay.EnsureCreated();   // WPF ChaosModeService.cs:453
             _state.StartShields = _state.Shields;
+            _thoughtAccumSec = 0;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
             _lastComboBigFired = 0;
@@ -269,6 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ShowPopScore(pts);
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            BodyBuzz(b);
             CheckComboMilestone();
         }
 
@@ -538,13 +540,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         // WPF ChaosModeService.KeepChromeTopmost: chrome first, then bubbles.
-        internal static void KeepChromeTopmost()
+        internal static void KeepChromeTopmost(Action? raiseWave = null)
         {
             if (!_spawning || !CoreSettings.Current.ChaosPinOnTop) return;
             void Raise(Window? w) { if (w is { IsVisible: true }) RaiseChromeWindow(w); }
             Raise(_hud);
             Raise(_fx);
-            Raise(ChaosWaveTimerWindow.Active);
+            if (raiseWave != null) raiseWave();
+            else ChaosWaveTimerWindow.RaiseActive();
             Raise(_boonBar);
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
@@ -553,12 +556,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             FlashOverlay.RaiseAll(RaiseOverlayWindow);
         }
 
+        // WPF ChaosModeService.cs:745-757, 937-951: lift every visible DVD surface.
+        internal static void RaiseDvdAboveVideo()
+        {
+            if (!IsDescending || !CoreSettings.Current.ChaosPinOnTop) return;
+            foreach (var window in ChaosDvdOverlay.Windows)
+                if (window.IsVisible) RaiseOverlayWindow(window);
+        }
+
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
         internal static void Tick()
         {
             if (!_spawning || _state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
-            if (++_chromeTicks >= 4) { _chromeTicks = 0; KeepChromeTopmost(); }
+            if (++_chromeTicks >= 4)
+            {
+                _chromeTicks = 0;
+                if (CoreEngine.Video?.IsPlaying == true) RaiseDvdAboveVideo();
+                KeepChromeTopmost();
+            }
             double elapsed = ChaosRunEngine.Advance(_state);
             if (_state.Config.ScriptedFirstRun && TickScriptedDraft()) return;
             UpdateHeatTint();

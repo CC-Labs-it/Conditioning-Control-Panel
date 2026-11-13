@@ -296,7 +296,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            if (!b.IsLiveThreat) { Pop(b); return; }
+            if (!b.IsLiveThreat)
+            {
+                bool wasPopping = b.Popping;
+                Pop(b);
+                if (!wasPopping && b.Popping) EStimClick(b);   // WPF BubbleService.cs:352: a player pop conducts
+                return;
+            }
             Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
             RequestFrame();
         }
@@ -359,7 +365,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void EndChaos()
         {
             Field.HoldChaos = false;
+            ClearEStim();
             ChaosRipples.Clear();
+            ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
             _chaosCanChannel = null;
@@ -368,6 +376,99 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Bubbles.RemoveAll(b => b.Spec != null && !b.AmbientTrigger);
             if (_chaosOpenedWindows) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
+        }
+
+        // ---- E-Stim charged pops (hand-ported from #4356; WPF BubbleService.cs:352-440) ----
+        // A charge is spent only when a player pop finds a conductor. Each hop is a one-shot
+        // timer kept in EStimHops, so run end, panic and EndChaos cancel every pending hit.
+        private static int _estimCharges;
+        private static bool _estimFork;
+        private static readonly List<IDisposable> EStimHops = new();
+        internal static int EStimCharges => _estimCharges;
+        /// <summary>Called after each conduction with the charges left (the run's event line and banner).</summary>
+        internal static Action<int>? EStimArc;
+
+        internal static void ArmEStim(int charges, bool fork)
+        {
+            if (_chaosPopped == null) return;
+            _estimCharges = Math.Max(1, charges);
+            _estimFork = fork;
+            ChaosEStimOverlay.Arm();
+        }
+
+        private static void ClearEStim()
+        {
+            foreach (var hop in EStimHops) hop.Dispose();
+            EStimHops.Clear();
+            _estimCharges = 0;
+            _estimFork = false;
+            EStimArc = null;
+            ChaosEStimOverlay.Disarm();
+        }
+
+        private static bool EscortShielded(AmbientBubble b) => b.Spec?.IsChaperoneLive == true
+            && b.Escort is { Popping: false } escort && Field.Bubbles.Contains(escort);
+
+        private static void EStimClick(AmbientBubble source)
+        {
+            if (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false }) return;
+            static double Dist2(AmbientBubble a, AmbientBubble b) =>
+                (a.CenterX - b.CenterX) * (a.CenterX - b.CenterX) + (a.CenterY - b.CenterY) * (a.CenterY - b.CenterY);
+            const double Reach2 = 600 * 600;
+            const int MaxChain = 40;
+            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping && !b.AmbientTrigger &&
+                b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false } && !EscortShielded(b)).ToList();
+            var hits = new List<(AmbientBubble From, AmbientBubble To, int DelayMs)>();
+            if (!_estimFork)
+            {
+                foreach (var target in pool.Where(b => Dist2(source, b) <= Reach2).OrderBy(b => Dist2(source, b)).Take(3))
+                    hits.Add((source, target, 70 * (hits.Count + 1)));
+            }
+            else
+            {
+                // The capstone fork chains breadth-first from each struck bubble.
+                var queue = new Queue<(AmbientBubble Bubble, int Depth)>();
+                var taken = new HashSet<AmbientBubble> { source };
+                queue.Enqueue((source, 0));
+                while (queue.Count > 0 && hits.Count < MaxChain)
+                {
+                    var (current, depth) = queue.Dequeue();
+                    foreach (var target in pool)
+                    {
+                        if (taken.Contains(target) || Dist2(current, target) > Reach2) continue;
+                        taken.Add(target);
+                        hits.Add((current, target, 70 * (depth + 1)));
+                        queue.Enqueue((target, depth + 1));
+                        if (hits.Count == MaxChain) break;
+                    }
+                }
+            }
+            if (hits.Count == 0) return;
+            _estimCharges--;
+            if (_estimCharges == 0) { _estimFork = false; ChaosEStimOverlay.Disarm(); }
+            foreach (var hit in hits)
+            {
+                var to = hit.To;
+                IDisposable? hop = null;
+                hop = DispatcherTimer.RunOnce(() =>
+                {
+                    EStimHops.Remove(hop!);
+                    // WPF BubbleService.cs:4661: a held (paused) field swallows the hop.
+                    if (Field.HoldChaos || _chaosPopped == null || !Field.Bubbles.Contains(to) || to.Popping || EscortShielded(to)) return;
+                    if (to.IsLiveThreat) { if (to.Snap()) Field.ChaosDefused?.Invoke(to); }
+                    else PopChaos(to);
+                    RequestFrame();
+                }, TimeSpan.FromMilliseconds(hit.DelayMs));
+                EStimHops.Add(hop);
+            }
+            var bolts = hits.Select(h => (CenterPx(h.From), CenterPx(h.To))).ToList();
+            // Gentle Visuals: the Skia bolt re-jitters every frame (flicker), the overlay path fades.
+            if (ChaosSkiaFxOverlay.Enabled && ConditioningControlPanel.Services.Safety.GentleVisuals.AllowFlicker)
+                ChaosSkiaFxOverlay.Strike(bolts);
+            else
+                ChaosEStimOverlay.Strike(bolts.Select(b => (new PixelPoint((int)b.Item1.X, (int)b.Item1.Y),
+                    new PixelPoint((int)b.Item2.X, (int)b.Item2.Y))).ToList());
+            EStimArc?.Invoke(_estimCharges);
         }
 
         /// <summary>WPF SpawnChaosBubble, FloatUp and RainDown. Without an overlay window (headless, or a

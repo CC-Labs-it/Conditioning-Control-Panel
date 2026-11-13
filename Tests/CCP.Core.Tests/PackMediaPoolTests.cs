@@ -230,6 +230,19 @@ public sealed class PackMediaPoolTests : IDisposable
     }
 
     [Fact]
+    public void BatchDoesNotDecryptTheSamePackEntryTwice()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
+        var pool = new PackMediaPool(ContentPackStore.ImageType, new Random(1), NewStore);
+        var chosen = new HashSet<string>();
+        var first = pool.TryDraw(0, chosen: chosen);
+        Assert.NotNull(first);
+        Assert.Null(pool.TryDraw(0, chosen: chosen));
+        Assert.Equal(1, pool.TempCount);
+        pool.CleanupTemps();
+    }
+
+    [Fact]
     public void DeactivatedPack_LeavesThePool_OnTheNextDraw()
     {
         ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.png", "image"));
