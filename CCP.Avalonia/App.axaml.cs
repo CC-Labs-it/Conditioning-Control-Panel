@@ -489,6 +489,16 @@ namespace ConditioningControlPanel.Avalonia
         internal static event Action<string>? FeatureUsed;
         internal static void NoteFeatureUsed(string feature) => FeatureUsed?.Invoke(feature);
 
+        internal static void SeedSubliminalFeatureUse()
+        {
+            CoreSubliminal.ShowProvider = Views.Overlays.SubliminalWhisperShow.Phrase;
+            Views.Overlays.SubliminalOverlay.Displayed -= NoteSubliminalFeatureUse;
+            Views.Overlays.SubliminalOverlay.Displayed += NoteSubliminalFeatureUse;
+        }
+
+        private static void NoteSubliminalFeatureUse() =>
+            NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
+
         /// <summary>
         /// WPF App.xaml.cs SignalMirrorFactory + WireMemorySignalSources: the brain's memory profile gets
         /// level, streak, sessions, archetype (CoreSettings), level-ups, favourite features and per-mod
@@ -836,11 +846,7 @@ namespace ConditioningControlPanel.Avalonia
                 // Subliminal and bouncing-text surfaces. Core owns the schedule / the motion;
                 // these draw on click-through overlays (Views/Overlays), hosted like the flash.
                 // SubliminalWhisperShow plays the linked whisper first, then draws SubliminalOverlay.
-                CoreSubliminal.ShowProvider = text =>
-                {
-                    Views.Overlays.SubliminalWhisperShow.Phrase(text);
-                    NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
-                };
+                SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
                 CoreSubliminal.RunStateChanged = running =>
