@@ -23,6 +23,35 @@ namespace CCP.Avalonia.Tests;
 /// closes it. Skips where ffmpeg (to make the clip) or libvlc is missing.</summary>
 public sealed class MandatoryVideoOverlayTests
 {
+    [Theory]
+    [InlineData(true, 0.75)]
+    [InlineData(false, 0.0)]
+    public Task BrowserSurfaceControlsUseTheInjectedInvokerAndKeepMirrorsSilent(bool primary, double expected) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var scripts = new System.Collections.Generic.List<string>();
+            var surface = new BrowserVideoSurface(script => { scripts.Add(script); return Task.FromResult<string?>("true"); });
+            surface.Start("http://localhost/clip.mp4", primary, 50);
+            surface.View.OnNavigationCompleted(new Uri("about:blank"));
+            scripts.Clear();
+            surface.Pause();
+            surface.Resume();
+            surface.Seek(-10);
+            surface.Seek(2500);
+            surface.SetVolume(75);
+            Assert.Equal(expected, surface.Volume);
+            Assert.Equal(new[] { "window.ccpVideo?.pause();", "window.ccpVideo?.resume();",
+                "window.ccpVideo?.seek(0);", "window.ccpVideo?.seek(2500);",
+                $"window.ccpVideo?.volume({System.Text.Json.JsonSerializer.Serialize(expected)});" }, scripts);
+            surface.Dispose();
+            var count = scripts.Count;
+            surface.Resume();
+            surface.Seek(1);
+            surface.SetVolume(100);
+            Assert.Equal(count, scripts.Count);
+            return Task.CompletedTask;
+        });
+
     [Fact]
     public void NoVideosDialogBlamesTheLengthFilterWhenItEmptiedTheLibrary()
     {
