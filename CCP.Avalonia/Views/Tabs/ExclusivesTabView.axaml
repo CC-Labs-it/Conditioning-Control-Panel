@@ -439,9 +439,11 @@
                                         BorderBrush="{Binding Rule}" BorderThickness="0,0,0,1.5"
                                         AutomationProperties.Name="{Binding Title}">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <Image x:Name="VaultSign" Source="{Binding Sign}" IsVisible="{Binding HasSign}" Height="44"
-                                               Stretch="Uniform" Margin="0,0,14,0" VerticalAlignment="Center"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                                        <Grid IsVisible="{Binding HasSign}" Margin="0,0,14,0" VerticalAlignment="Center"
+                                              Loaded="Sign_Loaded" Unloaded="Sign_Unloaded">
+                                            <Image x:Name="VaultSign" Source="{Binding Sign}" Height="44"
+                                                   Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                                        </Grid>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Title}"
                                                        FontSize="22" FontWeight="SemiBold" Foreground="{Binding HueBrush}"/>
