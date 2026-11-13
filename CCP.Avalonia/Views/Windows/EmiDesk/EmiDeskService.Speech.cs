@@ -1,4 +1,7 @@
 using System;
+using System.Linq;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
@@ -6,6 +9,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _greetingTimer;
+    private EmiDeskService()
+    {
+        EmiLineEngine.AskSituationProbe = AskSituationOk;
+        EmiLineEngine.EffectFeasibleProbe = EffectFeasible;
+    }
+    private bool AskSituationOk()
+    {
+        var win = _window;
+        var main = (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        return IsOut && win is { IsVisible: true, PresentationActive: false, InputLocked: false, Transiting: false, AskLive: false }
+            && !CoreSession.IsSessionRunning && App.Sessions?.IsRunning != true && CoreEngine.Video?.IsPlaying != true
+            && !TubeBubbleLive() && main?.WindowState != WindowState.Minimized;
+    }
+    private static bool EffectFeasible(string? effect)
+    {
+        if (!string.Equals(effect, "pinTop:fyp", StringComparison.OrdinalIgnoreCase)) return false;
+        var target = EmiTargets.Find("fyp");
+        return target is { Available: true, Locked: false }
+            && !EmiState.Current.Pins.Contains("fyp", StringComparer.OrdinalIgnoreCase);
+    }
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
     internal Func<bool> TubeBubbleLive = () => global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live?.HasBubbleUp == true;
     // WPF Fire/Speak: the Core engine owns spice, cadence, limits and holds. The window owns pixels.
@@ -27,9 +50,20 @@ internal sealed partial class EmiDeskService
             }
             // WPF :677-689: safety holds arm even while the widget is away.
             if (_window?.PresentationActive == true && !engine.IsHoldMoment(moment)) return;
+            if (_window?.AskLive == true)
+            {
+                if (!engine.IsHoldMoment(moment)) return;
+                _window.CancelAsk();
+            }
             if (!engine.IsHoldMoment(moment) && (IntakeHostWindow.IsAnyOpen() || TubeBubbleLive())) return;
             var ctx = EmiLineEngine.ToCtx(context);
             var line = engine.Draw(moment, ctx);
+            var ask = engine.DrawAsk(moment, ctx);
+            if (ask != null && moment is not ("dismissed" or "appClosing"))
+            {
+                _window?.ShowAsk(ask, engine);
+                return;
+            }
             // WPF EmiDeskService.cs:649 NeverSpeaks; a hold is a face, so it plays even there (:765).
             bool neverSpeaks = moment is "dismissed" or "appClosing";
             if (line != null && (line.Hold || !neverSpeaks))
@@ -74,6 +108,7 @@ internal sealed partial class EmiDeskService
     internal void PanicSilence()
     {
         CancelGreeting();
+        _window?.CancelAsk();
         _window?.CancelChain();
         Fire("panicPressed");
     }
