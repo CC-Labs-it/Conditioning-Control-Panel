@@ -718,8 +718,13 @@ public sealed class DeeperRowsTests
         var t = new DeeperLocalAudio.Transport(e, 12000, () => { });
         e.State = LibVLCSharp.Shared.VLCState.Playing; t.Volume = 135; Assert.Equal(100, e.Volume);
         t.Volume = -1; Assert.Equal(0, e.Volume);
-        foreach (var (linear, native) in new[] { (25, 63), (50, 79), (75, 91), (80, 93) })
+        foreach (var (linear, native) in new[] { (25, 63), (37, 72), (50, 79), (75, 91), (80, 93) })
         { t.Volume = linear; Assert.Equal(native, e.Volume); Assert.Equal(linear, t.Volume); }
+        t.Volume = 37;
+        e.Volume = 0;
+        t.OnPlaying();
+        Assert.Equal(72, e.Volume);
+        t.Volume = 80;
         e.State = LibVLCSharp.Shared.VLCState.NothingSpecial;
         Assert.Equal(12, t.DurationSeconds);              // header estimate until playing
 
@@ -747,6 +752,16 @@ public sealed class DeeperRowsTests
         t.Play();
         t.OnPlaying();
         Assert.Equal(7000, e.Time);
+
+        // WPF audio seek is bounded by the media duration, including a pending seek.
+        t.PositionSeconds = 100;
+        Assert.Equal(6000, e.Time);
+        t.PositionSeconds = -1;
+        Assert.Equal(0, e.Time);
+        t.Volume = 200;
+        Assert.Equal(100, e.Volume);
+        t.Volume = -1;
+        Assert.Equal(0, e.Volume);
 
         // Pause (or panic) while the clip is still opening stops it rather than letting it start.
         e.State = LibVLCSharp.Shared.VLCState.Stopped;

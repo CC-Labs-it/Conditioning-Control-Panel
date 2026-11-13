@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -198,6 +199,39 @@ public sealed class PossessionShellTests
         rig.Shell.InvalidatePossessionTargets();
         var again = host.Targets;
         Assert.Contains(first, again);
+    });
+
+    // Restack b77 (#3303): WPF MainWindow.xaml:332 excludes the Lockdown badge; WPF's effective
+    // IsHitTestVisible / IsEnabled keep a passive or disabled subtree out of the auto-tag walk.
+    [Fact]
+    public void BadgeAndPassiveOrDisabledSubtreesStayOutOfTheWalk() => Run(rig =>
+    {
+        var root = rig.Shell.Named<Grid>("RootGrid")!;
+        Button Make(string name) => new() { Name = name, Content = "Start", Width = 100, Height = 30 };
+        var passive = Make("PassiveChild");
+        var disabled = Make("DisabledChild");
+        var live = Make("LiveChild");
+        root.Children.Add(new StackPanel
+        {
+            Children =
+            {
+                new StackPanel { IsHitTestVisible = false, Children = { passive } },
+                new StackPanel { IsEnabled = false, Children = { disabled } },
+                live,
+            },
+        });
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        var badge = rig.Shell.Named<Border>("LockdownBadge")!;
+        Assert.True(badge.IsEffectivelyVisible);
+        Assert.True(PossessionTree.GetExclude(badge));
+        rig.Shell.InvalidatePossessionTargets();
+        var targets = ((IPossessionHost)rig.Shell).Targets;
+        Assert.Contains(targets, t => t.Visual == live);
+        Assert.True(passive.IsHitTestVisible);
+        Assert.DoesNotContain(targets, t => t.Visual == passive);
+        Assert.DoesNotContain(targets, t => t.Visual == disabled);
+        Assert.DoesNotContain(targets, t => t.Visual is Visual v && (v == badge || badge.IsVisualAncestorOf(v)));
     });
 
     [Fact]
