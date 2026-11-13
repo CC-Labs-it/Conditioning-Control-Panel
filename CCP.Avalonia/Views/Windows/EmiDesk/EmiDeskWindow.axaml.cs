@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
@@ -853,24 +854,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
         }
 
-        /// <summary>
-        /// Put a wardrobe sheet's OVERLAY on her, or take it off with null. THE SKIN LAW's one seam.
-        ///
-        /// <para>Deliberately not wired to anything: the desk has no outfit picker, no wardrobe and
-        /// no outfit BODY sheets, and this method invents none of them. What it guarantees is that
-        /// when a sheet does arrive, the part of it that crosses her glass lands in
-        /// <c>OutfitOverImage</c> - which the markup authors ABOVE the face and the glass, so the
-        /// garment is on top and stays there.</para>
-        /// </summary>
+        /// <summary>Apply the Locker pick and repaint the current body pose.</summary>
         public void SetOutfit(string? outfit)
         {
             try
             {
-                var want = string.IsNullOrWhiteSpace(outfit) ? null : outfit!.Trim();
+                var want = EmiChains.OutfitName(outfit);
                 if (string.Equals(want, _outfit, StringComparison.Ordinal)) return;
                 _outfit = want;
-                PaintOutfitOver();
-                PaintDeskItems();
+                var old = _bodyCache.Values.ToArray();
+                _bodyCache.Clear();
+                SetPose(_pose);
+                foreach (var image in old)
+                    if (!ReferenceEquals(image, _bodyImage.Source)) image.Dispose();
             }
             catch (Exception ex)
             {
