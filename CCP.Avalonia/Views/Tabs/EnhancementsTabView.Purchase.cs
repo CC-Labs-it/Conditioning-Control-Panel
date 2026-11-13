@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -59,7 +60,9 @@ public partial class EnhancementsTabView
             card.IsEnabled = false;
             repaint = true;
             var service = PurchaseService ?? SkillPurchase.Current ?? new SkillPurchase();
+            var rankBefore = 1 + (App.Achievements?.Progress?.LifetimeSkillPointsSpent ?? 0) / 100;
             var (success, error) = await service.PurchaseSkillAsync(skillId);
+            if (success && owner is MainShellWindow shell) shell.CelebrateEnhancementPurchase(card, PrestigeRow, rankBefore);
             if (!success && !string.IsNullOrEmpty(error)) await TellFailure(owner, Loc.Get("dialog_purchase_failed"), error);
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Skill purchase click failed"); }

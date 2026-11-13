@@ -23,6 +23,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class SharedDeeperThemeTests
 {
     [Fact]
@@ -273,6 +274,7 @@ public sealed class SharedDeeperThemeTests
         static double Base(AvaloniaObject o, StyledProperty<double> p) => o.GetBaseValue(p) is { HasValue: true } v ? v.Value : double.NaN;
         try
         {
+            Assert.Equal(MotionLevel.Full, HudPlank.Level);
             foreach (var (key, kind) in new[]
             {
                 ("PinkButton", HudPlankKind.None), ("PinkButton", HudPlankKind.Plank), ("PinkButton", HudPlankKind.Chunky),

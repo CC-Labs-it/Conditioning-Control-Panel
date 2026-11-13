@@ -11,6 +11,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class VideoThumbnailTests
 {
     // WPF MainWindow.Assets.cs:921-925: real thumbnail extraction, off-thread and silent.
