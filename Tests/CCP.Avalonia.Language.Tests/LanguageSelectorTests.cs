@@ -504,6 +504,10 @@ public sealed class LanguageSelectorTests
         settings.Current.RailRecent.Add("tab.presets");
         // Opening a section page remembers its last tab (a real save, WPF SyncSectionChrome); already so.
         settings.Current.NavLastTabBySection = "{\"studio\":\"presets\"}";
+        // Launch marks today active for the season stats and raises their peak streak
+        // (a real save, WPF SeasonRecapService.cs:146-165); already so for this profile.
+        ConditioningControlPanel.Services.SeasonActivity.MarkActiveToday(settings.Current, DateTime.UtcNow);
+        ConditioningControlPanel.Services.SeasonActivity.TrackStreakPeak(settings.Current, 1);
         settings.SaveImmediate();
         return File.ReadAllText(settingsPath);
     }

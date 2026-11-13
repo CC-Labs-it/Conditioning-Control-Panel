@@ -47,7 +47,7 @@ public sealed class ChaosPopTextTests
             ChaosPopText.PlatformCanShow = () => true;
             try
             {
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
                 CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
@@ -117,7 +117,7 @@ public sealed class ChaosPopTextTests
             ChaosPopText.PlatformCanShow = () => true;
             try
             {
-                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
                 ChaosRunHost.State!.ShowPopScores = scores;
@@ -301,7 +301,7 @@ public sealed class ChaosPopTextTests
             {
                 foreach (var panic in new[] { false, true })
                 {
-                    ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                    ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                     ChaosRunHost.Overlay!.FinishCountdown();
                     var w = new ChaosPopText();
                     Assert.Same(w, ChaosPopText.Pool.Acquire(() => w));

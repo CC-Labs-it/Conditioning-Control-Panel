@@ -753,6 +753,119 @@ public sealed class ChaosGifCascadeOverlayTests
         finally { Directory.Delete(dir, true); }
     }
 
+    // Restack b62 (#3762): WPF ChaosModeService.cs:2164-2174,2260,2308-2309. A mandatory video that ends
+    // mid-run keeps the heavy gate shut 3 s more, never shortens a floor, and a dropped detonation says so.
+    private sealed class GateVideoHost : global::ConditioningControlPanel.Services.IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(global::ConditioningControlPanel.Services.AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    private static async Task WithCountingRun(global::ConditioningControlPanel.Services.MandatoryVideoScheduler? video,
+        Func<Func<DateTime>, Action<DateTime>, Func<int>, Task> body)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var now = DateTime.UnixEpoch;
+            var previousClock = BubbleOverlay.Field.Clock;
+            var previousFirer = EffectPayload.Firer;
+            var previousVideo = CoreEngine.Video;
+            int fired = 0;
+            try
+            {
+                ChaosRunHost.ForceShutdown();
+                BubbleOverlay.Field.Clock = () => now;
+                EffectPayload.Firer = _ => fired++;
+                if (video != null) CoreEngine.Video = video;
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                await body(() => now, t => now = t, () => fired);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                video?.ForceCleanup();
+                BubbleOverlay.Field.Clock = previousClock;
+                EffectPayload.Firer = previousFirer;
+                CoreEngine.Video = previousVideo;
+            }
+        });
+    }
+
+    private static void DetonateSpec(EffectPayload payload) =>
+        ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = payload });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Video_end_quarantines_heavy_detonations_for_three_seconds(bool forced)
+    {
+        var video = new global::ConditioningControlPanel.Services.MandatoryVideoScheduler(new GateVideoHost());
+        await WithCountingRun(video, (getNow, setNow, fired) =>
+        {
+            Assert.True(video.Trigger(path: "gate-test.mp4"));
+            if (forced) video.ForceCleanup(); else video.End();
+            Assert.False(video.IsPlaying);
+            DetonateSpec(new GifCascadePayload());
+            Assert.Equal(0, fired());
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.GetF("chaos_heavy_fizzle", new GifCascadePayload().DisplayName),
+                ChaosRunHost.State!.RecentEvents);
+            setNow(getNow().AddMilliseconds(2999));
+            DetonateSpec(new GifCascadePayload());
+            Assert.Equal(0, fired());
+            setNow(getNow().AddMilliseconds(1));
+            DetonateSpec(new GifCascadePayload());
+            Assert.Equal(1, fired());
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Video_end_never_shortens_an_existing_heavy_reservation()
+    {
+        var video = new global::ConditioningControlPanel.Services.MandatoryVideoScheduler(new GateVideoHost());
+        await WithCountingRun(video, (getNow, setNow, fired) =>
+        {
+            var start = getNow();
+            DetonateSpec(new GifCascadePayload());   // reserves DURATION_SEC + 5 = 11 s
+            Assert.Equal(1, fired());
+            Assert.True(video.Trigger(path: "gate-test.mp4"));
+            video.End();
+            setNow(start.AddSeconds(10.999));
+            DetonateSpec(new GifCascadePayload());
+            Assert.Equal(1, fired());
+            setNow(start.AddSeconds(11));
+            DetonateSpec(new GifCascadePayload());
+            Assert.Equal(2, fired());
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("panic")]
+    public async Task Run_teardown_unsubscribes_from_the_original_video_scheduler(string ending)
+    {
+        var video = new global::ConditioningControlPanel.Services.MandatoryVideoScheduler(new GateVideoHost());
+        await WithCountingRun(video, (getNow, setNow, fired) =>
+        {
+            CoreEngine.Video = new global::ConditioningControlPanel.Services.MandatoryVideoScheduler(new GateVideoHost());
+            if (ending == "stop") ChaosRunHost.RequestStop();
+            else ChaosRunHost.ForceShutdown();
+            Assert.True(video.Trigger(path: "gate-test.mp4"));
+            video.End();   // the old publisher must not re-arm the ended run's gate
+            DetonateSpec(new GifCascadePayload());
+            Assert.Equal(1, fired());
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Show(string gif) => ChaosGifCascadeOverlay.ShowWithFiles(new() { gif },
         GifCascade.PayloadSpawnRatePerSec, GifCascade.PayloadDurationSec, GifCascade.PayloadGifSize,
         GifCascade.PayloadFallSpeed, GifCascade.PayloadOpacity, GifCascade.PayloadStartScale);

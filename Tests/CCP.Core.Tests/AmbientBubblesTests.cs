@@ -11,6 +11,28 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AmbientBubblesTests
 {
+    [Theory]
+    [InlineData(500, 300, 1.0)]
+    [InlineData(-1500, 400, 1.5)]
+    [InlineData(2200, -200, 2.0)]
+    public void Chaos_pinned_spawn_centres_on_physical_point(double x, double y, double scale)
+    {
+        var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(1, false, x, y);
+        var b = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, scale, spec);
+        Assert.Equal(x / scale, b.CenterX, 8);
+        Assert.Equal(y / scale, b.CenterY, 8);
+        b.Step();
+        Assert.InRange(Math.Abs(b.X - (x / scale - b.Size / 2)), 0, 45);
+    }
+
+    [Fact]
+    public void Unpinned_chaos_spawn_still_starts_at_bottom()
+    {
+        var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(1);
+        var b = AmbientBubble.SpawnChaos(new Random(7), 0, 100, 200, 1920, 1080, 2, spec);
+        Assert.Equal(640, b.Y);
+    }
+
     [Fact]
     public void Bucket_pays_up_to_300_a_day_then_the_remainder_then_nothing()
     {

@@ -53,7 +53,7 @@ public partial class AvatarTubeWindow
                 string.Equals(row.modId, CoreMods.ActiveModId, StringComparison.OrdinalIgnoreCase) && AvatarGenerationRule.IsV2(row.generation)).folder;
             // WPF CirceEmotes.cs:169: RainV2Gate off, a saved "v2" plays V1 and stays saved.
             _rainFolder = RainPackPlayback.ResolveTubeFolder(AvatarGenerationRule.Effective(CoreSettings.Current.AvatarGeneration, RainGateOn()), v2, CoreSettings.Current.RainPackHash,
-                hash => (_rainPack = RainPackReader.TryRead(RainPackRoot, hash))?.Folder, () => null);
+                hash => (_rainPack = RainPackReader.TryRead(RainPackRoot, hash))?.Folder, ResolveV1EmoteFolder);
             if (_rainFolder == null) return;
             using var stream = OpenRainFile("emotes.json");
             using var map = new StreamReader(stream);
@@ -61,6 +61,33 @@ public partial class AvatarTubeWindow
             if (IsVisible) await PlayRainClip(PickRainIdle());
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Rain emote playback could not start"); StopRainPlayback(); }
+    }
+    // WPF ResolveV1EmoteFolder + ModLocalEmoteFolder (CirceEmotes.cs:178-206): the mod's own set{N}
+    // folder first, then the embedded registry row for (mod, set). A row whose clips this head does
+    // not embed answers null, so the tube keeps its static poses instead of failing every refresh.
+    private string? ResolveV1EmoteFolder() {
+        try {
+            var installed = CoreMods.ActiveModPackage?.InstalledPath;
+            if (!string.IsNullOrEmpty(installed)) {
+                var local = Path.Combine(installed, "resources", "emotes", $"set{_currentAvatarSet}");
+                if (File.Exists(Path.Combine(local, "emotes.json"))) return local;
+            }
+            using var registry = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
+            using var reader = new StreamReader(registry);
+            var folder = AvatarGenerationRule.ParseRegistry(reader.ReadToEnd()).sets.FirstOrDefault(row =>
+                string.Equals(row.modId, CoreMods.ActiveModId, StringComparison.OrdinalIgnoreCase) && row.set == _currentAvatarSet).folder;
+            return folder != null && AssetLoader.Exists(new Uri($"avares://CCP.Avalonia/Resources/{folder}/emotes.json")) ? folder : null;
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "V1 emote folder lookup failed"); return null; }
+    }
+    // WPF ResolveEmoteClipUri (CirceEmotes.cs:1238): <clip>.webp when the folder ships one, else <clip>.gif.
+    private Uri RainClipUri(string clip) {
+        if (Path.IsPathRooted(_rainFolder!)) {
+            var webp = Path.Combine(_rainFolder!, clip + ".webp");
+            return new Uri(File.Exists(webp) ? webp : Path.Combine(_rainFolder!, clip + ".gif"));
+        }
+        var embedded = new Uri($"avares://CCP.Avalonia/Resources/{_rainFolder}/{clip}.webp");
+        return AssetLoader.Exists(embedded) ? embedded : new Uri($"avares://CCP.Avalonia/Resources/{_rainFolder}/{clip}.gif");
     }
     private Stream OpenRainFile(string name) => Path.IsPathRooted(_rainFolder!)
         ? File.OpenRead(Path.Combine(_rainFolder!, name))
@@ -86,8 +113,7 @@ public partial class AvatarTubeWindow
         if (_rainPack != null && _rainPack.Clips.TryGetValue(clip, out var entry))
             await player.LoadStrip(Path.Combine(_rainFolder, entry.File), entry.Frames, entry.Fps);
         else
-            await player.Load(Path.IsPathRooted(_rainFolder) ? new Uri(Path.Combine(_rainFolder, clip + ".webp"))
-                : new Uri($"avares://CCP.Avalonia/Resources/{_rainFolder}/{clip}.webp"));
+            await player.Load(RainClipUri(clip));
         if (version != _rainVersion) return; _rainLoading = false;
         if (!player.IsReady) {   // WPF watchdog (CirceEmotes.cs:555) re-issues a failed load, then advances; the shown frame stays up.
             _rainFade?.Dispose();

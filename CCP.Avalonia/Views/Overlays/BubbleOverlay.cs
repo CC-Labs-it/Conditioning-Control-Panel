@@ -347,6 +347,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             RequestFrame();
         }
 
+        /// <summary>WPF PopAllBubbles at a wave boundary, retaining the chaos callbacks.</summary>
+        internal static void ClearChaos()
+        {
+            Field.Held = false;
+            Field.Bubbles.Clear();
+            foreach (var w in Windows) w.Sync();
+        }
+
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
@@ -362,18 +370,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Windows) w.Sync();
         }
 
-        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// <summary>WPF SpawnChaosBubble, FloatUp and RainDown. Without an overlay window (headless, or a
         /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
-        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null)
+        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null,
+            Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp)
         {
             AmbientBubble b;
             if (Targets.Count == 0)
-                b = AmbientBubble.SpawnChaos((random ?? Field.Random), 0, 0, 0, 1920, 1080, 1, spec);
+                b = AmbientBubble.SpawnChaos((random ?? Field.Random), 0, 0, 0, 1920, 1080, 1, spec, motion);
             else
             {
                 var i = (random ?? Field.Random).Next(Targets.Count);
+                if (spec.SpawnAtPxX is double x && spec.SpawnAtPxY is double y)
+                {
+                    for (var n = 0; n < Targets.Count; n++)
+                    {
+                        var bounds = Targets[n].Bounds;
+                        if (x >= bounds.X && x < bounds.Right && y >= bounds.Y && y < bounds.Bottom)
+                        { i = n; break; }
+                    }
+                }
                 var a = Targets[i].WorkingArea;
-                b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, motion);
             }
             Field.Bubbles.Add(b);
             RequestFrame();
