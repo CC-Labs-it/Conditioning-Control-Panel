@@ -341,6 +341,7 @@ public sealed class PanicSurfacesTests
         ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
         ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
+        ["LinuxRaceHost"] = "owned by its GameWindow (GameWindow.FirstRace.cs:119 disposes it on Closed); panic closes it through the 'games' surface (GameWindow.CloseAllForPanic), see GameWindowTests.LinuxShell_PanicAfterWatchdogKillIsAFullPanicNotAPause",
     };
 
     [Fact]

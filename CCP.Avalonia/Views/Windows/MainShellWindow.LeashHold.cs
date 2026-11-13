@@ -121,6 +121,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnPortalPanicReleased() => LeashHoldReleased();
 
+        /// <summary>The race shell's Escape (X11 cannot see it): held until its keyup; a dead shell (null) hands off to the key probe.</summary>
+        internal void OnRaceEscape(bool? down)
+        {
+            if (down == true) { LeashHoldPressed(); _leashHoldFromPortal = _leashHoldClock?.IsEnabled == true; }
+            else if (down == false) LeashHoldReleased();
+            else if (_leashHoldFromPortal && !_portalHoldLive) (_leashHoldFromPortal, _leashHoldPortalUnproven) = (false, true);
+        }
+
         private void ApplyLeashHold(LeashHoldStep step)
         {
             if (step.Dismiss) LeashHoldRing.Dismiss();

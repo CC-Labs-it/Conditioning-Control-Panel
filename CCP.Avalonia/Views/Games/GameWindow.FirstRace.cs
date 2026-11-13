@@ -1,4 +1,4 @@
-// B2 section 4: Linux first race card. The fetch and owned Chromium host arrive in separate lanes.
+// B2 section 4: Linux first race card and the owned shell launch (LinuxRaceHost). The fetch arrives in a separate lane.
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -100,6 +100,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (_raceFetch == cancel) { _raceFetch = null; if (!_closing) RaceDownload.IsEnabled = true; }
                 cancel.Dispose();
             }
+        }
+
+        /// <summary>B2 (#3702) step 3: the race runs in the owned Electron shell (LinuxRaceHost). This window is never
+        /// shown and keeps the whole Glassroad session; Post and the page frames travel by the shell's pipe.</summary>
+        internal LinuxRaceHost? RaceShell { get; private set; }
+        internal static Func<GameWindow, Uri, LinuxRaceHost?> LaunchRaceShell = LinuxRaceHost.TryLaunch;
+        private string? _shellRoom;
+        /// <summary>True = the shell runs; null = no engine or shell installed; false = installed and did not start.</summary>
+        private bool? StartRaceShell(string? room)
+        {
+            var url = new Uri(Server().Url(Spec.Page, RaceQuery(Spec, room)));
+            LinuxRaceHost? shell;
+            try { shell = LaunchRaceShell(this, url); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Glassroad: race shell did not start"); return false; }
+            if (shell == null) return null;
+            (RaceShell, PageUrl, _shellRoom) = (shell, url, room);
+            Closed += (_, _) => shell.Dispose();
+            lock (Open) Open.Add(this);   // what Opened does for a shown window
+            OpenGlassroad();
+            return true;
+        }
+        /// <summary>The shell died before loading a page: close this session and show the card saying so.</summary>
+        internal void RaceShellFailed()
+        {
+            Close();
+            var card = new GameWindow(Spec);
+            card.ShowRaceCard(_shellRoom, failed: true);
+            card.Show();
+        }
+        private void ShowRaceCard(string? room, bool failed)
+        {
+            ShowRaceCard();
+            if (failed) RaceStatus.Text = Loc.Get("rt_engine_start_failed");
+            HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
         }
 
         private void CancelRaceFetch()

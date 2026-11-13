@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// (WPF FriendsLanding.cs:568 -> GlassroadHostService.Launch(joinRoomId)).</summary>
         internal static GameWindow? LaunchFriendRace(string? room) => LaunchRacingThoughts(room);
 
-        /// <summary>The race launch seam. The Linux host lane replaces this call with its owned host.
+        /// <summary>The race launch seam; on Linux LaunchWindow tries the owned shell first (GameWindow.FirstRace.cs).
         /// WPF GlassroadHostService.Launch: DemandPrime runs before a live window is re-focused, so a tier
         /// loss cannot bring a live race forward through another door.</summary>
         private static GameWindow? LaunchRacingThoughts(string? room = null)
@@ -132,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 live.HandoffRaceRoom(room);
                 // #4286: a feed the WM hid (ghost restored on hide) comes back with its door.
                 if (live.Spec.Id == FypId && !live.IsVisible) live.Show();
-                live.Activate();
+                if (live.RaceShell != null) live.RaceShell.Focus(); else live.Activate();   // the shell's window is never shown
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
@@ -158,8 +158,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var window = new GameWindow(spec);
                 if (spec.Id == GlassroadId && UseLinuxRaceCard())
                 {
-                    window.ShowRaceCard();
-                    window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                    var raceShell = window.StartRaceShell(room);   // B2 (#3702): the owned Electron shell first
+                    if (raceShell == true) return window;
+                    window.ShowRaceCard(room, failed: raceShell == false);
                 }
                 else window.Load(Server(), room);
                 window.Show();
@@ -437,6 +438,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
             if (_closing) return;
+            if (RaceShell != null) { RaceShell.Send(json); return; }
             _ = Web.PostJsonAsync(json);
         }
 

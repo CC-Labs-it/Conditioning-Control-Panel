@@ -116,6 +116,7 @@ internal static class PanicWatchdog
     private static void RunEmergencyTeardown()
     {
         Step("race engine download", RaceEngineDownload.Cancel);
+        Step("Linux race", () => Views.Games.LinuxRaceHost.Current?.Kill());
         Step("haptics", () => CoreHaptics.Service?.PanicStop());
         Step("remote haptics", RemoteCommands.StopHaptics);
         // WPF RunEmergencyPanicTeardown (main 7e14c2870): the hold the real handler would open first; thread-safe.
