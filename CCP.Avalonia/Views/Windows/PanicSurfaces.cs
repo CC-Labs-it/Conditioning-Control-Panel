@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+            new("bank-fx", sh => sh?.StopBankFx()), // WPF BankFx.cs:635 abort contract; P06
             new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
                 Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
