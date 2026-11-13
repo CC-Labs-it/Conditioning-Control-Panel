@@ -75,6 +75,17 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
+            // WPF ModResourceResolver.EmbeddedModTwin (polish wave 11): after the pack override, a nav/ path
+            // takes the active mod's embedded twin (nav/mods/<mod-id>/...), then our own default.
+            var modId = CoreMods.ActiveModId;
+            if (resourceName.StartsWith("nav/", StringComparison.Ordinal)
+                && !resourceName.StartsWith("nav/mods/", StringComparison.Ordinal)
+                && !string.IsNullOrEmpty(modId) && !modId.Contains("..")
+                && !modId.Contains('/') && !modId.Contains('\\') && !Path.IsPathRooted(modId))
+            {
+                var twin = LoadBuiltIn("nav/mods/" + modId + "/" + resourceName.Substring(4), decodeWidth);
+                if (twin != null) return twin;
+            }
             return LoadBuiltIn(resourceName, decodeWidth);
         }
 
