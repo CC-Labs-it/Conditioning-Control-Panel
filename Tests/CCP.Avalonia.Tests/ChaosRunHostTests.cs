@@ -72,7 +72,7 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
                 BubbleOverlay.PopChaos(BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsFreeze = true, SizePx = 100 }));
-                Assert.Contains("❄ " + eventText, ChaosRunHost.State!.RecentEvents);
+                Assert.Contains(eventText, ChaosRunHost.State!.RecentEvents);
                 Assert.Equal(bannerText, Assert.Single(ChaosEffectBannerOverlay.Active!.Strip.Row, e => e.Id == "freeze").Text);
                 Assert.Equal(200, BubbleOverlay.Field.FreezeVibrateRemainingMs);
                 Assert.True(BubbleOverlay.Field.FreezeAuraOpacity > 0);

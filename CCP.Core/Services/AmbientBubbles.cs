@@ -513,7 +513,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (i >= Bubbles.Count) continue;   // a callback cleared the field
                 var b = Bubbles[i];
-                if (FreezeChaos && FreezeVibrateRemainingMs > 0 && b.Spec != null && !b.AmbientTrigger)
+                if (FreezeChaos && FreezeVibrateRemainingMs > 0 && b.Spec != null && !b.AmbientTrigger && !Safety.GentleVisuals.On)
                 {
                     b.FreezeOffsetX = (Random.NextDouble() - 0.5) * 8;
                     b.FreezeOffsetY = (Random.NextDouble() - 0.5) * 8;

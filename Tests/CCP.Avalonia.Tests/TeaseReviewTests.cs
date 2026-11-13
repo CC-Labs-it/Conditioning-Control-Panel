@@ -44,9 +44,9 @@ public sealed class TeaseReviewTests
             if (kind == "sub") { Touch(new SubliminalPayload()); Assert.Equal("test phrase", phrase); }
             PinkFilterOverlay.SkipPlatformChecksForTests = true; SpiralOverlay.SkipPlatformChecksForTests = true;
             if (kind == "pink") { Touch(new OverlayPayload("pink_filter") { Strength = 50 });
-                Assert.Equal(.47, PinkFilterOverlay.PaintedOpacity, 3); }
+                Assert.True(PinkFilterOverlay.HasTimedPayload); Assert.Equal(.475, PinkFilterOverlay.PayloadHold.Opacity, 3); }
             if (kind == "spiral") { Touch(new OverlayPayload("spiral") { Strength = 50 });
-                Assert.Equal(SpiralFrames.Paint(.47), SpiralOverlay.PaintedOpacity, 3); }
+                Assert.Equal(SpiralFrames.Paint(.475), SpiralOverlay.PaintedOpacity, 3); }
             ChaosFlashOverlay.SkipPlatformChecksForTests = true;
             var oldWash = ChaosFlashOverlay.LastShow;
             if (kind == "wash") { Touch(new OverlayPayload("braindrain") { Strength = 50 });

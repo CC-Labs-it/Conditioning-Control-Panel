@@ -56,7 +56,6 @@ Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WP
 Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ♥ {Loc.Get("chaos_resistance_regrows")} :: fixed marker in the localized run event-feed sentence, WPF ChaosModeService.cs:2434 (content (c).3)
-Views/Chaos/ChaosRunHost.cs :: _state.PushEvent("❄ " + Loc.Get("chaos_freeze_event")) :: fixed marker in the localized run event-feed sentence, WPF ChaosModeService.cs:2391 (content (c).3)
 
 Controls/HoverBubbleBar.cs :: new global::Avalonia.Controls.Shapes.Path :: path: Discord brand mark, no Fluent glyph (WPF SettingsTabView.xaml:1966)
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
@@ -138,3 +137,4 @@ Theme/Styles.xaml :: <Path x:Name="Arrow" :: path: ComboBox drop-arrow template 
 Theme/Styles.xaml :: <Path x:Name="arrow" :: path: Expander chevron template chrome, WPF Aero2 ExpanderToggleButton (parity 2026-11-06)
 Views/AvatarTube/AvatarTubeWindow.axaml :: <Path x:Name="SpeechTail" :: path: speech-bubble tail chrome, WPF AvatarTube/AvatarTubeWindow.xaml:96 (fix2 bubble window 2026-11-06)
 Controls/Billboard/BillboardVectorArt.cs :: Geometry.Parse("M 0,-1 Q 0.12,-0.12 1,0 Q 0.12,0.12 0,1 Q -0.12,0.12 -1,0 Q -0.12,-0.12 0,-1 Z") :: path: billboard spark particle shape, not an icon; WPF Controls/Billboard/BillboardVectorArt.cs (fix2 billboard art 2026-11-06)
+Views/Chaos/ChaosRunHost.cs :: Label(b, "✖" :: WPF Services/BubbleService.cs:4809 Tease touch pop label, drawn as outlined text like SNAP (content (c).3)

@@ -278,7 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnTeaseTouched(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             _state.Detonated++;
             ChaosRunLessons.OnDetonation();
             Label(b, "✖", Color.FromRgb(0xFF, 0x3D, 0x5A));
@@ -310,7 +310,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // WPF ChaosModeService.cs:1403: restraint pays gold, score and focus once.
         internal static void OnTeaseDenied(AmbientBubble b)
         {
-            if (_state == null || _manualPaused || _lessonCardPaused) return;
+            if (_state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(ChaosTuning.TEASE_GOLD_MIN, ChaosTuning.TEASE_GOLD_MAX + 1));
             BankGold(gold);
             if (ChaosMeta.State.BubbleHintsLearned.Add("tease")) ChaosMeta.Save();
@@ -340,7 +340,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
                 App.Achievements?.TrackBubblePopped();
                 ChaosLessons.Tick("freeze_trigger");
-                _state.PushEvent("❄ " + Loc.Get("chaos_freeze_event"));
+                _state.PushEvent(Loc.Get("chaos_freeze_event"));   // WPF :2391 prefixes a snowflake; no emoji in event lines
                 CheckComboMilestone();
                 ActivateFreeze();
                 return;
