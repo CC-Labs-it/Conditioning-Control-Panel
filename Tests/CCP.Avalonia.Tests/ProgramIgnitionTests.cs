@@ -249,6 +249,27 @@ public sealed class ProgramIgnitionTests
         Assert.Equal(.65, glow.Opacity, 3);
     });
 
+    [Fact]
+    public void SyncIgnitionTwiceKeepsTodayPipBreathPhase() => WithRun(lastDay: true, (shell, tab, _, _) =>
+    {
+        var glow = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Ellipse>().Single(e => e.Name == "PipGlow" && e.DataContext is ProgramDayPip { IsCurrent: true });
+        Step(.6);
+        Assert.Equal(.65, glow.Opacity, 3);
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(.65, glow.Opacity, 3);
+        shell.WindowState = WindowState.Maximized;
+        Dispatcher.UIThread.RunJobs();
+        shell.WindowState = WindowState.Normal;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(.65, glow.Opacity, 3);
+        Step(.6);
+        Assert.Equal(.95, glow.Opacity, 3);
+    });
+
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
