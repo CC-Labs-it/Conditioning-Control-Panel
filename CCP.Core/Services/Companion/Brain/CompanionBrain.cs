@@ -403,7 +403,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     _conversationRevision++;
                     ApplyPreviewCommands(result, cancellationToken);
                     NoteRecommendedTitles(result.Text);
-                    PersistAsync();
+                    _ = PersistAsync();
                     SignalMemoryRecallIfDue();
                     return result;
                 }
@@ -867,16 +867,16 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// Fire-and-forget persistence so chat latency never pays for disk I/O. Only reached AFTER
         /// output moderation passed (P2/H5), and only dialogue turns are handed over.
         /// </summary>
-        private void PersistAsync()
+        internal Task PersistAsync()
         {
             var dialogue = Session.DialogueTurns();
             var revision = _conversationRevision;
-            _ = Task.Run(() =>
+            return Task.Run(() =>
             {
                 try
                 {
                     lock (_conversationMutation)
-                        if (revision == _conversationRevision) _store.Save(dialogue);
+                        if (!_disposed && revision == _conversationRevision) _store.Save(dialogue);
                 }
                 catch (Exception ex) { Log.Debug("CompanionBrain: persist failed: {Error}", ex.Message); }
             });
@@ -912,8 +912,12 @@ namespace ConditioningControlPanel.Services.Companion.Brain
 
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            // Finish an active save and make queued saves observe shutdown before the final flush.
+            lock (_conversationMutation)
+            {
+                if (_disposed) return;
+                _disposed = true;
+            }
             _maintenance?.Dispose();
             DetachBarkSource();
             try { Flush(); } catch { /* shutdown is best-effort */ }
