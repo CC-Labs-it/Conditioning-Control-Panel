@@ -41,6 +41,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            // WPF MainWindow.SessionIO.cs:1403: the camera pill shares the shell's rebind.
+            parts.Behavior.CameraShortcutRequested += async (_, _) =>
+            {
+                if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell) await shell.RebindCameraShortcutAsync();
+            };
             // WPF CompanionCard_Click: the cell supplies the same 0..4 Tag index.
             parts.Roster.CompanionCardClicked += (_, index) =>
             {
@@ -64,8 +69,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
-            // CameraShortcutRequested still needs the camera hotkey route. The webcam tracker
-            // exists, but a rebind alone would configure a shortcut that cannot fire.
             // Browser pause forwards from the cell to the shell's live Home WebHost.
             // Community owns its shared-service actions and native picker presentation.
         }

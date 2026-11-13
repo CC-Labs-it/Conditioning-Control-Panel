@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -55,6 +56,45 @@ public partial class MainShellWindow
                 () => Dispatcher.UIThread.Post(async () => await ToggleWebcamFromHotkeyAsync()));
         }
         catch (Exception ex) { Log.Warning(ex, "Camera hotkey registration failed"); }
+    }
+    /// <summary>WPF MainWindow.SessionIO.cs:1403 BtnCameraShortcut_Click: the chat capture dialog
+    /// edits the camera combo, saves it, re-arms the hotkey and repaints both labels. One handler
+    /// serves the Companion pill and the Settings Devices row, as in WPF.</summary>
+    internal async Task RebindCameraShortcutAsync()
+    {
+        try
+        {
+            // Avalonia refuses a hidden owner; the shell can sit loaded-but-hidden in the tray.
+            if (!IsVisible) return;
+            var prompt = CoreSettings.Current?.CompanionPrompt;
+            if (prompt == null) return;
+            var dlg = new ChatShortcutCaptureDialog { GlobalHotkey = prompt.CameraShortcutGlobal };
+            if (!await dlg.ShowDialogSafe<bool>(this)) return;
+            if (dlg.ResetToDefault)
+            {
+                prompt.CameraShortcutKey = "K";
+                prompt.CameraShortcutModifiers = "Control,Alt";
+            }
+            else
+            {
+                prompt.CameraShortcutKey = dlg.CapturedKey.ToString();
+                // "Windows", not Avalonia's "Meta", so the file still parses on the WPF head.
+                prompt.CameraShortcutModifiers = AvatarTube.AvatarTubeWindow.SerializeModifiers(dlg.CapturedModifiers);
+            }
+            prompt.CameraShortcutGlobal = dlg.GlobalHotkey;
+            CoreSettings.Save();
+            // Only a desktop run that armed the chords re-arms them (StartQuickRecalHotkey); render/tests never grab keys.
+            if (_quickRecalBindingWatch != null) ApplyCameraHotkey();
+            RefreshCameraShortcutLabels();
+        }
+        catch (Exception ex) { Log.Warning(ex, "Camera shortcut rebind failed"); }
+    }
+    /// <summary>WPF MainWindow.SessionIO.cs:1381 RefreshCameraShortcutLabel: both pills read the saved combo.</summary>
+    internal void RefreshCameraShortcutLabels()
+    {
+        foreach (var label in global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(this).OfType<TextBlock>()
+                     .Where(t => t.Name is "TxtCameraShortcutLabel" or "TxtCameraShortcutLabelDevices"))
+            label.Text = CameraShortcutChord;
     }
     private void HookCameraShortcutKey()
     {
