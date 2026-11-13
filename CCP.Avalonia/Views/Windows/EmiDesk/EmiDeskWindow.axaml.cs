@@ -1521,8 +1521,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// rather than building a second panel.</para>
         ///
         /// <para>Bookmark and the lifetime open count are the router's own (EmiBook.cs Open):
-        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. ponytail: still missing
-        /// <c>NoteSideChanged</c> (the bubble dodge in EmiDeskWindow.Bubble.cs).</para>
+        /// <c>EmiState.BookBookmark</c> / <c>NoteCodexOpened</c> in Core. Opening, closing and a side change re-lay the bubble
+        /// (WPF <c>EmiBook.NoteSideChanged</c>, the dodge in EmiDeskWindow.Bubble.cs).</para>
         /// </summary>
         internal void OpenBook(string? cardId = null)
         {
@@ -1543,6 +1543,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.Closed += OnBookClosed;
                 _book = win;
                 win.OpenBook(cardId);
+                OnBookSideChanged();   // WPF EmiBook.cs:170: opening moves the side from 0
             }
             catch (Exception ex)
             {
@@ -1556,6 +1557,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var win = _book;
             _book = null;
+            OnBookSideChanged();   // WPF EmiBook.cs:202: closing restores the default side
             if (win == null) return;
             try
             {
@@ -1569,6 +1571,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (!ReferenceEquals(sender, _book)) return;
             _book = null;
+            OnBookSideChanged();
         }
 
         /// <summary>Clear the resize hold, whichever way the drag ended.</summary>
