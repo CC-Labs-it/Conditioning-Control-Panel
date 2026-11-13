@@ -85,6 +85,36 @@ public class VideoCutPlaybackIntegrationTests
         Assert.True(p.Stopped && p.Disposed);
     });
 
+    // WPF VideoService.cs StartSafetyTimer (6838-6870): the length + 5 s safety timer is wall clock and a
+    // voice pause (PausePrimary) never stops it; only a grace pause does (restack b39, from #3676).
+    [Fact]
+    public Task A_voice_paused_clip_still_meets_the_safety_deadline() => Run(0, (o, v, clock, players, credit) =>
+    {
+        o.GuardTick(); // the length is known: the deadline is 120 + 5 s from here
+        typeof(MandatoryVideoOverlay).GetProperty(nameof(MandatoryVideoOverlay.PrimaryPaused), System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(o, true);
+        clock.Advance(124000);
+        o.GuardTick();
+        Assert.True(v.IsPlaying);
+        clock.Advance(1000);
+        o.GuardTick();
+        Assert.False(v.IsPlaying);
+    });
+
+    [Fact]
+    public Task A_grace_pause_suspends_the_safety_deadline() => Run(0, (o, v, clock, players, credit) =>
+    {
+        var p = players.Single();
+        o.GuardTick();
+        clock.Advance(100000);
+        Assert.True(o.TryGracePause(false));
+        clock.Advance(60000);
+        o.GuardTick();
+        Assert.True(v.IsPlaying);
+        o.ResumeFromGrace("test");
+        Step(o, clock, p, 20000); // 120 s of the 125 s spent outside the pause
+        Assert.True(v.IsPlaying);
+    });
+
     private static void Step(MandatoryVideoOverlay o, Clock clock, Decoder p, int ms)
     {
         clock.Advance(ms);
