@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
