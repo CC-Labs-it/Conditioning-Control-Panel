@@ -61,7 +61,10 @@
     <Style Selector="ContextMenu">
       <Setter Property="Theme" Value="{StaticResource InputContextMenuTheme}"/>
     </Style>
-    <Style Selector="ContextMenu Separator">
+    <Style Selector="Separator">
+      <Setter Property="Theme" Value="{StaticResource InputStandaloneSeparatorTheme}"/>
+    </Style>
+    <Style Selector="Menu Separator, ContextMenu Separator">
       <Setter Property="Theme" Value="{StaticResource InputSeparatorTheme}"/>
     </Style>
     <!-- Icon size ramp + semantic icon brushes (Controls/Icons, fluent icons 2026-10-10). -->

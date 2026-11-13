@@ -875,6 +875,11 @@
     </Setter>
   </ControlTheme>
 
+  <!-- Inputs.xaml:675-688: implicit standalone divider. -->
+  <ControlTheme x:Key="InputStandaloneSeparatorTheme" TargetType="Separator" BasedOn="{StaticResource InputSeparatorTheme}">
+    <Setter Property="Margin" Value="0,6"/>
+  </ControlTheme>
+
   <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxTheme}"/>
 
   <!-- MainWindow.xaml:280. The WPF template replaced wholesale, and so does this one: a
