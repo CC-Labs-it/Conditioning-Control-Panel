@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     {
         internal static readonly ChaosPopPool<ChaosPopText> Pool = new(ChaosPopTextMotion.POOL_MAX);
         private static int _generation;
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
 
         /// <summary>Click-through + invisible + override-redirect at <paramref name="rect"/> (screen
         /// px), before the first map. False = the platform refused; the word is dropped. Test seam.</summary>
@@ -146,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var k = Screens.Primary?.Scaling is > 0 and var s ? s : 1.0;
             var rect = new PixelRect((int)Math.Round(left * k), (int)Math.Round(top * k),
                 (int)Math.Round(ChaosPopTextMotion.WIN_W * k), (int)Math.Round(ChaosPopTextMotion.WIN_H * k));
+            bool reshow = _prepared;
             if (!_prepared)
             {
                 if (!Prepare(this, rect))
@@ -161,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             SetLabel(text, color);
             base.Show();   // first call maps it; later calls just unhide
+            if (reshow && CoreSettings.Current.ChaosPinOnTop && CoreEngine.Video?.IsPlaying == true) RaiseWindow(this);
             _beat.Start();   // steps t=0 at once (alpha 0, rise +6) in this same job, before any frame
         }
 
