@@ -135,4 +135,47 @@ public sealed class EmiRingFanTests
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public override DateTimeOffset GetUtcNow() => new DateTimeOffset(Now, TimeSpan.Zero);
     }
+
+    /// <summary>WPF EmiSfx.cs:156,161 (#4767): output suppression and a panic hold silence the cues.</summary>
+    [Fact]
+    public Task CuesRespectOutputSuppressionAndPanicHold() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var service = EmiDeskService.Instance;
+        var oldEngine = service.LineEngine;
+        var oldAudio = CoreAudio.PlayOneShotProvider;
+        var oldSuppression = CoreAudio.IsOutputSuppressedProvider;
+        var oldVolume = CoreSettings.Current.MasterVolume;
+        var clock = new SteppedClock();
+        var played = new List<string>();
+        try
+        {
+            service.LineEngine = EmiLineEngine.FromJson("{\"moments\":{\"panicPressed\":{\"hold\":true,\"tailMs\":300000}},\"pools\":{}}");
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => played.Add(tag);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreSettings.Current.MasterVolume = 50;
+            EmiSfx.Clock = clock;
+            EmiSfx.Pat();
+            Assert.Single(played);
+            CoreAudio.IsOutputSuppressedProvider = () => true;
+            clock.Now += TimeSpan.TicksPerSecond;
+            EmiSfx.Pat();
+            Assert.Single(played);
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            service.PanicSilence();
+            Assert.True(service.LineEngine.HoldActive);
+            clock.Now += TimeSpan.TicksPerSecond;
+            EmiSfx.Pat();
+            Assert.Single(played);
+        }
+        finally
+        {
+            service.LineEngine = oldEngine;
+            CoreAudio.PlayOneShotProvider = oldAudio;
+            CoreAudio.IsOutputSuppressedProvider = oldSuppression;
+            CoreSettings.Current.MasterVolume = oldVolume;
+            EmiSfx.Clock = TimeProvider.System;
+        }
+        return Task.CompletedTask;
+    });
 }

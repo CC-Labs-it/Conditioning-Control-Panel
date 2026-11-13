@@ -212,6 +212,9 @@ internal sealed class AchievementEngine
         return minutes;
     }
 
+    /// <summary>An ambient pop reached a 100-pop milestone (the lifetime total); the head shows WPF's popup.</summary>
+    public event Action<int>? BubbleMilestone;
+
     /// <summary>WPF AchievementService.cs:378-413 ambient credit; milestone presentation stays in the head.</summary>
     public void TrackBubblePopped()
     {
@@ -225,6 +228,9 @@ internal sealed class AchievementEngine
             settings.SkillPoints++;
             CoreSettings.Save();
             SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+            // WPF ShowBubbleMilestoneNotification (AchievementService.cs:593): a failing popup never undoes the credit.
+            try { BubbleMilestone?.Invoke(Progress.TotalBubblesPopped); }
+            catch (Exception ex) { Serilog.Log.Debug("bubble milestone handler: {E}", ex.Message); }
         }
         if (Progress.TotalBubblesPopped % 50 == 0) Save();
     }

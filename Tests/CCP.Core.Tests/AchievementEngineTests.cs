@@ -59,9 +59,12 @@ public sealed class AchievementEngineTests : IDisposable
             engine.TrackBubblePopped();
             Assert.Equal(950, new AchievementStore(path).Load().TotalBubblesPopped);
             Assert.Equal(points, s.SkillPoints);
+            var milestones = new System.Collections.Generic.List<int>();
+            engine.BubbleMilestone += milestones.Add;
             for (var i = 0; i < 50; i++) engine.TrackBubblePopped();
             Assert.True(engine.Progress.IsUnlocked("pop_the_thought"));
             Assert.Equal(points + 1, s.SkillPoints);
+            Assert.Equal(new[] { 1000 }, milestones);   // WPF ShowBubbleMilestoneNotification, once per hundred
         }
         finally { s.SkillPoints = points; dir.Delete(true); }
     }
