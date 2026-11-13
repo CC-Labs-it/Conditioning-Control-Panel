@@ -6,8 +6,9 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // The blocked fallback and once-only presence ask share Core rules with WPF.
-// ponytail: no leash section and no shared row juice; a friend card hosts only the leash offer
-// chip (FriendLeashOffer.cs). A word WPF throws outside the drawer
+// The rail drawer hosts the leash section (Tabs.LeashTabView asDrawer: offers, own card, held
+// cards, WPF LeashDrawerSection.cs); the Friends page leaves it to the Leash page.
+// ponytail: no shared row juice; a friend card hosts the leash offer chip (FriendLeashOffer.cs). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Linq;
@@ -74,6 +75,7 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>WPF RefreshInviteLine: subscribers only (an invite week holds no codes).</summary>
     internal Func<bool> OffersInviteLink { get; set; } = () => ConditioningControlPanel.Services.Invites.InviteTicketRule.OffersInviteLink(
         CoreAccount.HasPremiumAccess, ConditioningControlPanel.Services.ProviderSubscription.IsInviteWeekOnly(AccountSeed.Patreon, AccountSeed.SubscribeStar, CoreSettings.Current));
+    internal Tabs.LeashTabView? LeashSection { get; }
     public FriendsDrawer() : this(null) { }
     internal FriendsDrawer(IFriendsService? service, bool asPage = false)
     {
@@ -112,7 +114,8 @@ public sealed partial class FriendsDrawer : Border
             },
         });
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
-        var (scroll, top, line) = (new ScrollViewer { Content = _list, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
+        if (!asPage) LeashSection = new Tabs.LeashTabView(() => Platform.LeashHead.Service, asDrawer: true);
+        var (scroll, top, line) = (new ScrollViewer { Content = LeashSection == null ? _list : new StackPanel { Children = { LeashSection, _list } }, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
         (_head.Background, _head.CornerRadius, _head.BorderBrush, _head.BorderThickness, _head.Padding) = (Raised, new CornerRadius(15, 15, 0, 0), line, new Thickness(0, 0, 0, 1), new Thickness(12, 12, 12, 10));
         (_addBox.IsVisible, _addBox.Padding, _addBox.BorderBrush, _addBox.BorderThickness) = (false, new Thickness(10, 8, 10, 8), line, top);
         (_foot.Background, _foot.BorderBrush, _foot.BorderThickness, _foot.CornerRadius, _foot.Padding) = (Foot, line, top, new CornerRadius(0, 0, 15, 15), new Thickness(8));
@@ -183,6 +186,7 @@ public sealed partial class FriendsDrawer : Border
     public void OnOpened()
     {
         _isOpen = true;
+        LeashSection?.SetDrawerOpen(true);
         Rebind();
         try { _svc?.SetDrawerOpen(true); } catch { }
         if (_svc?.Available == true) _ = SafeRefreshAsync();
@@ -195,6 +199,7 @@ public sealed partial class FriendsDrawer : Border
         try { _svc?.SetDrawerOpen(false); } catch { }
         Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
         FeedFolded();
+        LeashSection?.SetDrawerOpen(false);
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
     private void Rebind()
