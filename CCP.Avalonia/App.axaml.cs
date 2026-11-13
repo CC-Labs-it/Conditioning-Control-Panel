@@ -20,6 +20,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
+        /// <summary>The daily-free service (WPF App.DailyFree), or null on the headless render path.</summary>
+        internal static DailyFreeService? DailyFree { get; private set; }
+
         /// <summary>The haunted-UI layer that rides a running lockdown (WPF App.Possession; Core director,
         /// this head's effects and attribution). Arms only when a lockdown starts with Possession on.</summary>
         public static global::ConditioningControlPanel.Services.Possession.PossessionDirector? Possession { get; internal set; }
@@ -797,6 +800,7 @@ namespace ConditioningControlPanel.Avalonia
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 PostCodeInputsChanged = dailyFree.NotifyInputsChanged;
+                DailyFree = dailyFree;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 CoreEntitlement.DailyFreeKeyProvider = () => dailyFree.TodayKey;
