@@ -35,12 +35,17 @@ onboarded offline user. <code>startup_since_process_ms</code> adds the runtime's
 <code>perf-compare.py</code> reports both startup rows as <code>info</code> and never fails on them.</li>
 <li><strong>Tab switch</strong>: <code>ShowTab</code> (the call every rail handler makes) to the next rendered frame, for every panel in
 <code>NavCheck.TabPanels</code>, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab. Frame done differs slightly: Avalonia waits for <code>RequestCompositionBatchCommitAsync().Rendered</code> (render thread included), WPF stops at a Background hop after <code>CompositionTarget.Rendering</code> (UI thread committed, before the render thread presents), so tab rows lean slightly against Avalonia; the 20 ms slack is meant to absorb it.</li>
+<li><strong>Idle Home</strong> (Avalonia only, informational): <code>idle_home_frame_requests_per_s</code>, the frames the
+window's <code>FrameClock</code>s requested per second over 3 s on Home after a 1 s settle. A clock parks between beats on a
+one-shot timer and a clock whose owner is detached, hidden or minimised requests nothing, so this sits near the beat rate
+(30/s), not the monitor refresh.</li>
 <li><strong>Memory</strong>: working set after the cycles and two <code>GC.Collect</code> + <code>WaitForPendingFinalizers</code> passes.</li>
 <li>Exit 0 with the JSON written; 3 when a tab is missing or does not show; 4 on a frame timeout (30 s). WPF also exits 2 with usage on a bad command line or a non-absolute <code>CCP_USERDATA_DIR</code>, and every WPF benchmark exit goes through <code>PerfBench.Exit</code> (flush, then <code>TerminateProcess</code>), because <code>Environment.Exit</code> crashes WPF in ProcessExit and loses the code.</li>
 </ul>
 <p>JSON shape <code>ccp-perf-bench/1</code> (the WPF twin writes the same shape, <code>head: &quot;wpf&quot;</code>):</p>
 <pre><code class="language-json">{ &quot;schema&quot;: &quot;ccp-perf-bench/1&quot;, &quot;head&quot;: &quot;avalonia&quot;, &quot;os&quot;: &quot;...&quot;, &quot;runtime&quot;: &quot;...&quot;,
   &quot;startup_ms&quot;: 0, &quot;startup_since_process_ms&quot;: 0, &quot;working_set_mb&quot;: 0, &quot;cycles&quot;: 20,
+  &quot;idle_home_frame_requests_per_s&quot;: 0,
   &quot;tabs&quot;: [ { &quot;tab&quot;: &quot;SettingsTab&quot;, &quot;median_ms&quot;: 0, &quot;p95_ms&quot;: 0 } ] }
 </code></pre>
 <p>CI: <code>perf-bench-linux</code> (xvfb, artifact <code>perf-bench-linux</code>) and <code>perf-bench-windows</code> (artifact <code>perf-bench-windows</code>)
