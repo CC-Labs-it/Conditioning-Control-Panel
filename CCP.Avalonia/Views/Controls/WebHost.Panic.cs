@@ -63,6 +63,7 @@ public partial class WebHost
                     // Clear even while the native gate is pending: its late report must not reload it.
                     host.Source = null;
                     host.CurrentUrl = null;
+                    host.ActiveNavigation = null;
                     host._scrolllerPanicTarget = null;
                     // WPF MainWindow.Browser.cs:983 pauses media; unloading the document
                     // is this head's equivalent and also prevents playback after reattachment.

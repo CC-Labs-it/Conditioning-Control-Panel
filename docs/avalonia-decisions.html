@@ -1749,5 +1749,10 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>WPF: Microsoft documents render tier 0 as "no graphics hardware acceleration, all graphics features use software" (learn.microsoft.com, WPF "Graphics Rendering Tiers", <code>RenderCapability.Tier</code>), and WPF picks its tier itself with no app code. Not confirmed: that WPF actually lands on tier 0 on the Basic Render Driver. The runner does not log <code>RenderCapability.Tier</code>, so treat it as parity in intent only.</li>
 <li>Measured gain (software variant, one run): Programs 92 to 35 ms, AvailableSubjects 77 to 38, BlinkTrainer 75 to 35, all-tab median 81 to 57. Settings stays high (75 ms): its own tile draw is heavy (slice 3).</li>
 </ul>
+<h2 id="2026-11-12-ocr-capture-lifecycle-blocked">2026-11-12: OCR capture lifecycle remains blocked on the Avalonia head</h2>
+<ul>
+<li>The Awareness OCR switch only saves the setting (<code>CCP.Avalonia/Views/Tabs/AwarenessTabView.axaml.cs:247-263</code>); the master calls the keyboard head (<code>:215</code>). WPF starts and stops capture from both switches (<code>ConditioningControlPanel/MainWindow/MainWindow.Awareness.cs:419-426,443-468</code>).</li>
+<li>Part B: implement platform screen capture and OCR with real screen coordinates and exclusion of the app's window rectangles, then connect matching, confirmation and dispatch. WPF <code>ConditioningControlPanel/Services/ScreenOcrService.cs:51-70,84-151</code> and <code>ConditioningControlPanel/Services/KeywordTriggerService.cs:712-714,827-862</code> define the lifecycle and consumer. The Avalonia head has neither consumer nor capture service; <code>CCP.Avalonia/Views/Controls/Companion/KeywordTriggersPanel.axaml.cs:192-197</code> also needs live interval updates. A standalone scanner or timer would leave the switch without a working user path. Linux capture permissions, recognition availability and multi-monitor coordinates need a platform implementation and tests.</li>
+</ul>
 </body>
 </html>

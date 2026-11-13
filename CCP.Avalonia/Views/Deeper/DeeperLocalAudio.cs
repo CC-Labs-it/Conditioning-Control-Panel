@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     {
         int Volume { get; set; }
         double DurationSeconds { get; }
+        double? PlaybackDurationSeconds { get; }
         double PositionSeconds { get; set; }
         void Play();
         void Pause();
@@ -115,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             private long _pendingMs;   // a seek made before playback could take it; consumed once
             private bool _primingVideo, _primePlaying, _primePauseRequested, _playAfterPrime;
             private Timer? _primeTimer;
+            private long _playbackLengthMs;
             private int _disposed;
             internal bool IsDisposed => _disposed != 0;
 
@@ -127,14 +129,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             // The parse misreads some LAME/Xing mp3 headers (measured: a 6.0 s ffmpeg mp3 parsed as
             // 12.1 s); the playing player's Length is exact, so it wins once known.
-            public double DurationSeconds
+            public double? PlaybackDurationSeconds
             {
                 get
                 {
-                    var len = Live ? player.Length : -1;
-                    return (len > 0 ? len : parsedMs) / 1000.0;
+                    lock (Gate)
+                    {
+                        var length = Live ? player.Length : -1;
+                        if (length > 0) _playbackLengthMs = length;
+                        return _playbackLengthMs > 0 ? _playbackLengthMs / 1000.0 : null;
+                    }
                 }
             }
+            public double DurationSeconds => PlaybackDurationSeconds ?? parsedMs / 1000.0;
 
             public double PositionSeconds
             {
@@ -270,7 +277,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             /// <summary>WPF OnVlcEndReached: Stop + rewind so the next Play replays.</summary>
             internal void OnEndReached()
             {
-                lock (Gate) { if (IsDisposed) return; _primeTimer?.Dispose(); _primeTimer = null; player.Stop(); _pendingMs = 0; _primingVideo = false; _playAfterPrime = false; }
+                lock (Gate)
+                {
+                    if (IsDisposed) return;
+                    var length = player.Length;
+                    if (length > 0) _playbackLengthMs = length;
+                    _primeTimer?.Dispose(); _primeTimer = null;
+                    player.Stop(); _pendingMs = 0; _primingVideo = false; _playAfterPrime = false;
+                }
                 Ended?.Invoke();
             }
 

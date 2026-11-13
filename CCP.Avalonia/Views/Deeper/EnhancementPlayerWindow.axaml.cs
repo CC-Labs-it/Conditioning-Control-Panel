@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> Waveform decoding and WebcamTracking remain WPF-side.
+    ///   <item><b>Services.</b> WebcamTracking remains WPF-side.
     ///         Local audio transport uses DeeperLocalAudio; editor jumps are wired below.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
@@ -140,6 +140,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private int _audioLoad;
         private bool _audioDurationRemembered;
         internal Action<string?, double> RememberAudioDuration = MediaDurationCache.Remember;
+        // Tests only: a decode that settles at once keeps the open synchronous.
+        internal Func<string, Task<AudioWaveformResult>> LoadWaveformPeaks = AudioWaveformCache.LoadAsync;
+        private int _waveformGeneration;
+        private AudioWaveformResult? _waveformData;
+        private double? _waveformDuration;
+        private double? _parsedDuration;
+        private (long Size, DateTime Modified)? _waveformFile;
         private bool _closing;
 
 
@@ -674,18 +681,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // ====================================================================================
 
         // WPF EnhancementPlayerWindow.xaml.cs:616-662, 836-859, 2621: replace, play and cancel on close.
-        private async void LoadAudio(string path)
+        private async void LoadAudio(string path, bool reuseWaveform = false)
         {
             if (_closing) return;
             StopAudio();
+            var info = new System.IO.FileInfo(path);
+            var file = info.Exists ? (info.Length, info.LastWriteTimeUtc) : ((long, DateTime)?)null;
+            if (!reuseWaveform || file == null || file != _waveformFile) InvalidateWaveform();
+            _waveformFile = file;
             var load = _audioLoad;
             _audioPath = path;
             _audioDurationRemembered = false;
             _txtAudioPath.Text = path;
             _txtStatus.Text = Loc.Get("deeper_player_status_loading_audio");
             ShowMediaPaneFor(MediaTypes.Audio);
-            _peaks = null;
-            _waveformPath.Data = null;
             _currentSec = _durationSec = 0;
             try
             {
@@ -705,8 +714,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _audioFailed = () => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_localAudio, audio)) AudioFailed(); });
                 audio.Ended += _audioEnded; audio.Failed += _audioFailed;
                 audio.Volume = (int)_sliderVolume.Value;
-                _durationSec = audio.DurationSeconds;
+                _parsedDuration = audio.DurationSeconds;
+                var total = reuseWaveform && _waveformDuration is { } known ? known : _parsedDuration.Value;
+                if (_waveformData == null && _waveformLoad?.IsCompleted == true) _waveformLoad = null;
+                _waveformLoad ??= LoadWaveformAsync(path, _waveformGeneration);
+                await _waveformLoad;
+                if (_closing || load != _audioLoad) return;
                 audio.Play();
+                // WPF player.xaml.cs:648-652: a failed start keeps the previous total, so the tick must not paint the parse.
+                _durationSec = _waveformDuration ?? total;
                 _isPlaying = true;
                 _txtTotal.Text = FormatTime(_durationSec);
                 _txtPlayPauseGlyph.Kind = IconKind.Pause;
@@ -720,6 +736,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Log.Warning(ex, "Deeper player audio load failed");
             }
         }
+
+        internal Task? _waveformLoad;
+
+        // WPF EnhancementPlayerWindow.xaml.cs:665: decode off the UI thread and draw the peaks.
+        private async Task LoadWaveformAsync(string path, int generation)
+        {
+            try
+            {
+                var data = await LoadWaveformPeaks(path);
+                if (_closing || generation != _waveformGeneration) return;
+                _waveformData = data;
+                UpdateAudioWaveform();
+            }
+            catch (Exception ex) { Log.Debug(ex, "EnhancementPlayer: waveform decode failed"); }
+        }
+
+        private void UpdateAudioWaveform()
+        {
+            if (_localAudio?.PlaybackDurationSeconds is { } live && double.IsFinite(live) && live > 0)
+            {
+                _waveformDuration = _durationSec = live;
+                _txtTotal.Text = FormatTime(live);
+            }
+            if (_waveformData is not { } data) return;
+            // Use an agreeing parse for the timeline until a live player length is available.
+            if (_waveformDuration == null && _parsedDuration is { } parsed && Matches(data.DurationSeconds, parsed))
+            {
+                _waveformDuration = _durationSec = parsed;
+                _txtTotal.Text = FormatTime(parsed);
+            }
+            // WPF EnhancementPlayerWindow.xaml.cs:671 draws every successful decode.
+            var peaks = data.Peaks;
+            if (ReferenceEquals(_peaks, peaks)) return;
+            _peaks = peaks;
+            RenderWaveform();
+        }
+
+        private static bool Matches(double decoded, double duration) =>
+            double.IsFinite(duration) && double.IsFinite(decoded) && duration > 0 && decoded > 0
+            && Math.Abs(decoded - duration) <= 0.05;
 
         // WPF MainWindow.xaml.cs:2067 and player:2527: panic pauses every player, including pending opens.
         internal static void PanicPauseAll()
@@ -746,6 +802,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void StopAudio()
         {
             ++_audioLoad; // Invalidate an asynchronous open before it can start sound.
+            UpdateAudioWaveform(); // Keep a verified duration before disposing the transport.
             var audio = _localAudio;
             _localAudio = null;
             _isPlaying = false;
@@ -757,6 +814,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             audio.Dispose();
         }
 
+        private void InvalidateWaveform()
+        {
+            ++_waveformGeneration;
+            _waveformLoad = null;
+            _waveformData = null;
+            _waveformDuration = _parsedDuration = null;
+            _waveformFile = null;
+            _peaks = null;
+            _waveformPath.Data = null;
+        }
+
         /// <summary>
         /// The WPF path navigated the WebView2 to a file:// URL and let Edge's media viewer wrap it
         /// in a &lt;video&gt; element. Same shape here, with the same one-shot allowlist: the media
@@ -766,7 +834,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         private void LoadLocalVideo(string path)
         {
-            StopAudio(); ++_videoLoad; _pollDisabled = false;
+            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false;
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -811,7 +879,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void LoadVideoUrl(string url)
         {
-            StopAudio(); ++_videoLoad; _pollDisabled = false;
+            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false;
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -863,7 +931,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (!_isVideoMode && _audioPath != null)
             {
-                if (_localAudio == null) { LoadAudio(_audioPath); return; }
+                if (_localAudio == null) { LoadAudio(_audioPath, reuseWaveform: true); return; }
+                if (_waveformLoad is { IsCompleted: false }) { StopAudio(); LoadAudio(_audioPath, reuseWaveform: true); return; }
                 try { if (_isPlaying) _localAudio.Pause(); else _localAudio.Play(); }
                 catch (Exception ex) { AudioFailed(); Log.Warning(ex, "Deeper audio start failed"); return; }
                 _isPlaying = !_isPlaying;
@@ -1021,6 +1090,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _audioDurationRemembered = true;
                     RememberAudioDuration(_audioPath, _durationSec);
                 }
+                UpdateAudioWaveform();
             }
 
             _txtCurrent.Text = FormatTime(_currentSec);
@@ -1834,6 +1904,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _videoBrowser.WebMessage -= OnVideoWebMessage;
             _closing = true; ++_videoLoad;
             StopAudio();
+            InvalidateWaveform();
             // Stop the tick timer first so no UI work is queued onto a dying window — and because
             // --render-all opens and closes every view in one process, a timer left running would
             // accumulate one live 100ms tick per view.

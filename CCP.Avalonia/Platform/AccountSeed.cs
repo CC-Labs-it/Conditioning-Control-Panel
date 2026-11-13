@@ -147,7 +147,6 @@ internal static class AccountSeed
     /// WPF ProfileSyncService.LoadProfileAsync's V2 read-before-write (ReadServerProfileBeforePushAsync), READ-ONLY:
     /// GET /v2/user/profile, follow the curve epoch, offer a tier rise, adopt take-higher (Core <see cref="ProfileAdopt"/>).
     /// Then, as WPF LoadProfileAsync does after the read, the heartbeat and the push (<see cref="Sync"/>; unseeded = none).
-    /// ponytail: no season-recap nudge - the next layer.
     /// </summary>
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)

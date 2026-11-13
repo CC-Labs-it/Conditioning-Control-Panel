@@ -1,4 +1,7 @@
 using System.Linq;
+using System.IO;
+using ConditioningControlPanel.Models;
+using Newtonsoft.Json.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -20,6 +23,133 @@ namespace CCP.Avalonia.Tests;
 /// <summary>WPF's 18+ gate on the first run, and the dashboard/Library clicks that used to do nothing.</summary>
 public sealed class FirstRunGateDeadClickTests
 {
+    [Fact]
+    public async Task StartupBookkeepingRestoresTheSharedProfile()
+    {
+        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        var backup = Path.GetTempFileName();
+        var existed = File.Exists(path);
+        if (existed) File.Copy(path, backup, true);
+        const string sentinel = "{\"Welcomed\":true,\"SeasonStatsSeason\":\"2024-01\"}";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, sentinel);
+            await StartupRunsSilentSeasonBookkeeping();
+            Assert.Equal(sentinel, File.ReadAllText(path));
+        }
+        finally
+        {
+            if (existed) File.Copy(backup, path, true); else File.Delete(path);
+            File.Delete(backup);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SeasonAdvanceDuringProfileAdoptionRollsTheLiveBucket(bool syncReply) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+        var backup = Path.GetTempFileName();
+        var existed = File.Exists(settingsPath);
+        if (existed) File.Copy(settingsPath, backup, true);
+        var snapshotPath = Path.Combine(CorePaths.UserData, "season-recaps", "2098-07.json");
+        var snapshotBackup = Path.GetTempFileName();
+        var snapshotExisted = File.Exists(snapshotPath);
+        if (snapshotExisted) File.Copy(snapshotPath, snapshotBackup, true);
+        var nextSnapshotPath = Path.Combine(CorePaths.UserData, "season-recaps", "2098-08.json");
+        var nextBackup = Path.GetTempFileName();
+        var nextExisted = File.Exists(nextSnapshotPath);
+        if (nextExisted) File.Copy(nextSnapshotPath, nextBackup, true);
+        var oldSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            var s = service.Current;
+            s.Welcomed = true;
+            s.HasAcceptedAgeVerification = true;
+            s.CurrentSeason = s.LastSeasonResetSeen = s.SeasonStatsSeason = "2098-07";
+            s.SeasonSessionsStarted = 3;
+            shell = new MainShellWindow();
+            if (syncReply)
+                ProfileAdopt.ApplySyncResponse(s, JObject.Parse("{\"user\":{\"current_season\":\"2098-08\"}}"), System.DateTime.UtcNow);
+            else
+                ProfileAdopt.AdoptReadBeforeWrite(s, new V2AuthService.V2User { CurrentSeason = "2098-08" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("2098-08", s.SeasonStatsSeason);
+            Assert.Equal("2098-08", s.LastSeasonResetSeen);
+            Assert.Equal(0, s.SeasonSessionsStarted);
+            Assert.Equal(3, SeasonRecapStore.Load("2098-07")!.SessionCount);
+            s.SeasonSessionsStarted++;
+            Assert.Equal("2098-08", s.SeasonStatsSeason);
+
+            // A queued nudge from the old account must not roll the next account's bucket.
+            s.UnifiedId = "old-account";
+            ProfileAdopt.AdoptReadBeforeWrite(s, new V2AuthService.V2User { CurrentSeason = "2098-09" });
+            s.UnifiedId = "new-account";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("2098-08", s.SeasonStatsSeason);
+            Assert.Equal(1, s.SeasonSessionsStarted);
+        }
+        finally
+        {
+            shell?.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SealForReset();
+            CoreSettings.ServiceProvider = oldSettings;
+            if (existed) File.Copy(backup, settingsPath, true); else File.Delete(settingsPath);
+            File.Delete(backup);
+            if (snapshotExisted) File.Copy(snapshotBackup, snapshotPath, true); else File.Delete(snapshotPath);
+            File.Delete(snapshotBackup);
+            if (nextExisted) File.Copy(nextBackup, nextSnapshotPath, true); else File.Delete(nextSnapshotPath);
+            File.Delete(nextBackup);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task StartupRunsSilentSeasonBookkeeping() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+        var backup = Path.GetTempFileName();
+        var existed = File.Exists(settingsPath);
+        if (existed) File.Copy(settingsPath, backup, true);
+        var service = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            service.Current.Welcomed = true;
+            service.Current.HasAcceptedAgeVerification = true;
+            service.Current.CurrentSeason = "2026-08";
+            service.Current.LastSeasonResetSeen = "2026-07";
+            service.Current.SeasonStatsSeason = "";
+            shell = new MainShellWindow();
+            Assert.Equal("2026-08", service.Current.SeasonStatsSeason);
+            Assert.Equal("2026-08", service.Current.LastSeasonResetSeen);
+            Assert.Empty(shell.OwnedWindows);
+        }
+        finally
+        {
+            shell?.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            service.SealForReset();
+            CoreSettings.ServiceProvider = oldSettings;
+            if (existed) File.Copy(backup, settingsPath, true); else File.Delete(settingsPath);
+            File.Delete(backup);
+        }
+        return Task.CompletedTask;
+    });
+
+
     [Fact]
     public Task ClosingTheGateUnticked_HandsBackAndExits() => Run(welcomed: false, accepted: false, async shell =>
     {
