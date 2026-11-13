@@ -285,6 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static Task? _portalBind;
         private static bool _portalFailed, _portalAllowed;
         private static DispatcherTimer? _portalWatch;
+        private static readonly System.Collections.Generic.Queue<Action> PortalStartQueue = new();
 
         // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
         internal static bool KeepPortalBound =>
@@ -299,7 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool PortalLeashSafetyNeeded => PortalHoldLive;
 
         private static bool AnyEffectRunning =>
-            CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
+            PortalStartQueue.Count > 0 || CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning
             || Views.Overlays.BlinkTrainerSession.IsRunning;
 
         /// <summary>Every desktop-effect start goes through here. <paramref name="start"/> must re-check
@@ -383,14 +384,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal static void StartEffect(Action start)
         {
-            if ((!_portalAllowed && PortalPanicShortcut.BindForTests == null) || PortalPanicShortcut.IsBound || _portalFailed || (!PanicRouteWanted && !PortalLeashSafetyNeeded)
-                || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))))
+            if (PortalStartQueue.Count == 0 && ((!_portalAllowed && PortalPanicShortcut.BindForTests == null)
+                || (PortalPanicShortcut.IsBound && _portalBind is not { IsCompleted: false }) || _portalFailed
+                || (!PanicRouteWanted && !PortalLeashSafetyNeeded)
+                || (PortalPanicShortcut.BindForTests == null && (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"))))))
             {
                 start();
                 return;
             }
+            PortalStartQueue.Enqueue(start);
+            if (PortalStartQueue.Count != 1) return;
             _portalBind ??= BindPortalAsync();
-            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(start), TaskScheduler.Default);
+            // Post as soon as binding completes, including an already-completed bind. Leaving the
+            // continuation on the thread pool can keep the portal alive after the last effect stops.
+            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                while (PortalStartQueue.Count > 0)
+                {
+                    try { PortalStartQueue.Dequeue()(); }
+                    catch (Exception ex) { Serilog.Log.Error(ex, "Deferred effect start failed"); }
+                }
+            }), System.Threading.CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
         /// <summary>The bound panic key cannot fire on this desktop (listener thread): say so, never only in the
