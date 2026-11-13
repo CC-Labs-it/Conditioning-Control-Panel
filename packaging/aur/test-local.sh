@@ -17,10 +17,12 @@ cp "$here/PKGBUILD" "$tmp/build/"
 ln "$1" "$tmp/build/" 2>/dev/null || cp "$1" "$tmp/build/"
 (cd "$tmp/build" && PKGDEST="$tmp/build" BUILDDIR="$tmp/build" SRCDEST="$tmp/build" LOGDEST="$tmp/build" SRCPKGDEST="$tmp/build" makepkg -f --skipchecksums --nodeps >&2)
 pkg=$(ls "$tmp/build"/conditioning-control-panel-bin-"$ver"-*.pkg.tar.*)
+pacman -Qlp "$pkg" | grep -F " /usr/share/licenses/conditioning-control-panel-bin/RT-ENGINE-NOTICES.txt"
 tar -xf "$pkg" -C "$tmp/root"
 id=io.github.CodeBambi.ConditioningControlPanel
 for f in usr/bin/conditioning-control-panel usr/share/applications/$id.desktop usr/share/metainfo/$id.metainfo.xml \
          usr/share/icons/hicolor/256x256/apps/$id.png usr/share/licenses/conditioning-control-panel-bin/LICENSE usr/share/licenses/conditioning-control-panel-bin/THIRD-PARTY-NOTICES.txt \
+         usr/share/licenses/conditioning-control-panel-bin/RT-ENGINE-NOTICES.txt \
          opt/conditioning-control-panel/CCP.Avalonia opt/conditioning-control-panel/Resources/web; do
   test -e "$tmp/root/$f" || { echo "missing in package: /$f" >&2; exit 1; }
 done
