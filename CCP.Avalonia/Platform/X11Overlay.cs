@@ -96,6 +96,9 @@ internal static class X11Overlay
 
     private static readonly object Gate = new();
 
+    // Serialize X grab setup with overlay requests that inspect the shared X error flag.
+    internal static void Synchronize(Action action) { lock (Gate) action(); }
+
     // Held in a static field on purpose: Xlib keeps the raw function pointer, so letting the
     // delegate be collected turns the next X error into a jump into freed memory.
     private static readonly XErrorHandler ErrorHandler = OnXError;
