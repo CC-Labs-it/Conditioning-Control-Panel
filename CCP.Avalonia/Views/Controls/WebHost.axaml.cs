@@ -156,6 +156,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool GateScrolller { get; set; } = true;
 
+        // The dashboard browser is subject to the app offline setting, including held requests.
+        public bool BlockWhenOffline { get; set; }
+
         /// <summary>Scrolller requests that left with the honest user-agent (a headless test's view).</summary>
         internal int ScrolllerRewrites { get; private set; }
 
@@ -587,6 +590,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            if (BlockWhenOffline && CoreSettings.Current.OfflineMode && Source is { IsAbsoluteUri: true, Scheme: not "about" })
+            {
+                CancelHeldNavigation();
+                _scrolllerGate = gated;
+                return;
+            }
             _scrolllerGate = gated;
             _pendingNavigation?.TrySetResult(gated);
             var src = Source;
