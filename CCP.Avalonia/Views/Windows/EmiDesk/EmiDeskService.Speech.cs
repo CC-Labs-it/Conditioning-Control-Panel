@@ -87,6 +87,51 @@ internal sealed partial class EmiDeskService
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bark min-gap stamp failed"); }
     }
+    // #4071, WPF EmiDeskService.cs:123-195 THE AVATAR OWNS VOICE: the tube is about to talk, so EMI holds to
+    // blink-only faces until its bubble and voice end, plus the moment's own tail. Armed even while she is
+    // muted or away. A one-second local poll that runs only while a hold is live (no server call).
+    private DispatcherTimer? _avatarHoldTimer;
+    private readonly System.Collections.Generic.HashSet<string> _voiceHolds = new(StringComparer.Ordinal);
+    // The tube that spoke last is the one the hold waits on (WPF has one App.AvatarWindow).
+    private global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow? _speakingTube;
+    private bool TubeVoiceLive() =>
+        (_speakingTube ?? global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live)?.VoiceHoldLive == true;
+    internal bool AvatarHoldPolling => _avatarHoldTimer != null;
+    /// <summary>The tube's speech chokepoints call this the instant before a bubble goes up, muted or not.</summary>
+    internal void NoteAvatarSpeaking(global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow? tube = null)
+    {
+        if (tube != null) _speakingTube = tube;
+        try { ArmVoiceHold("avatarSpeaking"); }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold arm failed"); }
+    }
+    private void ArmVoiceHold(string momentId)
+    {
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => ArmVoiceHold(momentId)); return; }
+        if (_voiceHolds.Add(momentId)) Fire(momentId);
+        if (_avatarHoldTimer != null) return;
+        _avatarHoldTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(1) };
+        _avatarHoldTimer.Tick += OnAvatarHoldTick;
+        _avatarHoldTimer.Start();
+    }
+    private void OnAvatarHoldTick(object? sender, EventArgs e) => CheckAvatarVoiceHold();
+    /// <summary>Release every voice hold once the tube has neither a bubble up nor a clip playing.</summary>
+    internal void CheckAvatarVoiceHold()
+    {
+        try
+        {
+            if (TubeVoiceLive()) return;
+            if (_avatarHoldTimer != null)
+            {
+                _avatarHoldTimer.Stop();
+                _avatarHoldTimer.Tick -= OnAvatarHoldTick;
+                _avatarHoldTimer = null;
+            }
+            foreach (var id in _voiceHolds) LineEngine.ReleaseHold(id);
+            _voiceHolds.Clear();
+            _speakingTube = null;
+        }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold tick failed"); }
+    }
     private void ScheduleGreeting(string? why)
     {
         CancelGreeting();
