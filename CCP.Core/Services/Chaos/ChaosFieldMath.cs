@@ -89,6 +89,10 @@ public static class ChaosFieldMath
         s.Score += pts;
         return pts;
     }
+    /// <summary>WPF ChaosModeService.cs:1921: each Bound half costs half a normal channel.</summary>
+    public static double DefuseCostFor(EffectBubbleSpec? spec) =>
+        spec?.IsBoundHalf == true ? ChaosTuning.DEFUSE_COST_BOUND : ChaosTuning.DEFUSE_COST;
+
     /// <summary>
     /// WPF OnDefused (:1984), the state change in WPF order: a held snap pays its focus cost
     /// (DEFUSE_COST; a freeze makes it free, <paramref name="free"/>), Defused and combo count,
@@ -99,7 +103,7 @@ public static class ChaosFieldMath
     public static (double Points, double LastBreath, double Slowburn) ApplyDefuse(ChaosRunState s,
         EffectBubbleSpec spec, double fuseSecLeft, bool viaChannel, bool free, double pendulum, double chanceFlip)
     {
-        if (viaChannel && !free) s.Focus -= ChaosTuning.DEFUSE_COST;
+        if (viaChannel && !free) s.Focus -= DefuseCostFor(spec);
         s.Defused++;
         s.Combo++;
         s.Heat = Math.Min(1.0, s.Heat + 0.07);

@@ -18,6 +18,23 @@ public sealed class ChaosBoundPairsTests
         return (pairs, a, b);
     }
 
+    [Fact] public void Bound_channels_cost_half_and_free_snaps_cost_nothing()
+    {
+        var (bound, _) = ChaosBubbleVariants.BuildBoundPair(1);
+        var plain = new EffectBubbleSpec { IsLive = true };
+        Assert.Equal(15, ChaosFieldMath.DefuseCostFor(bound));
+        Assert.Equal(30, ChaosFieldMath.DefuseCostFor(plain));
+        var state = new ChaosRunState(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+        state.Focus = 100;
+        ChaosFieldMath.ApplyDefuse(state, bound, 3, true, false, 1, 1);
+        Assert.Equal(85, state.Focus);
+        ChaosFieldMath.ApplyDefuse(state, bound, 3, true, true, 1, 1);
+        ChaosFieldMath.ApplyDefuse(state, bound, 3, false, false, 1, 1);
+        Assert.Equal(85, state.Focus);
+        ChaosFieldMath.ApplyDefuse(state, plain, 3, true, false, 1, 1);
+        Assert.Equal(55, state.Focus);
+    }
+
     [Fact] public void Both_resolve_inside_window()
     {
         var (p, a, b) = Pair(); var now = DateTime.UtcNow; int id = a.Spec!.PairId;
