@@ -439,6 +439,15 @@ public sealed class PossessionShellTests
         AvApp.Possession = rig.Director;
         rig.Shell.ShowTab("settings");
         Frame();
+        // The real deck picks at random (unseeded, as WPF). At Settle it deals a transform effect (nudge,
+        // breathe: the control is leased) or the typo text effect (no lease, one letter swapped), about one
+        // pick in eight. Remember every control's text so the panic check covers both kinds. Keys repeat
+        // (template parts like RootBorder), so the snapshot is per control.
+        var textBefore = new Dictionary<TextBlock, string?>(ReferenceEqualityComparer.Instance);
+        foreach (var t in ((IPossessionHost)rig.Shell).Targets)
+            if (t.Visual is Control c && TypoHeadEffect.FindText(c) is { } tb) textBefore[tb] = tb.Text;
+        var started = new List<(string Id, string? Key)>();
+        rig.Director.EffectStarted += (id, key, _) => started.Add((id, key));
         rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
         Frame();
         Assert.True(rig.Director.IsHaunting);
@@ -451,18 +460,33 @@ public sealed class PossessionShellTests
             Dispatcher.UIThread.RunJobs();
         }
         Assert.Equal(1, rig.Director.LiveEffectCount);
+        var (effectId, key) = Assert.Single(started);
         var layer = rig.Shell.PossessionGhostLayer!;
         Assert.Contains(layer.Children, c => c is Border);   // the ember charge, before anything moves
 
         for (int ms = 0; ms <= 600; ms += 50) { rig.Frames.Frame(TimeSpan.FromMilliseconds(5000 + ms)); Dispatcher.UIThread.RunJobs(); }
         var leased = ((IPossessionHost)rig.Shell).Targets.Where(t => PossessionLease.IsLeased(t.Visual as Control)).ToList();
-        Assert.Single(leased);
+        var victimTexts = ((IPossessionHost)rig.Shell).Targets
+            .Where(t => t.Key == key && t.Visual is Control)
+            .Select(t => TypoHeadEffect.FindText((Control)t.Visual))
+            .OfType<TextBlock>().Where(textBefore.ContainsKey).Distinct().ToList();
+        if (effectId == "typo")
+        {
+            Assert.Empty(leased);   // a text effect leaves the transform alone
+            Assert.Single(victimTexts, tb => tb.Text != textBefore[tb]);   // the haunt really wrote one letter
+        }
+        else
+        {
+            Assert.Contains(effectId, new[] { "nudge", "breathe" });   // the Settle transform effects
+            Assert.Equal(key, Assert.Single(leased).Key);
+        }
 
         var panic = PanicSurfaces.All.Single(s => s.Id == "possession");
         panic.Stop(rig.Shell);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, rig.Director.LiveEffectCount);
-        Assert.False(PossessionLease.IsLeased(leased[0].Visual as Control));
+        Assert.DoesNotContain(((IPossessionHost)rig.Shell).Targets, t => PossessionLease.IsLeased(t.Visual as Control));
+        Assert.All(victimTexts, tb => Assert.Equal(textBefore[tb], tb.Text));   // every letter given back
         Assert.DoesNotContain(layer.Children, c => c is Border);   // outline and charge stripped
     });
 
