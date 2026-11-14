@@ -331,11 +331,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _player.EndReached += (_, _) =>
             {
-                var len = _player?.Length ?? 0;
-                if (len > 0 && _cutClock == null) Interlocked.Exchange(ref _watchedMs, len);
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
                     if (_player != live) return;
+                    // Read the length here, not in the event: a libvlc call inside its own event waits on the
+                    // input lock a concurrent Stop holds while it joins this thread (restack fixw4d).
+                    var len = live?.Length ?? 0;
+                    if (len > 0 && _cutClock == null) Interlocked.Exchange(ref _watchedMs, len);
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
                     OnNaturalVideoEnd();

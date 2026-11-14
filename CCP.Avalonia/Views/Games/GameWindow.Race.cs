@@ -35,9 +35,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Spark banking (WPF DtrhMetaBridge.AwardRun, real state: ChaosMeta.AwardRunRewards); tests swap it.</summary>
         internal static Func<ChaosMeta.ChaosRunRewardInput, int> RaceBankSparks = input => ChaosMeta.AwardRunRewards(input);
 
-        private bool IsRace => string.Equals(Spec.Id, "race", StringComparison.OrdinalIgnoreCase);
+        private bool IsRace => string.Equals(Spec.Id, "raceclassic", StringComparison.OrdinalIgnoreCase);
         private readonly RaceRunLifecycle _raceRun = new();
         private DispatcherTimer? _raceHeartbeatWatch;
+        private IDisposable? _raceExitWatchdog;
         private DateTime _raceLastHeartbeatUtc;
         private int[] _raceOwnedTracks = Array.Empty<int>();
         private bool _racePinged, _raceExiting, _raceStarted, _raceDisposed;
@@ -130,6 +131,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
         }
 
+        // WPF CaucusHostService.CloseActive: a ready page gets time to settle its run.
+        private void CloseRaceForPanic()
+        {
+            try
+            {
+                if (IsReady && !_raceExiting)
+                {
+                    _raceExiting = true;
+                    Post(new { type = "exit-request" });
+                    ArmRaceExitWatchdog();
+                }
+                else Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("RaceHost: exit-request failed: {E}", ex.Message);
+                Close();
+            }
+        }
+
+        private void ArmRaceExitWatchdog()
+        {
+            _raceExitWatchdog?.Dispose();
+            _raceExitWatchdog = DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
+        }
+
         /// <summary>WPF OnPageReady (:255): init with the race's settings block, then the manifest.</summary>
         private void OnRacePageReady()
         {
@@ -159,6 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 masterVolume = RaceSafe(() => CoreSettings.Current.MasterVolume, 100),
                 // Reduced and Off both read as reduced motion: the page has no third state.
                 reducedMotion = RaceSafe(() => CoreSettings.Current.MotionLevel != MotionLevel.Full, false),
+                // The page plays the bundled host cues when this host does not handle sfx.
+                hostSfx = false,
                 // WPF sends true (:278): only a host that owns the levels browser offers it; not yet here.
                 cloud = false,
                 racingTracks = RacingAccess.OwnedTracks,
@@ -299,6 +328,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF DisposeAll (:686): the one funnel every exit reaches (Closed). Idempotent.</summary>
         private void DisposeRace()
         {
+            _raceExitWatchdog?.Dispose();
+            _raceExitWatchdog = null;
             DtrhLoomStore.Changed -= OnRaceLoomChanged;
             RaceMilestonePopup?.Close();
             if (!_raceStarted || _raceDisposed) return;

@@ -7,6 +7,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using LibVLCSharp.Shared;
 using Serilog;
@@ -21,6 +22,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private readonly object _gate = new();
         private Media? _media;
         private MediaPlayer? _player;
+        /// <summary>The media's length parse, still running in libvlc's preparser for up to 2 s after Load.</summary>
+        private Task _parse = Task.CompletedTask;
+        /// <summary>The last Unload's native release, for tests.</summary>
+        internal Task Released { get; private set; } = Task.CompletedTask;
+        /// <summary>How long a release waits for that parse before it leaks the media instead of freeing it.</summary>
+        internal const int ParseSettleMs = 5000;
         /// <summary>True while a Stop, a restart or a teardown is why playback ends (WPF _stopping).</summary>
         private volatile bool _stopping;
         /// <summary>Latch: an ending is reported once (WPF _endedFired).</summary>
@@ -70,13 +77,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             media.AddOption(LibVlcAudio.NoVideo);
             // The length before the first play, without blocking the UI thread: the parse finishes in the
             // background and the 250 ms track-clock carries DurationSec to the page once it is known.
-            try { _ = media.Parse(MediaParseOptions.ParseLocal, 2000); }
+            // Kept, so Unload never frees the media while libvlc's preparser still holds it (restack fixw4d).
+            var parse = Task.CompletedTask;
+            try { parse = LibVlcAudio.ParseAsync(media, MediaParseOptions.ParseLocal, 2000); }
             catch (Exception ex) { Log.Debug("RaceTrackPlayer: parse: {E}", ex.Message); }
             var player = new MediaPlayer(media);
             player.EndReached += OnEndReached;
             player.EncounteredError += OnError;
             player.Playing += OnPlaying;
-            lock (_gate) { _media = media; _player = player; }
+            lock (_gate) { _media = media; _player = player; _parse = parse; }
             _stopping = false;
             _endedFired = false;
             _started = false;
@@ -195,8 +204,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void Unload()
         {
             _stopping = true;
-            MediaPlayer? player; Media? media;
-            lock (_gate) { player = _player; media = _media; _player = null; _media = null; }
+            MediaPlayer? player; Media? media; Task parse;
+            lock (_gate) { player = _player; media = _media; parse = _parse; _player = null; _media = null; _parse = Task.CompletedTask; }
             if (player == null && media == null) return;
             if (player != null)
             {
@@ -205,10 +214,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 player.Playing -= OnPlaying;
             }
             // Never stop or dispose a player on a libvlc event thread, and never make the UI wait on it.
-            ThreadPool.QueueUserWorkItem(_ =>
+            // The media waits for its length parse (LibVlcAudio.ParseAsync resumes off libvlc's thread):
+            // freeing it mid-parse released it under the preparser. A parse that never settles leaks the
+            // media rather than freeing a live one (as Core VideoMetadataCache does).
+            Released = Task.Run(async () =>
             {
                 try { player?.Stop(); } catch { }
                 try { player?.Dispose(); } catch (Exception ex) { Log.Debug("RaceTrackPlayer.Unload player: {E}", ex.Message); }
+                try { await parse.WaitAsync(TimeSpan.FromMilliseconds(ParseSettleMs)).ConfigureAwait(false); }
+                catch (TimeoutException) { Log.Debug("RaceTrackPlayer.Unload: leaking a media whose parse never settled"); return; }
+                catch (Exception ex) { Log.Debug("RaceTrackPlayer.Unload parse: {E}", ex.Message); }
                 try { media?.Dispose(); } catch (Exception ex) { Log.Debug("RaceTrackPlayer.Unload media: {E}", ex.Message); }
             });
         }
