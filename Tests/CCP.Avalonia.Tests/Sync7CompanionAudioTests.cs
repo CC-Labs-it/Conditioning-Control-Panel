@@ -103,6 +103,39 @@ public sealed class Sync7CompanionAudioTests
     });
 
     [Fact]
+    public void PriorityGiggleTagsPlaybackWithItsCaller() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var (provider, playback, modId, modPackage) = (CoreSettings.ServiceProvider, CoreAudio.PlayStoppableProvider, CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider);
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        service.Current.MasterVolume = 50;
+        service.Current.AvatarMuted = false;
+        var root = Directory.CreateTempSubdirectory("ccp-giggle-").FullName;
+        var sounds = Path.Combine(root, "resources", "sounds");
+        Directory.CreateDirectory(sounds);
+        for (var i = 5; i <= 8; i++) File.WriteAllBytes(Path.Combine(sounds, $"giggle{i}.mp3"), new byte[] { 1 });
+        CoreMods.ActiveModIdProvider = () => "test-mod";
+        CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "test-mod" }, root, false);
+        string? tag = null;
+        CoreAudio.PlayStoppableProvider = (_, _, name, _, _) => { tag = name; return () => { }; };
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            tube.GigglePriority("hello", aiGenerated: false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("giggle (Sync7CompanionAudioTests.PriorityGiggleTagsPlaybackWithItsCaller)", tag);
+        }
+        finally
+        {
+            tube.Close();
+            (CoreSettings.ServiceProvider, CoreAudio.PlayStoppableProvider, CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider) = (provider, playback, modId, modPackage);
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
     public void AudioFallbackReadsTheActiveModAndRespectsDisabledVoiceLines() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
