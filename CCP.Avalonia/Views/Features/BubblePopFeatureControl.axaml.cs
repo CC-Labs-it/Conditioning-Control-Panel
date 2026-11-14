@@ -53,8 +53,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // WPF ApplyFeatureArt: the hero strip and side plate, repainted on a mod switch.
             Helpers.ModArt.BindFeaturePlates(this, "features/Bubble_pop.png", HeroArt, SideArt);
             RowGetBubblesV2.RowChanged += (_, _) => RebuildMotionPicker();
-            // WPF includes the Brain Drain bubble in this prize (BubbleService.cs:1159,1202).
-            // Keep the offer out of reach until that effect is implemented on this head.
+            ChkBrainDrainBubble.IsCheckedChanged += ChkBrainDrainBubble_Changed;
+            // WPF includes the Brain Drain melt in this prize; keep the offer gated until it can fire here.
             RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box", available: false);
 
             LoadFromSettings();
@@ -158,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtTriggerEggHint.Text = Loc.GetF("label_trigger_bubbles_egg_hint", persona);
 
                 ChkTriggers.IsChecked = s.BubbleTriggersEnabled;
-                TriggerOptionsPanel.IsVisible = s.BubbleTriggersEnabled;
+                TriggerOptionsPanel.IsVisible = s.BubbleTriggersEnabled || RenderProof.Rendering;
                 SliderTriggerChance.Value = s.BubbleTriggerChance;
                 TxtTriggerChance.Text = $"{s.BubbleTriggerChance}%";
                 var ids = s.BubbleTriggerVariants ?? new List<string>();
@@ -167,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 // WPF builds the items on GrantsChanged and only calls SelectMotion on a settings tick.
                 if (CmbMotion.Items.Count == 0) RebuildMotionPicker();
                 SelectMotion(s.BubbleMotionStyle);
+                ChkBrainDrainBubble.IsChecked = s.BubbleBrainDrainEnabled;
                 UpdateAmbientXpBudgetLine();
             }
             finally { _isLoading = false; }
@@ -189,6 +190,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
             bool spiral = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleSpiralIn);
             MotionRow.IsVisible = rain || spiral;
+            // The Brain Drain trigger and melt payload are not wired on this head yet.
+            ChkBrainDrainBubble.IsVisible = false;
             V2Box.IsVisible = rain || spiral || !RowGetBubblesV2.IsRowHidden;
             var wasLoading = _isLoading;
             _isLoading = true;
@@ -263,10 +266,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.BubbleTriggersEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggerChance) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggerVariants) ||
-                e.PropertyName == nameof(AppSettings.BubbleMotionStyle))
+                e.PropertyName == nameof(AppSettings.BubbleMotionStyle) ||
+                e.PropertyName == nameof(AppSettings.BubbleBrainDrainEnabled))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
             }
+        }
+
+        private void ChkBrainDrainBubble_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.BubbleBrainDrainEnabled = ChkBrainDrainBubble.IsChecked ?? false;
+            CoreSettings.Save();
         }
 
         private void ChkEnable_Changed(object? sender, RoutedEventArgs e)

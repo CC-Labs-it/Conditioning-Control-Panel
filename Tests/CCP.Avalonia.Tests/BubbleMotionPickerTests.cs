@@ -31,20 +31,21 @@ public sealed class BubbleMotionPickerTests
         LocalizationManager.Instance.SetLanguage("en");
         var seam = PrizeOwnership.IsGranted;
         var saved = CoreSettings.Current.BubbleMotionStyle;
+        var savedBrain = CoreSettings.Current.BubbleBrainDrainEnabled;
         ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
         Window? host = null;
         try
         {
-            // Nothing owned and the offer withheld on this head: the whole box collapses.
+            // Exercise the future offer configuration while it is gated on this head.
             PrizeOwnership.IsGranted = _ => false;
             var bare = new BubblePopFeatureControl();
             Assert.False(bare.FindControl<Border>("V2Box")!.IsVisible);
-            // With the offer enabled, WPF hides the picker but keeps the purchase row.
             bare.FindControl<V2GetItRow>("RowGetBubblesV2")!.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
             Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
             Assert.False(bare.FindControl<Control>("MotionRow")!.IsVisible);
 
             CoreSettings.Current.BubbleMotionStyle = BubbleMotionStyle.FloatUp;
+            CoreSettings.Current.BubbleBrainDrainEnabled = false;
             PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleSpiralIn;
             shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
             shell.Show();
@@ -70,9 +71,17 @@ public sealed class BubbleMotionPickerTests
             Assert.Equal(BubbleMotionStyle.Mix, (BubbleMotionStyle)((ComboBoxItem)liveCmb.SelectedItem!).Tag!);
             Assert.Same(firstItem, liveCmb.Items[0]);
 
+            var brain = bubbles.FindControl<CheckBox>("ChkBrainDrainBubble")!;
+            Assert.False(brain.IsChecked);
+            brain.IsChecked = true;
+            Assert.True(CoreSettings.Current.BubbleBrainDrainEnabled);
+            CoreSettings.Current.BubbleBrainDrainEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(live.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsChecked);
             ConditioningControlPanel.CoreSession.IsSessionRunningProvider = () => true;
             shell.RefreshSessionFeatureLock();
             Assert.False(cmb.IsEnabled);
+            Assert.True(brain.IsEnabled);
             ConditioningControlPanel.CoreSession.IsSessionRunningProvider = () => false;
             shell.RefreshSessionFeatureLock();
             Assert.True(cmb.IsEnabled);
@@ -82,6 +91,7 @@ public sealed class BubbleMotionPickerTests
             ConditioningControlPanel.CoreSession.IsSessionRunningProvider = null;
             PrizeOwnership.IsGranted = seam;
             CoreSettings.Current.BubbleMotionStyle = saved;
+            CoreSettings.Current.BubbleBrainDrainEnabled = savedBrain;
             shell?.Close();
             host?.Close();
             Dispatcher.UIThread.RunJobs();
@@ -110,11 +120,12 @@ public sealed class BubbleMotionPickerTests
             var box = panel.FindControl<Border>("V2Box")!;
             host = new Window { Content = panel };
             host.Show();
-            Assert.False(box.IsVisible);
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             // The same accepted snapshot a purchase reply supplies, arriving off the UI thread.
             Task.Run(() => PrizeOwnership.ApplySnapshot("bubble-owner", 1, new[] { PrizeOwnership.BubbleRain })).GetAwaiter().GetResult();
             Dispatcher.UIThread.RunJobs();
             Assert.True(box.IsVisible);
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             Assert.Equal(new[] { BubbleMotionStyle.FloatUp, BubbleMotionStyle.Rain, BubbleMotionStyle.Mix },
                 picker.Items.OfType<ComboBoxItem>().Select(i => (BubbleMotionStyle)i.Tag!).ToArray());
             Assert.Equal(BubbleMotionStyle.SpiralIn, settings.BubbleMotionStyle); // repaint must not save fallback
@@ -126,6 +137,7 @@ public sealed class BubbleMotionPickerTests
             CoreAccount.UnifiedUserId = "other-owner";
             Dispatcher.UIThread.RunJobs();
             Assert.False(box.IsVisible);
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             settings.UnifiedId = "bubble-owner";
             CoreAccount.UnifiedUserId = "bubble-owner";
             Dispatcher.UIThread.RunJobs();
@@ -140,6 +152,7 @@ public sealed class BubbleMotionPickerTests
             Assert.DoesNotContain(changed?.GetInvocationList() ?? System.Array.Empty<System.Delegate>(), d => ReferenceEquals(d.Target, panel));
             host.Content = panel;
             Assert.False(box.IsVisible); // reload catches the snapshot missed while detached
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
             Assert.Single(picker.Items);
         }
         finally

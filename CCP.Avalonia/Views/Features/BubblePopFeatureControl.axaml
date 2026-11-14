@@ -272,6 +272,7 @@
                                     <CheckBox x:Name="ChkTypeGlitch"     Tag="glitch"     Content="Glitch"      Foreground="White" Margin="0,0,16,8"/>
                                     <CheckBox x:Name="ChkTypeCascade"    Tag="htlink"     Content="Cascade"     Foreground="White" Margin="0,0,16,8"/>
                                     <CheckBox x:Name="ChkTypeVideo"      Tag="video"      Content="Video"       Foreground="White" Margin="0,0,16,8"/>
+                                    <CheckBox x:Name="ChkBrainDrainBubble" Content="{loc:Str setting_bubble_braindrain}" ToolTip.Tip="{loc:Str tooltip_bubble_braindrain}" Foreground="White" Margin="0,0,16,8" IsVisible="False"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Grid>
