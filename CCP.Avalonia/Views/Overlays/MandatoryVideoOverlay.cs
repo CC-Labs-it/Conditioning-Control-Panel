@@ -122,14 +122,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF ChaosModeService.cs:816 and VideoService.cs:5818: retry after activation settles.
         internal static Action<Action, TimeSpan> ScheduleGameRestack = (action, delay) => DispatcherTimer.RunOnce(action, delay);
-        internal static void RestackOnVideoStart()
-        {
-            Instance.RestackGameAndTargets();
-            ScheduleGameRestack(Instance.RestackGameAndTargets, TimeSpan.FromMilliseconds(60));
-        }
-        internal static void RestackOnVideoClick() =>
-            ScheduleGameRestack(Instance.RestackGameAndTargets, TimeSpan.FromMilliseconds(50));
-
         // The target canvas must be a separate window to sit above the gameplay band.
         // The native region keeps empty portions click-through; refuse the separate window if unsupported.
         internal static Func<Window, PixelRect, bool> PrepareAttentionWindow = (w, bounds) =>
@@ -139,23 +131,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<Window> RaiseAttentionWindow = w => X11Overlay.RaiseWithoutActivation(w);
         // Test seam: surface creation and restack still take the production path without a decoder.
         internal static Action? StartPlaybackForTests;
-
-        private void RestackGameAndTargets()
-        {
-            // WPF ChaosModeService.cs:745: gameplay rides above the video, except while a fallback
-            // target shares the opaque video window (then the video must sit on top until it retires).
-            if (!_surfaces.Any(x => x.AttentionWindow == null && x.Layer.Children.Count > 0))
-                ChaosRunHost.RaiseGameLayerAboveVideo();
-            foreach (var x in _surfaces)
-                if (x.Layer.Children.Count > 0)
-                {
-                    // A fallback target shares the opaque video window, so the whole video must
-                    // sit above gameplay until that target retires (WPF VideoService.cs:5822).
-                    var w = x.AttentionWindow ?? x.Window;
-                    if (w.IsVisible)
-                        try { RaiseAttentionWindow(w); } catch (Exception ex) { Log.Debug("Attention raise: {E}", ex.Message); }
-                }
-        }
 
         private void EnsureAttentionWindow(Surface x)
         {

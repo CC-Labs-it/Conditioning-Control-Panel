@@ -159,7 +159,7 @@ public sealed class ChaosVideoRestackTests
     {
         // No skip: CI installs libvlc on Linux (build.yml:330) and the Windows head bundles it.
         _ = new LibVlcAudio("--aout=dummy");
-        await AvaloniaTestDispatcher.RunAsync(() =>
+        await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -232,6 +232,8 @@ public sealed class ChaosVideoRestackTests
                 attention.MouseUp(at, MouseButton.Left);
                 Assert.Equal(0, o.LiveTargets);
                 o.Step(settings.AttentionLifespan + 1, 0);
+                // A caught target remains in the input region until its 320 ms fade completes.
+                for (var i = 0; i < 100 && regions[^1].Length != 0; i++) await Task.Delay(20);
                 Assert.Empty(regions[^1]);
                 MandatoryVideoOverlay.SetAttentionRegion = (_, _) => false;
                 paused.SetValue(o, true);
@@ -259,7 +261,6 @@ public sealed class ChaosVideoRestackTests
                 MandatoryVideoOverlay.SetAttentionRegion = oldRegion;
                 MandatoryVideoOverlay.RaiseAttentionWindow = oldAttentionRaise;
             }
-            return Task.CompletedTask;
         });
     }
 
