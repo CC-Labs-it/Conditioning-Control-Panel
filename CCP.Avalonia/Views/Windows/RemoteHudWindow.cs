@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.RemoteHud;
@@ -25,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Red = Color.FromRgb(0xFF, 0x54, 0x68), Pink = Color.FromRgb(0xFF, 0x69, 0xB4), Ink = Color.FromRgb(0x1A, 0x1A, 0x2E);
 
         private readonly Func<RemoteRelay?> _relay;
-        private readonly Action _onLocalStop;
+        private readonly Func<bool> _onLocalStop;
         private readonly Func<Window?> _anchor;
         private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
         private readonly Border _pill, _tag;
@@ -37,9 +38,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private string? _confirm, _lastAction;
 
         /// <summary>Render proof (--render-all): no relay, the anonymous headline.</summary>
-        internal RemoteHudWindow() : this(() => null, () => { }, () => null) { Paint(); }
+        internal RemoteHudWindow() : this(() => null, () => false, () => null) { Paint(); }
 
-        public RemoteHudWindow(Func<RemoteRelay?> relay, Action onLocalStop, Func<Window?> anchor)
+        /// <summary>Clock for elapsed time, the 1.6 s confirmation and the Stop debounce; tests step it.</summary>
+        internal TimeProvider Clock = TimeProvider.System;
+        // Per-window test seam for a second monitor; production asks Avalonia for the anchor's screen.
+        internal Func<Window, Screen?>? ScreenForAnchor;
+
+        /// <param name="onLocalStop">The local half of Stop; true only when the panic key's full reach ran (Core
+        /// VoicePanicReach), so the pill says "Stopped" only when something stopped here.</param>
+        public RemoteHudWindow(Func<RemoteRelay?> relay, Func<bool> onLocalStop, Func<Window?> anchor)
         {
             (_relay, _onLocalStop, _anchor) = (relay, onLocalStop, anchor);
             WindowDecorations = WindowDecorations.None;
@@ -90,6 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Content = _pill;
             SizeChanged += (_, _) => Place();
             _tick.Tick += (_, _) => Refresh();
+            // WPF Closed += Teardown (:224): a window manager close ends the tick, so a late Refresh never shows it again.
+            Closed += (_, _) => { _disposed = true; _tick.Stop(); };
         }
 
         internal string Headline => _headline.Text ?? "";
@@ -103,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var r = _relay();
             bool connected = RemoteHudRules.ShouldShow(r?.IsActive == true, r?.ControllerConnected == true);
             if (r?.IsActive != true) _lastAction = null;   // WPF ResetV2SessionState clears LastActionLabel
-            if (connected && !_wasConnected) (_seenSinceUtc, _collapsed, _lastStopUtc, _confirm) = (DateTime.UtcNow, false, null, null);
+            if (connected && !_wasConnected) (_seenSinceUtc, _collapsed, _lastStopUtc, _confirm) = (Clock.GetUtcNow().UtcDateTime, false, null, null);
             _wasConnected = connected;
             if (!connected)
             {
@@ -139,7 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var name = RemoteHudRules.DisplayName(r?.ControllerName);
             _initial.Text = RemoteHudRules.InitialFrom(name);
             _headline.Text = name != null ? Loc.GetF("remote_hud_has_remote", name) : Loc.Get("remote_hud_someone");
-            var now = DateTime.UtcNow;
+            var now = Clock.GetUtcNow().UtcDateTime;
             if (_confirm != null && now < _confirmUntilUtc) _subline.Text = _confirm;
             else
             {
@@ -167,7 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!IsVisible) return;
             try
             {
-                var screen = (_anchor() is { } a ? Screens.ScreenFromWindow(a) : null) ?? Screens.Primary;
+                var screen = (_anchor() is { } a ? (ScreenForAnchor?.Invoke(a) ?? Screens.ScreenFromWindow(a)) : null) ?? Screens.Primary;
                 if (screen == null) return;
                 var wa = screen.WorkingArea;
                 double w = Bounds.Width > 0 ? Bounds.Width : 360;
@@ -195,22 +205,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task OnSignalAsync(string kind, string labelKey)
         {
             if (_disposed) return;
-            bool isStop = kind == "stop";
+            bool isStop = kind == "stop", stoppedHere = false;
             if (isStop)
             {
-                var now = DateTime.UtcNow;
+                var now = Clock.GetUtcNow().UtcDateTime;
                 if (!RemoteHudRules.StopPressAccepted(_lastStopUtc, now)) return;
                 _lastStopUtc = now;
-                try { _onLocalStop(); } catch (Exception ex) { Serilog.Log.Warning("RemoteHud: local stop failed: {E}", ex.Message); }
+                try { stoppedHere = _onLocalStop(); } catch (Exception ex) { Serilog.Log.Warning("RemoteHud: local stop failed: {E}", ex.Message); }
             }
             bool sent = false;
+            // A refused local stop (Lockdown, panic off) still tells the controller; RemoteRelay.SendSignalAsync gates
+            // its own forced stop on the same VoicePanicReach.PanicKeyRuns, so it stops the remote's effects only.
             try { sent = _relay() is { } r && await r.SendSignalAsync(kind); }
             catch (Exception ex) { Serilog.Log.Debug("RemoteHud: signal {Kind} failed: {E}", kind, ex.Message); }
             if (_disposed) return;
-            _confirm = isStop
+            _confirm = isStop && stoppedHere
                 ? Loc.Get(sent ? "remote_hud_stopped" : "remote_hud_stopped_not_sent")
                 : sent ? Loc.GetF("remote_hud_sent", Loc.Get(labelKey)) : Loc.Get("remote_hud_not_sent");
-            _confirmUntilUtc = DateTime.UtcNow + RemoteHudRules.ConfirmFor;
+            _confirmUntilUtc = Clock.GetUtcNow().UtcDateTime + RemoteHudRules.ConfirmFor;
             Refresh();
         }
     }

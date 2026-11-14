@@ -18,8 +18,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.RemoteHud;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.CommandReceived += command;
             Closed += (_, _) =>
             {
+                _remoteControlClosed = true;
                 r.SessionsProvider = null;
                 r.SessionRunnerProvider = null;
                 if (r.ResumeSession == ResumeRemoteSession) r.ResumeSession = null;
@@ -128,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteControllerChanged (:784).</summary>
         internal void OnRemoteControllerChanged()
         {
+            if (_remoteControlClosed) return;   // a posted change after close must not open a new pill
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
             if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); EnsureRemoteHud(); }
@@ -145,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.RemoteHud.cs: the subject's More / Easy / Stop pill.</summary>
         internal RemoteHudWindow? RemoteHudPill { get; private set; }
+        private bool _remoteControlClosed;
 
         private void EnsureRemoteHud()
         {
@@ -163,12 +166,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             hud?.Dispose();
         }
 
-        /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now; with the
-        /// panic key off only the leash safety, else nothing local (the signal still stops the remote's effects).</summary>
-        internal void StopFromRemoteHud()
+        /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now (Core
+        /// VoicePanicReach), so Lockdown or panic off refuses it and a leash alone gets the leash-only stop. True when
+        /// the full panic ran; RemoteRelay.SendSignalAsync applies the same rule to its forced stop.</summary>
+        internal bool StopFromRemoteHud()
         {
-            if (RemoteHudRules.LocalPanicAllowed(CoreSettings.Current.PanicKeyEnabled)) HandlePanicKeyPress(DateTime.Now);
-            else if (LeashHoldLeashed) PanicKeyLeashOnly();   // WPF LeashOnPanicPress(panicRuns: false); else the signal only
+            var full = VoicePanicReach.PanicKeyRuns(LockdownActive, CoreSettings.Current.PanicKeyEnabled);
+            HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
+            return full;
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
