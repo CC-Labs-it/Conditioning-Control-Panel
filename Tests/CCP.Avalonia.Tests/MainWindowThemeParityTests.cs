@@ -27,6 +27,36 @@ public sealed class MainWindowThemeParityTests
     }
 
     [Fact]
+    public Task TreeChromeKeepsDefaultsAndCallerBrushes() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var tree = new TreeView { ItemsSource = new[] { "Folder" } };
+        var host = new Window { Content = tree, Width = 300, Height = 180 };
+        host.Show();
+        try
+        {
+            host.UpdateLayout();
+            Assert.Equal(Brushes.Transparent, tree.Background);
+            Assert.Equal(new Thickness(0), tree.BorderThickness);
+            tree.Background = Brushes.Olive;
+            tree.BorderBrush = Brushes.Cyan;
+            tree.BorderThickness = new Thickness(2);
+            tree.Padding = new Thickness(9);
+            host.UpdateLayout();
+            var chrome = tree.GetVisualChildren().OfType<Border>().Single();
+            Assert.Same(tree.Background, chrome.Background);
+            Assert.Same(tree.BorderBrush, chrome.BorderBrush);
+            Assert.Equal(tree.BorderThickness, chrome.BorderThickness);
+            var scroll = tree.GetVisualDescendants().OfType<ScrollViewer>()
+                .Single(v => v.Name == "PART_ScrollViewer");
+            Assert.Equal(tree.Padding, scroll.Padding);
+            Assert.False(scroll.Focusable);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HelpChromeMatchesWpfAndHoverUsesTheCurrentAccent() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
