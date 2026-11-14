@@ -30,6 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private volatile bool _started;
         /// <summary>A Pause that arrived before libvlc reached Playing.</summary>
         private volatile bool _pausePending;
+        // The latest requested state, used when libvlc delivers an older pause asynchronously.
+        private bool _wantsPause;
 
         public double PositionSec
         {
@@ -76,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             player.EndReached += OnEndReached;
             player.EncounteredError += OnError;
             player.Playing += OnPlaying;
+            player.Paused += OnPaused;
             lock (_gate) { _media = media; _player = player; }
             _stopping = false;
             _endedFired = false;
@@ -95,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 _stopping = false;
                 _endedFired = false;
                 _pausePending = false;
+                lock (_gate) _wantsPause = false;
                 _started = true;
                 if (!p.Play()) Log.Warning("RaceTrackPlayer.Play: the player refused to start");
             }
@@ -107,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_disposed || p == null) return;
             // A Brake right after Play lands while libvlc is still opening/buffering, where SetPause is
             // ignored: remember it and pause as soon as the track is Playing (WPF WaveOutEvent.Pause holds).
-            try { lock (_gate) { if (p.IsPlaying) p.SetPause(true); else if (_started && p.State != VLCState.Paused) _pausePending = true; } }
+            try { lock (_gate) { _wantsPause = true; if (p.IsPlaying) p.SetPause(true); else if (_started && p.State != VLCState.Paused) _pausePending = true; } }
             catch (Exception ex) { Log.Warning("RaceTrackPlayer.Pause: {E}", ex.Message); }
         }
 
@@ -121,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 lock (_gate)
                 {
                     _pausePending = false;
+                    _wantsPause = false;
                     if (p.State is VLCState.Paused or VLCState.Playing) p.SetPause(false);
                 }
                 ApplyVolume();
@@ -179,6 +184,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ApplyVolume();
         }
 
+        private void OnPaused(object? sender, EventArgs e)
+        {
+            var p = sender as MediaPlayer;
+            if (p == null) return;
+            // The native pause can land after Resume observed Playing and its unpause was ignored.
+            // Do not call libvlc from its event thread; the latest request wins under the gate.
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { lock (_gate) if (!_disposed && _started && !_wantsPause && ReferenceEquals(p, _player) && p.State == VLCState.Paused) p.SetPause(false); }
+                catch (Exception ex) { Log.Debug("RaceTrackPlayer pending resume: {E}", ex.Message); }
+            });
+        }
+
         private void OnError(object? sender, EventArgs e) => Log.Warning("RaceTrackPlayer: playback stopped with an error");
 
         /// <summary>WPF OnPlaybackStopped :152: a stop we asked for is not an ending; anything else is the
@@ -203,6 +221,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 player.EndReached -= OnEndReached;
                 player.EncounteredError -= OnError;
                 player.Playing -= OnPlaying;
+                player.Paused -= OnPaused;
             }
             // Never stop or dispose a player on a libvlc event thread, and never make the UI wait on it.
             ThreadPool.QueueUserWorkItem(_ =>

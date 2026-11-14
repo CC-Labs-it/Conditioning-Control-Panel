@@ -484,6 +484,9 @@ public sealed class LanguageSelectorTests
         // Versionless startup is separately exercised by FeatureIntroUpgradeTests.
         var version = typeof(App).Assembly.GetName().Version!; // the provider is seeded only by StartApp
         settings.Current.LastSeenVersion = $"{version.Major}.{version.Minor}.{version.Build}";
+        // This is an already initialized profile: upgrade migrations legitimately save at startup.
+        ConditioningControlPanel.Services.Awareness.AwarenessPrivacyRules.EnsureSeeded(settings.Current);
+        ConditioningControlPanel.Services.Awareness.AwarenessIntensityMigration.EnsureMigrated(settings.Current);
         // Returning profile: first-run demo seeding legitimately saves this flag, as WPF does.
         settings.Current.HasSeededDeeperDemos = true;
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;

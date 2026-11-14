@@ -154,9 +154,12 @@ public class AwarenessConsentTests
         var source = SourceRoots.ReadProductFile("Services", "Awareness", "AwarenessObserver.cs");
 
         Assert.Contains("HasEntitlement && s.UseAwarenessV2", source, StringComparison.Ordinal);
-        Assert.Contains("App.Patreon?.HasPremiumAccess == true", source, StringComparison.Ordinal);
+        Assert.Contains("EntitlementProvider?.Invoke() == true", source, StringComparison.Ordinal);
+        var head = SourceRoots.ReadProductFile("App.xaml.cs");
+        Assert.Contains("AwarenessObserver.EntitlementProvider = () =>", head, StringComparison.Ordinal);
+        Assert.Contains("Patreon?.HasPremiumAccess == true", head, StringComparison.Ordinal);
         // The free day has to be OR'd in or the ? box would advertise a door it cannot open.
-        Assert.Contains("IsFreeToday(\"awareness\")", source, StringComparison.Ordinal);
+        Assert.Contains("|| DailyFree?.IsFreeToday(\"awareness\") == true", head, StringComparison.Ordinal);
     }
 
     [Fact]

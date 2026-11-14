@@ -205,6 +205,17 @@ public sealed class RaceTrackPlayerTests
             double from = player.PositionSec;
             Assert.True(SpinWait.SpinUntil(() => player.PositionSec > from + 0.5, 10_000),
                 "a Resume right after a Pause keeps playing, not " + player.State);
+
+            // A newer Pause must win over the queued repair for the preceding Resume.
+            player.Pause();
+            player.Resume();
+            player.Pause();
+            Assert.True(SpinWait.SpinUntil(() => player.State == LibVLCSharp.Shared.VLCState.Paused, 10_000),
+                "the latest Pause must be honoured, not " + player.State);
+            Thread.Sleep(250);
+            Assert.Equal(LibVLCSharp.Shared.VLCState.Paused, player.State);
+            player.Resume();
+            Assert.True(SpinWait.SpinUntil(() => player.IsPlaying, 10_000), "the final Resume must play");
             player.Stop();
         }
         finally { Directory.Delete(dir, true); }
