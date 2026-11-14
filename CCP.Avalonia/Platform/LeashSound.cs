@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 internal static class LeashSound
 {
-    private static readonly LeashSfxRules Rules = new();
+    internal static LeashSfxRules Rules { get; set; } = new();   // tests swap it (the gate is shared and timed)
 
     internal static void Tick(DateTime now) => Play(LeashCue.Tick, "chaos/countdown_tick.mp3", 0.10f, now);
 
@@ -22,6 +22,9 @@ internal static class LeashSound
     internal static void Denied(DateTime now) => Play(LeashCue.Denied, "chaos/ui_denied.mp3", 0.16f, now);
 
     internal static void Cut(DateTime now) => Play(LeashCue.Cut, "chaos/snap.mp3", 0.22f, now);
+
+    /// <summary>WPF LeashHolderCard.ReleaseAsync: the cut when the server took the Let go, else Denied.</summary>
+    internal static void Release(bool ok, DateTime now) { if (ok) Cut(now); else Denied(now); }
 
     /// <summary>WPF LeashSurfaces.OnEvent: the cue each landed event plays (an accepted answer plays the snap instead).</summary>
     internal static void Event(LeashEventKind kind, DateTime now)
