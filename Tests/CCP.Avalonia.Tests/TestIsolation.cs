@@ -183,6 +183,43 @@ internal sealed class ProcessStateSnapshot
         Error = (_, e) => e.ErrorContext.Handled = true,
     };
 
+    /// <summary>Restore the account seed and its delegates after a test temporarily re-seeds it.
+    /// Reattach the intake pass to the original providers without reading the secret store.</summary>
+    internal static Action CaptureAccountSeed()
+    {
+        var p = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
+        var ss = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar;
+        var discord = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord;
+        var sandbox = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SandboxWhitelisted;
+        var secrets = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        var account = (CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider,
+            CoreAccount.IsWhitelistedProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider,
+            CoreAccount.ChangeDisplayNameProvider, CoreAccount.DeleteAccountProvider);
+        var entitlement = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider);
+        var program = CoreProgram.HasPremiumProvider;
+        var recovery = (ConditioningControlPanel.Services.AuthRecovery.Recovered, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate);
+        return () =>
+        {
+            // Seed detached the intake listener from the old pair. Put it back on that pair.
+            ConditioningControlPanel.Avalonia.App.IntakePass.AttachEntitlementSources(
+                h => { if (p != null) p.TierChanged += h; if (ss != null) ss.TierChanged += h; },
+                h => { if (p != null) p.TierChanged -= h; if (ss != null) ss.TierChanged -= h; });
+            var type = typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed);
+            void SetSeed(string name, object? value) => type.GetProperty(name, BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, value);
+            SetSeed("Patreon", p);
+            SetSeed("SubscribeStar", ss);
+            SetSeed("Discord", discord);
+            SetSeed("SandboxWhitelisted", sandbox);
+            (CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider,
+                CoreAccount.IsWhitelistedProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider,
+                CoreAccount.ChangeDisplayNameProvider, CoreAccount.DeleteAccountProvider) = account;
+            (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = entitlement;
+            CoreProgram.HasPremiumProvider = program;
+            (ConditioningControlPanel.Services.AuthRecovery.Recovered, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate) = recovery;
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = secrets;
+        };
+    }
+
     internal static ProcessStateSnapshot Take(bool repairLateWrites = true)
     {
         var s = new ProcessStateSnapshot();

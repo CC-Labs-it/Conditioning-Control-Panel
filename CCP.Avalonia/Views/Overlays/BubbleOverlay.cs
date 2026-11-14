@@ -1153,6 +1153,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     new GradientStop(Color.FromArgb(190, 150, 210, 255), 0.66),
                     new GradientStop(Color.FromArgb(0, 150, 210, 255), 1.0) }
             };
+            private static readonly Dictionary<(string, int), (FormattedText Text, FormattedText Shadow)> LabelCache = new();
+            private static readonly Typeface LabelFace = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+            private static readonly IBrush LabelShadow = new ImmutableSolidColorBrush(Colors.Black, 0.8);
+
+            /// <summary>WPF variant label (BubbleService.cs:4967): white bold glyph at 30% of the bubble with a
+            /// soft black shadow, centred. Cached per glyph and size so the render pass stays allocation-free
+            /// (hand-ported from #3890).</summary>
+            internal static void DrawLabel(DrawingContext dc, string label, double cx, double cy, double size, double k)
+            {
+                int em = (int)Math.Round(Math.Max(14 * k, size * 0.30));
+                if (!LabelCache.TryGetValue((label, em), out var t))
+                    LabelCache[(label, em)] = t = (
+                        new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LabelFace, em, Brushes.White),
+                        new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LabelFace, em, LabelShadow));
+                double x = cx - t.Text.Width / 2, y = cy - t.Text.Height / 2, d = 1.5 * k;
+                dc.DrawText(t.Shadow, new Point(x - d, y));
+                dc.DrawText(t.Shadow, new Point(x + d, y));
+                dc.DrawText(t.Shadow, new Point(x, y - d));
+                dc.DrawText(t.Shadow, new Point(x, y + d));
+                dc.DrawText(t.Text, new Point(x, y));
+            }
 
             public override void Render(DrawingContext dc)
             {
@@ -1188,6 +1209,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             if (HasChaosShine(b, teaseImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
+                            // WPF's no-sprite path: the label carries the variant. Only the freeze pickup draws it so far.
+                            if (b.Spec is { IsFreeze: true, Label.Length: > 0 }) DrawLabel(dc, b.Spec.Label, cx, cy, size, k);
                             if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                             {
                                 var frame = face.Frames[face.Animated

@@ -59,6 +59,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.RepaintEntitlement();
                 Named<Tabs.AchievementsTabView>("AchievementsTab")?.RefreshAll();
                 Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<Controls.Companion.CompanionRoomView>("Room")?.SyncBrain();
+                // WPF Login.cs:322-330: an account change repaints the effective companion effect switch even with
+                // no TierChanged (a cached Lab grant ends at logout). The saved choice is never written (#3920).
+                if (accountChanged && RoomView()?.FindControl<Controls.Companion.AiPermissionsGrid>("PermissionsZone") is { } permissions)
+                {
+                    permissions.SyncFromSettings();
+                    permissions.ApplyTierGate();
+                }
                 AppSettingsPage?.SectionAccount.RefreshTierBadge();
                 // WPF Patreon.cs:294: the pass is per-account, so sign-in/out moves the intake door.
                 App.IntakePass.RaiseChanged();
