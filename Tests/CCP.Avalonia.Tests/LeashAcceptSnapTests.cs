@@ -75,4 +75,42 @@ public sealed class LeashAcceptSnapTests
         }
         finally { LeashAskWindow.CloseCurrent(); CoreAccount.DisplayNameProvider = oldName; }
     });
+    [Fact]
+    public void AcceptedAnswerUsesTheVisiblePanelOrLauncherAsOwner() => LeashGateCardTests.Run(false, (shell, launcher, _) =>
+    {
+        var service = new Service();
+        var answer = new LeashEvent("owner", LeashEventKind.Answered, new LeashPerson("friend", "Juno", null), DateTimeOffset.UtcNow, Accepted: true);
+        LeashHead.Service = service;
+        try
+        {
+            shell.Show();
+            launcher.Show();
+            service.Emit(answer);
+            Assert.Same(shell, LeashAskWindow.Current?.Owner);
+            LeashAskWindow.CloseCurrent();
+
+            shell.Hide();
+            service.Emit(answer);
+            Assert.Same(launcher, LeashAskWindow.Current?.Owner);
+            LeashAskWindow.CloseCurrent();
+
+            shell.Show();
+            shell.WindowState = WindowState.Minimized;
+            service.Emit(answer);
+            Assert.Same(launcher, LeashAskWindow.Current?.Owner);
+            LeashAskWindow.CloseCurrent();
+
+            launcher.Hide();
+            service.Emit(answer);
+            Assert.NotNull(LeashAskWindow.Current?.Snap);
+            Assert.Null(LeashAskWindow.Current!.Owner);
+            Assert.Equal(WindowStartupLocation.CenterScreen, LeashAskWindow.Current.WindowStartupLocation);
+        }
+        finally
+        {
+            LeashAskWindow.CloseCurrent();
+            shell.WindowState = WindowState.Normal;
+        }
+    });
+
 }

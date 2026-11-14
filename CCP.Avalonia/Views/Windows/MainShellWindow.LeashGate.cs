@@ -74,7 +74,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (e.Kind != LeashEventKind.Answered || e.Accepted != true) return;
             var name = CoreAccount.DisplayName;
             var me = new LeashPerson("me", string.IsNullOrWhiteSpace(name) ? Loc.Get("leash_you") : name.Trim(), null);
-            LeashAskWindow.OpenSnap(me, e.From, this);
+            // WPF MainWindow.Leash.cs:80-82: prefer the panel, then the visible launcher.
+            Window? owner = IsVisible && WindowState != WindowState.Minimized ? this
+                : LauncherWindow.Instance is { IsVisible: true } launcher ? launcher : null;
+            LeashAskWindow.OpenSnap(me, e.From, owner);
         }
 
         private void InitializeLeashGate()
