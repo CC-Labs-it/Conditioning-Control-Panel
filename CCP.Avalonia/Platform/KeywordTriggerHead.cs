@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Content;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -66,22 +67,75 @@ internal static class KeywordTriggerHead
         windows && string.IsNullOrEmpty(sandboxDir) && ensureListening();
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); _ocr?.Stop(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
+    internal static void Stop() { DetachKeyboard(); lock (_ocrGate) _ocr?.Stop(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
+
+    /// <summary>Owner call 2026-10-10 (handoff-1010/PARITY-CHECKPOINT-1010.md; AGENTS "panic switches keyword
+    /// triggers off"): a panic switches keyword triggers off until the user turns them back on. The master
+    /// ([JsonIgnore], per run as on WPF) goes off; the screen read goes off as a SAVED setting, since it is the
+    /// switch that would read the screen again. Then the sources stop (key listener, scanner, clip, comment).
+    /// Stricter than WPF main, which leaves both armed and only holds responses for the PanicAftermath quiet.
+    /// Nothing turns them back on. UI thread, idempotent, never throws; true when a switch changed.</summary>
+    internal static bool SwitchOffForPanic()
+    {
+        var changed = false;
+        try
+        {
+            var s = CoreSettings.Current;
+            if (s.KeywordTriggersEnabled) { s.KeywordTriggersEnabled = false; changed = true; }
+            if (s.ScreenOcrEnabled) { s.ScreenOcrEnabled = false; changed = true; CoreSettings.Save(); }
+        }
+        catch (Exception ex) { Log.Warning(ex, "Panic: keyword trigger switch-off failed"); }
+        try { Stop(); }
+        catch (Exception ex) { Log.Warning(ex, "Panic: keyword trigger stop failed"); }
+        if (changed) Log.Information("Panic: keyword triggers switched off until the user turns them back on");
+        return changed;
+    }
 
     /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
     /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland
     /// capture is interactive only. While null the scanner never starts; everything after the source is live.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
+    private static readonly object _ocrGate = new();
+    private static int _ocrSuspension;
+    private static bool _ocrSuspended;
 
     /// <summary>WPF MainWindow.Awareness.cs:414-428,461-468 and KeywordTriggers.cs:119: master, OCR switch and interval.</summary>
     internal static void SyncOcr()
     {
-        var s = CoreSettings.Current;
-        if (OcrSource == null) { _ocr?.Stop(); return; }
-        _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
-            () => KeywordAudioRuntime.HasAccess, DeliverOcr);
-        _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        lock (_ocrGate)
+        {
+            var s = CoreSettings.Current;
+            if (_ocrSuspended || OcrSource == null) { _ocr?.Stop(); return; }
+            _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
+                () => KeywordAudioRuntime.HasAccess, DeliverOcr);
+            _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        }
+    }
+
+    // WPF MainWindow.xaml.cs:1157 (fallback stops the scanner off the UI thread) and :1192-1206 (queued restart,
+    // only with master, screen read and access). The generation keeps an older queued recovery from
+    // restarting capture during a later fallback (restack b221, #4551).
+    internal static int SuspendOcrForPanic()
+    {
+        lock (_ocrGate)
+        {
+            _ocrSuspended = true;
+            try { _ocr?.Stop(); }
+            catch (Exception ex) { Log.Warning(ex, "Panic OCR stop failed"); }
+            return ++_ocrSuspension;
+        }
+    }
+
+    internal static void RecoverOcrAfterPanic(int suspension)
+    {
+        lock (_ocrGate)
+        {
+            if (suspension != _ocrSuspension) return;
+            _ocrSuspended = false;
+            var s = CoreSettings.Current;
+            if (s.KeywordTriggersEnabled && s.ScreenOcrEnabled && KeywordAudioRuntime.HasAccess) SyncOcr();
+        }
     }
 
     internal static Task TickOcrForTest() => _ocr?.TickAsync() ?? Task.CompletedTask;
@@ -109,12 +163,14 @@ internal static class KeywordTriggerHead
 
     // WPF App.xaml.cs:1600-1720: visible, unminimised windows; one that covers a whole monitor is an
     // overlay container and is skipped (#273).
-    // shortcut: bouncing/subliminal text rects (WPF :1722-1740) are not added (#4717 in b221 brings them).
+    // Plus the bouncing and subliminal text itself (WPF :1722-1740), not their full-screen hosts (restack b221, #4717).
     internal static IReadOnlyList<System.Drawing.Rectangle> OwnWindowRects()
     {
-        if (global::Avalonia.Application.Current?.ApplicationLifetime is not
-            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return [];
         var rects = new List<System.Drawing.Rectangle>();
+        rects.AddRange(BouncingTextOverlay.ActiveTextRects());
+        rects.AddRange(SubliminalOverlay.ActiveTextRects());
+        if (global::Avalonia.Application.Current?.ApplicationLifetime is not
+            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return rects;
         foreach (var w in desktop.Windows)
         {
             if (!w.IsVisible || w.WindowState == global::Avalonia.Controls.WindowState.Minimized) continue;
@@ -135,7 +191,7 @@ internal static class KeywordTriggerHead
         _subscribed = false;
     }
 
-    /// <summary>Panic cuts the clip; WPF leaves the trigger service itself running.</summary>
+    /// <summary>Cuts the clip only; the panic pass uses <see cref="SwitchOffForPanic"/>.</summary>
     internal static void StopAudio() => Engine.StopAudio();
 
     private static void OnKey(int vk, string? name)
@@ -229,6 +285,7 @@ internal sealed class KeywordAudioRuntime
     private readonly KeywordTextInput _input = new();
     private KeywordCooldowns _cooldowns = new();
     internal void ResetCooldownsForTest() { _cooldowns = new(); ClearOcr(); }   // Stop keeps the OCR guards
+    internal void MuteKeywordEcho(string text, int milliseconds) => _cooldowns.Mute(text, milliseconds, Now().ToUniversalTime());
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private int _playGeneration;
