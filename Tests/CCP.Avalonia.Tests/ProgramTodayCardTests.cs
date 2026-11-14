@@ -141,6 +141,78 @@ public sealed class ProgramTodayCardTests
         }
     });
 
+    [Fact]
+    public void TierChangesRefreshTodayCardWhileProgramsIsHidden() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var restore = ProcessStateSnapshot.CaptureAccountSeed();
+        var oldPrograms = AvApp.Programs;
+        var oldSettings = CoreSettings.ServiceProvider;
+        var dir = Directory.CreateTempSubdirectory("ccp-programs-tier-").FullName;
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            var settings = new ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.Welcomed = true;
+            settings.Current.HasAcceptedAgeVerification = true;
+            settings.Current.HasSeenProgramsTab = settings.Current.HasSeenProgramsIntro = true;
+            foreach (var key in FeatureIntros.All.Keys)
+                if (!settings.Current.SeenFeatureIntros.Contains(key)) settings.Current.SeenFeatureIntros.Add(key);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(
+                p => new ConditioningControlPanel.Services.ProviderSubscription(p, () => settings.Current)));
+            bool premium = false;
+            CoreAccount.HasPremiumAccessProvider = () => premium;
+            var today = DateTime.Today;
+            var state = new ProgramState
+            {
+                Active = new ProgramEnrollment
+                {
+                    ProgramId = "kept", StartedAt = today.AddDays(-6), CurrentDay = 7,
+                    CurrentDayDate = today, State = ProgramEnrollmentState.Active,
+                }
+            };
+            state.Active.GetOrCreateRecord(7, today).SessionCompleted = true;
+            var path = System.IO.Path.Combine(dir, "programs.json");
+            File.WriteAllText(path, JsonSerializer.Serialize(state));
+            AvApp.Programs = new ProgramService(path, readOnly: true);
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("settings");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.Named<ProgramsTabView>("ProgramsTab")!.IsVisible);
+            var text = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<TextBlock>("TxtProgramTodayLine")!;
+            Assert.Contains(Loc.Get("programs_card_all_done"), text.Text);
+
+            premium = true;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level1);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(Loc.Get("programs_card_task_left_one"), text.Text);
+            Assert.False(shell.Named<ProgramsTabView>("ProgramsTab")!.IsVisible);
+
+            premium = false;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(Loc.Get("programs_card_all_done"), text.Text);
+        }
+        finally
+        {
+            try { shell?.Close(); Dispatcher.UIThread.RunJobs(); }
+            finally
+            {
+                AvApp.Programs?.Dispose();
+                AvApp.Programs = oldPrograms;
+                CoreSettings.ServiceProvider = oldSettings;
+                restore();
+                Directory.Delete(dir, true);
+            }
+        }
+    });
+
     /// <summary>The banner loops on the 30 fps beat, stepped (P08), on WPF MainWindow.ProgramBanner.cs's
     /// curves, read against the card's CURRENT width (a resize mid-run used to keep the first width), and
     /// the hover nudge really slides the art (it was an Animation on a Transform: inert, P82).</summary>
