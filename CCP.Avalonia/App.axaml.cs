@@ -699,6 +699,24 @@ namespace ConditioningControlPanel.Avalonia
             Mods?.AttachReleaseContent();
         }
 
+        /// <summary>WPF App.xaml.cs:723,2738,6035: one Deeper library for the app lifetime. Constructing it
+        /// seeds the bundled demos once (HasSeededDeeperDemos) and starts the folder watch; the resolver's
+        /// library tier (mandatory videos, the player) asks it. The shell hub and the player reuse it.</summary>
+        internal static Services.Deeper.EnhancementLibrary? DeeperLibrary { get; private set; }
+
+        internal static void StartDeeperLibrary()
+        {
+            DeeperLibrary ??= new Services.Deeper.EnhancementLibrary();
+            Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => DeeperLibrary?.FindMatch(path, type);
+        }
+
+        internal static void StopDeeperLibrary()
+        {
+            Services.Deeper.EnhancementResolver.LibraryMatchProvider = null;
+            DeeperLibrary?.Dispose();
+            DeeperLibrary = null;
+        }
+
         /// <summary>
         /// WPF App.xaml.cs:3163 (<c>ContentPacks = new ContentPackService()</c>) and :448 (the pack-video
         /// seam): register the installed packs under &lt;assets&gt;/.packs and the network half beside them.
@@ -964,6 +982,9 @@ namespace ConditioningControlPanel.Avalonia
                 // recovery, which can put a controller's strict lock back first (RemoteHoldings).
                 try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+                // WPF App.xaml.cs:2738: after every launch heal, so the demo seed's one save writes healed values.
+                try { StartDeeperLibrary(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Deeper library start failed (non-fatal)"); }
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
@@ -1883,6 +1904,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { StopDeeperLibrary(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper library shutdown failed"); } // WPF App.OnExit:6035
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
