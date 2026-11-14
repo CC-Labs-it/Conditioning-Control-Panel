@@ -220,12 +220,18 @@ public sealed class ProfileFaucetTests
             Step(.15); Assert.Equal(1.16, hover.ScaleX, 3);
             tap.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, tap, new Pointer(1, PointerType.Mouse, true), shell, default, 0, default, default));
             Step(.15); Assert.Equal(1, hover.ScaleX, 3);
+            // Restack b204 (from #3931): the motion gate event alone parks or wakes the tap, and the still
+            // badge dot shows only while the wobble cannot (WPF ProfileFaucet.cs:326-329).
+            var badge = page.FindControl<Control>("ProfileVatFaucetBadge")!;
+            Assert.False(badge.IsVisible);
             s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
-            typeof(MainShellWindow).GetMethod("UpdateFaucetPresentation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, null);
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.False(shell.FaucetWobbling); Assert.Equal(0, lean.Angle); Assert.Equal(1, chip.ScaleX);
+            Assert.True(badge.IsVisible);
             s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
-            typeof(MainShellWindow).GetMethod("UpdateFaucetPresentation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(shell, null);
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.True(shell.FaucetWobbling);
+            Assert.False(badge.IsVisible);
             s.OfflineMode = true; service.Reset(); Dispatcher.UIThread.RunJobs();
             Assert.False(shell.FaucetWobbling); Assert.Equal(0, lean.Angle); Assert.Equal(1, hover.ScaleX);
         }

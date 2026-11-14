@@ -228,4 +228,36 @@ public sealed class AuthRecoveryTests : IDisposable
         Assert.Equal(new[] { "/v2/user/change-display-name", "/v2/auth/restore-session" }, _http.Calls.Select(c => c.Path));
         Assert.Equal("fresh", _settings.AuthToken);   // the next rename goes out with the recovered token
     }
+
+    [Fact]
+    public async Task StreakFix401_RecoversButDoesNotRepeatTheSpend()
+    {
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{\"error\":\"bad token\"}"));
+        _http.Answers.Enqueue((HttpStatusCode.OK, "{\"auth_token\":\"fresh\"}"));
+        var fix = new StreakFix(() => _settings, _http);
+
+        var first = await fix.UseAsync(new DateTime(2026, 10, 4));
+
+        Assert.Equal((false, "bad token", (int?)null), first);
+        Assert.Equal(new[] { "/v2/user/use-oopsie", "/v2/auth/restore-session" }, _http.Calls.Select(c => c.Path));
+        Assert.Equal("fresh", _settings.AuthToken);
+
+        // Only a new user action spends, using the recovered token.
+        _http.Answers.Enqueue((HttpStatusCode.OK, "{\"oopsie_credits\":2}"));
+        Assert.Equal((true, (string?)null, (int?)2), await fix.UseAsync(new DateTime(2026, 10, 4)));
+        Assert.Equal(("/v2/user/use-oopsie", "fresh"), _http.Calls.Last());
+    }
+
+    [Fact]
+    public async Task StreakFixFailedRecoveryKeepsTokenAndDoesNotRepeatSpend()
+    {
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{\"error\":\"bad token\"}"));
+        _http.Answers.Enqueue((HttpStatusCode.Unauthorized, "{}"));
+        var fix = new StreakFix(() => _settings, _http);
+
+        Assert.Equal((false, "bad token", (int?)null), await fix.UseAsync(DateTime.Today));
+        Assert.Equal(new[] { "/v2/user/use-oopsie", "/v2/auth/restore-session" }, _http.Calls.Select(c => c.Path));
+        Assert.Equal("tok", _settings.AuthToken);
+    }
+
 }
