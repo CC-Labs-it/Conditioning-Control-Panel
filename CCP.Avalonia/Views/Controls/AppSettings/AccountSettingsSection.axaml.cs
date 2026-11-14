@@ -74,12 +74,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // UpdatePatreonUI, Chaster ProfileChanged). Subscribed only while attached (P41).
             EventHandler changed = (_, _) => Post();
             EventHandler<PatreonTier> tier = (_, _) => Post();
+            // The support card names the active mod's takeover; ModChanged can be raised off the UI thread.
+            EventHandler<ModPackage> mod = (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshSupportFeatures);
             Action chasterChanged = () => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshChaster);
             ChasterService? chaster = null;
             ProviderSubscription? patreon = null, substar = null;
             AttachedToVisualTree += (_, _) =>
             {
                 LocalizationManager.Instance.LanguageChanged += changed;
+                CoreMods.ModChanged += mod;
                 AccountSeed.GraceClosed += Post;
                 patreon = AccountSeed.Patreon; substar = AccountSeed.SubscribeStar;
                 if (patreon != null) patreon.TierChanged += tier;
@@ -90,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             DetachedFromVisualTree += (_, _) =>
             {
                 LocalizationManager.Instance.LanguageChanged -= changed;
+                CoreMods.ModChanged -= mod;
                 AccountSeed.GraceClosed -= Post;
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
@@ -183,6 +187,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             catch (Exception ex) { Log.Debug("AccountSettingsSection.RefreshProviders failed: {E}", ex.Message); }
             RefreshChaster();
             RefreshFriendsPresence();
+            RefreshSupportFeatures();
+        }
+
+        internal string? SupportFeaturesText => RunPatreonFeatures.Text;
+
+        // WPF MainWindow.xaml.cs:2455-2458 (LoadTakeoverImage): the support card names the active takeover.
+        // A code write replaces the {loc:Str} default, so Refresh re-runs it on every language change.
+        private void RefreshSupportFeatures()
+        {
+            var title = CoreMods.Service?.GetTakeoverLabel() ?? Loc.Get("tab_takeover");
+            RunPatreonFeatures.Text = Loc.GetF("label_patreon_features", title);
         }
 
         private static string Tier(PatreonTier tier, bool whitelisted, bool active) => tier switch

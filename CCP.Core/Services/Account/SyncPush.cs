@@ -176,6 +176,38 @@ namespace ConditioningControlPanel.Services
         {
             _serverAchievements = serverAchievements?.ToArray();
             Loaded = true;
+            RestoreCloudAchievements(CoreSettings.Current, _serverAchievements, Volatile.Read(ref _sessionVersion), CoreSettings.Current.UnifiedId);
+        }
+
+        /// <summary>The head's silent union of cloud achievement ids into the local store.</summary>
+        public Action<IEnumerable<string>>? RestoreAchievements { get; set; }
+
+        // WPF ProfileSyncService.cs:2099-2118 (restack b164, #3712): the profile and every sync reply carry the
+        // account's cloud achievements; union them locally on the UI dispatcher, never into another session.
+        private void RestoreCloudAchievements(AppSettings s, IEnumerable<string>? ids, int session, string? account)
+        {
+            if (ids == null || RestoreAchievements == null) return;
+            var cloud = ids.ToArray();
+            if (cloud.Length == 0) return;
+            _serverAchievements = (_serverAchievements ?? Array.Empty<string>()).Union(cloud).ToArray();
+            CoreDispatch.Post(() =>
+            {
+                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || !SignedIn(s) || s.UnifiedId != account) return;
+                try { RestoreAchievements?.Invoke(cloud); }
+                catch (Exception ex) { Log.Debug("V2 Sync: cloud achievement restore failed: {Error}", ex.Message); }
+            });
+        }
+
+        // WPF ProfileSyncService.cs:2149-2165 (restack b164, #4120): the mobile quest ledger stays apart from the
+        // desktop counters and takes the server's totals verbatim.
+        internal static void AdoptMobileQuestTotals(AppSettings s, JObject reply)
+        {
+            if (reply["user"] is not JObject user || user["mobile_stats"] is not JObject mobile) return;
+            static int Total(JObject o, string key) => o[key]?.Type == JTokenType.Integer ? (int)o[key]! : 0;
+            s.MobileQuestDailyCompleted = Total(mobile, "total_daily_quests_completed");
+            s.MobileQuestWeeklyCompleted = Total(mobile, "total_weekly_quests_completed");
+            s.MobileQuestXP = Total(mobile, "total_xp_from_quests");
         }
 
         /// <summary>A profile read that carried these fields already took the higher value (WPF reads the
@@ -411,6 +443,10 @@ namespace ConditioningControlPanel.Services
                     var reply = JObject.Parse(json);
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
                     Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
+                    if (reply["user"] is JObject user && user["achievements"] is JArray achievements
+                        && achievements.All(a => a.Type == JTokenType.String))
+                        RestoreCloudAchievements(s, achievements.Values<string>().Select(a => a!), session, id);
+                    AdoptMobileQuestTotals(s, reply);
                     if (AdoptFromResponse(s, reply, id)) _adopted = true;
                     ClaimWebXp(s, reply, allowUnread, session, id);
                     ApplyQuestResets(s, id, session, reply);

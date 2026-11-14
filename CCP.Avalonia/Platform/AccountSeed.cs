@@ -153,9 +153,12 @@ internal static class AccountSeed
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)
     {
+        var uid = CoreSettings.Current.UnifiedId;
+        var settings = CoreSettings.Current;
+        var questsReset = false;
         try
         {
-            var uid = CoreSettings.Current.UnifiedId;
+            questsReset = ClaimLocalQuests(uid);
             if (!await LoadProfileCoreAsync(v2 ?? NewV2()) || CoreSettings.Current.UnifiedId != uid) return false;
             LoadedProfileUid = uid;
             ProfileLoaded?.Invoke();
@@ -167,6 +170,26 @@ internal static class AccountSeed
             Log.Warning(ex, "Profile load failed");
             return false;
         }
+        finally
+        {
+            // WPF MainWindow.Login.cs:189-195: a wiped quest file is generated after the load, even a failed one,
+            // and never for a replacement session.
+            if (questsReset && ReferenceEquals(settings, CoreSettings.Current) && settings.UnifiedId == uid)
+            {
+                try { App.Quests?.CheckAndGenerateQuests(); }
+                catch (Exception ex) { Log.Warning(ex, "Quest generation after an account switch failed"); }
+            }
+        }
+    }
+
+    /// <summary>WPF ProfileSyncService.cs:828-833 (restack b164, #3916): the local quest file is checked against its
+    /// owner before any cloud read, so another account's quest progress never carries over. True when it was wiped.</summary>
+    internal static bool ClaimLocalQuests(string? uid)
+    {
+        if (string.IsNullOrEmpty(uid) || CoreSettings.Current.OfflineMode || App.Quests is not { } quests) return false;
+        var owner = quests.Progress.OwnerUnifiedId;
+        quests.EnsureOwnedBy(uid);
+        return !string.IsNullOrEmpty(owner) && owner != uid;
     }
 
     // WPF MainWindow.Login.cs:155-187. The failed-read fallback has its own guards.
@@ -231,6 +254,8 @@ internal static class AccountSeed
             ResetDailyQuest = () => App.Quests?.ForceRegenerateDailyQuest(),
             ResetWeeklyQuest = () => App.Quests?.ForceRegenerateWeeklyQuest(),
             Prizes = PrizeOwnership.Feed,
+            // WPF ProfileSyncService.cs:2099-2118: cloud achievements are restored silently (restack b164, #3712).
+            RestoreAchievements = ids => App.Achievements?.RestoreCloudAchievements(ids),
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
             // WPF DescentMigrationService.RaiseStageCeremonyDue (:421-440): the companion carries the moment,
@@ -505,6 +530,9 @@ internal static class AccountSeed
         Patreon?.Logout();
         Discord?.Logout();
         SubscribeStar?.Logout();
+        // WPF MainWindow.Login.cs:278-284 (restack b164, #3916): a plain logout keeps the day's quest progress,
+        // stamped with its owner so a different account's next load wipes it (ClaimLocalQuests).
+        if (!accountDeleted) App.Quests?.StampOwner(CoreAccount.UnifiedUserId ?? CoreSettings.Current.UnifiedId);
         CoreAccount.UnifiedUserId = null;
         CoreSettings.Current.MergedSignInPending = false;
         var s = CoreSettings.Current;
