@@ -1128,14 +1128,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
     }
 
-    /// <summary>
-    /// Individual bubble for the counting game - its own window, so it never shares a visual tree
-    /// with the video surface.
-    ///
-    /// WPF Windows/BubbleCountWindow.xaml.cs:1729 raises every new bubble to HWND_TOPMOST,
-    /// above older bubbles and other topmost windows. Windows uses the same native raise here.
-    /// X11 keeps its owner-relative restack. Both backends also make the bubble click-through.
-    /// </summary>
     internal interface IBubbleCountPlaybackEvents
     {
         event Action? Playing;
@@ -1158,6 +1150,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
     }
 
+    /// <summary>
+    /// Individual bubble for the counting game - its own window, so it never shares a visual tree
+    /// with the video surface.
+    ///
+    /// WPF Windows/BubbleCountWindow.xaml.cs:1729 raises every new bubble to HWND_TOPMOST,
+    /// above older bubbles and other topmost windows. Windows uses the same native raise here.
+    /// X11 keeps its owner-relative restack. Both backends also make the bubble click-through.
+    /// </summary>
     internal class CountBubble : IDisposable
     {
         private readonly Window _window;
