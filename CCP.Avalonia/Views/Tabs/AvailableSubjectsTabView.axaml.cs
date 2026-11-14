@@ -165,7 +165,7 @@ public partial class AvailableSubjectsTabView : UserControl
         RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
         BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
         TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
-        // Goon doors and Remote claims remain part B.
+        // Goon doors remain part B.
         // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
     }
 
@@ -191,6 +191,7 @@ public partial class AvailableSubjectsTabView : UserControl
     {
         if (sender is not Control { DataContext: LobbyCardView card }) return;
         if (card.Row.Game == LobbyGame.Race) { PressRaceRow(card.Row); return; }
+        if (card.Row.Game == LobbyGame.Remote) { _ = PressRemoteRow(card, sender as Button); return; }
         if (card.Row.Game != LobbyGame.Chess) return;
         if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
         if (!ReadGates().CanJoin(LobbyGame.Chess)) { _ = shell.OpenUnifiedLoginDialog(); return; }
@@ -209,6 +210,43 @@ public partial class AvailableSubjectsTabView : UserControl
         if (!RaceJoinLink.IsRoomId(row.Key)) { Serilog.Log.Warning("[Lobby] race join refused: bad room id"); return; }
         try { OpenRace(row.Key!); }
         catch (Exception ex) { Serilog.Log.Warning(ex, "[Lobby] join {Game} failed", row.Game); }
+    }
+
+    // One claim client with the launcher (LauncherWindow.Lobby.cs ClaimLobbySubject): honest user agent and
+    // merged-account recovery. The url carries the PIN: it lives on this stack only, never logged or kept.
+    internal Func<string, Task<(RemoteClaimStatus Status, string? Url)>> ClaimRemoteSubject = async key =>
+    {
+        var r = await new RemoteDirectoryClaimClient().ClaimAsync(key);
+        return (r.Status, r.SessionUrl);
+    };
+    internal Func<string, bool> OpenClaimUrl = Platform.ExternalOpener.Open;
+
+    /// <summary>WPF MainWindow.Lobby.cs:243-271 and MainWindow.RemoteControl.cs:499-512: sign-in first, the
+    /// button rests while the claim runs, the returned session opens in the browser, then the roster refreshes
+    /// (a 409 re-fetches too, so the row flips to playing).</summary>
+    internal async Task PressRemoteRow(LobbyCardView card, Button? button)
+    {
+        var row = card.Row;
+        if (row.Game != LobbyGame.Remote || !row.CanJoin || string.IsNullOrEmpty(row.Key)) return;
+        var gates = ReadGates();
+        if (!gates.SignedIn || !gates.CanJoin(LobbyGame.Remote))
+        {
+            if (TopLevel.GetTopLevel(this) is MainShellWindow shell) _ = shell.OpenUnifiedLoginDialog();
+            return;
+        }
+        button?.SetCurrentValue(IsEnabledProperty, false);
+        try
+        {
+            var (status, url) = await ClaimRemoteSubject(row.Key!);
+            if (status == RemoteClaimStatus.Success && !string.IsNullOrEmpty(url))
+            {
+                try { OpenClaimUrl(url); }
+                catch { Serilog.Log.Warning("[Lobby] failed to open browser for claimed session"); }
+            }
+            if (status is RemoteClaimStatus.Success or RemoteClaimStatus.Conflict) _ = _lobby?.RefreshAsync();
+        }
+        catch { Serilog.Log.Warning("[Lobby] Remote claim failed"); }
+        finally { button?.SetCurrentValue(IsEnabledProperty, card.DoorAvailable); }
     }
 
     private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
@@ -263,7 +301,7 @@ public sealed record LobbyCardView
             return art;
         }
     }
-    public bool DoorAvailable => Row.Game is LobbyGame.Chess or LobbyGame.Race;
+    public bool DoorAvailable => Row.Game is LobbyGame.Chess or LobbyGame.Race or LobbyGame.Remote;
     private static IBrush? Theme(string key) =>
         global::Avalonia.Application.Current?.TryFindResource(key, out var value) == true ? value as IBrush : null;
     public IBrush? CardRim => Theme("DepthFloatRim");
