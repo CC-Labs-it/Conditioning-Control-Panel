@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -36,6 +37,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static bool ManualFramesForTests;
         internal static bool Refused;
         internal static long RunId { get; private set; }
+        // WPF Services/Media/AnimatedWebp.cs:89-96,167-195 and :399-401.
+        private const int MaxFrames = 96, MaxDecodedFrames = 600;
+        private const long MaxFrameBytes = 24L * 1024 * 1024, MaxSourcePixels = 4096L * 4096;
         private static ChaosGifCascadeOverlay? _active;
         private static int _generation;
         internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
@@ -147,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             public TimeSpan Delay;
             public double FrameAcc;
             public int FrameIndex;
+            public CancellationTokenSource? DecodeCancellation = new();
         }
 
         private readonly GifCascade _cascade = new();
@@ -303,12 +308,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // Decoded at display size off the UI thread; the clip falls empty for the few frames it takes.
             bool animate = f.Animated;
             int px = (int)Math.Round(size * _scale);
-            if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate)); return; }
+            var cancellation = clip.DecodeCancellation!.Token;
+            if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate, cancellation)); return; }
             LastDecode = Task.Run(() =>
             {
                 BeforeDecodeForTests?.Invoke(path);
-                return Decode(path, px, animate);
-            }).ContinueWith(t =>
+                return Decode(path, px, animate, cancellation);
+            }, cancellation).ContinueWith(t =>
                 Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default))),
                 TaskScheduler.Default);
             _pendingDecodes.RemoveAll(t => t.IsCompleted);
@@ -330,14 +336,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             catch (UnauthorizedAccessException) { return false; }
         }
 
-        private static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate)
+        // WPF AnimatedWebp bounds (frames, bytes, visited frames, canvas size), its average frame timing,
+        // and the shared two-permit decode gate; an animation that decodes nothing falls back to one still.
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int px, bool animate, CancellationToken cancellationToken = default)
         {
-            if (animate) return SpiralOverlay.Decode(path, px);
+            if (animate)
+            {
+                var decoded = SpiralOverlay.Decode(path, px, MaxFrames, maxMemoryBytes: MaxFrameBytes, maxDecodedFrames: MaxDecodedFrames,
+                    maxSourcePixels: MaxSourcePixels, averageFrameDelay: true, cancellationToken: cancellationToken);
+                if (decoded.Frames.Count > 0) return decoded;
+            }
             try
             {
-                using var stream = File.OpenRead(path);
-                return (new List<Bitmap> { Bitmap.DecodeToWidth(stream, Math.Max(1, px)) }, default);
+                return SpiralOverlay.RunGatedDecode(() =>
+                {
+                    using var stream = File.OpenRead(path);
+                    var bitmap = Bitmap.DecodeToWidth(stream, Math.Max(1, px));
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        bitmap.Dispose();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                    return (new List<Bitmap> { bitmap }, TimeSpan.Zero);
+                }, cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 Log.Debug("GifCascade decode: {E}", ex.Message);
@@ -347,6 +370,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void Attach(GifCascade.Faller f, Clip clip, (List<Bitmap> Frames, TimeSpan Delay) decoded)
         {
+            clip.DecodeCancellation?.Dispose();
+            clip.DecodeCancellation = null;
             if (!_clips.TryGetValue(f, out var live) || !ReferenceEquals(live, clip))
             {
                 foreach (var b in decoded.Frames) b.Dispose();   // the clip already fell out
@@ -362,6 +387,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void OnGone(GifCascade.Faller f)
         {
             if (!_clips.Remove(f, out var c)) return;
+            // WPF ChaosGifCascadeOverlay.cs:511-521,555-560 detaches media on removal.
+            c.DecodeCancellation?.Cancel();
             c.Image.Source = null;
             _canvas.Children.Remove(c.Image);
             if (c.Frames != null) foreach (var b in c.Frames) b.Dispose();

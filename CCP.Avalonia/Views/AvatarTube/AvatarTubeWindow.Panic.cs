@@ -28,6 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
             try { _stopSpoken(); } catch { }
             _stopSpoken = static () => { };
+            // WPF KillAllAudio -> Subliminal.Stop (App.xaml.cs:1293): a trigger whisper plays while the
+            // subliminal scheduler, and so the engine stop, is idle, so it is cut here too.
+            try { Views.Overlays.SubliminalWhisperShow.StopAll(); } catch { }
             try { StopThinkingAnimation(); } catch { }
             try { _speechTimer?.Stop(); } catch { }
             try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
