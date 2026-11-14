@@ -314,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
                 double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
                 double runLeft = _state.RunDurationSec - _state.ElapsedSec;
-                if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
+                if (enabled.Contains("video") && (HeavyEffectActive || waveLeft < 14 || runLeft < 18))
                     enabled = enabled.Where(id => id != "video").ToList();
 
                 if (!cfg.ScriptedFirstRun && ChaosMeta.AtLeast(ChaosRank.Tempted)
