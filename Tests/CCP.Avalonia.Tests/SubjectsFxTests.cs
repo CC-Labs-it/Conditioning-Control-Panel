@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -236,6 +237,67 @@ public sealed class SubjectsFxTests
             var still = Tagged<Grid>(open.ContainerFromIndex(0)!, "lobby-card").RenderTransform as ScaleTransform;
             Assert.True(still == null || still.ScaleX == 1);
             Assert.False(view.SubjectsFxRunning);
+        }
+        finally
+        {
+            window?.Close();
+            SetClock(TimeProvider.System);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CardHoverUsesClockAndSharesPopScale() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var clock = new Clock();
+        SetClock(clock);
+        Window? window = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            var view = new AvailableSubjectsTabView();
+            Paint(view, 1);
+            window = new Window { Width = 1300, Height = 700, Content = view };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            Step(view, clock, 1000);
+            var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
+            var card = Tagged<Grid>(list.ContainerFromIndex(0)!, "lobby-card");
+            var face = Tagged<Border>(card, "lobby-card-face");
+            var sheen = Tagged<Border>(card, "lobby-sheen");
+            var rim = face.BorderBrush;
+            void Pointer(bool enter) => card.RaiseEvent(new PointerEventArgs(enter ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent, card,
+                new Pointer(1, PointerType.Mouse, true), card, default, 0, new PointerPointProperties(), KeyModifiers.None));
+            Pointer(true);
+            Assert.Equal(1, sheen.Opacity);
+            Assert.Equal(Color.Parse("#66FF8CC0"), Assert.IsType<SolidColorBrush>(face.BorderBrush).Color);
+            var scale = Assert.IsType<ScaleTransform>(card.RenderTransform);
+            Step(view, clock, 75);
+            Assert.Equal(1.015, scale.ScaleX, 6);
+            Step(view, clock, 75);
+            Assert.Equal(1.02, scale.ScaleX, 6);
+            view.LobbyEntrance(new System.Collections.Generic.HashSet<string> { ((LobbyCardView)list.Items[0]!).Id });
+            Assert.Same(scale, card.RenderTransform);
+            Assert.Equal(0.918, scale.ScaleX, 6);
+            Step(view, clock, 600);
+            Assert.Equal(1.02, scale.ScaleX, 6);
+            Pointer(false);
+            Assert.Equal(0, sheen.Opacity);
+            Assert.Same(rim, face.BorderBrush);
+            Step(view, clock, 150);
+            Assert.Equal(1, scale.ScaleX, 6);
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            Pointer(true);
+            Assert.Equal(1.02, scale.ScaleX, 6);
+            Pointer(false);
+            Assert.Equal(1, scale.ScaleX, 6);
         }
         finally
         {

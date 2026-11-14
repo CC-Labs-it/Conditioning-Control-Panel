@@ -69,12 +69,12 @@
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
-   <Grid Margin="0,0,6,8" Tag="lobby-card">
+   <Grid Margin="0,0,6,8" Tag="lobby-card" RenderTransformOrigin="50%,50%" PointerEntered="LobbyCardEnter" PointerExited="LobbyCardLeave" DetachedFromVisualTree="LobbyCardDetached">
     <!-- WPF AvailableSubjectsTabView.xaml:134: the ring a new table sends out (AvailableSubjectsTabView.Fx.cs) -->
     <Rectangle Tag="lobby-ring" RadiusX="16" RadiusY="16" Stroke="#FF8CC0" StrokeThickness="2" Opacity="0" IsHitTestVisible="False"/>
     <Rectangle Tag="lobby-float" Fill="{Binding CardShadow}" Height="{Binding CardShadowPx}" RadiusX="7" RadiusY="7"
                VerticalAlignment="Bottom" Margin="8,0,8,-6" IsHitTestVisible="False"/>
-   <Border CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="{Binding CardRim}" BorderThickness="1">
+   <Border Tag="lobby-card-face" CornerRadius="14" Padding="10,9" Background="{StaticResource LobbyGlass}" BorderBrush="{Binding CardRim}" BorderThickness="1">
     <Grid ColumnDefinitions="Auto,*,Auto">
      <!-- WPF AvailableSubjectsTabView.xaml:150-165: game art with the host's face and frame on its corner -->
      <Grid Width="40" Height="40" Margin="0,0,10,0" VerticalAlignment="Center">
@@ -97,6 +97,9 @@
      </Button>
     </Grid>
    </Border>
+    <Border Tag="lobby-sheen" CornerRadius="14" Opacity="0" IsHitTestVisible="False">
+     <Border.Background><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#00FFFFFF" Offset="0.2"/><GradientStop Color="#1EFFFFFF" Offset="0.5"/><GradientStop Color="#00FFFFFF" Offset="0.8"/></LinearGradientBrush></Border.Background>
+    </Border>
    </Grid>
   </DataTemplate>
  </UserControl.Resources>

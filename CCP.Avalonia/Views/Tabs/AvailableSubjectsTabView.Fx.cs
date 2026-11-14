@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -27,6 +28,50 @@ public partial class AvailableSubjectsTabView
     private sealed record Pop(ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start);
     private readonly List<Pop> _pops = new();
     private readonly HashSet<string> _seenRows = new();
+    private sealed record Hover(ScaleTransform Scale, double From, double Target, long Start);
+    private readonly Dictionary<ScaleTransform, Hover> _hovers = new();
+
+    private void LobbyCardEnter(object? sender, PointerEventArgs e) => SetCardHover((Control)sender!, true);
+    private void LobbyCardLeave(object? sender, PointerEventArgs e) => SetCardHover((Control)sender!, false);
+    private void LobbyCardDetached(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is Control { RenderTransform: ScaleTransform scale }) _hovers.Remove(scale);
+    }
+
+    // The pop and lift write one transform. The hover factor is independent of the pop clock.
+    private double HoverValue(ScaleTransform scale)
+    {
+        if (!_hovers.TryGetValue(scale, out var h)) return 1;
+        double t = Math.Clamp(FxTime.GetElapsedTime(h.Start).TotalMilliseconds / 150, 0, 1);
+        return h.From + (h.Target - h.From) * (1 - (1 - t) * (1 - t));
+    }
+
+    private double PopValue(ScaleTransform scale)
+    {
+        var p = _pops.FirstOrDefault(p => p.Card == scale);
+        if (p == null) return 1;
+        return 0.9 + 0.1 * BackOut(Math.Clamp(FxTime.GetElapsedTime(p.Start).TotalMilliseconds / 320, 0, 1));
+    }
+
+    private void SetCardHover(Control card, bool on)
+    {
+        var parts = card.GetVisualDescendants().OfType<Control>().ToList();
+        if (parts.FirstOrDefault(c => Equals(c.Tag, "lobby-sheen")) is Border sheen) sheen.Opacity = on ? 1 : 0;
+        if (parts.FirstOrDefault(c => Equals(c.Tag, "lobby-card-face")) is Border face && card.DataContext is LobbyCardView row)
+            face.SetCurrentValue(Border.BorderBrushProperty, on ? new SolidColorBrush(Color.Parse("#66FF8CC0")) : row.CardRim);
+        var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
+        card.RenderTransform = scale;
+        double from = HoverValue(scale), target = on ? 1.02 : 1;
+        if (!Env.AllowTransitions)
+        {
+            foreach (var p in _pops.Where(p => p.Card == scale)) if (p.Ring != null) p.Ring.Opacity = 0;
+            _pops.RemoveAll(p => p.Card == scale);
+        }
+        _hovers[scale] = new Hover(scale, Env.AllowTransitions ? from : target, target, FxTime.GetTimestamp());
+        scale.ScaleX = scale.ScaleY = PopValue(scale) * (Env.AllowTransitions ? from : target);
+        if (Env.AllowTransitions) StartSubjectsFxClock();
+        else if (!on) _hovers.Remove(scale);
+    }
 
     // WPF MainWindow.Lobby.cs:146-155: the first fill staggers every column in; after that only a new table pops.
     private void QueueLobbyEntrance(List<string> ids)
@@ -65,7 +110,7 @@ public partial class AvailableSubjectsTabView
         if (parts.FirstOrDefault(c => Equals(c.Tag, "lobby-card")) is not { } card) return;
         var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
         card.RenderTransform = scale;
-        scale.ScaleX = scale.ScaleY = 0.9;
+        scale.ScaleX = scale.ScaleY = 0.9 * HoverValue(scale);
         var ring = Env.AllowParticles ? parts.OfType<Rectangle>().FirstOrDefault(c => Equals(c.Tag, "lobby-ring")) : null;
         ScaleTransform? spread = null;
         if (ring != null) { ring.RenderTransform = spread = new ScaleTransform(); ring.Opacity = 0.9; }
@@ -159,7 +204,7 @@ public partial class AvailableSubjectsTabView
             var p = _pops[i];
             double ms = FxTime.GetElapsedTime(p.Start).TotalMilliseconds;
             double grow = Math.Clamp(ms / 320, 0, 1), spread = Math.Clamp(ms / 520, 0, 1);
-            p.Card.ScaleX = p.Card.ScaleY = 0.9 + 0.1 * BackOut(grow);
+            p.Card.ScaleX = p.Card.ScaleY = (0.9 + 0.1 * BackOut(grow)) * HoverValue(p.Card);
             if (p.Ring != null)
             {
                 p.RingScale!.ScaleX = p.RingScale.ScaleY = 1 + 0.08 * (1 - (1 - spread) * (1 - spread));
@@ -167,7 +212,15 @@ public partial class AvailableSubjectsTabView
             }
             if (p.Ring == null ? grow == 1 : spread == 1) _pops.RemoveAt(i);
         }
-        if (_entrances.Count == 0 && _pops.Count == 0) _subjectsFxBeat?.Stop();
+        bool hoverRunning = false;
+        foreach (var h in _hovers.Values.ToArray())
+        {
+            double value = HoverValue(h.Scale);
+            h.Scale.ScaleX = h.Scale.ScaleY = PopValue(h.Scale) * value;
+            if (FxTime.GetElapsedTime(h.Start).TotalMilliseconds < 150) hoverRunning = true;
+            else if (h.Target == 1) _hovers.Remove(h.Scale);
+        }
+        if (_entrances.Count == 0 && _pops.Count == 0 && !hoverRunning) _subjectsFxBeat?.Stop();
     }
 
     private void FinishSubjectsFx()
@@ -178,5 +231,7 @@ public partial class AvailableSubjectsTabView
         _entrances.Clear();
         foreach (var p in _pops) { p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
         _pops.Clear();
+        foreach (var h in _hovers.Values) h.Scale.ScaleX = h.Scale.ScaleY = 1;
+        _hovers.Clear();
     }
 }
