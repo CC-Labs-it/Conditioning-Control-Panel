@@ -116,6 +116,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
         internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
 
+        /// <summary>Media.Parse, resumed on the thread pool. LibVLCSharp completes the parse inside libvlc's
+        /// ParsedChanged callback, on libvlc's own thread while it still walks the media's listeners. A caller
+        /// with no synchronization context then runs its continuation right there, and disposing the media in
+        /// it frees the event manager under libvlc (native heap corruption: the 0xC0000005 at ntdll+0x1A12D,
+        /// restack fixw4c). Every awaited parse goes through here; never touch the media inside a libvlc event.</summary>
+        internal static async Task<MediaParsedStatus> ParseAsync(Media media, MediaParseOptions options, int timeoutMs)
+        {
+            var status = await media.Parse(options, timeoutMs).ConfigureAwait(false);
+            await Task.Yield();   // leave libvlc's callback thread before the caller disposes or drives the media
+            return status;
+        }
+
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
         internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
 
