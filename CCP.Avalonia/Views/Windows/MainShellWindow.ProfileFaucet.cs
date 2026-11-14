@@ -125,7 +125,8 @@ public partial class MainShellWindow
         }
         if (FaucetControl<Border>("ProfileVatChip") is { } chip) chip.IsVisible = waiting;
         if (FaucetControl<TextBlock>("ProfileVatChipText") is { } label) label.Text = Loc.GetF("profile_vat_chip", held);
-        if (FaucetControl<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0;
+        // WPF ProfileFaucet.cs:326-329 (restack b204, from #3931): the still badge dot stands in for the wobble only.
+        if (FaucetControl<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0 && !AmbientFxCanvas.Env.AllowAmbientLoops;
         // WPF ProfileFaucet.cs:352-489: the waiting tap wobbles, sparkles, ticks and breathes its chip.
         SetFaucetAmbient(waiting && _vatArmed && _vatOnScreen && VatGlassCanvas.WindowIsPresenting(this) && AmbientFxCanvas.Env.AllowAmbientLoops);
     }

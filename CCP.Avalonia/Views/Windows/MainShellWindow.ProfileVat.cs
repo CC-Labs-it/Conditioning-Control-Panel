@@ -67,14 +67,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (e.Property == WindowStateProperty) EvaluateVatPoll();
             };
+            // A motion level or performance change starts or parks the waiting tap and swaps its badge (restack b204, from #3931).
+            AmbientFxCanvas.Env.MotionGateChanged += OnFaucetMotionGate;
             Closed += (_, _) =>
             {
+                AmbientFxCanvas.Env.MotionGateChanged -= OnFaucetMotionGate;
                 _vatPollTimer?.Stop();
                 CancelFaucetCharge();
                 if (VatGlass is { } glass) glass.FillPercentChanged -= OnVatFillPercentChanged;
                 if (_vatDescent != null) _vatDescent.BlockChanged -= OnDescentBlockChanged;
             };
             if (page.IsEffectivelyVisible) OnProfileVatVisibilityChanged(true);
+        }
+
+        private void OnFaucetMotionGate()
+        {
+            if (_vatArmed) UpdateFaucetPresentation();
         }
 
         internal void OnProfileVatVisibilityChanged(bool onScreen)
