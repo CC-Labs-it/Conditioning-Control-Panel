@@ -663,7 +663,7 @@ public sealed class ModChoiceTests
         CoreSettings.ServiceProvider = () => settings;
         CoreReleaseContent.AppVersionProvider = () => "6.6.3";   // cycle v6.6.0
         using var svc = new ReleaseContentService(server.Prefix + "{0}/", handler);
-        var oldResources = Application.Current!.Resources.Keys.ToHashSet();
+        var oldResources = Application.Current!.Resources.ToDictionary(x => x.Key, x => x.Value);
         MainShellWindow? shell = null;
         try
         {
@@ -688,8 +688,9 @@ public sealed class ModChoiceTests
             foreach (var w in shell?.OwnedWindows.ToList() ?? new()) w.Close();
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
-            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.Contains(k)).ToList())
+            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.ContainsKey(k)).ToList())
                 Application.Current.Resources.Remove(key);   // the palette must not leak into later tests
+            foreach (var entry in oldResources) Application.Current.Resources[entry.Key] = entry.Value;   // nor overwrite an earlier value
             settings.SaveImmediate();
             settings.SealForReset();
             CoreSettings.ServiceProvider = oldSettings;

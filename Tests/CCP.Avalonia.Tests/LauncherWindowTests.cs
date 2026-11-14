@@ -1140,7 +1140,9 @@ public sealed class LauncherWindowTests
     public void ModPill_ReadsTheActiveMod_ASwitchRepaintsThePillAndRedrawsTheTiles() => Run(shell =>
     {
         var snapshot = new CoreModsSnapshot();
-        var oldResources = Application.Current!.Resources.Keys.ToHashSet();
+        // Values too, not only keys: an earlier repaint may already own PinkColor at the top level, and the
+        // switch below would leave the Dronification green there for every later test.
+        var oldResources = Application.Current!.Resources.ToDictionary(x => x.Key, x => x.Value);
         try
         {
             CoreSettings.Current.ActiveModId = BuiltInMods.CCPDefaultId;
@@ -1161,8 +1163,9 @@ public sealed class LauncherWindowTests
         }
         finally
         {
-            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.Contains(k)).ToList())
+            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.ContainsKey(k)).ToList())
                 Application.Current.Resources.Remove(key);
+            foreach (var entry in oldResources) Application.Current.Resources[entry.Key] = entry.Value;
             snapshot.Dispose();
             global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent();
             CoreSettings.Current.ActiveModId = BuiltInMods.CCPDefaultId;
@@ -1190,7 +1193,9 @@ public sealed class LauncherWindowTests
     public void Lockdown_ModPillOpensNoMenu_AndSwitchModRefuses() => Run(shell =>
     {
         var snapshot = new CoreModsSnapshot();
-        var oldResources = Application.Current!.Resources.Keys.ToHashSet();
+        // Values too, not only keys: an earlier repaint may already own PinkColor at the top level, and the
+        // switch below would leave the Dronification green there for every later test.
+        var oldResources = Application.Current!.Resources.ToDictionary(x => x.Key, x => x.Value);
         var ld = LockdownService.Current = new LockdownService();
         try
         {
@@ -1210,8 +1215,9 @@ public sealed class LauncherWindowTests
         finally
         {
             ld.Deactivate();
-            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.Contains(k)).ToList())
+            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.ContainsKey(k)).ToList())
                 Application.Current.Resources.Remove(key);
+            foreach (var entry in oldResources) Application.Current.Resources[entry.Key] = entry.Value;
             snapshot.Dispose();
             global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent();
             CoreSettings.Current.ActiveModId = BuiltInMods.CCPDefaultId;
