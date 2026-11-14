@@ -83,8 +83,11 @@ internal static class KeywordTriggerHead
         catch (Exception ex) { Log.Debug(ex, "Keyword input failed"); }
     }
 
-    private static (string? Process, bool Own) Foreground(uint id)
+    internal static (string? Process, bool Own) Foreground(uint id)
     {
+        // WPF KeywordTriggerService.cs:647-655: no foreground window (lock screen, mid-switch) names no app;
+        // process id 0 would otherwise resolve to the System Idle Process and offer it as a chip.
+        if (id == 0) return (null, false);
         try
         {
             using var p = Process.GetProcessById((int)id);
