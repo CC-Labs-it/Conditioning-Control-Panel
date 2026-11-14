@@ -4,9 +4,8 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session start, the directory opt-in chain, tray minimise
-// for remote and remote
-// browser video playback and reveal.
+// ponytail: still missing here - remote-driven session start, the directory opt-in chain and tray minimise
+// for remote.
 
 using System;
 using System.Linq;
@@ -70,6 +69,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RemoteCommands.RefreshOverlays = refreshOverlays;
             Action stopSession = StopSessionFromRemote;   // the one remote session stop (trigger_panic calls it too)
             RemoteCommands.StopSession = stopSession;
+            Func<string, string?> playHypnotube = PlayHypnotubeFromRemote;
+            Action stopBrowserVideo = StopBrowserVideoFromRemote;
+            (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (playHypnotube, stopBrowserVideo);
             var r = RemoteControlTabView.Relay.Value;
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
@@ -117,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CancelRemoteMoreConfirmation();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
                 if (RemoteCommands.StopSession == stopSession) RemoteCommands.StopSession = null;
+                if (RemoteCommands.PlayHypnotube == playHypnotube) (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (null, null);
                 DisposeRemoteHud();   // WPF OnClosing: an unowned visible window would hold the app open
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
@@ -212,7 +215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var r = RemoteControlTabView.Relay.Value;
             CancelRemoteMoreConfirmation();
-            if (LeashBrowser is { } browser) browser.IsVisible = false; // native web view airspace, WPF :904
+            // Native web view airspace, WPF :904; not while the controller's own video plays (a reconnect mid-video keeps it).
+            if (!_remoteOverlayBrowserRevealed && LeashBrowser is { } browser) browser.IsVisible = false;
             var text = string.IsNullOrEmpty(r.SessionCode) ? "" : $"Session: {string.Join(" ", r.SessionCode.ToCharArray())}";
             if (!string.IsNullOrEmpty(r.ConnectPin)) text += $"  PIN: {r.ConnectPin}";
             if (Named<TextBlock>("TxtOverlaySessionCode") is { } code) code.Text = text;
@@ -225,6 +229,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _remoteOverlayTimer ??= new DispatcherTimer(RemoteOverlaySlowTick, DispatcherPriority.Background, (_, _) => RemoteOverlayTick());
             _remoteOverlayTimer.Start();
             RemoteOverlayTick();
+        }
+
+        // WPF :946: a controller video has lifted the blindfold; Show must not put it back underneath.
+        private bool _remoteOverlayBrowserRevealed;
+
+        /// <summary>WPF RevealBrowserForRemoteVideo (:951): the controller's video wins over the overlay card (never
+        /// over a leash gate or a tour: RestoreBrowser keeps those); when it stops and the controller is still here,
+        /// the card gets the browser's space back.</summary>
+        private void RevealBrowserForRemoteVideo(bool reveal)
+        {
+            _remoteOverlayBrowserRevealed = reveal;
+            if (reveal) RestoreBrowser();
+            else if (Named<Border>("RemoteControlOverlay")?.IsVisible == true && LeashBrowser is { } browser) browser.IsVisible = false;
         }
 
         /// <summary>WPF's 1 s session-info cadence; 100 ms only while a toast or fade-out is pending (P07).</summary>
@@ -260,6 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
                 // WPF MainWindow.Leash.cs:185-201: the gate owns the browser until it goes; a tour that is
                 // still up keeps it hidden too (#4384). One rule: RestoreBrowser (MainShellWindow.BrowserCover.cs).
+                _remoteOverlayBrowserRevealed = false;
                 RestoreBrowser();
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;

@@ -77,6 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF IsReady: the page said ready and is not on its way out.</summary>
         internal bool DtrhReady => IsReady && !_dtrhExiting && !_closing;
 
+        /// <summary>WPF DtrhHostService.IsActive: a DtRH window is open.</summary>
+        internal static bool IsDtrhOpen() { lock (Open) return Open.Any(w => w.IsDtrh); }
+
         /// <summary>WPF IsInFront: the open DtRH window when it is the active one, else null.</summary>
         internal static GameWindow? DtrhInFront()
         {
