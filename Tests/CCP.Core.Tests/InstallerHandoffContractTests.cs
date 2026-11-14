@@ -236,6 +236,9 @@ public partial class InstallerHandoffContractTests
         Assert.Contains("The old browser_data profile is kept.", notice);
         Assert.Contains("does not clear CCP account tokens, settings or progress.", notice);
         Assert.DoesNotContain("InfoBeforeFile=INSTALL_AVALONIA.txt", Read("installer.iss"));
+        // Seen on the page, so the app's notice (AppUpdater.BrowserResetAcknowledged) is not owed again.
+        Assert.Contains("if not WizardSilent and not IsAdminInstallMode and", installer);
+        Assert.Contains(@"{localappdata}\ConditioningControlPanel\browser-reset.ack.json", installer);
     }
 
     [Fact]

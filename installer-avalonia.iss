@@ -245,6 +245,14 @@ Type: filesandordirs; Name: "{app}\logs"
 #include "installer-avalonia-code-2.iss"
       if CheckForMutexes('ConditioningControlPanel_SingleInstance_Mutex') then
 #include "installer-avalonia-code-3.iss"
+
+    // The InfoBeforeFile page showed the browser reset notice, so the app need not repeat it
+    // (AppUpdater.cs NeedsBrowserResetNotice). Only a non-elevated setup's {localappdata} is the user's own.
+    if not WizardSilent and not IsAdminInstallMode and
+       DirExists(ExpandConstant('{localappdata}\ConditioningControlPanel\browser_data')) then
+      if not SaveStringToFile(ExpandConstant('{localappdata}\ConditioningControlPanel\browser-reset.ack.json'), '{}', False) then
+        Log('Could not write browser reset acknowledgment');
+
     if not WizardIsTaskSelected('fileassoc') then
       CleanupFileAssociations();
 #include "installer-avalonia-code-4.iss"
