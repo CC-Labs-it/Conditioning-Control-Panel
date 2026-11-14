@@ -684,7 +684,7 @@ public sealed class LauncherWindowTests
 
         // Only the destinations this head has: the Breakout demo, Piece by Piece, Racing Thoughts and Down the Rabbit Hole game hosts,
         // then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "dtrh", "intake" }, Tiles(launcher));
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
