@@ -86,6 +86,15 @@ namespace ConditioningControlPanel.Avalonia
         /// and let the awareness switch start/stop it. Startup calls this; tests drive the same hook.</summary>
         internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger)
         {
+            // WPF App.xaml.cs:3125: upgraders may never reopen the consent dialog.
+            try
+            {
+                var settings = CoreSettings.Service;
+                bool wrote = ConditioningControlPanel.Services.Awareness.AwarenessPrivacyRules.EnsureSeeded(settings?.Current);
+                wrote |= ConditioningControlPanel.Services.Awareness.AwarenessIntensityMigration.EnsureMigrated(settings?.Current);
+                if (wrote) settings?.Save();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Awareness: startup migration failed"); }
             ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = ledger;
             try { ledger.PruneOnDisk(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "ActivityLedger: startup retention sweep failed"); }
@@ -1856,7 +1865,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Games.LinuxRaceHost.Current?.Dispose();
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
-            Platform.LoginStreakHead.ClearProfile();
+            Platform.LoginStreakHead.Stop();
             ClearEngineCrashOnExit();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no

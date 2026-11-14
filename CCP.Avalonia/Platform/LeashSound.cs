@@ -21,6 +21,9 @@ internal static class LeashSound
 
     internal static void Denied(DateTime now) => Play(LeashCue.Denied, "chaos/ui_denied.mp3", 0.16f, now);
 
+    // WPF LeashFx.Sent: an offer the server took.
+    internal static void Sent(DateTime now) => Play(LeashCue.Sent, "chaos/chip_pop.mp3", 0.16f, now);
+
     internal static void Cut(DateTime now) => Play(LeashCue.Cut, "chaos/snap.mp3", 0.22f, now);
 
     /// <summary>WPF LeashHolderCard.ReleaseAsync: the cut when the server took the Let go, else Denied.</summary>
