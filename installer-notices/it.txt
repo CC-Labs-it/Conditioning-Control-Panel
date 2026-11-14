@@ -1,0 +1,7 @@
+﻿Aggiornamento ad Avalonia
+
+Passando da WPF, gli accessi nel browser integrato vengono reimpostati. Accedi di nuovo ai siti aperti in CCP.
+
+Il nuovo profilo browser_data_avalonia si trova nella cartella dei dati utente di CCP. Il vecchio profilo browser_data viene conservato.
+
+Questa modifica non cancella i token dell’account CCP, le impostazioni o i progressi.

@@ -79,8 +79,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _leashGate.CutRequested += () => _ = CutLeashAsync();
                 _leashGate.LaterRequested += () => { _leashUnplayablePid = null; HideLeashGate(); };
 
+                InitializeLeashAsks();
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-                timer.Tick += (_, _) => CheckLeashGate();
+                timer.Tick += (_, _) => { RebindLeashAsks(); CheckLeashGate(); };
                 timer.Start();
                 Closed += (_, _) => timer.Stop();
             }

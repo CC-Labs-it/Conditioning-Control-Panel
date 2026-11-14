@@ -7959,6 +7959,8 @@
   "leash_video_max": "Durée max d'une vidéo",
   "leash_video_max_hint": "Une vidéo s'arrête à sa fin ou à cette durée, selon ce qui arrive en premier.",
   "leash_self_hold_hint": "Maintiens {0} 5 secondes, n'importe où, pour couper la laisse.",
+  "leash_self_cut_wayland": "Utilise Couper la laisse ci-dessus.",
+  "leash_explain_cut_wayland": "Tu peux la couper à tout moment sur la page {0}. Couper désactive aussi le Verrouillage Strict et réactive la touche panique.",
   "leash_evt_punish_done": "{0} a terminé la punition",
   "leash_evt_punish_skipped": "{0} n'a pas pu lire cette vidéo, la punition a donc été sautée",
   "leash_skip_unplayable": "La vidéo ne se lançait pas de son côté. Aucune grâce dépensée.",
@@ -8468,5 +8470,6 @@
   "chaos_expiry_name_braindrain": "brain drain",
   "chaos_expiry_name_gif": "cascade de GIF",
   "webcam_camera_unavailable_detail": "Caméra indisponible. Une autre application l’utilise peut-être ou les paramètres de confidentialité la bloquent.",
-  "webcam_capture_retry_fmt": "La caméra répond lentement. Essai d’une autre méthode ({0}/{1})."
+  "webcam_capture_retry_fmt": "La caméra répond lentement. Essai d’une autre méthode ({0}/{1}).",
+  "installer_avalonia_upgrade_notice": "Mise à niveau vers Avalonia\n\nLa mise à niveau depuis WPF réinitialise les connexions du navigateur intégré. Reconnectez-vous aux sites ouverts dans CCP.\n\nLe nouveau profil browser_data_avalonia se trouve dans le dossier de données utilisateur de CCP. L’ancien profil browser_data est conservé.\n\nCe changement n’efface pas les jetons du compte CCP, les paramètres ni la progression."
 }

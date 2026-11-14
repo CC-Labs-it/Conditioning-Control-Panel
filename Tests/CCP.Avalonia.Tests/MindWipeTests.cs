@@ -330,6 +330,54 @@ public sealed class MindWipeTests
         Assert.Null(cleanSlate);
     });
 
+    /// <summary>Restack b178 (#4375): a stop or panic that lands while the loop builds its voice wins,
+    /// and a newer loop start disposes the older one that finished later.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Stop_during_loop_start_disposes_the_late_voice(bool panic) => Run((_, voices, clock) =>
+    {
+        var built = new Voice { Loop = true };
+        MindWipePlayer? player = null;
+        player = new MindWipePlayer((path, vol, loop, ended) =>
+        {
+            if (panic) CoreEngine.Stop(); else player!.StopLoop();
+            return built;
+        }, (path, ended) => null, clock);
+        player.Seed();
+        try
+        {
+            player.StartLoop(0.5);
+            Assert.False(player.IsLooping);
+            Assert.True(built.Disposed);
+        }
+        finally { player.UnwatchMaster(); }
+    });
+
+    [Fact]
+    public void Newer_loop_start_wins_over_an_older_one_that_finishes_later() => Run((_, voices, clock) =>
+    {
+        var older = new Voice { Loop = true };
+        var newer = new Voice { Loop = true };
+        var starts = 0;
+        MindWipePlayer? player = null;
+        player = new MindWipePlayer((path, vol, loop, ended) =>
+        {
+            if (++starts != 1) return newer;
+            player!.StartLoop(0.5);   // the newer start finishes before the older one returns
+            return older;
+        }, (path, ended) => null, clock);
+        try
+        {
+            player.StartLoop(0.5);
+            Assert.True(player.IsLooping);
+            Assert.True(older.Disposed);
+            Assert.False(newer.Disposed);
+        }
+        finally { player.StopLoop(); }
+        Assert.True(newer.Disposed);
+    });
+
     [Fact]
     public void Engine_stop_silences_a_test_clip_and_the_loop() => Run((player, voices, clock) =>
     {

@@ -1,0 +1,7 @@
+Avalonia upgrade
+
+Embedded browser logins reset when upgrading from WPF. Sign in again to websites opened inside CCP.
+
+The new browser profile is browser_data_avalonia under your CCP user data folder. The old browser_data profile is kept.
+
+This browser change does not clear CCP account tokens, settings or progress.

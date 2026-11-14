@@ -7959,6 +7959,8 @@
   "leash_video_max": "Vídeo mais longo",
   "leash_video_max_hint": "Um vídeo termina quando acaba ou neste tempo, o que vier primeiro.",
   "leash_self_hold_hint": "Segure {0} por 5 segundos, em qualquer lugar, para cortar a coleira.",
+  "leash_self_cut_wayland": "Use Cortar coleira acima.",
+  "leash_explain_cut_wayland": "Você pode cortar quando quiser na página {0}. Cortar também desliga o Bloqueio Rigoroso e religa a tecla de pânico.",
   "leash_evt_punish_done": "{0} terminou o castigo",
   "leash_evt_punish_skipped": "O vídeo não tocou para {0}, então o castigo foi pulado",
   "leash_skip_unplayable": "O vídeo não tocou para a pessoa. Nenhum perdão gasto.",
@@ -8468,5 +8470,6 @@
   "chaos_expiry_name_braindrain": "brain drain",
   "chaos_expiry_name_gif": "cascata de GIFs",
   "webcam_camera_unavailable_detail": "Câmera indisponível. Outro aplicativo pode estar usando a câmera ou as configurações de privacidade podem estar bloqueando o acesso.",
-  "webcam_capture_retry_fmt": "A câmera está demorando para responder. Tentando outro método ({0}/{1})."
+  "webcam_capture_retry_fmt": "A câmera está demorando para responder. Tentando outro método ({0}/{1}).",
+  "installer_avalonia_upgrade_notice": "Atualização para Avalonia\n\nAo atualizar do WPF, os logins do navegador integrado são redefinidos. Entre novamente nos sites abertos no CCP.\n\nO novo perfil browser_data_avalonia fica na pasta de dados do usuário do CCP. O perfil antigo browser_data é mantido.\n\nEssa alteração não apaga os tokens da conta CCP, as configurações ou o progresso."
 }

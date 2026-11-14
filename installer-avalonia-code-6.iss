@@ -32,10 +32,3 @@ ShowLanguageDialog=auto
 ; License and info pages (optional - create these files if desired)
 ; LicenseFile=LICENSE.txt
 ; InfoBeforeFile=INSTALL_INFO.txt
-
-[Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
-
-[Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce

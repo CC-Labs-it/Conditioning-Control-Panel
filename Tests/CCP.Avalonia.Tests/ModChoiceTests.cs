@@ -31,6 +31,23 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class ModChoiceTests
 {
+    // Restack b164 (#4129): WPF MainWindow.xaml.cs:2455-2458, the support card names the active takeover.
+    [Fact]
+    public Task AccountSupportCopyTracksTakeoverName() => Run(async (shell, svc, server) =>
+    {
+        shell.ShowTab("appsettings");
+        var section = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AccountSettingsSection>("SectionAccount")!;
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        var drone = ConditioningControlPanel.Localization.Loc.GetF("label_patreon_features", AvApp.Mods.GetTakeoverLabel());
+        Assert.Equal(drone, section.SupportFeaturesText);
+        AvApp.Mods.ActivateMod(BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("label_patreon_features", AvApp.Mods.GetTakeoverLabel()), section.SupportFeaturesText);
+        Assert.NotEqual(drone, section.SupportFeaturesText);
+        await Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -35,8 +35,27 @@
 #include "installer-avalonia-code-5.iss"
 SetupIconFile=Assets\app.ico
 
+; Avalonia only (code-6 keeps the WPF excerpt verbatim): WPF BrowserService.cs:127-131 uses browser_data;
+; WebViewProfile.cs:19-31 uses a new profile, so upgraders are told before installing.
+InfoBeforeFile=INSTALL_AVALONIA.txt
+
 ; Compression
 #include "installer-avalonia-code-6.iss"
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
+Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl,installer-notices\zh-CN.isl"; InfoBeforeFile: "installer-notices\zh-CN.txt"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"; InfoBeforeFile: "installer-notices\ja.txt"
+Name: "korean"; MessagesFile: "compiler:Default.isl,installer-notices\ko.isl"; InfoBeforeFile: "installer-notices\ko.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoBeforeFile: "installer-notices\es.txt"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoBeforeFile: "installer-notices\fr.txt"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"; InfoBeforeFile: "installer-notices\it.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoBeforeFile: "installer-notices\de.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "installer-notices\ru.txt"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 Name: "fileassoc"; Description: "Add 'Open with CCP' to right-click menu for media files (.mp4, .mp3, etc.)"; GroupDescription: "File associations:"; Flags: unchecked
 
 [Files]
@@ -130,6 +149,16 @@ Type: files;      Name: "{app}\Resources\sounds\ZAP COCK DRAIN OBEY.mp3"
 ; view natives in the single-file exe, so a stale loader beside it could only shadow them.
 Type: files;      Name: "{app}\WebView2Loader.dll"
 
+; WPF shipped LibVLC 3.0.21 in {app}\libvlc (ConditioningControlPanel.csproj:146,945-953).
+; These exact old-only paths are absent from the 3.0.24 publish; preserve other files.
+Type: files;      Name: "{app}\libvlc\lua\playlist\youtube.luac"
+Type: files;      Name: "{app}\libvlc\plugins\access\libbluray-awt-j2se-1.3.2.jar"
+Type: files;      Name: "{app}\libvlc\plugins\access\libbluray-j2se-1.3.2.jar"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\lua\playlist\youtube.luac"
+Type: files;      Name: "{app}\libvlc\win-x86\lua\playlist\youtube.luac"
+
 [Icons]
 ; Start Menu shortcut
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon
@@ -216,6 +245,14 @@ Type: filesandordirs; Name: "{app}\logs"
 #include "installer-avalonia-code-2.iss"
       if CheckForMutexes('ConditioningControlPanel_SingleInstance_Mutex') then
 #include "installer-avalonia-code-3.iss"
+
+    // The InfoBeforeFile page showed the browser reset notice, so the app need not repeat it
+    // (AppUpdater.cs NeedsBrowserResetNotice). Only a non-elevated setup's {localappdata} is the user's own.
+    if not WizardSilent and not IsAdminInstallMode and
+       DirExists(ExpandConstant('{localappdata}\ConditioningControlPanel\browser_data')) then
+      if not SaveStringToFile(ExpandConstant('{localappdata}\ConditioningControlPanel\browser-reset.ack.json'), '{}', False) then
+        Log('Could not write browser reset acknowledgment');
+
     if not WizardIsTaskSelected('fileassoc') then
       CleanupFileAssociations();
 #include "installer-avalonia-code-4.iss"
