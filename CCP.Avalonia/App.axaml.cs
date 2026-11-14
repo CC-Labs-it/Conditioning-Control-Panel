@@ -880,7 +880,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             // WPF App.xaml.cs:380,463,2952,3282: re-clones must see the live AI availability (the one seed).
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
-            var presets = new KeywordTriggerPresetService();
+            var presets = KeywordPresets;   // the one head-owned service (WPF App.KeywordPresets)
             try { presets.SyncInstalledCustomSources(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
             foreach (var id in settings.PendingPresetReinstalls.ToList())
