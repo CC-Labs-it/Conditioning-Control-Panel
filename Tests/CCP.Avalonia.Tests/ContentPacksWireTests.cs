@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
@@ -16,6 +18,7 @@ namespace CCP.Avalonia.Tests;
 /// content-packs-wire: the startup seed (WPF App.xaml.cs:3163 / :448) and the flash, video and bubble
 /// pools drawing active content-pack media (WPF FlashService / VideoService / BubbleCountService).
 /// </summary>
+[Collection(RunsAloneCollection.Name)]
 public sealed class ContentPacksWireTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ccp-packwire-" + Guid.NewGuid().ToString("N"));
@@ -144,6 +147,86 @@ public sealed class ContentPacksWireTests : IDisposable
         store.DeactivatePack("p1");
         Assert.Equal(Expected(1, 0), MandatoryVideoOverlay.NoVideosMessage(s));   // installed, none active
         Assert.NotEqual(Expected(1, 1), Expected(1, 0));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Startup_StatusUsesLiveProviderTokensAndHonorsLogout(bool failWhileSignedIn)
+    {
+        var oldGet = CoreSecrets.RetrieveProvider;
+        var oldSet = CoreSecrets.StoreProvider;
+        ProviderSubscription? seededPatreon = null;
+        DiscordAccount? seededDiscord = null;
+
+        async Task CheckStatusAsync()
+        {
+            try
+            {
+                // WPF ContentPackService.cs:831-884: Patreon priority, then Discord, never stale auth.
+                var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+                CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var value) ? value : null;
+                CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+                Assert.True(AccountSeed.Seed());
+                seededPatreon = AccountSeed.Patreon;
+                seededDiscord = AccountSeed.Discord;
+                var handler = new StatusHandler();
+                var store = StoreWithPack(("a.png", "image"));
+                AvApp.StartContentPacks(store, _root, "http://127.0.0.1:9", new System.Net.Http.HttpClient(handler));
+                var svc = PackService.Current!;
+                Assert.Null(await svc.GetFullPackStatusAsync());
+                Assert.Empty(handler.Seen);
+
+                secrets["discord_auth"] = JsonConvert.SerializeObject(new DiscordTokenData
+                { AccessToken = "discord-test", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+                Assert.Equal(7, (await svc.GetFullPackStatusAsync())!.DailyLimit);
+                Assert.Equal(("/discord/pack/status", "Bearer discord-test"), handler.Seen[0]);
+
+                secrets["patreon_auth"] = JsonConvert.SerializeObject(new PatreonTokenData
+                { AccessToken = "patreon-test", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+                Assert.Equal(7, (await svc.GetFullPackStatusAsync())!.DailyLimit);
+                Assert.Equal(("/pack/status", "Bearer patreon-test"), handler.Seen[1]);
+                Assert.Equal(2, handler.Seen.Count);
+                if (failWhileSignedIn) Assert.Fail("Simulated failure while signed in");
+                secrets.Clear();
+                Assert.Null(await svc.GetFullPackStatusAsync());
+                Assert.Equal(2, handler.Seen.Count);
+            }
+            finally
+            {
+                CoreSecrets.RetrieveProvider = oldGet;
+                CoreSecrets.StoreProvider = oldSet;
+                // Match AccountSettingsSectionTests: discard providers bound to the test state.
+                AccountSeed.Seed(p => new ProviderSubscription(p));
+            }
+        }
+
+        if (failWhileSignedIn)
+        {
+            var error = await Assert.ThrowsAnyAsync<Xunit.Sdk.XunitException>(CheckStatusAsync);
+            Assert.Contains("Simulated failure while signed in", error.Message);
+        }
+        else await CheckStatusAsync();
+
+        // Checked before the assembly hook can hide a missing local cleanup, on both exits.
+        Assert.Same(oldGet, CoreSecrets.RetrieveProvider);
+        Assert.Same(oldSet, CoreSecrets.StoreProvider);
+        Assert.NotNull(seededPatreon);
+        Assert.NotNull(seededDiscord);
+        Assert.NotSame(seededPatreon, AccountSeed.Patreon);
+        Assert.NotSame(seededDiscord, AccountSeed.Discord);
+    }
+
+    private sealed class StatusHandler : System.Net.Http.HttpMessageHandler
+    {
+        internal readonly System.Collections.Generic.List<(string, string?)> Seen = new();
+        protected override System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            Seen.Add((request.RequestUri!.AbsolutePath, request.Headers.Authorization?.ToString()));
+            return System.Threading.Tasks.Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent("{\"dailyLimit\":7}") });
+        }
     }
 
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
