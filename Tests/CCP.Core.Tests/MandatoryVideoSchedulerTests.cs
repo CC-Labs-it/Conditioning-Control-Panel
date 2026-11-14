@@ -4,6 +4,7 @@ using System.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.Haptics.Core;
 using Xunit;
 using FakeClock = CCP.Core.Tests.PopQuizSchedulerTests.FakeClock;
 
@@ -31,10 +32,12 @@ public sealed class MandatoryVideoSchedulerTests
         public double Watched;
         public bool ThrowOnClose;
         public readonly List<bool> FlashesAtShow = new();
+        public Action<string>? OnShow;
         public void Show(string path, bool strict)
         {
             FlashesAtShow.Add(CoreFlash.IsRunning);
             Shown.Add((path, strict));
+            OnShow?.Invoke(path);
         }
         public double CloseAll() { Closes++; if (ThrowOnClose) throw new InvalidOperationException(); return Watched; }
         public readonly List<AttentionVerdict> Messages = new();
@@ -690,6 +693,47 @@ public sealed class MandatoryVideoSchedulerTests
         }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReplacedClipDoesNotAnnounceOrStartBeforeTheReplacementPreRoll(bool throwAfterReplace) => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips); var started = new List<string?>();
+        v.VideoStarted += () => started.Add(v.LastVideoPath);
+        host.OnShow = path =>
+        {
+            if (path != "/old.mp4") return;
+            v.End(); Assert.True(v.Trigger(path: "/new.mp4"));
+            if (throwAfterReplace) throw new InvalidOperationException("old host failed");
+        };
+        Assert.True(v.Trigger(path: "/old.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.True(v.IsPlaying); Assert.Null(v.LastVideoPath); Assert.Empty(started);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(new[] { "/new.mp4" }, started); v.ForceCleanup();
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void StopDuringStartCallbacksDoesNotLeaveVideoHapticsOrStartAScript(bool stopOnVideoStarted) => With(20, false, () =>
+    {
+        using var h = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
+        var old = CoreHaptics.Service; CoreHaptics.Service = h;
+        try
+        {
+            var seq = typeof(ConditioningControlPanel.Services.Haptics.FunScriptService).GetField("_loadSeq", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var before = (long)seq.GetValue(h.FunScript)!;
+            var clock = new FakeClock(); var v = new MandatoryVideoScheduler(new Host(), clock, () => Clips);
+            if (stopOnVideoStarted) v.VideoStarted += v.End;
+            else h.HapticTriggered += (_, m) => { if (m.StartsWith("Video Background")) v.End(); };
+            Assert.True(v.Trigger()); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.False(v.IsPlaying); Assert.Equal(0, h.GetLayer(HapticLayer.Video));
+            Assert.Equal(before + 1, (long)seq.GetValue(h.FunScript)!); // stop only, no asynchronous script load
+        }
+        finally { CoreHaptics.Service = old; }
+    });
+
     [Fact]
     public void ForceCleanup_does_not_rearm_and_cancels_a_pending_pre_roll() => With(20, true, () =>
     {
@@ -1178,6 +1222,41 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.True(MandatoryVideoScheduler.GuardHeals("output lost", false));
         Assert.False(MandatoryVideoScheduler.GuardHeals("output lost", true));
         Assert.False(MandatoryVideoScheduler.GuardHeals("max length", false));
+    }
+
+    [Fact]
+    public void RemoteClipGuardWaitsTwentySecondsForTheFirstFrame()
+    {
+        string? G(double show, bool framed, double sinceFrame, bool remote) =>
+            MandatoryVideoScheduler.Guard(show, 0, framed, true, 0, sinceFrame, 0, remote: remote);
+        Assert.Null(G(7.99, false, 0, false));
+        Assert.Equal("no frame", G(8, false, 0, false));
+        Assert.Null(G(8, false, 0, true));
+        Assert.Null(G(19.99, false, 0, true));
+        Assert.Equal("no frame", G(20, false, 0, true));
+    }
+
+    [Fact]
+    public void RemoteClipWithNoReportedVideoTrackStillTimesOut()
+    {
+        Assert.Null(MandatoryVideoScheduler.Guard(19.99, 0, false, false, 0, 0, 0, remote: true));
+        Assert.Equal("no frame", MandatoryVideoScheduler.Guard(20, 0, false, false, 0, 0, 0, remote: true));
+        Assert.Null(MandatoryVideoScheduler.Guard(20, 0, false, false, 0, 0, 0)); // local audio-only
+    }
+
+    [Fact]
+    public void RemoteClipOutputFailuresEndWithoutReplay()
+    {
+        string? G(double show, bool framed, double sinceFrame, bool remote) =>
+            MandatoryVideoScheduler.Guard(show, 0, framed, true, 0, sinceFrame, 0, remote: remote);
+        Assert.Null(G(25, true, 4.99, true));
+        Assert.Equal("output lost", G(25, true, 5, true));
+        foreach (var why in new[] { "no frame", "output lost" })
+        {
+            Assert.True(MandatoryVideoScheduler.GuardHeals(why, false));
+            Assert.False(MandatoryVideoScheduler.GuardHeals(why, false, remote: true));
+            Assert.False(MandatoryVideoScheduler.GuardHeals(why, true));
+        }
     }
 
     // WPF CompanionService.OnAttentionCheckFailed: only the Trainer's perk costs 25 XP, floored at 0.

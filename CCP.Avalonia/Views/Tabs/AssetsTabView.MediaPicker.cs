@@ -32,9 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// Deviations: the consent ask is AWAITED (MessageDialog is async) and MediaSource is written
     /// only after Yes; the chips are put back first so nothing reads "Reddit" while it waits.
-    /// WPF's InvalidateAssetPoolsAfterSelectionChange has no target here: no flash/video service
-    /// on this head consumes online media yet (parity row views-tab-assets), so the switch is
-    /// ResetAllChannels + Save, which is what intake (the one consumer) reads.
+    /// ResetAllChannels + Save updates intake and mandatory videos: the video pool checks the
+    /// live selection before accepting a batch or drawing.
     /// </summary>
     public partial class AssetsTabView
     {
