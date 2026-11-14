@@ -67,6 +67,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
+        /// <summary>Shared preset events, as WPF App.xaml.cs:1254,3230.</summary>
+        internal static KeywordTriggerPresetService KeywordPresets { get; } = new();
+
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
         internal static IntakePunchCardService? IntakePunchCard { get; set; }
@@ -877,7 +880,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             // WPF App.xaml.cs:380,463,2952,3282: re-clones must see the live AI availability (the one seed).
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
-            var presets = new KeywordTriggerPresetService();
+            var presets = KeywordPresets;   // the one head-owned service (WPF App.KeywordPresets)
             try { presets.SyncInstalledCustomSources(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
             foreach (var id in settings.PendingPresetReinstalls.ToList())
