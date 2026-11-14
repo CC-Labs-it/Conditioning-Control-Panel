@@ -147,6 +147,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// parks a keyed Inbox row; only its explicit Open bypasses that deferral.</summary>
         internal async Task OfferAchievementSharingAfterDiscordLink(bool userAsked = false)
         {
+            // Switched off by the owner (2026-11-07, WPF Patreon.cs:945): no unasked prompt. The Discord
+            // checkbox stays, and a row the user opens (userAsked) still asks.
+            if (!userAsked && !Platform.PopupSwitches.DiscordSharePrompt) return;
             if (AccountSeed.Discord?.IsAuthenticated != true || _achievementShareOfferUp) return;
             var s = CoreSettings.Current;
             var routing = AchievementSharePromptDecision.Decide(s.DiscordShareAchievements,

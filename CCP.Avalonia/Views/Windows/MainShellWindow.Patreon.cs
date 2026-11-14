@@ -298,6 +298,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingRiseTier = 0;
             try
             {
+                // Switched off by the owner (2026-11-07, WPF Patreon.cs:1249): no celebration card, big or small.
+                // The tier is still recorded (TierOnNoticePass), so the small card never fires late.
+                if (!Platform.PopupSwitches.TierCelebration) { TierOnNoticePass(mayShow: false); return; }
                 if (!CoreAccount.HasPremiumAccess) return;
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
@@ -372,7 +375,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
         }
 
-        internal void TierOnNoticePass()
+        internal void TierOnNoticePass() => TierOnNoticePass(mayShow: true);
+
+        internal void TierOnNoticePass(bool mayShow)
         {
             try
             {
@@ -387,7 +392,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     s.LastKnownEffectiveTier = verdict.Record;
                     if (hadReading) CoreSettings.Save();
                 }
-                if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                if (!verdict.Owed || !mayShow || !Platform.PopupSwitches.TierCelebration) return;
+                if (TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
                 var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
                 var body = Loc.Get("tier_on_body");
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
