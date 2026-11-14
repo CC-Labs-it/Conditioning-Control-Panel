@@ -593,6 +593,7 @@ export function createHud(opts = {}) {
   for (const button of root.querySelectorAll('[data-turncard]')) click(button, () => setPresentation({ turnCard: button.dataset.turncard }));
   for (const button of root.querySelectorAll('[data-amount]')) click(button, () => setPresentation(watching ? { watchAmount: button.dataset.amount } : { amount: button.dataset.amount }));
   for (const button of root.querySelectorAll('[data-ramp]')) click(button, () => setPresentation({ rampSpeed: button.dataset.ramp }));
+  for (const button of root.querySelectorAll('[data-boardmotion]')) click(button, () => setPresentation({ boardMotion: button.dataset.boardmotion }));
   const strength = pick('game-strength');
   const strengthOut = pick('game-strength-out');
   const strengthInput = () => {
@@ -655,6 +656,7 @@ export function createHud(opts = {}) {
     if (invertY) invertY.checked = p.invertY;
     for (const button of root.querySelectorAll('[data-turncard]')) button.setAttribute('aria-pressed', String(button.dataset.turncard === p.turnCard));
     for (const button of root.querySelectorAll('[data-ramp]')) button.setAttribute('aria-pressed', String(button.dataset.ramp === p.rampSpeed));
+    for (const button of root.querySelectorAll('[data-boardmotion]')) button.setAttribute('aria-pressed', String(button.dataset.boardmotion === p.boardMotion));
     if (strength && document.activeElement !== strength) strength.value = String(Math.round(p.strength * 100));
     if (strengthOut) strengthOut.textContent = Math.round(p.strength * 100) + '%';
     const note = pick('game-preference-note');
