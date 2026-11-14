@@ -9,6 +9,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -88,6 +89,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             CoreSettings.Current.KeywordTriggers.Add(t);
             CoreSettings.Save();
             RefreshTriggerList();
+            var row = ListPanel.Children.OfType<Border>().FirstOrDefault(x => Equals(x.Tag, t.Id));
+            if (row?.Child is StackPanel main && main.Children[0] is Grid top && top.Children[1] is TextBox keyword)
+                Dispatcher.UIThread.Post(() => { row.BringIntoView(); keyword.Focus(); }, DispatcherPriority.Background);
         }
 
         /// <summary>KeywordTriggerService.ImportFromCustomTriggers + BtnImportFromCustomTriggers_Click.</summary>

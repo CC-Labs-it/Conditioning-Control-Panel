@@ -302,10 +302,13 @@ internal sealed class KeywordAudioRuntime
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }   // WPF :193-200 keeps the OCR guards
     internal void ClearInput() => _input.Clear();
 
+    internal static bool ShouldListen(bool active, bool disposed, bool sessionPaused)
+        => active && !disposed && !sessionPaused;
+
     private bool Accept(string? process, bool own)
     {
         var s = CoreSettings.Current;
-        if (!IsActive || !s.KeywordTriggersEnabled ||
+        if (!ShouldListen(IsActive, false, CoreSession.IsSessionRunning && CoreSession.IsSessionPaused) || !s.KeywordTriggersEnabled ||
             !HasAccess) return false;
         RememberSeenApp(process, own);
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;

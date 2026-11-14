@@ -221,6 +221,14 @@
                     </StackPanel>
                 </Grid>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="UpdateChip" Theme="{StaticResource LauncherBarPill}" IsVisible="False"
+                            Padding="10,0,13,0" Margin="0,0,6,0" Click="UpdateChip_Click"
+                            AutomationProperties.Name="{loc:Str launcher_update_ready}" RenderTransformOrigin="50%,50%">
+                        <StackPanel Orientation="Horizontal">
+                            <fx:IconGlyph Kind="ArrowCircleUp" Variant="Filled" Size="13" Foreground="{DynamicResource PanelAccentBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{loc:Str launcher_update_ready}" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <!-- signed out: a sign-in pill where the chip would be -->
                     <Button x:Name="SignInPill" Theme="{StaticResource LauncherSignInPill}" Margin="0,0,6,0"
                             IsVisible="False" Click="SignIn_Click">

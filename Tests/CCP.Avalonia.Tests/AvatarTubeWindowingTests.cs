@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -191,6 +192,36 @@ public sealed class AvatarTubeWindowingTests
         tube.EndSpeechBubble();
         Dispatcher.UIThread.RunJobs();
         Assert.False(w.IsVisible);
+    });
+
+    [Fact]
+    public Task ChatInputOpeningAndClosingMovesTheVisibleBubble() => Run(detached: true, (main, tube) =>
+    {
+        tube.Position = new PixelPoint(500, 100);
+        tube.GigglePriority("A short line.", playSound: false, aiGenerated: false);
+        Dispatcher.UIThread.RunJobs();
+        var bubble = tube.BubbleWindow!;
+        var input = tube.FindControl<Border>("InputPanel")!;
+        Assert.True(bubble.IsVisible);
+        Assert.False(input.IsVisible);
+        var closed = tube.LastBubblePlan!.Value.Bubble;
+
+        tube.OpenChatInput();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(input.IsVisible);
+        var open = tube.LastBubblePlan!.Value.Bubble;
+        var top = input.PointToScreen(new Point(0, 0)).Y;
+        Assert.True(open.Bottom <= top, $"bubble {open}, input top {top}");
+        Assert.NotEqual(closed, open);
+
+        var avatar = tube.FindControl<Border>("AvatarBorder")!;
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        avatar.RaiseEvent(new PointerPressedEventArgs(avatar, pointer, tube, default, 0,
+            new PointerPointProperties(RawInputModifiers.RightMouseButton, PointerUpdateKind.RightButtonPressed), KeyModifiers.None));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(input.IsVisible);
+        Assert.True(bubble.IsVisible);
+        Assert.Equal(closed, tube.LastBubblePlan!.Value.Bubble);
     });
 
     /// <summary>Its own input shape: only the bubble (and its tail) takes the mouse; the margin

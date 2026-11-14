@@ -698,6 +698,28 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void PausedSessionDoesNotDetectKeysAndResumeRestoresDetection() => Run((engine, s, played) =>
+    {
+        var running = CoreSession.IsSessionRunningProvider;
+        var paused = CoreSession.IsSessionPausedProvider;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = () => true;
+            CoreSession.IsSessionPausedProvider = () => true;
+            Type(engine, "sit");
+            Assert.Empty(engine.GetRecentFires());
+            CoreSession.IsSessionPausedProvider = () => false;
+            Type(engine, "sit");
+            Assert.Single(engine.GetRecentFires());
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = running;
+            CoreSession.IsSessionPausedProvider = paused;
+        }
+    });
+
+    [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
     {
         Type(engine, "intensity"); Assert.Empty(played);
@@ -1306,6 +1328,33 @@ public sealed class KeywordAudioRuntimeTests
             Assert.True(KeywordTriggerHead.Engine.IsActive);
         }
         finally { shell.Close(); }
+    });
+
+    [Fact]
+    public void LaunchRearmsOnlyWhenRequestedAndWaitsForAccess() => Run((_, s, _) =>
+    {
+        var previous = s.AwarenessStartOnLaunch;
+        MainShellWindow? shell = null;
+        try
+        {
+            KeywordTriggerHead.Stop();
+            CoreEntitlement.HasPremiumProvider = () => false;
+            s.AwarenessStartOnLaunch = false;
+            s.KeywordTriggersEnabled = false;
+            shell = new MainShellWindow();
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            shell.Close(); shell = null;
+
+            s.AwarenessStartOnLaunch = true;
+            shell = new MainShellWindow();
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell.RefreshEntitlementVeils();
+            Assert.True(KeywordTriggerHead.Engine.IsActive);
+        }
+        finally { shell?.Close(); s.AwarenessStartOnLaunch = previous; }
     });
 
     [Fact] // WPF MainWindow.Patreon.cs:452-454
