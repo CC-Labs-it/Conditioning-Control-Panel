@@ -65,10 +65,11 @@ public sealed class KnockCardTests
     private static Task Run(Action<FakeFriends, Window, Action<DateTimeOffset>, Func<LandingWorld, LandingWorld>> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motion, bell, volume) = (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume);
+        var media = (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented);
         var (oldSvc, oldClock, oldWorld, oldAnchor) = (FriendsHead.Service, KnockCard.Clock, FriendsLanding.World, FriendsLanding.Anchor);
         var oldOpenTab = FriendsLanding.OpenPanelTab;
         var oldFetch = KnockCard.FetchPicture;
@@ -99,6 +100,7 @@ public sealed class KnockCardTests
             FriendsLanding.OpenPanelTab = oldOpenTab;
             KnockCard.FetchPicture = oldFetch;
             (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume) = (motion, bell, volume);
+            (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented) = media;
             StartupLadder.ResetForTests();
             FriendsSeen.Shared.Clear();
             foreach (var w in host.OwnedWindows.ToArray()) w.Close();
@@ -156,6 +158,327 @@ public sealed class KnockCardTests
         // An invite that ran out is not filed: the server tells the sender "no answer".
         Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key.StartsWith("friends:"));
     });
+
+    private static InboxItem WatchItem(string id, WatchRef watch) =>
+        new(id, SendKind.Watch, "u_mia", "Mia", null, null, null, null, watch, T0, T0.AddDays(1));
+
+    // WPF FriendsLanding.cs:262-280,475-490,511-533: notice, Inbox and action.
+    [Fact]
+    public Task WatchNoticeCanBeFiledReopenedAndPlayed() => Run((svc, _, step, _) =>
+    {
+        var oldUrl = FriendsLanding.OpenWatchUrl;
+        var oldSays = FriendsLanding.EmiSays;
+        var urls = new List<string>();
+        var says = new List<(string, string)>();
+        FriendsLanding.OpenWatchUrl = urls.Add;
+        FriendsLanding.EmiSays = (line, face) => says.Add((line, face));
+        try
+        {
+            var item = WatchItem("00000000000000d1", new WatchRef(WatchKind.Ht, "12345", null));
+            svc.Deliver(item);
+            var notice = Assert.IsType<FriendNotices>(FriendNotices.Current);
+            Assert.Contains(svc.Receipts, r => r.State == ReceiptState.Seen);
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("friends_land_watch"), Text(notice));
+            Assert.Contains(says, x => x.Item1 == ConditioningControlPanel.Localization.Loc.Get("friends_land_emi_present") && x.Item2 == "^_~");
+            notice.Advance(100000);
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + item.Id);
+            StartupLadder.Inbox.Open(row);
+            notice = Assert.IsType<FriendNotices>(FriendNotices.Current);
+            Press(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(notice)
+                .OfType<Button>().Single(b => Equals(b.Tag, "friend-notice-action")));
+            Assert.Equal(new[] { "https://hypnotube.com/video/video-12345.html" }, urls);
+            Assert.False(StartupLadder.Inbox.Contains("friends:" + item.Id));
+            Assert.DoesNotContain(svc.Receipts, r => r.State == ReceiptState.Joined);
+
+            CoreSettings.Current.FriendNotificationsEnabled = false;
+            var other = WatchItem("00000000000000d2", new WatchRef(WatchKind.Ht, "222", null));
+            svc.Deliver(other);
+            Assert.Null(FriendNotices.Current);
+            row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + other.Id);
+            step(T0.AddDays(1));
+            StartupLadder.Inbox.Open(row);
+            Assert.Contains(says, x => x.Item1 == ConditioningControlPanel.Localization.Loc.Get("friends_land_too_late") && x.Item2 == ";_;");
+            Assert.Single(urls);
+        }
+        finally { FriendsLanding.OpenWatchUrl = oldUrl; FriendsLanding.EmiSays = oldSays; }
+    });
+
+    // WPF FriendsLanding.cs:475-480: expiry feedback applies before checking the delivery kind.
+    [Theory]
+    [InlineData(SendKind.Invite)]
+    [InlineData(SendKind.Poke)]
+    [InlineData(SendKind.Watch)]
+    public Task EveryExpiredInboxItemSaysItIsTooLate(SendKind kind) => Run((svc, _, step, _) =>
+    {
+        var oldSays = FriendsLanding.EmiSays;
+        var says = new List<(string, string)>();
+        FriendsLanding.EmiSays = (line, face) => says.Add((line, face));
+        try
+        {
+            CoreSettings.Current.FriendNotificationsEnabled = false;
+            var item = kind switch
+            {
+                SendKind.Invite => Invite("00000000000000e1"),
+                SendKind.Poke => new InboxItem("00000000000000e2", kind, "u_mia", "Mia", null, "hi", null, null, null, T0, T0.AddHours(1)),
+                _ => WatchItem("00000000000000e3", new WatchRef(WatchKind.Ht, "123", null)),
+            };
+            svc.Deliver(item);
+            var row = Assert.Single(StartupLadder.Inbox.Items, i => i.Key == "friends:" + item.Id);
+            step(item.ExpiresAt);
+            StartupLadder.Inbox.Open(row);
+            Assert.Equal((ConditioningControlPanel.Localization.Loc.Get("friends_land_too_late"), ";_;"), Assert.Single(says));
+            Assert.Empty(KnockCard.Up);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally { FriendsLanding.EmiSays = oldSays; }
+    });
+
+    // WPF FriendsLanding.cs:673-691 and 694-705: a failed action stays contained.
+    [Fact]
+    public Task FlavourWatchContainsApplyFailures() => Run((_, _, _, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldSource = s.MediaSource;
+        var calls = 0;
+        System.ComponentModel.PropertyChangedEventHandler fail = (_, e) =>
+        {
+            if (e.PropertyName == nameof(s.MediaSource)) { calls++; throw new InvalidOperationException("apply failed"); }
+        };
+        try
+        {
+            s.PropertyChanged += fail;
+            Assert.Null(Record.Exception(() => FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null))));
+            Assert.Equal(1, calls);
+        }
+        finally { s.PropertyChanged -= fail; s.MediaSource = oldSource; }
+    });
+
+    [Fact]
+    public Task HtWatchContainsBrowserFailures() => Run((_, _, _, _) =>
+    {
+        var oldUrl = FriendsLanding.OpenWatchUrl;
+        var calls = 0;
+        FriendsLanding.OpenWatchUrl = _ => { calls++; throw new InvalidOperationException("browser failed"); };
+        try
+        {
+            Assert.Null(Record.Exception(() => FriendsLanding.Watch(new WatchRef(WatchKind.Ht, "123", null))));
+            Assert.Equal(1, calls);
+        }
+        finally { FriendsLanding.OpenWatchUrl = oldUrl; }
+    });
+
+    // WPF FriendsLanding.cs:272-280: body opens sender, and leaving files only unexpired watches.
+    [Fact]
+    public Task WatchBodyOpensSenderAndExpiredNoticeDoesNotActOrFile() => Run((svc, _, step, _) =>
+    {
+        var oldDrawer = FriendsLanding.OpenDrawer;
+        var oldUrl = FriendsLanding.OpenWatchUrl;
+        var opened = new List<string?>();
+        var urls = new List<string>();
+        FriendsLanding.OpenDrawer = opened.Add;
+        FriendsLanding.OpenWatchUrl = urls.Add;
+        try
+        {
+            var item = WatchItem("00000000000000d3", new WatchRef(WatchKind.Ht, "123", null));
+            svc.Deliver(item);
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: false, open: true);
+            Assert.Equal(new[] { "u_mia" }, opened);
+            Assert.True(StartupLadder.Inbox.Contains("friends:" + item.Id));
+            StartupLadder.Inbox.Remove("friends:" + item.Id);
+            svc.Deliver(item with { Id = "00000000000000d4" });
+            notice = FriendNotices.Current!;
+            step(T0.AddDays(1));
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            Assert.Empty(urls);
+            Assert.False(StartupLadder.Inbox.Contains("friends:00000000000000d4"));
+            step(T0);
+            svc.Deliver(item with { Id = "00000000000000d5" });
+            notice = FriendNotices.Current!;
+            step(T0.AddDays(1));
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: false);
+            Assert.False(StartupLadder.Inbox.Contains("friends:00000000000000d5"));
+        }
+        finally { FriendsLanding.OpenDrawer = oldDrawer; FriendsLanding.OpenWatchUrl = oldUrl; }
+    });
+
+    // WPF FriendsLanding.cs:632-687: catalogue resolves local files or opens Deeper; flavour never grants consent.
+    [Fact]
+    public async Task WatchDispatchResolvesCatalogueAndKeepsMediaConsent()
+    {
+        var settings = CoreSettings.Current;
+        var before = (settings.MediaSource, settings.RemoteMediaConsented, settings.FypOnlineConsented,
+            settings.BackRoomMediaSource, settings.RemoteMediaRatio, settings.FypOnlineNiches,
+            settings.BackRoomMediaSubs, settings.BackRoomMediaSubsOff);
+        await Run((_, host, _, _) =>
+        {
+            var oldPlay = FriendsLanding.PlayWatchCatalogue;
+            var oldTab = FriendsLanding.OpenPanelTab;
+            var oldGame = FriendsLanding.ActiveGameWindow;
+            var oldWord = FriendsLanding.ShowWatchWord;
+            var words = new List<(Window, string)>();
+            FriendsLanding.ActiveGameWindow = () => null;
+            FriendsLanding.ShowWatchWord = (owner, text) => words.Add((owner, text));
+            var played = new List<string>();
+            var tabs = new List<string>();
+            FriendsLanding.PlayWatchCatalogue = played.Add;
+            FriendsLanding.OpenPanelTab = tabs.Add;
+            var s = CoreSettings.Current;
+            var entries = s.DeeperSubmissions.ToDictionary(e => e.Key, e => e.Value);
+            var original = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.BackRoomMediaSource,
+                s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff);
+            try
+            {
+                s.DeeperSubmissions.Clear();
+                var path = typeof(KnockCardTests).Assembly.Location;
+                s.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "known" };
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "missing", null));
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "../bad", null));
+                Assert.Equal(new[] { path }, played);
+                Assert.Equal(new[] { "deeper" }, tabs);
+                FriendsLanding.PlayWatchCatalogue = _ => throw new InvalidOperationException();
+                FriendsLanding.Watch(new WatchRef(WatchKind.Catalogue, "known", null));
+                Assert.Equal(new[] { "deeper", "deeper" }, tabs);
+
+                s.MediaSource = "local";
+                s.RemoteMediaConsented = false;
+                s.FypOnlineConsented = false;
+                s.BackRoomMediaSource = "online";
+                FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null));
+                Assert.Equal("local", s.MediaSource);
+                Assert.Contains("bimbo", s.FypOnlineNiches);
+                Assert.Equal("auto", s.BackRoomMediaSource);
+                s.RemoteMediaConsented = true;
+                FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "trance", null));
+                Assert.Equal("mixed", s.MediaSource);
+                Assert.Contains("hypno", s.FypOnlineNiches);
+                Assert.Equal((host, ConditioningControlPanel.Localization.Loc.Get("friends_land_flavour_on")), words[0]);
+                Assert.Equal(2, words.Count);
+            }
+            finally
+            {
+                s.DeeperSubmissions.Clear();
+                foreach (var entry in entries) s.DeeperSubmissions[entry.Key] = entry.Value;
+                (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.BackRoomMediaSource,
+                    s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff) = original;
+                FriendsLanding.PlayWatchCatalogue = oldPlay; FriendsLanding.OpenPanelTab = oldTab; FriendsLanding.ActiveGameWindow = oldGame; FriendsLanding.ShowWatchWord = oldWord;
+            }
+        });
+        Assert.Equal(before.MediaSource, settings.MediaSource);
+        Assert.Equal(before.RemoteMediaConsented, settings.RemoteMediaConsented);
+        Assert.Equal(before.FypOnlineConsented, settings.FypOnlineConsented);
+        Assert.Equal(before.BackRoomMediaSource, settings.BackRoomMediaSource);
+        Assert.Equal(before.RemoteMediaRatio, settings.RemoteMediaRatio);
+        Assert.Same(before.FypOnlineNiches, settings.FypOnlineNiches);
+        Assert.Same(before.BackRoomMediaSubs, settings.BackRoomMediaSubs);
+        Assert.Same(before.BackRoomMediaSubsOff, settings.BackRoomMediaSubsOff);
+    }
+
+    // WPF FriendsLanding.cs:667-685: accepting a flavour discards already dealt media.
+    [Fact]
+    public Task AcceptingAFlavourRefreshesBothDealtMediaQueues() => Run((svc, _, _, _) =>
+    {
+        var video = MandatoryVideoOverlay.Instance;
+        var bubbles = BubbleCountHost.Instance;
+        var (oldVideo, oldBubbles, oldWord) = (video.Scheduler, bubbles.Scheduler, FriendsLanding.ShowWatchWord);
+        IReadOnlyList<string> library = new[] { "old-a.mp4", "old-b.mp4" };
+        video.Scheduler = new MandatoryVideoScheduler(video, library: () => library);
+        bubbles.Scheduler = new BubbleCountScheduler(bubbles, library: () => library);
+        FriendsLanding.ShowWatchWord = (_, _) => { };
+        try
+        {
+            Assert.StartsWith("old-", video.Scheduler.PickNext());
+            Assert.StartsWith("old-", bubbles.Scheduler.PickNext());
+            library = new[] { "new.mp4" };
+            svc.Deliver(WatchItem("00000000000000d6", new WatchRef(WatchKind.Flavour, "pink", null)));
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            Assert.Equal("new.mp4", video.Scheduler.PickNext());
+            Assert.Equal("new.mp4", bubbles.Scheduler.PickNext());
+        }
+        finally
+        {
+            video.Scheduler = oldVideo;
+            bubbles.Scheduler = oldBubbles;
+            FriendsLanding.ShowWatchWord = oldWord;
+        }
+    });
+
+    // WPF FriendsLanding.cs:681-685 and both services' ReloadAssets: pack decrypts are also cleared.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task AcceptingAFlavourCleansBothPackPools(bool checkVideo) => Run((svc, _, _, _) =>
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-watch-packs-").FullName;
+        var dir = Path.Combine(root, ".packs", "watch-pack");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        File.WriteAllBytes(Path.Combine(dir, "content", "v.enc"), new byte[] { 1 });
+        var manifest = new InstalledPackManifest { PackId = "p1", PackGuid = "watch-pack", PackName = "One" };
+        manifest.Files.Add(new PackFileEntry { OriginalName = "v.mp4", ObfuscatedName = "v.enc", FileType = "video", Extension = ".mp4" });
+        PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var packSettings = new AppSettings();
+        var store = new ContentPackStore(() => root, () => packSettings, () => { }, decryptFile: _ => new byte[] { 1 }, tempDir: () => Path.Combine(root, ".temp"));
+        var video = MandatoryVideoOverlay.Instance; var bubbles = BubbleCountHost.Instance;
+        var (oldVideo, oldBubbles, oldWord) = (video.Scheduler, bubbles.Scheduler, FriendsLanding.ShowWatchWord);
+        var videoPack = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var bubblePack = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        video.Scheduler = new MandatoryVideoScheduler(video, library: () => Array.Empty<string>()) { PackVideos = videoPack };
+        bubbles.Scheduler = new BubbleCountScheduler(bubbles, library: () => Array.Empty<string>()) { PackVideos = bubblePack };
+        FriendsLanding.ShowWatchWord = (_, _) => { };
+        try
+        {
+            var videoTemp = video.Scheduler.PickNext()!; var bubbleTemp = bubbles.Scheduler.PickNext()!;
+            Assert.True(File.Exists(videoTemp)); Assert.True(File.Exists(bubbleTemp));
+            svc.Deliver(WatchItem("00000000000000d7", new WatchRef(WatchKind.Flavour, "pink", null)));
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            var temp = checkVideo ? videoTemp : bubbleTemp;
+            var pool = checkVideo ? videoPack : bubblePack;
+            Assert.False(File.Exists(temp));
+            Assert.Equal(0, pool.TempCount);
+            Assert.Single(store.GetAllActivePackVideos());
+        }
+        finally
+        {
+            videoPack.CleanupTemps(); bubblePack.CleanupTemps();
+            video.Scheduler = oldVideo; bubbles.Scheduler = oldBubbles; FriendsLanding.ShowWatchWord = oldWord;
+            try { Directory.Delete(root, true); } catch { }
+        }
+    });
+
+    [Fact]
+    public async Task FlavourFixtureRestoresSharedMediaSettings()
+    {
+        var s = CoreSettings.Current;
+        var old = (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented);
+        try
+        {
+            s.MediaSource = "online"; s.RemoteMediaRatio = 47; s.FypOnlineNiches = new() { "hypno" };
+            s.BackRoomMediaSource = "bundled"; s.BackRoomMediaSubs = new() { "pink" }; s.BackRoomMediaSubsOff = new() { "trance" };
+            s.RemoteMediaConsented = false; s.FypOnlineConsented = true;
+            await Run((_, _, _, _) =>
+            {
+                var oldWord = FriendsLanding.ShowWatchWord;
+                try
+                {
+                    FriendsLanding.ShowWatchWord = (_, _) => { };
+                    s.RemoteMediaConsented = true; s.FypOnlineConsented = false;
+                    FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null));
+                }
+                finally { FriendsLanding.ShowWatchWord = oldWord; }
+            });
+            Assert.Equal("online", s.MediaSource); Assert.Equal(47, s.RemoteMediaRatio); Assert.Equal(new[] { "hypno" }, s.FypOnlineNiches);
+            Assert.Equal("bundled", s.BackRoomMediaSource); Assert.Equal(new[] { "pink" }, s.BackRoomMediaSubs);
+            Assert.Equal(new[] { "trance" }, s.BackRoomMediaSubsOff);
+            Assert.False(s.RemoteMediaConsented); Assert.True(s.FypOnlineConsented);
+        }
+        finally
+        {
+            (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented) = old;
+        }
+    }
 
     private static global::Avalonia.Media.IBrush FriendsDrawerGold => ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Gold;
 
