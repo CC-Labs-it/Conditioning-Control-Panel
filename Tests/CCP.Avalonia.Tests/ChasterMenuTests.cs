@@ -10,14 +10,18 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -51,11 +55,12 @@ public sealed class ChasterMenuTests
             });
     }
 
-    private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body)
+    private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body, double height = 3000)
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -75,7 +80,7 @@ public sealed class ChasterMenuTests
                 new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>())));
         ChasterHead.Service = chaster;
         var tab = new ChasterTabView();
-        var w = new Window { Width = 1200, Height = 3000, Content = tab };
+        var w = new Window { Width = 1200, Height = height, Content = tab };
         try
         {
             w.Show();
@@ -195,6 +200,91 @@ public sealed class ChasterMenuTests
         }
         await Task.CompletedTask;
     }));
+
+    private static bool Breathing(ChasterTabView tab) =>
+        (typeof(ChasterTabView).GetField("_keysBreath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(tab) as BeatLoop)?.IsRunning == true;
+
+    // WPF ChasterTabView.xaml.cs:283-303, 1193-1206 and Fx.cs:206-248.
+    [Fact]
+    public Task EmptyMenuHintFindsTheKeysAndTracksRealRowChanges() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, tab, w) =>
+    {
+        fake.Locks = Locked;
+        await chaster.RefreshLockAsync();
+        var settings = CoreSettings.Current;
+        settings.ChasterPrices = new List<string>();
+        settings.PerformanceMode = false;
+        settings.AutoPerformanceMode = false;
+        settings.GentleVisuals = false;
+        settings.MotionLevel = MotionLevel.Full;
+        tab.Refresh();
+        Dispatcher.UIThread.RunJobs();
+        var hint = tab.FindControl<TextBlock>("SetupHint")!;
+        var keys = tab.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("PresetRow")!;
+        var scroll = tab.FindControl<ScrollViewer>("PageScroll")!;
+        Assert.Equal(Loc.Get("chaster_setup_nothing"), hint.Text);
+        Assert.Equal(Color.FromRgb(0xE0, 0xB0, 0x52), ((ISolidColorBrush)hint.Foreground!).Color);
+        Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), hint.Cursor?.ToString());
+        Assert.IsType<DropShadowEffect>(keys.Effect);
+        Assert.True(Breathing(tab));
+
+        w.UpdateLayout();
+        Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
+        Assert.Equal(0, scroll.Offset.Y);
+        // A player can scroll to the hint first if font metrics put it below the fold.
+        hint.BringIntoView();
+        // A prior batch can still be in flight when this changed layout is committed.
+        var previousBatch = ElementComposition.GetElementVisual(w)!.Compositor.RequestCompositionBatchCommitAsync();
+        hint.InvalidateMeasure();
+        w.UpdateLayout();
+        ContentHitTestTests.RenderLiveTree(w);
+        Assert.True(previousBatch.Rendered.IsCompleted);
+        var beforeHintClick = scroll.Offset.Y;
+        var hintPoint = hint.TranslatePoint(new Point(hint.Bounds.Width / 2, hint.Bounds.Height / 2), w)!.Value;
+        var hit = w.InputHitTest(hintPoint) as Visual;
+        Assert.True(hit == hint || (hit != null && hint.IsVisualAncestorOf(hit)),
+            $"hint at {hintPoint} hit {(hit as Control)?.Name ?? hit?.GetType().Name ?? "nothing"}");
+        bool released = false;
+        hint.AddHandler(InputElement.PointerReleasedEvent, (_, _) => released = true, RoutingStrategies.Bubble, handledEventsToo: true);
+        Click(w, hint);
+        Assert.True(released, "hint did not receive the pointer release");
+        w.UpdateLayout();
+        ContentHitTestTests.RenderLiveTree(w);
+        Assert.True(scroll.Offset.Y > beforeHintClick);
+        // The row's actual click must clear the hint immediately, not at the 30 s tick.
+        var row = tab.PriceRows["attention"];
+        row.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        w.UpdateLayout();
+        ContentHitTestTests.RenderLiveTree(w);
+        Click(w, row);
+        Assert.Contains("attention", settings.ChasterPrices!);
+        Assert.False(hint.IsVisible);
+        Assert.Null(keys.Effect);
+        Assert.False(Breathing(tab));
+        Click(w, row);
+        Assert.Empty(settings.ChasterPrices!);
+        Assert.True(hint.IsVisible);
+        Assert.IsType<DropShadowEffect>(keys.Effect);
+        settings.MotionLevel = MotionLevel.Reduced;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.IsType<DropShadowEffect>(keys.Effect);
+        Assert.False(Breathing(tab));
+        settings.PerformanceMode = true;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Null(keys.Effect);
+        Assert.Equal(1, tab.FindControl<Control>("PresetRow")!.Opacity);
+        settings.PerformanceMode = false;
+        settings.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.True(Breathing(tab));
+        tab.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(Breathing(tab));
+        tab.IsVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(Breathing(tab));
+    }, height: 700));
 
     [Fact]
     public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>

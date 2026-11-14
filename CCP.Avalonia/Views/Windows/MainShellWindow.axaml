@@ -916,16 +916,14 @@
                     <!-- Support/welcome banner, WPF MainWindow.xaml:1078-1146: a 31px pill capped at 744,
                          14px beats, the support line ending on a live link. It rides the header's
                          leftover star column, so a narrow window trims banner text and nothing else. -->
-                    <!-- Keep the glow off the text container. -->
+                    <!-- Keep the glow off the text container. WPF's DropShadowEffect BannerGlow (BlurRadius 12,
+                         Opacity 0.35) is this layer's own BoxShadow, painted and flared in MainShellWindow.BannerFx.cs;
+                         the breath moves the layer's opacity, never an Effect property. -->
                     <Border Grid.Column="3" x:Name="HeaderBannerGlowHost"
                             Background="{DynamicResource SurfaceBgBrush}" CornerRadius="16"
                             Height="31" Width="{Binding #HeaderBannerHost.Bounds.Width}"
                             Margin="12,0,12,0" HorizontalAlignment="Center" VerticalAlignment="Center"
-                            IsHitTestVisible="False">
-                        <Border.Effect>
-                            <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="12" OffsetX="0" OffsetY="0" Opacity="0.35"/>
-                        </Border.Effect>
-                    </Border>
+                            Opacity="0.35" IsHitTestVisible="False"/>
                     <Border Grid.Column="3" x:Name="HeaderBannerHost"
                             Background="{DynamicResource DepthWellFloorBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
@@ -953,11 +951,15 @@
                             </Border>
                             <Border x:Name="BannerDrumFoot" CornerRadius="15" BorderThickness="0,0,0,1"
                                     BorderBrush="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <!-- WPF MainWindow.xaml:1126: flashed on every beat change (MainShellWindow.BannerFx.cs). -->
+                            <Border x:Name="BannerFlashRing" CornerRadius="15" BorderThickness="1.5"
+                                    BorderBrush="{DynamicResource PinkButtonHoveredBrush}"
+                                    Opacity="0" IsHitTestVisible="False"/>
                             <Grid x:Name="BannerDrum" ClipToBounds="True" Margin="2,0">
                             <Grid Margin="12,0">
                             <!-- WPF MainWindow.xaml:1132-1146: the Hyperlink trims with the lead. Same embedded
                                  DockPanel as the web beat below, since Avalonia never trims an inline. -->
-                            <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -965,9 +967,9 @@
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
-                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
+                                                   Foreground="{DynamicResource PinkButtonHoveredBrush}" TextTrimming="CharacterEllipsis">
                                             <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
-                                            <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold"/>
+                                            <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold" FontStyle="Normal" Foreground="White"/>
                                             <Run Text=" "/>
                                         </TextBlock>
                                         <fx:SafeHyperlinkButton x:Name="BannerSupportLink" NavigateUri="https://linktr.ee/CodeBambi"
@@ -979,7 +981,7 @@
                                     </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
-                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -995,7 +997,7 @@
                             <!-- Stretch, not Center: a Center TextBlock sizes itself from the inline
                                  button's first measure (4 DIP short), clipping "app" to "ap".
                                  TextAlignment centres the line just the same. -->
-                            <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -1011,7 +1013,7 @@
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
-                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
+                                                   Foreground="{DynamicResource PinkButtonHoveredBrush}" TextTrimming="CharacterEllipsis">
                                             <Run Text="{loc:Str label_banner_web_xp}"/>
                                             <Run Text=" "/>
                                         </TextBlock>
@@ -1028,7 +1030,7 @@
                                 </InlineUIContainer>
                             </TextBlock>
                             <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
-                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -1059,6 +1061,8 @@
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
+                            <!-- WPF MainWindow.xaml:1224: the support beat's sparkle run, unclipped, above the sheen. -->
+                            <Canvas x:Name="BannerSparkleLayer" IsHitTestVisible="False"/>
                             <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="7,2,7,0"
                                     VerticalAlignment="Top" IsHitTestVisible="False">
                                 <Border.Background>
@@ -2518,7 +2522,7 @@
                                 <!-- Quick Tip -->
                                 <Border Background="#3A2542" CornerRadius="8" Padding="12" Margin="0,0,0,15" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="💡" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Lightbulb" Size="18" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="{loc:Str label_hover_over_any_control_for_tooltips_click_a_g}"
                                                    Foreground="#D0B0C0" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                     </StackPanel>
@@ -2535,7 +2539,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="🚪" FontSize="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="DoorArrowLeft" Size="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str whatmoved_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str help_whatmoved_row_sub}"
@@ -2547,6 +2551,19 @@
                                 </Border>
 
                                 <!-- WPF MainWindow.xaml:2946. Rain V2 stays out of 7.2.0. -->
+                                <!-- Prize Counter (WPF MainWindow.xaml:2900-2912) -->
+                                <Border Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <fx:IconGlyph x:Name="PrizeCounterHelpIcon" Kind="Sparkle" Variant="Filled" Size="22" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{loc:Str help_counter_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{loc:Str help_counter_sub}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <Button x:Name="BtnHelpPrizeCounter" Grid.Column="2" Content="{loc:Str help_read_btn}"
+                                                Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
                                 <Border x:Name="HelpRainRow" IsVisible="{x:Static companion:RainV2Gate.On}"
                                         Background="{DynamicResource SurfaceBgBrush}" CornerRadius="8" Padding="12" Margin="0,0,0,8">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
@@ -2568,7 +2585,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="🚀" FontSize="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Rocket" Size="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str label_getting_started}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_quick_overview_of_the_basics_start_button_add}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
@@ -2586,7 +2603,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="⚙️" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                        <fx:IconGlyph Grid.Column="0" Kind="Settings" Size="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str label_settings_tab}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_flash_images_videos_subliminals_overlays_audi}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
@@ -2604,7 +2621,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="💾" FontSize="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Save" Size="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str label_presets_sessions}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_save_configurations_run_timed_sessions_create}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>

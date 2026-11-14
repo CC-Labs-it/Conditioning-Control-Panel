@@ -174,6 +174,147 @@ public sealed class RemoteRelayTests
         f.Answer = path => path == "/v2/remote/poll" ? Json(HttpStatusCode.OK, json) : Json(HttpStatusCode.OK, "{}");
 
     [Fact]
+    public async Task Stop_signal_forces_local_teardown_even_when_post_fails_and_emote_was_recent()
+    {
+        var (old, prevLd) = (CoreSettings.ServiceProvider, LockdownService.Current);
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        LockdownService.Current = null;
+        try
+        {
+            settings.Current.PanicKeyEnabled = true;
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("light");
+            Assert.True((await r.SendEmoteAsync("hi", "", "custom")).ok);
+            f.Answer = _ => throw new HttpRequestException("offline");
+            Assert.False(await r.SendSignalAsync("stop"));
+            Assert.Contains(true, _stops);
+            var body = f.Seen.Last().Body;
+            Assert.Equal("signal", (string?)body["kind"]);
+            Assert.Equal("stop", (string?)body["text"]);
+        }
+        finally { (CoreSettings.ServiceProvider, LockdownService.Current) = (old, prevLd); }
+    }
+
+    // Safety (RemoteHudRules.LocalPanicAllowed, VoicePanicReach.PanicKeyRuns): the wearer's Stop is never more
+    // permissive than the panic key. Under Lockdown or with the key off it stops the remote's effects only:
+    // the session and engine survive and Circe's safety hold stays shut. The signal still goes out.
+    [Theory]
+    [InlineData(true, true)]    // Lockdown on, panic key on
+    [InlineData(false, false)]  // panic key off
+    [InlineData(true, false)]
+    public async Task Stop_signal_under_Lockdown_or_panic_off_stops_only_the_remote_effects(bool lockdown, bool panicKey)
+    {
+        var (old, prevLd, oldStopSession, oldRefresh, oldChaster) = (CoreSettings.ServiceProvider, LockdownService.Current,
+            RemoteCommands.StopSession, RemoteCommands.RefreshOverlays, ConditioningControlPanel.Services.Safety.PanicChasterHold.Service);
+        var (sessionStops, holds) = (0, 0);
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current;
+        (s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.LockdownTripwiresEnabled) = (false, false, false);
+        var ld = LockdownService.Current = new LockdownService();
+        RemoteCommands.StopSession = () => sessionStops++;
+        RemoteCommands.RefreshOverlays = () => { };
+        ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => { holds++; return null; };
+        try
+        {
+            if (lockdown) ld.Activate(TimeSpan.FromMinutes(30));
+            s.PanicKeyEnabled = panicKey;
+            Assert.Equal(lockdown, ld.IsActive);
+            CoreEngine.Start();
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            s.SpiralEnabled = false; await r.StartAsync("light");
+            s.StrictLockEnabled = false; Assert.Null(RemoteCommands.Execute("enable_strict_lock", null)); Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            CoreFlash.Start(); Assert.True(CoreFlash.IsRunning);
+            Assert.True(await r.SendSignalAsync("stop"));
+            Assert.True(CoreFlash.IsRunning);
+            Assert.False(s.StrictLockEnabled); Assert.False(s.SpiralEnabled);
+            Assert.Equal("stop", (string?)f.Seen.Last().Body["text"]);
+            Assert.Equal(0, sessionStops);
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(0, holds);
+            Assert.Equal(lockdown, ld.IsActive);
+        }
+        finally
+        {
+            ld.Deactivate();
+            ld.Dispose();
+            CoreEngine.Stop();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteCommands.ReleaseOverlayStop();
+            (CoreSettings.ServiceProvider, LockdownService.Current, RemoteCommands.StopSession, RemoteCommands.RefreshOverlays,
+                ConditioningControlPanel.Services.Safety.PanicChasterHold.Service) = (old, prevLd, oldStopSession, oldRefresh, oldChaster);
+        }
+    }
+
+    // WPF RemoteControlService.V2.cs:87 ApplyEasy: a showing spiral and a controller-set pink halve, the remote
+    // haptic replays at half, a later ask is eased, the floor is 0.25; session end hands the wearer's own back.
+    [Fact]
+    public void Easy_signal_eases_overlays_and_haptics_until_the_session_ends()
+    {
+        var old = (CoreSettings.ServiceProvider, RemoteCommands.RefreshOverlays, RemoteCommands.RemoteHaptics);
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        RemoteCommands.RefreshOverlays = () => { };
+        var levels = new List<double>();
+        RemoteCommands.RemoteHaptics = new ConditioningControlPanel.Services.Remote.CoreRemoteHapticDriver(() => RemoteCommands.EasyFactor, new PopQuizSchedulerTests.FakeClock())
+        { Sink = steps => { levels.Add(steps[0].Pulse.Intensity); return null; } };
+        RemoteCommands.ResetEasy();
+        try
+        {
+            var s = settings.Current;
+            (s.SpiralEnabled, s.SpiralOpacity, s.PinkFilterEnabled, s.PinkFilterOpacity) = (true, 60, false, 10);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute,
+                _ => ConditioningControlPanel.Services.Remote.RemoteWearer.HandBackAllButStrict(), f) { AutoPoll = false };
+            r.StartAsync("full").Wait();
+            Poll(f, Cmd("1", "set_pink_opacity", "{\"value\":40}")); r.PollOnceAsync().Wait();
+            Poll(f, Cmd("2", "haptic_level", "{\"level\":80,\"ms\":3000}")); r.PollOnceAsync().Wait();
+            var full = levels.Last();
+            Assert.Equal(40, s.PinkFilterOpacity);
+
+            Assert.True(r.SendSignalAsync("easy").Result);
+            Assert.Equal("easy", (string?)f.Seen.Last().Body["text"]);
+            Assert.Equal(0.5, RemoteCommands.EasyFactor);
+            Assert.Equal((30, 20), (s.SpiralOpacity, s.PinkFilterOpacity));
+            Assert.Equal(full / 2, levels.Last(), 3);
+            r.SendSignalAsync("easy").Wait();
+            r.SendSignalAsync("easy").Wait();
+            Assert.Equal(0.25, RemoteCommands.EasyFactor);
+            Poll(f, Cmd("3", "set_spiral_opacity", "{\"value\":80}")); r.PollOnceAsync().Wait();
+            Assert.Equal(20, s.SpiralOpacity);
+
+            r.StopAsync().Wait();
+            Assert.Equal(1.0, RemoteCommands.EasyFactor);
+            Assert.Equal((60, 10), (s.SpiralOpacity, s.PinkFilterOpacity));
+        }
+        finally
+        {
+            RemoteCommands.RemoteHaptics.Stop();
+            RemoteCommands.ResetEasy();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            (CoreSettings.ServiceProvider, RemoteCommands.RefreshOverlays, RemoteCommands.RemoteHaptics) = old;
+        }
+    }
+
+    [Fact]
+    public async Task More_signal_posts_without_stopping_and_rejects_unknown_kinds()
+    {
+        var f = new FakeRelay();
+        using var r = Relay(f);
+        await r.StartAsync("light");
+        Assert.False(await r.SendSignalAsync("unknown"));
+        Assert.True(await r.SendSignalAsync(" MORE "));
+        Assert.Empty(_stops);
+        Assert.Equal("more", (string?)f.Seen.Last().Body["text"]);
+        Assert.Equal("signal", (string?)f.Seen.Last().Body["kind"]);
+    }
+
+    [Fact]
     public async Task StatusReportsActiveOverlaysAndMindWipe()
     {
         var oldSettings = CoreSettings.ServiceProvider;
@@ -342,6 +483,7 @@ public sealed class RemoteRelayTests
     {
         var old = CoreSettings.ServiceProvider;
         var oldRefresh = RemoteCommands.RefreshOverlays;
+        var (oldStopSession, sessionStops) = (RemoteCommands.StopSession, 0);
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         RemoteCommands.RefreshOverlays = () => { };
@@ -351,15 +493,19 @@ public sealed class RemoteRelayTests
             settings.Current.PinkFilterEnabled = true;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
             Assert.Null(RemoteCommands.Execute("set_pink_opacity", JObject.FromObject(new { value = 30 })));
+            RemoteCommands.StopSession = () => sessionStops++;
             RemoteCommands.StopEffects(force: false); // user unticks Remote Control mid-run (WPF LeavesLocalRun, #1405)
             Assert.False(RemoteCommands.OverlaysStopped);
             Assert.True(settings.Current.PinkFilterEnabled);
+            Assert.Equal(0, sessionStops);   // the subject's own session is not the remote's to end
             RemoteCommands.StopEffects(force: true); // trigger_panic takes the run and the remote switches down
             Assert.False(CoreEngine.IsRunning);
+            Assert.Equal(1, sessionStops);   // WPF StopSessionFromRemote
             Assert.True(settings.Current.PinkFilterEnabled); // base wearer restoration wins
         }
         finally
         {
+            RemoteCommands.StopSession = oldStopSession;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
             CoreEngine.Stop(); RemoteCommands.ReleaseOverlayStop();
             RemoteCommands.RefreshOverlays = oldRefresh; CoreSettings.ServiceProvider = old;
@@ -680,7 +826,7 @@ public sealed class RemoteRelayTests
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
             Assert.True(s.StrictLockEnabled);
             Assert.True(s.PanicKeyEnabled);
-            Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("play_hypnotube", null));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("remote_invalid_hypnotube_url"), RemoteCommands.Execute("play_hypnotube", null));   // WPF :1422
 
             s.StrictLockEnabled = false;
             ConditioningControlPanel.Services.Remote.RemoteWearer.Take();

@@ -255,6 +255,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation. A SubscribeStar
                 // change rebuilds it once, in InitializeSubscribeStarDependents (WPF OnSubscribeStarTierChanged).
                 if (ReferenceEquals(sender, patreon)) Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+                // WPF ProgramsTab.cs:469-478: the Dashboard's Today card refreshes with every Programs refresh,
+                // even while Programs is hidden (#3920).
+                SettingsPage?.RefreshProgramTodayCard();
                 RefreshTierDependentViews();
                 RefreshProfileBubble();
                 MaybeShowPremiumCelebration();
@@ -266,7 +269,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             void Focused(object? sender, System.EventArgs e) => _ = Platform.AccountSeed.OnAppFocusedAsync();
             Activated += Focused;
             // WPF OnGraceClosed: the veils repaint from App.axaml.cs; Programs gate on the same entitlement at build time.
-            void GraceClosed() => Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+            void GraceClosed()
+            {
+                Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+                SettingsPage?.RefreshProgramTodayCard();
+                RefreshProfileBubble();   // WPF OnGraceClosed (MainWindow.Patreon.cs:1206)
+            }
             Platform.AccountSeed.GraceClosed += GraceClosed;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
@@ -290,6 +298,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _pendingRiseTier = 0;
             try
             {
+                // Switched off by the owner (2026-11-07, WPF Patreon.cs:1249): no celebration card, big or small.
+                // The tier is still recorded (TierOnNoticePass), so the small card never fires late.
+                if (!Platform.PopupSwitches.TierCelebration) { TierOnNoticePass(mayShow: false); return; }
                 if (!CoreAccount.HasPremiumAccess) return;
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
@@ -364,7 +375,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
         }
 
-        internal void TierOnNoticePass()
+        internal void TierOnNoticePass() => TierOnNoticePass(mayShow: true);
+
+        internal void TierOnNoticePass(bool mayShow)
         {
             try
             {
@@ -379,7 +392,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     s.LastKnownEffectiveTier = verdict.Record;
                     if (hadReading) CoreSettings.Save();
                 }
-                if (!verdict.Owed || TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
+                if (!verdict.Owed || !mayShow || !Platform.PopupSwitches.TierCelebration) return;
+                if (TierCelebration.IsOwed(s.SeenFeatureIntros, current, onRise: true)) return;
                 var title = Loc.Get(Services.TierOnNotice.TitleKey(current));
                 var body = Loc.Get("tier_on_body");
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem

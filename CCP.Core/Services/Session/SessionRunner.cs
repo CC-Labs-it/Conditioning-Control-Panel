@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Services
     /// Bubble count follows WPF SessionEngine too (schedule, pause, resume).
     ///
     /// ponytail: not driven here - brain drain, phase events,
-    /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
+    /// EMI Desk, friends and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
     public sealed partial class SessionRunner
@@ -82,6 +82,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF _cornerHandbackOwed: we took the corner, so the first terminal close
         /// re-queues the standalone slots. A hide-only close (pause, live edit) keeps the debt.</summary>
         private bool _cornerHandbackOwed;
+        /// <summary>WPF SessionEngine._brainDrainActive: the session's Brain Drain block is live.</summary>
+        private bool _brainDrainActive;
 
         /// <summary>Where the crash journal goes (<see cref="SessionSettingsJournal"/>); the head seeds
         /// CorePaths.UserData. Null (tests, renders) writes none.</summary>
@@ -90,6 +92,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>Runs right before the settings snapshot: the head hands back the values a running
         /// Takeover pulse borrowed (WPF AutonomyService.SettleSettingPulses).</summary>
         public Action? SettleBeforeSnapshot { get; set; }
+
+        /// <summary>The head's per-day feature log (WPF FeatureDayLogService.Note via SeasonRecapService.TrackFeature).</summary>
+        public Action<string>? NoteFeatureDayEvent { get; set; }
 
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
@@ -131,7 +136,7 @@ namespace ConditioningControlPanel.Services
             }
             // SessionEngine.cs:207-230: the session owns Mind Wipe, including its delayed start.
             CoreMindWipe.Stop();
-            // WPF SessionEngine.cs:1492-1496. ponytail: the session's Brain Drain timeline is not ported.
+            // WPF SessionEngine.cs:1492-1496: inherited Brain Drain stops; the session timeline owns it below.
             CoreEngine.StopBrainDrain?.Invoke();
 
             var s = CoreSettings.Current;
@@ -151,6 +156,9 @@ namespace ConditioningControlPanel.Services
             // Ledger persisted before any override, so a crash mid-session keeps it (as WPF) without
             // leaking session values to disk. Immediate: a debounced save would serialise the overrides.
             try { s.RecordSessionStart(s.ActiveModId); } catch { }
+            // WPF SessionEngine.cs:296-318: this season's session and the features it runs, once per start.
+            try { SeasonFeatureTracking.RecordSessionStart(s, session.Settings, NoteFeatureDayEvent, DateTime.UtcNow); }
+            catch (Exception ex) { Log.Warning(ex, "SeasonRecap: failed to record session feature use"); }
             CoreSettings.SaveImmediate();
 
             // Main 8fe2a80a0: a Takeover pulse from the last 30 s hands its boosted values back first,
@@ -263,6 +271,16 @@ namespace ConditioningControlPanel.Services
             }
             else LockCardScheduler.Instance.Stop();
 
+            // WPF SessionEngine.cs:1602-1614: the session owns both halves, even when its block is off.
+            // WPF's second Stop for an off block is the inherited stop Start already ran (SessionEngine.cs:1495).
+            _brainDrainActive = ss.BrainDrainEnabled && ss.BrainDrainStartMinute == 0;
+            s.BrainDrainEnabled = _brainDrainActive;
+            if (_brainDrainActive)
+            {
+                s.BrainDrainIntensity = ss.BrainDrainStartIntensity;
+                CoreEngine.StartBrainDrain?.Invoke();
+            }
+
             // WPF Services/Session/SessionEngine.cs:1528-1547.
             s.MandatoryVideosEnabled = ss.MandatoryVideosEnabled;
             if (ss.MandatoryVideosEnabled)
@@ -350,6 +368,7 @@ namespace ConditioningControlPanel.Services
             if (ss.MindWipeEnabled && !_deferred.IsPending("mind wipe"))
                 Step("mind-wipe", () => CoreMindWipe.Start(ss.MindWipeBaseMultiplier, ss.MindWipeVolume / 100.0));
             if (CoreSettings.Current.PopQuizEnabled) Step("pop-quiz", () => CoreEngine.PopQuiz?.Start());   // SessionEngine.cs:574
+            if (ss.BrainDrainEnabled && _brainDrainActive) Step("brain-drain", () => CoreEngine.StartBrainDrain?.Invoke());   // WPF :600
             if (ss.BubblesEnabled) Step("bubbles", CoreBubbles.Start); // WPF SessionEngine.cs:570
             if (ss.MandatoryVideosEnabled && !_deferred.IsPending("mandatory videos")) Step("mandatory-videos", () => CoreEngine.Video?.Start());   // WPF :580
             if (ss.BubbleCountEnabled && !_deferred.IsPending("bubble count")) Step("bubble-count", () => CoreEngine.BubbleCount?.Start());   // WPF :573
@@ -447,6 +466,7 @@ namespace ConditioningControlPanel.Services
                 }
             });
             Step("tick:bubbles", () => TickBubbles(session.Settings, minutes, wallTime ?? DateTime.Now));
+            Step("tick:brain-drain", () => TickBrainDrain(session.Settings, minutes));
             Step("tick:corner-gif", () => TickCornerGif(session.Settings, minutes));
             Step("tick:progress", () => Ticked?.Invoke());
         }
@@ -474,6 +494,15 @@ namespace ConditioningControlPanel.Services
                 PinkOpacity = Lerp(ss.PinkFilterStartOpacity, ss.PinkFilterEndOpacity, pink);
             }
 
+            // WPF SessionEngine.cs:874-886: ramp the running player, not the saved preference.
+            if (ss.BrainDrainEnabled && _brainDrainActive && ss.BrainDrainStartIntensity != ss.BrainDrainEndIntensity
+                && minutes >= ss.BrainDrainStartMinute)
+            {
+                var duration = Math.Max(0.01, total - ss.BrainDrainStartMinute);
+                var brain = RampCurves.ApplyCurve(Math.Clamp((minutes - ss.BrainDrainStartMinute) / duration, 0, 1), curve);
+                CoreEngine.SetBrainDrainIntensity?.Invoke(Lerp(ss.BrainDrainStartIntensity, ss.BrainDrainEndIntensity, brain));
+            }
+
             // SessionEngine.cs:731: only when the session actually ramps, so a constant one leaves the
             // user's slider live (#897).
             if (ss.SpiralEnabled && ss.SpiralOpacity != ss.SpiralOpacityEnd && minutes >= SpiralStartMinute)
@@ -494,6 +523,29 @@ namespace ConditioningControlPanel.Services
             return CornerGifPlanner.AllowSessionCornerGif(ss.CornerGifEnabled, s.SessionCornerGifAllowed,
                 CoreCornerGif.StandaloneActive, CornerGifPlanner.SessionCornerArtIsSpiral(ss.CornerGifPath),
                 _snapshot?.SpiralEnabled ?? s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
+        }
+
+        /// <summary>WPF SessionEngine.cs:1014-1037: the Brain Drain block's delayed start, then its end,
+        /// both in one tick when the clock jumps past them.</summary>
+        private void TickBrainDrain(SessionSettings ss, double minutes)
+        {
+            var s = CoreSettings.Current;
+            if (ss.BrainDrainEnabled && !_brainDrainActive && ss.BrainDrainStartMinute > 0
+                && minutes >= ss.BrainDrainStartMinute)
+            {
+                _brainDrainActive = true;
+                s.BrainDrainEnabled = true;
+                s.BrainDrainIntensity = ss.BrainDrainStartIntensity;
+                CoreEngine.StartBrainDrain?.Invoke();
+                Log.Information("Brain Drain activated at {Minutes:F1} minutes (target was {Target})", minutes, ss.BrainDrainStartMinute);
+            }
+            if (_brainDrainActive && ss.BrainDrainEndMinute > 0 && minutes >= ss.BrainDrainEndMinute)
+            {
+                _brainDrainActive = false;
+                s.BrainDrainEnabled = false;
+                CoreEngine.StopBrainDrain?.Invoke();
+                Log.Information("Brain Drain ended at {Minutes:F1} minutes (target was {Target})", minutes, ss.BrainDrainEndMinute);
+            }
         }
 
         /// <summary>The per-second admission recheck, delayed start and delayed end.</summary>
@@ -637,6 +689,8 @@ namespace ConditioningControlPanel.Services
             _timer = null;
             _deferred.Clear();
             Step("mind-wipe", CoreMindWipe.Stop);   // WPF SessionEngine.cs:368
+            Step("brain-drain", () => CoreEngine.StopBrainDrain?.Invoke());   // WPF SessionEngine.cs:395
+            _brainDrainActive = false;
             Step("pop-quiz", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
             Step("corner-gif", () => CloseCornerGif(handBack: true, stepName: "stop:corner-gif"));   // SessionEngine.cs:356
 

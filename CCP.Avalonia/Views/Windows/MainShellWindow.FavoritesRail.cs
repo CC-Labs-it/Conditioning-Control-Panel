@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow/MainWindow.FavoritesRail.cs:78-79, including hostless cards.
             ("BtnPlayBackRoom", "game.backroom"), ("BtnPlayDtrh", "game.dtrh"),
             ("BtnPlayArcademy", "game.arcademy"), ("BtnPlayRacingThoughts", "game.race"),
+            ("BtnPlayRacingThoughtsClassic", "game.raceclassic"),
         };
 
         /// <summary>WPF InitFavoritesRail (MainWindow.xaml.cs:3501): pin menus, first paint, and a
@@ -329,12 +330,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Background = dash.FavoritesRail.TryFindResource("RailChipScrim", out var b) ? b as IBrush : null,
         };
 
-        // WPF's ModResourceResolver decode cache, keyed by what actually resolves (a mod switch
-        // changes the override path, so it cannot serve the old mod's picture).
-        private static readonly Dictionary<(string, int), Bitmap?> RailArtCache = new();
+        // WPF ModResourceResolver.cs:149 keys decoded art by mod as well as path and width:
+        // embedded nav twins can differ even when neither mod supplies an override file.
+        private static readonly Dictionary<(string, string, int), Bitmap?> RailArtCache = new();
         private static Bitmap? RailArt(string path, int width)
         {
-            var key = (CoreModArt.OverridePath(path) ?? path, width);
+            var key = (CoreMods.ActiveModId, CoreModArt.OverridePath(path) ?? path, width);
             lock (RailArtCache)
             {
                 if (!RailArtCache.TryGetValue(key, out var bmp))

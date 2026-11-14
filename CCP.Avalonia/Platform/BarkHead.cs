@@ -21,6 +21,7 @@ internal static class BarkHead
         if (Engine != null) return;
         var e = Engine = new BarkEngine();
         Seed(e);
+        AttachEcho(e);
         e.Start();
         WireSources(e);
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
@@ -35,6 +36,12 @@ internal static class BarkHead
                 e.ReloadRules();
             };
     }
+
+    // WPF BarkService.cs:1972,2008 (SelfEchoMuteMs :128): the spoken line can never trip the keyword
+    // triggers (typed or read off the screen) for eight seconds, loop protection on or off.
+    internal static Func<KeywordAudioRuntime> EchoTarget = () => KeywordTriggerHead.Engine;   // tests
+    internal static void AttachEcho(BarkEngine e) => e.BarkSpoken += OnBarkSpoken;
+    private static void OnBarkSpoken(BarkRule _, string line) => EchoTarget().MuteKeywordEcho(line, 8000);
 
     private static readonly List<Action> _unsubscribe = new();
 
@@ -86,6 +93,7 @@ internal static class BarkHead
     /// <summary>Drops the engine and detaches sources (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        if (Engine != null) Engine.BarkSpoken -= OnBarkSpoken;
         foreach (var detach in _unsubscribe) detach();
         _unsubscribe.Clear();
         App.UserMessageSent -= _onUserMessage;
@@ -97,6 +105,7 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
+        e.IsWhisperStarting = () => Views.Overlays.FlashOverlay.VoiceStarting;
         // WPF App.xaml.cs:3006: a held idle line is not recorded as spoken (#1468), same policy as the tube.
         ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced = trigger =>
             Views.AvatarTube.AvatarTubeWindow.MayVoice(ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.IsUnprompted(trigger));

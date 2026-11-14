@@ -169,6 +169,27 @@ public sealed partial class GameWindowTests
         Assert.Equal(Loc.Get("launcher_game_race_title"), refusal.Feature);
     });
 
+    /// <summary>WPF LauncherHost.LaunchGame (:335-375): a launch the gate refused reports false, so the
+    /// companion's open action does not claim it opened the race (restack b128, from #4065).</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Glassroad_LauncherLaunchGame_ReportsWhetherTheRaceOpened(bool lab) => RunGlassroad("1", (shell, _, _) =>
+    {
+        var denied = new List<TierVerdict>();
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        CoreEntitlement.ShowDeniedHandler = denied.Add;
+        try
+        {
+            CoreEntitlement.HasLabProvider = () => lab;
+            Assert.Equal(lab, LauncherWindow.LaunchGame(shell, "race"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(lab, GameWindow.IsAnyOpen());
+            Assert.Equal(lab ? 0 : 1, denied.Count);
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    }, lab: lab);
+
     [Fact]
     public void Glassroad_RaceTileIsVisibleWithoutPurchase()
     {
@@ -460,7 +481,8 @@ public sealed partial class GameWindowTests
             Assert.True(GameWindow.GlassroadGate());
             Assert.Equal(GameWindow.GlassroadId, GameWindow.ResolveDoor("RACE"));
             Assert.Equal("loom", GameWindow.ResolveDoor("loom"));
-            Assert.DoesNotContain(GameWindow.Games.Values, g => g.Page == "dtrh/race.html");
+            Assert.Equal("dtrh/race.html", GameWindow.Games["raceclassic"].Page);
+            Assert.Equal("glassroad/index.html", GameWindow.Games["race"].Page);
             Assert.Equal("glassroad/index.html", GameWindow.Games["race"].Page);
         }
         finally
@@ -483,7 +505,8 @@ public sealed partial class GameWindowTests
             Assert.Contains(LauncherWindow.VisibleCards, c => c.Id == "race");
             Assert.Equal(!prime, LauncherWindow.Destinations["race"].Locked());
             Assert.Equal(GameWindow.GlassroadId, GameWindow.ResolveDoor("RACE"));
-            Assert.DoesNotContain(GameWindow.Games.Values, g => g.Page == "dtrh/race.html");
+            Assert.Equal("dtrh/race.html", GameWindow.Games["raceclassic"].Page);
+            Assert.Equal("glassroad/index.html", GameWindow.Games["race"].Page);
             if (prime && !solo)
             {
                 int gates = 0;

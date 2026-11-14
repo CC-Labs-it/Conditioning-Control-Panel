@@ -1,6 +1,11 @@
 using System;
 using ConditioningControlPanel;
 using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+using Avalonia.Controls.Documents;
+using Avalonia.Controls.Shapes;
+using Avalonia.Media;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
@@ -11,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -42,11 +48,225 @@ public sealed class FriendNoticesTests
             w.Dismiss(n, true);
             Assert.Equal("new", acted);
             Assert.Equal(0, missed);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
         }
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
+    [Theory]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Off)]
+    public Task DismissalFadesOnceAndSurvivesExpiry(global::ConditioningControlPanel.Models.MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe, oldTime) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe, BeatLoop.Time);
+        try
+        {
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = level; settings.GentleVisuals = false;
+            int actions = 0, missed = 0;
+            var at = DateTimeOffset.UtcNow;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", at, 6000), new NoticeLook { Act = _ => actions++ });
+            var w = FriendNotices.Current!;
+            w.Advance(260);
+            var n = Assert.Single(w.Stack.All);
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().Single();
+            w.Dismiss(n, true); w.Dismiss(n, true);
+            Assert.Equal(1, actions);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Off)
+                Assert.Null(FriendNotices.Current);
+            else
+            {
+                Assert.Same(w, FriendNotices.Current);
+                w.Advance(70);
+                Assert.Equal(0.5, card.Opacity, 5);
+                FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "b", "B", at, 1), new NoticeLook { Missed = _ => missed++ });
+                w.Advance(1);
+                Assert.Equal(1, missed);
+                Assert.Contains(card, ((StackPanel)w.Content!).Children);
+                w.Advance(68);
+                Assert.Same(w, FriendNotices.Current);
+                w.Advance(1);
+                Assert.Null(FriendNotices.Current);
+            }
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    // House rule (Gentle visuals): a rise never beats the 300 ms floor and a fade only lengthens (restack b151 review).
+    [Fact]
+    public Task GentleVisualsSlowTheArrivalAndLengthenTheDismissFade() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var (oldProvider, oldProbe, oldTime) = (CoreSettings.ServiceProvider, UiMotionPreference.OsProbe, BeatLoop.Time);
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            var settings = CoreSettings.Current;
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = true;
+            settings.GentleFadeSeconds = 0.75;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", DateTimeOffset.UtcNow, 6000), new NoticeLook());
+            var w = FriendNotices.Current!;
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().Single();
+            w.Advance(200);
+            Assert.True(card.Opacity < 0.7, $"rise {card.Opacity} at 200 ms");
+            w.Advance(100);
+            Assert.Equal(1, card.Opacity);
+            Assert.True(FriendNotices.DismissFadeMs > 140);
+            w.Dismiss(Assert.Single(w.Stack.All), false);
+            w.Advance(140);
+            Assert.Same(w, FriendNotices.Current);
+            Assert.True(card.Opacity > 0);
+            w.Advance(FriendNotices.DismissFadeMs);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            CoreSettings.ServiceProvider = oldProvider;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task ClosingDuringDismissalDoesNotRepeatTheAction() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        try
+        {
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false;
+            int actions = 0;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", DateTimeOffset.UtcNow, 6000), new NoticeLook { Act = _ => actions++ });
+            var w = FriendNotices.Current!;
+            var n = Assert.Single(w.Stack.All);
+            w.Dismiss(n, true);
+            Assert.Same(w, FriendNotices.Current);
+            FriendNotices.CloseAll();
+            w.Advance(140);
+            w.Dismiss(n, true);
+            Assert.Equal(1, actions);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    // WPF FriendNotices.cs:101-108,234-245,395-411. Only the fresh card moves.
+    [Theory]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Off)]
+    public Task ArrivalAndRepeatFollowTheMotionSetting(global::ConditioningControlPanel.Models.MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldGentle = settings.GentleVisuals;
+        var oldProbe = UiMotionPreference.OsProbe;
+        var oldTime = BeatLoop.Time;
+        try
+        {
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = level;
+            settings.GentleVisuals = false;
+            var at = DateTimeOffset.UtcNow;
+            FriendNotice Notice(string id) => new(NoticeKind.Poke, id, "Friend", at, 6000);
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            var w = FriendNotices.Current!;
+            Border Card() => ((StackPanel)w.Content!).Children.OfType<Border>().Last();
+            var card = Card();
+            Assert.Equal(new Thickness(16, 0, 0, 8), card.Margin); // WPF :376 leaves room for the nudge
+            var shift = (TranslateTransform)card.RenderTransform!;
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Full ? 28 : 0, shift.X);
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, card.Opacity);
+            w.Advance(140);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Reduced) Assert.Equal(1, card.Opacity);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Full)
+            {
+                Assert.Equal(0.7, card.Opacity, 5);
+                Assert.NotEqual(0, shift.X);
+            }
+            w.Advance(120);
+            Assert.Equal(0, shift.X, 5);
+            Assert.Equal(1, card.Opacity);
+
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            card = Card();
+            shift = (TranslateTransform)card.RenderTransform!;
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Full ? -6 : 0, shift.X, 5);
+            Assert.Equal(1, card.Opacity);
+            w.Advance(110);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Full) Assert.NotEqual(0, shift.X);
+            w.Advance(110);
+            Assert.Equal(0, shift.X, 5);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF FriendNotices.cs:101-108,395-411: motion begins with this arrival, not the preceding tick.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DelayedBeatStartsArrivalAndRepeatAtTheirOwnTimes(bool repeat) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var oldTime = BeatLoop.Time;
+        var (oldLevel, oldGentle, oldProbe) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        var time = new SteppedTime();
+        try
+        {
+            BeatLoop.Time = time;
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false;
+            FriendNotice Notice(string id) => new(NoticeKind.Poke, id, "Friend", DateTimeOffset.UtcNow, 30000);
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            var w = FriendNotices.Current!;
+            Assert.True(w.IsVisible);
+            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, w));
+            time.Advance(TimeSpan.FromSeconds(5)); // no beat since the first card appeared
+            FriendNotices.Present(null, Notice(repeat ? "a" : "b"), new NoticeLook());
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().First();
+            time.Advance(TimeSpan.FromMilliseconds(110));
+            BeatLoop.StepAll();
+            Assert.Equal(repeat ? 1 : 0.55, card.Opacity, 5);
+            Assert.NotEqual(0, ((TranslateTransform)card.RenderTransform!).X);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -138,6 +358,125 @@ public sealed class FriendNoticesTests
         }
         return Task.CompletedTask;
     });
+    // WPF FriendNotices.cs:278; LandingChrome.cs:35-77. Exercise the request delivery path.
+    [Theory]
+    [InlineData("/friends/avatar/u_req.png", true)]
+    [InlineData("https://elsewhere.example/a.png", false)]
+    [InlineData(null, false)]
+    [InlineData("/friends/avatar/broken.png", false)]
+    public Task RequestNoticeUsesOnlyProxyPicturesAndKeepsInitials(string? path, bool loads) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var panel = new Window();
+        var urls = new List<string>();
+        byte[] png;
+        using (var stream = global::Avalonia.Platform.AssetLoader.Open(new Uri(
+            "avares://CCP.Avalonia/Resources/" + LandingRules.KnockArt(new InboxItem(
+                "x", SendKind.Invite, "f", "Friend", null, null, InviteDestination.Ramp, null, null,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5))))))
+        using (var ms = new MemoryStream()) { stream.CopyTo(ms); png = ms.ToArray(); }
+        var previousFetch = KnockCard.FetchPicture;
+        var previousAnchor = FriendsLanding.Anchor;
+        var settings = CoreSettings.Current;
+        var previousBell = settings.FriendNotificationsEnabled;
+        try
+        {
+            KnockCard.FetchPicture = url =>
+            {
+                urls.Add(url);
+                return path?.Contains("broken") == true
+                    ? Task.FromException<byte[]>(new IOException("unavailable")) : Task.FromResult(png);
+            };
+            panel.Show();
+            FriendsLanding.Anchor = () => panel;
+            CoreSettings.Current.FriendNotificationsEnabled = true;
+            FriendsLanding.AnnounceRequest(new FriendRequest("req", "Friend", path, null, DateTimeOffset.UtcNow), false);
+            var w = Assert.IsType<FriendNotices>(FriendNotices.Current);
+            Assert.Contains(w.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "F");
+            var face = w.GetVisualDescendants().OfType<Ellipse>().SingleOrDefault(e => e.Fill is ImageBrush);
+            Assert.Equal(loads, face != null);
+            if (face != null) { Assert.Equal(1, face.Opacity); Assert.Equal(34, face.Width); }
+            Assert.Equal(path?.StartsWith('/') == true ? 1 : 0, urls.Count);
+            if (urls.Count > 0) Assert.Equal("https://codebambi-proxy.vercel.app" + path, urls[0]);
+        }
+        finally
+        {
+            KnockCard.FetchPicture = previousFetch;
+            FriendsLanding.Anchor = previousAnchor;
+            settings.FriendNotificationsEnabled = previousBell;
+            FriendNotices.CloseAll();
+            panel.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AvatarTestRestoresItsStateEvenWhenItFails(bool fail)
+    {
+        var previousFetch = KnockCard.FetchPicture;
+        var previousAnchor = FriendsLanding.Anchor;
+        var settings = CoreSettings.Current;
+        var previousBell = settings.FriendNotificationsEnabled;
+        Func<string, Task<byte[]>> fetch = _ => Task.FromResult(Array.Empty<byte>());
+        Func<Window?> anchor = () => null;
+        try
+        {
+            KnockCard.FetchPicture = fetch;
+            FriendsLanding.Anchor = anchor;
+            settings.FriendNotificationsEnabled = false;
+            if (fail)
+                await Assert.ThrowsAnyAsync<Xunit.Sdk.XunitException>(() => RequestNoticeUsesOnlyProxyPicturesAndKeepsInitials(null, true));
+            else
+                await RequestNoticeUsesOnlyProxyPicturesAndKeepsInitials(null, false);
+            Assert.Same(fetch, KnockCard.FetchPicture);
+            Assert.Same(anchor, FriendsLanding.Anchor);
+            Assert.False(settings.FriendNotificationsEnabled);
+        }
+        finally
+        {
+            KnockCard.FetchPicture = previousFetch;
+            FriendsLanding.Anchor = previousAnchor;
+            settings.FriendNotificationsEnabled = previousBell;
+        }
+    }
+
+    // WPF FriendNotices.cs:283-325: a repeat keeps its time in the heading and accents the count.
+    [Fact]
+    public Task NoticeTimeSharesTheHeadingAndOnlyWordAndCountAreAccented() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        try
+        {
+            var at = DateTimeOffset.UtcNow.AddMinutes(-2);
+            for (int i = 0; i < 2; i++)
+                FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "f", "Friend", at, 6000),
+                    new NoticeLook { Line = "poked you:", Word = "hello", Pink = true });
+            var w = FriendNotices.Current!;
+            var name = w.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Friend");
+            var heading = Assert.IsType<DockPanel>(name.Parent);
+            Assert.Equal(FontWeight.SemiBold, name.FontWeight);
+            var ago = Assert.IsType<TextBlock>(heading.Children[0]);
+            Assert.Equal(Dock.Right, DockPanel.GetDock(ago));
+            Assert.Equal(10.5, ago.FontSize);
+            Assert.Equal(new Thickness(6, 0, 0, 0), ago.Margin);
+            var line = w.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Inlines?.OfType<Run>().Any() == true);
+            var runs = line.Inlines!.OfType<Run>().ToArray();
+            Assert.Equal(3, runs.Length);
+            Assert.Equal("poked you:", runs[0].Text);
+            Assert.Equal(FriendsDrawer.Muted, line.Foreground);
+            Assert.Equal(" hello", runs[1].Text);
+            Assert.Equal(FriendsDrawer.Pink, runs[1].Foreground);
+            Assert.Equal(FontWeight.SemiBold, runs[1].FontWeight);
+            Assert.Equal(FriendNoticeRules.CountSuffix(2), runs[2].Text);
+            Assert.Equal(FriendsDrawer.Gold, runs[2].Foreground);
+            Assert.Equal(FontWeight.SemiBold, runs[2].FontWeight);
+        }
+        finally { FriendNotices.CloseAll(); }
+        return Task.CompletedTask;
+    });
     private static Point Centre(Control c, Window w) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
     private static Control Tagged(Window w, string tag) => w.GetVisualDescendants().OfType<Control>().First(c => Equals(c.Tag, tag));
     private static string PillText(Control pill) => ((TextBlock)((Button)pill).Content!).Text!;
@@ -172,6 +511,7 @@ public sealed class FriendNoticesTests
             Assert.Single(w.Stack.All);
             Press(w, onName, MouseButton.Left);
             Assert.Equal(1, opened);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "b", "Friend", DateTimeOffset.UtcNow, 6000), Look());
             w = FriendNotices.Current!;
@@ -179,6 +519,7 @@ public sealed class FriendNoticesTests
             Press(w, Centre(Tagged(w, "friend-notice-action"), w), MouseButton.Left);
             Assert.Equal(1, acted);
             Assert.Equal(1, opened);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
         }
         finally { FriendNotices.CloseAll(); }
@@ -261,7 +602,8 @@ public sealed class FriendNoticesTests
             for (int i = 0; i < 2; i++) FriendNotices.Present(anchor,
                 new FriendNotice(NoticeKind.Request, i.ToString(), "Friend", DateTimeOffset.UtcNow, 8000), new NoticeLook());
             var notice = FriendNotices.Current!; notice.Stack.Paused = true; Dispatcher.UIThread.RunJobs(); var height = notice.Bounds.Height;
-            anchor.Close(); notice.Dismiss(notice.Stack.All[0], false); notice.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            anchor.Close(); notice.Dismiss(notice.Stack.All[0], false); notice.Advance(FriendNotices.DismissFadeMs);
+            notice.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             Assert.Single(notice.Stack.All); Assert.True(notice.Bounds.Height < height);
             var screen = notice.Screens.Primary!; var area = screen.WorkingArea; var scale = screen.Scaling;
             var (x, y) = FriendNoticeRules.Place(area.X / scale, area.Y / scale, area.Width / scale, area.Height / scale, notice.Bounds.Width, notice.Bounds.Height);

@@ -5,11 +5,13 @@
 // Remaining lifecycle gaps are listed in docs/avalonia-r72-start-stop-recut.md.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
+using System;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -18,6 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+        // The generation of a user engine or session start still waiting on the portal: the Lockdown
+        // dose keeper never starts over it (its own start would bump _engineGen and drop the user's).
+        private static int? _pendingUserEngineGen;
         private System.DateTime? _emiEngineStartedUtc;
         internal System.Action<string, object> EmiMoment = (name, context) => EmiDesk.EmiDeskService.Instance.Fire(name, context);
         internal System.Func<System.DateTime> EmiNow = () => System.DateTime.UtcNow;
@@ -35,6 +40,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             int minutes = start == null ? 0 : System.Math.Max(0, (int)(EmiNow() - start.Value).TotalMinutes);
             EmiMoment("engineStopped", new { minutes });
         }
+
+        // WPF MainWindow.xaml.cs:146 / MainWindow.StartStop.cs:607.
+        internal event EventHandler? EngineStopped;
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -106,20 +114,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine(bool systemInitiated = true, bool resumeSession = false)
+        internal void StartEngine(bool systemInitiated = true, bool resumeSession = false, bool lockdownDose = false)
         {
             var gen = ++_engineGen;
+            if (!systemInitiated) _pendingUserEngineGen = gen;
             StartEffect(() =>
             {
+                if (!systemInitiated && _pendingUserEngineGen == gen) _pendingUserEngineGen = null;
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
+                // The dose keeper re-checks at the moment the portal lets it start (MainShellWindow.LockdownDose.cs).
+                if (lockdownDose && !CanStartLockdownDoseEngine()) return;
+                if (lockdownDose) _doseEngineStarted = true;
                 // WPF StartStop.cs:345-350: no notice for audio-only or system starts.
                 if (!systemInitiated && !CoreSettings.Current.AudioOnlySession) WarnIfFlashLibraryEmpty();
                 if (!systemInitiated) App.Achievements?.CheckRelapse();
                 // WPF StartEngineFromUser: a resume is not a new run; the parked session comes back after the start.
                 var resuming = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true };
-                CoreEngine.Start(resumingSession: resuming);
+                CoreEngine.Start(resumingSession: resuming, systemInitiated: systemInitiated);   // WPF StartStop.cs:341
                 StartEngineRamp();
                 if (resuming) App.Sessions?.ResumeAfterEngineStart();
+                // WPF StartStop.cs:416-422; refuses unless enabled + consent + entitled. A panic stop holds
+                // Takeover off until the user restarts it (StopAutonomyForPanic), so an engine start never lifts it.
+                if (!AutonomyStoppedForPanic) Autonomy.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -129,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 UpdateStartButton();
                 if (!systemInitiated) _ = MaybePromptMandatoryVideoEnhancement(this, () => CoreEngine.IsRunning,   // WPF StartStop.cs:443
                     () => Platform.WebcamTracker.Instance.IsRunning, () => Named<Tabs.SettingsTabView>("SettingsTab")?.BtnWebcamTracking_Click(null, new()));
+                if (resuming) { SetPauseButton(false); OnSessionTick(); }   // the parked run is live again: repaint Pause and the labels
             });
         }
 
@@ -148,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopEngine()
         {
             _engineGen++;
+            _pendingUserEngineGen = null;
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }
@@ -159,6 +177,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
             App.Sessions?.Pause();
             Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
+            // WPF StartStop.cs:577-580 ExitBrowserFullscreenForTeardown (#952): a topmost fullscreen browser
+            // left up by a session's end hides the completion dialog behind it (#4423).
+            ExitBrowserPopoutFullscreen();
             Services.EngineCrashSentinel.Clear();
             EmiEngineStopped(); // WPF StartStop.cs:570-579
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
@@ -168,6 +189,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            // WPF StartStop.cs:548-555: Takeover the user did not switch on for itself stops with the engine.
+            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop();
             Deeper.ScreenShake.Stop();
             // WPF MainWindow.StartStop.cs:533-547: preserve only the standalone bed, release ducking.
             if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
@@ -183,6 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             StopEngineRamp();
+            EngineStopped?.Invoke(this, EventArgs.Empty);
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
             if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); OnSessionTick(); return; }
             // WPF OnSessionStopped: the session button and the dials come back on every exit path.

@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _warnedUnavailable;
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
+        private static readonly List<Grid> HostedCards = new();
 
         /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
         internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
@@ -64,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             card.Opacity = 0;
             card.ZIndex = 1200; // WPF: above hosted image flashes
             lease.Canvas.Children.Add(card);
+            HostedCards.Add(card);
             lease.Raise();
             var retired = false;
             Action retire = () =>
@@ -71,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (retired) return;
                 retired = true;
                 lease.Canvas.Children.Remove(card);
+                HostedCards.Remove(card);
             };
             RetireHosted.Add(retire);
             void Step(double value, TimeSpan at) => schedule(() =>
@@ -107,6 +110,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var lease in Hosts.Values) lease.Dispose();
             Hosts.Clear();
+        }
+
+        // WPF SubliminalService.cs:1088: exclude the text, not its full-screen host. Both paths count while
+        // they are visibly flashing: a classic card window and a card on the shared solid-mode stage.
+        internal static IReadOnlyList<System.Drawing.Rectangle> ActiveTextRects()
+        {
+            var rects = new List<System.Drawing.Rectangle>();
+            foreach (var w in Active)
+                if (w.IsVisible && w.IsFlashing && w.Content is Grid grid) AddText(rects, grid);
+            foreach (var card in HostedCards)
+                if (card.Opacity > 0.01) AddText(rects, card);
+            return rects;
+        }
+
+        // The card's own text is its last TextBlock (Build: outline copies first). Physical pixels, padded 40 DIP.
+        private static void AddText(List<System.Drawing.Rectangle> rects, Grid grid)
+        {
+            if (TopLevel.GetTopLevel(grid) is not Window w || !w.IsVisible) return;
+            if (grid.Children.OfType<TextBlock>().LastOrDefault() is not { } text) return;
+            if (string.IsNullOrEmpty(text.Text) || text.Bounds.Width <= 0 || text.Bounds.Height <= 0) return;
+            if (text.TranslatePoint(new Point(0, 0), w) is not { } pos) return;
+            var k = w.RenderScaling;
+            const double pad = 40;
+            var left = w.Position.X + (int)Math.Floor((pos.X - pad) * k);
+            var top = w.Position.Y + (int)Math.Floor((pos.Y - pad) * k);
+            var right = w.Position.X + (int)Math.Ceiling((pos.X + text.Bounds.Width + pad) * k);
+            var bottom = w.Position.Y + (int)Math.Ceiling((pos.Y + text.Bounds.Height + pad) * k);
+            rects.Add(new System.Drawing.Rectangle(left, top, right - left, bottom - top));
         }
 
         /// <summary>Draw one card for <paramref name="text"/> on every targeted screen; <paramref name="opacity"/>
@@ -283,6 +314,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF AnimateSubliminal: 0 -> alpha over 50 ms, hold, alpha -> 0 over 50 ms, then
         /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
+        internal bool IsFlashing { get; set; }
+
         public void Run(double alpha, TimeSpan hold)
         {
             var fade = FadeDuration;
@@ -319,7 +352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 1; i <= steps; i++)
             {
                 var v = from + (to - from) * i / steps;
-                DispatcherTimer.RunOnce(() => { if (!closed()) X11Overlay.SetOpacity(this, v); }, start + span * i / steps);
+                DispatcherTimer.RunOnce(() => { if (!closed()) { IsFlashing = v > 0.01; X11Overlay.SetOpacity(this, v); } }, start + span * i / steps);
             }
         }
     }

@@ -79,8 +79,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _leashGate.CutRequested += () => _ = CutLeashAsync();
                 _leashGate.LaterRequested += () => { _leashUnplayablePid = null; HideLeashGate(); };
 
+                InitializeLeashAsks();
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-                timer.Tick += (_, _) => CheckLeashGate();
+                timer.Tick += (_, _) => { RebindLeashAsks(); CheckLeashGate(); };
                 timer.Start();
                 Closed += (_, _) => timer.Stop();
             }
@@ -273,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             LeashTaskHost.EndTask("cut", this);   // WPF LeashSurfaces.CutDone -> EndLeashTask
             App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
+            try { LeashHead.NoteCut(); } catch { }   // WPF LeashSurfaces.NoteCut: cut sound, Ended swallowed once
             try { if (LeashHead.Service is { } s) await s.CutAsync(); }
             catch (Exception ex) { Serilog.Log.Debug("[Leash] cut failed (service retries): {E}", ex.Message); }
         }

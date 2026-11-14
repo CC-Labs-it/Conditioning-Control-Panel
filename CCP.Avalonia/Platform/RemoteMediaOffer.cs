@@ -57,6 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             try
             {
+                // Switched off by the owner (2026-11-07, WPF App.OfferRemoteMediaSource): no "Media without the download" card.
+                if (!PopupSwitches.RemoteMediaOffer) return;
                 if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => Offer(surface, owner)); return; }
                 if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
                 // WPF App.OfferRemoteMediaSource: do not let the intro's modal guard silently

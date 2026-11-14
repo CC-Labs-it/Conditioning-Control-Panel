@@ -9,12 +9,12 @@
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
-// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, loom-list and
-// loom-*, favorites + asset-stats, bark routing, sfx,
+// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
+// Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
 using System;
 using System.IO;
 using System.Linq;
@@ -48,6 +48,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        // WPF DtrhHostService.cs:314,403. Keep the store at the head boundary so bridge tests
+        // need neither a profile write nor process-wide engagement history.
+        internal static Func<int, System.Collections.Generic.List<string>> DtrhFavorites = DtrhAssetStatsStore.TopAssets;
+        internal static Action<JObject> DtrhMergeAssetStats = DtrhAssetStatsStore.Merge;
+
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
         private IDisposable? _dtrhExitWatchdog;
@@ -55,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private global::Avalonia.PixelPoint _dtrhWindowPosition;
         private double _dtrhWindowWidth, _dtrhWindowHeight;
         private global::Avalonia.Controls.WindowState _dtrhWindowState;
-        private bool _dtrhFullscreen, _dtrhHasWindowedFrame;
+        private bool _dtrhFullscreen, _dtrhHasWindowedFrame, _dtrhChangingMode;
         private DateTime _dtrhRunStartedUtc = DateTime.MinValue;
 
         private DispatcherTimer? _dtrhHeartbeatWatch;
@@ -71,6 +76,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF IsReady: the page said ready and is not on its way out.</summary>
         internal bool DtrhReady => IsReady && !_dtrhExiting && !_closing;
+
+        /// <summary>WPF DtrhHostService.IsActive: a DtRH window is open.</summary>
+        internal static bool IsDtrhOpen() { lock (Open) return Open.Any(w => w.IsDtrh); }
 
         /// <summary>WPF IsInFront: the open DtRH window when it is the active one, else null.</summary>
         internal static GameWindow? DtrhInFront()
@@ -123,6 +131,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "heartbeat":
                 case "pong":
                     _dtrhLastHeartbeatUtc = DtrhUtcNow(); // WPF DtrhHostService.cs:397-398,451-452
+                    return true;
+                case "loom-save":
+                case "loom-delete":
+                case "loom-reveal":
+                    HandleLoom(o); // WPF DtrhHostService.cs:405-433; same store and replies as the standalone Loom.
+                    return true;
+                case "asset-stats":
+                    // WPF DtrhHostService.cs:400-404: deltas are additive, best-effort telemetry.
+                    try { DtrhMergeAssetStats(o); }
+                    catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
                     return true;
                 case "request-run":
                     OnDtrhRequestRun(o);
@@ -219,10 +237,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _dtrhHasWindowedFrame = true;
         }
 
+        // A window manager (or a keyboard shortcut it owns) can enter or leave fullscreen without the page asking.
+        // Keep the host state true to the window and tell a ready page, so its next toggle asks for the right edge
+        // (WPF DtrhHostService.cs:488-502 echoes the host state; the page's scene.js reads that echo).
+        private void OnDtrhWindowStateChanged()
+        {
+            if (_dtrhChangingMode) return;
+            bool on = WindowState == WindowState.FullScreen;
+            if (on == _dtrhFullscreen) return;
+            _dtrhFullscreen = on;
+            if (!IsReady || _closing) return;
+            try { Post(new { type = "fullscreen", on }); }
+            catch (Exception ex) { Log.Debug("DtrhHost: fullscreen notification: {E}", ex.Message); }
+        }
+
         // WPF DtrhHostService.ApplyHostFullscreen and ChaosWebViewHost.ApplyWindowMode.
         private void SetDtrhFullscreen(bool on)
         {
+            // A native exit already cleared the flag above; this also covers a missed state event.
+            if (_dtrhFullscreen && WindowState != WindowState.FullScreen) _dtrhFullscreen = false;
             if (_dtrhFullscreen == on) return;
+            _dtrhChangingMode = true;
+            try { ApplyDtrhFullscreen(on); }
+            finally { _dtrhChangingMode = false; }
+        }
+
+        private void ApplyDtrhFullscreen(bool on)
+        {
             if (on)
             {
                 _dtrhWindowState = WindowState;
@@ -280,6 +321,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // (the page replaces its pools), so the tube fills without a relaunch. Unsubscribed in DisposeDtrh (P68).
             DtrhRemoteMedia.CopiesReady -= OnDtrhCopiesReady;
             DtrhRemoteMedia.CopiesReady += OnDtrhCopiesReady;
+            // WPF DtrhHostService.cs:309,462-479: saved spirals seed the descent pool.
+            PostLoomList();
+            // WPF DtrhHostService.cs:310-318: seed biome selection with the top twelve;
+            // an empty history sends no frame, and a failed read must not prevent play.
+            try
+            {
+                var favorites = DtrhFavorites(12);
+                if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
+            }
+            catch (Exception ex) { Log.Debug("DtrhHost: favorites post failed: {E}", ex.Message); }
         }
 
         /// <summary>WPF PostManifest (:83): the library, then the online half on top (Core DtrhRemoteMedia). Urls are

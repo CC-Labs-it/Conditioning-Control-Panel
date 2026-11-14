@@ -284,8 +284,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
         // The Possession haunt, its readout and first-run rules are MainShellWindow.Possession.cs (App.Possession).
-        // Not on this head: the Dose keeper and the system-key hook (Linux has none, so the warning
-        // does not promise it).
+        // The Dose keeper's engine half is MainShellWindow.LockdownDose.cs. Not on this head: Dose feature
+        // selection, and the system-key hook off Windows (Linux has none, so the warning does not promise it).
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
         internal static LockdownService? Lockdown => LockdownService.Current;
@@ -345,9 +345,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ld.Activate(TimeSpan.FromMinutes(minutes));
         }
 
-        /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper: none
-        /// runs here; system keys off Windows, where nothing blocks them) and with the platform's safety
-        /// valve. Possession runs on this head (App.Possession), so its paragraph is WPF's.</summary>
+        /// <summary>WPF's consent text, minus the lines this head would be lying about (the Dose keeper only
+        /// starts the engine here, it picks no features; system keys off Windows, where nothing blocks them)
+        /// and with the platform's safety valve. Possession runs on this head (App.Possession), so its
+        /// paragraph is WPF's.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg, bool windows)
@@ -358,6 +359,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (cfg.LockdownDisablePanicKey) warn.Append("- Panic Key will be DISABLED\n");
             // WPF MainWindow.Lab.cs:80; Platform/Win32PanicKey enforces it on Windows only.
             if (windows && cfg.LockdownBlockSystemKeys) warn.Append("- Alt+F4, Alt+Tab, the Windows key and Ctrl+Esc will be BLOCKED\n");
+            if (cfg.LockdownDoseKeeperEnabled)
+                warn.Append("- ").Append(Loc.Get("lockdown_dose_engine_warning")).Append('\n');
             warn.Append("- You CANNOT close the application (minimizing still works)\n");
             warn.Append("- The only escape is waiting for the timer to expire\n");
             warn.Append(windows

@@ -8,6 +8,10 @@
 // Time comes from the window's frame source (FrameClock's IFrameSource; tests step a fake): the hold
 // is measured on frame timestamps, never summed deltas (P40). Nothing animates (P82).
 //
+// Text effects (restack b165, #3794 #3922 #4041): Typo, Rewrite and GlyphRot (WPF TypoEffect.cs, RewriteEffect.cs,
+// GlyphRotEffect.cs) take no transform lease; their text returns at once in Finish (hold end, Return, panic),
+// and only while the control still shows exactly what the effect wrote.
+//
 // Panic: every live runtime registers itself; PanicSurfaces "possession" calls UndoAllLive, which
 // returns every touched control's own transform and origin at once.
 //
@@ -17,10 +21,9 @@
 //     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
 //     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
-//   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
-//     drop, fall, ghost cursor, glitch portrait, glyphrot, melt, misroute, relabel, reorder doors,
-//     retitle, rewrite, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
-//     typo, xp drain (opacity effects clamp to [0,1], P82).
+//   possession-head-c: the remaining effects - crack, dissolve, fall, ghost cursor, glitch portrait,
+//     melt, misroute, relabel, reorder doors, room warp, steal card, swap, toast, toggle lie,
+//     xp drain (opacity effects clamp to [0,1], P82).
 
 using System;
 using System.Collections.Generic;
@@ -45,7 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private sealed class Ghost
         {
             public required HeadEffect Effect;
-            public required PossessionLease Lease;
+            /// <summary>Null for a text effect: nothing to ease home, the text returns in Finish.</summary>
+            public PossessionLease? Lease;
             public required PossessionHeadTarget Target;
             public TimeSpan? Start;
             public double Tx, Ty, Rot, Sx = 1, Sy = 1;   // snapshot when the return begins
@@ -85,7 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         /// <summary>The ported effects, one instance each (WPF PossessionEffectCatalog.CreateAll).</summary>
         public static HeadEffect[] CreateAll() =>
-            new HeadEffect[] { new NudgeHeadEffect(), new DriftHeadEffect(), new BreatheHeadEffect(), new WobbleHeadEffect() };
+            new HeadEffect[] { new NudgeHeadEffect(), new DriftHeadEffect(), new BreatheHeadEffect(), new WobbleHeadEffect(),
+                new TypoHeadEffect(), new RewriteHeadEffect(), new GlyphRotHeadEffect() };
 
         /// <summary>WPF CanApply + Apply: refuses an off-limits, hidden, zero-size, wrong-role or already
         /// possessed control, and an effect instance that is already live.</summary>
@@ -102,13 +107,24 @@ namespace ConditioningControlPanel.Avalonia.Possession
             if (!Contains(effect.Roles, target.Role)) return false;
             foreach (var g in _ghosts)
                 if (ReferenceEquals(g.Effect, effect) || ReferenceEquals(g.Target.Element, el)) return false;
-            var lease = PossessionLease.Take(el);
-            if (lease == null) return false;
-            effect.Begin(lease, _rng, Photosafe);
+            if (!effect.CanApply(el)) return false;
+            // Text effects (typo, rewrite, glyph rot) leave the control's transform alone (no lease).
+            var lease = effect.UsesTransform ? PossessionLease.Take(el) : null;
+            if (effect.UsesTransform && lease == null) return false;
+            try { effect.Begin(el, lease, _rng, Photosafe); }
+            catch (Exception ex)
+            {
+                // A start that throws hands the control straight back: its own transform, text and lease.
+                Serilog.Log.Warning(ex, "Possession {Id} start failed", effect.Id);
+                try { effect.Release(); } catch (Exception rex) { Serilog.Log.Debug(rex, "Possession {Id} release failed", effect.Id); }
+                lease?.ReleaseImmediate();
+                return false;
+            }
             _ghosts.Add(new Ghost
             {
                 Effect = effect, Lease = lease, Target = target,
                 HoldMs = directed ? double.PositiveInfinity : effect.HoldFor.TotalMilliseconds,
+                ReturnMs = Math.Min(ReturnMs, effect.UndoMs),
             });
             _lastKey = target.Key;
             if (!_subscribed) { _subscribed = true; _frames.Subscribe(_onFrame); }
@@ -147,8 +163,15 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 double ms = (now - g.Start.Value).TotalMilliseconds;
                 if (g.ReturnAsked && !g.Returning) g.HoldMs = Math.Min(g.HoldMs, ms);   // home starts now
                 double hold = g.HoldMs;
-                if (ms < hold) { g.Effect.Frame(ms); continue; }
-                var l = g.Lease;
+                if (ms < hold)
+                {
+                    // One effect that throws on a frame ends there; the frame loop and the other ghosts go on.
+                    try { g.Effect.Frame(ms); }
+                    catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} frame failed", g.Effect.Id); Finish(g); }
+                    continue;
+                }
+                // WPF TypoEffect.UndoCoreAsync ignores duration: text returns at the hold boundary.
+                if (g.ReturnMs <= 0 || g.Lease is not { } l) { Finish(g); continue; }
                 if (!g.Returning)
                 {
                     g.Returning = true;
@@ -167,7 +190,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private void Finish(Ghost g)
         {
             _ghosts.Remove(g);
-            try { g.Lease.ReleaseImmediate(); }
+            try
+            {
+                try { g.Effect.Release(); }
+                finally { g.Lease?.ReleaseImmediate(); }
+            }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
             g.Done.TrySetResult();
@@ -184,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         {
             var g = _ghosts.Find(x => ReferenceEquals(x.Effect, effect));
             if (g == null) return Task.CompletedTask;
-            double ms = Math.Min(Math.Max(0, duration.TotalMilliseconds), ReturnMs);
+            double ms = Math.Min(Math.Min(Math.Max(0, duration.TotalMilliseconds), ReturnMs), effect.UndoMs);
             if (ms <= 0 || g.Start == null)
             {
                 Finish(g);
@@ -215,6 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal static void UndoAllLive()
         {
             PossessionGhost.UndoAll();
+            DropEffect.UndoAllLive();
             List<PossessionRuntime> alive = new();
             lock (Live)
             {

@@ -17,9 +17,7 @@ public partial class EmiDeskWindow
     private readonly List<Bitmap> _rainBitmaps = new();
     private readonly List<Image> _rainDrops = new();
     private DispatcherTimer? _rainWatch;
-    private DateTime _rainActivity = DateTime.UtcNow;
     private DateTime _rainOpened;
-    private TimeSpan _rainIdle = TimeSpan.FromSeconds(30);
     private bool _rainGlass, _rainGlassClick;
     private Canvas? _rainGlitch;
     private int _rainGlitchFrame;
@@ -27,11 +25,12 @@ public partial class EmiDeskWindow
 
     partial void OnReadyCore()
     {
-        _rainIdle = NextRainIdle();
         _glassCanvas.ClipToBounds = true;
-        PointerActivity += (_, _) => { if (!_rainGlassClick) CloseRainGlass(); _rainActivity = DateTime.UtcNow; };
-        Moved += (_, _) => { CloseRainGlass(); _rainActivity = DateTime.UtcNow; };
-        // Idle watch at a slow beat; the 55 ms rain steps only while the glass rain is live.
+        PointerActivity += (_, _) => { if (!_rainGlassClick) CloseRainGlass(); };
+        Moved += (_, _) => CloseRainGlass();
+        HookGlassActivity();
+        // A slow beat that only cancels a stale offer while idle; the 55 ms rain steps only while the
+        // glass rain is live. The idle flip itself is PollGlass's (EmiDeskWindow.Glass.cs).
         _rainWatch = new DispatcherTimer { Interval = RainIdleBeat };
         _rainWatch.Tick += RainTick;
         _rainWatch.Start();
@@ -41,14 +40,11 @@ public partial class EmiDeskWindow
     private static readonly TimeSpan RainIdleBeat = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan RainLiveBeat = TimeSpan.FromMilliseconds(55);
 
-    private TimeSpan NextRainIdle() => EmiDebug.IdleMs is int ms
-        ? TimeSpan.FromMilliseconds(ms) : TimeSpan.FromSeconds(30 + _rainRandom.NextDouble() * 30);
-
     private void RainTick(object? sender, EventArgs e)
     {
         if (RainAskLive && (PresentationActive || CoreSession.IsSessionRunning || CoreEngine.Video?.IsPlaying == true ||
             ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())) CancelRainOffer();
-        if (!IsVisible) { _rainActivity = DateTime.UtcNow; return; }
+        if (!IsVisible) return;
         if (_rainGlass)
         {
             var elapsed = (DateTime.UtcNow - _rainOpened).TotalMilliseconds;
@@ -63,19 +59,14 @@ public partial class EmiDeskWindow
             double height = _glassCanvas.Height;
             for (int i = 0; i < _rainDrops.Count; i++)
                 Canvas.SetTop(_rainDrops[i], ((i * 37 + elapsed * (0.035 + (i % 4) * 0.012)) % (height + 40)) - 20);
-            return;
         }
-        if (DateTime.UtcNow - _rainActivity < _rainIdle) return;
-        _rainActivity = DateTime.UtcNow;
-        _rainIdle = NextRainIdle();
-        TryShowRainChannel(); // rain is the only channel implemented on this head
     }
 
     internal bool TryShowRainChannel()
     {
         if (!IsVisible || PresentationActive || InputLocked || Transiting || ChainLive || RingOpen ||
             !CoreSettings.Current.EmiDeskGlass || EmiLineEngine.BedtimeSet || EmiLineEngine.Instance.HoldActive ||
-            CoreEngine.Video?.IsPlaying == true || _rainGlass || RainAskLive) return false;
+            CoreEngine.Video?.IsPlaying == true || _rainGlass || _glassLive || RainAskLive) return false;
         try
         {
             var files = EmiGifRain.Images().OrderBy(_ => _rainRandom.Next()).Take(4);
@@ -130,9 +121,10 @@ public partial class EmiDeskWindow
         }
     }
 
-    partial void OnGlassLiveQuery(ref bool live) { if (_rainGlass) live = true; }
+    partial void OnGlassLiveQuery(ref bool live) { if (_rainGlass || _glassLive) live = true; }
     partial void OnGlassClickedCore(ref bool handled)
     {
+        if (GlassClicked()) { handled = true; return; }
         if (!_rainGlass) return;
         handled = true;
         CloseRainGlass();
@@ -141,15 +133,19 @@ public partial class EmiDeskWindow
 
     private void CloseRainGlass()
     {
+        bool wasLive = _rainGlass;
         _rainGlass = false;
         if (_rainWatch != null) _rainWatch.Interval = RainIdleBeat;
         _rainGlitch = null;
-        _glassCanvas.Children.Clear();
+        // Only rain's own drawing: the off-air / shop layer shares this canvas and closes through CloseGlass.
+        if (wasLive) _glassCanvas.Children.Clear();
         _rainDrops.Clear();
         foreach (var bitmap in _rainBitmaps) bitmap.Dispose();
         _rainBitmaps.Clear();
-        _rainActivity = DateTime.UtcNow;
-        _rainIdle = NextRainIdle();
+        if (!wasLive) return;
+        // The one idle clock restarts after any channel (WPF EmiDeskWindow.Glass.cs:462-463).
+        _glassActivity = DateTime.UtcNow;
+        _glassIdle = NextGlassIdle();
     }
 
     private void TearDownRain()

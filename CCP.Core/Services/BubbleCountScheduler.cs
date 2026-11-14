@@ -13,6 +13,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>Open the game (clip, count bubbles, then the answer window) and call
         /// <paramref name="onComplete"/> once with the answer's outcome (WPF BubbleCountWindow.ShowOnAllMonitors).</summary>
         void Show(string path, int difficulty, bool strict, Action<bool> onComplete);
+        // WPF BubbleCountWindow.xaml.cs:308-319: a poisoned native start is a skip, not a loss.
+        void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) =>
+            Show(path, difficulty, strict, onComplete);
         /// <summary>Full-screen retry/mercy message for <paramref name="ms"/>, then <paramref name="then"/>
         /// (WPF ShowFullscreenMessage).</summary>
         void ShowMessage(string text, int ms, Action then);
@@ -64,10 +67,11 @@ namespace ConditioningControlPanel.Services
         private readonly Random _random = new();
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
+        private readonly HashSet<ITimer> _feedPolls = new();
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
-        private int _retryCount;
+        private int _retryCount, _generation;
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -127,7 +131,8 @@ namespace ConditioningControlPanel.Services
         {
             IsRunning = false;
             Dispose(ref _scheduler);
-            Dispose(ref _feedDefer);
+            // WPF Stop releases the latch without cancelling already scheduled polls.
+            _feedDefer = null;
             _feedDeadline = null;
             // A game already on screen plays out. Its completion/force-close retries after release.
             if (!IsBusy) PackVideos?.CleanupTemps();
@@ -147,7 +152,9 @@ namespace ConditioningControlPanel.Services
         {
             Dispose(ref _leadIn);
             Dispose(ref _queued);   // WPF panic: InteractionQueue.ForceReset drops the queued game
-            Dispose(ref _feedDefer);
+            foreach (var poll in _feedPolls) poll.Dispose();
+            _feedPolls.Clear();
+            _feedDefer = null;
             _feedDeadline = null;
             var wasBusy = IsBusy;
             _retryCount = 0;
@@ -190,8 +197,6 @@ namespace ConditioningControlPanel.Services
                 DeferPastFeed(forceTest);
                 return;
             }
-            Dispose(ref _feedDefer);
-            _feedDeadline = null;
             if (_host.DeferTrigger(() => Trigger(forceTest))) return;
             if (_host.OtherInteractionActive)
             {
@@ -233,25 +238,36 @@ namespace ConditioningControlPanel.Services
 
         private void DeferPastFeed(bool forceTest)
         {
-            if (_feedDefer != null) return; // one replay, never a backlog or a renewed deadline
+            if (_feedDefer != null) return; // one replay per current latch
             _feedDeadline ??= _time.GetUtcNow() + TimeSpan.FromSeconds(90);
             if (_time.GetUtcNow() >= _feedDeadline) { _feedDeadline = null; return; }
-            PollFeed(forceTest);
+            _feedDefer = PollFeed(forceTest, _feedDeadline.Value);
         }
 
-        private void PollFeed(bool forceTest) => _feedDefer = After(TimeSpan.FromMilliseconds(500), mine =>
+        private ITimer PollFeed(bool forceTest, DateTimeOffset deadline)
         {
-            if (!ReferenceEquals(mine, _feedDefer)) return;
-            Dispose(ref _feedDefer);
-            if (_host.FeedOwnsTheScreen)
+            var timer = After(TimeSpan.FromMilliseconds(500), mine =>
             {
-                if (_time.GetUtcNow() < _feedDeadline) PollFeed(forceTest);
-                else _feedDeadline = null;
-                return; // expired: release the latch without starting a game
-            }
-            Trigger(forceTest); // rechecks running/enabled; forceTest stays exempt, as WPF
-            if (_feedDefer == null) _feedDeadline = null;
-        });
+                if (mine == null || !_feedPolls.Remove(mine)) return;
+                var ownsLatch = ReferenceEquals(mine, _feedDefer);
+                mine.Dispose();
+                if (_host.FeedOwnsTheScreen)
+                {
+                    if (_time.GetUtcNow() < deadline)
+                    {
+                        var next = PollFeed(forceTest, deadline);
+                        if (ownsLatch) _feedDefer = next;
+                    }
+                    else if (ownsLatch) { _feedDefer = null; _feedDeadline = null; }
+                    return;
+                }
+                if (ownsLatch) _feedDefer = null;
+                Trigger(forceTest); // rechecks running/enabled; forceTest stays exempt, as WPF
+                if (ownsLatch && _feedDefer == null) _feedDeadline = null;
+            });
+            _feedPolls.Add(timer);
+            return timer;
+        }
 
         private void QueueBehind(bool forceTest) => _queued = After(QueuePoll, mine =>
         {
@@ -274,15 +290,29 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
-            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
+            var generation = ++_generation;
+            try
+            {
+                _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
+                    success => { if (generation == _generation) OnComplete(success); },
+                    () => { if (generation == _generation) OnSkipped(); });
+            }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
+        }
+
+        private void OnSkipped()
+        {
+            if (!IsBusy) return;
+            _retryCount = 0;
+            Idle();
         }
 
         /// <summary>WPF OnGameComplete.</summary>
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            var generation = ++_generation; // retire the clip callback before showing a message
             if (success)
             {
                 _retryCount = 0;
@@ -310,13 +340,13 @@ namespace ConditioningControlPanel.Services
             if (_retryCount >= s.MercyAfterFails && s.MercySystemEnabled)   // #1145: 2..10, default 3
             {
                 Log.Information("Bubble count mercy after {Retries} retries", _retryCount);
-                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { _retryCount = 0; Idle(); });
+                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation) return; _retryCount = 0; Idle(); });
                 return;
             }
             Log.Information("Bubble count retry {Count} (mercy at {Mercy})", _retryCount, s.MercyAfterFails);
             _host.ShowMessage(CoreMods.BubbleCountRetryMessage ?? "WRONG!\nWATCH AGAIN", 2000, () =>
             {
-                if (!IsBusy) return;   // panic during the message
+                if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
                 if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
             });
         }
@@ -329,6 +359,7 @@ namespace ConditioningControlPanel.Services
 
         private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
+            _generation++; // invalidate callbacks from a closed round
             IsBusy = false;
             if (HoldsEffects)
             {

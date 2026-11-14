@@ -8,8 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: HypnoTube,
-    /// wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
+    /// ponytail: wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
     {
@@ -39,9 +38,53 @@ namespace ConditioningControlPanel.Services
           // v2: hold-to-buzz sends one every second while held (main 719ed9ca5)
           "haptic_level", "haptic_stop" };
 
-        /// <summary>The remote haptic player (WPF RemoteControlService.RemoteHaptics). Easy is not on this head
-        /// (no HUD), so the scale stays 1.</summary>
-        internal static Remote.CoreRemoteHapticDriver RemoteHaptics = new(() => 1.0);   // tests swap in a stepped clock
+        /// <summary>The remote haptic player (WPF RemoteControlService.RemoteHaptics), scaled by Easy.</summary>
+        internal static Remote.CoreRemoteHapticDriver RemoteHaptics = new(() => EasyFactor);   // tests swap in a stepped clock
+
+        /// <summary>WPF RemoteControlService.V2 EasyFactor: 1 per session, halved by each Easy press (floor 0.25);
+        /// scales remote haptics and remote-set spiral / pink opacity.</summary>
+        public static double EasyFactor { get; private set; } = 1.0;
+        private static readonly Remote.EasedOpacity EasedSpiral = new(), EasedPink = new();
+
+        /// <summary>WPF StopAllRemoteEffects -> StopSessionFromRemote (RemoteControlService.cs:1027): a forced stop
+        /// (remote panic, the wearer's Stop signal) ends the running session. Core owns no session runner, so the
+        /// shell sets this to its one MainShellWindow.StopSessionFromRemote.</summary>
+        public static Action? StopSession;
+
+        /// <summary>The head's embedded browser (WPF MainWindow.PlayHypnotubeFromRemote / StopBrowserVideoFromRemote,
+        /// MainWindow.Browser.cs:3188 / :3228). Play returns null when the page was handed to the browser, else the
+        /// refusal. Null = this head has no browser to put it in.</summary>
+        public static Func<string, string?>? PlayHypnotube;
+        public static Action? StopBrowserVideo;
+
+        /// <summary>WPF ApplyEasy (RemoteControlService.V2.cs:87): a controller-set or showing spiral / pink
+        /// fades, the remote haptic replays at the new level. UI thread.</summary>
+        public static void ApplyEasy()
+        {
+            var next = Remote.RemoteEasy.Next(EasyFactor);
+            if (next == EasyFactor) return;
+            EasyFactor = next;
+            Serilog.Log.Information("[RemoteControl] Easy: remote strength now x{Factor}", next);
+            var s = CoreSettings.Current;
+            var changed = false;
+            if (EasedSpiral.Rescale(s.SpiralOpacity, s.SpiralEnabled, next) is int sv) { Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.SpiralOpacity, sv); s.SpiralOpacity = sv; changed = true; }
+            if (EasedPink.Rescale(s.PinkFilterOpacity, s.PinkFilterEnabled, next) is int pv) { Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.PinkOpacity, pv); s.PinkFilterOpacity = pv; changed = true; }
+            if (changed)
+            {
+                try { RefreshOverlays?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Easy refresh failed"); }
+                CoreSettings.Save();
+            }
+            RemoteHaptics.Rescale();
+        }
+
+        /// <summary>WPF ResetV2SessionState: session end, after the wearer's values were handed back.</summary>
+        public static void ResetEasy()
+        {
+            EasedSpiral.Reset();
+            EasedPink.Reset();
+            EasyFactor = 1.0;
+        }
+
 
         /// <summary>WPF EnsureOverlayRunning: a controller can show overlays with the engine stopped.
         /// The head refreshes its existing hosts; Core never owns a window.</summary>
@@ -85,12 +128,12 @@ namespace ConditioningControlPanel.Services
                 case "stop_spiral": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.Spiral, 0); s.SpiralEnabled = false; break;
                 case "set_pink_opacity":
                     if (p == null) return null; // WPF null params is a no-op
-                    var pink = Math.Clamp(p["value"]?.Value<int>() ?? 25, 0, 50);
+                    var pink = EasedPink.Ask(p["value"]?.Value<int>() ?? 25, 50, EasyFactor);
                     Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.PinkOpacity, pink);
                     s.PinkFilterOpacity = pink; break;
                 case "set_spiral_opacity":
                     if (p == null) return null;
-                    var spiral = Math.Clamp(p["value"]?.Value<int>() ?? 25, 0, 100);
+                    var spiral = EasedSpiral.Ask(p["value"]?.Value<int>() ?? 25, 100, EasyFactor);
                     Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.SpiralOpacity, spiral);
                     s.SpiralOpacity = spiral; break;
             }
@@ -184,13 +227,20 @@ namespace ConditioningControlPanel.Services
                 case "stop_bubbles": CoreBubbles.Stop(); return null;
                 case "start_bounce_text": CoreBouncingText.Start(); return null;
                 case "stop_bounce_text": CoreBouncingText.Stop(); return null;
+                // WPF RemoteControlService.cs:1413: the URL is the only thing crossing the trust boundary, so
+                // only a real hypnotube.com video page reaches the browser. WPF drops a bad one silently;
+                // here it is reported, as every other refusal (ccp-bugs#1138).
+                case "play_hypnotube":
+                    var htUrl = p?["url"]?.ToString();
+                    if (!Helpers.HtUrlHelper.IsEligibleHtUrl(htUrl)) return Localization.Loc.Get("remote_invalid_hypnotube_url");
+                    return PlayHypnotube is { } play ? play(htUrl!) : NotOnThisBuild;
                 case "trigger_video":
                     if (CoreEngine.Video is not { } video) return NotOnThisBuild;
                     // WPF RemoteControlService.cs:1395 acknowledges every trigger (held behind the feed, empty
                     // library): only a video that is really playing is refused (#3776).
                     return video.Trigger() || !video.IsPlaying ? null : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
-                case "stop_video": CoreEngine.Video?.Stop(); return null;
+                case "stop_video": CoreEngine.Video?.Stop(); StopBrowserVideo?.Invoke(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
                 case "trigger_mind_wipe":
                     if (CoreMindWipe.TriggerOnceProvider == null) return NotOnThisBuild;
@@ -210,7 +260,7 @@ namespace ConditioningControlPanel.Services
                     return AutonomyCommand(action == "start_autonomy") ? null : AutonomyOff;   // switch, consent or entitlement refused
                 case "trigger_haptic":
                     if (CoreHaptics.Service?.IsConnected != true) return "no_device";   // WPF 7b22ece8c (ccp-bugs #1065): never a silent "ok"
-                    _ = CoreHaptics.Service!.TriggerAsync("remote_control", 0.7, 2000); return null;
+                    _ = CoreHaptics.Service!.TriggerAsync("remote_control", 0.7 * EasyFactor, 2000); return null;
                 // Remote Control v2 (main 719ed9ca5): a pattern or hold-to-buzz level replaces whatever remote haptic plays.
                 case "haptic_pattern":
                 case "haptic_level":
@@ -261,10 +311,17 @@ namespace ConditioningControlPanel.Services
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
+            // WPF StopAllRemoteEffects (:1001, :1164): the controller's browser video stops too; a no-op unless one plays.
+            try { StopBrowserVideo?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] browser video stop failed"); }
             // Keep the base's wearer restoration; never clear the subject's saved switches.
             if (force || !CoreEngine.IsRunning) StopOverlays();
             var playerStopped = force || !CoreEngine.IsRunning;
-            if (force) CoreEngine.Stop();
+            if (force)
+            {
+                // Session, then engine, as WPF.
+                try { StopSession?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] session stop failed"); }
+                CoreEngine.Stop();
+            }
             else
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();

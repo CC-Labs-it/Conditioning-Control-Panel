@@ -49,13 +49,15 @@ public sealed class LeashCardsTests
         public void Receipts() => ReceiptsChanged?.Invoke();
         public void NoteShown(string? id) { if (id != null) Seen.Add(id); }
         public IReadOnlyList<LeashSentItem> SentTo(string id) => new[] { new LeashSentItem("l1", LeashItemKind.Tug, id, null, LeashStep.Seen, Now, Now) };
-        private Task<LeashSendResult> Send(string call, LeashWatch? watch = null) { Calls.Add(call); Watch = watch; return System.Threading.Tasks.Task.FromResult(new LeashSendResult(Reply)); }
+        public bool Throw;
+        private Task<LeashSendResult> Send(string call, LeashWatch? watch = null) { if (Throw) throw new InvalidOperationException("down"); Calls.Add(call); Watch = watch; return System.Threading.Tasks.Task.FromResult(new LeashSendResult(Reply)); }
         public Task<LeashSendResult> OfferAsync(string id) => Send("offer");
         public Task<LeashSendResult> AssignAsync(string id, AssignKind k, int size, LeashWatch? watch = null) => Send($"assign:{k}:{size}", watch);
         public Task<LeashSendResult> PunishAsync(string id, PunishKind k, int size, LeashWatch? watch = null) => Send($"punish:{k}:{size}", watch);
         public Task<LeashSendResult> RewardAsync(string id, RewardKind k, string? token = null, int? size = null) => Send($"reward:{k}:{token}:{size}");
         public Task<LeashSendResult> TugAsync(string id) => Send("tug");
-        public Task<bool> ReleaseAsync(string id) { Calls.Add("release"); return System.Threading.Tasks.Task.FromResult(true); }
+        public bool ReleaseOk = true;
+        public Task<bool> ReleaseAsync(string id) { Calls.Add("release"); return System.Threading.Tasks.Task.FromResult(ReleaseOk); }
         public Task CutAsync() { Calls.Add("cut"); Push(null); return System.Threading.Tasks.Task.CompletedTask; }
         public Task SetIntensityAsync(LeashIntensity i) { Calls.Add("level:" + i); return System.Threading.Tasks.Task.CompletedTask; }
         public Task SetDndAsync(LeashDnd d) { Calls.Add("dnd:" + d); return System.Threading.Tasks.Task.CompletedTask; }
@@ -79,9 +81,12 @@ public sealed class LeashCardsTests
         var card = new LeashHolderCard(Held(LeashIntensity.Strict, true), () => new Service());
         var today = (global::Avalonia.Controls.Shapes.Ellipse)Find<StackPanel>(card, "leash-week:Today").Children[0];
         Assert.Equal(global::Avalonia.Media.Brushes.Transparent, today.Fill); Assert.NotNull(today.Stroke); Assert.NotNull(today.StrokeDashArray);
-        foreach (var id in new[] { "assign", "reward", "punish", "tug", "letgo" }) Assert.Single(Tagged(card, "leash-slip-help:" + id));
+        foreach (var id in new[] { "assign", "reward", "punish", "tug" }) Assert.Single(Tagged(card, "leash-slip-help:" + id));
+        Assert.Single(Tagged(Release(card), "leash-slip-help:letgo"));   // Let go carries its "?" inside the "..." menu (WPF :293-304)
         Click(card, "leash-btn:punish"); Assert.Single(Tagged(card, "leash-slip-help:video")); Click(card, "leash-btn:reward"); Assert.Single(Tagged(card, "leash-slip-help:pardon"));
     });
+    private static ContextMenu Menu(LeashHolderCard card) => Find<Button>(card, "leash-holder-more").ContextMenu!;
+    private static MenuItem Release(LeashHolderCard card) => (MenuItem)Menu(card).Items[1]!;
     private static void Click(Control root, string tag)
     {
         var b = Find<Button>(root, tag);
@@ -188,7 +193,10 @@ public sealed class LeashCardsTests
         Find<TextBox>(card, "leash-ht-box").Text = "12x34";
         Assert.Equal("1234", Find<TextBox>(card, "leash-ht-box").Text);
         Click(card, "leash-video-send"); Assert.Equal("punish:Video:7", svc.Calls.Last()); Assert.Equal("1234", svc.Watch!.Id);
-        Click(card, "leash-release"); Assert.Equal("punish:Video:7", svc.Calls.Last());   // WPF asks first
+        var release = Release(card);
+        Assert.Equal("leash-release", release.Tag);
+        release.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+        Assert.Equal("punish:Video:7", svc.Calls.Last());   // WPF asks first
         var confirm = LeashCutConfirmWindow.Current!;
         Assert.Equal(Loc.Get("leash_release_confirm_yes"), ((TextBlock)confirm.YesButton.Content!).Text);
         confirm.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
@@ -318,10 +326,167 @@ public sealed class LeashCardsTests
         svc.Reply = LeashSendStatus.Queued; Click(card, "leash-btn:punish"); Click(card, "leash-punish:lines:5");
         Assert.Equal(Loc.GetF("leash_done_punish_queued", Person.Name), Find<TextBlock>(card, "leash-holder-result").Text);
     });
+    // restack b226 (#4589): WPF LeashHolderCard.Guarded / TugAsync (:751-780): Sent when the server took it, Denied on
+    // TooFast / Dnd / Failed or a throw; a tug jingles as it goes out and a throttled tug is Denied.
+    [Fact]
+    public void HolderSendAndTugCuesFollowTheResult() => Run(() =>
+    {
+        var svc = new Service();
+        var card = new LeashHolderCard(Held() with { Who = Person with { Id = Guid.NewGuid().ToString() } }, () => svc);
+        var cues = new List<LeashCue>();
+        card.PlayCue = cues.Add;
+        Click(card, "leash-btn:assign"); Click(card, "leash-assign:quests:2");
+        Assert.Equal(new[] { LeashCue.Sent }, cues); cues.Clear();
+        foreach (var status in new[] { LeashSendStatus.TooFast, LeashSendStatus.Dnd, LeashSendStatus.Failed })
+        {
+            svc.Reply = status;
+            Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
+            Assert.Equal(new[] { LeashCue.Denied }, cues); cues.Clear();
+            Click(card, "leash-btn:reward");   // the failed send keeps the sheet open: fold it for the next round
+        }
+        svc.Throw = true;
+        Click(card, "leash-btn:punish"); Click(card, "leash-punish:lines:5");
+        Assert.Equal(new[] { LeashCue.Denied }, cues); cues.Clear();
+        svc.Throw = false; svc.Reply = LeashSendStatus.Sent;
+        Click(card, "leash-btn:tug");
+        Assert.Equal(new[] { LeashCue.Jingle }, cues); cues.Clear();
+        Click(card, "leash-btn:tug");
+        Assert.Equal(new[] { LeashCue.Denied }, cues);
+    });
     private sealed class WindowCleanup : IDisposable
     {
         private readonly Window _window;
         internal WindowCleanup(Window window) { _window = window; window.Show(); Dispatcher.UIThread.RunJobs(); }
         public void Dispose() => _window.Close();
     }
+
+    // WPF LeashHolderCard.cs:264-318: the "..." pill opens the menu below it, Replay then Let go; the Let go help slip
+    // is a chromeless tooltip after 250 ms that closes after 60 s.
+    [Fact]
+    public void HolderMenuHasReplayAndLetGoWithTimedHelp() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(), () => new Service());
+        var header = Find<Grid>(card, "leash-holder-header");
+        Assert.Single(Tagged(header, "leash-holder-more"));
+        var menu = Menu(card);
+        Assert.Equal(PlacementMode.Bottom, menu.Placement);
+        Assert.Equal(2, menu.Items.Count);
+        Assert.Equal(Loc.Get("leash_menu_replay"), Assert.IsType<MenuItem>(menu.Items[0]).Header);
+        var release = Release(card);
+        Assert.Equal(250, ToolTip.GetShowDelay(release));
+        Assert.Equal(TimeSpan.FromSeconds(60), card.ReleaseHelpTimer!.Interval);
+        var tip = Assert.IsType<ToolTip>(ToolTip.GetTip(release));
+        Assert.IsType<LeashHelpSlip>(tip.Content);
+        Assert.Equal(global::Avalonia.Media.Brushes.Transparent, tip.Background);
+        Assert.Equal(PlacementMode.Right, ToolTip.GetPlacement(release));
+        Assert.Empty(Tagged(card, "leash-release"));   // no Let go button on the card any more
+        Click(card, "leash-btn:assign");
+        Assert.Single(Tagged(Find<Grid>(card, "leash-holder-header"), "leash-holder-more"));   // the header stays across sheets
+    });
+
+    // WPF LeashDrawerSection.cs:139, :153-156 (ReplaySnapRequested): the holder (me) on the left, this friend on the right.
+    [Fact]
+    public void ReplayOpensTheSnapForThisFriend() => Run(() =>
+    {
+        var oldRules = LeashSound.Rules;
+        try
+        {
+            LeashSound.Rules = new LeashSfxRules();
+            var card = new LeashHolderCard(Held(), () => new Service());
+            ((MenuItem)Menu(card).Items[0]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var snap = Assert.IsType<LeashSnapCard>(LeashAskWindow.Current!.Body);
+            Assert.Equal("me", snap.Holder.Id);
+            Assert.Equal(Person.Name, snap.Leashed.Name);
+        }
+        finally { LeashAskWindow.CloseCurrent(); LeashSound.Rules = oldRules; }
+    });
+
+    // WPF LeashHolderCard.ReleaseAsync (:322-327): the cut cue only when the server took it, else Denied; then the line.
+    [Theory]
+    [InlineData(true, "leash-cut")]
+    [InlineData(false, "leash-denied")]
+    public void LetGoPlaysTheCueTheReplyEarned(bool ok, string cue) => Run(() =>
+    {
+        var (oldPlay, oldArt, oldMuted, oldRules) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider,
+            ConditioningControlPanel.CoreModArt.AudioOverridePathProvider, ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules);
+        var (oldSettings, settings) = (ConditioningControlPanel.CoreSettings.ServiceProvider, new ConditioningControlPanel.Services.SettingsService());
+        var file = System.IO.Path.GetTempFileName();
+        var played = new List<string>();
+        try
+        {
+            ConditioningControlPanel.CoreSettings.ServiceProvider = () => settings;
+            ConditioningControlPanel.CoreSettings.Current.MasterVolume = 50;
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => played.Add(tag);
+            ConditioningControlPanel.CoreModArt.AudioOverridePathProvider = _ => file;
+            ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashSound.Rules = new LeashSfxRules();
+            var svc = new Service { ReleaseOk = ok };
+            var card = new LeashHolderCard(Held(), () => svc);
+            Release(card).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var confirm = LeashCutConfirmWindow.Current!;
+            confirm.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("release", svc.Calls.Last());
+            Assert.Equal(new[] { cue }, played);
+        }
+        finally
+        {
+            LeashCutConfirmWindow.Current?.Close();
+            (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, ConditioningControlPanel.CoreModArt.AudioOverridePathProvider,
+                ConditioningControlPanel.CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules) = (oldPlay, oldArt, oldMuted, oldRules);
+            ConditioningControlPanel.CoreSettings.ServiceProvider = oldSettings;
+            System.IO.File.Delete(file);
+        }
+    });
+
+    // restack b226 (#4211): the user's own cut prompt replaces an open Let go confirm, never the other way round,
+    // so a held-open release dialog can never block (or stand in for) the escape from the user's own leash.
+    [Fact]
+    public void CutPromptAlwaysWinsOverTheReleaseConfirm() => Run(() =>
+    {
+        var svc = new Service();
+        var card = new LeashHolderCard(Held(), () => svc);
+        var cut = 0;
+        try
+        {
+            Release(card).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var release = LeashCutConfirmWindow.Current!;
+            Assert.Equal("leash-release-confirm:yes", release.YesButton.Tag);
+            LeashCutConfirmWindow.Ask(Person.Name, () => cut++);
+            var prompt = LeashCutConfirmWindow.Current!;
+            Assert.NotSame(release, prompt);
+            Assert.False(release.IsVisible);
+            Assert.Equal("leash-cut-confirm:yes", prompt.YesButton.Tag);
+            // A Let go request while the cut prompt is up must not replace it.
+            Release(card).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Same(prompt, LeashCutConfirmWindow.Current);
+            prompt.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, cut);
+            Assert.Empty(svc.Calls);
+            Assert.Null(LeashCutConfirmWindow.Current);
+        }
+        finally { LeashCutConfirmWindow.Current?.Close(); }
+    });
+
+    [Fact]
+    public Task LetGoHelpClosesWhenItsTimerExpires() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current == null) AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var card = new LeashHolderCard(Held(), () => new Service());
+        var window = new Window { Content = card, Width = 420, Height = 600 };
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Click(card, "leash-holder-more");
+            var release = Release(card);
+            card.ReleaseHelpTimer!.Interval = TimeSpan.FromMilliseconds(20);
+            ToolTip.SetIsOpen(release, true);
+            Assert.True(card.ReleaseHelpTimer.IsEnabled);
+            for (var i = 0; i < 100 && ToolTip.GetIsOpen(release); i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+            Assert.False(ToolTip.GetIsOpen(release));
+            Assert.False(card.ReleaseHelpTimer.IsEnabled);
+        }
+        finally { window.Close(); }
+    });
 }

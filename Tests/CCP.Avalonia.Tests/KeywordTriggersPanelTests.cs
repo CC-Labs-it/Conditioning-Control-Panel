@@ -96,6 +96,35 @@ public sealed class KeywordTriggersPanelTests
     });
 
     [Fact]
+    public Task AddRevealsAndFocusesNewKeyword() => Run((_, panel, s) =>
+    {
+        Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded = true;
+        ((Window)TopLevel.GetTopLevel(panel)!).Activate();
+        for (var i = 0; i < 8; i++) panel.AddTrigger();
+        Dispatcher.UIThread.RunJobs();
+        var row = Rows(panel).Last();
+        var box = row.GetLogicalDescendants().OfType<TextBox>().Single();
+        Assert.True(box.IsFocused);
+        Assert.True(Find<ScrollViewer>(panel, "KeywordTriggerScroller").Offset.Y > 0);
+    });
+
+    [Fact]
+    public Task LaunchSwitchReadsAndWritesSetting() => Run((view, _, s) =>
+    {
+        var previous = s.AwarenessStartOnLaunch;
+        try
+        {
+            s.AwarenessStartOnLaunch = true;
+            view.SyncAwarenessTabUi();
+            var toggle = Find<CheckBox>(view, "ChkAwarenessStartOnLaunch");
+            Assert.True(toggle.IsChecked);
+            toggle.IsChecked = false;
+            Assert.False(s.AwarenessStartOnLaunch);
+        }
+        finally { s.AwarenessStartOnLaunch = previous; }
+    });
+
+    [Fact]
     public Task AddEditAndDeleteRowsWriteTheTriggerAndSkipPresetClones() => Run((_, panel, s) =>
     {
         s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:pack:1", Keyword = "pack" });

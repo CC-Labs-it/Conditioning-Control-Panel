@@ -84,9 +84,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _watchdog = new Timer(_ => WatchdogTick(), null, WatchdogMs, WatchdogMs);
                 _rescan?.Dispose();
                 _rescan = new Timer(_ => Rescan(), null, RescanMs, RescanMs);
+                // Queue the layers and OS sweep in the same order as the duck state changes.
+                try { LayeredAudio.Instance?.ApplyDuck(amount); } catch { }
+                Enqueue(() => DuckSweep(rescan: false));
             }
-            try { LayeredAudio.Instance?.ApplyDuck(amount); } catch { }   // per player: LibVLC plays through DirectSound here (LibVlcAudio)
-            Enqueue(() => DuckSweep(rescan: false));
         }
 
         /// <summary>WPF RescanForNewSessions: skip, never queue behind, a sweep still in flight (#750-#753).</summary>
@@ -104,9 +105,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (!_ducked || _count > 0) return;
                 _ducked = false;
                 DisposeDuckTimers();
+                try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
+                Enqueue(Restore);
             }
-            try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
-            Enqueue(Restore);
         }
 
         /// <summary>Panic / exit: advancing the generation turns every pending Unduck into a stale no-op.</summary>
@@ -126,7 +127,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         // A completion barrier by default; shutdown supplies its bounded exit budget.
-        internal void Drain(int ms = Timeout.Infinite) { try { _work.Wait(ms); } catch { } }
+        internal void Drain(int ms = Timeout.Infinite)
+        {
+            Task work;
+            lock (_lock) work = _work;   // Enqueue swaps the chain under the lock
+            try { work.Wait(ms); } catch { }
+        }
 
         private void DisposeDuckTimers()
         {
@@ -296,9 +302,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _count = 0;
                 _generation++;
                 DisposeDuckTimers();
+                try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
+                Enqueue(Restore);
             }
-            try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
-            Enqueue(Restore);
         }
 
         /// <summary>WPF SaveDuckingState: every original not yet handed back, the live ducks and the parked ones.</summary>

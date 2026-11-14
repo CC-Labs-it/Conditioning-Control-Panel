@@ -290,10 +290,72 @@ public sealed class ChasterBillTests
             Assert.StartsWith("NETTO ", receipt.StampText);
 
             Click(w, tab.FindControl<Border>("StatRun")!);
+            await Task.Delay(500);
             Assert.False(host.IsVisible);
         }
         finally { LocalizationManager.Instance.SetLanguage("en"); w.Close(); }
         await Task.CompletedTask;
+    }));
+
+    private static double Angle(Control c) => ((RotateTransform)c.RenderTransform!).Angle;
+
+    private static async Task WaitFor(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Yield();   // no sleeps in tests (P08); bounded by time (P73)
+        }
+        Assert.True(condition(), "timed out");
+    }
+
+    [Fact]
+    public Task ReceiptPrintsAndAReversalCannotReopenIt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var old = settings.MotionLevel;
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView();
+        var w = new Window { Width = 1200, Height = 900, Content = tab };
+        try
+        {
+            settings.MotionLevel = MotionLevel.Full;
+            w.Show(); Dispatcher.UIThread.RunJobs();
+            var host = tab.FindControl<Border>("ReceiptHost")!;
+            var arrow = tab.FindControl<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtRunChevron")!;
+            tab.ToggleBill();
+            Assert.True(host.IsVisible);
+            Assert.Equal(0, host.Height);
+            var measured = host.DesiredSize.Height;
+            Assert.True(measured > 0);
+            // The print runs on Avalonia's animation clock, which only advances when the UI thread is free:
+            // a loaded CI runner can go 120 ms with no tick (Bounds still 0). Wait on the state, not a stopwatch.
+            await WaitFor(() => host.Bounds.Height > 0.01);
+            Assert.InRange(host.Bounds.Height, 0.01, measured);
+            await WaitFor(() => double.IsNaN(host.Height) && Math.Abs(Angle(arrow) - 180) < 1);
+            Assert.InRange(host.Bounds.Height, measured - 1, measured + 1);
+            Assert.Equal(180, Angle(arrow), 1);
+            tab.ToggleBill();
+            await WaitFor(() => !host.IsVisible && Math.Abs(Angle(arrow)) < 1);
+            Assert.False(host.IsVisible);
+            Assert.Equal(0, ((RotateTransform)arrow.RenderTransform!).Angle, 1);
+            tab.ToggleBill();
+            var openingGeneration = tab.BillGeneration;
+            tab.ToggleBill();
+            await Task.Delay(650);
+            Assert.False(host.IsVisible);
+            tab.FinishBill(openingGeneration, true); // delayed completion from the earlier open
+            Assert.False(host.IsVisible);
+            settings.MotionLevel = MotionLevel.Off;
+            tab.ToggleBill();
+            Assert.True(host.IsVisible);
+            Assert.True(double.IsNaN(host.Height));
+            Assert.Equal(180, ((RotateTransform)arrow.RenderTransform!).Angle);
+            tab.ToggleBill();
+            Assert.False(host.IsVisible);
+            Assert.Equal(0, ((RotateTransform)arrow.RenderTransform!).Angle);
+        }
+        finally { settings.MotionLevel = old; w.Close(); }
     }));
 
     [Fact]

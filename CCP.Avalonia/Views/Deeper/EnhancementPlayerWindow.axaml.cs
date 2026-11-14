@@ -18,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
@@ -105,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <list type="bullet">
     ///   <item><b>Services.</b> WebcamTracking remains WPF-side.
     ///         Local audio transport uses DeeperLocalAudio; editor jumps are wired below.
-    ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
+    ///         The library tier and embedded promotion use the shell's one EnhancementLibrary. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
     ///         player drives the Core rule engine from its playback clock for speak cues only (App seeds
@@ -164,6 +165,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // One per window so EnhancementFetcher's per-session cache is worth having; disposed in
         // Window_Closing because it owns an HttpClient and its guarded handler.
         private EnhancementFetcher? _fetcher;
+        // WPF App.EnhancementLibrary: the player reads and promotes through the shell's ONE library, so its
+        // LibraryChanged reaches the Deeper tab. A player opened while the shell is hidden has no owner and
+        // MainShellWindow.Current is null, so the opener hands a weak link (restack b208, from #4054).
+        internal WeakReference<MainShellWindow>? LibraryShell { get; init; }
+        private EnhancementLibrary? _ownLibrary;   // only when no shell exists (a standalone player)
+        private DispatcherTimer? _hintTimer;
+        private EnhancementLibrary Library
+        {
+            get
+            {
+                MainShellWindow? shell = null;
+                LibraryShell?.TryGetTarget(out shell);
+                shell ??= Owner as MainShellWindow ?? MainShellWindow.Current;
+                return shell?.BrowserEnhancementLibrary ?? (_ownLibrary ??= new EnhancementLibrary());
+            }
+        }
 
         // Tracks WHICH branch supplied the current enhancement. Drives the source badge.
         private enum DiscoverySource { Manual, Library, Sidecar, Embedded, Url, PromotedFromEmbedded }
@@ -189,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private readonly TextBlock _statusPillText, _txtEnhName, _txtEnhPath,
                                    _txtEnhMetadata, _txtEnhSource, _txtAudioPath, _txtVideoStatus,
                                    _txtNowRegion, _txtMiniTimelineReadout, _txtMiniHoverTime, _txtCurrent, _txtTotal,
-                                   _txtStatus,
+                                   _txtStatus, _txtHint,
                                    _txtFilterCountAll, _txtFilterCountActions, _txtFilterCountEngine,
                                    _txtFilterCountErrors;
         private readonly Button _btnOpenInEditor, _btnChange, _btnCreateNewEnhancement,
@@ -265,6 +282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtCurrent = this.FindControl<TextBlock>("TxtCurrent")!;
             _txtTotal = this.FindControl<TextBlock>("TxtTotal")!;
             _txtStatus = this.FindControl<TextBlock>("TxtStatus")!;
+            _txtHint = this.FindControl<TextBlock>("TxtHint")!;
             _txtPlayPauseGlyph = this.FindControl<IconGlyph>("TxtPlayPauseGlyph")!;
             _txtCollapseGlyph = this.FindControl<IconGlyph>("TxtCollapseGlyph")!;
             _txtFilterCountAll = this.FindControl<TextBlock>("TxtFilterCountAll")!;
@@ -616,26 +634,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        /// <summary>
-        /// Core's EnhancementResolver ladder (embedded -> sidecar -> library), as WPF calls it.
-        ///
-        /// ponytail: this head leaves EnhancementResolver.LibraryMatchProvider unset, so the library
-        /// tier never hits; the auto-promotion of an embedded enhancement into the library and its
-        /// 6 s toast need an EnhancementLibrary instance (Core) this head does not construct yet. A media file whose enhancement
-        /// lives only in the library lands in the "nothing found" branch and offers Create-new.
-        /// </summary>
+        /// <summary>WPF EnhancementPlayerWindow.xaml.cs:472-551: embedded wins over sidecar and library;
+        /// an embedded enhancement with no library match is promoted into the library (6 s hint), else it
+        /// loads in memory for this session. App.StartDeeperLibrary sets EnhancementResolver.LibraryMatchProvider;
+        /// the player still asks its own library tier last, so a standalone player (no app library) finds it too.</summary>
         private void TryAutoLoadEnhancement(string mediaPath)
         {
             _lastMediaPathForCreateNew = mediaPath;
             _btnCreateNewEnhancement.IsVisible = false;
+            ClearHint();
             try
             {
                 var resolved = EnhancementResolver.ResolveForLocalMedia(mediaPath);
+                var mediaType = DeeperPreview.IsLocalVideoFile(mediaPath) ? MediaTypes.Video : MediaTypes.Audio;
                 switch (resolved.Source)
                 {
                     case EnhancementDiscoverySource.Embedded:
+                        var embedded = resolved.Enhancement!;
+                        var library = Library;
+                        if (library.FindMatch(mediaPath, mediaType) == null)
+                        {
+                            var saved = library.PromoteToLibrary(embedded, mediaPath);
+                            if (!string.IsNullOrEmpty(saved))
+                            {
+                                _lastDiscoverySource = DiscoverySource.PromotedFromEmbedded;
+                                LoadEnhancementFile(saved);
+                                ShowHint(Loc.GetF("deeper_player_promoted_to_library_fmt", System.IO.Path.GetFileName(saved)), 6);
+                                return;
+                            }
+                            // A failed promotion (read-only library, bad name) still loads it for this session.
+                        }
                         _lastDiscoverySource = DiscoverySource.Embedded;
-                        LoadEnhancementInMemory(resolved.Enhancement!, "embedded:" + System.IO.Path.GetFileName(mediaPath));
+                        LoadEnhancementInMemory(embedded, "embedded:" + System.IO.Path.GetFileName(mediaPath));
                         return;
 
                     case EnhancementDiscoverySource.Sidecar:
@@ -649,16 +679,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                         return;
                 }
 
-                // Nothing found — offer to author against this media.
+                var match = Library.FindMatch(mediaPath, mediaType);
+                if (match != null)
+                {
+                    _lastDiscoverySource = DiscoverySource.Library;
+                    LoadEnhancementFile(match.FilePath);
+                    return;
+                }
+
+                // Nothing found: offer to author against this media. The hint has its own element, so the
+                // audio load's later "Playing." in TxtStatus cannot wipe it (WPF :540-544).
                 _btnCreateNewEnhancement.IsVisible = true;
-                // Audio's load result owns the status (WPF player:647-658).
-                if (_isVideoMode) _txtStatus.Text = Loc.Get("deeper_player_no_enh_for_media");
+                ShowHint(Loc.Get("deeper_player_no_enh_for_media"), null);
             }
             catch (Exception ex)
             {
                 // WPF swallowed IO errors here too: the button stays hidden and no status is set.
                 Log.Debug("EnhancementPlayer: auto-load enhancement failed: {Error}", ex.Message);
             }
+        }
+
+        // WPF EnhancementPlayerWindow.xaml.cs:554-592: a hint beside TxtStatus, independent of transport status.
+        private void ShowHint(string text, double? seconds)
+        {
+            ClearHint();
+            _txtHint.Text = text;
+            _txtHint.IsVisible = true;
+            if (seconds is > 0)
+            {
+                _hintTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds.Value) };
+                _hintTimer.Tick += (_, _) => ClearHint();
+                _hintTimer.Start();
+            }
+        }
+
+        private void ClearHint()
+        {
+            _hintTimer?.Stop();
+            _hintTimer = null;
+            _txtHint.Text = "";
+            _txtHint.IsVisible = false;
         }
 
         private void BtnCreateNewEnhancement_Click()
@@ -1258,6 +1318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 return;
             }
 
+            ClearHint(); // WPF xaml.cs:1262: a new enhancement clears the hint; unload does not.
             _txtEnhPath.Text = path ?? "";
             _btnUnloadEnhancement.IsVisible = true;
             _btnCreateNewEnhancement.IsVisible = false;
@@ -1923,6 +1984,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _pollDisabled = true;
             try { _fetcher?.Dispose(); } catch { }
             _fetcher = null;
+            ClearHint();
+            _ownLibrary?.Dispose();   // the shell's library is the shell's to dispose
+            _ownLibrary = null;
             // ponytail: the WPF teardown also unsubscribed the player/webcam singletons, stopped a
             // webcam this session had started, disposed the video time source. Those head services do not
             // exist here. The web view itself is disposed with the visual tree.

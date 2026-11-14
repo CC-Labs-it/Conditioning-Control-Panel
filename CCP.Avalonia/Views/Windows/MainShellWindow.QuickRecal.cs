@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -19,14 +20,18 @@ public partial class MainShellWindow
 {
     private IDisposable? _quickRecalRegistration;
     private DispatcherTimer? _quickRecalBindingWatch;
-    private (bool Enabled, bool PanicOn, string Panic, string Pause)? _quickRecalBinding;
+    private (bool Enabled, bool PanicOn, string Panic, string Pause, bool Eligible)? _quickRecalBinding;
+    private CancellationTokenSource? _quickRecalPending;
+    private int _quickRecalGeneration;
     private bool _quickRecalBusy, _quickRecalClosed;
 
     // Native seam: headless tests never register a shortcut on the real desktop.
     internal Func<Window, Action, IDisposable?> RegisterQuickRecal = OperatingSystem.IsWindows() ? Win32QuickRecalHotkey.Register
         : (_, pressed) => X11SummonChord.Register("quick-recal", ChordMods.Ctrl | ChordMods.Alt, "G", pressed);
     internal Func<WebcamQuickRecalWindow, Window?, Task> ShowQuickRecal = ShowQuickRecalDialog;
+    internal bool QuickRecalWayland = OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
     internal bool QuickRecalPlatformSupported = OperatingSystem.IsWindows() || OperatingSystem.IsLinux();
+    internal Func<Action, Action, CancellationToken, Task<IDisposable?>> RegisterWaylandQuickRecal = PortalQuickRecalHotkey.BindAsync;
     internal bool QuickRecalHotkeyArmed => _quickRecalRegistration != null;
 
     /// <summary>WPF MainWindow.xaml.cs:1455-1459: a hidden or minimized shell must not own the dialog.
@@ -64,15 +69,21 @@ public partial class MainShellWindow
     internal void ApplyQuickRecalHotkey()
     {
         var s = CoreSettings.Current;
-        var binding = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var eligible = !QuickRecalWayland || (WebcamConsent.IsCurrent(s) && WebcamTracker.Instance.Calibration != null);
+        var binding = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, eligible);
         if (_quickRecalBinding == binding) return;
         _quickRecalBinding = binding;
-        _quickRecalRegistration?.Dispose();
-        _quickRecalRegistration = null;
-        if (!s.WebcamQuickRecalHotkeyEnabled || _quickRecalClosed) return;
+        CancelQuickRecalRegistration();
+        if (!eligible || !s.WebcamQuickRecalHotkeyEnabled || _quickRecalClosed) return;
         if (PanicPolicy.FindHookClash("G", PanicPolicy.HookBoundBaseKeys(s)) is { } clash)
         {
             Log.Warning("Quick Recal Ctrl+Alt+G not armed: shares its base key with {Binding} ({Key})", clash.Name, clash.Key);
+            return;
+        }
+        if (QuickRecalWayland)
+        {
+            _quickRecalPending = new CancellationTokenSource();
+            _ = BindWaylandQuickRecalAsync(_quickRecalGeneration, _quickRecalPending.Token);
             return;
         }
         try
@@ -88,13 +99,47 @@ public partial class MainShellWindow
         _quickRecalClosed = true;
         _quickRecalBindingWatch?.Stop();
         _quickRecalBindingWatch = null;
-        _quickRecalRegistration?.Dispose();
-        _quickRecalRegistration = null;
+        CancelQuickRecalRegistration();
         _cameraHotkeyRegistration?.Dispose();
         _cameraHotkeyRegistration = null;
         _portalCameraHotkey?.Dispose();
         _portalCameraHotkey = null;
         WebcamQuickRecalWindow.HotkeyHint = () => null;
+    }
+
+    private void CancelQuickRecalRegistration()
+    {
+        _quickRecalGeneration++;
+        _quickRecalPending?.Cancel();
+        _quickRecalPending?.Dispose();
+        _quickRecalPending = null;
+        _quickRecalRegistration?.Dispose();
+        _quickRecalRegistration = null;
+    }
+
+    private async Task BindWaylandQuickRecalAsync(int generation, CancellationToken cancellation)
+    {
+        IDisposable? registration = null;
+        try
+        {
+            registration = await RegisterWaylandQuickRecal(
+                () => Dispatcher.UIThread.Post(async () =>
+                {
+                    if (generation == _quickRecalGeneration && !cancellation.IsCancellationRequested)
+                        await OpenQuickRecalFromHotkeyAsync();
+                }),
+                () => Dispatcher.UIThread.Post(() =>
+                {
+                    if (generation == _quickRecalGeneration) CancelQuickRecalRegistration();
+                }), cancellation);
+            // Consent, calibration or hook settings can change while the portal dialog is open.
+            ApplyQuickRecalHotkey();
+            if (generation != _quickRecalGeneration || cancellation.IsCancellationRequested)
+                registration?.Dispose();
+            else
+                _quickRecalRegistration = registration;
+        }
+        catch (Exception ex) { registration?.Dispose(); Log.Warning(ex, "Quick Recal Wayland registration failed"); }
     }
 
     /// <summary>WPF OpenQuickRecalFromHotkey: silent refusal, no consent prompt, no stacked calibration,
@@ -105,8 +150,7 @@ public partial class MainShellWindow
         if (_quickRecalClosed || _quickRecalBusy || !s.WebcamQuickRecalHotkeyEnabled) return;
         if (PanicPolicy.FindHookClash("G", PanicPolicy.HookBoundBaseKeys(s)) != null)
         {
-            _quickRecalRegistration?.Dispose();
-            _quickRecalRegistration = null;
+            CancelQuickRecalRegistration();
             _quickRecalBinding = null;
             return;
         }

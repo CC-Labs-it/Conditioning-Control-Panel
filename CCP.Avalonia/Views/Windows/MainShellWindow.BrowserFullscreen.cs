@@ -78,6 +78,14 @@ public partial class MainShellWindow
     {
         var window = _browserPopoutWindow;
         if (window == null || _browserFullscreenWindow != null) return; // embedded takeover is part B
+        // WPF MainWindow.Browser.cs:2870-2877 (RemoteBrowserStopRule.HideBrowser): while the remote
+        // controller card is up, a late page fullscreen must not raise a topmost host over it. Remote
+        // browser video (the rule's exemption) is not on this head, so the card always wins (#4423).
+        if (Named<Border>("RemoteControlOverlay")?.IsVisible == true)
+        {
+            _ = _browserFullscreenHost?.InvokeScriptAsync(BrowserFullscreenCleanupScript);
+            return;
+        }
         _browserFullscreenWindow = window;
         _browserFullscreenSession++;
         if (_browserFullscreenHost is { } host) _ = InstallBrowserFullscreenExitScriptAsync(host);

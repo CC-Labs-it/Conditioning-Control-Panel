@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using ConditioningControlPanel.Services.Video.Browser;
@@ -67,6 +68,32 @@ public sealed class BubbleCountBrowserTests {
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Poisoned_native_still_allows_browser_and_skips_failed_browser_fallback() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var saved = BubbleCountWindow.NativeUnavailable;
+        try
+        {
+            BubbleCountWindow.NativeUnavailable = true;
+            Assert.True(BubbleCountHost.Instance.CanPlayPath(game.Clip));
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            Assert.NotNull(Assert.Single(BubbleCountWindow.OpenWindows).Browser);
+            BubbleCountWindow.ForceCloseAll();
+            BrowserVideoSurface.Create = () => null;
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            Assert.Equal(1, game.Skipped);
+            Assert.Equal(0, game.Completed);
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+            Assert.False(BrowserVideoSurface.SessionActive);
+        }
+        finally { BubbleCountWindow.NativeUnavailable = saved; }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("ended")]
     [InlineData("error")]
@@ -89,6 +116,83 @@ public sealed class BubbleCountBrowserTests {
         Assert.Equal(0, game.Completed);
         return Task.CompletedTask;
     });
+    [Theory]
+    [InlineData("ended", 23.0, 23.0)]
+    [InlineData("escape", 12.0, 12.0)]
+    [InlineData("panic", 17.0, 17.0)]
+    public Task BrowserPlaybackCreditsOnceThroughTerminalPaths(string terminal, double elapsed, double expected) => AvaloniaTestDispatcher.RunAsync(() => {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, false, _ => game.Completed++);
+        var w = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = w.Browser!;
+        double now = 100;
+        var credits = new List<double>();
+        w.WatchNow = () => now;
+        w.WatchCredit = credits.Add;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Send(browser, "meta", durationMs: 30000);
+        Send(browser, "playing");
+        now += elapsed;
+        if (terminal == "ended") Send(browser, "ended");
+        else if (terminal == "escape")
+            browser.View.OnWebMessage(JsonSerializer.Serialize(new { session = browser.SessionId, type = "key", key = "Escape" }));
+        else BubbleCountWindow.ForceCloseAll();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(expected, Assert.Single(credits), 3);
+        if (terminal == "ended") Assert.Single(BubbleCountResultWindow.OpenWindows);
+        else Assert.Empty(BubbleCountWindow.OpenWindows);
+        BubbleCountWindow.ForceCloseAll();
+        BubbleCountResultWindow.ForceCloseAll();
+        Send(browser, "ended");
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(expected, Assert.Single(credits), 3);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PlayerStallCreditsFurthestPositionOnEndOrSafetyTimeout(bool safetyTimeout) => AvaloniaTestDispatcher.RunAsync(async () => {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, false, _ => game.Completed++);
+        var w = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = w.Browser!;
+        double now = 100;
+        var credits = new List<double>();
+        w.WatchNow = () => now;
+        w.WatchCredit = credits.Add;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Send(browser, "meta", durationMs: 60000);
+        var events = new FakePlaybackEvents();
+        w.BindPlaybackEvents(events, () => true);
+        events.Start(); events.Position(4); events.Position(8); events.Position(7);
+        now += 50;
+        if (safetyTimeout) {
+            // Use the LibVLC branch of the real safety-timer callback and shorten only its delay.
+            typeof(BubbleCountWindow).GetField("_useBrowser", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(w, false);
+            typeof(BubbleCountWindow).GetMethod("StartSafetyTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, new object[] { -4.99 });
+            for (var i = 0; i < 100 && credits.Count == 0; i++) await Task.Delay(10);
+        }
+        else { events.End(); events.End(); }
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(8, Assert.Single(credits), 3);
+        Assert.Single(BubbleCountResultWindow.OpenWindows);
+        BubbleCountWindow.ForceCloseAll(); BubbleCountResultWindow.ForceCloseAll();
+        events.End(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(8, Assert.Single(credits), 3);
+    });
+
+    private sealed class FakePlaybackEvents : IBubbleCountPlaybackEvents {
+        public event Action? Playing;
+        public event Action<double>? TimeChanged;
+        public event Action? Ended;
+        internal void Start() => Playing?.Invoke();
+        internal void Position(double seconds) => TimeChanged?.Invoke(seconds);
+        internal void End() => Ended?.Invoke();
+    }
+
     [Theory]
     [InlineData(1, true)]
     [InlineData(4, true)]

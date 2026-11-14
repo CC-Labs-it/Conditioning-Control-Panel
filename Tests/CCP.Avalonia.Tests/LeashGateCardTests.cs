@@ -49,6 +49,7 @@ public sealed class LeashGateCardTests
         (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.LauncherSoundEnabled) = (true, true, 1, false);
         var (oldIn, oldLab) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider);
         var (oldSvc, oldDue, oldPresent) = (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider);
+        var oldSelfCut = LeashHead.SelfCut;   // a cut in the body notes it (WPF LeashSurfaces._iCut)
         (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (() => true, () => true);
         var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
         if (punished) svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
@@ -73,6 +74,8 @@ public sealed class LeashGateCardTests
         }
         finally
         {
+            ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashAskWindow.CloseCurrent();   // an ask or snap the body left up
+            LeashHead.SelfCut = oldSelfCut;
             LauncherWindow.Instance?.Close();
             (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
             (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider) = (oldSvc, oldDue, oldPresent);

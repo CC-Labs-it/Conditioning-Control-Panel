@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -103,6 +104,36 @@ public sealed class IntakePassNudgeTests
             foreach (var popup in opened) popup.Close();
             shell.Close();
         }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("breakoutdemo")]
+    [InlineData("race")]
+    public Task OpenGameKeepsTheNudgeAndItsSlotUntilClose(string id) => Run(() =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        var opened = new List<AnnouncementPopup>();
+        using var sub = Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is AnnouncementPopup p) opened.Add(p); });
+        var shell = new MainShellWindow();
+        var game = new GameWindow(GameWindow.Games[id]);
+        try
+        {
+            shell.Show();
+            game.Show();
+            Assert.True(GameWindow.IsAnyOpen());
+            shell.CheckIntakePassNudge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(StartupLadder.Inbox.Items);
+            Assert.Empty(opened);
+
+            game.Close();
+            Assert.False(GameWindow.IsAnyOpen());
+            shell.CheckIntakePassNudge();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("intake-pass:" + Week, Assert.Single(StartupLadder.Inbox.Items).Key);
+        }
+        finally { game.Close(); shell.Close(); }
         return Task.CompletedTask;
     });
 

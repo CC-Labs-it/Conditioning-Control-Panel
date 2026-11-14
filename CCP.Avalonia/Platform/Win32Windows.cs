@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Avalonia.Controls;
+using System.Text;
 using ConditioningControlPanel.Services.UI;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -44,6 +45,43 @@ internal static class Win32Windows
             finally { if (attached) AttachThreadInput(thisThread, otherThread, false); }
         }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Chat foreground failed"); }
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+    // WPF App.xaml.cs:1571 and AwarenessProbes.cs:72: sample title and process from one handle.
+    internal static bool AwarenessDisabled;
+    internal static (string Title, string Process) ReadAwarenessForeground()
+    {
+        if (AwarenessDisabled || !OperatingSystem.IsWindows()) return ("", "");
+        return ReadAwarenessForeground(GetForegroundWindow, hwnd =>
+        {
+            var text = new StringBuilder(512);
+            GetWindowText(hwnd, text, text.Capacity);
+            return text.ToString();
+        }, hwnd =>
+        {
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == 0 || pid > int.MaxValue) return "";
+            using var process = Process.GetProcessById((int)pid);
+            return process.ProcessName;
+        });
+    }
+
+    // The process can exit between reads; keep the title for the existing title-only fallback.
+    internal static (string Title, string Process) ReadAwarenessForeground(
+        Func<IntPtr> foreground, Func<IntPtr, string> title, Func<IntPtr, string> process)
+    {
+        try
+        {
+            var hwnd = foreground();
+            if (hwnd == IntPtr.Zero) return ("", "");
+            var name = title(hwnd);
+            try { return (name, process(hwnd)); }
+            catch { return (name, ""); }
+        }
+        catch { return ("", ""); }
     }
 
     /// <summary>The do-not-disturb sources for this OS: user32 on Windows, X11 elsewhere.</summary>

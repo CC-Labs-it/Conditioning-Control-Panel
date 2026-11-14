@@ -15,10 +15,15 @@ public partial class EmiDeskWindow
     private string? _patFaceDrawn;
 
     // Wordless pat frames retain the shared cooldown and poke clock. Full chains take
-    // the face through PlayChain; body art, moves, particles and speech still need hosts.
-    private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames)
+    // the face through PlayChain; particles and speech still need hosts.
+    // #4064 #4146: each pat wears the body pose and plays the body move of the WPF chain it stands
+    // in for (EmiChains pet/petStreak/wink, React.cs PetFlickChain, Alive.cs PokeAnnoy/PokeRage),
+    // and the pose returns to idle when the frames end or are cut.
+    private void StartPatFeedback(IReadOnlyList<EmiPatFrame> frames, string pose, string? move = null)
     {
-        StopPatFeedback();
+        StopPatFeedback(restorePose: false);
+        SetPose(pose);
+        if (move != null) RunBodyMove(move);
         _patFeedback = frames;
         _patFaceDrawn = null;
         _patFeedbackFrom = PatClock.GetUtcNow();
@@ -38,7 +43,7 @@ public partial class EmiDeskWindow
         else if (face != _patFaceDrawn) { _patFaceDrawn = face; DrawFace(face); }   // P07
     }
 
-    private void StopPatFeedback()
+    private void StopPatFeedback(bool restorePose = true)
     {
         if (_patFeedbackTimer is not null)
         {
@@ -46,7 +51,11 @@ public partial class EmiDeskWindow
             _patFeedbackTimer.Tick -= OnPatFeedbackTick;
             _patFeedbackTimer = null;
         }
-        if (_patFeedback is not null) DrawFace(EmiChains.RestFace);
+        if (_patFeedback is not null)
+        {
+            DrawFace(EmiChains.RestFace);
+            if (restorePose) SetPose("idle");
+        }
         _patFeedback = null;
     }
 }

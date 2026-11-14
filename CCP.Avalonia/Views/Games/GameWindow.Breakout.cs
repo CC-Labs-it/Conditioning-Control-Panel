@@ -199,7 +199,9 @@ internal sealed partial class GameWindow
             or nameof(AppSettings.BackRoomInvertLook) or nameof(AppSettings.BackRoomMediaSource)
             or nameof(AppSettings.BackRoomMediaSubs) or nameof(AppSettings.BackRoomMediaSubsOff)
             or nameof(AppSettings.MediaSource) or nameof(AppSettings.RemoteMediaRatio)
-            or nameof(AppSettings.RemoteMediaConsented) or nameof(AppSettings.FypOnlineConsented)) Dispatcher.UIThread.Post(PushBreakoutSettings);
+            or nameof(AppSettings.RemoteMediaConsented) or nameof(AppSettings.FypOnlineConsented)
+            or nameof(AppSettings.BreakoutSubVolume) or nameof(AppSettings.BreakoutSfxVolume)
+            or nameof(AppSettings.BreakoutMusicVolume)) Dispatcher.UIThread.Post(PushBreakoutSettings);
     }
 
     private void PushBreakoutSettings()
@@ -211,7 +213,39 @@ internal sealed partial class GameWindow
         Post(new { type = "settings", motion = motion.ToString().ToLowerInvariant(),
             reduced = motion != MotionLevel.Full, breakout = BreakoutEntitlementFor(Spec.Id), breakoutStandalone = true,
             intensity = BackRoomWire.IntensityWire(s, motion), intensityChoice = BackRoomWire.IntensityChoiceWire(s),
-            gates = BackRoomWire.GatesWire(s), media = BackRoomWire.MediaWire(s), invertLook = s.BackRoomInvertLook });
+            gates = BackRoomWire.GatesWire(s), media = BackRoomWire.MediaWire(s), invertLook = s.BackRoomInvertLook,
+            audio = BreakoutAudio() });
+    }
+
+    // WPF BackRoomHostService.cs:179-190 AudioWire(breakout: true): the standalone page's own 0..100 levels as 0..1,
+    // never the casino's (owner, 2026-09-27) and never the app's volumes (#3921).
+    internal static object BreakoutAudio() => new
+    {
+        sub = CoreSettings.Current.BreakoutSubVolume / 100.0,
+        sfx = CoreSettings.Current.BreakoutSfxVolume / 100.0,
+        music = CoreSettings.Current.BreakoutMusicVolume / 100.0,
+    };
+
+    // WPF BackRoomHostService.cs:64-73 ApplyRoomOption(breakout: true) via BackRoomBridge.cs:240-243 (the bridge drops
+    // options once exit begins). Only the three levels: the page's other room options are not wired on this head (#3921).
+    private void HandleBreakoutOption(JObject message)
+    {
+        if (_closing || _shellExiting) return;
+        try
+        {
+            var option = BackRoomBridge.ReadRoomOption(message);
+            if (option?.Level is not int level) return;
+            var settings = CoreSettings.Current;
+            switch (option.Key)
+            {
+                case BackRoomBridge.OptionSubVolume: settings.BreakoutSubVolume = level; break;
+                case BackRoomBridge.OptionSfxVolume: settings.BreakoutSfxVolume = level; break;
+                case BackRoomBridge.OptionMusicVolume: settings.BreakoutMusicVolume = level; break;
+                default: return;
+            }
+            CoreSettings.Service?.Save();
+        }
+        catch (Exception ex) { Log.Debug("[Breakout] option dropped: {E}", ex.Message); }
     }
 
     // WPF BreakoutHostService.cs:14-17 and BreakoutAccess.cs:9-16.

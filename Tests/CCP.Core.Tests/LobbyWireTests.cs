@@ -6,6 +6,7 @@ using Xunit;
 
 namespace ConditioningControlPanel.Tests;
 
+[Collection(CCP.Core.Tests.PlayerLookProviderStatics.Name)]
 public class LobbyWireTests
 {
     [Fact]
@@ -47,7 +48,13 @@ public class LobbyWireTests
         const string unknown = "{\"players\":[{\"id\":\"p\",\"cosmetics\":{\"frame_id\":\"unshipped\"}}]}";
         try
         {
+            // Unseeded reads the shipped shop registry (b232 #3859), the same ids both heads seed at launch, so a
+            // shipped frame survives and an unknown one still drops.
             PlayerLook.KnownIdsProvider = null;
+            Assert.Equal("profile.frame.lace", Assert.Single(PbpLobbyApi.Parse(known).Open).Look.FrameId);
+            Assert.Same(PlayerLook.None, Assert.Single(PbpLobbyApi.Parse(unknown).Open).Look);
+            // A head that knows no frames drops even a shipped one.
+            PlayerLook.KnownIdsProvider = () => (new HashSet<string>(), null);
             Assert.Null(Assert.Single(PbpLobbyApi.Parse(known).Open).Look.FrameId);
             PlayerLook.KnownIdsProvider = () => (new HashSet<string>(), new HashSet<string> { "profile.frame.lace" });
             Assert.Equal("profile.frame.lace", Assert.Single(PbpLobbyApi.Parse(known).Open).Look.FrameId);

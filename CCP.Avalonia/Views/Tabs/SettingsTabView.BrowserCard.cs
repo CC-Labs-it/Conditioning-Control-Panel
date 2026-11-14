@@ -116,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
+            _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.NavigationBeginning += BeginRemixMediaWatch;
@@ -338,9 +339,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             // WPF MainWindow.Browser.cs:2790-2800: label and tooltip follow the hosting window.
             bool popped = Shell?.IsBrowserPoppedOut == true;
-            if (BtnPopOutBrowser.Content is TextBlock label)
-                label.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(
-                    popped ? "btn_focus" : "btn_pop_out").ProvideValue(null!));
+            // WPF prefixes both labels with a glyph: drawn as a FluentIcon, so the label stays bare (#3940).
+            PopOutBrowserIcon.Kind = popped ? IconKind.Window : IconKind.Open;
+            TxtPopOutBrowser.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(
+                popped ? "btn_focus" : "btn_pop_out").ProvideValue(null!));
             BtnPopOutBrowser.Bind(ToolTip.TipProperty, LocBinding(popped
                 ? "tooltip_browser_is_popped_out_click_to_focus" : "tooltip_pop_out_browser_to_resizable_window"));
             SyncBrowserPrompt();

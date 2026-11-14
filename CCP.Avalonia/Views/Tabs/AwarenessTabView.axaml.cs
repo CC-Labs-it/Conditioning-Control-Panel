@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
     /// Haptic/XP/Chaster actions and the Last Detected feed run on it too.
-    /// ponytail: ScreenOcr, highlight windows, visual/avatar actions and recent-app chips remain
+    /// ponytail: the OCR engine (KeywordTriggerHead.OcrSource), highlight windows, visual/avatar actions and recent-app chips remain
     /// wire-shell-keyword-triggers-b-next; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -108,8 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             // Tabs are shown and hidden rather than rebuilt, so re-read on every show: the master
             // switch is [JsonIgnore] session state and the app list can be edited elsewhere.
-            AttachedToVisualTree += (_, _) => { AttachPulseFeed(); SyncAwarenessTabUi(); };
-            DetachedFromVisualTree += (_, _) => DetachPulseFeed();
+            AttachedToVisualTree += (_, _) => { AttachPulseFeed(); AttachPresetEvents(); SyncAwarenessTabUi(); };
+            DetachedFromVisualTree += (_, _) => { DetachPulseFeed(); DetachPresetEvents(); };
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == IsVisibleProperty && IsVisible) SyncAwarenessTabUi();
@@ -131,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 var masterOn = s.KeywordTriggersEnabled;
                 Set(ChkAwarenessMaster, masterOn);
+                Set(ChkAwarenessStartOnLaunch, s.AwarenessStartOnLaunch);
                 Set(ChkAwarenessOcr, s.ScreenOcrEnabled);
                 // The keyboard sub-toggle mirrors the master, as on WPF: it is one signal source,
                 // and the master is what actually arms it.
@@ -196,6 +197,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ------------------------------------------------------------------ live editors
 
+        /// <summary>WPF ChkAwarenessStartOnLaunch: re-arm the master at the next launch (MainShellWindow ctor).</summary>
+        private void ChkAwarenessStartOnLaunch_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.AwarenessStartOnLaunch = ChkAwarenessStartOnLaunch.IsChecked == true;
+            CoreSettings.Save();
+        }
+
         /// <summary>
         /// Master switch. Writes the setting, keeps the keyboard sub-toggle and the status
         /// indicator in step, and saves - the whole of ChkAwarenessMaster_Changed except starting
@@ -225,7 +234,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreSettings.Current.KeywordTriggersEnabled = on;
 
                 Platform.KeywordTriggerHead.Sync();
-                // ponytail: OCR/highlights and visual/avatar actions remain wire-shell-keyword-triggers-b-next.
+                // ponytail: highlights and visual/avatar actions remain wire-shell-keyword-triggers-b-next.
 
                 _isLoading = true;
                 try { if ((ChkAwarenessKeyboard.IsChecked ?? false) != on) ChkAwarenessKeyboard.IsChecked = on; }
@@ -251,7 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (ChkAwarenessKeyboard.IsChecked == true && ChkAwarenessMaster.IsChecked != true)
                 ChkAwarenessMaster.IsChecked = true;   // deliberately outside the guard: routes through the master handler
 
-            if (ChkAwarenessKeyboard.IsChecked == true) Platform.KeywordTriggerHead.Sync();
+            if (ChkAwarenessKeyboard.IsChecked == true) Platform.KeywordTriggerHead.AttachKeyboard();
             else Platform.KeywordTriggerHead.DetachKeyboard();   // WPF :493: master, engine and clip stay
             // The shared hook stays available to panic, pause and push-to-talk.
         }
@@ -271,8 +280,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     ConditioningControlPanel.Localization.Loc.Get("msg_screen_ocr_patreon_only"));
                 return;
             }
-            // ponytail: WPF starts/stops App.ScreenOcr here; no OCR engine on this head.
             WriteFlag(v => CoreSettings.Current.ScreenOcrEnabled = v, ChkAwarenessOcr, "ScreenOcrEnabled");
+            if (!_isLoading) Platform.KeywordTriggerHead.SyncOcr();   // WPF :465-468 starts/stops the scanner
             if (!_isLoading) KeywordPanel?.SyncFromSettings();   // WPF :475 SyncKeywordRescuePanelUi
         }
 

@@ -284,6 +284,10 @@ public class TestIsolationTests
     [InlineData(typeof(CoreTutorial), nameof(CoreTutorial.IsActiveProvider))]
     [InlineData(typeof(CoreSession), nameof(CoreSession.IsSessionRunningProvider))]
     [InlineData(typeof(ConditioningControlPanel.Services.TierGate), nameof(ConditioningControlPanel.Services.TierGate.ReconnectIsTheAnswerProvider))]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed), nameof(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon))]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed), nameof(ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar))]
+    [InlineData(typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed), nameof(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord))]
+    [InlineData(typeof(ConditioningControlPanel.Services.AuthRecovery), nameof(ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate))]
     [InlineData(typeof(CoreMods), nameof(CoreMods.MakeModAwareProvider))]
     [InlineData(typeof(AvApp), nameof(AvApp.Notifications))]
     [InlineData(typeof(AvApp), nameof(AvApp.Ai))]
@@ -294,6 +298,58 @@ public class TestIsolationTests
     [InlineData(typeof(ConditioningControlPanel.Services.RemoteCommands), "OverlaysStopped")]
     public void TheHookCoversEverySeamThatLeakedBefore(System.Type type, string member) =>
         Assert.Contains(ProcessStateSnapshot.Members.Value, m => m.DeclaringType == type && m.Name == member);
+
+    [Theory]
+    [InlineData("takeover")]
+    [InlineData("effects")]
+    public System.Threading.Tasks.Task PatreonTestsRestoreBorrowedState(string which) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var restore = ProcessStateSnapshot.CaptureAccountSeed();
+            var settings = CoreSettings.Current;
+            var oldAutonomy = settings.AutonomyModeEnabled;
+            try
+            {
+                System.Func<string, string?> get = _ => null;
+                System.Action<string, string?> set = (_, _) => { };
+                (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, set);
+                Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(
+                    p => new ConditioningControlPanel.Services.ProviderSubscription(p, () => new ConditioningControlPanel.Models.AppSettings())));
+                var p = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
+                var ss = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar;
+                var discord = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord;
+                System.Func<bool> premium = () => false;
+                System.Func<string?, bool> free = _ => false;
+                CoreEntitlement.HasPremiumProvider = premium;
+                CoreEntitlement.IsFreeTodayProvider = free;
+                var accountPremium = CoreAccount.HasPremiumAccessProvider;
+                var accountLab = CoreAccount.HasLabAccessProvider;
+                var programPremium = CoreProgram.HasPremiumProvider;
+                var recovery = ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate;
+                settings.AutonomyModeEnabled = true;
+
+                if (which == "takeover") new PremiumGatesTests().TakeoverAutonomyFollowsPremiumAndFreeDay();
+                else await new AiPermissionsLiveFeedTests().TierChangesRepaintEffectiveEffectsWithoutChangingSavedChoice();
+
+                Assert.Same(get, CoreSecrets.RetrieveProvider);
+                Assert.Same(set, CoreSecrets.StoreProvider);
+                Assert.Same(p, ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon);
+                Assert.Same(ss, ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar);
+                Assert.Same(discord, ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord);
+                Assert.Same(accountPremium, CoreAccount.HasPremiumAccessProvider);
+                Assert.Same(accountLab, CoreAccount.HasLabAccessProvider);
+                Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
+                Assert.Same(free, CoreEntitlement.IsFreeTodayProvider);
+                Assert.Same(programPremium, CoreProgram.HasPremiumProvider);
+                Assert.Same(recovery, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate);
+                if (which == "takeover") Assert.True(settings.AutonomyModeEnabled);
+            }
+            finally
+            {
+                settings.AutonomyModeEnabled = oldAutonomy;
+                restore();
+            }
+        });
 
     [Fact]
     public void RestorePutsPanicQuietEngineHoldAndCountBack()

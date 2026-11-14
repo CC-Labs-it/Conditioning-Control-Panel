@@ -21,7 +21,9 @@ public sealed class SessionRunnerTests : IDisposable
 {
     private const string Id = "runner-golden";
     private static readonly string[] AllowedSettingsChanges =
-        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun" };
+        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun",
+          // Restack b213: the season session and feature counts are kept, as WPF (SessionEngine.cs:296-318).
+          "SeasonStatsSeason", "SeasonSessionsStarted", "SeasonFeatureUse" };
     private static readonly string[] Timestamps = { "started_at", "ended_at", "timestamp", "session_time_seconds" };
 
     private readonly SessionLogService _logs = new();
@@ -396,8 +398,12 @@ public sealed class SessionRunnerTests : IDisposable
         var s = CoreSettings.Current;
         s.SubliminalDuration = 3;
         var before = SettingsJson();
+        var startsBefore = s.SeasonSessionsStarted;
+        var flashBefore = s.SeasonFeatureUse.TryGetValue(SeasonFeatureKeys.Flash, out var f) ? f : 0;
 
         _runner.Start(OneMinute());
+        Assert.Equal(startsBefore + 1, s.SeasonSessionsStarted);   // once per start
+        Assert.Equal(flashBefore + 1, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
         Assert.True(CoreSession.IsSessionRunning && CoreEngine.IsRunning);
         Assert.NotNull(CoreSession.UserPhrasePoolsWhileOverriding!());
         Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning);
@@ -474,6 +480,77 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(1, btStarts);
         Assert.True(LockCardScheduler.Instance.IsRunning);
         Assert.Equal(1.0, LockCardScheduler.Instance.LastWindowMinutes);   // #736: minutes left, not the duration
+    }
+
+    [Fact]
+    public void UserRestartReassertsDeferredEffectsAndDoesNotCountAnotherSession()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        session.Settings.FlashStartMinute = 3;
+        session.Settings.SubliminalStartMinute = 3;
+        session.Settings.LockCardStartMinute = 3;
+        session.Settings.BouncingTextStartMinute = 3;
+        var bouncing = false;
+        CoreBouncingText.StartAction = () => bouncing = true;
+        CoreBouncingText.StopAction = () => bouncing = false;
+        var mindWipe = false;
+        var oldMindWipeEnabled = CoreSettings.Current.MindWipeEnabled;
+        var oldAudioOnly = CoreSettings.Current.AudioOnlySession;
+        CoreMindWipe.StartProvider = (_, _) => mindWipe = true;
+        CoreMindWipe.StopProvider = () => mindWipe = false;
+        try
+        {
+            CoreSettings.Current.MindWipeEnabled = true;
+            CoreSettings.Current.AudioOnlySession = false;
+            _runner.Start(session);
+            var count = CoreSettings.Current.TotalSessions;
+            _runner.Pause();
+            CoreEngine.Stop();
+            CoreEngine.Start(resumingSession: true);
+            Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && bouncing && mindWipe);
+            _runner.ResumeAfterEngineStart();   // the trunk folds Resume and the reassert into one call
+            Assert.Equal(count, CoreSettings.Current.TotalSessions);
+            Assert.False(CoreFlash.IsRunning || CoreSubliminal.IsRunning || LockCardScheduler.Instance.IsRunning || bouncing || mindWipe);
+            _runner.Tick(TimeSpan.FromMinutes(3));
+            Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning && bouncing);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreBouncingText.StartAction = CoreBouncingText.StopAction = null;
+            CoreMindWipe.StartProvider = null;
+            CoreMindWipe.StopProvider = null;
+            CoreSettings.Current.MindWipeEnabled = oldMindWipeEnabled;
+            CoreSettings.Current.AudioOnlySession = oldAudioOnly;
+        }
+    }
+
+    [Fact]
+    public void RestartRearmsActiveLockCardsWithinTheRemainingSession()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        var oldAudioOnly = CoreSettings.Current.AudioOnlySession;
+        try
+        {
+            CoreSettings.Current.AudioOnlySession = false;
+            _runner.Start(session);
+            _runner.Pause();
+            CoreEngine.Stop();
+            CoreEngine.Start(resumingSession: true);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.Null(LockCardScheduler.Instance.LastWindowMinutes);
+            _runner.ResumeAfterEngineStart();   // the trunk folds Resume and the reassert into one call
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.NotNull(LockCardScheduler.Instance.LastWindowMinutes);
+            Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes.Value, 9.9, 10.0);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreSettings.Current.AudioOnlySession = oldAudioOnly;
+        }
     }
 
     [Fact]
@@ -656,6 +733,89 @@ public sealed class SessionRunnerTests : IDisposable
             Assert.Equal("session 2 60", calls.Last());
         }
         finally { (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider) = old; }
+    }
+
+    [Fact]
+    public void BrainDrain_SessionOwnsDelayedAudioRampPauseEndAndRestore()
+    {
+        // WPF SessionEngine.cs:843-856,969-990,1484-1495,529,579,1698-1702.
+        var old = (CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain, CoreEngine.SetBrainDrainIntensity);
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, s.BrainDrainIntensity);
+        var calls = new System.Collections.Generic.List<string>();
+        var ramps = new System.Collections.Generic.List<double>();
+        CoreEngine.StartBrainDrain = () => calls.Add($"start {s.BrainDrainEnabled} {s.BrainDrainIntensity}");
+        CoreEngine.StopBrainDrain = () => calls.Add("stop");
+        CoreEngine.SetBrainDrainIntensity = ramps.Add;
+        try
+        {
+            s.BrainDrainEnabled = true; s.BrainDrainIntensity = 73;
+            var session = OneMinute(); session.DurationMinutes = 4;
+            var ss = session.Settings;
+            ss.BrainDrainEnabled = true; ss.BrainDrainStartMinute = 1; ss.BrainDrainEndMinute = 3;
+            ss.BrainDrainStartIntensity = 20; ss.BrainDrainEndIntensity = 80; ss.RampCurve = RampCurve.EaseIn;
+            _runner.Start(session);
+            Assert.Equal(new[] { "start True 73", "stop" }, calls);
+            Assert.False(s.BrainDrainEnabled);
+            calls.Clear(); _runner.Pause(); _runner.Resume();
+            Assert.Equal(new[] { "stop" }, calls); // pending, so no resume start
+            calls.Clear(); _runner.Tick(TimeSpan.FromSeconds(59));
+            Assert.Empty(calls); Assert.Empty(ramps);
+            _runner.Tick(TimeSpan.FromMinutes(1));
+            Assert.Equal(new[] { "start True 20" }, calls);
+            Assert.Equal(20, s.BrainDrainIntensity);
+            calls.Clear(); _runner.Tick(TimeSpan.FromMinutes(2.5));
+            Assert.Equal(27.5, Assert.Single(ramps), 6); // ease-in at halfway
+            Assert.Equal(20, s.BrainDrainIntensity); // ramp never persists to settings
+            _runner.Pause(); Assert.Equal(new[] { "stop" }, calls);
+            _runner.Resume(); Assert.Equal(new[] { "stop", "start True 20" }, calls);
+            calls.Clear(); _runner.Tick(TimeSpan.FromMinutes(3));
+            Assert.Equal(new[] { "stop" }, calls); Assert.False(s.BrainDrainEnabled);
+            calls.Clear(); _runner.Pause(); _runner.Resume();
+            Assert.Equal(new[] { "stop" }, calls); // ended, so no resume start
+            calls.Clear(); _runner.Tick(TimeSpan.FromMinutes(3.1));
+            Assert.Equal(new[] { "start True 20", "stop" }, calls); // WPF's delayed-start check repeats after end
+            _runner.Stop();
+            Assert.True(s.BrainDrainEnabled); Assert.Equal(73, s.BrainDrainIntensity);
+        }
+        finally
+        {
+            _runner.Stop();
+            (CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain, CoreEngine.SetBrainDrainIntensity) = old;
+            (s.BrainDrainEnabled, s.BrainDrainIntensity) = saved;
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BrainDrain_SessionOwnsImmediateOrDisabledAudio(bool enabled)
+    {
+        var old = (CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain);
+        var s = CoreSettings.Current;
+        var saved = (s.BrainDrainEnabled, s.BrainDrainIntensity);
+        var calls = new System.Collections.Generic.List<string>();
+        CoreEngine.StartBrainDrain = () => calls.Add($"start {s.BrainDrainEnabled} {s.BrainDrainIntensity}");
+        CoreEngine.StopBrainDrain = () => calls.Add("stop");
+        try
+        {
+            s.BrainDrainEnabled = false; s.BrainDrainIntensity = 73;
+            var session = OneMinute(); session.Settings.BrainDrainEnabled = enabled;
+            session.Settings.BrainDrainStartIntensity = 25;
+            _runner.Start(session);
+            Assert.Equal(enabled ? new[] { "stop", "start True 25" } : new[] { "stop" }, calls); // inherited stop first
+            Assert.Equal(enabled, s.BrainDrainEnabled);
+            calls.Clear(); _runner.Pause(); _runner.Resume();
+            Assert.Equal(enabled ? new[] { "stop", "start True 25" } : new[] { "stop" }, calls);
+            calls.Clear(); _runner.Stop();
+            Assert.Equal(new[] { "stop", "stop" }, calls); // session then engine teardown (WPF SessionEngine.cs:395)
+            Assert.False(s.BrainDrainEnabled); Assert.Equal(73, s.BrainDrainIntensity);
+        }
+        finally
+        {
+            _runner.Stop(); (CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain) = old;
+            (s.BrainDrainEnabled, s.BrainDrainIntensity) = saved;
+        }
     }
 
     [Fact]

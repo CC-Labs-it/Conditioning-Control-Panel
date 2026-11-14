@@ -62,6 +62,17 @@ namespace ConditioningControlPanel.Services.Companion
             return pick;
         }
 
+        /// <summary>Resolve the WPF voice line placeholder using the focused app or a fallback.</summary>
+        public static string ResolvePlaceholder(string? text, string? serviceName, string? detectedName)
+        {
+            const string placeholder = "target application";
+            if (string.IsNullOrEmpty(text) || text.IndexOf(placeholder, StringComparison.OrdinalIgnoreCase) < 0) return text ?? string.Empty;
+            var name = !string.IsNullOrWhiteSpace(serviceName) ? serviceName : detectedName;
+            if (!string.IsNullOrWhiteSpace(name)) return text.Replace(placeholder, name.Trim());
+            var result = text.Replace(placeholder, "that");
+            return result.Length > 0 && char.IsLower(result[0]) ? char.ToUpper(result[0]) + result.Substring(1) : result;
+        }
+
         private static int IndexOf(IReadOnlyList<string> clips, string value)
         {
             for (int i = 0; i < clips.Count; i++)

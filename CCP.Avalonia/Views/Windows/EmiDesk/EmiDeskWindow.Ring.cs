@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             TearDownRain();
             CancelAsk();
-            try { _ring?.CloseRing(); }
+            try { _ring?.CloseRing(); StopGlassWatch(); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring tear-down failed"); }
         }
 

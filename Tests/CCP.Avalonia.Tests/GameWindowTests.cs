@@ -447,7 +447,7 @@ public sealed partial class GameWindowTests
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.Web.OnNavigationCompleted(w.PageUrl);
             w.Web.OnWebMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // the string carrier's JSON-quoted frame
-            Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal(15, (int)sent[0]["videoHoldSec"]!);
             Assert.Equal("tok", (string?)sent[1]["net"]!["authToken"]);
 
@@ -696,7 +696,7 @@ public sealed partial class GameWindowTests
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(false, (bool?)sent[0]["prizeCounter"]);
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
@@ -750,6 +750,8 @@ public sealed partial class GameWindowTests
     {
         var answer = new TaskCompletionSource<bool>();
         var w = GameWindow.Launch(GameWindow.PbpId)!;
+        Assert.True(w.PbpLocalProbe.Wait(TimeSpan.FromSeconds(10)));
+        Dispatcher.UIThread.RunJobs();
         int queries = 0;
         w.PbpOsAnimations = () => { queries++; return answer.Task; };
         var sent = new List<JObject>();
@@ -763,7 +765,7 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.True(w.PbpPending.IsCompletedSuccessfully);
         if (close) Assert.Empty(sent);
-        else Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        else Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look", "pbp:online-media" }, sent.Select(o => (string?)o["type"]));
     });
 
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
@@ -778,8 +780,8 @@ public sealed partial class GameWindowTests
         window.Posted += json => sent.Add(JObject.Parse(json));
         Assert.Empty(sent);
         window.HandleMessage("{\"type\":\"ready\"}");
-        // WPF OnPageReady: the lobby intent, then the wardrobe (owned + look).
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        // WPF OnPageReady: the media state, the lobby intent, then the wardrobe (owned + look).
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "pbp:friend", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal("host", (string?)sent.Last(o => (string?)o["type"] == "pbp:friend")["mode"]);
         Assert.Same(window, GameWindow.OpenChessLobby("join", "p_table"));
         Assert.Equal("p_table", (string?)sent.Last()["target"]);
@@ -792,12 +794,12 @@ public sealed partial class GameWindowTests
         sent.Clear(); window.Posted += json => sent.Add(JObject.Parse(json));
         window.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal("m_fedcba9876543210", (string?)sent.First()["spectateMatchId"]);
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
-        window.HandleMessage("{\"type\":\"ready\"}"); Assert.Equal(4, sent.Count);
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        window.HandleMessage("{\"type\":\"ready\"}"); Assert.Equal(5, sent.Count);
         GameWindow.CloseAllForPanic();
         Assert.Empty(GameWindow.OpenWindowsForTests());
     });
-    private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -942,14 +944,90 @@ public sealed partial class GameWindowTests
         }
     });
 
-    // Retained 2D bridge regressions run directly, never through a production door.
+    // Exercise the 2D bridge through its registered Classic specification.
     private static GameWindow OpenRetiredRace()
     {
-        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        var w = new GameWindow(GameWindow.Games["raceclassic"]);
         w.Load(GameWindow.Server());
         w.Show();
         return w;
     }
+
+    [Fact]
+    public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        launcher.BuildTiles();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "raceclassic"));
+        var w = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
+        Assert.Equal("dtrh/race.html", w.Spec.Page);
+        Assert.True(w.RaceWatchRunning);
+        Assert.Same(w, GameWindow.Launch("raceclassic"));
+        w.Close();
+        Dispatcher.UIThread.RunJobs();
+    });
+
+    [Fact]
+    public void Classic_FirstEscapePauses_SecondRequestsExit() => Run((shell, launcher) =>
+    {
+        var settings = CoreSettings.Current;
+        var (oldKey, oldEnabled, oldOverride) = (settings.PanicKey, settings.PanicKeyEnabled, settings.PanicOverridesAll);
+        try
+        {
+            (settings.PanicKey, settings.PanicKeyEnabled, settings.PanicOverridesAll) = ("Escape", true, false);
+            launcher.Hide();
+            var w = GameWindow.Launch("raceclassic")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(w.IsActive);
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            var now = DateTime.Now;
+            shell.HandlePanicKeyPress(now);
+            Assert.True(w.IsVisible);
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+            shell.HandlePanicKeyPress(now.AddSeconds(1));
+            Assert.True(w.IsVisible);
+            Assert.False(w.KeptEscapeReady);
+            Assert.Equal("exit-request", (string?)sent.Last()["type"]);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.False(w.IsVisible);
+        }
+        finally { (settings.PanicKey, settings.PanicKeyEnabled, settings.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride); }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Classic_PanicSettlesOrTimesOut(bool responds) => RunRace("rt.original.03", (_, xp, _) =>
+    {
+        var w = GameWindow.Launch("raceclassic")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        GameWindow.CloseAllForPanic();
+        Assert.True(w.IsVisible);
+        Assert.Equal("exit-request", (string?)Assert.Single(sent)["type"]);
+        if (responds)
+        {
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
+            Assert.Equal(250.0, Assert.Single(xp));
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+        }
+        else
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            w.Closed += (_, _) => deadline.Cancel();
+            Dispatcher.UIThread.MainLoop(deadline.Token);
+            Assert.InRange(clock.ElapsedMilliseconds, 1100, 2999);
+            Assert.Empty(xp);
+        }
+        Assert.False(w.IsVisible);
+    });
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
     /// one payout per run, score / 5 under 250 XP a minute, Sparks banked on score / 5.</summary>
@@ -965,6 +1043,7 @@ public sealed partial class GameWindowTests
         // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
         Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
+        Assert.False((bool)sent[0]["settings"]!["hostSfx"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // no run-started: nothing
         Assert.Empty(sent);
@@ -1232,6 +1311,7 @@ public sealed partial class GameWindowTests
         var (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var (oldFavorites, oldMerge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
         var oldRelaunched = GameWindow.DtrhRelaunchedOnce;
         GameWindow.DtrhRelaunchedOnce = false;
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
@@ -1240,6 +1320,9 @@ public sealed partial class GameWindowTests
         var denied = new List<string>();
         try
         {
+            // The engagement store stays out of lifecycle tests: no profile write, no ambient history.
+            GameWindow.DtrhFavorites = _ => new List<string>();
+            GameWindow.DtrhMergeAssetStats = _ => { };
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => lab;
             CoreEntitlement.HasPremiumProvider = () => lab;
@@ -1262,6 +1345,7 @@ public sealed partial class GameWindowTests
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
+            (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (oldFavorites, oldMerge);
             GameWindow.DtrhRelaunchedOnce = oldRelaunched;
             Directory.Delete(lib, true);
         }
@@ -1499,7 +1583,7 @@ public sealed partial class GameWindowTests
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
-            Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
             Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
             Assert.Equal("Basic", (string?)sent[0]["plans"]!["basic"]!["name"]);
@@ -2004,6 +2088,32 @@ public sealed partial class GameWindowTests
         Assert.False(GameWindow.IsAnyOpen());
     });
 
+    /// <summary>WPF HandlePanicFromStopButton (MainWindow.xaml.cs:1597-1607): the Remote HUD Stop is a click, never
+    /// a game's Escape, so a ready game in front is closed by the panic instead of paused.</summary>
+    [Fact]
+    public void RemoteHudStop_ClosesTheGameInFront_InsteadOfPausingIt() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled) = ("Escape", true);
+            launcher.Hide();
+            var w = GameWindow.Launch("breakoutdemo")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.Same(w, GameWindow.EscapePauseInFront());
+            shell.StopFromRemoteHud();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.DoesNotContain(sent, m => (string?)m["type"] == "kept-escape");
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
     /// <summary>WPF TryRacePauseOnEscape (owner 2026-10-12: Escape only pauses a game) on every game this head
     /// hosts, and main 251b60807: a page that has not said ready (or is on its way out) cannot pause, so its
     /// Escape is a full panic that closes it. A second Escape inside 2 s is a full panic too.</summary>
@@ -2051,6 +2161,7 @@ public sealed partial class GameWindowTests
     /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
     [Theory]
     [InlineData("race", "Glassroad", "kept-escape")]
+    [InlineData("raceclassic", "Race", "kept-escape")]
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]

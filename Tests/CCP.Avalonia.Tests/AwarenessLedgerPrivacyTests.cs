@@ -20,6 +20,39 @@ namespace CCP.Avalonia.Tests;
 public sealed class AwarenessLedgerPrivacyTests
 {
     [Fact]
+    public void Startup_seeds_and_migrates_existing_settings_once()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldLedger = AwarenessLive.Ledger;
+        var oldHook = WindowAwarenessService.V2Lifecycle;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.AwarenessDenySeeded = false;
+        settings.Current.AwarenessIntensityMigrated = false;
+        settings.Current.AwarenessReactionCooldownSeconds = 180;
+        using var ledger = new ActivityLedger(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"));
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.InstallPrivacyLedger(ledger);
+            Assert.True(settings.Current.AwarenessDenySeeded);
+            Assert.All(AwarenessPrivacyRules.SeededDenyList, token => Assert.Contains(token, settings.Current.AwarenessDenyList));
+            Assert.True(settings.Current.AwarenessIntensityMigrated);
+            Assert.Equal(ConditioningControlPanel.Services.Awareness.AwarenessIntensity.Subtle, settings.Current.AwarenessIntensity);
+            settings.Current.AwarenessDenyList.Clear();
+            settings.Current.AwarenessIntensity = ConditioningControlPanel.Services.Awareness.AwarenessIntensity.Chatty;
+            global::ConditioningControlPanel.Avalonia.App.InstallPrivacyLedger(ledger);
+            Assert.Empty(settings.Current.AwarenessDenyList);
+            Assert.Equal(ConditioningControlPanel.Services.Awareness.AwarenessIntensity.Chatty, settings.Current.AwarenessIntensity);
+        }
+        finally
+        {
+            AwarenessLive.Ledger = oldLedger;
+            WindowAwarenessService.V2Lifecycle = oldHook;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    }
+
+    [Fact]
     public async Task Retained_apps_are_shown_forgotten_pruned_and_wiped_through_the_card()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-awareness-privacy-").FullName;

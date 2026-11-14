@@ -10,9 +10,9 @@ arch=('x86_64')
 url="https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 license=('MIT')
 # Web views (GTK3 WebKit; gst-plugins-good's autoaudiosink, without which a page's first sound aborts the web process),
-# LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key, parec mic (libpulse), ICU for .NET globalization.
+# LibVLC audio/video, libsecret tokens, X11/XInput2 overlays + panic key, XScreenSaver input age, parec mic (libpulse), ICU for .NET globalization.
 # .NET itself is self-contained. WPE is an opt-in engine only (CCP_LINUX_WEBVIEW=wpe; docs/avalonia-decisions.html 2026-10-13).
-depends=('webkit2gtk-4.1' 'gst-plugins-good' 'vlc' 'libsecret' 'libx11' 'libxi' 'libpulse' 'icu')
+depends=('webkit2gtk-4.1' 'gst-plugins-good' 'vlc' 'libsecret' 'libx11' 'libxi' 'libxss' 'libpulse' 'icu')
 optdepends=('wpewebkit: opt-in WPE web view engine (CCP_LINUX_WEBVIEW=wpe; needs a wpewebkit that still has the libwpe API)'
             'wpebackend-fdo: opt-in WPE web view engine'
             'libwpe: opt-in WPE web view engine')

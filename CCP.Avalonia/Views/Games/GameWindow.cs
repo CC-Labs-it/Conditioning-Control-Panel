@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF #3126: the 2D bridge remains, but no production door opens it.
             ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
+            ["raceclassic"] = new("raceclassic", "launcher_game_raceclassic_title", "dtrh/race.html", RaceGate),
             ["race"] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Basic door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
@@ -100,7 +101,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
-            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec, panel: panel);
+            return spec.Id == GlassroadId ? LaunchRacingThoughts() :
+                spec.Id == "raceclassic" ? (PassesGate(spec) ? LaunchWindow(spec, gated: true, panel: panel) : null) : LaunchWindow(spec, panel: panel);
         }
 
         /// <summary>A friend's Racing Thoughts invite: the same race gate and window, plus the room to join
@@ -208,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => CaptureDtrhWindowedFrame();
                 PositionChanged += (_, _) => CaptureDtrhWindowedFrame();
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
+                PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnDtrhWindowStateChanged(); };
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
@@ -249,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
+            if (Spec.Id == PbpId) StartPbpLocalProbe();
             if (Spec.Id == "loom") DirectoryForLoom();
             if (Spec.Id == PrizeCounterId) StartCounter(FriendsHead.Identity()?.UnifiedId);
             PageUrl = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
@@ -301,6 +305,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (WebHost.HandlePageLog(o, Spec.Id)) return;
             bool handled = false;
             if (Spec.Id == "goon") HandleGoonMessage(o, ref handled);
             if (Spec.Id == "backroom") HandleBackRoomMessage(o, ref handled);
@@ -316,6 +321,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
+                case "room-option" when IsBreakout:
+                    HandleBreakoutOption(o);   // #3921
+                    break;
+                case "funnel" when IsBreakout:
+                    // WPF BackRoomBridge.cs:245-249: the demo end card counts on the one funnel path; after exit
+                    // starts, or while minimised, it never opens a checkout (#4066).
+                    FunnelPageMessage.Handle(o, !_closing && !_shellExiting && !_roomMinimized && WindowState != WindowState.Minimized);
+                    break;
                 case "breakout-wall" when IsBreakout:
                     // WPF BackRoomHostService.cs:511 (Sparkles B1): one medal per cleared wall, the Story Demo included.
                     DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.BreakoutWall(o), SparklesHead.Service));
@@ -361,9 +374,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         type = "fx-ack", token = (string?)o["token"], fired = Array.Empty<string>(),
                         skipped = new[] { new { prim = (string?)o["fxId"] ?? "", why = "unknown" } },
                     });
-                    break;
-                case "log":
-                    Log.Debug("[Game] {Id} page: {Msg}", Spec.Id, (string?)o["msg"]);
                     break;
                 case "boot-error":
                     Log.Warning("[Game] {Id}: page boot-error: {Msg}", Spec.Id, (string?)o["msg"]);
@@ -430,6 +440,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["media"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.MediaWire(settings));
             frame["sp"] = settings.SkillPoints;
             frame["invertLook"] = settings.BackRoomInvertLook;
+            frame["audio"] = JObject.FromObject(BreakoutAudio());   // WPF BackRoomHostService.cs:589-607 (#3921)
+            // WPF BackRoomHostService.cs:32-38,589-609: the br_ keys, resolved in the active language (#3921).
+            var loc = LocalizationManager.Instance;
+            frame["lex"] = JObject.FromObject(loc.KeysWithPrefix("br_").Distinct(StringComparer.Ordinal).ToDictionary(k => k, loc.Get));
             return frame;
         }
 
@@ -473,7 +487,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.CloseFor(PrizeCounterRules.ClosePanic); }
+                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else if (w.IsRace) w.CloseRaceForPanic(); else w.CloseFor(PrizeCounterRules.ClosePanic); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }

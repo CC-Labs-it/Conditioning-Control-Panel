@@ -91,6 +91,7 @@ internal static class X11Overlay
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
+    [DllImport(LibXfixes)] private static extern void XFixesUnionRegion(IntPtr display, IntPtr destination, IntPtr first, IntPtr second);
     [DllImport(LibXfixes)] private static extern void XFixesSetWindowShapeRegion(IntPtr display, IntPtr window, int shapeKind, int xOffset, int yOffset, IntPtr region);
     [DllImport(LibXfixes)] private static extern void XFixesDestroyRegion(IntPtr display, IntPtr region);
 
@@ -232,7 +233,16 @@ internal static class X11Overlay
                 Marshal.WriteInt16(_rectBuf, i * 8 + 4, (short)(ushort)Math.Max(0, r.Width));
                 Marshal.WriteInt16(_rectBuf, i * 8 + 6, (short)(ushort)Math.Max(0, r.Height));
             }
-            var region = XFixesCreateRegion(_display, count > 0 ? _rectBuf : IntPtr.Zero, count);
+            // The bubble field sends one band per pixel row of every hit disc: build big regions in
+            // 1024-rectangle requests and union them, so no single request outgrows a server without
+            // BIG-REQUESTS (restack b131, #4015).
+            var region = XFixesCreateRegion(_display, count > 0 ? _rectBuf : IntPtr.Zero, Math.Min(count, 1024));
+            for (int i = 1024; i < count; i += 1024)
+            {
+                var chunk = XFixesCreateRegion(_display, IntPtr.Add(_rectBuf, i * 8), Math.Min(count - i, 1024));
+                XFixesUnionRegion(_display, region, region, chunk);
+                XFixesDestroyRegion(_display, chunk);
+            }
             XFixesSetWindowShapeRegion(_display, xid, ShapeInput, 0, 0, region);
             XFixesDestroyRegion(_display, region);
             XFlush(_display);

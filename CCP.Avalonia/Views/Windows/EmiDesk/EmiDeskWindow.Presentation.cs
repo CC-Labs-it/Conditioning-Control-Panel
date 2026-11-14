@@ -24,8 +24,8 @@ public partial class EmiDeskWindow
         try
         {
             _dismissPending = false; _dismissDone = null; // #3329: the show abandons a running dismissal
-            FinishSummon(); CancelChain(); CancelHold(); CloseRing(); CloseOptionsPanel(); CloseBook();
-            StopIdleBeats(); DisarmPet();
+            FinishSummon(); CancelChain(); CancelHold(); CloseGlass(); CloseRing(); CloseOptionsPanel(); CloseBook();
+            StopIdleBeats(); StopAlive(); DisarmPet();
             var pointer = _dragPointer;
             EndDragHold();
             if (pointer?.Captured == _bodyRoot) pointer.Capture(null);   // WPF releases only BodyRoot's own
@@ -55,7 +55,7 @@ public partial class EmiDeskWindow
         double scale = Math.Max(.1, DipScale), bw = _bodyWidth * scale, bh = _bodyWidth * BodyAspect * scale;
         SetBodyPhysical(centerPixels.X - bw / 2, centerPixels.Y - bh / 2);
         if (PresentationArriving) return;
-        _moveShift.Y = bob; _wobbleRotate.Angle = turn;
+        SetMoveYBase(bob); _wobbleRotate.Angle = turn;
         if (_presentationPose != pose) { _presentationPose = pose; SetPose(pose); }
         if (_presentationFace != face) { _presentationFace = face; DrawFace(face); }
     }
@@ -68,7 +68,8 @@ public partial class EmiDeskWindow
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] presentation teardown step failed"); }
         _bodyRoot.IsVisible = true; SetCrt(1, 1); InputLocked = false; _transiting = false;
         Position = _beforePresentation;
-        _moveShift.Y = 0; _wobbleRotate.Angle = 0; _btnGear.IsVisible = _btnHelp.IsVisible = true;
+        SetMoveYBase(0); _wobbleRotate.Angle = 0; _btnGear.IsVisible = _btnHelp.IsVisible = true;
         SetPose("idle"); DrawFace("^_^"); ClampIntoWorkArea(); RestartIdleBeats();
+        StartAlive();
     }
 }

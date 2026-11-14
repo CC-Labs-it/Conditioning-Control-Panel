@@ -619,25 +619,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         internal void PushUndoSnapshot()
         {
             if (_suppressUndoSnapshot) return;
+            ResetInspectorSession();
             try
             {
-                var json = JsonConvert.SerializeObject(_enhancement, EnhancementSerializer.JsonReadSettingsForClone());
-                _undo.Push(json);
-                while (_undo.Count > UndoCap)
-                {
-                    // Stack lacks Dequeue - copy, drop the oldest (bottom), rebuild.
-                    var arr = _undo.ToArray(); // top first
-                    _undo.Clear();
-                    int keep = Math.Min(arr.Length, UndoCap);
-                    for (int i = keep - 1; i >= 0; i--) _undo.Push(arr[i]);
-                    break;
-                }
-                _redo.Clear();
+                PushUndoJson(JsonConvert.SerializeObject(_enhancement, EnhancementSerializer.JsonReadSettingsForClone()));
             }
             catch (Exception ex)
             {
                 Log.Debug("DeeperEditor: PushUndoSnapshot error: {Error}", ex.Message);
             }
+        }
+
+        private void PushUndoJson(string json)
+        {
+            _undo.Push(json);
+            while (_undo.Count > UndoCap)
+            {
+                var arr = _undo.ToArray();
+                _undo.Clear();
+                for (int i = Math.Min(arr.Length, UndoCap) - 1; i >= 0; i--) _undo.Push(arr[i]);
+            }
+            _redo.Clear();
+        }
+
+        private string? _inspectorPendingSnapshot;
+        private bool _inspectorSessionSnapshotted;
+
+        internal void ArmInspectorSnapshot(bool newSession)
+        {
+            if (_suppressUndoSnapshot) return;
+            if (newSession) _inspectorSessionSnapshotted = false;
+            if (_inspectorSessionSnapshotted || _inspectorPendingSnapshot != null) return;
+            try { _inspectorPendingSnapshot = JsonConvert.SerializeObject(_enhancement, EnhancementSerializer.JsonReadSettingsForClone()); }
+            catch (Exception ex) { Log.Debug("DeeperEditor: ArmInspectorSnapshot error: {Error}", ex.Message); }
+        }
+
+        internal void ResetInspectorSession()
+        {
+            _inspectorPendingSnapshot = null;
+            _inspectorSessionSnapshotted = false;
+        }
+
+        private void CommitPendingInspectorSnapshot()
+        {
+            if (_inspectorPendingSnapshot == null || _suppressUndoSnapshot) return;
+            PushUndoJson(_inspectorPendingSnapshot);
+            _inspectorPendingSnapshot = null;
+            _inspectorSessionSnapshotted = true;
         }
 
         internal void Undo()
@@ -648,6 +676,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 var current = JsonConvert.SerializeObject(_enhancement, EnhancementSerializer.JsonReadSettingsForClone());
                 _redo.Push(current);
                 var snapshot = _undo.Pop();
+                ResetInspectorSession();
                 ApplyHistorySnapshot(snapshot);
             }
             catch (Exception ex)
@@ -664,6 +693,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 var current = JsonConvert.SerializeObject(_enhancement, EnhancementSerializer.JsonReadSettingsForClone());
                 _undo.Push(current);
                 var snapshot = _redo.Pop();
+                ResetInspectorSession();
                 ApplyHistorySnapshot(snapshot);
             }
             catch (Exception ex)

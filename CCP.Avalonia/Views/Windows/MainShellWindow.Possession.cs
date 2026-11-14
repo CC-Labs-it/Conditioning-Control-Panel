@@ -12,8 +12,7 @@
 // biggest), target objects cached per control so cooldowns survive every rebuild, the rebuild behind a
 // 250 ms layout flag, a 750 ms floor and a 10 s max age, and never off the UI thread.
 //
-// Not here (recorded in docs/avalonia-parity.html shell-possession): the rubble floor (no effect that
-// drops pieces is ported), the hand tags in this head's XAML (WPF's poss:Possession.Role marks were
+// Not here (recorded in docs/avalonia-parity.html shell-possession): the hand tags in this head's XAML (WPF's poss:Possession.Role marks were
 // dropped in the port; the inference alone tags the room), the Bureau / Loom / DtRH takeover checks
 // (those hosts are not on this head; GameWindow covers the web games).
 
@@ -41,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         // ==== the stage =================================================================
 
-        private Canvas? _possessionGhostLayer;
+        private Canvas? _possessionGhostLayer, _possessionRubbleFloor;
         private bool _possessionHostHooked;
         private bool _possessionAttached;
         private PossessionRuntime? _possessionRuntime;
@@ -60,6 +59,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private PossessionDirector? Director => PossessionDirectorOverride ?? App.Possession;
 
         internal Canvas? PossessionGhostLayer => _possessionGhostLayer;
+
+        /// <summary>WPF PossessionEvents.OnPressed (:83-99): the door first (the more specific claim; a door usually
+        /// sits inside a card) drops a letter from Collapse; otherwise a card answers by breathing.</summary>
+        private void OnPossessionPressed(object? source)
+        {
+            if (!_possessionAttached || Director is not { } d) return;
+            try
+            {
+                if (d.TargetFor(source, PossessionRole.TabHeader) is { } door) { d.RequestReactive("drop", door, PossessionRung.Collapse); return; }
+                if (d.TargetFor(source, PossessionRole.Card) is { } card) d.RequestReactive("breathe", card);
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Possession reactive press failed: {Error}", ex.Message); }
+        }
 
         /// <summary>WPF InitializePossessionHost (called from InitializeLockdown): attach to the director once
         /// the window is up, detach when it closes, follow the pointer, and drive the readout.</summary>
@@ -80,6 +92,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                     catch (Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to detach the main window host"); }
                 };
+                foreach (var name in NavSectionButtonNames) if (Named<Button>(name) is { } door) PossessionTree.SetRole(door, PossessionRole.TabHeader);
+                AddHandler(PointerPressedEvent, (_, e) => OnPossessionPressed(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
                 LayoutUpdated += (_, _) =>
                 {
                     var now = DateTime.Now;
@@ -111,6 +125,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void EnsurePossessionLayers()
         {
             if (Named<Grid>("RootGrid") is not { } root) return;
+            if (_possessionRubbleFloor == null || !root.Children.Contains(_possessionRubbleFloor))
+            {
+                _possessionRubbleFloor = new Canvas { Height = 28, IsHitTestVisible = false, ClipToBounds = false,
+                    HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom, ZIndex = 8999 };
+                if (root.RowDefinitions.Count > 1) Grid.SetRowSpan(_possessionRubbleFloor, root.RowDefinitions.Count);
+                if (root.ColumnDefinitions.Count > 1) Grid.SetColumnSpan(_possessionRubbleFloor, root.ColumnDefinitions.Count);
+                root.Children.Add(_possessionRubbleFloor);
+            }
             if (_possessionGhostLayer != null && root.Children.Contains(_possessionGhostLayer)) return;
             _possessionGhostLayer = new Canvas
             {
@@ -136,12 +159,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             get { EnsurePossessionLayers(); return _possessionGhostLayer; }
         }
 
+        Canvas? IAvaloniaPossessionHost.RubbleFloor { get { EnsurePossessionLayers(); return _possessionRubbleFloor; } }
+
         IFrameSource IAvaloniaPossessionHost.PossessionFrames => PossessionFramesOverride ?? TopLevelFrameSource.For(this);
 
         PossessionRuntime IAvaloniaPossessionHost.PossessionEffectRuntime =>
             _possessionRuntime ??= new PossessionRuntime(((IAvaloniaPossessionHost)this).PossessionFrames);
 
         Point IAvaloniaPossessionHost.PointerPosition => _possessionPointer.Position;
+        PossessionPointer IAvaloniaPossessionHost.PossessionPointer => _possessionPointer;
 
         Rect? IAvaloniaPossessionHost.BoundsOnGhostLayer(Control element)
         {
@@ -263,7 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private PossessionSubtree WalkPossession(Visual node, List<PossessionTarget> into, List<PossessionTarget> labels, int depth, int pathHash)
         {
             if (node == null || depth > 64) return default;
-            if (ReferenceEquals(node, _possessionGhostLayer)) return default;
+            if (ReferenceEquals(node, _possessionGhostLayer) || ReferenceEquals(node, _possessionRubbleFloor)) return default;
 
             var c = node as Control;
             var handRole = PossessionRole.None;

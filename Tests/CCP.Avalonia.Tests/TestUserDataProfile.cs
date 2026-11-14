@@ -19,12 +19,16 @@ internal static class TestUserDataProfile
         ConditioningControlPanel.Avalonia.Platform.X11ActiveWindow.Disabled = true;
         // A chaos run must never grab the desk's right button (X11 grab / Windows low-level hook).
         ConditioningControlPanel.Avalonia.Platform.RipplePointer.Disabled = true;
+        ConditioningControlPanel.Avalonia.Platform.Win32Windows.AwarenessDisabled = true;
         // The runner's Windows "Animation effects" flag (off on CI) must not cap every motion test to Reduced.
         ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
         // The first-run wizard opens in the OS display language; on a non-English runner that would
         // switch the whole test process's strings.
         ConditioningControlPanel.Avalonia.Views.Windows.FirstRunWizard.SystemUiCulture =
             () => System.Globalization.CultureInfo.InvariantCulture;
+        // The owner's popup switches (WPF PopupSwitches) are off in shipped builds; the popup tests drive
+        // the doors behind them. PopupSwitchesTests runs alone and checks the shipped values.
+        ConditioningControlPanel.Avalonia.Platform.PopupSwitches.SetAllForTests(true);
         Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", Root);
         _ = ConditioningControlPanel.CorePaths.UserData;   // installs the SandboxNet guard before any test runs
         // Strings load once, as App.Initialize does, so a test that calls Loc.Get before any test

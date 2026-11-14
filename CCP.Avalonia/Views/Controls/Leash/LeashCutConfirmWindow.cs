@@ -5,6 +5,10 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.UI;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -24,14 +28,24 @@ internal sealed class LeashCutConfirmWindow : Window
     public static void Ask(string? holderName, Action onYes) => Show(
         Loc.Get("leash_cut_confirm_title"),
         string.IsNullOrWhiteSpace(holderName) ? Loc.Get("leash_cut_confirm_body_anon") : Loc.GetF("leash_cut_confirm_body", holderName!.Trim()),
-        Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", onYes);
+        Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), CutTag, onYes);
 
     public static void Confirm(string title, string body, string yes, string no, string tag, Action onYes) =>
         Show(title, body, yes, no, tag, onYes);
 
+    private const string CutTag = "leash-cut-confirm";
+    private readonly string _tag;
+
+    /// <summary>One prompt at a time, but the user's own cut always wins: an open release confirm (let a friend
+    /// go) is closed first, so its Yes can never stand in for the user's escape from their own leash.</summary>
     private static void Show(string title, string body, string yes, string no, string tag, Action onYes)
     {
-        if (_open != null) { try { _open.Activate(); } catch { } return; }
+        if (_open is { } open)
+        {
+            if (tag != CutTag || open._tag == CutTag) { try { open.Activate(); } catch { } return; }
+            _open = null;
+            try { open.Close(); } catch { }
+        }
         var w = new LeashCutConfirmWindow(title, body, yes, no, tag, onYes);
         _open = w;
         w.Closed += (_, _) => { if (_open == w) _open = null; };
@@ -45,6 +59,7 @@ internal sealed class LeashCutConfirmWindow : Window
 
     private LeashCutConfirmWindow(string titleText, string bodyText, string yesText, string noText, string tag, Action onYes)
     {
+        _tag = tag;
         WindowDecorations = WindowDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;
@@ -82,13 +97,49 @@ internal sealed class LeashCutConfirmWindow : Window
         };
     }
 
-    private static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, IBrush hover, string tag)
+    internal static Button Pill(string text, IBrush bg, IBrush fg, IBrush border, IBrush hover, string tag)
     {
         var b = F.Pill(text, bg, fg, tag, border);
         (b.Padding, b.CornerRadius, b.Focusable) = (new Thickness(18, 7, 18, 7), new CornerRadius(10), false);
         foreach (var state in new[] { "PointerOver", "Pressed" })
             (b.Resources["ButtonBackground" + state], b.Resources["ButtonForeground" + state], b.Resources["ButtonBorderBrush" + state]) = (hover, fg, border);
         if (b.Content is TextBlock t) t.FontSize = 13;
+        // WPF FriendsLook.cs:131-134 and MotionFx.cs:75-103. Both effects own the same scale.
+        var scale = new ScaleTransform(1, 1);
+        b.RenderTransformOrigin = RelativePoint.Center;
+        b.RenderTransform = scale;
+        void Move(double target, int milliseconds)
+        {
+            var settings = CoreSettings.Current;
+            var level = Platform.UiMotionPreference.ResolveLevel(settings.MotionLevel,
+                Platform.UiMotionPreference.AnimationsEnabled, settings.GentleVisuals);
+            if (level == MotionLevel.Off) scale.Transitions = null;
+            else
+            {
+                // Replacing the collection cancels active tweens and snaps to their old targets.
+                // WPF MotionFx.cs:279-286 starts the replacement animation at the current scale.
+                scale.Transitions ??= new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Easing = new QuadraticEaseOut() },
+                };
+                foreach (var transition in scale.Transitions)
+                    ((DoubleTransition)transition).Duration = TimeSpan.FromMilliseconds(milliseconds);
+            }
+            scale.ScaleX = scale.ScaleY = target;
+        }
+        b.PointerEntered += (_, _) => { if (b.IsEnabled) Move(1.02, 150); };
+        b.PointerExited += (_, _) => Move(1, 150);
+        b.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(b).Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed)
+                Move(InteractionPressMotion.ScaleFor(true), InteractionPressMotion.DurationMs);
+        }, RoutingStrategies.Tunnel);
+        b.AddHandler(PointerReleasedEvent, (_, e) =>
+        {
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                Move(InteractionPressMotion.ScaleFor(false), InteractionPressMotion.DurationMs);
+        }, RoutingStrategies.Tunnel);
         return b;
     }
 }

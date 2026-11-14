@@ -1,15 +1,18 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -109,6 +112,190 @@ public sealed class CompanionTabVisibilityTests
             Dispatcher.UIThread.RunJobs();
             CoreSettings.ServiceProvider = null;
         }
+    });
+
+    // restack b187: #3971 and #4010 (Mich).
+    // WPF ShowTab always runs SyncCompanionTabUI, even when Companion is already selected.
+    [Fact]
+    public Task ReselectingCompanionRefreshesTheConversationProvider() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.AiChatEnabled = false;
+        s.CompanionPrompt.AiProvider = AiProviderType.Local;
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            // The AI page adopts the engine from the collapsed room.
+            shell.ShowTab("companionai");
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            Assert.True(page.Vm.NeedsStart);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_v2_off"),
+                page.FindControl<TextBlock>("StatusText")!.Text);
+
+            // Another surface changed the settings while this tab stayed visible.
+            s.AiChatEnabled = true;
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(page.Vm.NeedsStart);
+            Assert.NotEqual(ConditioningControlPanel.Localization.Loc.Get("companion_v2_off"),
+                page.FindControl<TextBlock>("StatusText")!.Text);
+            Assert.True(s.AiChatEnabled); // refreshing must not write the old provider back
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF ShowTab -> SyncCompanionTabUI -> SyncHero, even without a visibility edge.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ReselectingCompanionRefreshesTheConversationHero(bool mute) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.AvatarEnabled = true;
+        s.AvatarMuted = false;
+
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            Assert.True(page.Vm.CompanionShown);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_v2_mute"), page.Vm.VoiceLabel);
+
+            // Another surface changes the settings while this tab stays selected.
+            if (mute) s.AvatarMuted = true;
+            else s.AvatarEnabled = false;
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            if (mute)
+            {
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("companion_v2_unmute"), page.Vm.VoiceLabel);
+                Assert.True(s.AvatarMuted);
+            }
+            else
+            {
+                Assert.False(page.Vm.CompanionShown);
+                Assert.True(page.Vm.CompanionHidden);
+                Assert.False(s.AvatarEnabled);
+            }
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+            shell.RequestExit();
+            Dispatcher.UIThread.RunJobs();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF hero sync replaces a resolved portrait and keeps it when the next pose cannot load.
+    [Fact]
+    public Task ReselectingCompanionKeepsTheLastLoadablePortrait() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var dir = Directory.CreateTempSubdirectory("ccp-hero-art-");
+        var firstPath = Path.Combine(dir.FullName, "first.png");
+        var secondPath = Path.Combine(dir.FullName, "second.png");
+        using (var first = new WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96))) first.Save(firstPath);
+        using (var second = new WriteableBitmap(new PixelSize(4, 7), new Vector(96, 96))) second.Save(secondPath);
+        var previousArt = CoreModArt.OverridePathProvider;
+        var previousSettings = CoreSettings.ServiceProvider;
+        CoreModArt.OverridePathProvider = name => name switch
+        {
+            "avatar9001_pose1.png" => firstPath,
+            "avatar9002_pose1.png" => secondPath,
+            _ => null
+        };
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AwarenessModeEnabled = false;
+        s.SelectedAvatarSet = 9001;
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var page = shell.GetLogicalDescendants().OfType<ConversationPage>().Single();
+            var hero = page.Vm.Hero!;
+            Assert.Equal(new PixelSize(6, 3), Assert.IsType<Bitmap>(hero.Portrait).PixelSize);
+
+            s.SelectedAvatarSet = 9002;
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            var replacement = Assert.IsType<Bitmap>(hero.Portrait);
+            Assert.Equal(new PixelSize(4, 7), replacement.PixelSize);
+
+            s.SelectedAvatarSet = 9003; // no mod or shipped pose
+            shell.ShowTab("companion");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(replacement, hero.Portrait);
+        }
+        finally
+        {
+            if (shell != null)
+            {
+                foreach (var w in shell.OwnedWindows.ToList()) w.Close();
+                shell.RequestExit();
+                Dispatcher.UIThread.RunJobs();
+            }
+            CoreModArt.OverridePathProvider = previousArt;
+            CoreSettings.ServiceProvider = previousSettings;
+            dir.Delete(true);
+        }
+        return Task.CompletedTask;
     });
 
     /// <summary>Found by the real-profile migration test: quitting without ever opening the

@@ -41,7 +41,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try { if (top?.Clipboard is { } c) await c.SetTextAsync(url); } catch { }
         };
 
-        internal static UpdateInfo? Latest { get; private set; }
+        private static UpdateInfo? _latest;
+        internal static event Action? LatestChanged;
+        internal static UpdateInfo? Latest
+        {
+            get => _latest;
+            set { _latest = value; LatestChanged?.Invoke(); }
+        }
+        // The launcher chip's offer and the startup offer are one offer a run (#4511).
+        internal static bool _offered;
         private static bool _busy;
         private static bool _offering;
 
@@ -80,6 +88,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         // ---- check (WPF UpdateService.CheckForUpdatesAsync :303 / CheckGitHubReleasesAsync :1261) ----
 
+        // Test seam: Windows CI runs from the build output, not an Inno install.
+        internal static Func<bool> Installed = () => !OperatingSystem.IsWindows()
+            || ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is not null || RegistryInstallPath() is not null;
+
         internal static async Task<UpdateInfo?> CheckAsync(bool force)
         {
             if (CoreSettings.Current.OfflineMode)
@@ -88,7 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return null;
             }
             // Only installed users can self-update on Windows (UpdateService.cs:316); Linux notifies.
-            if (OperatingSystem.IsWindows() && ReleaseFeed.InnoInstallDirOf(Environment.ProcessPath) is null && RegistryInstallPath() is null)
+            if (!Installed())
             {
                 Log.Information("App not installed via installer (running from source/dev), skipping update check");
                 return null;
@@ -164,6 +176,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// </summary>
         internal static async Task StartupAsync(MainShellWindow shell)
         {
+            var closed = false;
+            shell.Closed += (_, _) => closed = true;
             try
             {
                 await Task.Delay(500);
@@ -176,18 +190,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     StartupLadder.EnqueueModal("failed-update-report", 10, () => new UpdateFailedDialog(title, message) { Topmost = true }
                         .ShowDialogSafe(shell), () => UpdateFailedDialog.ShowFor(shell, title, message));
                 }
+                _ = QueueBrowserResetNoticeAsync(shell, () => closed);
 
                 var info = await CheckAsync(force: false);
                 if (info?.IsNewer != true) return;
                 shell.ShowUpdatePill(info.Version);
 
-                var closed = false;
-                shell.Closed += (_, _) => closed = true;
                 while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible))
                     await Task.Delay(500);
                 if (!closed) StartupLadder.EnqueueModal("update-available", 80, async () =>
                 {
-                    if (shell.IsVisible && CoreSettings.Current.HasAcceptedAgeVerification && !_busy)
+                    if (shell.IsVisible && CoreSettings.Current.HasAcceptedAgeVerification && !_busy && !_offered)
                         await OfferAsync(shell, info);
                 });
             }
@@ -197,9 +210,66 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
-        private static async Task OfferAsync(Window owner, UpdateInfo info)
+        internal const string BrowserResetAcknowledged = "browser-reset.ack.json";
+        internal static MessageDialog? BrowserResetDialog { get; private set; }
+
+        // Test seam: the old WPF browser profile only exists on Windows.
+        internal static bool OnWindows = OperatingSystem.IsWindows();
+
+        // WPF BrowserService.cs:125-132 keeps the old profile per user; checking it on each Windows launch covers
+        // machine installs, an installer run by another account, and a profile this head already created.
+        internal static bool NeedsBrowserResetNotice(string userData, bool windows) =>
+            windows && Directory.Exists(Path.Combine(userData, "browser_data"))
+            && !File.Exists(Path.Combine(userData, BrowserResetAcknowledged));
+
+        // A silent upgrade skips the installer's notice page. It goes on the ladder between the failed-update
+        // report (10) and the update offer (80); the ladder parks it for a game or the launcher hold.
+        private static async Task QueueBrowserResetNoticeAsync(MainShellWindow shell, Func<bool> closed)
         {
+            try
+            {
+                if (!NeedsBrowserResetNotice(UserData, OnWindows)) return;
+                while (!closed() && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible))
+                    await Task.Delay(500);
+                if (!closed()) StartupLadder.EnqueueModal("browser-reset-notice", 20, async () =>
+                {
+                    if (shell.IsVisible && CoreSettings.Current.HasAcceptedAgeVerification)
+                        await ShowBrowserResetNoticeAsync(shell, UserData);
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Browser reset notice could not be queued");
+            }
+        }
+
+        // WPF's updater runs setup /SILENT (UpdateService.cs:914, ReleaseFeed.cs:432), skipping the installer page; owed until OK.
+        internal static async Task ShowBrowserResetNoticeAsync(Window owner, string userData)
+        {
+            if (!NeedsBrowserResetNotice(userData, OnWindows))
+                return;
+            var notice = Loc.Get("installer_avalonia_upgrade_notice").Split(new[] { "\n\n" }, 2, StringSplitOptions.None);
+            var dialog = BrowserResetDialog = new MessageDialog(notice[0], notice.Length > 1 ? notice[1] : notice[0], false);
+            try
+            {
+                if (await dialog.ShowDialogSafe<bool?>(owner) == true)
+                    File.WriteAllText(Path.Combine(userData, BrowserResetAcknowledged), "{}");
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Browser reset notice failed");
+            }
+            finally
+            {
+                BrowserResetDialog = null;
+            }
+        }
+
+        /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
+        internal static async Task OfferAsync(Window owner, UpdateInfo info)
+        {
+            if (_busy) return;
+            _offered = true;
             _busy = _offering = true;
             try
             {

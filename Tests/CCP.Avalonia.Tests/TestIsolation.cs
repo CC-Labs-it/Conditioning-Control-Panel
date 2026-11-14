@@ -183,13 +183,51 @@ internal sealed class ProcessStateSnapshot
         Error = (_, e) => e.ErrorContext.Handled = true,
     };
 
-    internal static ProcessStateSnapshot Take()
+    /// <summary>Restore the account seed and its delegates after a test temporarily re-seeds it.
+    /// Reattach the intake pass to the original providers without reading the secret store.</summary>
+    internal static Action CaptureAccountSeed()
+    {
+        var p = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
+        var ss = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar;
+        var discord = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord;
+        var sandbox = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SandboxWhitelisted;
+        var secrets = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        var account = (CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider,
+            CoreAccount.IsWhitelistedProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider,
+            CoreAccount.ChangeDisplayNameProvider, CoreAccount.DeleteAccountProvider);
+        var entitlement = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider);
+        var program = CoreProgram.HasPremiumProvider;
+        var recovery = (ConditioningControlPanel.Services.AuthRecovery.Recovered, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate);
+        return () =>
+        {
+            // Seed detached the intake listener from the old pair. Put it back on that pair.
+            ConditioningControlPanel.Avalonia.App.IntakePass.AttachEntitlementSources(
+                h => { if (p != null) p.TierChanged += h; if (ss != null) ss.TierChanged += h; },
+                h => { if (p != null) p.TierChanged -= h; if (ss != null) ss.TierChanged -= h; });
+            var type = typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed);
+            void SetSeed(string name, object? value) => type.GetProperty(name, BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, value);
+            SetSeed("Patreon", p);
+            SetSeed("SubscribeStar", ss);
+            SetSeed("Discord", discord);
+            SetSeed("SandboxWhitelisted", sandbox);
+            (CoreAccount.IsLoggedInProvider, CoreAccount.DisplayNameProvider,
+                CoreAccount.IsWhitelistedProvider, CoreAccount.HasPremiumAccessProvider, CoreAccount.HasLabAccessProvider,
+                CoreAccount.ChangeDisplayNameProvider, CoreAccount.DeleteAccountProvider) = account;
+            (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = entitlement;
+            CoreProgram.HasPremiumProvider = program;
+            (ConditioningControlPanel.Services.AuthRecovery.Recovered, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate) = recovery;
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = secrets;
+        };
+    }
+
+    internal static ProcessStateSnapshot Take(bool repairLateWrites = true)
     {
         var s = new ProcessStateSnapshot();
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
-        PutBackLateWrites();
+        // Nested scopes capture the current test, not the previous test baseline.
+        if (repairLateWrites) PutBackLateWrites();
         foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json"))
             s._files[f] = File.ReadAllBytes(f);
         return s;
@@ -275,11 +313,13 @@ internal sealed class ProcessStateSnapshot
         found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay)
             .GetField("_refused", AnyStatic)!);
 
-        // Whole seam classes: the head's service locator and Core's static Core* seams.
+        // Whole seam classes: the head's service locator, account hooks and Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
                      || t == typeof(ConditioningControlPanel.Services.RemoteCommands)
                      || t == typeof(ConditioningControlPanel.Services.MergedAccountRecovery)
                      || t == typeof(ConditioningControlPanel.Services.V2AuthService)
+                     || t == typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed)
+                     || t == typeof(ConditioningControlPanel.Services.AuthRecovery)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 

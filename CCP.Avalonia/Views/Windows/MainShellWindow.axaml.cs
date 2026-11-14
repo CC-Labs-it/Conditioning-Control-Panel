@@ -143,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HookLevelDisplay(); // MainShellWindow.HeroFx.cs: header level/XP follow ProgressionBank
             HookAutonomy();     // MainShellWindow.Autonomy.cs: Takeover seeds; starts only on the user's switch
             InitializeDescentFuse(); // MainShellWindow.DescentFuse.cs (WPF MainWindow ctor); no-op without App.DescentCountdown
+            InitializeProfileEquip();  // MainShellWindow.ProfileEquip.cs (WPF MainWindow.ProfileCosmetics.cs:449)
             InitializeProfileBubble(); // MainShellWindow.ProfileBubble.cs (WPF MainWindow ctor): face + reactions
             InitializeProfileVat();
             InitializeProfileFx();     // MainShellWindow.ProfileFx.cs: search glow + OG border loop gate
@@ -156,6 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshIntakePassTile(); // startup Home has no ShowTab call
             InitializeFirstVisitPulses(); // MainShellWindow.TabTransitions.cs (WPF MainWindow.xaml.cs:3795-3830)
             InitializeLockdownGreys(); // MainShellWindow.Lockdown.cs (WPF Lab.cs:612/707)
+            InitializeLockdownDoseEngine(); // MainShellWindow.LockdownDose.cs (WPF LockdownDoseKeeper.Install)
             InitializePossessionHost(); // MainShellWindow.Possession.cs (WPF Lab.cs:42 InitializePossessionHost)
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
@@ -178,6 +180,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
+            // WPF MainWindow.xaml.cs:335: re-arm before the access-gated start.
+            if (CoreSettings.Current.AwarenessStartOnLaunch)
+                CoreSettings.Current.KeywordTriggersEnabled = true;
             Platform.KeywordTriggerHead.Sync(); // WPF MainWindow.xaml.cs:341: a saved-on switch arms at boot
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
@@ -266,7 +271,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     }
 }
 
-// Members of ConditioningControlPanel/MainWindow/MainWindow.xaml.cs dropped (182). Named here so
+// Members of ConditioningControlPanel/MainWindow/MainWindow.xaml.cs dropped (181). Named here so
 // nothing disappears silently; each one reaches App.*, a service, a device, WebView2 or Win32.
 //   private static extern void DwmSetWindowAttribute(…)
 //   private const int DWMWA_WINDOW_CORNER_PREFERENCE
@@ -321,7 +326,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private bool _skillTreeAnimationsActive
 //   private static readonly Dictionary<string, string> CommandLabels
 //   private static readonly HashSet<string> SuppressedCommands
-//   public event EventHandler? EngineStopped
 //   private DateTime _lastPanicTime
 //   private string? _lastKnownUnifiedId
 //   public Microsoft.Web.WebView2.Wpf.WebView2? GetBrowserWebView(…)

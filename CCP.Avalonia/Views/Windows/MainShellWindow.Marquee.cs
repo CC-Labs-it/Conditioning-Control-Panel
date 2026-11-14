@@ -198,7 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ? "banner_signed_in_no_name" : "label_welcome_consider_logging_in_with_patreon_for");
         }
 
-        private void BannerRotationTimer_Tick(object? sender, EventArgs e)
+        internal void BannerRotationTimer_Tick(object? sender, EventArgs e)
         {
             var banners = _bannerBeats;
             if (banners.Length < 2) return;
@@ -209,7 +209,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Crossfade(banners[_bannerCurrentIndex], banners[nextIndex]);
             _bannerCurrentIndex = nextIndex;
 
-            SweepBannerSheen();
+            // WPF BannerFx.cs:240-247 forces the support arrival sheen past the throttle.
+            SweepBannerSheen(force: ReferenceEquals(banners[nextIndex], BannerPrimary));
+            // WPF OnBannerBeatChanged (BannerFx.cs:236): pop, ring flash, support sparkles. A rolled beat only widens.
+            OnBannerBeatChanged(banners[nextIndex], rolled: _bannerDrumBeat?.IsRunning == true);
         }
 
         /// <summary>

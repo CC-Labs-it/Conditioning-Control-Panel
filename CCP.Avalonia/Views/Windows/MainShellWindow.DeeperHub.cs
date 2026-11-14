@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly Dictionary<string, DeeperEditorWindow> _deeperOpenEditors = new(StringComparer.OrdinalIgnoreCase);
         private EnhancementPlayerWindow? _deeperPlayer;
+        internal Func<EnhancementPlayerWindow>? DeeperPlayerFactory;   // test seam: an open failure
         private DispatcherTimer? _deeperDeleteTimer;
 
         private DeeperTabViewModel? DeeperModel => Named<DeeperTabView>("DeeperTab")?.DataContext as DeeperTabViewModel;
@@ -60,13 +61,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_deeperHubClosed) return;
             if (_deeperLibrary == null)
             {
-                _deeperLibrary = new EnhancementLibrary();
+                // The app's library (App.StartDeeperLibrary); a shell of its own only on the headless path.
+                var shared = App.DeeperLibrary;
+                _deeperLibrary = shared ?? new EnhancementLibrary();
                 _deeperLibrary.LibraryChanged += OnDeeperLibraryChanged;
                 Closed += (_, _) =>
                 {
                     _deeperHubClosed = true;
                     _deeperLibrary.LibraryChanged -= OnDeeperLibraryChanged;
-                    _deeperLibrary.Dispose();
+                    if (shared == null) _deeperLibrary.Dispose();
                 };
             }
         }
@@ -129,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 open.Activate();
                 return open;
             }
-            var player = new EnhancementPlayerWindow(null, null);
+            var player = DeeperPlayerFactory?.Invoke() ?? new EnhancementPlayerWindow(null, null) { LibraryShell = new(this) };
             player.Closed += (_, _) => { if (ReferenceEquals(_deeperPlayer, player)) _deeperPlayer = null; };
             _deeperPlayer = player;
             if (IsVisible) player.Show(this); else player.Show();
@@ -141,7 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CoreBark.NotifyUiAction("deeper_player");
             try { ShowOrActivateDeeperPlayer(); }
-            catch (Exception ex) { Log.Error(ex, "Failed to open Deeper player"); }
+            catch (Exception ex) { ReportDeeperOpenError(ex, "Player"); }   // WPF MainWindow.DeeperTab.cs:158-168
         }
 
         /// <summary>WPF DeeperRowPlay_Click (MainWindow.DeeperHub.cs:577): a player that already has
@@ -154,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var player = ShowOrActivateDeeperPlayer();
                 if (!already) player.LoadEnhancementFile(path);
             }
-            catch (Exception ex) { Log.Error(ex, "Failed to open Deeper player for enhancement"); }
+            catch (Exception ex) { ReportDeeperOpenError(ex, "Player"); }
         }
 
         /// <summary>WPF BtnDeeperOpenLibraryFolder_Click: create it if needed, then the file manager.</summary>

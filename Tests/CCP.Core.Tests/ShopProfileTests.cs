@@ -5,6 +5,12 @@ using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
 namespace CCP.Core.Tests;
+/// <summary>Tests that swap the process-wide <c>PlayerLook.KnownIdsProvider</c> (this class and LobbyWireTests):
+/// one collection so they never run beside each other.</summary>
+[CollectionDefinition(Name)]
+public sealed class PlayerLookProviderStatics { public const string Name = "PlayerLookProviderStatics"; }
+
+[Collection(PlayerLookProviderStatics.Name)]
 public sealed class ShopProfileTests
 {
     [Theory]
@@ -48,6 +54,37 @@ public sealed class ShopProfileTests
         Assert.True(item.NeedsPrime);
         Assert.False(ShopCosmeticsRegistry.IsOwned(item, null));
         Assert.True(ShopCosmeticsRegistry.IsOwned(item, new[] { item.Grant }));
+    }
+
+    [Fact]
+    public void UnseededWireUsesShippedRegistryAndStillRejectsUnknownIds()
+    {
+        var prior = PlayerLook.KnownIdsProvider;
+        try
+        {
+            PlayerLook.KnownIdsProvider = null;
+            var worn = PlayerLook.From(JObject.Parse("""{"avatar_id":"profile.avatar.emi-pixel","frame_id":"profile.frame.lace"}"""));
+            Assert.Equal(new PlayerLook("profile.avatar.emi-pixel", "profile.frame.lace"), worn);
+            Assert.True(PlayerLook.From(JObject.Parse("""{"avatar_id":"unknown","frame_id":"unknown"}""")).IsEmpty);
+            PlayerLook.KnownIdsProvider = () => (new HashSet<string>(), null);
+            Assert.True(PlayerLook.From(JObject.Parse("""{"avatar_id":"profile.avatar.emi-pixel","frame_id":"profile.frame.lace"}""")).IsEmpty);
+        }
+        finally { PlayerLook.KnownIdsProvider = prior; }
+    }
+
+    [Fact]
+    public void ShippedShopIdsSurviveWireValidation()
+    {
+        var avatars = ShopCosmeticsRegistry.AllAvatarIds();
+        var frames = ShopCosmeticsRegistry.FrameIds();
+        Assert.Contains("profile.frame.lace", frames!);
+        Assert.Contains("profile.avatar.emi-pixel", avatars);
+        var look = PlayerLook.From(JObject.Parse("""{"avatar_id":"profile.avatar.emi-pixel","frame_id":"profile.frame.lace"}"""),
+            avatars, frames);
+        Assert.Equal(new PlayerLook("profile.avatar.emi-pixel", "profile.frame.lace"), look);
+        Assert.True(ShopCosmeticsRegistry.Find(look.FrameId)!.IsFrame);
+        Assert.Null(ShopCosmeticsRegistry.Find("../escape"));
+        Assert.False(look.IsEmpty);
     }
 
     [Fact]

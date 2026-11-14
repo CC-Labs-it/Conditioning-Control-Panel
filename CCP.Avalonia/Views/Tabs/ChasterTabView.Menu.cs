@@ -160,6 +160,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF TAB-13: the horizontal row measures at unlimited width, so cap the line at the column less the sign.
             var signRoom = tier > 0 ? 52.0 : 0.0;
             words.SizeChanged += (_, e) => where.MaxWidth = Math.Max(0, e.NewSize.Width - signRoom);
+            if (TabPriceEdit.Editable(price.Id))
+            {
+                var warn = new TextBlock
+                {
+                    FontSize = 10.5, Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x52)), IsVisible = false,
+                };
+                words.Children.Add(warn);
+                _warnings[price.Id] = (whereRow, warn);
+            }
             Grid.SetColumn(words, 1);
             grid.Children.Add(words);
 
@@ -218,6 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PopRow(row);
             // One hand-flipped row can land exactly on a preset, or step off one.
             RefreshPresets();
+            RefreshSetupHint(); // WPF RefreshPresets also refreshes the empty-menu hint.
         }
 
         /// <summary>Red flashes with a 4 s ring to dodge them, or none at all (the default).</summary>

@@ -38,8 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
     /// <para>ponytail: Bubbles v2 motions (Rain/Spiral In),
-    /// Brain Drain, Natasha's red bubble, the avatar egg, the lucky gold glow
-    /// and the milestone popup remain unported.
+    /// Brain Drain, Natasha's red bubble, the avatar egg
+    /// and the milestone popup remain unported. The lucky gold glow is wired (LuckyGlow).
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
         internal static Bitmap? TeaseImage;
+        internal static Bitmap? BrainDrainImage;   // WPF the bundled molten-spiral bubble (braindrain_melt.png)
         internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, double Delay, long Start, bool Animated)> TeaseFaces = new();
         private static int _teaseAnimated;
 
@@ -196,6 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             LoadBubbleImage();
             TeaseImage = ChaosArt.Resolve("bubbles", "tease");
+            BrainDrainImage = ChaosArt.Resolve("bubbles", Services.Chaos.BrainDrainBubble.VariantId);
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
@@ -300,7 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var rng = random ?? Field.Random;
             var spec = AmbientBubblePayloads.Roll(settings, rng,
-                Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }));
+                Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }), PrizeOwnership.BubbleV2Owned());
             AmbientBubble b;
             if (spec == null)
             {
@@ -848,6 +850,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
+            // WPF BubbleService.cs:1111, :4456-4472: a paid lucky pop with perk visuals gets a gold glow,
+            // skipped on the Performance tier and capped by it otherwise, sampled once at the pop.
+            var tier = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier;
+            if (b.Lucky && PerkEffectsRules.ShowsVisuals(s.PerkEffects) && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(tier))
+                b.LuckyGlowBlur = Math.Min(50, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             if (b.AmbientTrigger && b.Spec?.Payload is { } payload) BubblePayloadHost.Run(payload);
             XpBudgetChanged?.Invoke();
@@ -1148,6 +1155,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     new GradientStop(Color.FromArgb(190, 150, 210, 255), 0.66),
                     new GradientStop(Color.FromArgb(0, 150, 210, 255), 1.0) }
             };
+            private static readonly Dictionary<(string, int), (FormattedText Text, FormattedText Shadow)> LabelCache = new();
+            private static readonly Typeface LabelFace = new(FontFamily.Default, FontStyle.Normal, FontWeight.Bold);
+            private static readonly IBrush LabelShadow = new ImmutableSolidColorBrush(Colors.Black, 0.8);
+
+            /// <summary>WPF variant label (BubbleService.cs:4967): white bold glyph at 30% of the bubble with a
+            /// soft black shadow, centred. Cached per glyph and size so the render pass stays allocation-free
+            /// (hand-ported from #3890).</summary>
+            internal static void DrawLabel(DrawingContext dc, string label, double cx, double cy, double size, double k)
+            {
+                int em = (int)Math.Round(Math.Max(14 * k, size * 0.30));
+                if (!LabelCache.TryGetValue((label, em), out var t))
+                    LabelCache[(label, em)] = t = (
+                        new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LabelFace, em, Brushes.White),
+                        new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LabelFace, em, LabelShadow));
+                double x = cx - t.Text.Width / 2, y = cy - t.Text.Height / 2, d = 1.5 * k;
+                dc.DrawText(t.Shadow, new Point(x - d, y));
+                dc.DrawText(t.Shadow, new Point(x + d, y));
+                dc.DrawText(t.Shadow, new Point(x, y - d));
+                dc.DrawText(t.Shadow, new Point(x, y + d));
+                dc.DrawText(t.Text, new Point(x, y));
+            }
 
             public override void Render(DrawingContext dc)
             {
@@ -1159,85 +1187,114 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
                     var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var img = teaseImage ?? BubbleOverlay.Image;
+                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
-                    using (dc.PushTransform(m))
-                    using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1)))
+                    var glow = LuckyGlow(dc, b, cx, cy, size, s, k, ox, oy);
+                    try
                     {
-                        if (b.Spec != null && BubbleOverlay.Field.FreezeChaos)
+                        using (dc.PushTransform(m))
+                        using (dc.PushOpacity(Math.Clamp(b.DisplayFade * b.MotionFade, 0, 1)))
                         {
-                            using (dc.PushOpacity(BubbleOverlay.Field.FreezeAuraOpacity))
-                                dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), (size + 6 * k) / 2, (size + 6 * k) / 2);
-                        }
-                        if (b.Spec != null && teaseImage == null)   // WPF skips tint for a variant sprite
-                        {
-                            var (fill, pen) = TintPaint(b.Spec.Tint);
-                            dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                        }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
-                        else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                        if (HasChaosShine(b, teaseImage != null))
-                            dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
-                        if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
-                        {
-                            var frame = face.Frames[face.Animated
-                                ? (int)((Environment.TickCount64 - face.Start) / face.Delay % face.Frames.Count) : 0];
-                            double edge = size * .86, x = cx - edge / 2, y = cy - edge / 2;
-                            var rect = new Rect(x, y, edge, edge);
-                            double side = Math.Min(frame.Size.Width, frame.Size.Height);
-                            var src = new Rect((frame.Size.Width - side) / 2, (frame.Size.Height - side) / 2, side, side);
-                            using (dc.PushGeometryClip(new EllipseGeometry(rect)))
+                            if (b.Spec != null && BubbleOverlay.Field.FreezeChaos)
                             {
-                                using (dc.PushOpacityMask(TeaseEdge, rect))
+                                using (dc.PushOpacity(BubbleOverlay.Field.FreezeAuraOpacity))
+                                    dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), (size + 6 * k) / 2, (size + 6 * k) / 2);
+                            }
+                            if (b.Spec != null && variantImage == null)   // WPF skips tint for a variant sprite
+                            {
+                                var (fill, pen) = TintPaint(b.Spec.Tint);
+                                dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            }
+                            if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                            else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                            if (HasChaosShine(b, variantImage != null))
+                                dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
+                            // WPF's no-sprite path: the label carries the variant. Only the freeze pickup draws it so far.
+                            if (b.Spec is { IsFreeze: true, Label.Length: > 0 }) DrawLabel(dc, b.Spec.Label, cx, cy, size, k);
+                            if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
+                            {
+                                var frame = face.Frames[face.Animated
+                                    ? (int)((Environment.TickCount64 - face.Start) / face.Delay % face.Frames.Count) : 0];
+                                double edge = size * .86, x = cx - edge / 2, y = cy - edge / 2;
+                                var rect = new Rect(x, y, edge, edge);
+                                double side = Math.Min(frame.Size.Width, frame.Size.Height);
+                                var src = new Rect((frame.Size.Width - side) / 2, (frame.Size.Height - side) / 2, side, side);
+                                using (dc.PushGeometryClip(new EllipseGeometry(rect)))
                                 {
-                                    dc.DrawEllipse(TeaseBack, null, new Point(cx, cy), edge / 2, edge / 2);
-                                    using (dc.PushOpacity(.92)) dc.DrawImage(frame, src, rect);
-                                    using (dc.PushOpacity(.16 + .14 * (.5 + .5 * Math.Sin(Environment.TickCount64 / 1000.0 * 5.2))))
-                                        dc.DrawEllipse(TeaseShine, null, new Point(cx, cy), edge / 2, edge / 2);
+                                    using (dc.PushOpacityMask(TeaseEdge, rect))
+                                    {
+                                        dc.DrawEllipse(TeaseBack, null, new Point(cx, cy), edge / 2, edge / 2);
+                                        using (dc.PushOpacity(.92)) dc.DrawImage(frame, src, rect);
+                                        using (dc.PushOpacity(.16 + .14 * (.5 + .5 * Math.Sin(Environment.TickCount64 / 1000.0 * 5.2))))
+                                            dc.DrawEllipse(TeaseShine, null, new Point(cx, cy), edge / 2, edge / 2);
+                                    }
                                 }
                             }
+                            if (b.Spec?.IsTease == true && teaseImage == null && !b.Popping)
+                            {
+                                double r = size * 0.12;
+                                dc.DrawLine(TeasePen, new Point(cx - r, cy - r), new Point(cx + r, cy + r));
+                                dc.DrawLine(TeasePen, new Point(cx + r, cy - r), new Point(cx - r, cy + r));
+                            }
+                            if (!b.Popping && BubbleOverlay.IsShielded(b))
+                            {
+                                using (dc.PushOpacity(b.ShieldOpacity))
+                                    dc.DrawEllipse(null, ShieldPen, new Point(cx, cy), size / 2 + 6 * k, size / 2 + 6 * k);
+                            }
+                            if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
+                            {
+                                double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
+                                dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                            }
                         }
-                        if (b.Spec?.IsTease == true && teaseImage == null && !b.Popping)
+                        if (BubbleOverlay.ShowsTeaseHint(b))   // WPF BubbleService.cs:5137-5160: pulsing 0.55-1 pill under the bubble
                         {
-                            double r = size * 0.12;
-                            dc.DrawLine(TeasePen, new Point(cx - r, cy - r), new Point(cx + r, cy + r));
-                            dc.DrawLine(TeasePen, new Point(cx + r, cy - r), new Point(cx - r, cy + r));
+                            var hint = new FormattedText(global::ConditioningControlPanel.Localization.Loc.Get("chaos_hint_tease"), System.Globalization.CultureInfo.CurrentUICulture,
+                                FlowDirection.LeftToRight, new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold), 12.5 * k, HintFore);
+                            var box = new Rect(cx - hint.Width / 2 - 8 * k, cy + size / 2 + 8 * k, hint.Width + 16 * k, hint.Height + 5 * k);
+                            using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1) * (.775 + .225 * Math.Cos(Environment.TickCount64 * Math.PI / 800))))
+                            {
+                                dc.DrawRectangle(HintBack, null, box, 9 * k, 9 * k);
+                                dc.DrawText(hint, new Point(box.X + 8 * k, box.Y + 2 * k));
+                            }
                         }
-                        if (!b.Popping && BubbleOverlay.IsShielded(b))
+                        // WPF BubbleService.cs:3477, :3517, :3791: sparkles are above the sprite,
+                        // outside its breathe/rotate transform, with particle alpha times field fade.
+                        foreach (var sp in b.Sparkles)
                         {
-                            using (dc.PushOpacity(b.ShieldOpacity))
-                                dc.DrawEllipse(null, ShieldPen, new Point(cx, cy), size / 2 + 6 * k, size / 2 + 6 * k);
-                        }
-                        if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
-                        {
-                            double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
-                            dc.DrawEllipse(null, FusePen(b.FuseRingArgb), new Point(cx, cy), rr, rr);
+                            if (sp.Alpha <= 0) continue;
+                            using (dc.PushOpacity(Math.Clamp(sp.Alpha * b.Fade, 0, 1)))
+                                dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
+                                    new Point((b.X + sp.X - ox) * k, (b.Y + sp.Y - oy) * k),
+                                    sp.Size * k / 2, sp.Size * k / 2);
                         }
                     }
-                    if (BubbleOverlay.ShowsTeaseHint(b))   // WPF BubbleService.cs:5137-5160: pulsing 0.55-1 pill under the bubble
-                    {
-                        var hint = new FormattedText(global::ConditioningControlPanel.Localization.Loc.Get("chaos_hint_tease"), System.Globalization.CultureInfo.CurrentUICulture,
-                            FlowDirection.LeftToRight, new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold), 12.5 * k, HintFore);
-                        var box = new Rect(cx - hint.Width / 2 - 8 * k, cy + size / 2 + 8 * k, hint.Width + 16 * k, hint.Height + 5 * k);
-                        using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1) * (.775 + .225 * Math.Cos(Environment.TickCount64 * Math.PI / 800))))
-                        {
-                            dc.DrawRectangle(HintBack, null, box, 9 * k, 9 * k);
-                            dc.DrawText(hint, new Point(box.X + 8 * k, box.Y + 2 * k));
-                        }
-                    }
-                    // WPF BubbleService.cs:3477, :3517, :3791: sparkles are above the sprite,
-                    // outside its breathe/rotate transform, with particle alpha times field fade.
-                    foreach (var sp in b.Sparkles)
-                    {
-                        if (sp.Alpha <= 0) continue;
-                        using (dc.PushOpacity(Math.Clamp(sp.Alpha * b.Fade, 0, 1)))
-                            dc.DrawEllipse(b.Lucky ? GoldSparkle : PinkSparkle, null,
-                                new Point((b.X + sp.X - ox) * k, (b.Y + sp.Y - oy) * k),
-                                sp.Size * k / 2, sp.Size * k / 2);
-                    }
+                    finally { glow?.Dispose(); }
                 }
+            }
+            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
+            /// <summary>WPF Bubble.SetLucky: #FFD700 at 0.8, no offset. The shadow is taken of what is drawn,
+            /// so it fades with the bubble and its sparkles. Bounds cover the turned sprite and every live sparkle.</summary>
+            private static DrawingContext.PushedState? LuckyGlow(DrawingContext dc, AmbientBubble b, double cx, double cy,
+                double size, double scale, double k, double ox, double oy)
+            {
+                if (b.LuckyGlowBlur <= 0) return null;
+                var blur = b.LuckyGlowBlur * k;
+                if (!LuckyShadows.TryGetValue(blur, out var effect))
+                    LuckyShadows[blur] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+                var angle = b.Angle * Math.PI / 180;
+                var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
+                double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;
+                foreach (var sp in b.Sparkles)
+                {
+                    if (sp.Alpha <= 0) continue;
+                    double x = (b.X + sp.X - ox) * k, y = (b.Y + sp.Y - oy) * k, r = sp.Size * k / 2;
+                    left = Math.Min(left, x - r); top = Math.Min(top, y - r); right = Math.Max(right, x + r); bottom = Math.Max(bottom, y + r);
+                }
+                return dc.PushEffect(effect, new Rect(left, top, right - left, bottom - top));
             }
             private static readonly IBrush GoldSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFFD700));
             private static readonly IBrush PinkSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFF69B4));

@@ -673,6 +673,262 @@ public sealed class ChaosGifCascadeOverlayTests
         finally { CoreSettings.Current.MotionLevel = motion; }
     });
 
+    // Restack b192 (#4003 #4012): WPF AnimatedWebp decode bounds, timing, gate and cancellation.
+    [Theory]
+    [InlineData(4, 40, 400, 60)]       // 120 frames, 96-frame ceiling samples every second frame
+    [InlineData(400, 40, 400, 30)]   // 24 MiB at 400x400 samples every fourth frame
+    [InlineData(4, 340, 400, 55)]    // 1020 frames, but decode stops after the first 600
+    [InlineData(1290, 40, 100, 60)]  // budget uses display size, not the larger source
+    public async Task AnimatedCascadeDecodeRespectsWpfFrameAndMemoryBudgets(int size, int repeats, int pixels, int expected)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, BuildGif(size, repeats));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var (frames, _) = ChaosGifCascadeOverlay.Decode(path, pixels, true);
+                try { Assert.Equal(expected, frames.Count); }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task OversizedAnimatedCascadeFallsBackToOneStill()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-large-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, BuildGif(4097, 1));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var (frames, _) = ChaosGifCascadeOverlay.Decode(path, 400, true);
+                try { Assert.Single(frames); }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(1, 3, 9, 0, 60)]
+    [InlineData(40, 3, 9, 0, 120)] // 120 frames, every second kept
+    [InlineData(1, 1, 1, 0, 100)] // bogus average below 20 ms
+    public async Task CascadeUsesAverageKeptFrameDuration(int repeats, byte first, byte second, byte third, int expectedMs)
+    {
+        var data = BuildGif(4, repeats);
+        var controls = Enumerable.Range(0, data.Length - 7)
+            .Where(i => data[i] == 0x21 && data[i + 1] == 0xF9 && data[i + 2] == 0x04).ToArray();
+        byte[] delays = { first, second, third }; // GIF delays are hundredths of a second
+        for (int i = 0; i < controls.Length; i++) { data[controls[i] + 4] = delays[i % 3]; data[controls[i] + 5] = 0; }
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-timing-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, data);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var (frames, delay) = ChaosGifCascadeOverlay.Decode(path, 400, true);
+                try { Assert.True(frames.Count > 1); Assert.Equal(TimeSpan.FromMilliseconds(expectedMs), delay); }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task StridedCascadeTimingUsesOnlyRetainedFrames()
+    {
+        var data = BuildGif(4, 40); // 120 frames: the 96-frame limit keeps even indices
+        var controls = Enumerable.Range(0, data.Length - 7)
+            .Where(i => data[i] == 0x21 && data[i + 1] == 0xF9 && data[i + 2] == 0x04).ToArray();
+        for (int i = 0; i < controls.Length; i++)
+        {
+            data[controls[i] + 4] = (byte)(i % 2 == 0 ? 3 : 9); // 30 ms kept, 90 ms skipped
+            data[controls[i] + 5] = 0;
+        }
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-stride-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, data);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var (frames, delay) = ChaosGifCascadeOverlay.Decode(path, 400, true);
+                try { Assert.Equal(60, frames.Count); Assert.Equal(TimeSpan.FromMilliseconds(60), delay); }
+                finally { foreach (var frame in frames) frame.Dispose(); }
+                return Task.CompletedTask;
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData(false, "panic")]
+    [InlineData(true, "panic")]
+    [InlineData(false, "fall")]
+    [InlineData(true, "fall")]
+    [InlineData(false, "restart")]
+    [InlineData(true, "restart")]
+    public async Task RemovedFallersCancelQueuedDecodes(bool animated, string ending)
+    {
+        const string png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        var dir = Directory.CreateTempSubdirectory("ccp-cascade-cancel-").FullName;
+        var path = Path.Combine(dir, animated ? "clip.gif" : "still.png");
+        File.WriteAllBytes(path, Convert.FromBase64String(animated ? TinyGif : png));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var previousSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                var previousManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+                using var entered = new CountdownEvent(2);
+                using var release = new ManualResetEventSlim();
+                Task Hold() => Task.Factory.StartNew(() => SpiralOverlay.RunGatedDecode(() =>
+                {
+                    entered.Signal(); release.Wait(); return 0;
+                }), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                var holder1 = Hold(); var holder2 = Hold();
+                var queued = new System.Collections.Generic.List<Task>();
+                try
+                {
+                    Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    void ShowShort() => ChaosGifCascadeOverlay.ShowWithFiles(new() { path }, 1.67, 1, 400, 30, 0.9, 0.45);
+                    ShowShort();
+                    var w = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    queued.Add(ChaosGifCascadeOverlay.LastDecode!);
+                    w.Cascade.Step(0.65); // second faller, both decodes waiting for the held permits
+                    queued.Add(ChaosGifCascadeOverlay.LastDecode!);
+                    Assert.NotSame(queued[0], queued[1]);
+                    Assert.Equal(2, w.Cascade.Fallers.Count);
+                    await Task.Delay(200);
+                    Assert.All(queued, t => Assert.False(t.IsCompleted));
+
+                    if (ending == "panic") PanicSurfaces.All.Single(x => x.Id == "gif-cascade").Stop(null);
+                    else if (ending == "fall")
+                    {
+                        for (int i = 0; i < 100 && w.Cascade.IsRaining; i++) w.Cascade.Step(0.1);
+                        Assert.False(w.Cascade.IsRaining);
+                    }
+                    else ShowShort(); // restart clears the old fallers before creating a new one
+
+                    await Task.WhenAll(queued).WaitAsync(TimeSpan.FromSeconds(5)); // no permit has been released
+                    Dispatcher.UIThread.RunJobs();
+                    if (ending != "restart") ShowShort();
+                    var next = ChaosGifCascadeOverlay.LastDecode!;
+                    queued.Add(next);
+                    await Task.Delay(100);
+                    Assert.False(next.IsCompleted); // the new faller is still allowed to wait and decode
+                    release.Set();
+                    await Task.WhenAll(holder1, holder2, next).WaitAsync(TimeSpan.FromSeconds(10));
+                    Dispatcher.UIThread.RunJobs();
+                    var live = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    Assert.NotNull(Assert.IsType<Image>(Assert.Single(live.Surface.Children)).Source);
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    release.Set();
+                    await Task.WhenAll(holder1, holder2);
+                    if (queued.Count > 0) await Task.WhenAll(queued).WaitAsync(TimeSpan.FromSeconds(10));
+                    Dispatcher.UIThread.RunJobs();
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = previousSkip;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = previousManual;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CascadeDecodeWaitsForTheSharedTwoPermitGate(bool animated)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "ccp-cascade-gate-" + Guid.NewGuid().ToString("N") + ".gif");
+        File.WriteAllBytes(path, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                using var entered = new CountdownEvent(2);
+                using var release = new ManualResetEventSlim();
+                using var started = new ManualResetEventSlim();
+                Task Hold() => Task.Factory.StartNew(() => SpiralOverlay.RunGatedDecode(() =>
+                {
+                    entered.Signal(); release.Wait(); return 0;
+                }), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                var first = Hold(); var second = Hold();
+                Task<(System.Collections.Generic.List<global::Avalonia.Media.Imaging.Bitmap> Frames, TimeSpan Delay)>? decode = null;
+                try
+                {
+                    Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "two decodes should enter the gate");
+                    decode = Task.Factory.StartNew(() =>
+                    {
+                        started.Set();
+                        return ChaosGifCascadeOverlay.Decode(path, 400, animated);
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+                    Assert.False(decode.Wait(TimeSpan.FromMilliseconds(300)), "a third decode must wait");
+                }
+                finally
+                {
+                    release.Set();
+                    await Task.WhenAll(first, second);
+                    if (decode != null)
+                    {
+                        var result = await decode;
+                        foreach (var frame in result.Frames) frame.Dispose();
+                    }
+                }
+            });
+        }
+        finally { File.Delete(path); }
+    }
+
+    private static byte[] BuildGif(int size, int repeats)
+    {
+        var data = Convert.FromBase64String(TinyGif);
+        data[6] = (byte)size; data[7] = (byte)(size >> 8);
+        data[8] = (byte)size; data[9] = (byte)(size >> 8);
+        int firstFrame = Enumerable.Range(0, data.Length - 2)
+            .First(i => data[i] == 0x21 && data[i + 1] == 0xF9 && data[i + 2] == 0x04);
+        using var result = new MemoryStream();
+        result.Write(data, 0, firstFrame);
+        for (int i = 0; i < repeats; i++) result.Write(data, firstFrame, data.Length - firstFrame - 1);
+        result.WriteByte(0x3B);
+        return result.ToArray();
+    }
+
     [Fact]
     public void ClosingCancelsPendingImagePick()
     {

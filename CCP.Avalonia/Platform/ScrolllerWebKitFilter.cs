@@ -49,19 +49,39 @@ internal static class ScrolllerWebKitFilter
     private delegate IntPtr BytesNewFn(byte[] data, UIntPtr size);
     private delegate uint IdleAddFn(SourceFunc f, IntPtr data);
 
-    private static readonly object Gate = new();
-    private static readonly Queue<(IntPtr View, Action<bool> Ready)> Views = new();
+    // Separate cached stores: other web views retain only the Scrolller filter.
+    private static readonly State Scrolller = new(RulesJson, Identifier);
+    private static readonly string AdsJson = RulesJson[..^1] + "," + ConditioningControlPanel.Services.Browser.BrowserAdBlockRules.WebKitJson[1..];
+    private static readonly State WithAds = new(AdsJson, "ccp-browser-block-" +
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(AdsJson)))[..12].ToLowerInvariant());
+    public static void Attach(IntPtr view, Action<bool> ready) => Scrolller.Attach(view, ready);
+    private static State Select(bool blockAds) => blockAds ? WithAds : Scrolller;
+    internal static string RulesFor(bool blockAds) => Select(blockAds).Rules;
+    public static void Attach(IntPtr view, bool blockAds, Action<bool> ready) =>
+        Select(blockAds).Attach(view, ready);
+
+    private sealed class State
+    {
+    private readonly object Gate = new();
+    private readonly Queue<(IntPtr View, Action<bool> Ready)> Views = new();
     // GLib thread only from here down.
-    private static readonly List<(IntPtr Manager, Action<bool> Ready)> Pending = new();
-    private static IntPtr _filter;
-    private static bool _started, _failed;
-    private static Api? _api;
-    private static readonly AsyncReady OnLoaded = Loaded, OnSaved = Saved;   // kept alive: GLib calls them
-    private static readonly SourceFunc OnIdle = Idle;
+    private readonly List<(IntPtr Manager, Action<bool> Ready)> Pending = new();
+    private IntPtr _filter;
+    private bool _started, _failed;
+    private Api? _api;
+    private readonly AsyncReady OnLoaded, OnSaved;
+    private readonly SourceFunc OnIdle;
+    private readonly string _rulesJson, _identifier;
+    public string Rules => _rulesJson;
+    public State(string rulesJson, string identifier)
+    {
+        _rulesJson = rulesJson; _identifier = identifier;
+        OnLoaded = Loaded; OnSaved = Saved; OnIdle = Idle;
+    }
 
     /// <summary>Queues the filter onto one WebKitWebView (the adapter's platform handle). <paramref name="ready"/> runs once,
     /// on the GLib thread or the caller's: true when the filter is on that view, false when it cannot be.</summary>
-    public static void Attach(IntPtr webKitWebView, Action<bool> ready)
+    public void Attach(IntPtr webKitWebView, Action<bool> ready)
     {
         if (webKitWebView == IntPtr.Zero || !OperatingSystem.IsLinux()) { ready(false); return; }
         try
@@ -85,7 +105,7 @@ internal static class ScrolllerWebKitFilter
     }
 
     /// <summary>On the GLib thread: each queued view gets the filter, which is loaded (or compiled) first if need be.</summary>
-    private static int Idle(IntPtr _)
+    private int Idle(IntPtr _)
     {
         var api = _api!;
         while (true)
@@ -109,7 +129,7 @@ internal static class ScrolllerWebKitFilter
             {
                 var dir = Path.Combine(CorePaths.UserData, "webkit-filters");
                 Directory.CreateDirectory(dir);
-                api.StoreLoad(api.StoreNew(dir), Identifier, IntPtr.Zero, OnLoaded, IntPtr.Zero);
+                api.StoreLoad(api.StoreNew(dir), _identifier, IntPtr.Zero, OnLoaded, IntPtr.Zero);
             }
             catch (Exception ex) { Log.Warning("ScrolllerWebKitFilter: store failed: {E}", ex.Message); Finish(IntPtr.Zero, IntPtr.Zero); }
         }
@@ -117,7 +137,7 @@ internal static class ScrolllerWebKitFilter
     }
 
     /// <summary>A stored filter from an earlier launch, or none (then the rule is compiled and stored).</summary>
-    private static void Loaded(IntPtr store, IntPtr result, IntPtr _)
+    private void Loaded(IntPtr store, IntPtr result, IntPtr _)
     {
         try
         {
@@ -125,15 +145,15 @@ internal static class ScrolllerWebKitFilter
             var filter = api.LoadFinish(store, result, out var error);
             if (error != IntPtr.Zero) api.ErrorFree(error);
             if (filter != IntPtr.Zero) { Finish(filter, store); return; }
-            var json = Encoding.UTF8.GetBytes(RulesJson);
+            var json = Encoding.UTF8.GetBytes(_rulesJson);
             var bytes = api.BytesNew(json, (UIntPtr)json.Length);
-            api.StoreSave(store, Identifier, bytes, IntPtr.Zero, OnSaved, IntPtr.Zero);
+            api.StoreSave(store, _identifier, bytes, IntPtr.Zero, OnSaved, IntPtr.Zero);
             api.BytesUnref(bytes);
         }
         catch (Exception ex) { Log.Warning("ScrolllerWebKitFilter: load failed: {E}", ex.Message); Finish(IntPtr.Zero, store); }
     }
 
-    private static void Saved(IntPtr store, IntPtr result, IntPtr _)
+    private void Saved(IntPtr store, IntPtr result, IntPtr _)
     {
         IntPtr filter = IntPtr.Zero;
         try
@@ -150,7 +170,7 @@ internal static class ScrolllerWebKitFilter
     }
 
     /// <summary>Every waiting view gets the filter (or a refusal); the filter is kept for the process.</summary>
-    private static void Finish(IntPtr filter, IntPtr store)
+    private void Finish(IntPtr filter, IntPtr store)
     {
         var api = _api!;
         _filter = filter;
@@ -169,9 +189,11 @@ internal static class ScrolllerWebKitFilter
         else Log.Information("ScrolllerWebKitFilter: Scrolller blocked in WebKitGTK web views");
     }
 
-    private static void Report(Action<bool> ready, bool ok)
+    private void Report(Action<bool> ready, bool ok)
     {
         try { ready(ok); } catch (Exception ex) { Log.Debug("ScrolllerWebKitFilter: ready callback failed: {E}", ex.Message); }
+    }
+
     }
 
     [DllImport("libdl.so.2", EntryPoint = "dlopen")]
@@ -181,7 +203,7 @@ internal static class ScrolllerWebKitFilter
     private static extern IntPtr DlopenC(string file, int mode);
 
     /// <summary>The handle of a library ALREADY in the process, or zero; never loads one (RTLD_LAZY | RTLD_NOLOAD).</summary>
-    private static IntPtr LoadedLibrary(string name)
+    internal static IntPtr LoadedLibrary(string name)
     {
         const int flags = 0x1 | 0x4;
         try { return DlopenDl(name, flags); }

@@ -88,7 +88,8 @@ public sealed class SyncS6bDepthTests
                     var banner = w.Named<Border>("HeaderBannerHost")!;
                     var glow = w.Named<Border>("HeaderBannerGlowHost")!;
                     Assert.Null(banner.Effect);
-                    Assert.NotNull(glow.Effect);
+                    Assert.Null(glow.Effect);   // restack b222: the glow is a BoxShadow so the flash and breath never animate an Effect
+                    Assert.Equal(1, glow.BoxShadow.Count); Assert.Equal(MainShellWindow.BannerGlowBlur, glow.BoxShadow[0].Blur);
                     Assert.False(glow.IsHitTestVisible);
                     var header = Assert.IsType<Grid>(banner.Parent);
                     Assert.True(header.Children.IndexOf(glow) < header.Children.IndexOf(banner));

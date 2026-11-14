@@ -62,6 +62,9 @@ internal static class Win32PanicKey
     /// strict-mode exit question, WPF PanicHook.IsInstalled).</summary>
     internal static bool IsListening => _hook != IntPtr.Zero;
 
+    /// <summary>The last install attempt failed: no key arrives until a later attempt succeeds (keyword program gate).</summary>
+    internal static volatile bool InstallFailed;
+
     /// <summary>The virtual key the configured name resolved to on the last event (or Start); 0 = the
     /// key cannot fire.</summary>
     internal static int BoundVirtualKey => _boundVk;
@@ -109,6 +112,7 @@ internal static class Win32PanicKey
         var thread = new Thread(() => Listen(ready)) { IsBackground = true, Name = "panic-key-win32" };
         thread.Start();
         ready.Wait(TimeSpan.FromSeconds(5));
+        InstallFailed = !IsListening;
         if (!IsListening)
         {
             Log.Warning("Panic key: WH_KEYBOARD_LL hook failed to install; the tray's Stop everything is the panic control");

@@ -497,6 +497,57 @@ public sealed class DeeperHubTests
         return Task.CompletedTask;
     });
 
+    // WPF MainWindow.DeeperTab.cs:677 and EnhancementPlayerWindow.xaml.cs:503-516.
+    [Fact]
+    public Task EmbeddedPromotionRefreshesTheVisibleLibrary() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-visible-promotion-").FullName;
+        var name = "visible-" + Guid.NewGuid().ToString("N");
+        var media = Path.Combine(dir, name + ".mp4");
+        var promoted = Path.Combine(DeeperLocalLibrary.DefaultFolder, name + ".ccpenh.json");
+        var hiddenName = name + "-hidden";
+        var hiddenMedia = Path.Combine(dir, hiddenName + ".mp4");
+        var hiddenPromoted = Path.Combine(DeeperLocalLibrary.DefaultFolder, hiddenName + ".ccpenh.json");
+        var header = new byte[] { 0, 0, 0, 8, (byte)'f', (byte)'t', (byte)'y', (byte)'p' };
+        File.WriteAllBytes(media, header);
+        File.WriteAllBytes(hiddenMedia, header);
+        var enhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = media };
+        enhancement.Metadata.Name = name;
+        Assert.True(EnhancementMediaBundler.Export(enhancement, media, media).Success);
+        var hiddenEnhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = hiddenMedia };
+        hiddenEnhancement.Metadata.Name = hiddenName;
+        Assert.True(EnhancementMediaBundler.Export(hiddenEnhancement, hiddenMedia, hiddenMedia).Success);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("deeper");
+            Dispatcher.UIThread.RunJobs();
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            var vm = (DeeperTabViewModel)view.DataContext!;
+            Assert.True(view.IsVisible);
+            Assert.DoesNotContain(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, promoted));
+            shell.BtnDeeperOpenPlayer_Click();
+            var player = Assert.Single(shell.OwnedWindows.OfType<EnhancementPlayerWindow>());
+            player.OpenLocalMediaFile(media);
+            Dispatcher.UIThread.RunJobs(); // the shell library's LibraryChanged posts the reload (restack b208)
+            Assert.True(File.Exists(promoted));
+            Assert.Contains(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, promoted));
+
+            shell.ShowTab("play");
+            Assert.False(view.IsVisible);
+            player.OpenLocalMediaFile(hiddenMedia);
+            Dispatcher.UIThread.RunJobs(); // a hidden tab still skips the reload
+            Assert.True(File.Exists(hiddenPromoted));
+            Assert.DoesNotContain(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, hiddenPromoted));
+            shell.ShowTab("deeper");
+            Assert.Contains(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, hiddenPromoted));
+        }
+        finally { shell.Close(); File.Delete(promoted); File.Delete(hiddenPromoted); Directory.Delete(dir, true); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task SubmissionBadgeWelcomeCardAndRowLift() => AvaloniaTestDispatcher.RunAsync(() =>
     {

@@ -26,6 +26,115 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
     private const string TinyGif =
         "R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAwAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEA/wAAAAAAAAAAAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7";
 
+    [Fact]
+    public async Task DecodeFinishingAfterStopDoesNotRefresh()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-late-spiral-").FullName;
+        var gif = Path.Combine(dir, "tiny.gif");
+        File.WriteAllBytes(gif, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var s = CoreSettings.Current;
+                var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider,
+                    SpiralOverlay.SkipPlatformChecksForTests);
+                try
+                {
+                    // As StaleDecodeCannotDisposeFramesShownAfterRestart: settle any decode another class left
+                    // running, and pass the compositor gate itself (a Linux runner has none, so the decode
+                    // only started when a parallel class happened to leave the seam on).
+                    if (SpiralOverlay.Decoding is { } prior) await prior;
+                    SpiralOverlay.Stop();
+                    s.SpiralEnabled = true; s.SpiralPath = gif; s.SpiralRandomize = false;
+                    CoreSession.IsEngineRunningProvider = () => true;
+                    SpiralOverlay.SkipPlatformChecksForTests = true;
+                    var host = new Window();
+                    SpiralOverlay.Refresh(host);
+                    var pending = SpiralOverlay.Decoding;
+                    Assert.NotNull(pending);
+                    SpiralOverlay.Stop();
+                    var refreshes = SpiralOverlay.Refreshes;
+                    await pending;
+                    Assert.Equal(refreshes, SpiralOverlay.Refreshes);
+                }
+                finally
+                {
+                    SpiralOverlay.Stop();
+                    (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider,
+                        SpiralOverlay.SkipPlatformChecksForTests) = saved;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public async Task StaleDecodeCannotDisposeFramesShownAfterRestart()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-spiral-restart-").FullName;
+        var a = Path.Combine(dir, "a.gif");
+        var b = Path.Combine(dir, "b.gif");
+        File.WriteAllBytes(a, Convert.FromBase64String(TinyGif));
+        File.Copy(a, b);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var s = CoreSettings.Current;
+                var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider,
+                    SpiralOverlay.SkipPlatformChecksForTests);
+                var host = new Window();
+                try
+                {
+                    if (SpiralOverlay.Decoding is { } prior) await prior;
+                    SpiralOverlay.Stop();
+                    s.SpiralEnabled = true; s.SpiralRandomize = false; s.SpiralPath = a;
+                    CoreSession.IsEngineRunningProvider = () => true;
+                    SpiralOverlay.SkipPlatformChecksForTests = true;
+                    host.Show();
+                    SpiralOverlay.Refresh(host);
+                    if (SpiralOverlay.Decoding is { } first) await first;
+                    Assert.True(SpiralOverlay.IsShowing);
+                    var frame = Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(SpiralOverlay.Shown[0].Spiral.Source);
+
+                    s.SpiralPath = b;
+                    SpiralOverlay.Refresh(host);
+                    var pending = SpiralOverlay.Decoding;
+                    Assert.NotNull(pending);
+                    SpiralOverlay.Stop();
+                    s.SpiralPath = a;
+                    SpiralOverlay.Refresh(host);
+                    Assert.Same(frame, SpiralOverlay.Shown[0].Spiral.Source);
+                    await pending;
+                    Assert.True(SpiralOverlay.IsShowing);
+                    Assert.Same(frame, SpiralOverlay.Shown[0].Spiral.Source);
+                    using var output = new MemoryStream();
+                    frame.Save(output); // a disposed frame cannot be drawn or saved
+                    Assert.True(output.Length > 0);
+                }
+                finally
+                {
+                    SpiralOverlay.Stop();
+                    host.Close();
+                    (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider,
+                        SpiralOverlay.SkipPlatformChecksForTests) = saved;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     [Theory]
     [InlineData(0.0, 0.0)]
     [InlineData(0.3, 0.03)]     // bottom half: the old flat tenth, unchanged

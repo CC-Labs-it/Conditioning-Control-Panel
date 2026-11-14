@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
-        private bool _isWaitingForAi;   // blocks nothing here but IsCompanionBusy, as WPF's bark gate
+        private bool _isWaitingForAi;   // blocks preset speech and contributes to IsCompanionBusy
         private DispatcherTimer? _thinkingTimer;
         private string _thinkingPhraseBase = string.Empty;
         private int _thinkingTickCount;
@@ -46,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // The first frame as WPF ShowGiggle(source: AI) draws it: unbadged, silent, no chat-log
             // entry and no auto-dismiss - the reply pre-empts it.
             _speechTimer?.Stop();
+            // #4071, WPF Speech.cs:2867: thinking is a ShowGiggle, which tells EMI before the mute gate (:442).
+            Windows.EmiDesk.EmiDeskService.Instance.NoteAvatarSpeaking(this);
             if (!Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
             {
                 if (_isShowingChatHistory)

@@ -8,6 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Media;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -73,6 +76,7 @@ public sealed class AppUpdaterTests
             {
                 if (Application.Current is null)
                     AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                        .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
 
@@ -199,6 +203,131 @@ public sealed class AppUpdaterTests
             CoreSettings.Current.HasAcceptedAgeVerification = accepted;
             ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
             Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", null);
+        }
+    });
+
+    [Fact]
+    public async Task LauncherChipOffersOnceBeforeStartupAndFollowsLockdown()
+    {
+        var (installed, offered, latest) = (AppUpdater.Installed, AppUpdater._offered, AppUpdater.Latest);
+        var (offline, motion, accepted, version, lockdown) = (CoreSettings.Current.OfflineMode, CoreSettings.Current.MotionLevel,
+            CoreSettings.Current.HasAcceptedAgeVerification, CoreReleaseContent.AppVersionProvider, LockdownService.Current);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            AppUpdater.Installed = () => true;
+            AppUpdater._offered = false;
+            CoreSettings.Current.OfflineMode = false;
+            AppUpdater.Latest = null;
+            AppUpdater.Handler = new FakeFeed();
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
+            CoreReleaseContent.AppVersionProvider = () => "6.11.3";
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            CoreSettings.Current.HasAcceptedAgeVerification = false;
+            ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
+            var ld = LockdownService.Current = new LockdownService();
+            var shell = new MainShellWindow();
+            var launcher = new LauncherWindow();
+            try
+            {
+                shell.Show();
+                launcher.Show();
+                var chip = launcher.FindControl<Button>("UpdateChip")!;
+                Assert.False(chip.IsVisible);
+                var startup = AppUpdater.StartupAsync(shell);
+                for (var i = 0; i < 100 && !chip.IsVisible; i++) await Task.Delay(50);
+                Assert.True(chip.IsVisible);
+                Assert.Equal(Loc.GetF("launcher_update_tooltip", "99.1.0"), ToolTip.GetTip(chip));
+                ld.Activate(TimeSpan.FromMinutes(30));
+                Assert.False(chip.IsVisible);
+                ld.Deactivate();
+                Assert.True(chip.IsVisible);
+                chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++) await Task.Delay(50);
+                Assert.NotNull(AppUpdater.OpenDialog);
+                AppUpdater.OpenDialog!.FindControl<Button>("BtnLater")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                CoreSettings.Current.HasAcceptedAgeVerification = true;
+                Assert.Same(startup, await Task.WhenAny(startup, Task.Delay(3000)));
+                Assert.Null(AppUpdater.OpenDialog);
+            }
+            finally
+            {
+                if (ld.IsActive) ld.Deactivate();
+                launcher.Close(); shell.Close();
+                AppUpdater.Handler = null;
+                ReleaseFeed.ClearSkippedUpdateVersion(CorePaths.UserData);
+                Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", null);
+                (AppUpdater.Installed, AppUpdater._offered, AppUpdater.Latest) = (installed, offered, latest);
+                (CoreSettings.Current.OfflineMode, CoreSettings.Current.MotionLevel, CoreSettings.Current.HasAcceptedAgeVerification) = (offline, motion, accepted);
+                CoreReleaseContent.AppVersionProvider = version;
+                LockdownService.Current = lockdown;
+            }
+        });
+    }
+
+    [Fact]
+    public async Task UninstalledWindowsCheckStaysOffline()
+    {
+        var feed = new FakeFeed();
+        var oldApi = Environment.GetEnvironmentVariable("CCP_UPDATE_API_URL");
+        var (installed, offline) = (AppUpdater.Installed, CoreSettings.Current.OfflineMode);
+        try
+        {
+            AppUpdater.Installed = () => false;
+            AppUpdater.Handler = feed;
+            CoreSettings.Current.OfflineMode = false;
+            Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
+            Assert.Null(await AppUpdater.CheckAsync(force: true));
+            Assert.Empty(feed.Requests);
+        }
+        finally
+        {
+            AppUpdater.Handler = null; Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", oldApi);
+            (AppUpdater.Installed, CoreSettings.Current.OfflineMode) = (installed, offline);
+        }
+    }
+
+    [Fact]
+    public void LauncherChipMotionUsesMatchingWpfCurves() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var (motion, gentle, probe, stamp, lockdown, latest) = (CoreSettings.Current.MotionLevel, CoreSettings.Current.GentleVisuals,
+            UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp, LockdownService.Current, AppUpdater.Latest);
+        CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        CoreSettings.Current.GentleVisuals = false;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        LockdownService.Current = null;
+        AppUpdater.Latest = null;
+        var launcher = new LauncherWindow();
+        try
+        {
+            launcher.Show();
+            var chip = launcher.FindControl<Button>("UpdateChip")!;
+            var scale = Assert.IsType<ScaleTransform>(chip.RenderTransform);
+            AppUpdater.Latest = new ConditioningControlPanel.Models.UpdateInfo { Version = "99.1.0", IsNewer = true };
+            var x = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleXProperty);
+            var y = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleYProperty);
+            Assert.Equal(TimeSpan.FromMilliseconds(240), x.Duration);
+            Assert.Equal(x.Duration, y.Duration);
+            var pop = Assert.IsType<ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(x.Easing);
+            Assert.Equal(0.4, pop.Amplitude);
+            Assert.Same(pop, y.Easing);
+            Assert.Equal(1 - (0.5 * 0.5 * 0.5 - 0.4 * 0.5 * Math.Sin(Math.PI * 0.5)), pop.Ease(0.5), 10);
+
+            AppUpdater.Latest = null;
+            x = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleXProperty);
+            y = scale.Transitions!.OfType<DoubleTransition>().Single(t => t.Property == ScaleTransform.ScaleYProperty);
+            Assert.Equal(TimeSpan.FromMilliseconds(160), x.Duration);
+            Assert.Equal(x.Duration, y.Duration);
+            Assert.IsType<QuadraticEaseIn>(x.Easing);
+            Assert.Same(x.Easing, y.Easing);
+            Assert.Equal(0.25, x.Easing.Ease(0.5), 10);
+        }
+        finally
+        {
+            launcher.Close();
+            (CoreSettings.Current.MotionLevel, CoreSettings.Current.GentleVisuals) = (motion, gentle);
+            (UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp) = (probe, stamp);
+            (LockdownService.Current, AppUpdater.Latest) = (lockdown, latest);
         }
     });
 

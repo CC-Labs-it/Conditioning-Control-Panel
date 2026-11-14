@@ -73,9 +73,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (owner?.IsVisible == true) hub.Show(owner);
                 else hub.Show();
             }
+            hub.BindShell(OwnerWindow());
             if (tab != null) hub.NavigateTo(tab);
             else hub.Activate();
         }
+
+        // WPF DtrhHostService.cs:950-952 and ChaosOverlayWindow.xaml.cs:880-882 own the hub by the main
+        // window, so it closes with it. A hub shown without an owner (hidden shell) follows the shell too.
+        private Window? _shell;
+
+        internal void BindShell(Window? shell)
+        {
+            if (ReferenceEquals(_shell, shell)) return;
+            if (_shell != null) _shell.Closed -= ShellClosed;
+            _shell = shell;
+            if (_shell != null) _shell.Closed += ShellClosed;
+        }
+
+        private void ShellClosed(object? sender, EventArgs e) => Close();
 
         private static readonly Random _rng = new();
         private int _waves = 5;
@@ -144,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!RenderProof.Rendering) Current = this;
             Closed += (_, _) =>
             {
+                BindShell(null);
                 UnlockCards.Stop();
                 StopRevealFlashes();
                 foreach (var timer in _balanceAnims.Values) timer.Stop();

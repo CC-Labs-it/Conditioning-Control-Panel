@@ -28,6 +28,9 @@ namespace ConditioningControlPanel
 
         // Head-owned Brain Drain audio. WPF MainWindow.StartStop.cs:411-414,531.
         public static volatile Action? StartBrainDrain, StopBrainDrain;
+        /// <summary>A session ramp sets the running player's rate, never the saved preference
+        /// (WPF SessionEngine.cs:874-886, App.BrainDrain.Intensity).</summary>
+        public static volatile Action<double>? SetBrainDrainIntensity;
 
         /// <summary>When the running engine started (WPF MainWindow._emiEngineStartedUtc); null when stopped.</summary>
         public static DateTime? StartedUtc { get; private set; }
@@ -50,12 +53,12 @@ namespace ConditioningControlPanel
         public static volatile BubbleCountScheduler? BubbleCount;
 
         /// <summary>WPF StartEngine's arming matrix, minus the services no head here has.
-        /// Not idempotent in TotalSessions, exactly as WPF; callers start only when stopped.</summary>
-        public static void Start(bool resumingSession = false)
+        /// A system start or resumed session does not increment TotalSessions (WPF StartStop.cs:341).</summary>
+        public static void Start(bool resumingSession = false, bool systemInitiated = false)
         {
             RemoteCommands.ReleaseOverlayStop();
             var s = CoreSettings.Current;
-            if (!resumingSession) s.TotalSessions++;
+            if (!systemInitiated && !resumingSession) s.TotalSessions++;
             CoreSettings.Save();
 
             // #668 Audio-Only Hypno (WPF :304): the visual features sit the session out.

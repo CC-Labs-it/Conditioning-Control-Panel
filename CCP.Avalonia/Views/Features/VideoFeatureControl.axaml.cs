@@ -219,7 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
-                FloatingSizeRow.IsVisible = s.MandatoryVideoFloating;
+                FloatingSizeRow.IsVisible = TxtFloatingNoChecks.IsVisible = s.MandatoryVideoFloating;
                 SliderFloatingSize.Value = s.MandatoryVideoFloatingSizePercent;
                 TxtFloatingSize.Text = s.MandatoryVideoFloatingSizePercent + "%";
                 ChkMercy.IsChecked = s.MercySystemEnabled;
@@ -276,7 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             if (s.MandatoryVideoFloating == floating) return;
             s.MandatoryVideoFloating = floating;
-            FloatingSizeRow.IsVisible = TxtAppearanceNote.IsVisible = floating;
+            FloatingSizeRow.IsVisible = TxtFloatingNoChecks.IsVisible = TxtAppearanceNote.IsVisible = floating;
             CoreSettings.Save();
         }
 

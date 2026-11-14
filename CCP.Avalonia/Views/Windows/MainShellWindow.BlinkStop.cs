@@ -4,7 +4,8 @@
 //
 // The stop pass is exactly WPF StopAllForRecalibration's set (decision 2026-10-12 in
 // docs/avalonia-decisions.html): a recalibration stop, not a panic. It pauses the session (never ends
-// it) and leaves the camera, mic, haptics and program run alone. No leash service, Focus Gaze, help
+// it) and leaves the camera, mic, haptics and program run alone. One addition to the WPF set: it switches
+// keyword triggers off through the panic pass's own row (hard rule 6, restack fixkwstop). No leash service, Focus Gaze, help
 // popover or interaction queue exists on this head, so those WPF steps have no target here.
 
 using System;
@@ -32,7 +33,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the tube's voice); Autonomy.CancelActivePulses; the session PAUSE + StopEngine (StartStop.cs:443-516:
         /// SkillTree, LockCardWindow.ForceCloseAll). Run in registry order.</summary>
         internal static readonly HashSet<string> BlinkStopIds = new()
-            { "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+            { "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+        // keyword-triggers: hard rule 6 (a stop gesture is never more permissive than the panic key) with the
+        // owner call 2026-10-10 that panic switches keyword triggers off. The same registry row as the panic
+        // pass (KeywordTriggerHead.SwitchOffForPanic, Awareness tab repaint), so there is one switch-off path.
+        // Stricter than WPF StopAllForRecalibration, which leaves them armed (restack fixkwstop).
         // mantra-chant + companion-audio: WPF KillAllAudio stops (and opts out of) the chant and Audio.StopSound;
         // the chant runs on its own timer, so the engine stop never reaches it (review 2026-11-06).
         // audio-playlist: WPF KillAllAudio (App.xaml.cs:1853) stops the audio player with a playlist first.

@@ -26,7 +26,8 @@ namespace ConditioningControlPanel.Avalonia
                 shell.RefreshEntitlementVeils(persist: true);
                 shell.RefreshExclusivesTab();
                 shell.RefreshNavPremiumTags();
-                shell.RefreshProfileBubble();
+                // The profile bubble repaints from the shell's own tier and grace handlers (MainShellWindow.Patreon.cs);
+                // WPF's daily rotation never touches it (MainWindow.xaml.cs:502), #4130.
             });
             dailyFree.TodayChanged += RepaintVeils;
             return RepaintVeils;
@@ -67,6 +68,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>In-app corner toasts (WPF App.Notifications). Queues until the shell attaches it.</summary>
         public static Helpers.NotificationService Notifications { get; internal set; } = new();
 
+        /// <summary>Shared preset events, as WPF App.xaml.cs:1254,3230.</summary>
+        internal static KeywordTriggerPresetService KeywordPresets { get; } = new();
+
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
         internal static IntakePunchCardService? IntakePunchCard { get; set; }
@@ -82,6 +86,15 @@ namespace ConditioningControlPanel.Avalonia
         /// and let the awareness switch start/stop it. Startup calls this; tests drive the same hook.</summary>
         internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger)
         {
+            // WPF App.xaml.cs:3125: upgraders may never reopen the consent dialog.
+            try
+            {
+                var settings = CoreSettings.Service;
+                bool wrote = ConditioningControlPanel.Services.Awareness.AwarenessPrivacyRules.EnsureSeeded(settings?.Current);
+                wrote |= ConditioningControlPanel.Services.Awareness.AwarenessIntensityMigration.EnsureMigrated(settings?.Current);
+                if (wrote) settings?.Save();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Awareness: startup migration failed"); }
             ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = ledger;
             try { ledger.PruneOnDisk(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "ActivityLedger: startup retention sweep failed"); }
@@ -196,10 +209,20 @@ namespace ConditioningControlPanel.Avalonia
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
         private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
-        /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
-        /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.html).</summary>
+        /// <summary>WPF App.WindowAwareness (App.xaml.cs:3005), the legacy title observer. On Windows and
+        /// X11/XWayland, privacy rules also check the foreground process before reactions.</summary>
         internal static WindowAwarenessService WindowAwareness { get; } =
-            new(Platform.X11ActiveWindow.ReadTitle, WindowAwarenessService.PassesPrivacyRules);
+            CreateWindowAwareness(OperatingSystem.IsWindows()
+                ? Platform.Win32Windows.ReadAwarenessForeground : Platform.X11ActiveWindow.ReadForeground);
+
+        // Keep the title and process from one foreground sample together for the privacy check.
+        internal static WindowAwarenessService CreateWindowAwareness(Func<(string Title, string Process)> read)
+        {
+            string process = "";
+            return new WindowAwarenessService(
+                () => { var sample = read(); process = sample.Process; return sample.Title; },
+                title => WindowAwarenessService.PassesPrivacyRules(title, process));
+        }
 
         /// <summary>The one session runner (WPF MainWindow._sessionEngine), or null on the headless render path.</summary>
         internal static SessionRunner? Sessions { get; set; }
@@ -685,17 +708,38 @@ namespace ConditioningControlPanel.Avalonia
             Mods?.AttachReleaseContent();
         }
 
+        /// <summary>WPF App.xaml.cs:723,2738,6035: one Deeper library for the app lifetime. Constructing it
+        /// seeds the bundled demos once (HasSeededDeeperDemos) and starts the folder watch; the resolver's
+        /// library tier (mandatory videos, the player) asks it. The shell hub and the player reuse it.</summary>
+        internal static Services.Deeper.EnhancementLibrary? DeeperLibrary { get; private set; }
+
+        internal static void StartDeeperLibrary()
+        {
+            DeeperLibrary ??= new Services.Deeper.EnhancementLibrary();
+            Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => DeeperLibrary?.FindMatch(path, type);
+        }
+
+        internal static void StopDeeperLibrary()
+        {
+            Services.Deeper.EnhancementResolver.LibraryMatchProvider = null;
+            DeeperLibrary?.Dispose();
+            DeeperLibrary = null;
+        }
+
         /// <summary>
         /// WPF App.xaml.cs:3163 (<c>ContentPacks = new ContentPackService()</c>) and :448 (the pack-video
         /// seam): register the installed packs under &lt;assets&gt;/.packs and the network half beside them.
         /// The proxy follows the friends rule: a sandbox without a loopback override sends nothing.
         /// </summary>
-        internal static void StartContentPacks(ContentPackStore store, string? userDataDir, string? overrideUrl)
+        internal static void StartContentPacks(ContentPackStore store, string? userDataDir, string? overrideUrl, System.Net.Http.HttpClient? http = null)
         {
             var url = Platform.FriendsHead.BaseUrl(userDataDir, overrideUrl);
             ConditioningControlPanel.Services.Packs.ContentPackService.DefaultBaseUrl = () => url;
             ContentPackStore.Current = store;
-            ConditioningControlPanel.Services.Packs.ContentPackService.Current = new ConditioningControlPanel.Services.Packs.ContentPackService(store);
+            ConditioningControlPanel.Services.Packs.ContentPackService.Current = new ConditioningControlPanel.Services.Packs.ContentPackService(store, http: http,
+                // WPF ContentPackService.cs:831-863: read live provider state, including logout.
+                patreonToken: () => Platform.AccountSeed.Patreon?.IsAuthenticated == true ? Platform.AccountSeed.Patreon.GetAccessToken() : null,
+                discordToken: () => Platform.AccountSeed.Discord?.IsAuthenticated == true ? Platform.AccountSeed.Discord.GetAccessToken() : null);
             CoreProgram.ActivePackVideoCountProvider = () => ContentPackStore.Current?.GetAllActivePackVideos().Count ?? 0;
         }
 
@@ -867,7 +911,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             // WPF App.xaml.cs:380,463,2952,3282: re-clones must see the live AI availability (the one seed).
             CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;
-            var presets = new KeywordTriggerPresetService();
+            var presets = KeywordPresets;   // the one head-owned service (WPF App.KeywordPresets)
             try { presets.SyncInstalledCustomSources(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Custom preset source sync failed"); }
             foreach (var id in settings.PendingPresetReinstalls.ToList())
@@ -950,6 +994,9 @@ namespace ConditioningControlPanel.Avalonia
                 // recovery, which can put a controller's strict lock back first (RemoteHoldings).
                 try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
+                // WPF App.xaml.cs:2738: after every launch heal, so the demo seed's one save writes healed values.
+                try { StartDeeperLibrary(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Deeper library start failed (non-fatal)"); }
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
@@ -1270,6 +1317,7 @@ namespace ConditioningControlPanel.Avalonia
                     JournalDir = CorePaths.UserData,
                     // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
                     SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
+                    NoteFeatureDayEvent = ev => FeatureDayLog?.Note(ev),
                 };
                 IntakePunchCard = new IntakePunchCardService();
                 WireIntakeSessionCredit(Sessions);
@@ -1817,7 +1865,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Games.LinuxRaceHost.Current?.Dispose();
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
-            Platform.LoginStreakHead.ClearProfile();
+            Platform.LoginStreakHead.Stop();
             ClearEngineCrashOnExit();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
@@ -1868,6 +1916,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { StopDeeperLibrary(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper library shutdown failed"); } // WPF App.OnExit:6035
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
@@ -1901,6 +1950,7 @@ namespace ConditioningControlPanel.Avalonia
             catch { /* one service cannot prevent the head from exiting */ }
 
             Descent?.Reset();
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();   // its dispatcher timer must not fire past exit
             DescentCountdown?.Dispose();   // its pool timer outlives the dispatcher otherwise
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Stop();   // same
             _desktopDispatch?.Stop();

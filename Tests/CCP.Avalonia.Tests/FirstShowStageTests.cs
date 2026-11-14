@@ -357,13 +357,17 @@ public sealed partial class FirstShowStageTests
             CoreSettings.Current.Welcomed = false;
             CoreSettings.Current.HasAcceptedAgeVerification = false;
             StartupLadder.ModalWindowReady = () => shell?.IsVisible == true;
+            EmiLineEngine.Instance.ResetForTests();
             shell = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
+            // WPF MainWindow.xaml.cs:569-571: EMI's firstLaunchEver hold is armed with the claim.
+            Assert.Equal("firstLaunchEver", EmiLineEngine.Instance.HeldBy);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
             Assert.Equal(0, opened);
+            Assert.Equal("firstLaunchEver", EmiLineEngine.Instance.HeldBy);
             wizard.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
             wizard.FindControl<Button>("BtnNext")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             wizard.Close();
@@ -371,6 +375,7 @@ public sealed partial class FirstShowStageTests
             ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
             await Until(() => opened > 0);
             Assert.Equal(1, opened);
+            Assert.Null(EmiLineEngine.Instance.HeldBy);   // WPF :593-599: released on the far side of the wizard
 
             second = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             second.Show();
@@ -382,6 +387,7 @@ public sealed partial class FirstShowStageTests
         {
             foreach (var w in new[] { shell, second }) { foreach (var o in w?.OwnedWindows.ToList() ?? new()) o.Close(); w?.RequestExit(); }
             Dispatcher.UIThread.RunJobs();
+            EmiLineEngine.Instance.ResetForTests();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });

@@ -104,8 +104,10 @@ public sealed class LeashSelfCard : Border
         ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
-        // WPF Controls/Leash/LeashSelfCard.cs:220-224; the head already owns the hold route.
-        _body.Children.Add(Caption(Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold"));
+        // WPF Controls/Leash/LeashSelfCard.cs:220-224; the head owns the hold route, but on Wayland the
+        // shortcuts portal may be unbound or unable to report a key release, so point at the button above.
+        _body.Children.Add(Caption(LeashHead.WaylandSession ? Loc.Get("leash_self_cut_wayland")
+            : Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold"));
         if (_me.Stickers.Count > 0)
         {
             // WPF Controls/Leash/LeashSelfCard.cs:248-264: compact shelf, newest first.
@@ -180,11 +182,18 @@ public sealed class LeashSelfCard : Border
 
     internal async Task CutAsync()
     {
-        if (TopLevel.GetTopLevel(this) is MainShellWindow shell) await shell.CutLeashAsync();
+        // The rail drawer's popup is not the shell window: route it through the shell's one cut path too.
+        if ((TopLevel.GetTopLevel(this) as MainShellWindow ?? MainShellWindow.Current) is { } shell) await shell.CutLeashAsync();
         else
         {
-            try { LeashTaskHost.Runner?.Cancel(); } catch { }
-            try { if (_service() is { } s) await s.CutAsync(); } catch { }
+            // The task shutdown can close the drawer and unbind it before the cut is sent.
+            ILeashService? service = null;
+            try { service = _service(); } catch { }
+            // WPF LeashSurfaces.NoteCut ends the task and closes its window before the service cut.
+            try { LeashTaskHost.EndTask("cut"); } catch { }
+            try { App.Notifications?.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success); } catch { }
+            try { LeashHead.NoteCut(); } catch { }
+            try { if (service != null) await service.CutAsync(); } catch { }
         }
     }
 

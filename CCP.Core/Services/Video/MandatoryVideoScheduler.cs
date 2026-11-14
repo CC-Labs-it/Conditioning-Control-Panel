@@ -54,7 +54,8 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
-    /// ponytail: remote clips, the duration filter
+    /// Remote clips come from the selected online channels through the device cache when the head sets <see cref="RemoteMedia"/>.
+    /// ponytail: the duration filter
     /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), browser-media defers and the
     /// interaction queue are WPF-head services; add each here when it reaches Core. The feed hold and
     /// cascade deferral are live; the cascade probe is seeded by the head.
@@ -261,6 +262,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF VoutGraceMs: no frame this long after Play is a dead output.</summary>
         public const double NoFrameSeconds = 8;
+        /// <summary>WPF RemoteVoutGraceMs: remote clips have longer to produce their first frame.</summary>
+        public const double RemoteNoFrameSeconds = 20;
         /// <summary>WPF VoutLostGraceMs: output that was there and stays gone this long is lost.</summary>
         public const double OutputLostSeconds = 5;
         /// <summary>WPF MaxVideoFallbackSeconds: the cap when the clip never reports a length.</summary>
@@ -269,22 +272,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF's clip guards, on unpaused clocks (a grace pause freezes them, as WPF re-phases
         /// its timers). <paramref name="sinceShow"/> counts from the window opening,
         /// <paramref name="played"/> from the first frame (from the opening for a clip with no video
-        /// track, which WPF lets play out). "no frame": no output 8 s after Play (vout watchdog);
-        /// "output lost": frames stopped for 5 s mid-clip (mid-play vout loss) - both heal, see
-        /// <see cref="GuardHeals"/>. "max length" (VideoMaxDurationSeconds cap), "overran" (length + 5 s
-        /// safety timer, or 600 s with no length) end the clip. Null = fine.</summary>
+        /// track, which WPF lets play out). "no frame": no output 8 s after Play locally, 20 s for a
+        /// remote clip (VideoService.cs:6804-6809,8097-8100); "output lost": frames stopped for 5 s
+        /// mid-clip (mid-play vout loss). See <see cref="GuardHeals"/>. "max length" (VideoMaxDurationSeconds
+        /// cap), "overran" (length + 5 s safety timer, or 600 s with no length) end the clip. Null = fine.</summary>
         public static string? Guard(double sinceShow, double played, bool framed, bool hasVideo, double lengthSeconds,
-            double sinceFrame, int maxSeconds, double capSpentBefore = 0, double? capPlayed = null)
+            double sinceFrame, int maxSeconds, double capSpentBefore = 0, double? capPlayed = null, bool remote = false)
         {
-            if (!framed && hasVideo) return sinceShow >= NoFrameSeconds ? "no frame" : null;
+            if (!framed && (hasVideo || remote)) return sinceShow >= (remote ? RemoteNoFrameSeconds : NoFrameSeconds) ? "no frame" : null;
             if (VideoMaxCap.CapLeft(maxSeconds, capSpentBefore + (capPlayed ?? played)) <= 0) return "max length";
             if (lengthSeconds > 0 ? played >= lengthSeconds + 5 : played >= FallbackSeconds) return "overran";
             return framed && sinceFrame >= OutputLostSeconds ? "output lost" : null;
         }
 
-        /// <summary>WPF VoutWatchdogFire / VoutMidPlayTick: a dead or lost output replays the same clip
-        /// once; after that (or for any other guard) the clip ends like a dismiss.</summary>
-        public static bool GuardHeals(string why, bool healUsed) => !healUsed && why is "no frame" or "output lost";
+        /// <summary>WPF VoutWatchdogFire / VoutMidPlayTick: a dead or lost output replays a local clip
+        /// once; a remote clip ends (VideoService.cs:6872-6885,6972-6982). After that (or for any other
+        /// guard) the clip ends like a dismiss.</summary>
+        public static bool GuardHeals(string why, bool healUsed, bool remote = false) =>
+            !remote && !healUsed && why is "no frame" or "output lost";
 
         /// <summary>WPF PlayVideo(isVoutRetry): the replayed clip starts its attention checks afresh.</summary>
         public void NoteReplay() => AttentionSpawned = AttentionHits = 0;
@@ -293,6 +298,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_running) return;
             _running = true;
+            KickRemotePrefetch();
             ScheduleNext();
             Log.Information("VideoService started");
         }
@@ -514,13 +520,19 @@ namespace ConditioningControlPanel.Services
                 CoreDiscord.Service?.SetVideoActivity(); // WPF StartVideoPlayback:3133
                 // WPF StartVideoPlayback: presentation can change during the pre-roll.
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
+                var generation = _retryGeneration;
+                ShowingPath = path;   // the host keeps the source URL identity when it plays a cached file
                 try { _host.Show(playbackPath, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); End(); return; }
+                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); return; }
+                // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
+                if (!_playing || generation != _retryGeneration) return;
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
+                if (!_playing || generation != _retryGeneration) return;
                 // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
                 _ = CoreHaptics.Service?.StartVideoBackgroundVibeAsync();
+                if (!_playing || generation != _retryGeneration) return;
                 try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -686,6 +698,7 @@ namespace ConditioningControlPanel.Services
             if (!_playing) { PackVideos?.CleanupTemps(); return false; }
             _playing = false;
             IsStrict = false;
+            ShowingPath = null;
             double watched = 0;
             try { watched = _host.CloseAll(); }
             catch (Exception ex) { Log.Warning(ex, "VideoService: close failed"); }
@@ -706,12 +719,21 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
-        /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
-        /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
+        /// <summary>WPF VideoService.ReloadAssets (VideoService.cs:1583-1592): drop both dealt queues so the
+        /// next pick re-reads the enabled library (an untick or preset switch takes effect on the very next
+        /// video, #130), then sweep the pack decrypts.</summary>
         public void ReloadAssets()
         {
-            _queue = new Queue<string>();
+            RefreshVideosPath();
             PackVideos?.CleanupTemps();
+        }
+
+        /// <summary>WPF VideoService.RefreshVideosPath (VideoService.cs:1570-1577), the asset-import refresh:
+        /// drop both dealt queues but keep every decrypt, since one may still be playing.</summary>
+        public void RefreshVideosPath()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.ResetShuffle();
         }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>
@@ -726,6 +748,13 @@ namespace ConditioningControlPanel.Services
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
             }
+            // WPF GetNextVideo (VideoService.cs:7981-8005): try the ready remote pool first,
+            // with the selected source and share; an empty pool falls back to local/pack.
+            var s = CoreSettings.Current;
+            var localEmpty = _queue.Count == 0 && (PackVideos?.Count ?? 0) == 0;
+            KickRemotePrefetch();
+            if (RemoteAllowed(s) && VideoSelectionRules.WantsRemote(localEmpty, s.MediaSource, s.RemoteMediaRatio, _random)
+                && TakeRemote() is { } remote) { KickRemotePrefetch(); return remote; }
             // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
             // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the
             // length filter (PackFileEntry carries no duration).
@@ -735,6 +764,118 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The content-pack clips mixed in (WPF _packVideoQueue); null = local only.</summary>
         public PackMediaPool? PackVideos { get; set; }
+
+        /// <summary>The picked source of the clip being shown (a Scrolller URL for a remote clip, while the
+        /// host plays its cached file); null when nothing plays. The host keys remote rules and the credit on it.</summary>
+        public string? ShowingPath { get; private set; }
+
+        // WPF VideoService.cs:8139-8155, 8222-8270, 8323-8368. The scheduler owns the "videos" tenant
+        // and never waits for the network on a trigger: a fetch (Scrolller list API, at most one in
+        // flight, only when fewer than 4 are queued) runs on Start and after each pick. A source or
+        // channel change drops the buffer and any in-flight response before it is used.
+        /// <summary>The head plays remote clips (consent, the online source and the licence still gate each one).</summary>
+        public bool RemoteMedia { get; set; }
+        private readonly object _remoteLock = new();
+        private readonly List<string> _remoteQueue = new();
+        private string _remoteSelection = "";
+        private int _remoteInFlight;
+        internal System.Threading.Tasks.Task? RemoteTask { get; private set; }
+        internal Func<CancellationToken, System.Threading.Tasks.Task<(List<FypAssetManifest.Entry> Entries, string? Error)>> FetchRemote { get; set; } =
+            ct => FypOnlineCoordinator.For("videos", RemoteChannels, FeedMediaKind.Video).FetchBatchAsync(ct);
+        internal Func<string, bool> MayFetchRemote { get; set; } = ScrolllerPolicyService.MayFetchFresh;
+        internal Func<string, CancellationToken, System.Threading.Tasks.Task<string?>> DownloadRemote { get; set; } =
+            (url, ct) => ScrolllerDiskCache.GetOrFetchAsync(url, ScrolllerItemIndex.MetaFor(url), ct);
+
+        private bool CachedRemote(string url) => CachedScrolllerPath(url) != null;
+        private static IReadOnlyList<string> RemoteChannels() => FypOnlineCoordinator.ResolveChannels(
+            CoreSettings.Current.FypOnlineNiches, CoreSettings.Current.FypOnlineCustomSubs);
+        private bool RemoteAllowed(Models.AppSettings s) => RemoteMedia && ScrolllerPolicy.Enabled
+            && s.MediaSource != "local" && s.HasRemoteMediaConsent;
+        private string Selection()
+        {
+            var s = CoreSettings.Current;
+            return RemoteAllowed(s) ? s.MediaSource + "|" + string.Join("|", RemoteChannels().OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) : "";
+        }
+        private string RefreshRemoteSelection()
+        {
+            var selection = Selection();
+            lock (_remoteLock)
+            {
+                if (_remoteSelection != selection) { _remoteQueue.Clear(); _remoteSelection = selection; }
+            }
+            return selection;
+        }
+        private void KickRemotePrefetch()
+        {
+            var selection = RefreshRemoteSelection();
+            if (selection.Length == 0) return;
+            if (Interlocked.CompareExchange(ref _remoteInFlight, 1, 0) != 0) return;
+            RemoteTask = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try { await RefillRemoteAsync(selection).ConfigureAwait(false); }
+                catch (Exception ex) { Log.Debug("VideoService: remote prefetch failed: {Error}", ex.Message); }
+                finally { Interlocked.Exchange(ref _remoteInFlight, 0); }
+            });
+        }
+        internal async System.Threading.Tasks.Task RefillRemoteAsync(string selection)
+        {
+            if (selection.Length == 0 || RefreshRemoteSelection() != selection) return;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            bool fetch;
+            lock (_remoteLock) fetch = _remoteQueue.Count < 4;
+            var queued = DownloadRemoteQueueAsync(selection);
+            try
+            {
+                if (!fetch) return;
+                var (entries, error) = await FetchRemote(timeout.Token).ConfigureAwait(false);
+                if (error != null || RefreshRemoteSelection() != selection) return;
+                lock (_remoteLock)
+                {
+                    if (_remoteSelection != selection) return;
+                    foreach (var entry in entries)
+                    {
+                        if (_remoteQueue.Count >= 60) break;
+                        if (RemoteMediaFormats.Validate(entry, FeedMediaKind.Video, out _) && !_remoteQueue.Contains(entry.Url))
+                            _remoteQueue.Add(entry.Url);
+                    }
+                }
+            }
+            finally { await queued.ConfigureAwait(false); }
+            await DownloadRemoteQueueAsync(selection).ConfigureAwait(false);
+        }
+        private async System.Threading.Tasks.Task DownloadRemoteQueueAsync(string selection)
+        {
+            // Only Scrolller URLs are downloaded; an uncached one is never streamed (WPF VideoService.cs:8197).
+            for (var i = 0; i < 60 && RefreshRemoteSelection() == selection; i++)
+            {
+                string? next;
+                lock (_remoteLock)
+                {
+                    if (_remoteQueue.Count(u => !ScrolllerPolicy.IsScrolllerUrl(u) || CachedRemote(u)) >= 3) return;
+                    next = _remoteQueue.FirstOrDefault(u => ScrolllerPolicy.IsScrolllerUrl(u) && !CachedRemote(u));
+                }
+                if (next == null || !MayFetchRemote(next) || RefreshRemoteSelection() != selection) return;
+                var path = await DownloadRemote(next, CancellationToken.None).ConfigureAwait(false);
+                if (RefreshRemoteSelection() != selection) return;
+                if (path == null) lock (_remoteLock) _remoteQueue.Remove(next);
+            }
+        }
+        private string? TakeRemote()
+        {
+            if (RefreshRemoteSelection().Length == 0) return null;
+            lock (_remoteLock)
+            {
+                for (int i = 0; i < _remoteQueue.Count; i++)
+                {
+                    var url = _remoteQueue[i];
+                    if (!ScrolllerPolicy.IsScrolllerUrl(url) || CachedRemote(url))
+                    { _remoteQueue.RemoveAt(i); return url; }
+                    if (!MayFetchRemote(url)) _remoteQueue.RemoveAt(i--);
+                }
+            }
+            return null;
+        }
+        internal System.Threading.Tasks.Task RefillRemoteForTest() => RefillRemoteAsync(RefreshRemoteSelection());
 
         /// <summary>WPF VideoService.MetadataCache: a clip's cached length, null on a miss. Null keeps
         /// every clip (WPF without LibVLC).</summary>

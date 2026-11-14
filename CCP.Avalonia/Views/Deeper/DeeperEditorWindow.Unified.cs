@@ -33,8 +33,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///   Cursors.Hand / SizeAll / SizeWE       -> new Cursor(StandardCursorType.*)
     ///   Panel.SetZIndex(v, n)                 -> v.ZIndex = n
     ///   Visibility                            -> IsVisible
-    ///   TutorialEventBus.Emit                 -> a named no-op; Core carries no event bus by
-    ///                                            design, see EmitTutorialEvent at the foot
     ///   App.Logger                            -> Serilog.Log
     /// </summary>
     public partial class DeeperEditorWindow
@@ -577,6 +575,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void UpdateSelectedSidePanelForEffect()
         {
             HideAllEditors();
+            ResetInspectorSession();
             if (_selectedEffect == null)
             {
                 if (SelectedPlaceholder != null) SelectedPlaceholder.IsVisible = true;

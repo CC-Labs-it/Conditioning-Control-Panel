@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
                 ["race"] = (Games.GameWindow.GlassroadLocked, _ => Games.GameWindow.Launch("race")),
+                ["raceclassic"] = (() => !ConditioningControlPanel.Services.Race.RacingAccess.CanLaunch, _ => Games.GameWindow.Launch("raceclassic")),
                 // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
@@ -58,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>The panel that sent us here, else the app's main window.</summary>
         private MainShellWindow? _panel;
+        private MainShellWindow? _engineSource;
         private MainShellWindow? Panel => _panel ?? MainShellWindow.Current;
 
         /// <summary>The launcher, if it has been built this run.</summary>
@@ -88,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _lobby?.Dispose();
                 CoreMods.ModChanged -= OnModChanged;
                 PrizeGrants.GrantsChanged -= OnGrantsChanged;
+                UnhookEngine();
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
             PropertyChanged += (_, e) =>
@@ -97,9 +100,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 else { _statusTimer.Stop(); StopLobby(); }
             };
             BuildTiles();
+            HookUpdateChip();
             HookVeil();
             HookFx();
             HookPress(PanelCta);
+            HookPress(SpChip);
             HookLinks();
             PaintSoundButton();
         }
@@ -112,9 +117,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BuildTiles();
                 StartEntrance();
                 RefreshAccount();
+                RefreshSpReadout(countUp: true);
                 RefreshMod();
                 RefreshStatus();
                 RefreshStats();
+                HookEngine();
                 _statusTimer.Start();
                 StartLobby();
             }
@@ -160,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Also on a reused link: an X-to-tray may have happened since the last handoff.
             panel.ClearTrayHide();
             if (!ReferenceEquals(_panel, panel)) { _panel = panel; panel.Closed += (_, _) => Close(); }
+            HookEngine();
             return this;
         }
 
@@ -188,15 +196,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF LauncherHost.LaunchGame for the cards this head can open; false = no such card here.</summary>
+        /// <summary>WPF LauncherHost.LaunchGame (:335) for the cards this head can open; false = no such card here,
+        /// the sign-in ask, or a gate that refused (the companion's open action reads it).</summary>
         internal static bool LaunchGame(MainShellWindow panel, string id)
         {
             var card = VisibleCards.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
             if (card == null) return false;
             // The sign-in ask is owned by the launcher, so only then does it come on screen.
             var w = card.RequiresAccount && !CoreAccount.IsLoggedIn ? OpenFor(panel) : (_window ??= new LauncherWindow()).Link(panel);
-            w.Play(card);
-            return true;
+            return w.Play(card);
         }
 
         /// <summary>WPF LauncherHost.OpenPanel without a launcher instance in hand.</summary>
@@ -352,6 +360,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!MainShellWindow.LockdownActive) OpenPanel(p => p.ShowTab("appsettings"));
         }
 
+        /// <summary>WPF WalletChip_Click (LauncherWindow.xaml.cs:250): the wallet opens the Prize Counter over the
+        /// launcher, the same door as the panel's SparkleWallet. The counter is its own window; the launcher stays.</summary>
+        private void WalletChip_Click(object? sender, RoutedEventArgs e)
+        {
+            try { Games.GameWindow.LaunchPrizeCounter(from: "launcher"); }
+            catch (Exception ex) { Log.Warning(ex, "[Launcher] Prize Counter failed to open"); }
+        }
+
         private void SignIn_Click(object? sender, RoutedEventArgs e) { if (!MainShellWindow.LockdownActive) OpenSignIn(); }
 
         /// <summary>WPF StopLink_Click.</summary>
@@ -364,8 +380,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshStatus();
         }
 
-        /// <summary>WPF RefreshStatus: running since HH:mm + Stop, or idle; the CTA reads Open or Launch.
-        /// ponytail: WPF also refreshes at once on EngineStopped; here the 1 s tick catches it.</summary>
+        // WPF LauncherWindow.xaml.cs:410-428: hook on show, detach on close, marshal a stop to the UI.
+        private void HookEngine()
+        {
+            var panel = Panel;
+            if (ReferenceEquals(panel, _engineSource)) return;
+            UnhookEngine();
+            _engineSource = panel;
+            if (_engineSource != null) _engineSource.EngineStopped += OnEngineStopped;
+        }
+
+        private void UnhookEngine()
+        {
+            if (_engineSource != null) _engineSource.EngineStopped -= OnEngineStopped;
+            _engineSource = null;
+        }
+
+        private void OnEngineStopped(object? sender, EventArgs e)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) RefreshStatus();
+            else Dispatcher.UIThread.Post(RefreshStatus);
+        }
+
+        /// <summary>WPF RefreshStatus: running since HH:mm + Stop, or idle; the CTA reads Open or Launch.</summary>
         private bool? _ctaRunning;
 
         internal void RefreshStatus()
@@ -415,13 +452,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug(ex, "[Launcher] RefreshAccount failed"); }
         }
 
-        /// <summary>WPF RefreshSpReadout: the chip's Sparkle Points while signed in.
-        /// ponytail: WPF odometers the number up; it snaps here until the launcher-fx slice.</summary>
-        private void RefreshSpReadout()
+        // WPF LauncherWindow.Choreo.cs:610: count from zero on show, then from the last target.
+        private double _spShown = double.NaN;
+        private Tween _spTween;
+
+        private void RefreshSpReadout(bool countUp = false)
         {
             int sp = CoreSettings.Current.SkillPoints;
             SpChip.IsVisible = sp >= 0 && CoreAccount.IsLoggedIn;
-            if (SpChip.IsVisible) SpReadout.Text = sp.ToString("N0");
+            if (!SpChip.IsVisible) { _spTween.On = false; _spShown = double.NaN; return; }
+            double from = countUp || double.IsNaN(_spShown) ? 0 : _spShown;
+            if (!countUp && from == sp && !double.IsNaN(_spShown)) return;
+            _spShown = sp;
+            if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions || Math.Abs(sp - from) < 0.5 || !FxLive)
+            {
+                _spTween.On = false;
+                SpReadout.Text = sp.ToString("N0");
+                return;
+            }
+            _spTween.Go(from, sp, countUp ? 0.9 : 0.6);
+            SpReadout.Text = from.ToString("N0");
+            EnsureFxClock();
+        }
+
+        private void StopSpTween()
+        {
+            if (!_spTween.On) return;
+            _spTween.On = false;
+            SpReadout.Text = _spShown.ToString("N0");
         }
 
         /// <summary>WPF TierBadge_MouseEnter/Leave: the big copy in a popup under the badge.
@@ -543,10 +601,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[Launcher] mod switch to {Id} failed", modId); }
         }
 
-        /// <summary>WPF LauncherHost.LaunchGame for the destinations this head has.</summary>
-        internal void Play(LauncherCard card)
+        /// <summary>WPF LauncherHost.LaunchGame for the destinations this head has. False like WPF :335-375:
+        /// the sign-in ask or a game whose gate refused; the leash gate and a panel tab count as handled.</summary>
+        internal bool Play(LauncherCard card)
         {
-            if (!Destinations.TryGetValue(card.Id, out var dest)) return;
+            if (!Destinations.TryGetValue(card.Id, out var dest)) return false;
             bool game = Games.GameWindow.Games.ContainsKey(card.Id);
             bool needsAccount = card.RequiresAccount && !CoreAccount.IsLoggedIn;
             // A panel tab that is locked still opens (its own gate paints the refusal), as WPF's does; a
@@ -558,24 +617,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (step == LauncherGameStep.SignIn)
             {
                 OpenSignIn();
-                return;
+                return false;
             }
             if (step == LauncherGameStep.Leash)
             {
                 Log.Information("[Launcher] {Id} waits: a leash punishment is pending", card.Id);
                 OpenPanel(p => p.PresentLeashGateFromLauncher());
-                return;
+                return true;
             }
-            if (game) { LaunchGameWindow(card.Id); return; }
+            if (game) return LaunchGameWindow(card.Id);
             OpenPanel(dest.Open);
+            return true;
         }
 
         /// <summary>WPF LauncherHost.LaunchGame (:335): the game opens, then the launcher hides behind it;
         /// the return poll brings the launcher back when the game closes and the panel is not up. A gate
         /// that refused leaves the launcher where it is.</summary>
-        private void LaunchGameWindow(string id)
+        private bool LaunchGameWindow(string id)
         {
-            HandoffGame(Games.GameWindow.Launch(id), id);
+            var game = Games.GameWindow.Launch(id);
+            HandoffGame(game, id);
+            return game != null;
         }
 
         private void HandoffGame(Window? game, string id)
@@ -709,7 +771,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var artHost = new Panel { RenderTransform = artSlide, Margin = new Thickness(-7) };
             Image? artImage = null;
             var plate = new Panel { ClipToBounds = true, MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
-            if (ModArt.TryLoad(card.ArtPath, 640) is { } art)
+            // WPF LauncherWindow.Tiles.cs:104-115: the Breakout demo has a built-in vector cover.
+            IImage? art = ModArt.TryLoad(card.ArtPath, 640);
+            art ??= card.Id switch
+            {
+                "breakoutdemo" => BreakoutCardArt.Demo,
+                _ => null,
+            };
+            if (art != null)
                 artHost.Children.Add(artImage = new Image { Source = art, Stretch = Stretch.UniformToFill });
             else
                 artHost.Children.Add(new TextBlock

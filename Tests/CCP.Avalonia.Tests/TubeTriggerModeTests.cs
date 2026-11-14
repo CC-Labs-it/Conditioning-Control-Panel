@@ -254,7 +254,8 @@ public sealed class TubeTriggerModeTests
             Assert.True(linkedTyping.Stopped());
             var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
             Assert.Equal("Watch", Assert.IsType<TextBlock>(link.Content).Text);
-            Assert.Equal(new[] { "Before ", " ", "Local", " after" }, text.Inlines!.OfType<Run>().Select(r => r.Text));
+            // WPF BuildLinkedInlines collapses a non-web markdown link to its label inside the plain text.
+            Assert.Equal(new[] { "Before ", " Local after" }, text.Inlines!.OfType<Run>().Select(r => r.Text));
             var previousNavigate = CompanionLinkLauncher.Navigate;
             string? opened = null;
             try
@@ -300,6 +301,66 @@ public sealed class TubeTriggerModeTests
             (s.AvatarTubeDetached, s.AvatarEnabled) = (detached, enabled);
             CoreAudio.PlayStoppableProvider = provider;
             (s.TriggerModeEnabled, s.TriggerIntervalSeconds, s.CustomTriggers, s.AvatarMuted) = (on, interval, triggers, muted);
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF ShowTriggerBubbleImmediate never closes the chat log, and KillAllAudio's Subliminal.Stop
+    // cuts a trigger whisper even with the subliminal scheduler idle (restack b196, from #3928).
+    [Fact]
+    public Task TriggerKeepsAnOpenHistoryAndPanicCutsItsWhisper() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        PanicAftermath.EndQuiet();
+        var s = CoreSettings.Current;
+        var saved = (s.TriggerModeEnabled, s.TriggerIntervalSeconds, s.CustomTriggers, s.AvatarMuted,
+            s.AvatarTubeDetached, s.AvatarEnabled, s.SubAudioEnabled, s.SubAudioMuted, s.AudioDuckingEnabled);
+        var provider = CoreAudio.PlayStoppableProvider;
+        var (played, stopped) = (0, 0);
+        CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) =>
+        {
+            if (tag != "whisper") return static () => { };
+            played++;
+            return () => stopped++;
+        };
+        (s.SubAudioEnabled, s.SubAudioMuted, s.AudioDuckingEnabled) = (true, false, false);
+        (s.TriggerModeEnabled, s.TriggerIntervalSeconds, s.CustomTriggers, s.AvatarMuted) = (true, 45, new List<string> { "freeze" }, false);
+        (s.AvatarTubeDetached, s.AvatarEnabled) = (true, true);
+        var tube = new AvatarTubeWindow(null);
+        var loops = new List<Action>();
+        var delays = new List<Action>();
+        tube.TriggerLoopScheduler = (_, tick) => { loops.Add(tick); return () => { }; };
+        tube.SpeechDelayScheduler = (_, fire) => { delays.Add(fire); return () => { }; };
+        tube.SpeechClock = new Stepped();
+        try
+        {
+            tube.Show();
+            Dispatcher.UIThread.RunJobs();
+            tube.ShowChatHistory();
+            delays[0]();     // the first tick, 2 s after start
+            delays[^1]();    // the 0.6 s lead-in: whisper, bubble, typing
+            Dispatcher.UIThread.RunJobs();
+            var history = tube.FindControl<Grid>("ChatHistoryView")!;
+            var bubble = tube.FindControl<Border>("SpeechBubble")!;
+            var scroller = tube.FindControl<ScrollViewer>("SpeechScroller")!;
+            // Fail-proof: the old path closed the log and shrank the bubble to the single-line width.
+            Assert.Equal((true, true, false, AvatarTubeWindow.SpeechBubbleHistoryWidth, 1),
+                (history.IsVisible, bubble.IsVisible, scroller.IsVisible, bubble.MaxWidth, played));
+            tube.PanicSilence();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, stopped);   // fail-proof: without the cut the whisper plays on after panic
+        }
+        finally
+        {
+            tube.Close();
+            PanicAftermath.EndQuiet();
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.StopAll();
+            CoreAudio.PlayStoppableProvider = provider;
+            (s.TriggerModeEnabled, s.TriggerIntervalSeconds, s.CustomTriggers, s.AvatarMuted,
+                s.AvatarTubeDetached, s.AvatarEnabled, s.SubAudioEnabled, s.SubAudioMuted, s.AudioDuckingEnabled) = saved;
         }
         return Task.CompletedTask;
     });

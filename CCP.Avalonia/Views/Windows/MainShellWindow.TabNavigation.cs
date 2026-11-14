@@ -104,6 +104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ["personality"] = "CompanionPersonalityTab", ["permissions"] = "CompanionPermissionsTab", ["companionlinks"] = "CompanionLinksTab",
         };
 
+        internal Control? TabRoot(string tab) => TabPanels.TryGetValue(tab, out var name) ? Named<Control>(name) : null;
+
         /// <summary>Keys that open a window or a service rather than a tab. ShowTab leaves the
         /// current tab alone for them, as WPF does; the launch itself is not on this head yet.</summary>
         private static readonly HashSet<string> WindowKeys = new(StringComparer.Ordinal)
@@ -236,6 +238,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;
                     // WPF :666, the "Scheduler & Ramp" zone pill: the rack's scheduler module.
                     case "ramp": StudioRack?.FocusRackEntry("scheduler"); RefreshSessionFeatureLock(); break;
+                    // WPF ShowTab -> SyncCompanionTabUI (CompanionTab.cs:67,79) re-reads the hero and the engine,
+                    // even on a re-selection where the room sees no visibility edge (#3971, #4010).
+                    case "companion":
+                        if (RoomView() is { } room)
+                        {
+                            room.HeroZone.ApplyAvatarArt();
+                            if (room.EngineZone.DataContext is Controls.Companion.EngineRoomVm engine) engine.Sync();
+                        }
+                        break;
                     // WPF MainWindow.CompanionTabs.cs NavTabHost(..., OnShown): each page adopts the collapsed room's live zones.
                     case "personality": Named<Controls.Companion.Pages.PersonalityPage>("CompanionPersonalityTab")?.OnShown(RoomView()); break;
                     case "permissions": Named<Controls.Companion.Pages.PermissionsPage>("CompanionPermissionsTab")?.OnShown(RoomView()); break;

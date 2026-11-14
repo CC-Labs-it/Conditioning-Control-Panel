@@ -684,7 +684,7 @@ public sealed class LauncherWindowTests
 
         // Only the destinations this head has: the Breakout demo, Piece by Piece, Racing Thoughts and Down the Rabbit Hole game hosts,
         // then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "dtrh", "intake" }, Tiles(launcher));
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
@@ -1087,7 +1087,7 @@ public sealed class LauncherWindowTests
         Assert.False(w.FindControl<Button>("SignInPill")!.IsVisible);
         Assert.Equal("bambi", Text(w, "AccountName"));
         Assert.Equal("B", Text(w, "AvatarInitial"));
-        Assert.True(w.FindControl<StackPanel>("SpChip")!.IsVisible);
+        Assert.True(w.FindControl<Button>("SpChip")!.IsVisible);
         Assert.Equal(1234.ToString("N0"), Text(w, "SpReadout"));
         Assert.False(w.FindControl<Image>("TierBadge")!.IsVisible);   // no Patreon tier here
 
@@ -1095,8 +1095,62 @@ public sealed class LauncherWindowTests
         w.RefreshAccount();
         Assert.False(w.FindControl<Button>("AccountChipButton")!.IsVisible);
         Assert.True(w.FindControl<Button>("SignInPill")!.IsVisible);
-        Assert.False(w.FindControl<StackPanel>("SpChip")!.IsVisible);
+        Assert.False(w.FindControl<Button>("SpChip")!.IsVisible);
     });
+
+    [Fact]
+    public void WalletChip_TracksBalanceAndSignIn() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        var chip = w.FindControl<Button>("SpChip")!;
+        Assert.False(chip.IsVisible);
+        CoreSettings.Current.SkillPoints = 1234;
+        CoreAccount.IsLoggedInProvider = () => true;
+        w.RefreshAccount();
+        Assert.True(chip.IsVisible);
+        Assert.Equal(1234.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.SkillPoints = 5678;
+        w.RefreshAccount();
+        Assert.Equal(5678.ToString("N0"), Text(w, "SpReadout"));
+        CoreAccount.IsLoggedInProvider = () => false;
+        w.RefreshAccount();
+        Assert.False(chip.IsVisible);
+    });
+
+    [Fact]
+    public void WalletReadout_AnimatesOnShowAndChange_AndParks() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreSettings.Current.SkillPoints = 1000;
+        LauncherWindow.BackToLauncher(shell);
+        var w = LauncherWindow.Instance!;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        w.Hide();
+        w.Show();
+        Assert.Equal(0.ToString("N0"), Text(w, "SpReadout"));
+        w.StepFx(0.45);
+        Assert.Equal(750.ToString("N0"), Text(w, "SpReadout"));
+        w.StepFx(0.45);
+        Assert.Equal(1000.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.SkillPoints = 2000;
+        w.RefreshAccount();
+        w.StepFx(0.3);
+        Assert.Equal(1750.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        w.StepFx(0.01);
+        Assert.Equal(2000.ToString("N0"), Text(w, "SpReadout"));
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        CoreSettings.Current.SkillPoints = 3000;
+        w.RefreshAccount();
+        w.StepFx(0.3);
+        Assert.Equal(2750.ToString("N0"), Text(w, "SpReadout"));
+        w.Hide();
+        Assert.Equal(3000.ToString("N0"), Text(w, "SpReadout"));
+        Assert.False(w.FxTicking);
+    }, pumpUntilIdle: false);
 
     [Fact]
     public void PanelCard_ShowsStatsAndRunningStatus_StopLinkStopsTheEngine() => Run(shell =>
@@ -1134,6 +1188,40 @@ public sealed class LauncherWindowTests
             Assert.Equal(Loc.Get("launcher_panel_idle"), Text(w, "StatusText"));
         }
         finally { CoreEngine.Stop(); }
+    });
+
+    [Fact]
+    public void EngineStoppedOutsideLauncher_ImmediatelyRefreshesThePanelCard() => Run(shell =>
+    {
+        var oldHook = CoreEngine.StoppedHook;
+        CoreEngine.StoppedHook = shell.OnEngineStopped;
+        try
+        {
+            shell.StartEngine();
+            Assert.True(CoreEngine.IsRunning);
+            LauncherWindow.BackToLauncher(shell);
+            var w = LauncherWindow.Instance!;
+            Assert.True(w.FindControl<Button>("StopLink")!.IsVisible);
+            Assert.Equal(Loc.Get("launcher_panel_open"), Text(w, "PanelCtaText"));
+
+            CoreEngine.Stop(); // session or panic path, not the launcher's Stop button
+            Assert.False(w.FindControl<Button>("StopLink")!.IsVisible);
+            Assert.Equal(Loc.Get("launcher_panel_idle"), Text(w, "StatusText"));
+            Assert.Equal(Loc.Get("launcher_panel_launch"), Text(w, "PanelCtaText"));
+        }
+        finally { CoreEngine.StoppedHook = oldHook; CoreEngine.Stop(); }
+    });
+
+    [Fact]
+    public void BreakoutDemoTile_UsesTheBuiltInCover() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell);
+        var w = LauncherWindow.Instance!;
+        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "breakoutdemo");
+        // The art sits in the tile's sliding art host, under the tilt and sheen layers.
+        var cover = Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Border)tile).OfType<Image>());
+        Assert.Same(ConditioningControlPanel.Avalonia.Helpers.BreakoutCardArt.Demo, cover.Source);
+        Assert.Equal(global::Avalonia.Media.Stretch.UniformToFill, cover.Stretch);
     });
 
     [Fact]
