@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Features
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
                 ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
                 ChkVideoLoopShort.IsChecked = s.MandatoryVideoLoopShortClips;
+                ChkVideoFillShort.IsChecked = s.MandatoryVideoFillShortWithOthers;
                 ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
@@ -256,6 +257,7 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.VideoMaxDurationSeconds) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoCutRandomStart) ||
                 e.PropertyName == nameof(Models.AppSettings.MandatoryVideoLoopShortClips) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFillShortWithOthers) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(Models.AppSettings.RandomizeAttentionTargets) ||
@@ -333,6 +335,15 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             s.MandatoryVideoLoopShortClips = ChkVideoLoopShort.IsChecked ?? false;
+            App.Settings?.Save();
+        }
+
+        private void ChkVideoFillShort_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoFillShortWithOthers = ChkVideoFillShort.IsChecked ?? false;
             App.Settings?.Save();
         }
 

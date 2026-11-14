@@ -7132,6 +7132,8 @@
   "tooltip_video_cut_random_start": "A clip longer than the limit starts at a random point instead of the beginning.",
   "setting_video_loop_short": "Loop short videos until the minimum",
   "tooltip_video_loop_short": "A clip shorter than the minimum replays until the minimum time has played, then ends once. Off: shorter clips are skipped.",
+  "setting_video_fill_short": "Fill the minimum with other videos",
+  "tooltip_video_fill_short": "A clip shorter than the minimum is followed by other random videos until the minimum time has played, then ends once. With only one video, it loops.",
   "setting_stare_to_click": "Stare to click",
   "tooltip_stare_to_click": "Look at a target for about a second instead of clicking it. Same hit, same reward.",
   "tooltip_update_to_version_install": "Version {0} is out. Click to install it.",

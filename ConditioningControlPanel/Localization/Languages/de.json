@@ -6512,6 +6512,8 @@
   "tooltip_video_cut_random_start": "Ein Clip über dem Zeitlimit startet an einer zufälligen Stelle statt am Anfang.",
   "setting_video_loop_short": "Kurze Videos bis zur Mindestzeit wiederholen",
   "tooltip_video_loop_short": "Ein Clip unter der Mindestzeit läuft so oft, bis die Mindestzeit erreicht ist, und endet dann einmal. Aus: kürzere Clips werden übersprungen.",
+  "setting_video_fill_short": "Mindestzeit mit anderen Videos füllen",
+  "tooltip_video_fill_short": "Nach einem Clip unter der Mindestzeit laufen andere zufällige Videos, bis die Mindestzeit erreicht ist, dann endet es einmal. Mit nur einem Video wird es wiederholt.",
   "setting_stare_to_click": "Ansehen statt klicken",
   "tooltip_stare_to_click": "Sieh ein Ziel etwa eine Sekunde an, statt es anzuklicken. Gleicher Treffer, gleiche Belohnung.",
   "tooltip_update_to_version_install": "Version {0} ist da. Klick, um sie zu installieren.",

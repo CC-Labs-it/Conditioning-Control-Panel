@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Models
         public int VideoMaxDurationSeconds { get; set; } = 0;
         public bool VideoCutRandomStart { get; set; } = true;
         public bool MandatoryVideoLoopShortClips { get; set; } = false;
+        public bool MandatoryVideoFillShortWithOthers { get; set; } = false;
 
         // Attention Check (Mini-Game) Settings
         public bool AttentionChecksEnabled { get; set; } = false;
@@ -347,6 +348,7 @@ namespace ConditioningControlPanel.Models
             settings.VideoMaxDurationSeconds = VideoMaxDurationSeconds;
             settings.VideoCutRandomStart = VideoCutRandomStart;
             settings.MandatoryVideoLoopShortClips = MandatoryVideoLoopShortClips;
+            settings.MandatoryVideoFillShortWithOthers = MandatoryVideoFillShortWithOthers;
 
             // Attention Checks
             settings.AttentionChecksEnabled = AttentionChecksEnabled;
@@ -471,6 +473,7 @@ namespace ConditioningControlPanel.Models
                 VideoMaxDurationSeconds = settings.VideoMaxDurationSeconds,
                 VideoCutRandomStart = settings.VideoCutRandomStart,
                 MandatoryVideoLoopShortClips = settings.MandatoryVideoLoopShortClips,
+                MandatoryVideoFillShortWithOthers = settings.MandatoryVideoFillShortWithOthers,
 
                 // Attention Checks
                 AttentionChecksEnabled = settings.AttentionChecksEnabled,

@@ -6512,6 +6512,8 @@
   "tooltip_video_cut_random_start": "Um clipe mais longo que o limite começa em um ponto aleatório em vez do início.",
   "setting_video_loop_short": "Repetir vídeos curtos até o mínimo",
   "tooltip_video_loop_short": "Um clipe mais curto que o mínimo se repete até atingir o tempo mínimo e depois termina uma única vez. Desligado: clipes mais curtos são pulados.",
+  "setting_video_fill_short": "Completar o mínimo com outros vídeos",
+  "tooltip_video_fill_short": "Depois de um clipe mais curto que o mínimo, outros vídeos aleatórios tocam até atingir o tempo mínimo e então termina uma única vez. Com um só vídeo, ele se repete.",
   "setting_stare_to_click": "Olhar para clicar",
   "tooltip_stare_to_click": "Olhe para um alvo por cerca de um segundo em vez de clicar. Mesmo acerto, mesma recompensa.",
   "tooltip_update_to_version_install": "A versão {0} saiu. Clique para instalar.",

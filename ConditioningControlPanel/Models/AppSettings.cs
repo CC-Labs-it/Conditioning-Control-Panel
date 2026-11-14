@@ -1569,6 +1569,17 @@ namespace ConditioningControlPanel.Models
             set { _mandatoryVideoLoopShortClips = value; OnPropertyChanged(); }
         }
 
+        // On: a clip shorter than the minimum is kept and followed by other random clips from the
+        // pool until the minimum has played, then the run ends once (Services/Video/VideoMinFill).
+        // A pool of one, or LibVLC, loops the clip instead. Off (default, and for every older
+        // settings file): the loop option above, or the plain skip, decides as before.
+        private bool _mandatoryVideoFillShortWithOthers = false;
+        public bool MandatoryVideoFillShortWithOthers
+        {
+            get => _mandatoryVideoFillShortWithOthers;
+            set { _mandatoryVideoFillShortWithOthers = value; OnPropertyChanged(); }
+        }
+
         private int _videoMaxDurationSeconds = 0;
         public int VideoMaxDurationSeconds
         {

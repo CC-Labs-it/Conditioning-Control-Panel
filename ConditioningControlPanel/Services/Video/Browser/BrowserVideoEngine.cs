@@ -49,6 +49,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// until this much has played, then ends once (Video.VideoMinLoop). 0 = play once.</summary>
         public long LoopUntilMs { get; init; }
 
+        /// <summary>"Fill the minimum with other videos": page URLs played after the first clip, in
+        /// order, until <see cref="LoopUntilMs"/> has played (Video.VideoMinFill). Empty = loop instead.</summary>
+        public IReadOnlyList<string>? FillUrls { get; init; }
+
         /// <summary>Gentle visuals: the page's playbackRate (1 = normal) and the fade-in on the
         /// first frame in ms (0 = none). The window itself can never fade (see BrowserVideoWindow).</summary>
         public double PlaybackRate { get; init; } = 1.0;
@@ -543,6 +547,8 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     hideCursor = req.HideCursor,
                     startAtMs = req.StartAtMs,
                     loopUntilMs = req.LoopUntilMs,
+                    // Every screen gets the same list, so the mirrors change clip together.
+                    fillUrls = req.FillUrls ?? Array.Empty<string>(),
                     rate = req.PlaybackRate,
                     fadeMs = req.FadeInMs,
                     // Arms the page's Media Session guard (player.js setMediaKeyGuard), which is what
