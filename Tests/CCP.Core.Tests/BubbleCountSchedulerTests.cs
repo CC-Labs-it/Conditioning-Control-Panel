@@ -609,6 +609,76 @@ public sealed class BubbleCountSchedulerTests
         finally { b.Stop(); b.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = oldFreeze; }
     });
 
+    [Fact]
+    public void Test_now_deferred_by_feed_survives_service_stop() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start();
+            b.Trigger(forceTest: true);
+            b.Stop();
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown);
+        }
+        finally { b.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void Stop_releases_feed_latch_for_test_now_while_old_poll_survives() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start(); b.Trigger(); // scheduled game parks first
+            b.Stop();
+            CoreSettings.Current.BubbleCountEnabled = false;
+            b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromMilliseconds(500)); // both polls remain while feed is visible
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown); // the old scheduled replay drops; Test Now plays
+        }
+        finally { b.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void Old_feed_poll_expiry_does_not_cancel_a_new_test_poll() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start(); b.Trigger();
+            clock.Advance(TimeSpan.FromSeconds(89));
+            b.Stop(); b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromSeconds(1)); // old poll expires, new poll still has time
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown);
+        }
+        finally { b.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void Force_cleanup_cancels_all_feed_polls_after_stop() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Trigger(forceTest: true); b.Stop(); b.Trigger(forceTest: true);
+            b.ForceCleanup(); host.Feed = false;
+            clock.Advance(TimeSpan.FromSeconds(2));
+            Assert.Empty(host.Shown);
+            Assert.False(b.IsBusy);
+        }
+        finally { b.ForceCleanup(); }
+    });
+
     [Theory]
     [InlineData("expiry")]
     [InlineData("stop")]

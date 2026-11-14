@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Services
         private readonly Random _random = new();
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
+        private readonly HashSet<ITimer> _feedPolls = new();
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
@@ -130,7 +131,8 @@ namespace ConditioningControlPanel.Services
         {
             IsRunning = false;
             Dispose(ref _scheduler);
-            Dispose(ref _feedDefer);
+            // WPF Stop releases the latch without cancelling already scheduled polls.
+            _feedDefer = null;
             _feedDeadline = null;
             // A game already on screen plays out. Its completion/force-close retries after release.
             if (!IsBusy) PackVideos?.CleanupTemps();
@@ -150,7 +152,9 @@ namespace ConditioningControlPanel.Services
         {
             Dispose(ref _leadIn);
             Dispose(ref _queued);   // WPF panic: InteractionQueue.ForceReset drops the queued game
-            Dispose(ref _feedDefer);
+            foreach (var poll in _feedPolls) poll.Dispose();
+            _feedPolls.Clear();
+            _feedDefer = null;
             _feedDeadline = null;
             var wasBusy = IsBusy;
             _retryCount = 0;
@@ -193,8 +197,6 @@ namespace ConditioningControlPanel.Services
                 DeferPastFeed(forceTest);
                 return;
             }
-            Dispose(ref _feedDefer);
-            _feedDeadline = null;
             if (_host.DeferTrigger(() => Trigger(forceTest))) return;
             if (_host.OtherInteractionActive)
             {
@@ -236,25 +238,36 @@ namespace ConditioningControlPanel.Services
 
         private void DeferPastFeed(bool forceTest)
         {
-            if (_feedDefer != null) return; // one replay, never a backlog or a renewed deadline
+            if (_feedDefer != null) return; // one replay per current latch
             _feedDeadline ??= _time.GetUtcNow() + TimeSpan.FromSeconds(90);
             if (_time.GetUtcNow() >= _feedDeadline) { _feedDeadline = null; return; }
-            PollFeed(forceTest);
+            _feedDefer = PollFeed(forceTest, _feedDeadline.Value);
         }
 
-        private void PollFeed(bool forceTest) => _feedDefer = After(TimeSpan.FromMilliseconds(500), mine =>
+        private ITimer PollFeed(bool forceTest, DateTimeOffset deadline)
         {
-            if (!ReferenceEquals(mine, _feedDefer)) return;
-            Dispose(ref _feedDefer);
-            if (_host.FeedOwnsTheScreen)
+            var timer = After(TimeSpan.FromMilliseconds(500), mine =>
             {
-                if (_time.GetUtcNow() < _feedDeadline) PollFeed(forceTest);
-                else _feedDeadline = null;
-                return; // expired: release the latch without starting a game
-            }
-            Trigger(forceTest); // rechecks running/enabled; forceTest stays exempt, as WPF
-            if (_feedDefer == null) _feedDeadline = null;
-        });
+                if (mine == null || !_feedPolls.Remove(mine)) return;
+                var ownsLatch = ReferenceEquals(mine, _feedDefer);
+                mine.Dispose();
+                if (_host.FeedOwnsTheScreen)
+                {
+                    if (_time.GetUtcNow() < deadline)
+                    {
+                        var next = PollFeed(forceTest, deadline);
+                        if (ownsLatch) _feedDefer = next;
+                    }
+                    else if (ownsLatch) { _feedDefer = null; _feedDeadline = null; }
+                    return;
+                }
+                if (ownsLatch) _feedDefer = null;
+                Trigger(forceTest); // rechecks running/enabled; forceTest stays exempt, as WPF
+                if (ownsLatch && _feedDefer == null) _feedDeadline = null;
+            });
+            _feedPolls.Add(timer);
+            return timer;
+        }
 
         private void QueueBehind(bool forceTest) => _queued = After(QueuePoll, mine =>
         {
