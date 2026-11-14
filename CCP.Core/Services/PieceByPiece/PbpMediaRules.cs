@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel.Services.GoonGame;
 
-namespace ConditioningControlPanel.Services.PieceByPiece;
+namespace ConditioningControlPanel.Services.PieceByPieceMedia;
 
 /// <summary>
 /// The pure half of Piece by Piece's online pictures (2026-09-28): who may fetch, from which
@@ -18,6 +18,9 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 /// again") the pick is SAVED and stands as this game's own opt-in in every later window too
 /// (<see cref="SavedOptIn"/>); it is still never written back as app-wide consent, and "no
 /// online pictures" is saved the same way. Everything else is the player's own library.</para>
+/// <para>Core copy of WPF <c>Services/PieceByPiece/PbpMediaRules.cs</c> in its own namespace: both assemblies
+/// expose internals to the WPF tests, so one shared full name would not compile there (CS0433).
+/// Fold the WPF copy into this one when WPF moves to Core.</para>
 /// </summary>
 internal static class PbpMediaRules
 {

@@ -8,6 +8,7 @@ using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.PieceByPieceMedia;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;

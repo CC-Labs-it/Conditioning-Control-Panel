@@ -18,6 +18,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.PieceByPieceMedia;
 using ConditioningControlPanel.Services.Quiz;
 using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
