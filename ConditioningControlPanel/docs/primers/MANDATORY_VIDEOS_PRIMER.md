@@ -344,6 +344,7 @@ player so a Deeper blink/rewind doesn't desync the monitors (#527).
 | `VideosPerHour` | 760 | 6 (1–20) | Scheduler rate; base gap = 3600/N × 0.8–1.2 jitter, min 60s. |
 | `StrictLockEnabled` | 767 | false | Video can't be closed; only the panic key exits. Double-warning in the card. |
 | `VideoMinDurationSeconds` / `VideoMaxDurationSeconds` | 778 / 785 | 0 (off) | Queue-refill duration filter (best-effort, cold-cache falls open) + a hard wall-clock cap (#584). |
+| `MandatoryVideoLoopShortClips` | - | false | On: the minimum keeps shorter clips and replays them in place until it has played, then ends once (`Services/Video/VideoMinLoop.cs`; LibVLC `:input-repeat`, browser page `ended`). Full screen only. |
 | `AttentionChecksEnabled` | 806 | false | The bouncing-target mini-game. |
 | `AttentionDensity` | 813 | 3 (1–10) | Target count. |
 | `RandomizeAttentionTargets` | 820 | false | Random 1..N instead of exactly N. |

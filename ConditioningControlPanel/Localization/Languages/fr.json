@@ -6510,6 +6510,8 @@
   "tooltip_duration_filter": "À gauche : les vidéos plus courtes sont ignorées. À droite : une vidéo plus longue est coupée à cette durée, vidéos web et flottantes comprises. 0 veut dire sans limite.",
   "setting_video_cut_random_start": "Démarrer les vidéos coupées à un point aléatoire",
   "tooltip_video_cut_random_start": "Un clip plus long que la limite démarre à un point aléatoire au lieu du début.",
+  "setting_video_loop_short": "Répéter les vidéos courtes jusqu'au minimum",
+  "tooltip_video_loop_short": "Un clip plus court que le minimum se répète jusqu'à atteindre la durée minimale, puis se termine une seule fois. Désactivé : les clips plus courts sont ignorés.",
   "setting_stare_to_click": "Regarder pour cliquer",
   "tooltip_stare_to_click": "Fixe une cible environ une seconde au lieu de cliquer dessus. Même touche, même récompense.",
   "tooltip_update_to_version_install": "La version {0} est sortie. Cliquez pour l'installer.",

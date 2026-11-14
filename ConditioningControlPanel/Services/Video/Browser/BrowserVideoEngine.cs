@@ -45,6 +45,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <summary>Start position for the chaos random-segment mode. 0 = from the top.</summary>
         public long StartAtMs { get; init; }
 
+        /// <summary>"Loop short videos until the minimum time": the page replays the clip in place
+        /// until this much has played, then ends once (Video.VideoMinLoop). 0 = play once.</summary>
+        public long LoopUntilMs { get; init; }
+
         /// <summary>Gentle visuals: the page's playbackRate (1 = normal) and the fade-in on the
         /// first frame in ms (0 = none). The window itself can never fade (see BrowserVideoWindow).</summary>
         public double PlaybackRate { get; init; } = 1.0;
@@ -538,6 +542,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     blurBackground = req.BlurBackground,
                     hideCursor = req.HideCursor,
                     startAtMs = req.StartAtMs,
+                    loopUntilMs = req.LoopUntilMs,
                     rate = req.PlaybackRate,
                     fadeMs = req.FadeInMs,
                     // Arms the page's Media Session guard (player.js setMediaKeyGuard), which is what

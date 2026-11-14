@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Services
         /// clip's last seconds (CreditOutroTiming). Once per clip.</summary>
         private bool _browserHasCredit;
         private bool _browserOutroSent;
+        private long _browserLoopUntilMs;
 
         /// <summary>True while a browser video session owns the screen. Read by AudioService so the
         /// duck sweep never lowers the app's OWN video audio (LibVLC audio is in-process and
@@ -131,6 +132,9 @@ namespace ConditioningControlPanel.Services
                 _browserSegmentSeeked = false;
                 _browserHasCredit = Video.ScrolllerCredit.For(path) != null;
                 _browserOutroSent = false;
+                // "Loop short videos": the page replays up to this; meta turns it into a pass count.
+                _browserLoopUntilMs = Video.VideoMinLoop.PageLoopUntilMs(LoopShortClipApplies(path),
+                    App.Settings?.Current?.VideoMinDurationSeconds ?? 0);
 
                 // Chaos random-segment mode: the LibVLC path seeks from LengthChanged, but the page
                 // takes a start offset directly. The fraction needs the duration, which only arrives
@@ -150,6 +154,7 @@ namespace ConditioningControlPanel.Services
                     HideCursor = false,
                     // Gentle visuals: slowed playback + a fade in from black inside the page.
                     PlaybackRate = _playRate,
+                    LoopUntilMs = _browserLoopUntilMs,
                     FadeInMs = Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0,
                     // The SAME flag SetupStrictHandlers is given below, not the live IsStrictActive
                     // probe: the page wants one fixed answer at load time, and this is the value the
@@ -477,6 +482,8 @@ namespace ConditioningControlPanel.Services
             }
 
             _duration = durationMs / 1000.0;
+            _loopPasses = _browserLoopUntilMs > 0
+                ? Video.VideoMinLoop.Passes(true, (int)(_browserLoopUntilMs / 1000), durationMs) : 1;
             App.Logger?.Information("VideoService: browser meta - duration={Duration}s ({W}x{H})", _duration, width, height);
 
             // meta can arrive more than once (Infinity at loadedmetadata, real value at
