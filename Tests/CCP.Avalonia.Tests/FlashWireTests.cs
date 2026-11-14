@@ -217,7 +217,7 @@ public sealed class FlashWireTests
     public Task A_shown_flash_pays_4_xp_and_ticks_the_flash_achievement_counter() => OnUi((s, _, xp, engine) =>
     {
         ShowOne();
-        Assert.Equal(new[] { (4.0, "Flash") }, xp);   // no flash sound on this head: WPF's no-sound 4
+        Assert.Equal(new[] { (4.0, "Flash") }, xp);   // no flash voice in this burst: WPF's no-sound 4
         Assert.Equal(1, engine.Progress.TotalFlashImages);
     });
 

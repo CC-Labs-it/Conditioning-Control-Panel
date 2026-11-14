@@ -65,13 +65,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static readonly object BurstGate = new();
         private static int _generation;
+        private static int _voiceAttempted;
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
         internal static int Generation => _generation;
 
         /// <summary>A burst is still spawning (WPF <c>_isBusy</c>); the ambient tick skips.</summary>
         public static bool IsBusy { get { lock (BurstGate) return _busy; } }
-        internal static int BeginBurst() { lock (BurstGate) { _busy = true; return _generation; } }
+        internal static int BeginBurst() { lock (BurstGate) { _busy = true; Volatile.Write(ref _voiceAttempted, 0); return _generation; } }
         internal static void FinishBurst(int generation) { lock (BurstGate) if (generation == _generation) _busy = false; }
 
         /// <summary>Fire one burst. Any attached visual works as <paramref name="host"/>; it only
@@ -237,6 +238,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     lock (sync) if (version == duckVersion && !duckReleased) { duckReleased = true; CoreAudio.Unduck(duckGeneration); }
                 });
             }
+            // WPF marks the burst before PlaySound, even if output fails.
+            Volatile.Write(ref _voiceAttempted, 1);
             var stop = CoreAudio.PlayStoppable(path, gain, "flash-voice", reported =>
             {
                 lock (sync)
@@ -354,7 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>What a shown flash pays (WPF FlashService.cs:1608, 1834-1877, 2165-2172): session
-        /// log and history, the lucky chime, XP (the voiced-flash bonus is still missing; a hydra child with
+        /// log and history, the lucky chime, XP (a hydra child with
         /// independent timing pays less; x10 lucky), and the achievement + quest tick, which a linked
         /// hydra child skips only when timing is independent.</summary>
         internal static void Paid(string path, AppSettings s, int hydraGeneration, int multiplier)
@@ -362,7 +365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
-            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
+            CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: Volatile.Read(ref _voiceAttempted) != 0, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
             {
                 App.Achievements?.TrackFlashImage();   // WPF AchievementService.cs:388
@@ -590,7 +593,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // The burst generation and the voice stop at once; windows close on the UI thread.
         private static void RetireBurst()
         {
-            lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; }
+            lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; Volatile.Write(ref _voiceAttempted, 0); }   // WPF FlashService.cs:5118
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
         }
 
