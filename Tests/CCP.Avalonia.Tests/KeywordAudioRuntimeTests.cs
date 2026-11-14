@@ -363,6 +363,26 @@ public sealed class KeywordAudioRuntimeTests
         try { running.SetValue(null, true); s.BrainDrainEnabled = true; s.AudioOnlySession = false; Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.UserDrainRunning()); }
         finally { running.SetValue(null, saved.Item1); (s.BrainDrainEnabled, s.AudioOnlySession) = (saved.BrainDrainEnabled, saved.AudioOnlySession); }
     });
+    [Theory]
+    [InlineData(false, 30)]
+    [InlineData(true, 60)]
+    public Task DrainFrameClockUsesSelectedIntervalAndStops(bool highRefresh, int fps) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var source = new FakeFrames();
+        var clock = new ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock(source);
+        var interval = ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.FrameInterval(highRefresh);
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.StartFrames(clock, interval);
+            Assert.Equal(TimeSpan.FromMilliseconds(1000.0 / fps), clock.Interval);
+            Assert.True(clock.IsEnabled);
+            Assert.Equal(1, source.Count);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Overlays.BrainDrainOverlay.Stop(); }
+        Assert.False(clock.IsEnabled);
+        Assert.Equal(0, source.Count);
+        return Task.CompletedTask;
+    });
     [Fact] // WPF KeywordTriggerService.cs:1805-1808, EffectPayloadFiring.cs:70-99
     public void KeywordUsesTimedDrainHandlerWithWpfGuardsAndPanicStop() => Run((engine, s, _) =>
     {

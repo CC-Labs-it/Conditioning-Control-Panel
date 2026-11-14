@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -26,13 +27,13 @@ internal static class BrainDrainOverlay
 {
     private static readonly List<DrainWindow> Windows = new();
     private static BrainDrainCapturePump? _pump;
-    private static DispatcherTimer? _frames;
+    private static FrameClock? _frames;
     private static Window? _owner;
     private static int _generation;
     private static long _started, _ending;
     private static bool _allowCapture;
     internal static bool IsShowing { get; private set; }
-    // Test seams: the real path opens native windows and schedules a dispatcher timer.
+    // Test seams: the real path opens native windows and schedules its end.
     internal static Func<int, bool, bool>? ShowOverride;
     internal static Func<bool> UserDrainRunning = () => false; // No base visual consumer on this head yet.
     internal static Action<Action, TimeSpan> Schedule = (a, t) => DispatcherTimer.RunOnce(a, t);
@@ -84,14 +85,19 @@ internal static class BrainDrainOverlay
             const int downscale = 4;
             float sigma = (float)(strength * 0.14 / downscale / 3.0);
             float amplitude = (float)(1 + Math.Clamp(strength, 0, 200) * .045);
-            var interval = TimeSpan.FromMilliseconds(1000.0 / (s.BrainDrainHighRefresh ? 60 : 30));
+            var interval = FrameInterval(s.BrainDrainHighRefresh);
             _pump = new BrainDrainCapturePump(downscale, interval, melt, rects, sigma, amplitude);
-            _frames = new DispatcherTimer { Interval = interval }; _frames.Tick += OnFrame; _frames.Start();
+            StartFrames(new FrameClock(Windows[0]), interval);
             _allowCapture = s.AllowOverlayCapture;
             _owner = owner; owner.Closed += OwnerClosed;
             return true;
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain overlay failed"); Stop(); return false; }
+    }
+    internal static TimeSpan FrameInterval(bool highRefresh) => TimeSpan.FromSeconds(1.0 / (highRefresh ? 60 : 30));
+    internal static void StartFrames(FrameClock clock, TimeSpan interval)
+    {
+        _frames = clock; clock.Interval = interval; clock.Tick += OnFrame; clock.Start();
     }
     private static void End()
     {
@@ -134,7 +140,7 @@ internal static class BrainDrainOverlay
             return;
         }
         System.Threading.Interlocked.Increment(ref _generation); IsShowing = false;
-        _frames?.Stop(); _frames = null;
+        if (_frames != null) { _frames.Stop(); _frames.Tick -= OnFrame; _frames = null; }
         _pump?.Shutdown(); _pump = null; // Never join a stalled desktop capture on the UI thread.
         foreach (var w in Windows) { try { w.Close(); } catch { } }
         Windows.Clear();
