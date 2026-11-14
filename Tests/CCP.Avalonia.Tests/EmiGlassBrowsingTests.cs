@@ -90,8 +90,10 @@ public class EmiGlassBrowsingTests
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public Task ReducedMotionKeepsTheBrowsingPageStill() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public Task BrowsingPagesAdvanceAtEveryMotionLevel(MotionLevel motion) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         AmbientBeatLoopsTests.Setup();
         var old = CoreSettings.ServiceProvider;
@@ -102,7 +104,7 @@ public class EmiGlassBrowsingTests
         try
         {
             CoreSettings.Current.EmiDeskGlass = true;
-            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            CoreSettings.Current.MotionLevel = motion;
             EmiState.Current.BedtimeUntil = DateTime.MinValue;
             desk.Show(); Dispatcher.UIThread.RunJobs();
             var flip = DateTime.UtcNow.AddSeconds(61);
@@ -111,7 +113,7 @@ public class EmiGlassBrowsingTests
             var layer = Assert.IsType<Canvas>(Assert.Single(desk.GlassHost.Children));
             var page = Assert.Single(layer.Children.OfType<Canvas>().Where(c => c.IsVisible));
             desk.AdvanceGlass(flip.AddMilliseconds(5220));
-            Assert.Same(page, Assert.Single(layer.Children.OfType<Canvas>().Where(c => c.IsVisible)));
+            Assert.NotSame(page, Assert.Single(layer.Children.OfType<Canvas>().Where(c => c.IsVisible)));
         }
         finally
         {

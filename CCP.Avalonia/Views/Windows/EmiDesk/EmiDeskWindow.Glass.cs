@@ -152,7 +152,7 @@ public partial class EmiDeskWindow
             return;
         }
         if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
-        if (_glassMotion) _browsing?.Tick(elapsed);
+        _browsing?.Tick(elapsed);
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {
             Canvas.SetLeft(_glassSignal, (10 + (int)(elapsed / 1000) % 6 * 4) * _glassScale);

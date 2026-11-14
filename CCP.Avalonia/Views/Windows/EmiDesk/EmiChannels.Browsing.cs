@@ -55,7 +55,7 @@ internal sealed class BrowsingPainter
     private readonly TextBlock _bankNum = new();
     private readonly TextBlock _bankDrop = new();
     private readonly Polyline _deepTrace = new();
-    private readonly Avalonia.Collections.AvaloniaList<Point> _deepPts = new();
+    private readonly global::Avalonia.Collections.AvaloniaList<Point> _deepPts = new();
 
     private double _mailBarMax, _boardBarMax, _deepStep, _deepTop;
     private int _live = -1, _litState = -1, _bankN = -1;
