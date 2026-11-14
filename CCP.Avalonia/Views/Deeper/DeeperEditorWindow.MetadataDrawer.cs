@@ -219,6 +219,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (w < 320) w = 320;
                 if (w > 520) w = 520;
                 col.Width = new GridLength(w, GridUnitType.Pixel);
+                var h = Math.Clamp(CoreSettings.Current.DeeperEditorTimelineHeight, 120, 400);
+                PreviewTimelineGrid.RowDefinitions[2].Height = new GridLength(h, GridUnitType.Pixel);
             }
             catch { }
         }
@@ -241,6 +243,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 CoreSettings.Save();
             }
             catch (Exception ex) { Log.Warning(ex, "DeeperEditor: sidebar width would not persist"); }
+        }
+
+        private void TimelineSplitter_DragCompleted(object? sender, VectorEventArgs e)
+        {
+            try
+            {
+                int h = Math.Max(120, (int)Math.Round(PreviewTimelineGrid.RowDefinitions[2].ActualHeight));
+                CoreSettings.Current.DeeperEditorTimelineHeight = h;
+                CoreSettings.Save();
+            }
+            catch (Exception ex) { Log.Warning(ex, "DeeperEditor: timeline height would not persist"); }
         }
 
         // -----------------------------------------------------------------

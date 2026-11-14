@@ -299,6 +299,124 @@ public sealed class AiPermissionsLiveFeedTests
     }
 
     [Fact]
+    public Task TierChangesRepaintEffectiveEffectsWithoutChangingSavedChoice() => Run(service =>
+    {
+        var restore = ProcessStateSnapshot.CaptureAccountSeed();
+        Window? window = null;
+        try
+        {
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p)));
+            bool lab = false;
+            CoreAccount.HasLabAccessProvider = () => lab;
+            service.Current.CompanionPrompt.AllowAiToControlEffects = true;
+            var grid = new AiPermissionsGrid();
+            window = new Window { Content = grid };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var toggle = grid.FindControl<CheckBox>("ChkCapEffects")!;
+            var panel = grid.FindControl<Control>("EffectPermsPanel")!;
+            Assert.False(toggle.IsChecked);
+            Assert.False(panel.IsVisible);
+            lab = true;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            lab = false;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(toggle.IsChecked);
+            Assert.False(panel.IsVisible);
+            Assert.True(service.Current.CompanionPrompt.AllowAiToControlEffects);
+        }
+        finally
+        {
+            try { window?.Close(); }
+            finally { restore(); }
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CachedLabLogoutRepaintsPermissionsWithoutTierChanged() => Run(async service =>
+    {
+        var restore = ProcessStateSnapshot.CaptureAccountSeed();
+        var oldSync = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync;
+        var oldUser = CoreAccount.UnifiedUserId;
+        var oldClearFailed = ConditioningControlPanel.Avalonia.Platform.SecretStore.ClearFailed;
+        var achievements = typeof(App).GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldAchievements = achievements.GetValue(null);
+        MainShellWindow? shell = null;
+        ProviderSubscription? patreon = null, substar = null;
+        int changes = 0;
+        EventHandler<PatreonTier> tierChanged = (_, _) => changes++;
+        try
+        {
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = null;
+            achievements.SetValue(null, null);
+            var s = service.Current;
+            s.AwarenessModeEnabled = false;
+            s.Welcomed = true;
+            s.HasAcceptedAgeVerification = true;
+            foreach (var key in FeatureIntros.All.Keys)
+                if (!s.SeenFeatureIntros.Contains(key)) s.SeenFeatureIntros.Add(key);
+            s.UnifiedId = CoreAccount.UnifiedUserId = "test-account";
+            s.PatreonTier = 2;
+            s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = DateTime.UtcNow.AddDays(3);
+            s.CompanionPrompt.AllowAiToControlEffects = true;
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p, () => s)));
+            patreon = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!;
+            substar = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar!;
+            Assert.Equal(PatreonTier.None, patreon.CurrentTier);
+            Assert.Equal(PatreonTier.None, substar.CurrentTier);
+            Assert.True(CoreAccount.HasLabAccess);
+            patreon.TierChanged += tierChanged;
+            substar.TierChanged += tierChanged;
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("permissions");
+            Dispatcher.UIThread.RunJobs();
+            var grid = shell.GetVisualDescendants().OfType<AiPermissionsGrid>().Single();
+            var toggle = grid.FindControl<CheckBox>("ChkCapEffects")!;
+            var panel = grid.FindControl<Control>("EffectPermsPanel")!;
+            var band = grid.FindControl<Grid>("EffectsLockBand")!;
+            Assert.True(toggle.IsChecked);
+            Assert.True(panel.IsVisible);
+            Assert.False(band.IsVisible);
+
+            await shell.LogoutAsync();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, changes);
+            Assert.False(CoreAccount.HasLabAccess);
+            Assert.False(toggle.IsChecked);
+            Assert.False(panel.IsVisible);
+            Assert.True(band.IsVisible);
+            Assert.True(s.CompanionPrompt.AllowAiToControlEffects);
+        }
+        finally
+        {
+            try
+            {
+                if (patreon != null) patreon.TierChanged -= tierChanged;
+                if (substar != null) substar.TierChanged -= tierChanged;
+                shell?.Close();
+            }
+            finally
+            {
+                achievements.SetValue(null, oldAchievements);
+                ConditioningControlPanel.Avalonia.Platform.SecretStore.ClearFailed = oldClearFailed;
+                ConditioningControlPanel.Avalonia.Platform.AccountSeed.Sync = oldSync;
+                CoreAccount.UnifiedUserId = oldUser;
+                restore();
+            }
+        }
+    });
+
+    [Fact]
     public Task LockBandCtaOpensSettingsAccountAsWpfDoes() => Run(_ =>
     {
         var shell = new MainShellWindow();

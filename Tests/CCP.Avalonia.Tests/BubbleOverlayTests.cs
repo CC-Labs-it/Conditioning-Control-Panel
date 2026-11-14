@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -442,6 +444,60 @@ public sealed class BubbleOverlayTests
                 Assert.True(ms < 30, report + " (budget 30 ms = one step)");
             }
             finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF BubbleService.cs:4967: with no per-variant sprite the freeze pickup wears its
+    /// label glyph, so it reads as a freeze before it is caught. Same bubble, label vs none.</summary>
+    [Fact]
+    public async Task Freeze_pickup_draws_its_label_glyph()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var saved = BubbleOverlay.Field.Bubbles.ToArray();
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1) { Width = 1280, Height = 720 };
+            ConditioningControlPanel.Services.Chaos.EffectBubbleSpec Spec(string label) => new()
+                { VariantId = "bambifreeze", IsFreeze = true, SizePx = 200, Tint = 0xFF8AE6FFu, Label = label };
+            var b = new AmbientBubble { Screen = 0, X = 400, Y = 200, Size = 200, Clickable = true, Spec = Spec("\u2744") };
+            int stride = 0;
+            byte[] Frame()
+            {
+                (w.Content as Control)!.InvalidateVisual();
+                using var bmp = w.CaptureRenderedFrame()!;
+                using var fb = bmp.Lock();
+                stride = fb.RowBytes;
+                var px = new byte[fb.RowBytes * fb.Size.Height];
+                System.Runtime.InteropServices.Marshal.Copy(fb.Address, px, 0, px.Length);
+                return px;
+            }
+            try
+            {
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.Add(b);
+                w.Show();
+                var labelled = Frame();
+                b.Spec = Spec("");
+                var plain = Frame();
+                int inside = 0, outside = 0;
+                for (int i = 0; i < labelled.Length; i += 4)
+                {
+                    if (labelled[i] == plain[i] && labelled[i + 1] == plain[i + 1] && labelled[i + 2] == plain[i + 2]) continue;
+                    int x = i % stride / 4, y = i / stride;
+                    if (Math.Abs(x - 500) < 50 && Math.Abs(y - 300) < 50) inside++; else outside++;
+                }
+                Assert.True(inside > 100, $"label pixels {inside}");
+                Assert.Equal(0, outside);
+            }
+            finally
+            {
+                w.Close();
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.AddRange(saved);
+            }
             return Task.CompletedTask;
         });
     }

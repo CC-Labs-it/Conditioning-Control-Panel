@@ -123,6 +123,39 @@ public sealed class FeatureCardFxTests
         Assert.False(badge.IsHitTestVisible);
     });
 
+    // Restack b214 (#4144): a Home tile keeps the rim light but neither lifts nor pops its art, and a card
+    // that becomes a Home tile while hovered drops both at once.
+    [Fact]
+    public void HomeHoverKeepsRimButDoesNotLiftOrPopArt() => WithCard((window, host, card) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        Env.RaiseMotionGateChanged();
+        try
+        {
+            card.DashboardDepth = true;
+            var scale = (ScaleTransform)card.FindControl<Border>("RootBorder")!.RenderTransform!;
+            var art = card.FindControl<Border>("ImgIconHost")!;
+            var rim = card.FindControl<Border>("RimLight")!;
+            Hover(card, window, true);
+            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(0.85, rim.Opacity, 3);
+            Assert.True(art.RenderTransform == null || art.RenderTransform.Value.IsIdentity);
+            Hover(card, window, false);
+            card.DashboardDepth = false;
+            Hover(card, window, true);
+            Assert.Equal(1.02, scale.ScaleX, 3);
+            Assert.False(art.RenderTransform!.Value.IsIdentity);
+            card.DashboardDepth = true;
+            Assert.Equal(1, scale.ScaleX);
+            Assert.True(art.RenderTransform!.Value.IsIdentity);
+        }
+        finally
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            Env.RaiseMotionGateChanged();
+        }
+    });
+
     [Fact]
     public void PointerMovesRetargetOneTiltTransitionAndIgnoreRepeatedTargets() => WithCard((window, host, card) =>
     {
