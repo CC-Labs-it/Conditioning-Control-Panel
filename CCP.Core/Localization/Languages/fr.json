@@ -8468,5 +8468,6 @@
   "chaos_expiry_name_braindrain": "brain drain",
   "chaos_expiry_name_gif": "cascade de GIF",
   "webcam_camera_unavailable_detail": "Caméra indisponible. Une autre application l’utilise peut-être ou les paramètres de confidentialité la bloquent.",
-  "webcam_capture_retry_fmt": "La caméra répond lentement. Essai d’une autre méthode ({0}/{1})."
+  "webcam_capture_retry_fmt": "La caméra répond lentement. Essai d’une autre méthode ({0}/{1}).",
+  "installer_avalonia_upgrade_notice": "Mise à niveau vers Avalonia\n\nLa mise à niveau depuis WPF réinitialise les connexions du navigateur intégré. Reconnectez-vous aux sites ouverts dans CCP.\n\nLe nouveau profil browser_data_avalonia se trouve dans le dossier de données utilisateur de CCP. L’ancien profil browser_data est conservé.\n\nCe changement n’efface pas les jetons du compte CCP, les paramètres ni la progression."
 }
