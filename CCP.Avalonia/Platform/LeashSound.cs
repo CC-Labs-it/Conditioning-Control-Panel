@@ -24,6 +24,9 @@ internal static class LeashSound
     // WPF LeashFx.Sent: an offer the server took.
     internal static void Sent(DateTime now) => Play(LeashCue.Sent, "chaos/chip_pop.mp3", 0.16f, now);
 
+    // WPF LeashFx.Jingle: the holder's own tug, as it goes out.
+    internal static void Jingle(DateTime now) => Play(LeashCue.Jingle, "chaos/chain_pop.mp3", 0.22f, now);
+
     internal static void Cut(DateTime now) => Play(LeashCue.Cut, "chaos/snap.mp3", 0.22f, now);
 
     /// <summary>WPF LeashHolderCard.ReleaseAsync: the cut when the server took the Let go, else Denied.</summary>
