@@ -79,8 +79,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case "gazeminigame": Named<Tabs.PlayTabView>("PlayTab")?.OpenGazeMinigame(); break;
                 case "breakout": LaunchPlayBreakout(); break;                          // WPF :205, the Play wall's door
                 case "dtrh": LaunchPlayLauncherGame(Games.GameWindow.DtrhId); break;   // WPF :208 LaunchExclusiveGame
+                case "focusgaze": OpenFocusGazeSwitch(); break;                       // WPF :242
                 default: ShowTab(key); break;
             }
+        }
+
+        /// <summary>WPF OpenFocusGazeSwitch (MainWindow.Exclusives.cs:257): Focus Gaze is a switch on the Play
+        /// wall, not a window, so go there and show it. The switch's own handler asks the tier gate;
+        /// navigating never turns it on.</summary>
+        private void OpenFocusGazeSwitch()
+        {
+            ShowTab("play");
+            var slot = Named<Tabs.PlayTabView>("PlayTab")?.FindControl<Control>("SlotFocusGaze");
+            if (slot == null) return;
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                try { slot.BringIntoView(); }
+                catch (System.Exception ex) { Serilog.Log.Debug("Focus Gaze bring-into-view: {E}", ex.Message); }
+            }, global::Avalonia.Threading.DispatcherPriority.Background);   // after the Play tab's first layout
         }
     }
 }

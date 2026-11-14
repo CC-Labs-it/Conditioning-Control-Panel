@@ -126,7 +126,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         // A completion barrier by default; shutdown supplies its bounded exit budget.
-        internal void Drain(int ms = Timeout.Infinite) { try { _work.Wait(ms); } catch { } }
+        internal void Drain(int ms = Timeout.Infinite)
+        {
+            Task work;
+            lock (_lock) work = _work;   // Enqueue swaps the chain under the lock
+            try { work.Wait(ms); } catch { }
+        }
 
         private void DisposeDuckTimers()
         {

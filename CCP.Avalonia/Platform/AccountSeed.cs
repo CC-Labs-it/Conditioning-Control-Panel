@@ -488,9 +488,17 @@ internal static class AccountSeed
         // WPF ProfileSyncService read-before-write: the Patreon confirmation keeps a Discord sign-in's grace alive.
         ApplyPatreonReading(new PatreonActiveReading(user.PatreonIsActive,
             ConditioningControlPanel.Services.Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), "profile");
+        var (preLevel, preLevelXp) = (s.PlayerLevel, s.PlayerXP);
         if (!ConditioningControlPanel.Services.Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
             ProfileAdopt.AdoptReadBeforeWrite(s, user, adoptConditioningMinutes: true);
         CoreSettings.Save();
+        // WPF ProfileSyncService RaiseProfileLoadedIfProgressionChanged("read-before-write"): a read that
+        // moved level or XP repaints before the push, whether or not the push then succeeds.
+        if (s.PlayerLevel != preLevel || Math.Abs(s.PlayerXP - preLevelXp) > 0.01)
+        {
+            try { ProfileLoaded?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Profile read notification failed"); }
+        }
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)
         {

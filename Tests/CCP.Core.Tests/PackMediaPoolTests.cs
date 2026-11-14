@@ -313,6 +313,37 @@ public sealed class PackMediaPoolTests : IDisposable
         Assert.InRange(Hits(remaining: false), 9, 40);    // flash weighs whole lists: 10 of 109 -> ~9 %
     }
 
+    private sealed class PackWinsRandom : Random
+    {
+        public readonly List<int> Bounds = new();
+        public override int Next(int maxValue) { Bounds.Add(maxValue); return maxValue - 1; }
+    }
+
+    // WPF VideoService.RefreshVideosPath / ReloadAssets clear BOTH dealt queues; only ReloadAssets sweeps
+    // the decrypts (restack b199, from #3944 / #4036).
+    [Fact]
+    public void VideoRefreshRestartsThePackCycleAndKeepsThePlayingDecrypt()
+    {
+        ContentPackStoreTests.WritePack(_root, "p1", "One", ("a.mp4", "video"), ("b.mp4", "video"), ("c.mp4", "video"));
+        var store = NewStore();
+        var random = new PackWinsRandom();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, random, () => store);
+        var video = new MandatoryVideoScheduler(new ClosingHost(), library: () => new[] { "local-a.mp4", "local-b.mp4" }) { PackVideos = pool };
+        var playing = video.PickNext()!;
+        Assert.Equal(5, random.Bounds[0]);   // two local + three pack clips
+
+        video.RefreshVideosPath();
+        random.Bounds.Clear();
+        Assert.NotNull(video.PickNext());
+        Assert.Equal(5, random.Bounds[0]);   // fail-proof: without the pack reset only two pack clips are weighed
+        Assert.True(File.Exists(playing));   // the import refresh never deletes a clip that may be playing
+        Assert.Equal(2, pool.TempCount);
+
+        video.ReloadAssets();                // pack activation: both queues and the decrypt sweep
+        Assert.False(File.Exists(playing));
+        Assert.Equal(0, pool.TempCount);
+    }
+
     [Fact]
     public void StartupSweep_DeletesOnlyStaleDecrypts()
     {

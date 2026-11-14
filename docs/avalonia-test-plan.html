@@ -1013,7 +1013,7 @@ changes served unchanged from <code>Assets/web/dtrh</code> (automated-only: byte
 </ol>
 <h2 id="rows-with-no-manual-check">Rows with no manual check</h2>
 <ul>
-<li>Automated-only: <code>barks-wpf-b</code> (status missing) - WPF's bark engine handing its decisions to the shared engine; nothing on screen changes. Test companion voice lines through section 7 steps 6-8.</li>
+<li>Bambi mod, flash audio on, companion on: fire a flash burst from Studio. Expect, about a second after the press, one recorded voice line, the pictures staying about as long as the line, other audio ducked until shortly after it, and the clip's name in the companion bubble when no bubble was up; no bark talks over it. Mute voice lines: the pictures still show, silently. Stop flashes mid-line: the voice stops at once. WPF <code>Services/Flash/FlashService.cs:1527</code>. Rows: <code>barks-wpf-b</code>.</li>
 </ul>
 
 <script>

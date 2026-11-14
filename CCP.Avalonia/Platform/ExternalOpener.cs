@@ -24,6 +24,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return true;
         };
 
+        // WPF Helpers/BrowserLauncher.cs:43-51: after the association fails, try these Windows
+        // browser handlers in order. Seams keep the Windows path testable on Linux.
+        internal static Func<bool> IsWindows = OperatingSystem.IsWindows;
+        internal static Func<ProcessStartInfo, bool> StartBrowserFallback = info =>
+        {
+            if (SandboxNet.Active) return false; // Never launch a browser from a sandboxed test or render.
+            using var p = Process.Start(info);
+            return true;
+        };
+
         /// <summary>Outside a sandbox everything non-empty goes to the shell, as before. Inside one: local paths, and
         /// URIs by <see cref="SandboxNet.Allows"/>; never a UNC path or file://host (that is a network share).</summary>
         internal static bool Allowed(string? target) => Allowed(target, SandboxNet.Active);
@@ -44,8 +54,35 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static bool Open(string? target)
         {
             if (!Allowed(target)) return false;
-            try { Services.CheckoutWatch.NoteOpened(target); return Shell(target!); }
-            catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }
+            try { Services.CheckoutWatch.NoteOpened(target); if (Shell(target!)) return true; }
+            catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); }
+            return TryWindowsBrowserFallbacks(target!);
+        }
+
+        private static bool TryWindowsBrowserFallbacks(string target)
+        {
+            // Open also handles files and folders. BrowserLauncher's fallbacks apply only to web URLs.
+            if (!IsWindows() || !Uri.TryCreate(target, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return false;
+
+            bool Try(string file, string? arguments, params string[] parts)
+            {
+                try
+                {
+                    var info = new ProcessStartInfo { FileName = file, UseShellExecute = false, CreateNoWindow = true };
+                    if (arguments != null) info.Arguments = arguments;
+                    else foreach (var part in parts) info.ArgumentList.Add(part);
+                    return StartBrowserFallback(info);
+                }
+                catch (Exception ex) { Log.Debug("Fallback browser launcher {File} failed: {Error}", file, ex.Message); return false; }
+            }
+
+            if (Try("explorer.exe", null, target)) return true;
+            // cmd expands percent variables even in quotes. Skip this strategy for shell-sensitive
+            // URLs; explorer and rundll32 still receive the original URL as a single argument.
+            if (target.IndexOfAny(new[] { '%', '!', '^', '"', '\\', '\r', '\n' }) < 0
+                && Try("cmd.exe", $"/c start \"\" \"{target}\"")) return true;
+            return Try("rundll32.exe", null, "url.dll,FileProtocolHandler", target);
         }
 
         /// <summary>Test seam for the select-the-file half of <see cref="Reveal"/>: gets a full path to an existing

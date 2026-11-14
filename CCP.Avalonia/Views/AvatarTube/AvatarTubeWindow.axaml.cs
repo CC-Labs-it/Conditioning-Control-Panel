@@ -1220,6 +1220,19 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             });
         }
 
+        /// <summary>WPF AvatarTubeWindow.Reactions.cs:440-463: display a flash clip's filename
+        /// without replaying its audio, only when no bubble is already showing.</summary>
+        internal void ShowFlashVoice(string text)
+        {
+            if (IsMuted || string.IsNullOrWhiteSpace(text) || _isGiggling) return;
+            RunOnAvatar(() =>
+            {
+                if (IsMuted || _isGiggling) return;
+                ClearSpeechQueue();
+                ShowSpeech(text, playSound: false, aiGenerated: false, null, false, preset: true);
+            });
+        }
+
         private int _presetGiggleCounter;
 
         /// <summary>WPF RestartIdleTimer (Speech.cs): the idle cadence restarts after every line.</summary>
@@ -1322,7 +1335,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _stopSpoken = static () => { };
 
                     // The chat log owns the bubble while it is up - take it back before rendering.
-                    if (_isShowingChatHistory)
+                    // WPF ShowTriggerBubbleImmediate (Speech.cs:2163-2203) never touches the log, so a
+                    // trigger leaves an open history view, and its width, in place.
+                    if (_isShowingChatHistory && !trigger)
                     {
                         _isShowingChatHistory = false;
                         _chatHistoryView.IsVisible = false;
@@ -1349,7 +1364,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     else _txtSpeech.Text = text;
                     // WPF AdjustBubbleSize (Speech.cs:857-881): real DIPs now, 14 only for long replies.
                     _txtSpeech.FontSize = text.Length > 250 ? 14 : 15;
-                    _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
+                    if (!_isShowingChatHistory) _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
                     ApplySpeechBubblePlacement();
                     _speechBubble.IsVisible = true;
                     _isGiggling = true;

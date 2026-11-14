@@ -174,6 +174,7 @@ public sealed class ExclusivesVaultClickTests
     [Theory]
     [InlineData("breakout", true)]
     [InlineData("dtrh", true)]
+    [InlineData("focusgaze", true)]
     [InlineData("backroom", false)]
     [InlineData("arcademy", false)]
     public void PremiumCardsMatchThePlayWallDoors(string key, bool onThisBuild) =>
