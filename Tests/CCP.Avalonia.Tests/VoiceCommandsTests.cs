@@ -335,7 +335,8 @@ public sealed class VoiceCommandsTests
                     + (voiced ? ",\"promptAudio\":\"prompt.mp3\"" : "") + "}]}");
                 if (voiced) System.IO.File.WriteAllBytes(System.IO.Path.Combine(audio, "prompt.mp3"), new byte[16]);
                 shotId += "-2";                              // a fresh mod id reloads the set
-                Assert.True(shell.Autonomy.CanPerform(AutonomyActionType.SpokenMantra));
+                // The tube, the speech engine and the mod reload can settle late on a loaded CI runner (wave 3 run 2, Linux shard 4).
+                await Until(() => { Dispatcher.UIThread.RunJobs(); return shell.Autonomy.CanPerform(AutonomyActionType.SpokenMantra); }, 10);
                 Assert.True(shell.SetAutonomyEnabled(true));
                 Dispatcher.UIThread.RunJobs();
                 CoreProgression.AddXPProvider = (amount, _) => { lock (xp) xp.Add(amount); };
