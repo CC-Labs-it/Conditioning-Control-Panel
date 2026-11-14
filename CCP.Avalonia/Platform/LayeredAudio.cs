@@ -273,7 +273,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 lock (_gate)
                 {
-                    if (_disposed || _newest != c || !c.Playing) return;
+                    // A failed pass stays _newest after Retire freed it; a TimeChanged queued before its error
+                    // must not read Length from the freed player (restack fixw4d).
+                    if (_disposed || _newest != c || !c.Playing || c.Disposed) return;
                     var length = c.Player.Length;
                     if (length <= 0) return;   // unknown length: Retire restarts at the end
                     var due = Math.Max(100, length - OverlapMs) - timeMs;   // LoopVoice's 100 ms floor
