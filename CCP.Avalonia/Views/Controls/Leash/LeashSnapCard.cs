@@ -113,7 +113,8 @@ public sealed class LeashSnapCard : Border
         var rise = GentleVisuals.RiseMs(0, GentleVisuals.On);
         _title.Opacity = ms < 300 ? 0 : rise <= 0 ? 1 : Math.Clamp((ms - 300) / rise, 0, 1);
         if (ms >= 300) _titleScale.ScaleX = _titleScale.ScaleY = 1 + 0.5 * _amount * (1 - BillboardTiming.Thud(Math.Clamp((ms - 300) / 340, 0, 1)));
-        if (ms >= 340 && !_burst) Burst();
+        // Gentle visuals: no sparks (a dot that appears at full brightness is a hard pop-in).
+        if (ms >= 340 && !_burst) { if (GentleVisuals.On) _burst = true; else Burst(); }
         if (_burst)
         {
             _impactScale.ScaleX = _impactScale.ScaleY = 1 + 0.18 * _amount * (1 - BillboardTiming.Thud(Math.Clamp((ms - 340) / 340, 0, 1)));

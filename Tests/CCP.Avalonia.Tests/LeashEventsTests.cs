@@ -229,7 +229,7 @@ public sealed class LeashEventsTests
             Assert.True(title.Opacity > 0);
             Assert.Equal(!gentle, title.Opacity == 1);
             var sparks = Tagged<Canvas>(card, "leash-snap-sparks");
-            Assert.NotEmpty(sparks.Children);   // 22 at Full, 11 at Reduced (Gentle or OS animations off)
+            Assert.Equal(gentle, sparks.Children.Count == 0);   // 22 at Full, 11 at Reduced (OS animations off), none with Gentle
             card.Advance(2000);
             Assert.Empty(sparks.Children);
             Assert.Equal(1, title.Opacity);
