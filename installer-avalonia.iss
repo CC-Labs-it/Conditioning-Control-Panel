@@ -35,6 +35,10 @@
 #include "installer-avalonia-code-5.iss"
 SetupIconFile=Assets\app.ico
 
+; Avalonia only (code-6 keeps the WPF excerpt verbatim): WPF BrowserService.cs:127-131 uses browser_data;
+; WebViewProfile.cs:19-31 uses a new profile, so upgraders are told before installing.
+InfoBeforeFile=INSTALL_AVALONIA.txt
+
 ; Compression
 #include "installer-avalonia-code-6.iss"
 Name: "fileassoc"; Description: "Add 'Open with CCP' to right-click menu for media files (.mp4, .mp3, etc.)"; GroupDescription: "File associations:"; Flags: unchecked
