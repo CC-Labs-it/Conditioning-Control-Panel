@@ -643,6 +643,9 @@ public sealed class DeeperRowsTests
             throw new InvalidOperationException("decode failed");
         };
         var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        // The test starts the preview itself; the framework's Loaded must not start a third one.
+        var loaded = typeof(DeeperEditorWindow).GetMethod("DeeperEditorWindow_Loaded", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        editor.Loaded -= (EventHandler<RoutedEventArgs>)loaded.CreateDelegate(typeof(EventHandler<RoutedEventArgs>), editor);
         var initialize = typeof(DeeperEditorWindow).GetMethod("InitializePreviewAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         try
         {
