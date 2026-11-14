@@ -129,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 open.Activate();
                 return open;
             }
-            var player = new EnhancementPlayerWindow(null, null);
+            var player = new EnhancementPlayerWindow(null, null) { LibraryShell = new(this) };
             player.Closed += (_, _) => { if (ReferenceEquals(_deeperPlayer, player)) _deeperPlayer = null; };
             _deeperPlayer = player;
             if (IsVisible) player.Show(this); else player.Show();

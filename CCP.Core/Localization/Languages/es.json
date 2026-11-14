@@ -7345,6 +7345,7 @@
   "deeper_editor_ctx_item_delete": "Delete",
   "deeper_editor_ctx_item_jump": "Jump to start",
   "deeper_editor_saved_inline": "Saved",
+  "deeper_player_promoted_to_library_fmt": "Guardado en la biblioteca como {0}",
   "deeper_player_window_title_fmt": "Deeper Player - {0}",
   "deeper_player_webcam_banner_text": "This enhancement has gaze / blink / attention triggers. They only fire while the webcam is on.",
   "deeper_player_webcam_banner_enable": "Enable webcam",

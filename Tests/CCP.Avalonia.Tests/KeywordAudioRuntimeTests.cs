@@ -420,6 +420,44 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Equal((float)Math.Pow(0.5, 1.5), Assert.Single(played).Volume);
     });
 
+    /// <summary>#4416 (restack b204): every permitted keyboard match feeds the program verifier once per
+    /// trigger through QuestService; entitlement and panic quiet hold it (WPF KeywordTriggerService.cs:1253).</summary>
+    [Fact]
+    public void KeyboardMatchesForwardEachPermittedTriggerToProgramVerifier() => Run((engine, s, played) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-keyword-program-").FullName;
+        var oldQuests = ConditioningControlPanel.Avalonia.App.Quests;
+        var oldVerifier = CoreQuests.TrackProgramVerifierProvider;
+        var quests = new ConditioningControlPanel.Services.QuestService(null, dir);
+        var credits = new List<(QuestCategory, int)>();
+        try
+        {
+            ConditioningControlPanel.Avalonia.App.Quests = quests;
+            CoreQuests.TrackProgramVerifierProvider = (category, amount) => credits.Add((category, amount));
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "preset:one", Keyword = "sit", CooldownSeconds = 0 });
+            CoreEntitlement.HasPremiumProvider = () => false;
+            Type(engine, "sit");
+            Assert.Empty(credits);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Type(engine, "sit");
+            Assert.Empty(credits);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 2);
+            Type(engine, "sit");
+            Assert.Equal(new[] { (QuestCategory.KeywordTrigger, 1), (QuestCategory.KeywordTrigger, 1) }, credits);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            CoreQuests.TrackProgramVerifierProvider = oldVerifier;
+            ConditioningControlPanel.Avalonia.App.Quests = oldQuests;
+            quests.Dispose();
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    });
+
     [Fact]   // WPF FireDemoTrigger never reads saved triggers or plays audio (#887 back door)
     public void TutorialDemoNeverPlaysTheSavedTriggerAudio() => Run((engine, s, played) =>
     {
