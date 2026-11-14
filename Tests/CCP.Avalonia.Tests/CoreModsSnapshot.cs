@@ -20,6 +20,12 @@ internal sealed class CoreModsSnapshot : IDisposable
 
     private readonly Action<string?>? _modSwitched = CoreModsHooks.ModSwitched;
     private readonly Action? _invalidatePrompt = CoreModsHooks.InvalidateStablePrompt;
+    private readonly Action? _closeDtrhHost = CoreModsHooks.CloseDtrhHost;
+    private static readonly PropertyInfo Service = typeof(CoreMods).GetProperty(nameof(CoreMods.Service))!;
+    private static readonly PropertyInfo AppMods = typeof(ConditioningControlPanel.Avalonia.App)
+        .GetProperty("Mods", BindingFlags.Static | BindingFlags.NonPublic)!;
+    private readonly object? _service = Service.GetValue(null);
+    private readonly object? _appMods = AppMods.GetValue(null);
 
     public void Dispose()
     {
@@ -27,5 +33,8 @@ internal sealed class CoreModsSnapshot : IDisposable
         CoreModsHooks.KnownVideoLinksProvider = _links;
         CoreModsHooks.ModSwitched = _modSwitched;
         CoreModsHooks.InvalidateStablePrompt = _invalidatePrompt;
+        CoreModsHooks.CloseDtrhHost = _closeDtrhHost;
+        Service.SetValue(null, _service);
+        AppMods.SetValue(null, _appMods);
     }
 }

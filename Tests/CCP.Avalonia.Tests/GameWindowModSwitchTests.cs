@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -28,6 +29,12 @@ public sealed partial class GameWindowTests
                 builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             else builder.AfterSetupCallback(builder);
+            var priorSettings = CoreSettings.ServiceProvider;
+            var priorAppMods = App.Mods;
+            var priorService = CoreMods.Service;
+            var priorProvider = CoreMods.ActiveModIdProvider;
+            var priorHook = CoreModsHooks.CloseDtrhHost;
+            var mods = new CoreModsSnapshot();
             var settings = new SettingsService();
             CoreSettings.ServiceProvider = () => settings;
             try
@@ -67,9 +74,55 @@ public sealed partial class GameWindowTests
             }
             finally
             {
-                GameWindow.CloseAllForPanic();
-                settings.SealForReset();
-                CoreSettings.ServiceProvider = null;
+                try
+                {
+                    GameWindow.CloseAllForPanic();
+                    settings.SealForReset();
+                }
+                finally
+                {
+                    CoreSettings.ServiceProvider = priorSettings;
+                    mods.Dispose();
+                }
             }
+            Assert.Same(priorSettings, CoreSettings.ServiceProvider);
+            Assert.Same(priorAppMods, App.Mods);
+            Assert.Same(priorService, CoreMods.Service);
+            Assert.Same(priorProvider, CoreMods.ActiveModIdProvider);
+            Assert.Same(priorHook, CoreModsHooks.CloseDtrhHost);
         });
+
+    [Theory]
+    [InlineData("app")]
+    [InlineData("service")]
+    [InlineData("provider")]
+    [InlineData("hook")]
+    public void ModSnapshotRestoresPriorServicesProvidersAndDtrhHook(string member)
+    {
+        using var outer = new CoreModsSnapshot();
+        var appMods = typeof(App).GetProperty("Mods", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var original = new ModService();
+        CoreMods.Attach(original);
+        appMods.SetValue(null, original);
+        var provider = CoreMods.ActiveModIdProvider;
+        Action hook = () => { };
+        CoreModsHooks.CloseDtrhHost = hook;
+        var snapshot = new CoreModsSnapshot();
+        try
+        {
+            var replacement = new ModService();
+            CoreMods.Attach(replacement);
+            appMods.SetValue(null, replacement);
+            CoreModsHooks.CloseDtrhHost = () => { };
+        }
+        finally { snapshot.Dispose(); }
+        switch (member)
+        {
+            case "app": Assert.Same(original, App.Mods); break;
+            case "service": Assert.Same(original, CoreMods.Service); break;
+            case "provider": Assert.Same(provider, CoreMods.ActiveModIdProvider); break;
+            case "hook": Assert.Same(hook, CoreModsHooks.CloseDtrhHost); break;
+            default: throw new ArgumentOutOfRangeException(nameof(member));
+        }
+    }
 }
