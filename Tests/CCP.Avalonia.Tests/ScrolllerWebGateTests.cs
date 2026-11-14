@@ -196,6 +196,16 @@ public sealed class ScrolllerWebGateTests
         Assert.Contains("ScrolllerWebKitFilter.Attach(", gate);
     }
 
+    [Fact]
+    public void Windows_gate_connects_audio_events_to_the_tracker()
+    {
+        var gate = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ScrolllerWebView2Gate.cs"));
+        Assert.Contains("ScrolllerWebGate.AttachHook = WatchAudio;", gate);
+        Assert.Contains("Audio.Attach(core,", gate);
+        Assert.Contains("core.IsDocumentPlayingAudioChanged +=", gate);
+        Assert.Contains("core.IsDocumentPlayingAudio, core.Source, core.IsMuted", gate);
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
