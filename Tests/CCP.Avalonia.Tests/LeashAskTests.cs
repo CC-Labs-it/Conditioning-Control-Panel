@@ -8,6 +8,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
+using ConditioningControlPanel.Models;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -160,6 +162,34 @@ public sealed class LeashAskTests
             LeashGateCardTests.Click(Tagged<Button>(card, "leash-ask-no")); // Gone: "Not now" is a plain close.
             Assert.Null(LeashAskWindow.Current);
             Assert.Equal(3, wire.Calls.Count(c => c.Op == "answer"));
+        });
+
+    // WPF LeashOverlayWindow Loaded (:308-311): the ask lands from 1.08 (half under Reduced, none with motion off).
+    [Theory]
+    [InlineData(MotionLevel.Full, 1.08)]
+    [InlineData(MotionLevel.Reduced, 1.04)]
+    [InlineData(MotionLevel.Off, 1.0)]
+    public void OpenedAskThudsUnlessMotionIsOff(MotionLevel motion, double start) =>
+        Run((_, page, _, _) =>
+        {
+            var settings = CoreSettings.Current;
+            var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+            try
+            {
+                settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
+                settings.PerformanceMode = false;
+                LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+                var ask = LeashAskWindow.Current!;
+                var scale = ask.Card.RenderTransform as ScaleTransform;
+                Assert.Equal(start, scale?.ScaleX ?? 1, 3);
+                Assert.Equal(start, scale?.ScaleY ?? 1, 3);
+                Assert.Equal(motion != MotionLevel.Off, ask.ThudActive);
+                ask.AdvanceThud(340);
+                Assert.Equal(1, scale?.ScaleX ?? 1, 3);
+                Assert.Equal(1, scale?.ScaleY ?? 1, 3);
+                Assert.False(ask.ThudActive);
+            }
+            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
     [Fact]

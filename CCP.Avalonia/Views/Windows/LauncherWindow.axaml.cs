@@ -100,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HookVeil();
             HookFx();
             HookPress(PanelCta);
+            HookPress(SpChip);
             HookLinks();
             PaintSoundButton();
         }
@@ -112,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BuildTiles();
                 StartEntrance();
                 RefreshAccount();
+                RefreshSpReadout(countUp: true);
                 RefreshMod();
                 RefreshStatus();
                 RefreshStats();
@@ -352,6 +354,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!MainShellWindow.LockdownActive) OpenPanel(p => p.ShowTab("appsettings"));
         }
 
+        /// <summary>WPF WalletChip_Click (LauncherWindow.xaml.cs:250): the wallet opens the Prize Counter over the
+        /// launcher, the same door as the panel's SparkleWallet. The counter is its own window; the launcher stays.</summary>
+        private void WalletChip_Click(object? sender, RoutedEventArgs e)
+        {
+            try { Games.GameWindow.LaunchPrizeCounter(from: "launcher"); }
+            catch (Exception ex) { Log.Warning(ex, "[Launcher] Prize Counter failed to open"); }
+        }
+
         private void SignIn_Click(object? sender, RoutedEventArgs e) { if (!MainShellWindow.LockdownActive) OpenSignIn(); }
 
         /// <summary>WPF StopLink_Click.</summary>
@@ -415,13 +425,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug(ex, "[Launcher] RefreshAccount failed"); }
         }
 
-        /// <summary>WPF RefreshSpReadout: the chip's Sparkle Points while signed in.
-        /// ponytail: WPF odometers the number up; it snaps here until the launcher-fx slice.</summary>
-        private void RefreshSpReadout()
+        // WPF LauncherWindow.Choreo.cs:610: count from zero on show, then from the last target.
+        private double _spShown = double.NaN;
+        private Tween _spTween;
+
+        private void RefreshSpReadout(bool countUp = false)
         {
             int sp = CoreSettings.Current.SkillPoints;
             SpChip.IsVisible = sp >= 0 && CoreAccount.IsLoggedIn;
-            if (SpChip.IsVisible) SpReadout.Text = sp.ToString("N0");
+            if (!SpChip.IsVisible) { _spTween.On = false; _spShown = double.NaN; return; }
+            double from = countUp || double.IsNaN(_spShown) ? 0 : _spShown;
+            if (!countUp && from == sp && !double.IsNaN(_spShown)) return;
+            _spShown = sp;
+            if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions || Math.Abs(sp - from) < 0.5 || !FxLive)
+            {
+                _spTween.On = false;
+                SpReadout.Text = sp.ToString("N0");
+                return;
+            }
+            _spTween.Go(from, sp, countUp ? 0.9 : 0.6);
+            SpReadout.Text = from.ToString("N0");
+            EnsureFxClock();
+        }
+
+        private void StopSpTween()
+        {
+            if (!_spTween.On) return;
+            _spTween.On = false;
+            SpReadout.Text = _spShown.ToString("N0");
         }
 
         /// <summary>WPF TierBadge_MouseEnter/Leave: the big copy in a popup under the badge.
