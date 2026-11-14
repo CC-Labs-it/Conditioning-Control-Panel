@@ -7,6 +7,7 @@
              xmlns:p="using:Avalonia.Controls.Primitives"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView">
     <UserControl.Resources>
+        <DropShadowEffect x:Key="KeysNudgeGlow" Color="#E0B052" BlurRadius="24" OffsetX="0" OffsetY="0" Opacity="0.8"/>
         <ControlTheme x:Key="CirceCta" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource AccentGradientBrush}"/>
             <Setter Property="Foreground" Value="White"/>
@@ -149,6 +150,11 @@
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
         </ControlTheme>
     </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="UniformGrid.keys-nudge">
+            <Setter Property="Effect" Value="{StaticResource KeysNudgeGlow}"/>
+        </Style>
+    </UserControl.Styles>
 
     <Grid>
     <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -301,7 +307,7 @@
                     </StackPanel>
                     <TextBlock x:Name="TxtHeroEnds" FontSize="13" Margin="0,2,0,0" IsVisible="False" Foreground="{DynamicResource TextSecondaryBrush}"/>
                     <TextBlock x:Name="SetupHint" IsVisible="False" FontSize="16" FontWeight="SemiBold" Foreground="White"
-                               TextWrapping="Wrap" MaxWidth="480" HorizontalAlignment="Left" Margin="0,8,0,12"/>
+                               TextWrapping="Wrap" MaxWidth="480" HorizontalAlignment="Left" Margin="0,8,0,12" PointerReleased="SetupHint_PointerReleased"/>
                     <WrapPanel x:Name="HeroPills" Margin="0,10,0,0"/>
                     <StackPanel x:Name="LockRow" Orientation="Horizontal" Margin="0,8,0,0" IsVisible="False">
                         <ComboBox x:Name="CmbLock" FontSize="16" MinWidth="260" SelectionChanged="CmbLock_SelectionChanged"/>

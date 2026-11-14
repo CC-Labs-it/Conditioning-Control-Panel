@@ -6372,6 +6372,7 @@
   "lockdown_badge_label": "LOCKDOWN",
   "lockdown_badge_end": "Beenden",
   "lockdown_badge_tooltip": "Lockdown läuft. Klick, um den Lockdown-Tab zu öffnen.",
+  "lockdown_dose_engine_warning": "Lockdown startet den Motor, solange eine Funktion aktiviert ist, oder startet ihn erneut.",
   "lockdown_poss_safety_dose": "Nichts läuft? Lockdown wählt für dich",
   "lockdown_poss_safety_dose_tip": "Ein Lockdown läuft nie leer. Engine aus beim Start: sie wird für dich gestartet. Nichts eingeschaltet (oder du schaltest mittendrin alles aus): die Wärterin schaltet Features ein, jedes Mal eins mehr, und gibt am Ende alles zurück.",
   "st4_braindrain_audio_rate": "Audio-Häufigkeit",
