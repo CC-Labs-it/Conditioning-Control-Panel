@@ -121,7 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CoreEngine.Start(resumingSession: resuming, systemInitiated: systemInitiated);   // WPF StartStop.cs:341
                 StartEngineRamp();
                 if (resuming) App.Sessions?.ResumeAfterEngineStart();
-                Autonomy.Start();                  // WPF StartStop.cs:416-422; refuses unless enabled + consent + entitled
+                // WPF StartStop.cs:416-422; refuses unless enabled + consent + entitled. A panic stop holds
+                // Takeover off until the user restarts it (StopAutonomyForPanic), so an engine start never lifts it.
+                if (!AutonomyStoppedForPanic) Autonomy.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);

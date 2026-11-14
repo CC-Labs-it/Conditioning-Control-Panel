@@ -87,7 +87,7 @@ public class TakeoverEngineLifecycleTests
     });
 
     /// <summary>WPF Presets.cs:1618: a session from idle starts the engine through BtnStart_Click, so
-    /// StartEngine (StartStop.cs:416-422) also starts Takeover, e.g. after a panic stopped it.</summary>
+    /// StartEngine (StartStop.cs:416-422) also starts Takeover (not over a panic hold, see below).</summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -111,6 +111,23 @@ public class TakeoverEngineLifecycleTests
             global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
             CoreSession.IsSessionRunningProvider = oldProvider;
         }
+    });
+
+    /// <summary>Restack b206 review: the trunk holds Takeover off after a panic until the user restarts it
+    /// (StopAutonomyForPanic); neither an engine start nor a session from idle lifts that hold.</summary>
+    [Fact]
+    public Task EngineStartKeepsThePanicHoldOnTakeover() => WithShell((shell, s) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreEntitlement.IsFreeTodayProvider = _ => false;
+        s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+        shell.StartEngine(); Assert.True(shell.Autonomy.IsEnabled);
+        shell.StopAutonomyForPanic();
+        MainShellWindow.StopEngine();
+        Assert.False(shell.Autonomy.IsEnabled);
+        shell.StartEngine();
+        Assert.True(CoreEngine.IsRunning);
+        Assert.False(shell.Autonomy.IsEnabled);
     });
 
     [Fact]

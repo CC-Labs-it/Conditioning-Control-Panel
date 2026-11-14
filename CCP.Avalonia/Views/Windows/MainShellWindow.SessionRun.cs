@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (!engineWasRunning && CoreEngine.IsRunning)
                     {
                         EmiEngineStarted(false); // WPF Presets.cs:1619
-                        Autonomy.Start();        // WPF Presets.cs:1618 -> StartEngine StartStop.cs:416-422; gated by CanStart
+                        if (!AutonomyStoppedForPanic) Autonomy.Start();   // WPF Presets.cs:1618 -> StartStop.cs:416-422; gated by CanStart and the panic hold
                     }
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
                     Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session); // WPF SessionEngine.cs:247
