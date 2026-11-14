@@ -27,6 +27,7 @@ public sealed class PossessionDissolveToggleTests
         public IFrameSource PossessionFrames => frames;
         public PossessionRuntime PossessionEffectRuntime { get; } = new(frames);
         public Point PointerPosition => default;
+        public PossessionPointer PossessionPointer { get; } = new();
         public Rect? BoundsOnGhostLayer(Control element) => null;
         public IReadOnlyList<PossessionTarget> Targets => Array.Empty<PossessionTarget>();
         public bool IsUsable => true;

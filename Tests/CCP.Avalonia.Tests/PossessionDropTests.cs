@@ -53,6 +53,7 @@ public class PossessionDropTests
         public IFrameSource PossessionFrames => frames;
         public PossessionRuntime PossessionEffectRuntime { get; } = new(frames);
         public Point PointerPosition => default;
+        public PossessionPointer PossessionPointer { get; } = new();
         public IReadOnlyList<PossessionTarget> Targets => Array.Empty<PossessionTarget>();
         public bool IsUsable => true;
         public Rect? BoundsOnGhostLayer(Control element) => element == floor && FloorBoundsOverride is { } bounds ? bounds : element.TranslatePoint(default, layer) is { } point
