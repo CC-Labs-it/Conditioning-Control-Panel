@@ -1,10 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.Program;
 using ConditioningControlPanel.Services.Program;
 using Xunit;
 
@@ -23,12 +26,20 @@ public sealed class ProgramCapabilitiesTests
         ["first_week"] = new string[0],
         ["presentation"] = new string[0],
         ["the_takeover"] = new string[0],
-        ["kept"] = new[] { "KeywordTrigger" },
-        ["firmware_install"] = new[] { "KeywordTrigger" },
+        ["kept"] = new string[0],
+        ["firmware_install"] = new string[0],
     };
 
     [Fact]
     public void EveryBuiltInProgramIsClassifiedAndOnlyTheFinishableOnesAreEnrollable()
+    {
+        var oldKeyword = ProgramCapabilities.KeywordInputAvailable;
+        ProgramCapabilities.KeywordInputAvailable = () => true;   // a head with a key source (Windows hook)
+        try { AssertClassified(); }
+        finally { ProgramCapabilities.KeywordInputAvailable = oldKeyword; }
+    }
+
+    private static void AssertClassified()
     {
         var all = BuiltInPrograms.All();
         Assert.Equal(Needs.Keys.OrderBy(k => k), all.Select(p => p.Id).OrderBy(k => k));
@@ -39,13 +50,103 @@ public sealed class ProgramCapabilitiesTests
                 .Distinct().OrderBy(s => s);
             Assert.True(Needs[p.Id].OrderBy(s => s).SequenceEqual(missing), $"{p.Id}: {string.Join(",", missing)}");
         }
-        Assert.Equal(new[] { "first_week", "presentation", "the_takeover" },
+        Assert.Equal(new[] { "first_week", "presentation", "firmware_install", "the_takeover", "kept" },
             all.Where(p => ProgramService.UnavailableTasks(p, ProgramCapabilities.IsAvailable).Count == 0).Select(p => p.Id));
+    }
+
+    /// <summary>No key source (Linux, VR): keyword programs stay refused, or the run lapses on tasks nobody can credit.</summary>
+    [Fact]
+    public void KeywordProgramsAreRefusedWithoutAKeySource()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-programs-keyword-").FullName;
+        var (oldKeyword, oldTask, oldPremium) =
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider);
+        try
+        {
+            ProgramCapabilities.KeywordInputAvailable = () => false;
+            CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
+            CoreProgram.HasPremiumProvider = () => true;
+            using var svc = new ProgramService(Path.Combine(dir, "programs.json"), readOnly: true);
+            foreach (var p in svc.Library)
+            {
+                var keyword = p.Id is "kept" or "firmware_install";
+                Assert.Equal(!keyword, svc.CanEnroll(p, out var reason));
+                if (keyword) Assert.Equal(ProgramService.UnavailableReason(p, ProgramCapabilities.IsAvailable), reason);
+            }
+        }
+        finally
+        {
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider) =
+                (oldKeyword, oldTask, oldPremium);
+            Directory.Delete(dir, true);
+        }
+    }
+
+    /// <summary>The default gate reads the real key source: a sandbox profile (Sync never subscribes there) and a
+    /// failed hook install both refuse keyword tasks, also on Windows.</summary>
+    [Fact]
+    public void KeywordGateFollowsTheSandboxAndTheHookInstall()
+    {
+        var keywordTask = BuiltInPrograms.All().SelectMany(p => p.Chapters).SelectMany(c => c.Days).SelectMany(d => d.Tasks)
+            .First(t => t.Verifier == QuestCategory.KeywordTrigger);
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, "/tmp/ccp-sandbox", () => true));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => false));
+        Assert.False(KeywordTriggerHead.KeyboardSourceAvailable(false, null, () => true));
+        Assert.True(KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => true));
+
+        var (oldGate, oldFailed) = (ProgramCapabilities.KeywordInputAvailable, Win32PanicKey.InstallFailed);
+        try
+        {
+            ProgramCapabilities.KeywordInputAvailable = KeywordTriggerHead.KeyboardSourceAvailable;
+            Win32PanicKey.InstallFailed = false;
+            // This process runs in a CCP_USERDATA_DIR profile (TestUserDataProfile), so no key source on any OS.
+            Assert.False(string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+            Assert.False(ProgramCapabilities.IsAvailable(keywordTask));
+        }
+        finally { (ProgramCapabilities.KeywordInputAvailable, Win32PanicKey.InstallFailed) = (oldGate, oldFailed); }
+    }
+
+    [Fact]
+    public void StartupRolloverWaitsForConfirmedKeyboardHook()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-program-hook-").FullName;
+        var path = Path.Combine(dir, "programs.json");
+        var (oldKeyword, oldTask, oldPremium) =
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider);
+        var now = new DateTime(2026, 5, 4, 12, 0, 0, DateTimeKind.Local);
+        var attempts = 0;
+        try
+        {
+            CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
+            CoreProgram.HasPremiumProvider = () => true;
+            ProgramCapabilities.KeywordInputAvailable = () => KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => true);
+            using (var svc = new ProgramService(path, readOnly: false, now: () => now))
+            {
+                Assert.NotNull(svc.Enroll(svc.Library.First(p => p.Id == "kept")));
+                svc.Save();
+            }
+
+            now = now.AddDays(7);
+            ProgramCapabilities.KeywordInputAvailable = () => KeywordTriggerHead.KeyboardSourceAvailable(true, null, () => { attempts++; return false; });
+            using var reopened = new ProgramService(path, readOnly: false, now: () => now);
+            Assert.True(attempts > 0);
+            Assert.NotNull(reopened.State.Active);
+            Assert.Equal(ProgramEnrollmentState.Active, reopened.State.Active!.State);
+            Assert.Equal(1, reopened.State.Active.CurrentDay);
+            Assert.Equal(4, reopened.State.Active.DaysOffRemaining);
+        }
+        finally
+        {
+            (ProgramCapabilities.KeywordInputAvailable, CoreProgram.TaskAvailableProvider, CoreProgram.HasPremiumProvider) =
+                (oldKeyword, oldTask, oldPremium);
+            Directory.Delete(dir, true);
+        }
     }
 
     /// <summary>The QuestService call that raises each category.</summary>
     private static readonly Dictionary<QuestCategory, string> TrackCall = new()
     {
+        [QuestCategory.KeywordTrigger] = "TrackKeywordTrigger",
         [QuestCategory.Flash] = "TrackFlashImage",
         [QuestCategory.Video] = "TrackVideoMinutes",
         [QuestCategory.Spiral] = "TrackSpiralMinutes",
