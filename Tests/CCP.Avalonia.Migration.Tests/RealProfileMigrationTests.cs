@@ -533,6 +533,10 @@ public sealed class RealProfileMigrationTests
                 // lifts the season peak to the banked streak, as WPF SeasonRecapService.cs:146/:159 does.
                 else if (SeasonActivityRecordedToday(key, value, now, saved))
                     expect("season-activity-recorded-at-launch");
+                // Expected (restack b231, #4762): an upgrader's launch seeds the recommended deny groups and
+                // runs the one-time intensity migration, as WPF App.xaml.cs:3125 does at every launch.
+                else if (AwarenessPrivacySeededAtLaunch(key, value, now, original))
+                    expect("awareness-privacy-seeded-at-launch");
                 else yield return "value changed: " + key;
                 continue;
             }
@@ -540,6 +544,21 @@ public sealed class RealProfileMigrationTests
             var defaultToken = fallback is null ? JValue.CreateNull() : JToken.FromObject(fallback);
             if (!JToken.DeepEquals(value, defaultToken)) yield return "key dropped with a non-default value: " + key;
         }
+    }
+
+    private static bool AwarenessPrivacySeededAtLaunch(string key, JToken original, JToken now, JObject before)
+    {
+        static bool WasFalse(JToken? t) => t == null || t.Type == JTokenType.Null || (t.Type == JTokenType.Boolean && !(bool)t);
+        return key switch
+        {
+            "AwarenessDenySeeded" or "AwarenessIntensityMigrated" => WasFalse(original) && now.Type == JTokenType.Boolean && (bool)now,
+            "AwarenessDenyList" => WasFalse(before["AwarenessDenySeeded"]) && now is JArray list
+                && (original is not JArray was || was.All(o => list.Any(n => string.Equals((string?)n, (string?)o, StringComparison.OrdinalIgnoreCase))))
+                && ConditioningControlPanel.Services.Awareness.AwarenessPrivacyRules.SeededDenyList.All(s =>
+                    list.Any(n => string.Equals((string?)n, s, StringComparison.OrdinalIgnoreCase))),
+            "AwarenessIntensity" => WasFalse(before["AwarenessIntensityMigrated"]),
+            _ => false,
+        };
     }
 
     private static bool SeasonActivityRecordedToday(string key, JToken original, JToken now, JObject saved)
