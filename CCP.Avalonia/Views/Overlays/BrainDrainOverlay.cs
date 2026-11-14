@@ -12,6 +12,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -28,7 +29,8 @@ internal static class BrainDrainOverlay
 {
     private static readonly List<DrainWindow> Windows = new();
     private static BrainDrainCapturePump? _pump;
-    private static DispatcherTimer? _frames, _keepClearTimer;
+    private static FrameClock? _frames;
+    private static DispatcherTimer? _keepClearTimer;
     private static AppSettings? _settings;
     private static SettingsService? _settingsService;
     internal static Func<IReadOnlyList<BrainDrainKeepClear.BandEntry>> Band = ReadBand;
@@ -96,14 +98,18 @@ internal static class BrainDrainOverlay
             const int downscale = 4;
             float sigma = (float)(strength * 0.14 / downscale / 3.0);
             float amplitude = (float)(1 + Math.Clamp(strength, 0, 200) * .045);
-            var interval = TimeSpan.FromMilliseconds(1000.0 / (s.BrainDrainHighRefresh ? 60 : 30));
+            var interval = TimeSpan.FromSeconds(1.0 / (s.BrainDrainHighRefresh ? 60 : 30));
             _pump = new BrainDrainCapturePump(downscale, interval, melt, rects, sigma, amplitude);
-            _frames = new DispatcherTimer { Interval = interval }; _frames.Tick += OnFrame; _frames.Start();
+            StartFrameClock(new FrameClock(Windows[0]), interval);
             _allowCapture = s.AllowOverlayCapture;
             _owner = owner; owner.Closed += OwnerClosed;
             return true;
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Brain Drain overlay failed"); Stop(); return false; }
+    }
+    internal static void StartFrameClock(FrameClock clock, TimeSpan interval)
+    {
+        _frames = clock; clock.Interval = interval; clock.Tick += OnFrame; clock.Start();
     }
     private static void End()
     {
