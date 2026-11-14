@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 /// <list type="bullet">
 /// <item>host -&gt; page <c>pbp:settings</c> carries <c>letPeopleWatch</c> (bool, every boot),
 /// the stands' effects choice <c>watchEffects</c> (bool) + <c>watchAmount</c>
-/// (<see cref="Amounts"/>), <c>mediaAvailable</c> (bool, see <see cref="PbpMediaRules.MediaAvailable"/>)
+/// (<see cref="Amounts"/>), <c>mediaAvailable</c> (bool, see <see cref="PieceByPieceMedia.PbpMediaRules.MediaAvailable"/>)
 /// and, on a board opened straight into a spectate, <c>spectateMatchId</c> (once).</item>
 /// <item>page -&gt; host <c>{ type: 'pbp:setting', key, value }</c> when one of the page's
 /// host-kept toggles changes: <c>letPeopleWatch</c> (bool), <c>watchEffects</c> (bool),

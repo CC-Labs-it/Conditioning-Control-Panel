@@ -8503,5 +8503,8 @@
   "possession_doki_message": "tu as essayé de partir.",
   "possession_doki_progress": "suppression de ta sortie...",
   "possession_doki_done": "rien ne s’est passé. il n’y avait rien à supprimer.",
-  "possession_doki_ok": "ok"
+  "possession_doki_ok": "ok",
+  "remote_invalid_hypnotube_url": "URL de vidéo HypnoTube non valide",
+  "remote_browser_unavailable": "le navigateur n’a pas pu l’ouvrir",
+  "remote_browser_screen_busy": "{0} est à l’écran"
 }

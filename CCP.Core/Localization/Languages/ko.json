@@ -8503,5 +8503,8 @@
   "possession_doki_message": "나가려고 했구나.",
   "possession_doki_progress": "출구를 삭제하는 중...",
   "possession_doki_done": "아무 일도 없었어. 삭제할 것은 없었어.",
-  "possession_doki_ok": "확인"
+  "possession_doki_ok": "확인",
+  "remote_invalid_hypnotube_url": "올바른 HypnoTube 동영상 URL이 아닙니다",
+  "remote_browser_unavailable": "브라우저에서 열 수 없습니다",
+  "remote_browser_screen_busy": "{0}이(가) 화면에 표시되어 있습니다"
 }

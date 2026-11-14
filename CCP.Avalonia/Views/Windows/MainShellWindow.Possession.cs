@@ -60,6 +60,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal Canvas? PossessionGhostLayer => _possessionGhostLayer;
 
+        /// <summary>WPF PossessionEvents.OnPressed (:83-99): the door first (the more specific claim; a door usually
+        /// sits inside a card) drops a letter from Collapse; otherwise a card answers by breathing.</summary>
+        private void OnPossessionPressed(object? source)
+        {
+            if (!_possessionAttached || Director is not { } d) return;
+            try
+            {
+                if (d.TargetFor(source, PossessionRole.TabHeader) is { } door) { d.RequestReactive("drop", door, PossessionRung.Collapse); return; }
+                if (d.TargetFor(source, PossessionRole.Card) is { } card) d.RequestReactive("breathe", card);
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Possession reactive press failed: {Error}", ex.Message); }
+        }
+
         /// <summary>WPF InitializePossessionHost (called from InitializeLockdown): attach to the director once
         /// the window is up, detach when it closes, follow the pointer, and drive the readout.</summary>
         private void InitializePossessionHost()
@@ -80,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     catch (Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to detach the main window host"); }
                 };
                 foreach (var name in NavSectionButtonNames) if (Named<Button>(name) is { } door) PossessionTree.SetRole(door, PossessionRole.TabHeader);
-                AddHandler(PointerPressedEvent, (_, e) => { if (_possessionAttached && Director is { } d && d.TargetFor(e.Source, PossessionRole.TabHeader) is { } door) d.RequestReactive("drop", door, PossessionRung.Collapse); }, RoutingStrategies.Tunnel, handledEventsToo: true);
+                AddHandler(PointerPressedEvent, (_, e) => OnPossessionPressed(e.Source), RoutingStrategies.Tunnel, handledEventsToo: true);
                 LayoutUpdated += (_, _) =>
                 {
                     var now = DateTime.Now;
