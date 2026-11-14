@@ -54,8 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         /// </summary>
         /// <param name="resourceName">
         /// Forward-slash path relative to <c>Resources/</c>, e.g. "bubble.png",
-        /// "features/flash.png", "achievements/lv_10.png". Traversal is rejected inside
-        /// <see cref="CoreModArt.OverridePath"/>.
+        /// "features/flash.png", "achievements/lv_10.png". Traversal (a ".." segment or a rooted
+        /// path) is rejected before resolution.
         /// </param>
         internal static Bitmap? TryLoad(string? resourceName, int? decodeWidth = null) =>
             TryLoad(resourceName, out _, decodeWidth);
@@ -64,6 +64,9 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         {
             modApplied = false;
             if (string.IsNullOrWhiteSpace(resourceName)) return null;
+            // Traversal is refused before any resolution, shipped twin and default included (#3918).
+            resourceName = resourceName.Replace('\\', '/');
+            if (resourceName.Contains("..") || Path.IsPathRooted(resourceName)) return null;
 
             var overridePath = CoreModArt.OverridePath(resourceName);
             // A launch's first loads come decoded off the UI thread when the last launch listed them (StartupArt).

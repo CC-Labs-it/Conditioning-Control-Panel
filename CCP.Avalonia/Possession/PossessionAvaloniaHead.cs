@@ -87,7 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 if (!c.IsEffectivelyVisible || c.Bounds.Width <= 0 || c.Bounds.Height <= 0) return false;
                 if (PossessionTree.IsOffLimits(c, _inner is WobbleHeadEffect && target.Role == PossessionRole.Timer && c is TextBlock && c.Name == "TxtLockdownTimer") || PossessionLease.IsLeased(c)) return false;
                 if (ctx.Photosafe && UsesFlicker) return false;
-                return true;
+                // The effect's own gate (text effects: an unbound, plain TextBlock with something to change).
+                return _inner.CanApply(c);
             }
             catch { return false; }
         }
