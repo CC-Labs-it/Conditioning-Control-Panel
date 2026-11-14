@@ -28,14 +28,12 @@ public sealed class RemoteWearerWiringTests
         Assert.Contains("Relay = NewRelay();", tab);
         Assert.Contains("ExecuteRemoteCommand, RemoteCommands.StopEffects", tab);
         var exec = tab.Substring(tab.IndexOf("internal static string? ExecuteRemoteCommand(", StringComparison.Ordinal));
-        exec = exec.Substring(0, exec.IndexOf("
-        }", StringComparison.Ordinal));
+        exec = exec.Substring(0, exec.IndexOf("\n        }", StringComparison.Ordinal));
         // The Chaster head books an overlapping video attempt, then always runs Core's executor and returns its reason.
         Assert.EndsWith("return Platform.ChasterHead.ExecuteRemote(action, parameters);", exec.TrimEnd());
         var head = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ChasterHead.cs"));
         var run = head.Substring(head.IndexOf("internal static string? ExecuteRemote(", StringComparison.Ordinal));
-        run = run.Substring(0, run.IndexOf("
-    }", StringComparison.Ordinal));
+        run = run.Substring(0, run.IndexOf("\n    }", StringComparison.Ordinal));
         Assert.Contains("var reason = RemoteCommands.Execute(action, parameters);", run);
         Assert.EndsWith("return reason;", run.TrimEnd());
         Assert.DoesNotContain("return null", run);

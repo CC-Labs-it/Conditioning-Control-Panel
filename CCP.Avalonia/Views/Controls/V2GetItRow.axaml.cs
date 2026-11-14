@@ -52,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         private IDisposable? _shown;
+        // An event repaint queued before detach must not run after it (the host rebuilds on reattach).
+        private bool _listening;
 
         /// <summary>WPF IsVisibleChanged -> EnsureState: the counter is read the first time the row is
         /// genuinely on screen (the whole ancestor chain), never at startup.</summary>
@@ -80,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            _listening = true;
             // WPF repaints on V2PurchaseService.Changed and PrizeGrants.GrantsChanged; a sign-in or
             // sign-out moves the row too (P41: subscribed on attach, dropped on detach).
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
@@ -96,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            _listening = false;
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnServiceChanged;
             if (_wired is { } svc)
@@ -111,12 +115,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void OnIdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
         {
+            if (!_listening) return;
             Apply();
             EnsureStateIfShown();
         });
 
         // The service finishes its work off the UI thread, so every repaint is marshalled.
-        private void OnServiceChanged() => Dispatcher.UIThread.Post(Apply);
+        private void OnServiceChanged() => Dispatcher.UIThread.Post(() => { if (_listening) Apply(); });
 
         private void OnBought(string prizeId) => Dispatcher.UIThread.Post(() =>
         {

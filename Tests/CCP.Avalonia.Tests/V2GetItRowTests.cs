@@ -21,12 +21,7 @@ namespace CCP.Avalonia.Tests;
 /// inputs. Owned hides it, signed out offers the login, signed in reads "not available" (no counter here).</summary>
 public sealed class V2GetItRowTests
 {
-    private static void EnsureApp()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
+    private static void EnsureApp() => BubbleMotionPickerTests.Setup();
 
     [Fact]
     public void Decide_maps_ownership_and_sign_in_to_the_rule_states()
