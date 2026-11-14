@@ -33,15 +33,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     internal sealed class ChaosVibeTrailOverlay : Window
     {
         private static ChaosVibeTrailOverlay? _active;
+        internal static Action<ChaosVibeTrailOverlay>? BeforePrewarmForTests;
         private static bool _refused;   // the platform said no once: later vibes don't rebuild and re-warn
         internal static ChaosVibeTrailOverlay? Active => _active;
 
-        /// <summary>Create the (hidden) trail window ahead of time at run start (WPF :33).</summary>
-        public static void EnsureCreated() => Dispatcher.UIThread.Post(() =>
+        /// <summary>Create the (hidden) trail window ahead of time at run start and realise it once with a
+        /// show-and-hide (WPF :33-50), so the first buzz does not pay for the native window. Inline on the UI
+        /// thread (run start is there), so a panic close right after it cannot be undone by a queued create.</summary>
+        public static void EnsureCreated()
         {
-            try { _active ??= new ChaosVibeTrailOverlay(); }
+            if (Dispatcher.UIThread.CheckAccess()) Create();
+            else Dispatcher.UIThread.Post(Create);
+        }
+
+        private static void Create()
+        {
+            try
+            {
+                if (_active != null || _refused) return;
+                var w = _active = new ChaosVibeTrailOverlay();
+                BeforePrewarmForTests?.Invoke(w);
+                // The sample drawing must not flash during the show-and-hide prewarm.
+                w.Opacity = 0;
+                try { w.Show(); }
+                finally { w.Hide(); w.Opacity = 1; }
+            }
             catch (Exception ex) { Log.Debug("ChaosVibeTrail.EnsureCreated: {E}", ex.Message); }
-        });
+        }
 
         /// <summary>The vibe started: show the glow + trail and follow the pointer (WPF :57). Inline on the
         /// UI thread (the toy press is there), so a panic close right after it cannot be undone by a queued
