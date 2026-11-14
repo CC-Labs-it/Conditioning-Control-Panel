@@ -1259,7 +1259,31 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
             ClearStaleSpeechLatch();   // WPF Speech.cs:1612-1614: the one beat still running once she is wedged
-            if (IsSpeechReady()) Platform.BarkHead.Engine?.DispatchIdle();
+            if (!IsSpeechReady()) return;
+            if (!ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced() && TrySpeakOwnVoiceLine()) return;
+            Platform.BarkHead.Engine?.DispatchIdle();
+        }
+
+        private string? _lastOwnVoiceLine;
+
+        /// <summary>WPF Speech.cs:1880: speak an own clip as an unprompted voiced line.</summary>
+        internal bool TrySpeakOwnVoiceLine()
+        {
+            var phrases = CoreSettings.Current.CustomCompanionPhrases;
+            var clips = ConditioningControlPanel.Services.Companion.IdleVoiceLines.OwnClips(phrases, CompanionPhrase.DefaultAudioFolder, File.Exists);
+            if (!ConditioningControlPanel.Services.Companion.IdleVoiceLines.TakesTurn(clips.Count,
+                    _random.Next(ConditioningControlPanel.Services.Companion.IdleVoiceLines.OneIn))) return false;
+            var path = ConditioningControlPanel.Services.Companion.IdleVoiceLines.Pick(clips, _lastOwnVoiceLine, _random);
+            if (path == null) return false;
+            var file = System.IO.Path.GetFileName(path);
+            var text = phrases.FirstOrDefault(p => p?.Category == ConditioningControlPanel.Services.CompanionPhraseIds.VoiceLineCategory
+                && string.Equals(p.AudioFileName, file, StringComparison.OrdinalIgnoreCase))?.Text;
+            text = ConditioningControlPanel.Services.Companion.IdleVoiceLines.ResolvePlaceholder(text,
+                App.WindowAwareness.CurrentServiceName, App.WindowAwareness.CurrentDetectedName);
+            if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
+            _lastOwnVoiceLine = path;
+            Giggle(text, unprompted: true, phraseAudioPath: path, barkVoice: true);
+            return true;
         }
 
         /// <summary>WPF ClearStaleSpeechLatch (Speech.cs:3070): drop a latch nothing can lower any more.
