@@ -89,7 +89,7 @@ public sealed class FavoritesRailShellTests
                 Assert.Empty(recent.Children);   // a pinned destination leaves RECENT
                 var chip = (Button)favs.Children[0];
                 Assert.IsType<ImageBrush>(chip.Background);   // features/vibe.png, cover-cropped
-                Assert.True(HasPadlock(chip), "a locked destination's chip wears no padlock");
+                Assert.False(HasPadlock(chip), "toys are free (main f54203401b): the Haptics chip wears no padlock");
 
                 // Visits change only RECENT; a pinned chip retains its visual and context menu.
                 int pinnedBuilds = w.RailChipBuildCount;
@@ -106,12 +106,15 @@ public sealed class FavoritesRailShellTests
                 Assert.Contains(recentChip, recent.Children);
                 Assert.Same(recentChip, recent.Children[0]);
 
-                // A tier change repaints through RefreshNavPremiumTags (App.axaml.cs RepaintVeils),
-                // exactly as WPF NavPremiumTags.cs:158 repaints the chips.
+                // A locked destination (Awareness, Basic) wears one, and a tier change repaints through
+                // RefreshNavPremiumTags (App.axaml.cs RepaintVeils), exactly as WPF NavPremiumTags.cs:158 repaints the chips.
+                s.RailFavorites.Add("tab.awareness");
+                w.RefreshNavPremiumTags();
+                Assert.True(HasPadlock((Button)favs.Children[1]), "a locked destination's chip wears no padlock");
                 premium = true;
                 w.RefreshNavPremiumTags();
+                Assert.False(HasPadlock((Button)favs.Children[1]), "padlock kept after the door opened");
                 chip = (Button)favs.Children[0];
-                Assert.False(HasPadlock(chip), "padlock kept after the door opened");
 
                 chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();

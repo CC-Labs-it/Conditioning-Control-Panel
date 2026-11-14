@@ -175,7 +175,7 @@ public sealed class PremiumGatesTests
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = (null, null, null);
                 Show("play");
                 foreach (var (t, g) in Veils) Assert.True(Veiled(t, g), g);
-                Assert.True(HapticsVeiled());
+                Assert.False(HapticsVeiled());   // toys are free for everyone (main f54203401b)
                 foreach (var b in Bands) Assert.True(Banded(b), b);
 
                 // The free day lifts its own veil and band, nothing else.
@@ -203,7 +203,7 @@ public sealed class PremiumGatesTests
                 CoreEntitlement.HasPremiumProvider = null;
 
                 // The other three pool keys lift their own veils (WPF RefreshEntitlementVeils).
-                CoreEntitlement.IsFreeTodayProvider = k => k is "takeover" or "voice" or "haptics";
+                CoreEntitlement.IsFreeTodayProvider = k => k is "takeover" or "voice";
                 Show("play");
                 Assert.False(Veiled("BambiTakeoverTab", "BambiTakeoverGate"));
                 Assert.False(Veiled("SheListeningTab", "SheListeningGate"));
