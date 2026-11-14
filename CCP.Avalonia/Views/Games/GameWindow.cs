@@ -317,6 +317,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
+                case "room-option" when IsBreakout:
+                    HandleBreakoutOption(o);   // #3921
+                    break;
+                case "funnel" when IsBreakout:
+                    // WPF BackRoomBridge.cs:245-249: the demo end card counts on the one funnel path; after exit
+                    // starts, or while minimised, it never opens a checkout (#4066).
+                    FunnelPageMessage.Handle(o, !_closing && !_shellExiting && !_roomMinimized && WindowState != WindowState.Minimized);
+                    break;
                 case "breakout-wall" when IsBreakout:
                     // WPF BackRoomHostService.cs:511 (Sparkles B1): one medal per cleared wall, the Story Demo included.
                     DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.BreakoutWall(o), SparklesHead.Service));
@@ -428,6 +436,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             frame["media"] = JToken.FromObject(ConditioningControlPanel.Services.BackRoom.BackRoomWire.MediaWire(settings));
             frame["sp"] = settings.SkillPoints;
             frame["invertLook"] = settings.BackRoomInvertLook;
+            frame["audio"] = JObject.FromObject(BreakoutAudio());   // WPF BackRoomHostService.cs:589-607 (#3921)
+            // WPF BackRoomHostService.cs:32-38,589-609: the br_ keys, resolved in the active language (#3921).
+            var loc = LocalizationManager.Instance;
+            frame["lex"] = JObject.FromObject(loc.KeysWithPrefix("br_").Distinct(StringComparer.Ordinal).ToDictionary(k => k, loc.Get));
             return frame;
         }
 
