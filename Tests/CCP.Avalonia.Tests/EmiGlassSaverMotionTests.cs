@@ -144,6 +144,7 @@ public class EmiGlassSaverMotionTests
         var bedtime = EmiState.Current.BedtimeUntil;
         var path = System.IO.Path.Combine(CorePaths.UserData, "arcademy_meta.json");
         var bytes = System.IO.File.Exists(path) ? System.IO.File.ReadAllBytes(path) : null;
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow { GlassChannelOverride = "reruns" };
         try
         {
@@ -170,6 +171,7 @@ public class EmiGlassSaverMotionTests
             desk.ShutDown();
             try { if (bytes == null) System.IO.File.Delete(path); else System.IO.File.WriteAllBytes(path, bytes); }
             finally { RerunsPainter.ResetCacheForTests(); }
+            EmiDeskWindow.GlassRollWrong = oldRoll;
             EmiState.Current.BedtimeUntil = bedtime; CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;

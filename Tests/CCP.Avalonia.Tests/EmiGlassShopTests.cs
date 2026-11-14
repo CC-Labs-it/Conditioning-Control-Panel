@@ -31,6 +31,7 @@ public class EmiGlassShopTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         EmiDeskWindow.GlassPick = _ => "shop";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow();
         try
         {
@@ -48,7 +49,7 @@ public class EmiGlassShopTests
         finally
         {
             desk.ShutDown(); EmiState.Current.BedtimeUntil = bedtime;
-            EmiDeskWindow.GlassPick = oldPick; CoreSettings.ServiceProvider = old;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll; CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;
     });

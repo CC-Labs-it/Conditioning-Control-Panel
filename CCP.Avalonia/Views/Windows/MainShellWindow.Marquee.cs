@@ -211,6 +211,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // WPF BannerFx.cs:240-247 forces the support arrival sheen past the throttle.
             SweepBannerSheen(force: ReferenceEquals(banners[nextIndex], BannerPrimary));
+            // WPF OnBannerBeatChanged (BannerFx.cs:236): pop, ring flash, support sparkles. A rolled beat only widens.
+            OnBannerBeatChanged(banners[nextIndex], rolled: _bannerDrumBeat?.IsRunning == true);
         }
 
         /// <summary>
