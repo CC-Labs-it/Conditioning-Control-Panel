@@ -36,9 +36,7 @@ public class EmiDeskGlassTests
         var language = LocalizationManager.Instance.CurrentLanguage;
         var section = new EmiDeskSettingsSection();
         var host = new Window { Content = section };
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         var desk = new EmiDeskWindow();
         try
         {
@@ -80,7 +78,7 @@ public class EmiDeskGlassTests
         finally
         {
             EmiLineEngine.Instance.ResetForTests();
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -115,9 +113,7 @@ public class EmiDeskGlassTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         var desk = new EmiDeskWindow();
         try
         {
@@ -144,7 +140,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -162,9 +158,7 @@ public class EmiDeskGlassTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         var desk = new EmiDeskWindow();
         try
         {
@@ -186,7 +180,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -204,9 +198,7 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         var desk = new EmiDeskWindow();
         try
         {
@@ -235,7 +227,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -256,9 +248,7 @@ public class EmiDeskGlassTests
         var oldTime = BeatLoop.Time;
         var time = new SteppedTime();
         BeatLoop.Time = time;
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         EmiLineEngine.Instance.ResetForTests();
         var desk = new EmiDeskWindow();
         try
@@ -291,7 +281,7 @@ public class EmiDeskGlassTests
         finally
         {
             EmiLineEngine.Instance.ResetForTests();
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             BeatLoop.Time = oldTime; CoreSettings.ServiceProvider = oldSettings;
         }
@@ -309,9 +299,7 @@ public class EmiDeskGlassTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         var engine = EmiLineEngine.Instance;
         engine.ResetForTests();
         var desk = new EmiDeskWindow();
@@ -334,7 +322,7 @@ public class EmiDeskGlassTests
         finally
         {
             engine.ResetForTests();
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = oldSettings;
         }
@@ -353,9 +341,7 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
-        var oldChoice = EmiDeskWindow.GlassChooseShop;
-        EmiDeskWindow.GlassChooseShop = () => false;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
         var desk = new EmiDeskWindow();
         try
         {
@@ -392,7 +378,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            EmiDeskWindow.GlassPick = oldPick;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language); CoreSettings.ServiceProvider = oldSettings;
         }
