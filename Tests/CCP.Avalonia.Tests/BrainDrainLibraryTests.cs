@@ -167,12 +167,33 @@ public class BrainDrainLibraryTests
             Assert.Equal(Loc.Get("st4_braindrain_discovery_hint"), ToolTip.GetTip(card.FindControl<Button>("BtnRefreshAudio")!));
             Assert.Equal(Loc.Get("st4_braindrain_audio_unavailable"), ToolTip.GetTip(card.FindControl<Grid>("AudioRateRow")!));
             Assert.Equal(Loc.Get("st4_braindrain_visual_only_hint"), ToolTip.GetTip(card.FindControl<Grid>("VisualStrengthRow")!));
-            Assert.Equal(Loc.Get("st4_braindrain_audio_unavailable"), ToolTip.GetTip(card.FindControl<Grid>("HighRefreshRow")!));
+            Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(card.FindControl<Grid>("HighRefreshRow")!));
             File.Delete(Path.Combine(legacy, "old.mp3"));
             card.FindControl<Button>("BtnRefreshAudio")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(card.FindControl<Border>("NoAudioHint")!.IsVisible);
         }
         finally { window?.Close(); if (Directory.Exists(root)) Directory.Delete(root, true); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task UnportedMeltAndHighRefreshStayInactiveAndExplainWhy() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(); var card = new BrainDrainFeatureControl(); var window = new Window { Content = card }; window.Show();
+        try
+        {
+            foreach (var (control, label) in new[] { ("ChkMelt", "TxtMeltUnavailable"), ("ChkHighRefresh", "TxtHighRefreshUnavailable") })
+            {
+                var check = card.FindControl<CheckBox>(control)!;
+                Assert.False(check.IsEffectivelyEnabled);
+                check.IsEnabled = true; // Session unlock can set the child enabled.
+                Assert.False(check.IsEffectivelyEnabled);
+                var hint = card.FindControl<TextBlock>(label)!;
+                Assert.True(hint.IsEffectivelyVisible);
+                Assert.Equal(Loc.Get("exclusives_not_on_this_build"), hint.Text);
+            }
+        }
+        finally { window.Close(); }
         return Task.CompletedTask;
     });
 

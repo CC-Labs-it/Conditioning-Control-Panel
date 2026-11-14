@@ -14,6 +14,8 @@ using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Localization;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Studio;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -24,8 +26,15 @@ public sealed class BrainDrainIntegrationTests
 {
     private static Task Run(Func<Window, Task> test, bool supported = true) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var owner = Setup(supported); try { await test(owner); }
-        finally { BrainDrainOverlay.CloseAll(); owner.Close(); }
+        var previous = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        global::ConditioningControlPanel.Avalonia.App.Notifications = new();
+        Window? owner = null;
+        try { owner = Setup(supported); await test(owner); }
+        finally
+        {
+            try { BrainDrainOverlay.CloseAll(); owner?.Close(); }
+            finally { global::ConditioningControlPanel.Avalonia.App.Notifications = previous; }
+        }
     });
     private static Window Setup(bool supported = true)
     {
@@ -33,7 +42,13 @@ public sealed class BrainDrainIntegrationTests
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        BrainDrainOverlay.CloseAll(); var owner = new Window(); owner.Show();
+        BrainDrainOverlay.CloseAll();
+        BrainDrainOverlay.LastNoticeUtc = DateTime.MinValue;
+        ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
+        var notices = new StackPanel();
+        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(notices);
+        notices.Children.Clear();
+        var owner = new Window { Content = notices, Tag = notices }; owner.Show();
         CoreSession.IsEngineRunningProvider = () => true; var settings = CoreSettings.Current; settings.BrainDrainEnabled = true; settings.BrainDrainBlurStrength = 100; settings.DualMonitorEnabled = true; settings.BrainDrainKeepPicturesClear = false;
         BrainDrainOverlay.Prepare = _ => supported; BrainDrainOverlay.Capture = (_, _) => { };
         BrainDrainOverlay.Alpha = (w, a) => w.Opacity = a;
@@ -315,4 +330,91 @@ public sealed class BrainDrainIntegrationTests
             Assert.Equal(bounds.Position, host.Position); Assert.Equal(bounds.Width / scale, host.Width); Assert.Equal(bounds.Height / scale, host.Height);
         } return Task.CompletedTask;
     });
+    [Fact]
+    public Task ZeroFramesAndRefusedPreparationShareNoticeCooldown() => Run(async owner =>
+    {
+        var notices = ((StackPanel)owner.Tag!).Children;
+        BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
+        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(() => null, TimeSpan.FromMilliseconds(20));
+        BrainDrainOverlay.Start(owner);
+        for (int i = 0; i < 250 && notices.Count == 0; i++) await Task.Delay(20);
+        Assert.Single(notices);
+        BrainDrainOverlay.CloseAll();
+        BrainDrainOverlay.Prepare = _ => false;
+        BrainDrainOverlay.Start(owner);
+        BrainDrainOverlay.Reconcile();
+        Assert.Single(notices);
+        Assert.Empty(BrainDrainOverlay.Active);
+    });
+
+    [Fact]
+    public Task RefusedPreparationRaisesNotice() => Run(owner =>
+    {
+        var notices = ((StackPanel)owner.Tag!).Children;
+        BrainDrainOverlay.Prepare = _ => false;
+        BrainDrainOverlay.Start(owner); BrainDrainOverlay.Reconcile();
+        Assert.Single(notices);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FirstFrameDisarmsFailureNotice() => Run(async owner =>
+    {
+        var notices = ((StackPanel)owner.Tag!).Children;
+        BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
+        BrainDrainOverlay.CreatePump = _ => new BrainDrainCapturePump(
+            () => new BrainDrainCapturePump.Frame(2, 2, new byte[16]), TimeSpan.FromMilliseconds(20));
+        BrainDrainOverlay.Start(owner);
+        await Task.Delay(3500);
+        Assert.Empty(notices);
+    });
+
+    [Fact]
+    public Task NoScreensShowsOneTwelveSecondWarningAndRecovers() => Run(owner =>
+    {
+        var notices = ((StackPanel)owner.Tag!).Children;
+        BrainDrainOverlay.Screens = _ => Array.Empty<(PixelRect, double, bool)>();
+        BrainDrainOverlay.Start(owner);
+        BrainDrainOverlay.Reconcile();
+        var toast = Assert.IsType<Border>(Assert.Single(notices));
+        Assert.Empty(BrainDrainOverlay.Active);
+        Assert.Equal(Loc.Get("brain_drain_capture_failed"), Assert.IsType<TextBlock>(Assert.IsType<Grid>(toast.Child).Children[0]).Text);
+        Assert.Equal(Color.Parse("#FFB347"), Assert.IsType<SolidColorBrush>(toast.BorderBrush).Color);
+        Assert.Equal(TimeSpan.FromSeconds(12), Assert.IsType<DispatcherTimer>(toast.Tag).Interval);
+        BrainDrainOverlay.Screens = _ => new[] { (new PixelRect(0, 0, 8, 8), 1.0, true) };
+        BrainDrainOverlay.Reconcile();
+        Assert.Single(BrainDrainOverlay.Active);
+        Assert.Single(notices);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public async Task FixtureRestoresNotificationHostAndQueuedStateEvenOnFailure()
+    {
+        var original = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        var previous = new ConditioningControlPanel.Avalonia.Helpers.NotificationService();
+        var host = new StackPanel();
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() => {
+                global::ConditioningControlPanel.Avalonia.App.Notifications = previous;
+                previous.Show("queued"); return Task.CompletedTask;
+            });
+            await Run(owner => { BrainDrainOverlay.Prepare = _ => false; BrainDrainOverlay.Start(owner); return Task.CompletedTask; });
+            await AvaloniaTestDispatcher.RunAsync(() => {
+                Assert.Same(previous, global::ConditioningControlPanel.Avalonia.App.Notifications);
+                previous.AttachHost(host);
+                Assert.Single(host.Children);
+                return Task.CompletedTask;
+            });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Run(_ => throw new InvalidOperationException()));
+            await AvaloniaTestDispatcher.RunAsync(() => {
+                Assert.Same(previous, global::ConditioningControlPanel.Avalonia.App.Notifications);
+                previous.Show("after"); Assert.Equal(2, host.Children.Count);
+                return Task.CompletedTask;
+            });
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.Notifications = original; }
+    }
+
 }
