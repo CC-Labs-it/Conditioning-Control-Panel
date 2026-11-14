@@ -26,12 +26,11 @@ public class EmiGlassShopTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var old = CoreSettings.ServiceProvider;
-        var choice = EmiDeskWindow.GlassChooseShop;
+        var oldPick = EmiDeskWindow.GlassPick;
         var bedtime = EmiState.Current.BedtimeUntil;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
-        EmiDeskWindow.GlassChooseShop = () => true;
-        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        EmiDeskWindow.GlassPick = _ => "shop";
         var desk = new EmiDeskWindow();
         try
         {
@@ -49,7 +48,7 @@ public class EmiGlassShopTests
         finally
         {
             desk.ShutDown(); EmiState.Current.BedtimeUntil = bedtime;
-            EmiDeskWindow.GlassChooseShop = choice; EmiDeskWindow.GlassChooseRain = oldRain; CoreSettings.ServiceProvider = old;
+            EmiDeskWindow.GlassPick = oldPick; CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;
     });
