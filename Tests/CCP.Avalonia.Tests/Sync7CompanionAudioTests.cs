@@ -107,6 +107,9 @@ public sealed class Sync7CompanionAudioTests
     {
         EnsureApp();
         var (provider, playback, modId, modPackage) = (CoreSettings.ServiceProvider, CoreAudio.PlayStoppableProvider, CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider);
+        var overrides = CoreModArt.OverridePathProvider;
+        // App startup seeds this (App.axaml.cs:1018); run alone the test must seed it itself.
+        CoreModArt.OverridePathProvider = p => CoreModArt.ResolveOverride(p, null, CoreMods.ActiveModPackage?.InstalledPath);
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         service.Current.MasterVolume = 50;
@@ -131,6 +134,7 @@ public sealed class Sync7CompanionAudioTests
         {
             tube.Close();
             (CoreSettings.ServiceProvider, CoreAudio.PlayStoppableProvider, CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider) = (provider, playback, modId, modPackage);
+            CoreModArt.OverridePathProvider = overrides;
             Directory.Delete(root, true);
         }
     });
