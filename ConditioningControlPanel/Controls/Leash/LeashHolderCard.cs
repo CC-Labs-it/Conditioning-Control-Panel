@@ -283,7 +283,7 @@ public sealed class LeashHolderCard : Border
         return g;
     }
 
-    private ContextMenu Menu()
+    internal ContextMenu Menu()
     {
         var m = new ContextMenu();
         var replay = new MenuItem { Header = Loc.Get("leash_menu_replay") };

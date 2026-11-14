@@ -1,0 +1,52 @@
+FREE TOYS: 7.2.4
+
+TOYS ARE FREE
+connected toys are free for everyone now, no Basic needed. your limits still apply and panic still stops them.
+
+RACING THOUGHTS CLASSIC IS BACK
+the original 2D race returns beside the 3D one, as its own door on Play and in the launcher. free for everyone, every track open. the 3D Racing Thoughts stays Prime. Classic is also on the website and, soon, on the phone.
+
+PIECE BY PIECE
+- right-click arrows and circles on the board: right drag from one square to another draws an arrow, a right click circles a square, the same again removes it, a left click clears them all. only you see them. a right drag that starts off the board still turns the camera.
+
+NEW
+- Mod Creator: Text Replacements lists every original text a replacement can match, with a search box. click one and it fills the original box. Export list saves the whole list as a text file.
+- Mandatory videos: "Loop short videos until the minimum", off by default. on, a clip shorter than the minimum replays until the minimum has played, then ends once, with one result.
+- Wallpaper: "Save this wallpaper" keeps the picture on your desktop, in Pictures > CCP Wallpapers.
+- Wallpaper: a Fit choice (Fill, Fit, Stretch, Span, Center), so a vertical or mixed setup can span instead of stretch. your own fit comes back after.
+- the launcher shows an "Update ready" chip when a new version is waiting, so you can update without opening the panel.
+- Settings > Account: "Redeem a code" for a pass code.
+- Settings > Data: Delete account now sits in the Danger zone, next to Factory reset.
+- Perk effects: Full, No cards or Off, in Settings > Notifications. Off also turns off the Pink Rush wash and the gold and pink sparkles on flashes and bubbles. XP still pays the same.
+- Circe's Tab: a price and the day limit can go up to 24 hours. anything over an hour shows a warning line.
+- Awareness: a new "On at launch" switch. it can now be turned off during a session, and pausing a session pauses it.
+- quests: click a daily or weekly quest to open the page that completes it. Lockdown included.
+- Natasha's bubbles: trigger words can come up more often, in Circe's Tab costs.
+- Brain Drain: the audio clip rate goes down to 0, for blur only.
+- "+Add Trigger" jumps to the new row and puts the cursor in it.
+- fewer popups: the online media offer, the "share achievements on Discord?" question and the tier celebration cards are gone. online media and Discord sharing are still one switch away.
+
+FIXES
+- the app no longer freezes when a video in the in-app browser goes full screen.
+- Escape typed into another app no longer pauses and then closes a floating video. a floating video now answers Escape only when Escape is your panic key.
+- a settings backup taken during a session now keeps your own values, so a restore on a new PC no longer brings back the session's pink filter, ducking or Hydra.
+- your own voice lines speak on the idle timer again.
+- importing the same pack twice no longer makes a copy of every file.
+- Prize Counter: a buy that needs Discord says "Link Discord first" instead of failing on every try.
+- Wallpaper no longer leaves a white desktop when Windows rotates your wallpapers: Dynamic redraws the whole desktop when it stops, and Static and the session wallpaper leave a rotating, Spotlight or per-monitor desktop alone.
+- other apps such as Discord no longer stay turned down after a session.
+- the spiral clears when a session ends.
+- the companion's speech bubble no longer covers the chat box, and the tube no longer covers its own menu.
+- the Prize Counter plays its sounds as soon as it opens.
+- Bubble Count time counts for the "watch videos" quests, including a clip you leave early.
+- a strict lock card with panic turned off says that Escape closes it.
+- the Social badge checks the Lobby every 2 minutes instead of every 10 seconds. the Lobby itself stays live while it is open.
+
+HUNTING A STRAY SOUND
+thanks to your reports, most "random" sounds now have a name. the giggle while idle was the companion asking you something on its own: with nothing running it now shows the question quietly, unless you let it speak while idle. it also waits while a Deeper session plays. the sounds right at launch are the launcher's own chimes and hover notes (its speaker button mutes them). still hearing something? send an in-app bug report right away, it now names more sources.
+
+ALSO LOGGED FOR THE NEXT REPORT
+- a crash when the in-app browser goes full screen now saves your graphics card and window sizes.
+- corner GIFs log how long they take to load and show.
+
+this replaces the 7.2.3 pre-release and carries all of it. coming from 7.2.1 or older? read the 7.2.2 notes on the release page.
