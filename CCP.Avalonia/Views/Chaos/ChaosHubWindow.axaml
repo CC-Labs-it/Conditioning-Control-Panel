@@ -26,7 +26,7 @@
          CheckBox}}" (Resources/Theme/Inputs)      implicit CheckBox on this head to inherit from
        OptChk LayoutTransform 1.35              -> ONE LayoutTransformControl around the column
                                                    (Avalonia has no LayoutTransform per control)
-       skia:SKElement MenuFog                   -> fog layer is inert.
+       skia:SKElement MenuFog                   -> ChaosHubMenuFx.
        bare <Slider> / <ComboBox>               -> Theme="{StaticResource PinkSlider}" /
                                                    "{StaticResource DarkComboBoxStyle}". WPF got
                                                    these from the app-wide IMPLICIT styles in
@@ -699,11 +699,7 @@
                             <Border.Background><ImageBrush Stretch="UniformToFill"/></Border.Background>
                         </Border>
                     </Grid>
-                    <!-- WPF: skia:SKElement MenuFog — animated pink fog drifting IN FRONT of the
-                         character (additive-soft), gated on Enhanced FX. ponytail: needs SkiaSharp,
-                         which this head does not reference and a view layer may not add; the layer
-                         stays as an inert placeholder so the z-order still reads. -->
-                    <Border x:Name="MenuFog" IsHitTestVisible="False" Background="Transparent"/>
+                    <chaos:ChaosHubMenuFx x:Name="MenuFog"/>
                 </Grid>
             </Border>
 

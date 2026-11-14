@@ -2094,6 +2094,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _menuLeftCol.IsVisible = true;
             _menuArtPanel.IsVisible = true;
             _menuOptions.IsVisible = false;
+            StartMenuIntro();
             StartMenuArt();
             RefreshTopBar();   // keep the menu chips current
         }
