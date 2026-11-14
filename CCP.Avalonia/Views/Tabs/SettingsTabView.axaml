@@ -1140,7 +1140,11 @@
                     Theme="{StaticResource SolidPinkButton}"
                     ToolTip.Tip="{loc:Str tooltip_pop_out_browser_to_resizable_window}"
                     FontSize="9" Padding="6,3" VerticalAlignment="Center">
-              <TextBlock Text="{loc:Str btn_pop_out}"/>
+              <!-- WPF prefixes both labels with a glyph: drawn here as a FluentIcon, the label stays bare (#3940). -->
+              <StackPanel Orientation="Horizontal" Spacing="3">
+                <fx:IconGlyph x:Name="PopOutBrowserIcon" Kind="Open" Size="10" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TxtPopOutBrowser" Text="{loc:StrBare btn_pop_out}" VerticalAlignment="Center"/>
+              </StackPanel>
             </Button>
           </Grid>
 

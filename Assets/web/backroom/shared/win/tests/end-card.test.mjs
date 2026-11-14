@@ -154,3 +154,17 @@ test('copy voice: no exclamation marks, no em or en dashes', () => {
     assert.doesNotMatch(s, /[!\u2013\u2014]/);
   }
 });
+
+test('the Breakout plan click uses the WebKit string carrier', () => {
+  const posted = [];
+  const env = { invokeCSharpAction: m => posted.push(JSON.parse(m)) };
+  assert.equal(postFunnel('gate_shown', 'breakout_demo', 'prime', env), 'host');
+  const row = buildEndCard({ doc: fakeDoc(), plan: planOf(C1, 'prime'), feature: 'breakout_demo', env });
+  let held = 0;
+  row.children[0].listeners.click[0]({ preventDefault: () => held++ });
+  assert.equal(held, 1);
+  assert.deepEqual(posted, [
+    { type: 'funnel', event: 'gate_shown', a: 'breakout_demo', b: 'prime' },
+    { type: 'funnel', event: 'cta_clicked', a: 'breakout_demo', b: 'patreon', plan: 'prime' },
+  ]);
+});

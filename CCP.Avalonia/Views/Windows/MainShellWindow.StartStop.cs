@@ -159,6 +159,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
             App.Sessions?.Pause();
             Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
+            // WPF StartStop.cs:577-580 ExitBrowserFullscreenForTeardown (#952): a topmost fullscreen browser
+            // left up by a session's end hides the completion dialog behind it (#4423).
+            ExitBrowserPopoutFullscreen();
             Services.EngineCrashSentinel.Clear();
             EmiEngineStopped(); // WPF StartStop.cs:570-579
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row

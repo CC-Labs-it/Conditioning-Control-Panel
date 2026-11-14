@@ -94,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             M(IconKind.Library, R, null, "📚"); M(IconKind.BookOpen, R, null, "📖"); M(IconKind.History, R, null, "📜");
             M(IconKind.Calendar, R, null, "📅");          // CalendarLtr is not in 2.1.343
             M(IconKind.DataBarVertical, R, null, "📊"); M(IconKind.ArrowTrending, R, null, "📈"); M(IconKind.NumberSymbol, R, null, "🔢");
-            M(IconKind.TextFont, R, null, "🔤"); M(IconKind.Open, R, null, "↗"); M(IconKind.ArrowUpLeft, R, null, "↖");
+            M(IconKind.TextFont, R, null, "🔤"); M(IconKind.Open, R, null, "↗", "⧉"); M(IconKind.ArrowUpLeft, R, null, "↖");
             M(IconKind.ArrowDownRight, R, null, "↘"); M(IconKind.ArrowDownLeft, R, null, "↙"); M(IconKind.ArrowUp, R, null, "↑");
             M(IconKind.ArrowLeft, R, null, "←"); M(IconKind.ArrowRight, R, null, "→"); M(IconKind.Add, R, null, "➕", "＋");
             M(IconKind.Subtract, R, null, "−", "➖", "─"); M(IconKind.FullScreenMaximize, R, null, "⛶");
