@@ -158,6 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new ScrollHijackEffect());
             list.Add(new DropEffect());
             list.Add(new ToggleLieEffect());
+            list.Add(new CrackEffect());
             return list;
         }
 
