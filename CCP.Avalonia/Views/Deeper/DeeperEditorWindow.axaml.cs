@@ -143,6 +143,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // Core caches peaks decoded through LibVLC. Local audio and video playback use _localAudio;
         // remote video polls the page media element.
         private float[]? _waveformPeaks;
+        // WPF DeeperEditorWindow.xaml.cs:1199: a decoded waveform's duration is the timeline's; the
+        // playback reading only stands in when the decode failed (#4136).
+        private bool _hasWaveformDuration;
+        // Bumped by every preview start, so a decode or open from an earlier start of the same file is dropped.
+        private int _previewGeneration;
         private IDeeperLocalAudio? _localAudio;
 
         /// <summary>Open editors (UI thread): the panic sweep and the player's one-editor-per-file
@@ -741,9 +746,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // A swap from a URL to a local file must blank the old page first, or its audio
                 // keeps playing behind the waveform this method is about to show.
                 _panicStoppedLocalVideo = null;
+                var generation = ++_previewGeneration;
                 StopBrowserPreview();
                 DisposeLocalAudio();
                 _waveformPeaks = null;
+                _hasWaveformDuration = false;
                 UpdateWaveformPath();
 
                 var source = _enhancement.MediaSource;
@@ -762,9 +769,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 }
 
                 if (_enhancement.MediaType == MediaTypes.Audio)
-                    await InitializeAudioAsync(source);
+                    await InitializeAudioAsync(source, generation);
                 else
-                    await InitializeVideoAsync(source);
+                    await InitializeVideoAsync(source, generation);
             }
             catch (Exception ex)
             {
@@ -1027,16 +1034,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>Local video uses the shared LibVLC transport and frame sink.</summary>
-        private async Task InitializeVideoAsync(string path)
+        private async Task InitializeVideoAsync(string path, int generation)
         {
             if (!DeeperPreview.IsLocalVideoFile(path)) { InitializeBrowserLocalVideo(path); return; }
-            await InitializeAudioAsync(path, video: true);
+            await InitializeAudioAsync(path, generation, video: true);
         }
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
         /// use LibVLC; Core AudioWaveformCache supplies the peaks beside audio playback. With
         /// <paramref name="video"/> the same transport feeds <c>LocalVideoImage</c> instead.</summary>
-        private async Task InitializeAudioAsync(string path, bool video = false)
+        private async Task InitializeAudioAsync(string path, int generation, bool video = false)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
@@ -1045,9 +1052,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             LocalVideoImage.IsVisible = video;
             if (!video)
             {
-                _waveformLoad = LoadWaveformAsync(path);
+                _waveformLoad = LoadWaveformAsync(path, generation);
                 await _waveformLoad;
-                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                if (_playbackDisposed || generation != _previewGeneration || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
             }
 
             IDeeperLocalAudio? audio = null;
@@ -1056,14 +1063,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (audio == null)
             {
                 Log.Debug("DeeperEditor: local media unavailable: {Path}", path);
-                if (!_playbackDisposed && string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
+                if (!_playbackDisposed && generation == _previewGeneration && string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
                 {
                     if (video) { LocalVideoImage.IsVisible = false; InitializeBrowserLocalVideo(path); }
                 }
                 return;
             }
             // Swapped or closed while the parse ran: this clip is no longer the project's.
-            if (_playbackDisposed || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
+            if (_playbackDisposed || generation != _previewGeneration || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
             {
                 audio.Dispose();
                 return;
@@ -1086,7 +1093,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Log.Warning("DeeperEditor: local audio playback failed: {Path}", path);
                 LocalAudioStopped();
             });
-            if (audio.DurationSeconds > 0) _totalSeconds = audio.DurationSeconds;
+            if (!_hasWaveformDuration && audio.DurationSeconds > 0) _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
             UpdateWaveformPath();
             RebuildTimelineRuler();
@@ -1101,13 +1108,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1196-1211: peaks from AudioWaveformCache, then the
         /// waveform path and timeline duration before playback. Decode failure leaves a flat strip.</summary>
-        private async Task LoadWaveformAsync(string path)
+        private async Task LoadWaveformAsync(string path, int generation)
         {
             try
             {
                 var data = await AudioWaveformCache.LoadAsync(path);
-                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                if (_playbackDisposed || generation != _previewGeneration || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
                 _waveformPeaks = data.Peaks;
+                _hasWaveformDuration = data.DurationSeconds > 0;
                 _totalSeconds = data.DurationSeconds;
                 TxtTotalTime.Text = FormatTime(_totalSeconds);
                 UpdateWaveformPath();
@@ -1284,7 +1292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (_localAudio == null) return;
             // The pre-play duration can be a header estimate; re-lay the timeline only on a change.
             var duration = _localAudio.DurationSeconds;
-            if (duration > 0 && Math.Abs(duration - _totalSeconds) > 0.05)
+            if (!_hasWaveformDuration && duration > 0 && Math.Abs(duration - _totalSeconds) > 0.05)
             {
                 _totalSeconds = duration;
                 TxtTotalTime.Text = FormatTime(_totalSeconds);

@@ -581,6 +581,96 @@ public sealed class DeeperRowsTests
     });
 
 
+    /// <summary>#4136 (WPF DeeperEditorWindow.xaml.cs:1199): a decoded waveform's duration stays the
+    /// timeline's; neither the playback open nor the playhead tick replaces it with the transport's reading.</summary>
+    [Fact]
+    public Task EditorKeepsTheDecodedDurationOverPlayback() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-duration-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        var audio = new FakeAudio { DurationSeconds = 120, PlaybackDurationSeconds = 120 };
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        AudioWaveformCache.Decoder = _ => new AudioWaveformResult { Peaks = new[] { 0.5f }, DurationSeconds = 95 };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            await editor._waveformLoad!.WaitAsync(TimeSpan.FromSeconds(10));
+            for (int i = 0; i < 20 && GetLocalAudio(editor) == null; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.Same(audio, GetLocalAudio(editor));
+            Assert.Equal("1:35.0", editor.TxtTotalTime.Text);
+            typeof(DeeperEditorWindow).GetMethod("PlayheadTimer_Tick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(editor, new object?[] { null, EventArgs.Empty });
+            Assert.Equal("1:35.0", editor.TxtTotalTime.Text);
+        }
+        finally
+        {
+            editor.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    /// <summary>#4136: a restart of the same file's preview drops the earlier start's decode and open, and with
+    /// its own decode failed the playback duration stands in.</summary>
+    [Fact]
+    public Task EditorPreviewRestartIgnoresTheOldDecode() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-restart-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new System.Threading.ManualResetEventSlim();
+        int calls = 0, opens = 0;
+        DeeperLocalAudio.Open = _ => { opens++; return Task.FromResult<IDeeperLocalAudio?>(new FakeAudio { DurationSeconds = 29, PlaybackDurationSeconds = 29 }); };
+        AudioWaveformCache.Decoder = _ =>
+        {
+            if (System.Threading.Interlocked.Increment(ref calls) == 1)
+            {
+                started.TrySetResult();
+                if (!release.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException();
+                return new AudioWaveformResult { DurationSeconds = 12, Peaks = new[] { 0.5f } };
+            }
+            throw new InvalidOperationException("decode failed");
+        };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        var initialize = typeof(DeeperEditorWindow).GetMethod("InitializePreviewAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        try
+        {
+            var first = (Task)initialize.Invoke(editor, null)!;
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var oldLoad = editor._waveformLoad!;
+            await ((Task)initialize.Invoke(editor, null)!).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("0:29.0", editor.TxtTotalTime.Text);
+            release.Set();
+            await oldLoad.WaitAsync(TimeSpan.FromSeconds(10));
+            await first.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("0:29.0", editor.TxtTotalTime.Text);
+            Assert.Equal(1, opens);
+        }
+        finally
+        {
+            release.Set();
+            editor.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    private static IDeeperLocalAudio? GetLocalAudio(DeeperEditorWindow editor) =>
+        (IDeeperLocalAudio?)typeof(DeeperEditorWindow).GetField("_localAudio", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor);
+
     [Theory]
     [InlineData(95)]
     [InlineData(94.864)]
