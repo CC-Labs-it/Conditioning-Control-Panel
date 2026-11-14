@@ -100,6 +100,8 @@ namespace ConditioningControlPanel.Services.Bark
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
+        /// <summary>A flash voice is starting but has not reported its length yet (WPF holds the floor from Play).</summary>
+        public Func<bool>? IsWhisperStarting;
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
         public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
         public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
@@ -192,7 +194,8 @@ namespace ConditioningControlPanel.Services.Bark
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
                     if (!fire) { LogDecision(trigger, winner, pool, false, idx, reason); return false; }
                     LogDecision(trigger, winner, pool, true, idx, reason);
-                    if (Speak == null) return false;
+                    // WPF BarkService.cs:180-184: dry-run decides and spends the session even with no mouth.
+                    if (!DryRun && Speak == null) return false;
                     CommitFire(winner, idx, pool);
                 }
                 return !DryRun && SpeakLine(winner, pool[idx], ctx);
@@ -254,8 +257,11 @@ namespace ConditioningControlPanel.Services.Bark
                     DryRun ? "dry-run WOULD FIRE" : "FIRE", trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, idx,
                     idx >= 0 && idx < pool.Count ? pool[idx].Text?.Length ?? 0 : -1);
             else
-                Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
-                    trigger, rule.Id, rule.Class, rule.Priority, reason);
+                // WPF BarkService.cs:2024-2028 logs blocks at Debug; a dry run raises them to the Avalonia
+                // default floor (Information) so its block reasons are readable.
+                Log.Write(DryRun ? Serilog.Events.LogEventLevel.Information : Serilog.Events.LogEventLevel.Debug,
+                    "[BARK] {Decision} trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
+                    DryRun ? "dry-run blocked" : "blocked", trigger, rule.Id, rule.Class, rule.Priority, reason);
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
@@ -369,7 +375,7 @@ namespace ConditioningControlPanel.Services.Bark
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
                 // WPF :1668: never talk over an audible whisper (two voices at once); safety and guaranteed
                 // barks bypass it above, and the text-only attributions may name the haunt or the exit.
-                if (IsWhisperAudioPlaying && !WhisperExemptTriggers.Contains(rule.Trigger))
+                if ((IsWhisperAudioPlaying || Safe(IsWhisperStarting)) && !WhisperExemptTriggers.Contains(rule.Trigger))
                     return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
