@@ -62,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <c>CoreSettings</c>, screens from <c>ScreenList.Enumerate</c>) and the result window, so a
     /// finished game asks for the count and resolves on the answer instead of being written off.</para>
     ///
-    /// <para><b>Stubbed:</b> the shared LibVLC retire/rebuild and startup wedge watchdog, and VideoDiag.
+    /// <para><b>Stubbed:</b> the shared LibVLC retire/rebuild and VideoDiag.
     /// The game shares the mandatory-video metadata cache.</para>
     ///
     /// <para>Opened validates the path synchronously so an invalid clip completes once inside Show().
@@ -248,12 +248,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Action<bool> complete = ok =>
             {
                 if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
+                BubbleCountWedgeWatchdog.Game.Disarm();
                 onComplete?.Invoke(ok);
             };
 
             Action skip = () =>
             {
                 if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
+                BubbleCountWedgeWatchdog.Game.Disarm();
                 if (onSkipped != null) onSkipped(); else onComplete(false);
             };
 
@@ -290,11 +292,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Screens is what the set is drawn from; WPF read App.GetAllScreensCached() up front.
             // An empty enumeration (headless, or no platform impl yet) is the single-screen path,
             // NOT WPF's onComplete(false): here empty means "no topology reported", not "no display".
+            BubbleCountWedgeWatchdog.Game.Arm();
             try
             {
                 var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true, skip);
                 primaryWindow._useBrowser = BrowserVideoSurface.TryAcquire(primaryWindow, videoPath);
-                if (primaryWindow._useBrowser) _browserOwner = primaryWindow;
+                if (primaryWindow._useBrowser) { _browserOwner = primaryWindow; BubbleCountWedgeWatchdog.Game.Disarm(); }
                 primaryWindow.Show();
                 if (primaryWindow._closed) return;
                 primaryWindow.WindowState = WindowState.Maximized;
@@ -333,6 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         public static void ForceCloseAll()
         {
+            BubbleCountWedgeWatchdog.Game.Disarm();
             _completionGeneration++;
             lock (_cleanupLock)
             {
@@ -377,10 +381,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnOpened(object? sender, EventArgs e)
         {
-            // ponytail: WPF registered this window's HWND with VideoService here
-            // (RegisterManagedWindow) so a wedged UI thread could still be rescued, and armed the
-            // wedge watchdog before the first window existed. Both are VideoService, and both only
-            // guard an in-process LibVLC decoder - browser mode never armed them at all.
+            if (!_useBrowser) BubbleCountWedgeWatchdog.Game.Register(this);
 
             // WPF VideoService.cs:8709: clicking the game must not raise it over count bubbles.
             // X11 still needs its own deny-focus-on-click implementation.
@@ -401,6 +402,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     BrowserVideoSurface.Release(this);
                     _browserOwner = null;
                     _useBrowser = false;
+                    BubbleCountWedgeWatchdog.Game.Arm();
+                    BubbleCountWedgeWatchdog.Game.Register(this);
                 }
                 // WPF :308-319 skips a poisoned native start, including browser fallback.
                 if (_isPrimary && NativeBlocked)
@@ -552,7 +555,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             player.Volume = Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100);
-            _player = player;
+            lock (_nativeStopGate) _player = player;
             var media = new Media(vlc, _videoPath, FromType.FromPath);
             _media = media;
             _sink = new VlcFrameSink(player, () => media,
@@ -684,6 +687,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        // Share an in-flight stop with teardown. If startup resumes after a stop completed,
+        // teardown needs a fresh stop before disposing the player.
+        private static readonly object _nativeStopGate = new();
+        private static object? _nativeStopOwner;
+        private static Task? _nativeStopTask;
+
+        internal static Task QueueNativeStop(object owner, Action stop)
+        {
+            lock (_nativeStopGate)
+            {
+                if (!ReferenceEquals(_nativeStopOwner, owner) || _nativeStopTask == null || _nativeStopTask.IsCompleted)
+                {
+                    _nativeStopOwner = owner;
+                    _nativeStopTask = Task.Run(stop);
+                }
+                return _nativeStopTask!;
+            }
+        }
+
+        internal static void StopForWedge()
+        {
+            lock (_nativeStopGate)
+            {
+                var player = _player;
+                if (player != null) _ = QueueNativeStop(player, player.Stop);
+            }
+        }
+
         private static Task StopPlayer()
         {
             foreach (var window in _allWindows)
@@ -693,18 +724,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (_browserOwner != null) BrowserVideoSurface.Release(_browserOwner);
             _browserOwner = null;
-            var player = _player;
+            MediaPlayer? player;
+            Task stopped;
+            lock (_nativeStopGate)
+            {
+                player = _player;
+                _player = null;
+                stopped = player == null ? Task.CompletedTask : QueueNativeStop(player, player.Stop);
+                _nativeStopOwner = null;
+                _nativeStopTask = null;
+            }
             var media = _media;
             var sink = _sink;
             var vlc = _gameVlc;
             _gameVlc = null;
-            _player = null;
             _media = null;
             _sink = null;
             foreach (var w in _allWindows) w._videoImage.Source = null;
             if (player == null && media == null && sink == null && vlc == null) return Task.CompletedTask;
             var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            StopNative(() => player?.Stop(), () =>
+            StopNative(() => stopped.GetAwaiter().GetResult(), () =>
             {
                 player?.Dispose();
                 media?.Dispose();
@@ -1148,6 +1187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
 
             _window.Show();
+            BubbleCountWedgeWatchdog.Game.Register(_window);
 
             // IsHitTestVisible only silences Avalonia's own hit testing; the compositor would still
             // send the click here. This is the WS_EX_TRANSPARENT the original got implicitly.
