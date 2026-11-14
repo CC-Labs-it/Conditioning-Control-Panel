@@ -42,7 +42,8 @@ public sealed class CompanionEffectsTests
             CoreEntitlement.HasPremiumProvider = () => true;   // DtRH is Basic (owner 2026-10-31); the race stays Prime
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
-            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
+            // WPF CompanionActivities.cs:15 offers every LauncherCatalogue game, Classic included (:249).
+            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.raceclassic", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
             var race = all.Single(a => a.Id == "game.race");
             var intake = all.Single(a => a.Id == "game.intake");
@@ -50,6 +51,7 @@ public sealed class CompanionEffectsTests
             Assert.True(race.Allowed && intake.Allowed && dtrh.Allowed);
             CoreEntitlement.HasLabProvider = () => false;
             Assert.False(race.Allowed);                             // the Companion respects the same Prime door
+            Assert.True(all.Single(a => a.Id == "game.raceclassic").Allowed);   // Classic is free (LauncherCatalogue.cs:249)
             CoreEntitlement.HasLabProvider = () => true;
             Assert.True(race.Allowed);                              // the cached activity rechecks entitlement
             CoreAccount.IsLoggedInProvider = () => false;          // the tile would ask to sign in
