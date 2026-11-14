@@ -447,7 +447,7 @@ namespace ConditioningControlPanel.Services
                     try
                     {
                         Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
-                        // Rain's look pulls once the snapshot is queued (#4811; WPF ProfileSyncService.cs:1874-1880).
+                        // #4811: Rain's look may also pull here, once a current-account snapshot is held (WPF pulls only after a validate).
                         ReceiptReceived?.Invoke(id);
                     }
                     catch (Exception ex) { Log.Debug("V2 Sync: prize receipt failed: {Error}", ex.Message); }
