@@ -69,6 +69,28 @@ internal static class KeywordTriggerHead
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
     internal static void Stop() { DetachKeyboard(); lock (_ocrGate) _ocr?.Stop(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
+    /// <summary>Owner call 2026-10-10 (handoff-1010/PARITY-CHECKPOINT-1010.md; AGENTS "panic switches keyword
+    /// triggers off"): a panic switches keyword triggers off until the user turns them back on. The master
+    /// ([JsonIgnore], per run as on WPF) goes off; the screen read goes off as a SAVED setting, since it is the
+    /// switch that would read the screen again. Then the sources stop (key listener, scanner, clip, comment).
+    /// Stricter than WPF main, which leaves both armed and only holds responses for the PanicAftermath quiet.
+    /// Nothing turns them back on. UI thread, idempotent, never throws; true when a switch changed.</summary>
+    internal static bool SwitchOffForPanic()
+    {
+        var changed = false;
+        try
+        {
+            var s = CoreSettings.Current;
+            if (s.KeywordTriggersEnabled) { s.KeywordTriggersEnabled = false; changed = true; }
+            if (s.ScreenOcrEnabled) { s.ScreenOcrEnabled = false; changed = true; CoreSettings.Save(); }
+        }
+        catch (Exception ex) { Log.Warning(ex, "Panic: keyword trigger switch-off failed"); }
+        try { Stop(); }
+        catch (Exception ex) { Log.Warning(ex, "Panic: keyword trigger stop failed"); }
+        if (changed) Log.Information("Panic: keyword triggers switched off until the user turns them back on");
+        return changed;
+    }
+
     /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
     /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland
     /// capture is interactive only. While null the scanner never starts; everything after the source is live.</summary>
@@ -169,7 +191,7 @@ internal static class KeywordTriggerHead
         _subscribed = false;
     }
 
-    /// <summary>Panic cuts the clip; WPF leaves the trigger service itself running.</summary>
+    /// <summary>Cuts the clip only; the panic pass uses <see cref="SwitchOffForPanic"/>.</summary>
     internal static void StopAudio() => Engine.StopAudio();
 
     private static void OnKey(int vk, string? name)

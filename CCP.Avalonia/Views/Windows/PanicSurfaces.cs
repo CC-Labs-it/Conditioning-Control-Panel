@@ -95,7 +95,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("perfect-week-bonus", _ => App.StopPerfectWeekBonus()), // WPF SkillTreeService.cs:535-563; close every new popup on panic.
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("keyword-comments", _ => Platform.KeywordAvatarComment.CancelPending()),
-            new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
+            // Owner call 2026-10-10: panic switches keyword triggers off (master, saved screen read) and stops
+            // their sources; the Awareness tab repaints if it is up. Stricter than WPF main (clip + quiet only).
+            new("keyword-triggers", sh =>
+            {
+                if (!Platform.KeywordTriggerHead.SwitchOffForPanic()) return;
+                var tab = sh?.Named<Tabs.AwarenessTabView>("AwarenessTab");
+                tab?.SyncAwarenessTabUi();
+                tab?.KeywordPanel?.SyncFromSettings();
+            }),
             // Cancel pending browser audio work before zeroing toys (WPF AudioSyncService.cs:331;
             // MainWindow.xaml.cs:2066,2112). Otherwise decoding may finish after panic and resume haptics.
             new("audio-sync", _ => Platform.AudioSyncHost.Service?.StopSync()),
