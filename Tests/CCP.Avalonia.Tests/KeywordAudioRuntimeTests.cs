@@ -654,4 +654,101 @@ public sealed class KeywordAudioRuntimeTests
         finally { shell.Close(); }
     });
 
+    [Fact]   // WPF DispatchMergedAsync :1322 + FireVisualEffect: visuals run in action order, once per variant, enabled only
+    public void VisualActionsRunInOrderMergeByVariantAndSkipDisabled() => Run((engine, s, played) =>
+    {
+        var calls = new List<string>();
+        var (oldFlash, oldSub, pool) = (CoreFlash.ShowProvider, CoreSubliminal.ShowProvider, s.SubliminalPool);
+        try
+        {
+            CoreFlash.ShowProvider = () => calls.Add("flash");
+            CoreSubliminal.ShowProvider = text => calls.Add("sub:" + text);
+            s.SubliminalPool = new() { ["pool phrase"] = true };
+            engine.BubbleEffect = () => calls.Add("bubble");
+            engine.Haptic = (_, _) => calls.Add("haptic");
+            s.KeywordTriggers[0].Actions.AddRange(new KeywordAction[] {
+                new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal, Enabled = false },
+                new HapticAction { Intensity = 0.5 },
+                new VisualEffectAction { Effect = KeywordVisualEffect.SubliminalFlash } });
+            s.KeywordTriggers.Add(new KeywordTrigger { Id = "two", Keyword = "sit", CooldownSeconds = 0, Actions = new() {
+                new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash },
+                new VisualEffectAction { Effect = KeywordVisualEffect.Bubbles } } });
+            Type(engine, "sit");
+            Assert.Single(played);
+            Assert.Equal(new[] { "flash", "haptic", "sub:pool phrase", "bubble" }, calls);
+        }
+        finally { (CoreFlash.ShowProvider, CoreSubliminal.ShowProvider, s.SubliminalPool) = (oldFlash, oldSub, pool); }
+    });
+
+    [Fact]   // WPF FireVisualEffect ExactSubliminal: FlashSubliminalCustom(keyword upper) + ForceMuteKeyword(3000)
+    public void ExactSubliminalEchoesTheKeywordAndMutesItForThreeSeconds() => Run((engine, s, _) =>
+    {
+        var shown = new List<string>();
+        var old = CoreSubliminal.CustomShowProvider;
+        try
+        {
+            CoreSubliminal.CustomShowProvider = shown.Add;
+            s.AwarenessLoopProtectionEnabled = false;
+            s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } };
+            var now = engine.Now();
+            Type(engine, "sit");
+            Assert.Equal(new[] { "SIT" }, shown);
+            engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+            engine.Now = () => now.AddMilliseconds(2999);
+            Type(engine, "sit"); Assert.Single(shown);
+            engine.Key(ConditioningControlPanel.Services.KeywordInputKey.Clear);
+            engine.Now = () => now.AddMilliseconds(3000);
+            Type(engine, "sit"); Assert.Equal(2, shown.Count);
+        }
+        finally { CoreSubliminal.CustomShowProvider = old; }
+    });
+
+    [Fact]   // WPF DispatchLegacyFlatFieldsAsync: the flat visual follows the audio; the panic quiet holds both
+    public void LegacyFlatVisualFollowsTheAudioAndPanicQuietHoldsIt() => Run((engine, s, played) =>
+    {
+        var flashes = 0;
+        var old = CoreFlash.ShowProvider;
+        try
+        {
+            CoreFlash.ShowProvider = () => { Assert.Single(played); flashes++; };
+            var file = ((PlayAudioAction)s.KeywordTriggers[0].Actions[0]).FilePath;
+            s.KeywordTriggers[0] = new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0, Actions = new List<KeywordAction>(),
+                AudioFilePath = file, DuckAudio = false, VisualEffect = KeywordVisualEffect.ImageFlash };
+            Type(engine, "sit");
+            Assert.Equal(1, flashes);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            engine.Now = () => new DateTime(2026, 10, 14, 13, 0, 0);
+            Type(engine, "sit");
+            Assert.Equal(1, flashes); Assert.Single(played);
+        }
+        finally { CoreFlash.ShowProvider = old; ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
+    [Fact]   // WPF FireVisualEffect MindWipe: audio, so held while idle and skipped with an empty pool; flashes still fire
+    public void MindWipeVisualIsHeldWhileIdleButImageFlashStillFires() => Run((engine, s, _) =>
+    {
+        var (wipes, flashes, clips) = (0, 0, 2);
+        var (oldFlash, oldCount, oldWipe) = (CoreFlash.ShowProvider, CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider);
+        try
+        {
+            CoreFlash.ShowProvider = () => flashes++;
+            CoreMindWipe.ClipCountProvider = () => clips;
+            CoreMindWipe.TriggerOnceProvider = () => wipes++;
+            s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.MindWipe },
+                new VisualEffectAction { Effect = KeywordVisualEffect.ImageFlash } };
+            Type(engine, "sit");
+            Assert.Equal((1, 1), (wipes, flashes));
+            CoreSession.IsEngineRunningProvider = () => false;
+            engine.Now = () => new DateTime(2026, 10, 14, 13, 0, 0);
+            Type(engine, "sit");
+            Assert.Equal((1, 2), (wipes, flashes));
+            CoreSession.IsEngineRunningProvider = () => true;
+            clips = 0;
+            engine.Now = () => new DateTime(2026, 10, 14, 14, 0, 0);
+            Type(engine, "sit");
+            Assert.Equal((1, 3), (wipes, flashes));
+        }
+        finally { (CoreFlash.ShowProvider, CoreMindWipe.ClipCountProvider, CoreMindWipe.TriggerOnceProvider) = (oldFlash, oldCount, oldWipe); }
+    });
 }
