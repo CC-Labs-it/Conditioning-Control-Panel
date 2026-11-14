@@ -250,6 +250,8 @@ Friends invite (7.2, `host/friendInvite.js`): a host that sets `caps.friendInvit
 roomId }`; host -> page `friends-list-reply { id, friends: [{ uid, name }] }` and `invite-friend-reply { id, sent, note }`
 (note = the host's worded result in the player's language). Hosts without the cap (web, phone) keep the button hidden.
 Page -> host in A: `ready`, `heartbeat`, `pong`, `run-started`, `run-ended { timeS, laps }`, `telemetry`.
+Page -> host (7.2.2): `loading { stage, p }` once per loading stage; the desktop host gives a page that sent one in
+the last 120 s up to 90 s of silence before it closes the window (a course build may hold the main thread, ccp-bugs #1543).
 Escape only pauses; the page never sends `exit` on Escape.
 Owned kart bodies (owner 2026-10-29, `meta/owned.js`): the ten kart bodies are sold in the Prize Counter (CCP-Server
 proxy/shop.js rows `kart.body.<id>`, grants `cos.kart.body.<id>`), so the garage offers only the free kart
@@ -261,8 +263,36 @@ GET /v2/race/profile (every platform, through the same lobby transport). The las
 `glassroad.owned.v1`; signed out owns nothing. A saved pick that is locked now falls back to the free kart.
 CLIENT LOCK ONLY: a room seat's `look.vehicle` is checked against `LOOK_VEHICLES`, never against ownership. Looks
 never reach the sim, `onlineCourseHash` or room validation, so no room redeploy follows a lock change.
+Owned kart looks (7.2, lane B3-G1, `hud/garageState.js` SHOP_*): the Prize Counter also sells three EMI outfits
+(`kart.outfit.pit-crew|ringmaster|ballerina`), the pattern bundle (`kart.paint.pattern-bundle` = hearts + spiral; the
+retired v1 rows `kart.paint.hearts` / `kart.paint.spiral` keep theirs, `pink-checker` is the free Checks), the lace
+glide umbrella (`kart.umbrella.lace`) and two Prime looks (`prime.paint.host-gold`, `prime.trail.podium`, grants
+`cos.prime.*`, so the owned snapshot and the desktop `KartGrants` keep `cos.prime.paint.*` and `cos.prime.trail.*` too).
+The nine free outfits and the four native patterns stay free. Unowned ones are dark with "In the Prize Counter" (Prime
+looks: "Prime, in the Prize Counter") and change nothing. The race look carries them next to the vehicle (NET.md
+looks): `outfit` (the shop ids join the list), `paint: hearts|spiral|host-gold` (only with a custom `skin`; the skin's
+pattern digit stays 0-3), `umbrella: lace` (opens in the glide cap's place) and `trail: podium` (ribbons behind the
+cup). They ride the lobby create / join / quick / claim bodies into the seat ticket; the room `look` message keeps
+its old keys (`roomLook`). Bots never wear them. Looks never touch feel.json or tracks: `onlineCourseHash` is pinned
+against the room cards in tests/garage-shop.test.mjs.
+Prize Counter row (7.2 contract 1, `host/prizeCounter.js`): a host that sets `caps.prizeCounter: true` gets a "Prize
+Counter" row on the garage menu. Page -> host `open-prize-counter { tab: 'kart', from: 'glassroad' }`; the host pauses
+the page, opens the counter over it (desktop: the counter window, `PrizeCounterHostService.Launch`; web:
+`/prize-counter?tab=kart&from=glassroad`; phone: the counter screen) and re-sends `owned { grants }` when it closes.
+Wear (7.2 fix wave, desktop only): after the counter's Wear on an owned kart look it closes with reason `wear` and
+re-sends `owned { grants, wear: '<counter row id>' }` (`kart.body.<id>`, `kart.outfit.<id>`, `kart.paint.pattern-bundle`,
+`kart.umbrella.lace`, `prime.paint.host-gold`, `prime.trail.podium`). The garage adopts the grants first, then puts the
+item on like its own picker (`hud/garageState.js wearPick`; the bundle keeps hearts or spiral if worn, else hearts),
+saves it, turns to the kart or opens Customize on the section, and shows a short note. Unknown or unowned ids are ignored.
+Toys (7.2, `host/raceToys.js`, the feel table is `fx/toyPlan.js`): a host with a toy stack sets `caps.toys: true`, and
+`caps.toysConnected` drives the Options "Toys" row (host -> page `toys { connected }` when it changes). page -> host:
+`toy { level 0..1, ms, tag }`, `toy-bed { level 0..1 }` re-sent while it runs (the host zeroes it within 1.5 s when the
+sends stop, so a dead page cannot pin a toy) and `toy-stop`. The player's own events only, nothing crosses the network.
+Pause, a hidden page and leaving send `toy-stop`. The host clamps everything and scales it: the page is untrusted.
+The numbers stay out of feel.json, which would move the course hash.
+
 Web Scrolller pictures (2026-10-26, `host/scrolllerFeed.js`): a host that can feed them sets `caps.scrolller:
-{ consent: boolean }` (the web shim; the desktop never does). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
+{ consent: boolean }` (the web shim). Host -> page `scrolller-feed { v: 1, rows: [{ url, kind:
 'image' }] }` (https on a scrolller.com host, at most 12 used; an empty list when consent is off) and the `setting
 { key: 'media.remoteConsent', value }` echo (what is STORED). Page -> host `set-setting { key: 'media.remoteConsent',
 value }` from the Options "Online pictures" switch, drawn only when `caps.scrolller` is set and moved only by the
@@ -271,6 +301,21 @@ echo. LAW: Scrolller's media hosts send no CORS headers, so these rows are DISPL
 texture, never read back) and nowhere else. The host asks api.scrolller.com from the same browser (no CC Labs
 server touches a byte). If Scrolller ever serves CORS to the page's origin, the host may instead fetch whole clips
 into `blob:` urls and post the existing `card-media` manifest, which reaches the world screens.
+Device origin (2026-10-31, phone, `host/devicePictures.js`): `caps.scrolller: { consent, origin: 'device' }` means the
+host caches each picture and serves it from the page's own loopback server. `scrolller-feed { v: 1, rows: [{ url, kind:
+'image', mime }], catalog? }`: every `url` is absolute and same-origin (under `/scrolller-media/` or a host alias), and
+the guard (`deviceRows`) refuses anything else, a scrolller.com url included; at most 12, a later feed replaces the list,
+empty rows when consent is off or nothing is available. These rows are origin-clean, so they are NOT display only: they
+go to the world screens (every face `selectScrolllerSlots` picks) and the flash stills as real textures, on the prewarmed
+shared owners `media.setSource(id, { kind: 'canvas', el, borrowed: true, credit: 'scrolller' })` and `media.swapStill`.
+One decode at a time, long edge at most 640 px, one upload per picture under the tier's upload budget, owners =
+`mediaClipLimit(memoryTier)` (phone 3), each owner changes picture every 7 s (Gentle 14 s), nothing moves while paused.
+Clips (2026-11-01, desktop): `caps.scrolller.clips: true` lets the feed carry `{ url, kind: 'video' }` rows from the same origin; without it the guard refuses them, so the phone stays on stills. Every second owner plays one (muted, looping, half speed on Gentle, paused whenever nothing draws the world), via `media.setSource(id, { kind: 'video', el, borrowed: true })` and `media.swapSource`, at the tier's video upload rate. Its first frame stays in the owner's canvas for flash cards and pickup fronts.
+Page -> host `set-setting { key: 'media.remoteConsent', value: true, ask: true }` under this origin only, from the
+player's own press of Scrolller (the host may show its sheet); nothing else ever sends `ask`, and the page never raises
+this consent by itself. An echo of false to a pending ask turns the course's pick off. Rows ending in `.svg` are refused.
+My files and Off still win: the provider then holds nothing and My files keeps the display-only route. A host without
+`origin` (the web) behaves as before. The desktop (2026-10-31) is a device-origin host with `mediaOrigin: 'https://ccp.assets'`: its rows sit on that host, not the page's, and each one is a cached temp file.
 Per-course niches (2026-10-26, `host/scrolllerNiches.js`): the web switch is the race's OWN (stored under
 `glassroad-web:scrolller`, ON unless the player turned it off; it never writes the campus-wide consent). Each course
 has a default pick (`TRACK_NICHES`, one to four catalog ids); the player's own pick per course is kept in
@@ -296,9 +341,10 @@ message: files never cross the bridge or the room. Only the choice is kept (`gla
 | `boost-start` | `{ kind: 'drift'\|'pad'\|'launch', tier, amount, holdS }` | kart (applyBoost) | fx (fovKick, speedLines, bandSpeedMul, shake boost), audio (low-pass opens) |
 | `boost-end` | `{ kind }` | kart | fx, audio (ease back over boost.tailTcS) |
 | `hop` | `{ speed }` | kart | fx (squash then stretch), audio |
-| `air-word-launch` | `{ id, section, index: 0 }` | scripted solo aerial route, initial lip | faint spring on the shared SFX bus; no speech |
-| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted solo aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
+| `air-word-launch` | `{ id, section, index: 0 }` | scripted aerial route, initial lip | faint spring on the shared SFX bus; no speech |
+| `air-word-hop` | `{ id, section, index, s, p }` (one automatic word launch; index starts at 0 per crossing) | scripted aerial route | quiet ascending pluck and airy spring on the shared SFX bus; no speech |
 | `airborne` | `{ cause: 'lip'\|'edge' }` | kart | fx (stretch) |
+| `ramp` | `{ racer, id, purpose, upMps, s, x, speed }` (a jump ramp lip launched the kart; track `ramps`, sim/ramps.js; a bot's arrives as racer-event) | kart (sim/racers.js adds racer) | audio (soft whoosh from the existing bank); EMI air trick stage |
 | `land` | `{ tier: 0..3, airTime }` (0 = under air.lightS) | kart, respawn | fx (squash, dust, shake on 3), audio (cue on 2 and 3) |
 | `edge-enter` | `{ side: -1\|1 }` | kart | fx (edgeGlow), audio (hum) |
 | `edge-exit` | `{ to: 'road'\|'drop' }` | kart | fx (glow fade or hand over), audio |

@@ -3,14 +3,15 @@
  *
  * createOwned({ storage, uid }) -> { grants, setAccount(uid), adopt(list) }. Sources, newest wins, each a FULL
  * snapshot (never merged): the host init's `identity.grants`, a host `owned { grants }` push (desktop, after a buy)
- * and the `grants` of GET /v2/race/profile (meta/profileSync.js, every platform). Only `cos.kart.*` ids are kept.
+ * and the `grants` of GET /v2/race/profile (meta/profileSync.js, every platform). Only `cos.kart.*` ids and the two
+ * kart Prime families (`cos.prime.paint.*`, `cos.prime.trail.*`) are kept.
  * The last snapshot is remembered per account under `glassroad.owned.v1`, so the garage opens with it before the
  * profile answers; another account, or none, owns nothing. A client lock only: rooms take any listed vehicle id
  * (NET.md) and a look never reaches the sim or the course hash. Storage access always in try/catch.
  */
 export const OWNED_KEY = 'glassroad.owned.v1';
 export const MAX_GRANTS = 64;
-const GRANT_RE = /^cos\.kart\.[a-z0-9-]+\.[a-z0-9-]+$/;
+const GRANT_RE = /^cos\.(kart\.[a-z0-9-]+|prime\.(paint|trail))\.[a-z0-9-]+$/;
 
 /** A grant list cleaned to known-shape `cos.kart.*` ids, sorted and capped; null when `list` is not an array. */
 export function cleanGrants(list) {

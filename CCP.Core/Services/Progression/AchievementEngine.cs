@@ -161,6 +161,23 @@ internal sealed class AchievementEngine
         return minutes;
     }
 
+    /// <summary>WPF AchievementService.cs:378-413 ambient credit; milestone presentation stays in the head.</summary>
+    public void TrackBubblePopped()
+    {
+        Progress.TotalBubblesPopped++;
+        IsDirty = true;
+        if (Progress.TotalBubblesPopped >= AchievementRules.PopTheThoughtBubbles) TryUnlock("pop_the_thought");
+        if (Progress.TotalBubblesPopped % 100 == 0)
+        {
+            var settings = CoreSettings.Current;
+            var previous = settings.SkillPoints;
+            settings.SkillPoints++;
+            CoreSettings.Save();
+            SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
+        }
+        if (Progress.TotalBubblesPopped % 50 == 0) Save();
+    }
+
     /// <summary>WPF AchievementService.TrackFlashImage: one more image shown, retinal_burn at 5000.
     /// The caller credits quests (WPF App.Quests.TrackFlashImage).</summary>
     public void TrackFlashImage()
@@ -176,6 +193,15 @@ internal sealed class AchievementEngine
         Progress.GazePops++;
         _isDirty = true;
         if (Progress.GazePops >= AchievementRules.HandsFreeGazePops) TryUnlockExclusive("hands_free");
+    }
+
+    /// <summary>WPF Services/GamificationBridge.cs:361-380: count every send, then check milestones.</summary>
+    public void TrackCompanionMessage()
+    {
+        Progress.CompanionMessages++;
+        IsDirty = true;
+        TryUnlock("pleased_to_meet_you");
+        if (Progress.CompanionMessages >= AchievementRules.PillowTalkMessages) TryUnlock("pillow_talk");
     }
 
     /// <summary>WPF AchievementService.TrackMindWipeDuration: clean_slate at 60 s of continuous loop.</summary>

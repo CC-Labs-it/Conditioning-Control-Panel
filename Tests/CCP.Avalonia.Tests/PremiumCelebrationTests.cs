@@ -23,10 +23,10 @@ public sealed class PremiumCelebrationTests
     private static void Run(bool premiumAtLaunch, Action<MainShellWindow, List<Window>, Action<bool, bool>> body) =>
         AvaloniaTestDispatcher.Run(() =>
         {
+            var builder = global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp();
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+                builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            else builder.AfterSetupCallback(builder); // Register shipped fonts regardless of test order.
             var oldGet = CoreSecrets.RetrieveProvider;
             var oldSet = CoreSecrets.StoreProvider;
             var oldSettings = CoreSettings.ServiceProvider;

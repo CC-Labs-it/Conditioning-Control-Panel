@@ -135,6 +135,11 @@ export const FX_CUES = {
   airborne(fx) {
     fx.hold('stretch', fx.feel.get('air.squash')[0], 2 * rise(fx));
   },
+  // a ramp lip (handoff-1030): a stronger hop, the medium squash then the air stretch; no shake
+  ramp(fx) {
+    fx.fire('squash', fx.feel.get('air.squash')[1], rise(fx) / 2, 0, rise(fx));
+    fx.hold('stretch', fx.feel.get('air.squash')[1], 2 * rise(fx));
+  },
   land(fx, { tier = 0, airWord = false }) {
     const gone = j(fx, 'landGoneS');
     fx.release('stretch', rise(fx));

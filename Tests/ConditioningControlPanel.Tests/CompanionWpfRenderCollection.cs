@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Tests;
 /// <para>The wiring pass added two more of these suites, which made a rare collision a regular one.
 /// Putting them in one non-parallel collection costs a couple of seconds and removes the class of
 /// failure entirely. Everything else in the assembly still runs in parallel.</para>
+/// <para>Every WpfRenderHarness caller also runs in a nonparallel collection: bootstrap and
+/// theme swaps mutate the process-wide Application.Resources. WpfRenderIsolationTests guards
+/// this rule, including partial suites, without changing any render assertions or timeouts.</para>
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class CompanionWpfRenderCollection

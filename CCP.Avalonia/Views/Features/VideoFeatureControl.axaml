@@ -7,8 +7,7 @@
        Image of 🎲 (EmojiToImageSource)  ->  TextBlock "🎲"
        Content="{loc:Str ...}" on Button ->  a <TextBlock> child (trap 1)
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%"
-       ImageBrush HeroArtBrush/SideArtBrush -> dropped (feature art not an AvaloniaResource here
-                                            yet; x:Name on a brush is AVLN2000); wash stands in
+       ImageBrush HeroArtBrush/SideArtBrush -> named Border backgrounds, painted by ModArt
        feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        all event handlers                ->  wired in code-behind (porting convention) -->
@@ -27,7 +26,7 @@
         <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                 BorderBrush="{StaticResource SectionHueStudioBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
             <Grid>
-                <Border CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
+                <Border x:Name="VideoHeroArt" CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
                         Background="{StaticResource SectionHueStudioWashBrush}">
                     <Border.OpacityMask>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -292,8 +291,8 @@
                 </Button>
             </StackPanel>
 
-            <!-- SIDE ART. On WPF an ImageBrush background; the wash stands in. Scrim kept verbatim. -->
-            <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
+            <!-- Mod-aware side art. Scrim kept verbatim. -->
+            <Border x:Name="VideoSideArt" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">

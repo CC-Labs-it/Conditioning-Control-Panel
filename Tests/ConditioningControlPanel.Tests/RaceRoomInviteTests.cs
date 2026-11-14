@@ -29,6 +29,21 @@ public class RaceRoomInviteTests
         Assert.Null(item.Code);
     }
 
+    [Fact]
+    public void A_race_invite_names_its_course_only_when_this_build_can()
+    {
+        var known = Parse("\"destination\":\"race\",\"room\":\"" + Room + "\",\"track\":\"keep\"");
+        Assert.Equal("keep", known!.Track);
+        Assert.Equal("Racing Thoughts, The Keep", LandingRules.WithCourse("Racing Thoughts", known.Track));
+
+        var unknown = Parse("\"destination\":\"race\",\"room\":\"" + Room + "\",\"track\":\"<b>x</b>\"");
+        Assert.Null(unknown!.Track);
+        Assert.Equal("Racing Thoughts", LandingRules.WithCourse("Racing Thoughts", unknown.Track));
+
+        var bare = Parse("\"destination\":\"race\",\"track\":\"keep\"");
+        Assert.Null(bare!.Track);
+    }
+
     [Theory]
     [InlineData("\"destination\":\"race\"")]
     [InlineData("\"destination\":\"race\",\"room\":null")]

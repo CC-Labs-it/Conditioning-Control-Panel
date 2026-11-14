@@ -116,6 +116,21 @@
                    IsHitTestVisible="False"
                    RenderOptions.BitmapScalingMode="NearestNeighbor"/>
 
+            <!-- THE PRIZE COUNTER DESK ITEMS (EmiDeskWindow.DeskItems.cs): a hat and a held toy, each a
+                 ten-pose over-layer sheet on the same 859x869 canvas. AFTER the outfit overlay, so a
+                 hat sits on whatever she wears and no face art ever covers either (THE SKIN LAW).
+                 Collapsed and sourceless until an owned item is picked. -->
+            <Image x:Name="DeskHatOverImage"
+                   Stretch="Fill"
+                   Visibility="Collapsed"
+                   IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+            <Image x:Name="DeskToyOverImage"
+                   Stretch="Fill"
+                   Visibility="Collapsed"
+                   IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+
             <!-- THE THING SHE IS HOLDING (idle beat). One plate at her right hand - a phone, a
                  clipboard, a punch card - shown for a couple of seconds by a fidget and taken
                  straight back off. See CCP.Core/Services/EmiDesk/EmiProps.cs for the anchor, the sizes and

@@ -186,15 +186,18 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
       out.brake = !fork && lip[at(s)] ? 0 : clamp((speed - vmax - 3) / 8, 0, 0.5) * view.cruise;
     }
 
-    // Only fully hands-off cruise opens the hat. Any actual input returns this choice to the player.
-    if (!fork && !backwards && view.auto >= .99 && view.cruise >= .99 && st[S.driftDir] === 0 &&
+    // Only an established autopilot opens the hat: fully hands-off cruise, or the throttle held with the wheel left
+    // to it (desk run 2026-10-30, held W fell into the gap on every rescue). A steer, a brake or a hop of the
+    // player's own returns this choice to the player.
+    if (!fork && !backwards && view.auto >= .99 && (view.cruise >= .99 || (a.throttle > dead && a.brake <= dead && !a.hop && !a.hopPressed && !a.item && !a.back)) && st[S.driftDir] === 0 &&
       (track.aerials || []).some(j => s >= j.rampS0 && s < j.landingS1)) out.hop = true;
 
     // steering help only on the ground, rolling forward, out of a drift
     if (backwards || st[S.grounded] <= 0 || st[S.driftDir] !== 0 || speed < 2) return out;
-    // Established hands-off autopilot jumps the challenge islands through the ordinary input.
-    // Steering, braking, or disabled assist gives every jump back to the player immediately.
-    const field = !fork && view.auto > .6 && view.cruise > .6 && !steerIn && a.brake <= dead && fieldAtS(track, s);
+    // Established autopilot (Trance) jumps the challenge islands through the ordinary input: hands off, or the
+    // throttle held with the wheel left to it (desk run 2026-10-30: held W looped fall / rescue on the Threshold
+    // stones). Steering, braking, or Help / Off gives every jump back to the player immediately.
+    const field = !fork && view.auto > .6 && (view.cruise > .6 || a.throttle > dead) &&!steerIn && a.brake <= dead && fieldAtS(track, s);
     if (field?.platforming && !a.hop && !a.hopPressed) {
       const stone = stoneIn(field, s, lat), span = stone && stoneLaneSpan(stone, lat);
       if (span && span[1] - s >= 0 && span[1] - s <= clamp(speed * .1, 1.5, 4.5) && span[1] < field.toS - 2) {

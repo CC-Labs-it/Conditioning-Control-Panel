@@ -475,7 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("[QuestStamps] card open failed: {E}", ex.Message); }
         }
 
-        private void HideStampPopup()
+        internal void HideStampPopup()
         {
             try
             {

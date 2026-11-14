@@ -41,10 +41,14 @@ public class UiThreadStackCaptureTests
         // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
         // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
         using var release = new ManualResetEvent(false);
-        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        using var entered = new ManualResetEventSlim(false);
+        var parked = new Thread(() => ParkedInAKnownFrame(release, entered)) { IsBackground = true, Name = "ParkedTarget" };
         parked.Start();
         try
         {
+            // ThreadState can already say WaitSleepJoin while the runtime/JIT is starting the
+            // thread. First prove the named frame is on its stack, then wait for its kernel wait.
+            Assert.True(entered.Wait(10_000), "target thread never entered the known frame");
             var deadline = Stopwatch.StartNew();
             while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
             {
@@ -74,9 +78,13 @@ public class UiThreadStackCaptureTests
         }
     }
 
-    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
+    // The assertion names this fixture frame, so keep it intact even in optimized Release builds.
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+    private static void ParkedInAKnownFrame(ManualResetEvent release, ManualResetEventSlim entered)
+    {
+        entered.Set();
+        release.WaitOne();
+    }
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()

@@ -76,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>A test card awards no XP and notifies no service - WPF's own gate.</summary>
         private bool _isTest;
+        private bool _covered;   // CoverScreen ran; the Opened fallback must not re-place the card
 
         // Per-session config (mutable: the WPF original pooled windows and reconfigured on reuse).
         private string _phrase = "";
@@ -176,7 +177,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtInput.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) TxtInput_TextChanged(); };
             KeyDown += (_, e) => Window_KeyDown(e);
             Loaded += (_, _) => OnShown();
-            Opened += (_, _) => CoverScreen(Screens.ScreenFromWindow(this) ?? Screens.Primary);
+            // Fallback only: ShowOnAllMonitors places every card before Show. Covering here again
+            // re-placed the primary onto the monitor it spawned on first, and KWin then clamped
+            // its move to the real one (the bottom 302 px of a 1.0x screen stayed usable).
+            Opened += (_, _) => { if (!_covered) CoverScreen(Screens.ScreenFromWindow(this) ?? Screens.Primary); };
 
             Configure(Loc.Get("label_good_girls_obey"), SampleRepeats, strictMode: false, voiceMode: false);
         }
@@ -205,7 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Apply per-session configuration: phrase, repeat count, strict/voice mode, and reset every
         /// transient piece of card state. The WPF original also positioned the window on a specific
         /// <c>System.Windows.Forms.Screen</c> in device pixels via <c>SetWindowPos</c>; here the
-        /// window is simply <c>WindowState="Maximized"</c> on its screen.
+        /// window is placed and sized by <c>CoverScreen</c> before it is shown.
         /// </summary>
         private void Configure(string phrase, int repeats, bool strictMode, bool voiceMode)
         {
@@ -571,12 +575,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var completionTime = (DateTime.Now - _startTime).TotalSeconds;
 
             // The XP award, WPF's body verbatim including the !_isTest gate and the strict 1.5x
-            // multiplier. App.Progression is CoreProgression here; the WPF call is already a
-            // null-conditional fire-and-forget, and unseeded (this head today) the seam is the same
-            // no-op, so restoring it cannot mis-award - it only starts working the day a head seeds
-            // progression. XPSource.LockCard crosses as its member NAME: the enum is declared inside
-            // Services/Companion/CompanionService.cs, which cannot move, so CoreProgression takes a
-            // string and the seeding head parses it.
+            // multiplier. CoreProgression keeps its string-based provider contract, so the shared
+            // CCP.Core/Services/XPSource.cs member LockCard crosses as its name.
             if (!_isTest)
             {
                 var xpAmount = (50 * _requiredRepeats) + 200;
@@ -686,9 +686,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void RefreshEscHint()
         {
             if (_txtEscHint == null) return;
-            if (EscClosesCard) SetLocalized(_txtEscHint, "label_press_esc_to_close");
-            // A strict card with the panic listener live: only the panic key gets out.
-            else SetPlain(_txtEscHint, Loc.GetF("label_strict_only_panic_key_closes", CoreSettings.Current.PanicKey));
+            // #1547 (WPF 7.2.2): a strict card with a live panic key names it; when it IS Escape, say
+            // Escape still ends the card (panic always does), not "only the panic key (Escape)".
+            var panicKey = CoreSettings.Current.PanicKey;
+            var hintKey = LockCardStrictCopy.HintKey(EscClosesCard, panicKey);
+            if (hintKey == LockCardStrictCopy.HintOnlyPanicKey) SetPlain(_txtEscHint, Loc.GetF(hintKey, panicKey ?? "?"));
+            else SetLocalized(_txtEscHint, hintKey);
         }
 
         private void Window_KeyDown(KeyEventArgs e)
@@ -1058,9 +1061,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///    <c>DisableProcessWindowsGhosting</c> / the <c>WM_DPICHANGED</c> swallow-hook, both
         ///    Windows-only and simply dropped.
         ///
-        /// <para>ponytail: the mirror's monitor placement is best effort. A maximized X11 window
-        /// ignores <c>Position</c>, so a mirror is un-maximized, moved and re-maximized and the WM
-        /// decides — where WPF could insist with <c>SetWindowPos</c> in device pixels.</para>
+        /// <para>Placement: each card is un-maximized and given its screen's pixel rect before it
+        /// is shown, so the WM maps it there. A move after mapping is the WM's call (KWin clamped
+        /// it, leaving the bottom of a screen usable); WPF could insist with <c>SetWindowPos</c>.</para>
         /// </summary>
         public static void ShowOnAllMonitors(string phrase, int repeats, bool strictMode, bool isTest = false, bool voiceMode = false)
         {
@@ -1079,23 +1082,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
+                // Every card gets its screen's geometry BEFORE Show, so it maps there. Moving a
+                // mapped window across monitors is the WM's call, and KWin clamped it.
+                // Avalonia has no screen list without a TopLevel, so the set is drawn off the
+                // primary once it is constructed (Screens exist before Show).
                 var primary = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: true);
+                var all = Features.ScreenList.Enumerate(primary);
+                var primaryScreen = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
+                primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1705-1717)
                 primary.Show();
 
-                // One cover per monitor when the user asked for it. Avalonia has no screen list
-                // without a TopLevel, so the set is drawn off the primary once it exists.
-                if (CoreSettings.Current.DualMonitorEnabled)
+                // Lock cards always cover every monitor, as WPF does (:1705-1717).
+                foreach (var screen in all.Where(s => s != primaryScreen))
                 {
-                    var all = Features.ScreenList.Enumerate(primary);
-                    var primaryScreen = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
-                    primary.CoverScreen(primaryScreen);   // the keyboard card sits on the primary (WPF :1635)
-                    foreach (var screen in all.Where(s => s != primaryScreen))
-                    {
-                        var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
-                        mirror.Show();
-                        // Placement is the WM's call on X11/Wayland: best effort, not SetWindowPos.
-                        mirror.CoverScreen(screen);
-                    }
+                    var mirror = Build(phrase, repeats, strictMode, voiceMode, isTest, isPrimary: false);
+                    mirror.CoverScreen(screen);
+                    mirror.Show();
                 }
 
                 // Last, so the card that can be typed into owns the foreground.
@@ -1134,6 +1136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void CoverScreen(global::Avalonia.Platform.Screen? screen)
         {
             if (screen is null) return;
+            _covered = true;
             var b = screen.Bounds;
             if (Position == b.Position && ClientSize.Width * RenderScaling >= b.Width - 1
                 && ClientSize.Height * RenderScaling >= b.Height - 1) return;

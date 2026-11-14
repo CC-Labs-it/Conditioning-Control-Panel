@@ -1,15 +1,16 @@
 import { S, BOOST, RESPAWN } from './state.js';
 import { movingPoseAt } from '../track/movingHazards.js';
 import { yawParams, calmOf } from './steer.js';
+import { HAZARD_KART } from './hitShapes.js';
 const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
 const local = (st, row) => {
   const d = row.p.map((v, j) => st[S.posX + j] - v);
   return { x: dot(d, row.b), z: dot(d, row.t), h: dot(d, row.n) };
 };
 export function movingOverlap(row, pose, p) {
-  const scale = row.hitboxScale ?? 1, radius = scale < 1 ? .4 : .7;
-  return pose.active && Math.abs(p.x - pose.x) <= row.w * scale / 2 + radius
-    && Math.abs(p.z) <= row.len * scale / 2 + radius && p.h > -1 && p.h < (row.pocket?.topM ?? 3.2) - .03;
+  const scale = row.hitboxScale ?? 1, radius = scale < 1 ? .4 : HAZARD_KART.radiusM;
+  return pose.active && Math.abs(p.x - pose.x) <= (row.contactW ?? row.w * scale) / 2 + radius
+    && Math.abs(p.z) <= (row.contactLen ?? row.len * scale) / 2 + radius && p.h > -1 && p.h < (row.pocket?.topM ?? 3.2) - .03;
 }
 
 export function createMovingHazards(track) {

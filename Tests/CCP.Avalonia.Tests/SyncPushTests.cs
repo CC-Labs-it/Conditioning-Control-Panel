@@ -23,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements", "total_conditioning_minutes" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -139,12 +139,38 @@ public sealed partial class AccountSeedTests
         foreach (var k in new[] { "stats", "allow_discord_dm", "public_share_avatar", "web_xp_claim_ack", "install_date",
                      "reset_weekly_quest", "reset_daily_quest", "force_streak_override", "force_skills_reset", "cosmetics" })
             Assert.Null(body[k]);
+        Assert.Equal(CoreSettings.Current.TotalConditioningMinutes, body.Value<double>("total_conditioning_minutes"));
         Assert.Equal("u1", (string?)body["unified_id"]);
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");
         Assert.Equal(40, (int)body["level"]!);
         Assert.Equal(1, (int)body["descent_epoch"]!);
         Assert.Superset(new HashSet<string> { "first_steps", "night_owl", "linux_only" },
             body["achievements"]!.Values<string>().ToHashSet()!);
+    });
+
+    [Fact]
+    public void ProfileLoadAndSyncRebaselineMinutesBeforeTheNextPush() => WithFreshInstall(async () =>
+    {
+        var profile = JObject.Parse(L40Profile("u1"));
+        profile["user"]!["total_conditioning_minutes"] = 60;
+        var (wire, sync, _) = SignIn("u1", profile.ToString());
+        wire.SyncReply = "{\"success\":true,\"total_conditioning_minutes\":75}";
+        var s = CoreSettings.Current;
+        s.TotalConditioningMinutes = 25;
+        var lifts = new List<double>();
+        void OnLift(AppSettings lifted) { if (ReferenceEquals(lifted, s)) lifts.Add(lifted.TotalConditioningMinutes); }
+        ProfileAdopt.ConditioningMinutesLifted += OnLift;
+        try
+        {
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            Assert.Equal(60, Assert.Single(wire.Syncs).Value<double>("total_conditioning_minutes"));
+            Assert.Equal(75, s.TotalConditioningMinutes);
+            sync.UtcNow = () => T0.AddMinutes(16);
+            Assert.True(await sync.PushAsync("after conditioning merge"));
+            Assert.Equal(75, wire.Syncs.Last().Value<double>("total_conditioning_minutes"));
+            Assert.Equal(new double[] { 60, 75 }, lifts);
+        }
+        finally { ProfileAdopt.ConditioningMinutesLifted -= OnLift; }
     });
 
     [Fact]

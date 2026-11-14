@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 
@@ -61,7 +62,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            if (!_watchingCore)
+            {
+                _watchingCore = true;
+                CompanionCore.Switched += OnCompanionSwitched;
+                CompanionCore.LevelUp += OnCompanionLevelUp;
+                InstalledCommunityPrompts.ValidationAdvisory += OnValidationAdvisory;
+                _host = TopLevel.GetTopLevel(this) as Window;
+                if (_host != null) _host.Closed += OnHostClosed;
+            }
             Refresh();
+        }
+
+        private bool _watchingCore;
+        private Window? _host;
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            StopCoreUpdates();
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void OnHostClosed(object? sender, EventArgs e) => StopCoreUpdates();
+
+        private void StopCoreUpdates()
+        {
+            if (!_watchingCore) return;
+            _watchingCore = false;
+            CompanionCore.Switched -= OnCompanionSwitched;
+            CompanionCore.LevelUp -= OnCompanionLevelUp;
+            InstalledCommunityPrompts.ValidationAdvisory -= OnValidationAdvisory;
+            if (_host != null) _host.Closed -= OnHostClosed;
+            _host = null;
+        }
+
+        private void OnValidationAdvisory(int count) => Dispatcher.UIThread.Post(async () =>
+        {
+            if (_watchingCore && _host is { IsVisible: true } owner)
+                await WorkshopAccordion.ShowRosterMessageAsync(owner, Loc.Get("community_prompt_warning_title"),
+                    Loc.GetF("community_prompt_warning_body", count));
+        });
+
+        private void OnCompanionSwitched(CompanionId id) => RefreshFromCore();
+        private void OnCompanionLevelUp(CompanionId id, int level) => RefreshFromCore();
+
+        private void RefreshFromCore()
+        {
+            // Core events can originate on an engine thread. A queued repaint must also
+            // re-check the subscription: a closed/detached cell must never be repainted.
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshFromCore); return; }
+            if (_watchingCore) Refresh();
         }
 
         /// <summary>

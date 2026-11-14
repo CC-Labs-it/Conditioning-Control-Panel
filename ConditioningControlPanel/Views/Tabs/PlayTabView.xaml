@@ -66,8 +66,8 @@
         surface may re-implement a launch.
 
         NO SMOKESCREEN. The Lab tab gated itself with one overlay over the whole page; this door
-        mixes free (Goon join), Tier 1 (Lockdown, Blink Trainer, For You, Remote Control) and
-        Tier 2 (Rabbit Hole, Gaze, Focus Gaze) in one wall, so the gate is PER CARD: a lockband
+        mixes free (Goon join), Tier 1 (Rabbit Hole, Lockdown, Blink Trainer, For You, Remote Control) and
+        Tier 2 (Gaze, Focus Gaze) in one wall, so the gate is PER CARD: a lockband
         (below) over the art, and the real refusal in the handler via TierGate. The band is
         decoration - IsHitTestVisible=False - so a locked click still reaches the handler and
         still raises the "See tiers" toast.
@@ -489,7 +489,7 @@
                         </Border>
                     </Grid>
                     <Grid x:Name="SlotDtrh" x:FieldModifier="internal">
-                        <Border Style="{StaticResource PlayCardT2}">
+                        <Border Style="{StaticResource PlayCardT1}">
                             <Grid>
                                 <Grid>
                                     <Grid.RowDefinitions>
@@ -509,13 +509,13 @@
                                         <Button.Resources><Style TargetType="Border"><Setter Property="CornerRadius" Value="10"/></Style></Button.Resources>
                                     </Button>
                                 </Grid>
-                                <Border x:Name="PlayLockDtrh" x:FieldModifier="internal" Style="{StaticResource PlayLockBandT2}" Margin="-22">
+                                <Border x:Name="PlayLockDtrh" x:FieldModifier="internal" Style="{StaticResource PlayLockBand}" Margin="-22">
                                     <StackPanel VerticalAlignment="Center">
                                         <helpers:EmojiTextBlock Text="🔒" Style="{StaticResource PlayLockGlyph}"/>
-                                        <TextBlock Text="{loc:Str hm3_rail_lock_t2}" Style="{StaticResource PlayLockTeaserT2}"/>
+                                        <TextBlock Text="{loc:Str hm3_rail_lock_t1}" Style="{StaticResource PlayLockTeaser}"/>
                                     </StackPanel>
                                 </Border>
-                                <fx:TierBadge x:Name="PlayBadgeDtrh" x:FieldModifier="internal" Style="{StaticResource PlayTierBadge}" Tier="2"/>
+                                <fx:TierBadge x:Name="PlayBadgeDtrh" x:FieldModifier="internal" Style="{StaticResource PlayTierBadge}" Tier="1"/>
                             </Grid>
                         </Border>
                     </Grid>

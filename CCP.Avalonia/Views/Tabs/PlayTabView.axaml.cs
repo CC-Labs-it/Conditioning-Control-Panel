@@ -102,8 +102,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         private static readonly (string Plate, string Art, Stretch Fit)[] HeroPlates =
         {
+            ("PlayBackRoomHeroPlate", "features/backroom.png", Stretch.UniformToFill),
+            ("PlayArcademyHeroPlate", "features/arcademy.png", Stretch.UniformToFill),
+            ("PlayRacingThoughtsHeroPlate", "features/race.png", Stretch.UniformToFill),
+            ("PlayWebAppHeroPlate", "billboard/webapp.png", Stretch.UniformToFill),
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill),
             ("PlayChessHeroPlate",    "features/piecebypiece.png",      Stretch.UniformToFill),
+            ("PlayDtrhHeroPlate",     "features/dtrh.png",              Stretch.UniformToFill),
             ("PlayRemoteHeroPlate",   "features/remote_control.png",    Stretch.UniformToFill),
             ("PlayGazeHeroPlate",     "features/lab_gaze_hero.png",     Stretch.UniformToFill),
             ("PlayFocusHeroPlate",    "features/lab_focusgaze_hero.png",Stretch.UniformToFill),
@@ -181,17 +186,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+                PlayLockArcademy.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")).Allowed;
+                // WPF MainWindow.PlayTab.cs:132: Racing Thoughts requires Lab, with no daily-free key.
+                PlayLockRacingThoughts.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_race_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;
                 PlayLockFocusGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed;
                 PlayLockRemote.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed;
                 PlayLockLockdown.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_lockdown_mode")).Allowed;
                 PlayLockBlink.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_blink_trainer")).Allowed;
                 PlayLockFyp.IsVisible = !TierGate.RequiresPremium(Loc.Get("tab_fyp"), "fyp").Allowed;
+                PlayLockDtrh.IsVisible = Games.GameWindow.DtrhLocked();
 
                 // FREE TODAY (WPF :145): only on a door that is otherwise shut - an owner gets no gift.
                 bool premium = CoreEntitlement.HasPremium;
                 PlayBadgeRemote.FreeToday = !premium && CoreEntitlement.IsFreeToday("remote");
                 PlayBadgeFyp.FreeToday = !premium && CoreEntitlement.IsFreeToday("fyp");
+                PlayBadgeDtrh.FreeToday = !premium && CoreEntitlement.IsFreeToday("dtrh");
 
                 RefreshPlayIntakeCard();
             }
@@ -220,11 +230,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ==================================================================================
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
-        // WPF card forwards to. GAMES: the Breakout demo and Piece by Piece open their GameWindow
+        // WPF card forwards to. GAMES: the Breakout demo, Piece by Piece, DtRH and Racing Thoughts open their GameWindow
         // as the launcher does (LauncherWindow.Destinations); the full Breakout and Goon have no
         // host on this head, so their buttons stay disabled in the markup with the
         // exclusives_not_on_this_build tooltip and carry no shim.
         // ==================================================================================
+
+        // WPF MainWindow.PlayTab.cs:79-86.
+        private void BtnPlayWebApp_Click(object? sender, RoutedEventArgs e) => Owner?.OpenPlayWebApp();
 
         // ---- GAMES -----------------------------------------------------------------------
 
@@ -236,6 +249,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF LaunchPlayChess (PieceByPieceHostService.Launch): free for everyone.</summary>
         private void BtnPlayChess_Click(object? sender, RoutedEventArgs e) => LaunchGame(Games.GameWindow.PbpId);
+
+        // WPF PlayTabView.Cards.cs:59-66: the same game doors as the launcher; each host owns its gate.
+        private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame(Games.GameWindow.DtrhId);
+
+        private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
 
         // ---- TOGETHER --------------------------------------------------------------------
 

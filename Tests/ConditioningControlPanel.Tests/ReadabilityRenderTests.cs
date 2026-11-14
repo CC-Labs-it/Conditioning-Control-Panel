@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Tests;
 /// outline. Companion > Personality: page title > card title > field label, by size.
 /// Set CCP_NAV_PNG_DIR for play-games.png and companion-personality.png.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class ReadabilityRenderTests
 {
     private static void Realize(FrameworkElement element, double width, double height)

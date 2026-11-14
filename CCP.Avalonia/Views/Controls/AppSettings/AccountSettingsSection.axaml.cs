@@ -91,7 +91,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Host seam: the Settings door repaints the tier card every time it opens, so a login that
         /// happened behind another door is never shown stale.
         /// </summary>
-        public void OnSectionShown() => Refresh();
+        public void OnSectionShown()
+        {
+            Refresh();
+            // WPF MainWindow/MainWindow.Exclusives.cs:296 -> ShowVaultPage -> RefreshVaultCore: gates can move between visits.
+            if (PlansView.PlansActive) PlansView.RefreshVault();
+        }
 
         private void Post() => global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);
 
@@ -478,6 +483,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         // ---- cloud settings backup (WPF MainWindow.CloudBackup.cs, Core CloudSettingsBackup) ----
 
+        private bool _backupBusy;
         /// <summary>Tests only: the client both buttons and the status line use.</summary>
         internal static Func<CloudSettingsBackup> NewBackup = () => new CloudSettingsBackup();
 
@@ -491,6 +497,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// <summary>WPF BtnBackupSettingsNow_Click: a forced upload, then the outcome and the status line.</summary>
         internal async Task BackupNowAsync()
         {
+            if (_backupBusy) return;
+            _backupBusy = true;
             var button = Find<Button>("BtnBackupSettingsNow");
             var label = Find<IconLabel>("TxtBtnBackupSettingsNow");
             button.IsEnabled = false;
@@ -513,6 +521,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             {
                 button.IsEnabled = true;
                 label.Key = "btn_backup_now";
+                _backupBusy = false;
             }
         }
 
@@ -521,8 +530,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// the sections repaint (CurrentReplaced + the per-open refresh).</summary>
         internal async Task RestoreAsync()
         {
+            if (_backupBusy) return;
             if (Shell?.RefuseActionIfSessionLocked("cloud-restore-settings") ?? CoreSession.IsSessionRunning) return;
             if (!await Confirm(Owner, Loc.Get("title_restore_settings_from_cloud"), Loc.Get("msg_restore_settings_confirm"))) return;
+            if (_backupBusy) return;
+            _backupBusy = true;
             var button = Find<Button>("BtnRestoreSettings");
             var label = Find<TextBlock>("TxtBtnRestoreSettings");
             button.IsEnabled = false;
@@ -535,6 +547,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     await Tell(Owner, Loc.Get("title_restore_failed"), Loc.Get("msg_no_cloud_backup_found_or_restore_failed"));
                     return;
                 }
+                // WPF MainWindow.CloudBackup.cs:108: never swap settings in a locked session.
+                // Recheck after the download, as in the old port lane.
+                if (Shell?.RefuseActionIfSessionLocked("cloud-restore-settings") ?? CoreSession.IsSessionRunning) return;
+                CloudSettingsBackup.KeepLocal(service.Current, restored);
+                CloudSettingsBackup.HoldSafetyFloor(service.Current, restored);
                 service.RestoreFrom(restored);
                 this.FindAncestorOfType<Tabs.AppSettingsTabView>()?.RefreshSections();
                 await Tell(Owner, Loc.Get("title_settings_restored"), Loc.Get("msg_settings_restored_from_cloud"));
@@ -548,6 +565,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             {
                 button.IsEnabled = true;
                 label.Text = Loc.Get("btn_restore_from_cloud");
+                _backupBusy = false;
             }
         }
 

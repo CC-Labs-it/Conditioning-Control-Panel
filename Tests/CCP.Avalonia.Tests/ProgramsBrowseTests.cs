@@ -23,7 +23,8 @@ public sealed class ProgramsBrowseTests
 {
     private static string ExpectedReason(ProgramDefinition p) =>
         ProgramService.UnavailableReason(p, ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.IsAvailable)
-        ?? Loc.Get("programs_unavailable");
+        ?? Loc.Get(p.Tier == ProgramTier.Premium && !CoreEntitlement.HasPremium
+            ? "programs_locked_hint" : "programs_unavailable");
 
     /// <summary>
     /// programs-3a test 7: a refused card renders the "needs X" reason as real text in the card,
@@ -120,9 +121,9 @@ public sealed class ProgramsBrowseTests
                 Assert.Equal(definitions.Count, list.ItemCount);
                 Assert.Equal(definitions.Select(program => program.Id), rows.Select(row => row.ProgramId));
                 Assert.Equal(definitions.Select(program => program.Title), rows.Select(row => row.Title));
-                Assert.All(rows, row => Assert.False(row.IsActionEnabled));
-                // Nothing can be started here, so no card may blame a missing pledge. A program this
-                // head can never finish names what it needs instead (programs-3a decision).
+                Assert.All(rows, row => Assert.Equal(row.IsLocked, row.IsActionEnabled));
+                // Locked cards open Account; nothing can enroll without a service. Programs this
+                // head cannot finish still name the missing feature (programs-3a decision).
                 var unavailable = Loc.Get("programs_unavailable");
                 Assert.All(rows, row => Assert.Equal(ExpectedReason(row.Definition), row.ReasonText));
                 Assert.Equal(unavailable, rows.Single(row => row.ProgramId == "first_week").ReasonText);
@@ -132,7 +133,8 @@ public sealed class ProgramsBrowseTests
                 // The rendered action buttons, not just the carrier flags.
                 var actionButtons = list.GetVisualDescendants().OfType<Button>().ToArray();
                 Assert.NotEmpty(actionButtons);
-                Assert.All(actionButtons, button => Assert.False(button.IsEffectivelyEnabled));
+                Assert.All(actionButtons, button =>
+                    Assert.Equal(((ProgramBrowseItem)button.DataContext!).IsLocked, button.IsEffectivelyEnabled));
                 Assert.Contains(list.GetVisualDescendants().OfType<TextBlock>(),
                     text => text.Text == unavailable);
                 Assert.True(view.FindControl<Border>("ProgramDetailsPanel")!.IsVisible);

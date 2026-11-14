@@ -28,7 +28,7 @@ public sealed class MandatoryVideoToyInputTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             using var h = new HapticService(new HapticSettings { ToyInputEnabled = true, AttentionCheckToyButton = true });
             using var p = new ButtonProvider();
@@ -85,7 +85,7 @@ public sealed class MandatoryVideoToyInputTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var old = CoreEngine.Video;
             var fake = new VideoHost();

@@ -56,6 +56,14 @@ namespace ConditioningControlPanel.Services.JustDrop
             return string.Equals(request.AbsolutePath, HandoffPath, StringComparison.Ordinal) ? authToken : null;
         }
 
+        /// <summary>WPF IsRefusedHandoff (JustDropHostService.cs:223, ccp-bugs #1499): a navigation that
+        /// completes ON the handoff url is a refusal (a stale token's 401 shows raw JSON), because a
+        /// success never completes there, it 303s to <c>next</c>. WPF also reads the HTTP status;
+        /// Avalonia.Controls.WebView reports none, so landing there is the whole test.</summary>
+        public static bool IsRefusedHandoff(Uri? completed) =>
+            IsSite(completed) && string.IsNullOrEmpty(completed!.UserInfo)
+            && string.Equals(completed.AbsolutePath.TrimEnd('/'), HandoffPath, StringComparison.Ordinal);
+
         /// <summary>WPF PrimaryHost: the window stays on the site's own https origin.</summary>
         public static bool IsSite(Uri? url) =>
             url is { IsAbsoluteUri: true } && url.Scheme == Uri.UriSchemeHttps && url.IsDefaultPort

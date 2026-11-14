@@ -34,6 +34,15 @@ test('boot: the cover lifts on the garage before the lights warm, and the lights
   assert.match(overdraw, /garage\.render\(dt,/);
 });
 
+test('boot: the garage stays live while the lights warm: a desktop draws every frame, the gate screen builds under the cover', () => {
+  const menu = between(boot, 'function menuFrame(now)', 'garageFrame(frameDt);');
+  assert.match(menu, /lights\.quiet \|\| now - menuDrawMs < warmMenuGapMs\(\)/);
+  assert.match(boot, /renderer\.device === 'phone' \? 1000 \/ 30 - 2 : 0/);
+  const gate = boot.indexOf('gateScreen.warm('), finish = boot.indexOf('loading.finish().then');
+  assert.ok(gate > 0 && gate < finish, 'the gate screen links before the cover lifts');
+  assert.ok(!between(boot, 'async function warmLights()', 'void warmLights();').includes('gateScreen.warm('), 'never behind the live garage');
+});
+
 test('boot: Race and the room go wait for the lights under the cover; the frame is the menu\'s own meanwhile', () => {
   const sr = between(boot, 'function startRace() {', 'function toMenu() {');
   assert.match(sr, /if \(!lights\.ready\) \{ waitForLights\('race'\); return; \}/);

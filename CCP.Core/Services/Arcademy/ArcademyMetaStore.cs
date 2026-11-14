@@ -503,6 +503,28 @@ internal sealed class ArcademyMetaStore
         lock (_lock) return ArcademyEconomy.Owns(WalletUnlocked(), sku);
     }
 
+    /// <summary>WPF ArcademyHostService.WalletOwnsSku's closed-Arcademy half (WalletOwnsOnDisk /
+    /// ReadOwnedSkus): does the persisted blob hold <paramref name="sku"/> with a positive count.
+    /// Never throws; a missing or unreadable file answers false.</summary>
+    public static bool WalletOwnsOnDisk(string sku) =>
+        WalletOwnsOnDisk(sku, Path.Combine(CorePaths.UserData, "arcademy_meta.json"));
+
+    internal static bool WalletOwnsOnDisk(string sku, string path)
+    {
+        if (string.IsNullOrWhiteSpace(sku)) return false;
+        try
+        {
+            if (!File.Exists(path)) return false;
+            return JObject.Parse(File.ReadAllText(path))[WalletKey] is JObject wallet
+                && wallet["inv"] is JObject inv && inv[sku] is JObject row && ((int?)row["n"] ?? 0) > 0;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("ArcademyMetaStore.WalletOwnsOnDisk({Sku}): {E}", sku, ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>(extraUnlocked, honorsUnlocked) — what the lever will actually accept tonight.</summary>
     public (bool Extra, bool Honors) LeverUnlocks()
     {

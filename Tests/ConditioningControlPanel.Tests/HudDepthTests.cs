@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// one chunky one) that press through <see cref="HudPlank"/>. These pin which brush each element
 /// wears, the travel rule on the planks, and that every other PinkButton draws as before.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class HudDepthTests
 {
     private static string RepoRoot()
@@ -91,10 +92,10 @@ public class HudDepthTests
     }
 
     [Fact]
-    public void TheXpTrackIsAGrooveAndTheFillIsATubeWithABead()
+    public void TheXpTrackIsAGrooveAndTheFillIsATube()
     {
         var xaml = AppFile("MainWindow", "MainWindow.xaml");
-        var track = Named(xaml, "Border", "XPBarTrack", "x:Name=\"XPMeniscus\"");
+        var track = Named(xaml, "Border", "XPBarTrack", "x:Name=\"TxtXP\"");
         Assert.Contains("Background=\"{DynamicResource DepthWellFloorBrush}\"", track);
         Assert.Contains("Background=\"{DynamicResource DepthWellTop}\"", track);
         Assert.Contains("Background=\"{DynamicResource DepthWellLeft}\"", track);
@@ -105,8 +106,6 @@ public class HudDepthTests
 
         var fill = Named(xaml, "Border", "XPBar", "x:Name=\"XPBarFlashOverlay\"");
         Assert.Contains("Background=\"{DynamicResource DepthTubeGloss}\"", fill);
-        Assert.Contains("Fill=\"{DynamicResource DepthTubeBead}\"", fill);
-        Assert.Contains("HorizontalAlignment=\"Right\"", fill);        // the bead rides the leading edge
         Assert.Contains("x:Name=\"XPBarSheen\"", fill);                // the sweep stays
         Assert.DoesNotContain("<Border.Effect>", fill);                // no new Effect on the bar
     }

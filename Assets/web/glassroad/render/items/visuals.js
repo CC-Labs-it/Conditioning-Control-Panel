@@ -37,6 +37,7 @@ import { bubbleCloud, toyIconCloud, moteCloud, meltPuddle, ghost, ringGlow, shel
 import { objectState } from '../objectUniform.js';
 import { createPickupCards, PICKUP_CARD, PICKUP_BOX, pickupBoxPose } from './pickupCards.js';
 import { createItemStatus } from './status.js';
+import { floatingBob } from '../rampLook.js';
 import { advanceRibbon, flightSpark, launchSpark } from './flight.js';
 import { createTethers } from './tethers.js';
 import { createToyProps } from './toys.js';
@@ -275,7 +276,8 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       if (prevAlive[i] && !b.alive) { turnT[i] = 0; confT[i] = 0; }
       prevAlive[i] = b.alive;
       const turning = turnT[i] !== undefined && turnT[i] < L.boxTurnS + showS;
-      const bob = Math.sin(timeS * L.boxBobHz * 6.283 + i) * PICKUP_CARD.bob;
+      // a floating box (ramps, liftM: b.p is already lifted) adds a slow soft float; Gentle holds it still
+      const bob = b.lift ? (soft || reduced ? 0 : Math.sin(timeS * L.boxBobHz * 6.283 + i) * PICKUP_CARD.bob + floatingBob(timeS, i)) : Math.sin(timeS * L.boxBobHz * 6.283 + i) * PICKUP_CARD.bob;
       lay(o, b.p, b.n, timeS * PICKUP_CARD.spin + i, pickupBoxPose(bob).lift);
       const nx = N.x, ny = N.y, nz = N.z;
       if (turning) {
@@ -322,7 +324,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     for (const b of view.bubbles || []) {
       if (!b.alive) continue;
       normal(b.n);
-      const lift = L.pickupHoverM + Math.sin(timeS * 1.7 + b.i) * 0.12;
+      const lift = L.pickupHoverM + (b.lift ? floatingBob(timeS, b.i, soft || reduced) : Math.sin(timeS * 1.7 + b.i) * 0.12);
       bubble(comp(b.p, 0) + N.x * lift, comp(b.p, 1) + N.y * lift, comp(b.p, 2) + N.z * lift, 'box', L.pickupR * (b.k === undefined ? 1 : b.k), 1, MODE.icon, b.i + 40);
     }
 

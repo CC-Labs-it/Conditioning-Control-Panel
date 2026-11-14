@@ -1,7 +1,7 @@
 // WPF MainWindow.Settings.cs shell entry points. Settings sections remain their own live
 // editors; Save persists their current model and offers a preset through the existing preset page.
 // Tours use TutorialHead/CoreTutorial, and folder migration uses the shared PackFolderMover.
-// ponytail: EMI tour narration and the Save tick/ripple remain with the head's FX/narration lanes.
+// Save feedback follows WPF MainWindow.HeroFx.cs:702; EMI narration remains part B.
 
 using System;
 using System.IO;
@@ -161,6 +161,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void MainTutorial_ContentClick(object? sender, global::Avalonia.Input.PointerPressedEventArgs e)
             => e.Handled = true;
 
+        private void BtnFirstShowReplay_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            CloseTutorialOverlay();
+            OpenWelcomeShow(this);
+        }
+
         private void CloseTutorialOverlay() => SetTutorialOverlay(false);
 
         /// <summary>
@@ -236,6 +242,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private async void BtnSave_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => await SaveSettingsAndOfferPreset();
+        {
+            // WPF MainWindow.Settings.cs:381: feedback starts before saving or offering a preset.
+            FlashSaveAbsorb();
+            await SaveSettingsAndOfferPreset();
+        }
     }
 }

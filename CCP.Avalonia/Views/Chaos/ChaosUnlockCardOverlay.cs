@@ -111,7 +111,11 @@ internal sealed class ChaosUnlockCardOverlay : Window
         };
         _auto.Tick += (_, _) => Dismiss();   // the timer IS the 12 s expiry; an early tick must not re-arm it
         if (!live) return;
-        Opened += (_, _) => SizeToScreens();
+        Opened += (_, _) =>
+        {
+            SizeToScreens();
+            ConditioningControlPanel.Avalonia.Platform.X11Overlay.SetPassive(this);
+        };
         _frame = new BeatLoop(_host, _ => Step());
         Closed += (_, _) =>
         {

@@ -70,6 +70,29 @@ public sealed class SubliminalWhisperShowTests
         Assert.Empty(run.Timers);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VideoFreezeDefersResetAndCancellationDropsPendingEffects(bool cancel) => With(true, 0.9, run =>
+    {
+        MandatoryVideoOverlay.Instance.Freeze();
+        Assert.Empty(run.Timers.FindAll(t => t.Ms >= 1000));
+        MandatoryVideoOverlay.Instance.FinishFreeze(cancel);
+        if (cancel)
+        {
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            Assert.DoesNotContain("card Freeze", run.Log);
+            Assert.Empty(run.Timers.FindAll(t => t.Ms >= 1000));
+        }
+        else
+        {
+            var reset = Assert.Single(run.Timers.FindAll(t => t.Ms >= 1000));
+            Assert.InRange(reset.Ms, 1000, 1999); Fire(run, reset.Ms);
+            Assert.Contains("play reset.mp3 whisper", run.Log);
+        }
+    });
+
     [Fact]
     public void Ambient_phrase_whispers_for_20_xp_else_card_for_10()
     {

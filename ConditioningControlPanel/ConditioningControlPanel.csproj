@@ -88,7 +88,13 @@
          CPU SKElement path is used for now (reliable on AllowsTransparency layered windows);
          native libSkiaSharp extracts via IncludeNativeLibrariesForSelfExtract for single-file. -->
     <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.8" />
-    
+
+    <!-- Dynamic wallpaper (DynamicWallpaperService): Direct3D11 + Direct2D + DirectComposition bindings.
+         Managed-only (no native DLLs), bundled inside the signed single-file exe like the other libs. -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+    <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.6.2" />
+
     <!-- MVVM Framework -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
     
@@ -225,6 +231,17 @@
          are ever loaded, so those would ship as dead weight - keep them out of the build. -->
     <Content Include="..\Assets\cosmetics\**\*.png;..\Assets\cosmetics\*.json" Link="Resources\cosmetics\%(RecursiveDir)%(Filename)%(Extension)"
              Exclude="..\Assets\cosmetics\**\*_28.png;..\Assets\cosmetics\**\*_104.png;..\Assets\cosmetics\**\*_guide.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <!-- profile.avatar.rain-portrait is Rain-derived (CC BY 4.0): its attribution ships beside it. -->
+    <Content Include="..\Assets\cosmetics\shop\ATTRIBUTION.txt" Link="Resources\cosmetics\shop\ATTRIBUTION.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- EMI desk Prize Counter items (Resources\emi\desk-items\<id>\over-body-*.png, Astra's ten-pose
+         over-layer sheets): read off disk by Services\EmiDesk\EmiDeskItems like the outfit overlays.
+         The registry.json beside them already ships through the Resources\emi\**\*.json Content below. -->
+    <None Remove="..\Assets\emi\desk-items\**\*.png" />
+    <Content Include="..\Assets\emi\desk-items\**\*.png" Link="Resources\emi\desk-items\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
@@ -582,7 +599,11 @@
       ..\Assets\web\piecebypiece\package.json;
       ..\Assets\web\dtrh\tests\**\*;
       ..\Assets\web\rain-wardrobe\tests\**\*;
-      ..\Assets\web\intake\tests\**\*
+      ..\Assets\web\intake\tests\**\*;
+      ..\Assets\web\prizecounter\tests\**\*;
+      ..\Assets\web\prizecounter\mock\**\*;
+      ..\Assets\web\prizecounter\dev.html;
+      ..\Assets\web\prizecounter\**\*.md
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -616,7 +637,11 @@
       $(MSBuildProjectDirectory)\..\Assets\web\piecebypiece\package.json;
       $(MSBuildProjectDirectory)\..\Assets\web\dtrh\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\rain-wardrobe\tests\**\*;
-      $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*
+      $(MSBuildProjectDirectory)\..\Assets\web\intake\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\mock\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\dev.html;
+      $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\**\*.md
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 

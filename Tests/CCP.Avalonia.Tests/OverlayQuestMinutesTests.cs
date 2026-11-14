@@ -9,7 +9,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF AchievementService:239/276: Pink Filter / Spiral quest minutes, 1 s ticks only while the
-/// overlay shows, intervals of 6 s or more dropped. Stepped clock, no real timer wait (P08).</summary>
+/// overlay shows, late ticks credited up to the 3 minute sleep ceiling. Stepped clock, no real timer wait (P08).</summary>
 public sealed class OverlayQuestMinutesTests
 {
     [Fact]
@@ -25,18 +25,25 @@ public sealed class OverlayQuestMinutesTests
         for (var i = 0; i < 60; i++) { now += TimeSpan.FromSeconds(1); counter.Sample(true); }
         Assert.Equal(1.0, credited.Sum(), 6);
 
-        now += TimeSpan.FromSeconds(30);         // a stalled tick: WPF's < 0.1 min sanity check drops it
+        now += TimeSpan.FromSeconds(30);         // a minimised panel: credit the full late interval
         counter.Sample(true);
-        Assert.Equal(1.0, credited.Sum(), 6);
-        now += TimeSpan.FromSeconds(6);          // exactly 0.1 min: WPF's strict < drops it too
+        Assert.Equal(1.5, credited.Sum(), 6);
+        now += TimeSpan.FromSeconds(6);          // an ordinary late tick
         counter.Sample(true);
-        Assert.Equal(1.0, credited.Sum(), 6);
+        Assert.Equal(1.6, credited.Sum(), 6);
+
+        now += TimeSpan.FromMinutes(3);
+        counter.Sample(true);
+        Assert.Equal(4.6, credited.Sum(), 6);
+        now += TimeSpan.FromMinutes(3) + TimeSpan.FromTicks(1);
+        counter.Sample(true);
+        Assert.Equal(4.6, credited.Sum(), 6);
 
         counter.Follow(false);                   // hidden: the tick stops, later time counts nothing
         Assert.False(counter.TickRunning);
         now += TimeSpan.FromSeconds(1);
         counter.Sample(false);
-        Assert.Equal(1.0, credited.Sum(), 6);
+        Assert.Equal(4.6, credited.Sum(), 6);
         return Task.CompletedTask;
     });
 }

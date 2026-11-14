@@ -10,6 +10,10 @@
             <TextBlock Style="{StaticResource Type.PageTitle}" Text="{loc:Str nav_tab_permissions}"/>
             <TextBlock Style="{StaticResource Type.PageSubtitle}" Text="{loc:Str companion_page_permissions_intro}" TextWrapping="Wrap" Margin="0,4,0,16"/>
             <ContentControl x:Name="PermissionsHost" Focusable="False"/>
+            <!-- The v2 Settings sheet holding this switch has been unreachable since the nav rework. -->
+            <CheckBox x:Name="ChkAsks" Click="ChkAsks_Click" Margin="0,14,0,0" Foreground="{DynamicResource TextLightBrush}" ToolTip="{loc:Str companion_asks_toggle_hint}">
+                <TextBlock Text="{loc:Str companion_asks_toggle}" Foreground="{DynamicResource TextLightBrush}"/>
+            </CheckBox>
             <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,14,0,0">
                 <Run Text="{loc:Str companion_page_permissions_takeover}"/>
                 <Hyperlink x:Name="LinkOpenTakeover" Click="OpenTakeover_Click" Foreground="#FF69B4" TextDecorations="{x:Null}"><Run Text="{loc:Str companion_page_open_takeover}"/></Hyperlink>

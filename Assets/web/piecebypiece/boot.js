@@ -19,9 +19,11 @@ import { createSolo } from './game/solo.js';
 import { createTurnHandoff } from './ui/turn-handoff.js';
 import { createDirector } from './board/director.js';
 import { createDriverSwitch, startOnlineMatch, startWatchMatch } from './net/online.js';
-import { setWatchPolicy } from './net/api.js';
+import { setWatchPolicy, setLookSource } from './net/api.js';
+import { createAttachments } from './board/attachments.js';
+import { createWear } from './skins/wear.js';
 import { DEFAULT_MS } from './game/clock.js';
-import { postToHost, onHostMessage, onIdentity, signalReady } from './bridge.js';
+import { postToHost, onHostMessage, onIdentity, signalReady, isHosted } from './bridge.js';
 import { showSlip } from './sparkles-slip.js';
 import { createPauseHush } from './ui/pause-hush.js';
 import { createHostEscape, HOST_ESCAPE } from './ui/host-escape.js';
@@ -70,7 +72,12 @@ function main() {
   // spring out of it when pieces.js builds it.
   const jiggle = createJiggle();
   const anim = createAnim({ group: view.pieceGroup, jiggle });
-  const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle });
+  const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle, attachments: createAttachments() });
+  // The wardrobe (skins/wear.js): who wears what, and the player's own pick. The pick rides
+  // every seat and join (contract 4); the server clamps it and hands both looks back.
+  const wear = createWear({ bus, pieces, post: postToHost, onHost: onHostMessage, hosted: isHosted,
+    storage: (() => { try { return window.localStorage; } catch { return null; } })() });
+  setLookSource(() => wear.mine());
   // The board API the effects layer drives. Keep this surface stable.
   const board = {
     view,
@@ -131,6 +138,7 @@ function main() {
   window.PBP.startWatch = (match) => startWatchMatch({ bus, board, hud: dom.hud, game, match });
   // "Let people watch my games" (Options): off sends watchable:false when a public game is made.
   setWatchPolicy(() => presentation().letPeopleWatch);
+  window.PBP.wear = wear;
   // The friends drawer: challenge a friend, or take a friend's challenge up. Heard here, early,
   // because the frame can land before the door exists; it waits for the door.
   onHostMessage((m) => {
@@ -504,12 +512,13 @@ function main() {
       if (!lobby) { const m = await import('./net/lobby.js'); lobby = m.createMockLobby({ seed: Number(params.get('seed')) || undefined }); }
     } catch (e) { console.warn('[pbp] no lobby; the door opens without one', e); }
     const m = await import('./door/door.js');
-    const door = m.createDoor({ bus, game, board, lobby, root: document.getElementById('door'), params, startGame });
+    const door = m.createDoor({ bus, game, board, lobby, root: document.getElementById('door'), params, startGame, wear });
     window.PBP.door = door;
     window.PBP.lobby = lobby;
     // the men stand on their squares behind the menu, clocks stopped
     pieces.setPosition(game.rules.position());
     board.setSide('w', true);
+    wear.toMenu();
     door.show(params.get('screen') || 'menu');
     return door;
   }).catch((e) => {

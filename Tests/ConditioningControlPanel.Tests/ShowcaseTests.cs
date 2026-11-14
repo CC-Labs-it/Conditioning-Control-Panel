@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// The Tonight Board's premium showcase: manifest parsing, who sees what, the per-install order,
 /// one clip per cycle, and the sha256-checked cache. No player is started here.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class ShowcaseTests
 {
     private static readonly Uri ManifestUri = new("https://example.test/releases/download/showcase-clips/showcase.json");

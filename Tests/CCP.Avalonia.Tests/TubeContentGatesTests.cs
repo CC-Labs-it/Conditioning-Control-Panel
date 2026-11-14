@@ -43,6 +43,22 @@ public sealed class TubeContentGatesTests
         return owner.OwnedWindows.OfType<T>().Single();
     }
 
+    // A type initializer may run on a worker before the UI constructs the tube (Windows CI).
+    // Fixed menu colors must be usable across threads, including by the icon compositor.
+    [Theory]
+    [InlineData("MenuRed", "#FFFF6347")]
+    [InlineData("MenuGreen", "#FF90EE90")]
+    [InlineData("MenuPatreon", "#FF9B59B6")]
+    [InlineData("MenuLocked", "#FF606070")]
+    public Task SharedMenuColorsAreSafeAcrossThreads(string name, string expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var brush = (global::Avalonia.Media.ISolidColorBrush)typeof(AvatarTubeWindow)
+            .GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var color = await Task.Run(() => brush.Color);
+        Assert.Equal(global::Avalonia.Media.Color.Parse(expected), color);
+        Assert.IsAssignableFrom<global::Avalonia.Media.IImmutableBrush>(brush);
+    });
+
     [Fact]
     public Task ExplicitPresetFromTheMenuWaitsOnTheAcknowledgement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

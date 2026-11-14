@@ -53,10 +53,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PollAsync(CatalogueKindDeeper, CoreSettings.Current.DeeperSubmissions, force,
                 () => App.Catalogue.FetchMySubmissionsAsync(default),
                 (id, key) => App.Notifications.ShowSticky("deeper_submission_accepted_" + id,
-                    Loc.GetF("deeper_submission_accepted_toast_fmt", Path.GetFileNameWithoutExtension(key)),
+                    Loc.GetF("deeper_submission_accepted_toast_fmt", ResolveDeeperSubmissionName(key)),
                     Helpers.NotificationType.Success,
                     Loc.Get("deeper_submission_accepted_action_view"), () => ShowTab("deeper")),
                 RefreshDeeperLibraryRows);
+
+        // WPF MainWindow.DeeperSubmissions.cs:159-164: library title, then filename fallback.
+        private string ResolveDeeperSubmissionName(string canonicalPath)
+        {
+            var name = DeeperModel?.FindEntry(canonicalPath)?.Name;
+            return string.IsNullOrEmpty(name) ? Path.GetFileNameWithoutExtension(canonicalPath) : name;
+        }
 
         // The two WPF polls are the same loop over a different dictionary and endpoint.
         private async Task PollAsync(string kind, Dictionary<string, DeeperSubmissionRecord>? dict, bool force,

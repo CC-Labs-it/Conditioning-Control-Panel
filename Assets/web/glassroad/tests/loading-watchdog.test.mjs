@@ -89,7 +89,8 @@ test('boot.js: a stall is recorded and fails the cover with Retry; phones wait f
   const st = b.slice(b.indexOf('loading.onStall('), b.indexOf('/** ?botFall=1'));
   assert.match(st, /const rec = record\('stall', new Error\(/);
   assert.match(st, /LOAD_STALL_MS/);
-  assert.match(st, /loading\.fail\(failureLine\(rec\)\);\s*loading\.onRetry\(\(\) => void retry\(rec\.course\)\);/);
-  assert.match(b, /createCardMedia\(world\.media, \{ bridge,\s*readyCount: renderer\.device === 'phone' \? PHONE_READY_CLIPS : Infinity \}\)/);   // the DEVICE, whatever Quality is pinned
+  assert.match(st, /showFailure\(rec\);/);
+  assert.match(b, /function showFailure\(rec\) \{[\s\S]*?loading\.fail\([\s\S]*?loading\.onRetry\(\(\) => void retry\(rec\.course\)\);/);
+  assert.match(b, /createCardMedia\(world\.media, \{ bridge,\s*readyCount: renderer\.device === 'phone' \? PHONE_READY_CLIPS : Infinity, \.\.\.\(deviceOrigin \? \{ local: false \} : null\) \}\)/);   // the DEVICE, whatever Quality is pinned
   assert.match(b, /if \(cardMedia\) await cardMedia\.ready;/);
 });

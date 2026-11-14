@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -893,7 +894,7 @@ public sealed partial class GameWindowTests
     /// <summary>Lab (or not), signed in, a throwaway library; XP and each payout's counts-as-run go to lists.</summary>
     private static void RunDtrh(bool lab, Action<MainShellWindow, List<double>, List<bool>, List<string>> body) => Run((shell, launcher) =>
     {
-        var (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider,
+        var (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
@@ -904,6 +905,7 @@ public sealed partial class GameWindowTests
         {
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => lab;
+            CoreEntitlement.HasPremiumProvider = () => lab;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreEntitlement.ShowDeniedHandler = v => denied.Add(v.Feature);
             GameWindow.DtrhBankSparks = (_, countsAsRun) => { runs.Add(countsAsRun); return 5; };
@@ -919,19 +921,19 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            (CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
-                CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
+            (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
+                CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
             Directory.Delete(lib, true);
         }
     });
 
-    /// <summary>WPF LauncherCatalogue :241 (Lab door, DemandLab refusal), OnPageReady :271 (init with motionLevel
+    /// <summary>WPF LauncherCatalogue (Basic door, DemandPremium refusal), OnPageReady :271 (init with motionLevel
     /// and runSetup, then the manifest with videos), OnRequestRun :523, OnRunEnded :583 (one payout per descent)
     /// and DisposeAll :1002 (a window closed mid-descent banks its last snapshot, paid by the host's clock).</summary>
     [Fact]
-    public void Dtrh_LabDoor_BootRunLifecycle_AndCloseBanks()
+    public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {
         RunDtrh(lab: false, (_, _, _, denied) =>
         {
@@ -958,6 +960,7 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
             Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
+            Assert.Equal("Basic", (string?)sent[0]["plans"]!["basic"]!["name"]);
             Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
             Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)sent[1]["videos"]!.Single()["url"]);
             sent.Clear();
@@ -994,6 +997,150 @@ public sealed partial class GameWindowTests
             Assert.Equal(new[] { true, true }, runs);
         });
     }
+
+    /// <summary>WPF LauncherCatalogue.cs:243-248: the Play door asks DtRH's gate before Launch, so lapsed access with
+    /// a descent still open is refused instead of refocusing it.</summary>
+    [Fact]
+    public void Dtrh_PlayDoor_LapsedAccessRefusesBeforeFocusingTheLiveHost() => RunDtrh(lab: true, (shell, _, _, denied) =>
+    {
+        var live = GameWindow.Launch("dtrh")!;
+        var oldLaunch = global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame;
+        var launches = new List<string>();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = launches.Add;
+            // DtRH is a Basic door now (DtrhGate demands premium), so a lapse drops Basic too.
+            CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
+            CoreEntitlement.HasPremiumProvider = () => false;   // RunDtrh restores it
+            shell.ShowTab("play");
+            Dispatcher.UIThread.RunJobs();
+            shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
+                .FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(launches);
+            Assert.Single(denied);
+            Assert.Same(live, Assert.Single(GameWindow.OpenWindowsForTests()));
+        }
+        finally { global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.LaunchGame = oldLaunch; }
+    });
+
+    [Fact]
+    public void Dtrh_BasicAndDailyGiftAgreeAcrossDoorsAndPayout() => RunDtrh(lab: false, (shell, _, _, denied) =>
+    {
+        bool premium = false;
+        string? freeKey = null;
+        MainShellWindow.LeashGateDueProvider = () => false;
+        CoreEntitlement.HasPremiumProvider = () => premium;
+        CoreEntitlement.IsFreeTodayProvider = key => key == freeKey;
+        shell.Show();
+        shell.ShowTab("play");
+        Dispatcher.UIThread.RunJobs();
+        var play = shell.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
+        var band = play.FindControl<global::Avalonia.Controls.Border>("PlayLockDtrh")!;
+        var badge = play.FindControl<global::ConditioningControlPanel.Avalonia.Controls.TierBadge>("PlayBadgeDtrh")!;
+        var button = play.FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!;
+        var emi = global::ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.Find("dtrh")!;
+        var launcher = LauncherWindow.Destinations["dtrh"];
+        Assert.Equal(1, badge.Tier);
+
+        void Check(bool locked, bool gift)
+        {
+            play.RefreshPlayCards();
+            Assert.Equal(locked, band.IsVisible);
+            Assert.Equal(gift, badge.FreeToday);
+            Assert.Equal(locked, GameWindow.DtrhLocked());
+            Assert.Equal(locked, launcher.Locked());
+            Assert.Equal(locked, emi.IsLocked());
+        }
+
+        freeKey = "remote"; // a different drop must not open this door
+        Check(locked: true, gift: false);
+        button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Single(denied);
+        emi.Open();
+        Assert.Equal(2, denied.Count);
+        Assert.False(GameWindow.IsAnyOpen());
+
+        freeKey = "dtrh";
+        Check(locked: false, gift: true);
+        button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        var w = Assert.IsType<GameWindow>(GameWindow.OpenForTests("dtrh"));
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        void EndRun()
+        {
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+        }
+        EndRun();
+        var giftPay = Assert.Single(sent);
+        Assert.True((bool)giftPay["daily_gift"]!);
+        Assert.Equal("basic", (string?)giftPay["plan"]);
+        sent.Clear();
+        premium = true; // Basic owns it even on the drop day
+        Check(locked: false, gift: false);
+        EndRun();
+        var ownedPay = Assert.Single(sent);
+        Assert.False((bool)ownedPay["daily_gift"]!);
+        Assert.Equal(JTokenType.Null, ownedPay["plan"]!.Type);
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        Assert.False(GameWindow.IsAnyOpen());
+
+        freeKey = null;
+        Check(locked: false, gift: false); // Basic without Lab still opens
+        emi.Open();
+        Assert.NotNull(GameWindow.OpenForTests("dtrh"));
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        Assert.False(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
+    public void Dtrh_FunnelOpensOnlyOutsideTheRunAndExit() => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        FunnelPageMessage.ResetForTests();
+        var opened = new List<string>();
+        int counts = 0;
+        var now = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
+        bool offline = CoreSettings.Current.OfflineMode;
+        try
+        {
+            CoreSettings.Current.OfflineMode = false;
+            FunnelPageMessage.BaseUrlOverride = "http://127.0.0.1:9";
+            FunnelPageMessage.SendOverride = (_, _) => { Interlocked.Increment(ref counts); return Task.CompletedTask; };
+            FunnelPageMessage.OpenCheckout = url => { opened.Add(url); return true; };
+            FunnelPageMessage.UtcNow = () => now;
+            FunnelPageMessage.RefreshAccount = () => Task.CompletedTask;
+            var w = GameWindow.Launch("dtrh")!;
+            // The exact string planCard.js hands WebKitGTK's invokeCSharpAction (plan-card.test.mjs asserts it).
+            const string cta = "{\"type\":\"funnel\",\"event\":\"cta_clicked\",\"a\":\"dtrh\",\"b\":\"patreon\",\"plan\":\"basic\"}";
+            w.HandleMessage(cta);
+            Assert.Equal(ConditioningControlPanel.Services.Vault.PlanCatalog.Current.Basic.PatreonUrl, Assert.Single(opened));
+            w.HandleMessage(cta); // throttled, but counted
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            now = now.AddSeconds(4);
+            w.HandleMessage(cta); // during a run
+            Assert.Single(opened);
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            w.HandleMessage(cta);
+            Assert.Equal(2, opened.Count);
+            w.HandleMessage("{\"type\":\"exit\"}");
+            now = now.AddSeconds(4);
+            w.HandleMessage(cta); // page is exiting
+            Assert.Equal(2, opened.Count);
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+            w.HandleMessage(cta); // the window is closed
+            Assert.Equal(2, opened.Count);
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref counts) == 6, TimeSpan.FromSeconds(5)));
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally
+        {
+            CoreSettings.Current.OfflineMode = offline;
+            FunnelPageMessage.ResetForTests();
+        }
+    });
 
     /// <summary>WPF DtrhHostService.PostManifest / OnRemoteCopiesReady (724ac82bc): the manifest's urls are root-relative
     /// (hostMedia.js counts only those, not 127.0.0.1, as local); with online media on, copies landing in

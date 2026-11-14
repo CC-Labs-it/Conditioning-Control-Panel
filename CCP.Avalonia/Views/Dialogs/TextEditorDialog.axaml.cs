@@ -201,6 +201,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             }
         }
 
+        internal void DiscardForPanic()
+        {
+            _dialogResult = false;
+            ResultData = null;
+            Close(false);
+        }
+
         private async void BtnCancel_Click()
         {
             if (_hasChanges)

@@ -451,82 +451,23 @@ public class SkillTreeService : IDisposable
     }
 
     /// <summary>
-    /// Check and award Perfect Bimbo Week bonus (7, 14, 30 day daily quest streaks)
-    /// Base XP: 3000, 6000, 10000 for 7/14/30 day milestones, scaled by level (+2% per level)
-    ///
-    /// GRANTS the XP itself and returns the amount awarded (0 when no milestone is due) — callers
-    /// must not add it again. The grant lives in here so it happens before the paid-once latch is
-    /// persisted; see the note at the grant.
+    /// Grant the perfect-week bonus through the shared rule and return the award (0 when none is due).
+    /// Callers must not add it again. The grant runs before the paid-once latch is saved.
     /// </summary>
     public int CheckPerfectWeekBonus()
     {
         var settings = App.Settings?.Current;
         if (settings == null) return 0;
 
-        if (!HasSkill("perfect_bimbo_week")) return 0;
-
-        var streak = settings.DailyQuestStreak;
-        var playerLevel = settings.PlayerLevel;
-
-        // The streak broke and is being rebuilt, so the same milestone can be earned again.
-        // Persisted immediately: nothing else on this path saves settings when no bonus is due.
-        if (streak < settings.LastPerfectWeekStreakAwarded)
+        var xp = SkillTreeRules.ClaimPerfectWeekBonus(settings,
+            amount => App.Progression?.AddXP(amount, XPSource.Other), () => App.Settings?.Save());
+        if (xp > 0)
         {
-            settings.LastPerfectWeekStreakAwarded = 0;
-            App.Settings?.Save();
+            App.Logger?.Information("[Skills] Perfect Bimbo Week bonus awarded: {XP} XP (streak: {Streak}, level: {Level})",
+                xp, settings.DailyQuestStreak, settings.PlayerLevel);
+            ShowPerfectWeekNotification(xp, settings.DailyQuestStreak);
         }
-
-        // Determine base XP reward based on milestone
-        int baseXP = 0;
-        string milestone = "";
-
-        if (streak == 30)
-        {
-            baseXP = 10000;
-            milestone = "30-Day";
-        }
-        else if (streak == 14)
-        {
-            baseXP = 6000;
-            milestone = "14-Day";
-        }
-        else if (streak % 7 == 0 && streak >= 7)
-        {
-            baseXP = 3000;
-            milestone = "7-Day";
-        }
-
-        if (baseXP == 0) return 0;
-
-        // Pay each milestone once. This runs on EVERY daily quest completion, so without the
-        // latch the bonus was awarded again for every further quest that day - and again on the
-        // next launch, since the streak value itself hadn't changed (#895).
-        if (settings.LastPerfectWeekStreakAwarded == streak)
-        {
-            App.Logger?.Debug("Perfect Bimbo Week {Milestone} bonus already awarded for streak {Streak}; skipping",
-                milestone, streak);
-            return 0;
-        }
-
-        // Scale with player level (+2% per level)
-        var scaledXP = (int)Math.Round(baseXP * (1 + playerLevel * 0.02));
-
-        // GRANT FIRST, LATCH SECOND. The latch used to be written (and saved) here before the
-        // caller added the XP, so a crash in between burned the milestone permanently. Ordered
-        // this way a crash between the grant and the latch can at worst pay the milestone twice
-        // — the lesser evil against a bonus the player can never earn again.
-        App.Progression?.AddXP(scaledXP, XPSource.Other);
-
-        settings.LastPerfectWeekStreakAwarded = streak;
-        App.Settings?.Save();
-
-        App.Logger?.Information("Perfect Bimbo Week {Milestone} bonus awarded! {XP} XP (base: {BaseXP}, level: {Level})",
-            milestone, scaledXP, baseXP, playerLevel);
-
-        // Trigger notification
-        ShowPerfectWeekNotification(scaledXP, streak);
-
-        return scaledXP;
+        return xp;
     }
 
     /// <summary>

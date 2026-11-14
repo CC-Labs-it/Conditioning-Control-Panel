@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Tests;
 /// burst, the overlay is the track's last child and never takes a click, and the idle sheen
 /// clock only runs on Full with ambient motion allowed.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class SectionTabStripFxTests
 {
     private const string Section = "companion";

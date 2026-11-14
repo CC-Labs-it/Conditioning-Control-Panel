@@ -127,7 +127,7 @@ namespace ConditioningControlPanel
                 // band, the click's refusal and the card title are one string in every language -
                 // a Japanese user no longer reads a Japanese refusal about an English subject.
                 SetLockbandVisible(tab.PlayLockBreakout, !Services.BackRoom.BreakoutAccess.FullAllowed);
-                SetLockband(tab.PlayLockDtrh, TierGate.RequiresLab(Loc.Get("launcher_game_dtrh_title"), "dtrh"));
+                SetLockband(tab.PlayLockDtrh, TierGate.RequiresPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh"));
                 SetLockband(tab.PlayLockArcademy, TierGate.RequiresLab(Loc.Get("launcher_game_arcademy_title")));
                 SetLockband(tab.PlayLockRacingThoughts, TierGate.RequiresLab(Loc.Get("launcher_game_race_title")));
                 SetLockband(tab.PlayLockGaze, TierGate.RequiresLab(Loc.Get("label_gaze_minigame")));
@@ -168,9 +168,8 @@ namespace ConditioningControlPanel
         /// <para><b>Eligibility mirrors the vault</b> (<c>IsExclusiveFreeToday</c>): a re-stamp only
         /// means anything on a door that is otherwise SHUT. An account that already owns the
         /// feature is not being given a gift, so it keeps the plain tier sign - the same call the
-        /// dashboard's ? box makes for premium accounts. Note the two gates differ: Remote and For
-        /// You are premium features, the descent is a Lab one, so each asks its own question rather
-        /// than a blanket "is this a patron".</para>
+        /// dashboard's ? box makes for premium accounts. All three are Basic features: Remote,
+        /// For You and, since 2026-10-31, the descent.</para>
         ///
         /// <para>Nothing here decides anything: <see cref="Services.TierGate"/> already ORs the same
         /// <see cref="Services.DailyFreeService.IsFreeToday"/> into the verdict that opens the door.
@@ -182,7 +181,7 @@ namespace ConditioningControlPanel
 
             SetFreeStamp(tab.PlayBadgeRemote, "remote", owned: premium);
             SetFreeStamp(tab.PlayBadgeFyp, "fyp", owned: premium);
-            SetFreeStamp(tab.PlayBadgeDtrh, "dtrh", owned: App.Patreon?.HasLabAccess == true);
+            SetFreeStamp(tab.PlayBadgeDtrh, "dtrh", owned: premium);
             // The descent's stamp ("dtrh", a promo-Saturday override) left with its card; the
             // launcher tile's Locked state reads the same TierGate verdict.
         }

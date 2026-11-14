@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Tests;
 /// ccp-bugs #1369: a click on a word in a friend's card lands on a Run, and walking up from it
 /// must not throw.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class FriendsDrawerPasteAndClickTests
 {
     [Theory]

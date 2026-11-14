@@ -279,6 +279,7 @@ public partial class EmiDeskWindow : Window
 
         SourceInitialized += OnSourceInitialized;
         Closed += OnClosedCleanup;
+        HookDeskItems();
 
         // ALIVE wave A rides ONE 100 ms poll, and it lives exactly as long as she is on screen.
         // Hung off IsVisibleChanged rather than off the summon so every road that shows or hides
@@ -848,6 +849,7 @@ public partial class EmiDeskWindow : Window
             BodyImage.Source = img;
             _bodySkin = _outfit;
             PaintOutfitOver();
+            PaintDeskItems();
         }
         catch (Exception ex)
         {
@@ -922,6 +924,7 @@ public partial class EmiDeskWindow : Window
                 return;
             }
             SetOutfit(Services.Arcademy.ArcademyHostService.EquippedEmiOutfit());
+            RefreshDeskItems();
         }
         catch (Exception ex)
         {
@@ -1966,6 +1969,7 @@ public partial class EmiDeskWindow : Window
         try
         {
             _closingForGood = true;
+            UnhookDeskItems();
             // Her options panel is a sibling window with two live hooks and a subscription to
             // this window's own Moved/Resized. It has to go before she does.
             try { _options?.Kill(); }

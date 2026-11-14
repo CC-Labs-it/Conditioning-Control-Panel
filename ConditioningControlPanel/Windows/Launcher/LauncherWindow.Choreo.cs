@@ -286,6 +286,7 @@ public partial class LauncherWindow
     /// <summary>Everything that was not pressed steps back. The next show brings it all forward.</summary>
     private void DimOthers(FrameworkElement keep)
     {
+        _tilesDimmed = true;
         foreach (var tile in _tiles)
             if (!ReferenceEquals(tile, keep)) Fade(tile, DimOthersTo);
         if (!ReferenceEquals(PanelCard, keep)) Fade(PanelCard, DimOthersTo);
@@ -611,7 +612,7 @@ public partial class LauncherWindow
     {
         int sp = App.Settings?.Current?.SkillPoints ?? -1;
         bool show = sp >= 0 && App.IsLoggedIn;
-        SpChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        WalletChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _spShown = double.NaN; return; }
         if (!countUp && double.IsNaN(_spShown)) return;
         double from = countUp ? 0 : _spShown;

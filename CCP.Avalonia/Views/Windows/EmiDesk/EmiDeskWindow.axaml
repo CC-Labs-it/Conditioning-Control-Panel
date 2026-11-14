@@ -19,7 +19,6 @@
        <TransformGroup x:Name=...>              -> built in the code-behind. FindControl is
                                                    constrained to Control, and a Transform is not
                                                    one, so naming them here buys nothing.
-       <emi:EmiFace/>                           -> a mono TextBlock placeholder. See below.
 
      The window is a pad bigger than EMI on every side so her FX have room; that pad is
      Background-less on purpose. ponytail: on X11 a transparent Avalonia window still EATS the
@@ -33,6 +32,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        xmlns:emi="clr-namespace:ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskWindow"
         Title="EMI"
 
@@ -113,23 +113,13 @@
                  hit-testable, because a glass click is resolved geometrically in the body's own
                  pointer-released handler (a hit-testable overlay would eat the drag). -->
             <Canvas x:Name="FaceLayer" IsHitTestVisible="False" ClipToBounds="False">
-                <!-- THE FACE. In WPF this is <emi:EmiFace/>, a 517-line DrawingContext renderer
-                     that draws the mood string as pixel glyphs in #FF69B4 (fill + stroke).
-                     ponytail: the head's EmiFace (EmiDesk/EmiFace.cs, used by the dock) is not
-                     wired into the widget yet; until then the mood string is drawn as mono text at
-                     the same size, in the same colour, on the same GazeShift transform.
+                <!-- THE FACE: <emi:EmiFace/>, the head's port of WPF EmiFace (ink-box glyph
+                     renderer, #FF69B4 fill + stroke), sized to the glass in code.
 
                      THE GAZE LEAN (ALIVE wave A): the face glyph slides up to three DIPs toward the
                      cursor on its OWN transform, so the lean composes with the body's CRT scale,
                      click squash and drag wobble instead of fighting them. -->
-                <TextBlock x:Name="FaceView"
-                           Text="0_0"
-                           FontFamily="Noto Sans Mono,DejaVu Sans Mono,Consolas,monospace"
-                           FontWeight="Bold"
-                           Foreground="#FF69B4"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
+                <emi:EmiFace x:Name="FaceView"/>
                 <Canvas x:Name="GlassCanvas" IsHitTestVisible="False"/>
             </Canvas>
 

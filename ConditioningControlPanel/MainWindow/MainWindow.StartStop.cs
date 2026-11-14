@@ -350,6 +350,10 @@ namespace ConditioningControlPanel
                 if (!systemInitiated) WarnIfFlashLibraryEmpty();
             }
 
+            // Collage wallpaper: an ambient desktop effect, runs for any session (incl. audio-only).
+            // Self-suppresses unless CollageWallpaperEnabled is on.
+            App.Wallpaper?.StartCollage();
+
             if (!audioOnly && settings.MandatoryVideosEnabled)
                 App.Video.Start();
 
@@ -498,6 +502,12 @@ namespace ConditioningControlPanel
         {
             // Stop flash first (safe, no complex cleanup)
             App.Flash.Stop();
+
+            // Collage wallpaper: stop composing and put the user's real wallpaper back, unless
+            // "Run with CCP" keeps it up while CCP is open. Panic never gets here first (KillAllAudio).
+            // engineRunning: false = "after this stop"; App.IsEngineRunning is still true here.
+            if (!Services.WallpaperService.ShouldBeUp(App.Settings?.Current, engineRunning: false))
+                App.Wallpaper?.StopCollage();
 
             // Stop stops everything (owner, 7.1.8): the audio player with a playlist goes quiet
             // with the engine. The list stays. StartEngine never touches the player.

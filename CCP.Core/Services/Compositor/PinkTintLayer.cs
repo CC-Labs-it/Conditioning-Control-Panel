@@ -14,9 +14,34 @@ public class PinkTintLayer : BaseLayer
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
 
-    public PinkTintLayer(Action wake) : base(wake) { }
+    private readonly Action? _resort;
+    private int _sortedZ;
 
-    public override int ZIndex => CompositorLayers.PinkTint;
+    /// <param name="resort">Re-sorts the host engine's layers after <see cref="ZIndex"/> moved
+    /// (WPF: <c>CompositorEngine.ResortLayers</c>). Null: the host has no re-sort to call.</param>
+    public PinkTintLayer(Action wake, Action? resort = null) : base(wake)
+    {
+        _resort = resort;
+        _sortedZ = ZIndex;   // RegisterLayer sorts on the value read right after this
+    }
+
+    /// <summary>Over every session effect (today's look), or under spirals, subliminals, bubbles and
+    /// bouncing text when the user asks for it (#1546). Read live; <see cref="SyncOrder"/> re-sorts.</summary>
+    public override int ZIndex => ZFor(CoreSettings.Current.PinkFilterUnderEffects);
+
+    internal static int ZFor(bool underEffects)
+        => underEffects ? CompositorLayers.PinkTintUnder : CompositorLayers.PinkTint;
+
+    /// <summary>Re-sort the engine when the setting moved the slot since the last sort. Cheap when
+    /// nothing changed; called on every show and by the feature page toggle. UI thread.</summary>
+    public void SyncOrder()
+    {
+        int z = ZIndex;
+        if (z == _sortedZ) return;
+        _sortedZ = z;
+        _resort?.Invoke();
+        _dirty = true;   // repaint the surface in the new order
+    }
 
     protected override bool GentleFades => true;   // gentle visuals: tint fades in and out
 
@@ -33,6 +58,7 @@ public class PinkTintLayer : BaseLayer
     public void Show(byte r, byte g, byte b, double opacity)
     {
         Set(r, g, b, opacity);
+        SyncOrder();              // a setting changed since the last show (cloud restore, preset) takes effect here
         _dirty = true;            // guarantee a paint on (re)show even if the values were unchanged
         SetActive(true);
     }

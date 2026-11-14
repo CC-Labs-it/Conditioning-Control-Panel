@@ -34,6 +34,14 @@ namespace ConditioningControlPanel
         /// <summary>DailyFreeService.IsFreeToday - "is this feature the free one today?".</summary>
         public static volatile Func<string?, bool>? IsFreeTodayProvider;
 
+        /// <summary>DailyFreeService.TodayKey, excluding member gifts and post grants.</summary>
+        public static volatile Func<string?>? DailyFreeKeyProvider;
+
+        public static string? DailyFreeKey
+        {
+            get { try { return DailyFreeKeyProvider?.Invoke(); } catch { return null; } }
+        }
+
         /// <summary>IntakePassService.IsPassAvailable - a free account's unspent weekly Graded Intake pass.</summary>
         public static volatile Func<bool>? IntakePassAvailableProvider;
 

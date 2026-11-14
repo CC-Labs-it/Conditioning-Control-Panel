@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Tests;
 /// row keeps one height.
 /// Set NAV_STRIP_SHOTS to a folder to save an offscreen render of every section's strip.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class NavStripHueTests
 {
     private readonly ITestOutputHelper _out;

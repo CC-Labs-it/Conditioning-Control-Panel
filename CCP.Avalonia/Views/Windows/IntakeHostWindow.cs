@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// IntakeHostWindow.Lifecycle.cs.
     /// ponytail: not ported yet - relaunch on a web-process crash (WebHost raises no process-failed),
     /// the EmiDesk intakeRunning hold (this head's
-    /// EmiDeskService has no Fire/ReleaseHold director), the punch card. Next slices in
+    /// EmiDeskService instead gates non-hold speech while this window is open), the punch card. Next slices in
     /// ~/ccp-port/briefs/intake-plan.md.
     /// </summary>
     internal sealed partial class IntakeHostWindow : Window

@@ -3,13 +3,14 @@ import { getBoudoirLayout } from './boudoir-layout.js';
 import { keepGatePhase } from '../sim/keepGates.js';
 import { pendulumBeatPhase } from '../sim/keepChains.js';
 import { beatCycle, machineryRearming, gearBeatTravel, machineryDuration } from './machineryBeat.js';
+import { THUMPER_CONTACT } from './chessContact.js';
 const TAU = Math.PI * 2, ease = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 export const BOUDOIR_HAZARD = Object.freeze({ pressWidthM: 14, pressDepthM: 8, pressHeightM: 3.2,
   brushAmplitudeM: 2.9, brushRadiusM: 1.12, brushDepthM: 2.5, brushCycleS: 6.4,
   brushArmM: 8.6, brushPivotY: 10.25, brushImpulseMps: 5.2,
   mirrorCycleS: 9.6, mirrorLiftM: 8.4, mirrorWidthM: 7, mirrorHeightM: 6,
   ribbonCycleS: 12, ribbonAccelMps2: 10, ribbonDragMps2: 7, ribbonMaxMps: 42 });
-export const BOUDOIR_PRESS_REVISION = 1;
+export const BOUDOIR_PRESS_REVISION = 2;
 export const powderPressHeads = row => row.pressHeads || [row];
 const pressArrangements = new WeakMap();
 export function powderPressPhase(row, timeS, beat = null) {
@@ -137,7 +138,8 @@ export function getBoudoirSetpieces(track, layout = getBoudoirLayout(track)) {
     .map(([id, u], i) => {
       const row = { id: 'powder-press-' + i, kind: 'press', s: point(id, u), x: 0, w: 14, depthM: 8, offsetS: i * 1.35 };
       row.pressHeads = [-5, 0, 5].map((x, lane) => ({ ...row, id: row.id + '-chess-' + lane,
-        stationId: row.id, pressLane: lane, x, w: 4, depthM: 4, heightM: 5.5 }));
+        stationId: row.id, pressLane: lane, x, w: 4, depthM: 4, heightM: 5.5,
+        contactX: THUMPER_CONTACT[lane].x, contactZ: THUMPER_CONTACT[lane].z }));
       return row;
     });
   const sweepers = [['ribbon-weave', .3], ['ribbon-weave', .8], ['shelf-weave-cross', .3], ['shelf-weave-cross', .72], ['pearl-slalom-cross', .28], ['pearl-slalom-cross', .75],

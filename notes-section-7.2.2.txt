@@ -1,0 +1,16 @@
+SECOND LAP: 7.2.2
+
+FIXES
+- Racing Thoughts: Boudoir no longer gets stuck at "Preparing track". the course builds about six times faster, and a slow PC gets time to finish loading instead of the window closing on it.
+- the launcher no longer goes blank on setups with several monitors. it grows inside the monitor it is on and redraws itself after a game, and if it still shows nothing it switches to a safer way of drawing for that run.
+- Dynamic wallpaper makes one collage per monitor, at each screen's own size: no more stretched or squashed pictures on a second, vertical or wider monitor. thanks to McKenzi for the report.
+- Circe's Tab: the raffle card says its total is net. time anyone takes off during the month comes out of it.
+- strict lock cards say what really happens: Escape is the default panic key, and panic always ends a card. want Escape to do nothing on a card? bind panic to another key in Settings.
+
+NEW
+- Pink Filter: a new switch, "Under spirals and text", puts the tint under spirals, subliminals, bubbles and text so they keep their own colours. off by default.
+
+HUNTING A STRAY SOUND
+some of you hear short music stings that come from nowhere. bug reports now also list sounds played by web pages and the bubble video. if you hear one, send an in-app bug report right away and it should name the source.
+
+

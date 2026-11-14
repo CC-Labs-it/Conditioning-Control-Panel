@@ -66,6 +66,10 @@ public class StudioRackRenderTests
         => OnStaThread(() => Realize(new BrainDrainFeatureControl(), 488, 640));
 
     [Fact]
+    public void WallpaperPanel_Realizes()
+        => OnStaThread(() => Realize(new WallpaperFeatureControl(), 488, 640));
+
+    [Fact]
     public void SchedulerRackPanel_Realizes()
         => OnStaThread(() => Realize(new SchedulerRackPanel(), 488, 640));
 
@@ -381,10 +385,56 @@ public class StudioRackRenderTests
     //  bark parity (pure — reads the shipped rule files, no WPF)
     // =====================================================================================
 
+    /// <summary>Studio is its only home: Settings keeps no section, pill or palette row for it.</summary>
+    [Fact]
+    public void WallpaperLivesInTheRackAndNotInSettings()
+    {
+        Assert.DoesNotContain("wallpaper", AppSettingsTabView.SectionKeys);
+        Assert.DoesNotContain(ConditioningControlPanel.Services.UI.NavSections.Order.SelectMany(s => s.Tabs), t => t.Key == "wallpaper");
+
+        var rows = SettingsPaletteIndex.All.Where(e => e.Id.Contains("wallpaper")).ToList();
+        var row = Assert.Single(rows);
+        Assert.Equal("rack.wallpaper", row.Id);
+        Assert.Equal("studio", row.TabKey);
+        Assert.Equal("wallpaper", row.RackKey);
+    }
+
+    /// <summary>The master by name, every dial by marker, and a Panel root for the lock banner.</summary>
+    [Fact]
+    public void TheSessionLockCoversTheWallpaperPanel()
+    {
+        OnStaThread(() =>
+        {
+            var panel = new StudioTabView().HostedFeaturePanels.OfType<WallpaperFeatureControl>().Single();
+
+            Assert.IsAssignableFrom<Panel>(panel.Content);
+            Assert.True(panel.FindName("ChkEnable") is CheckBox);
+
+            var owned = ConditioningControlPanel.Features.SessionLock.FindOwnedControls(panel).Select(c => c.Name).ToHashSet();
+            foreach (var name in new[] { "ChkEnable", "BtnWpStatic", "BtnWpDynamic", "BtnWpOwn", "BtnWpOwnBrowse",
+                                         "ChkWpRotate", "SliderWpInterval", "TxtWpInterval", "ChkWpRunWithCcp" })
+                Assert.True(owned.Contains(name), name + " stays live under the session lock");
+        });
+    }
+
+    /// <summary>A quick toggle never switches ON something that starts by itself (Run with CCP).</summary>
+    [Fact]
+    public void TheWallpaperRightClickIsOffOnly()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Views", "Tabs", "StudioTabView.xaml.cs"));
+        int at = code.IndexOf("Add(\"wallpaper\"", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        var row = code.Substring(at, code.IndexOf("});", at, StringComparison.Ordinal) - at);
+        Assert.Contains("CollageWallpaperEnabled == true", row);
+        Assert.Contains("PanelWallpaper?.SwitchOffFromRack()", row);
+        Assert.Contains("SelectEntry(\"wallpaper\"", row);
+        Assert.DoesNotContain("FlipMasterCheckBox", row);
+    }
+
     /// <summary>The rack's contract order. Duplicated here on purpose: this list IS the assertion.</summary>
     private static readonly string[] RackKeys =
     {
-        "flash", "video", "subliminal", "spiral", "pinkfilter", "visuals",
+        "flash", "video", "subliminal", "spiral", "pinkfilter", "wallpaper", "visuals",
         "bubbles", "bubblecount", "lockcard", "bouncingtext",
         "mindwipe", "braindrain", "haptics",
         "scheduler", "ramp",

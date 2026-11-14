@@ -40,6 +40,44 @@ export function boudoirBoxesIntersect(a, b, margin = 0) {
   return true;
 }
 
+/**
+ * `row => !corridors.some(c => boudoirBoxesIntersect(row, c))`, same answer, without testing every corridor
+ * (ccp-bugs #1543: that scan was most of a 12 s Boudoir build, past WebView2's hang monitor on slower PCs).
+ * Corridors sit in a coarse grid by bounding sphere; a row asks only the cells its own sphere touches, and
+ * a pair whose spheres are apart by more than SLACK is skipped (boudoirBoxesIntersect would say false
+ * there too). Anything within SLACK still runs the exact test, so the plan stays byte for byte the same.
+ */
+const CELL = 48, SLACK = 1e-3;
+export function corridorClearance(corridors) {
+  const r = row => Math.hypot(...bound(row));
+  const items = corridors.map(c => ({ c, x: c.p[0], y: c.p[1], z: c.p[2], r: r(c) }));
+  const cells = new Map(), key = (i, j, k) => i + ',' + j + ',' + k;
+  const span = (v, rad) => [Math.floor((v - rad) / CELL), Math.floor((v + rad) / CELL)];
+  let maxR = 0;
+  for (const it of items) {
+    maxR = Math.max(maxR, it.r);
+    const [x0, x1] = span(it.x, it.r), [y0, y1] = span(it.y, it.r), [z0, z1] = span(it.z, it.r);
+    for (let i = x0; i <= x1; i++) for (let j = y0; j <= y1; j++) for (let k = z0; k <= z1; k++) {
+      const id = key(i, j, k); let list = cells.get(id); if (!list) cells.set(id, list = []); list.push(it);
+    }
+  }
+  const hits = (row, rr, it) => {
+    const dx = it.x - row.p[0], dy = it.y - row.p[1], dz = it.z - row.p[2];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) <= rr + it.r + SLACK && boudoirBoxesIntersect(row, it.c);
+  };
+  return row => {
+    const rr = r(row);
+    const q = rr + SLACK, [x0, x1] = span(row.p[0], q), [y0, y1] = span(row.p[1], q), [z0, z1] = span(row.p[2], q);
+    // A room-sized row (the parquet, the frame) touches more cells than there are corridors: scan them all.
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > items.length) return !items.some(it => hits(row, rr, it));
+    for (let i = x0; i <= x1; i++) for (let j = y0; j <= y1; j++) for (let k = z0; k <= z1; k++) {
+      const list = cells.get(key(i, j, k));
+      if (list && list.some(it => hits(row, rr, it))) return false;
+    }
+    return true;
+  };
+}
+
 export function boudoirWorldPlan(track) {
   const layout = getBoudoirLayout(track); if (!layout) return null;
   if (plans.has(track)) return plans.get(track);
@@ -52,7 +90,7 @@ export function boudoirWorldPlan(track) {
     const surface = track.surfaceAt(f.s, f.w / 2 * share);
     corridors.push({ p: at(surface, 0, 6), size: [f.w / 5 + 2, 16, 8], axes: basisAt(surface) });
   }
-  const clear = row => !corridors.some(c => boudoirBoxesIntersect(row, c));
+  const clear = corridorClearance(corridors);
   let rejected = 0;
   function put(name, material, p, size, { shape = 'box', axes = WORLD, checked = true } = {}) {
     const row = { name, material, p, size, axes, shape };

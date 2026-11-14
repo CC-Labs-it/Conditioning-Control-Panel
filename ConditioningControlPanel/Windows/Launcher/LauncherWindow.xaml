@@ -425,16 +425,23 @@
                                            RenderOptions.BitmapScalingMode="HighQuality"
                                            RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False"/>
                                 </Popup>
-                                <!-- Sparkle Points, counted up by the odometer on every show. -->
-                                <StackPanel x:Name="SpChip" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
-                                    <Border Width="1" Height="14" Margin="10,0,8,0" Background="{DynamicResource GlassBorderBrush}"/>
-                                    <TextBlock Text="&#x25C6;" FontSize="10" Foreground="{DynamicResource PanelAccentBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="SpReadout" Text="0" Margin="5,0,0,0" FontSize="13" FontWeight="SemiBold"
-                                               FontFamily="/Fonts/#Fredoka, Segoe UI" Foreground="{DynamicResource TextLightBrush}"
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
+                        </Button>
+                        <!-- The wallet: Sparkles, counted up by the odometer on every show. A click opens
+                             the Prize Counter, the same door as the panel's SparkleWallet. Signed in only. -->
+                        <Button x:Name="WalletChip" Style="{StaticResource LauncherBarPill}" Visibility="Collapsed"
+                                ToolTip="{loc:Str shop_title}" AutomationProperties.Name="{loc:Str shop_title}"
+                                Click="WalletChip_Click" PreviewMouseLeftButtonDown="Press_Down" PreviewMouseLeftButtonUp="Press_Up"
+                                Padding="11,0,13,0" Margin="0,0,6,0" RenderTransformOrigin="0.5,0.5">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="M0,8 L6,0 12,8 6,16 Z M0,8 L12,8 M6,0 L4,8 6,16 8,8 Z"
+                                      Width="9" Height="12" Stretch="Fill" Fill="#FFD580" Stroke="#FFF0C5" StrokeThickness="0.6"
+                                      VerticalAlignment="Center"/>
+                                <TextBlock x:Name="SpReadout" Text="0" Margin="7,0,0,0" FontSize="13" FontWeight="SemiBold"
+                                           FontFamily="/Fonts/#Fredoka, Segoe UI" Foreground="{DynamicResource TextLightBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Button>
                         <!-- the active mod: a click lists the installed mods and "Manage mods" -->
                         <Button x:Name="ModPill" Style="{StaticResource LauncherBarPill}"

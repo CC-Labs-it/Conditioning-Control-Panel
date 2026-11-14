@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// an adorner whose element was collapsed, at the element's last spot, so the ring hung over the
 /// mosaic. The glow now leaves with its target.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class NavGlowLifetimeTests
 {
     private static void Pump()

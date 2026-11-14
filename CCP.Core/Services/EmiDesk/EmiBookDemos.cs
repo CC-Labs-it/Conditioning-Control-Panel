@@ -53,6 +53,7 @@ public static class EmiBookDemos
         all.AddRange(EmiBookDemosMachines.All);
         all.AddRange(EmiBookDemosControl.All);
         all.AddRange(EmiBookDemosPlaces.All);
+        all.AddRange(EmiBookDemosShop.All);
         var d = new Dictionary<string, EmiDemoPainter>(StringComparer.Ordinal);
         foreach (var p in all) d[p.Id] = p;
         return d;

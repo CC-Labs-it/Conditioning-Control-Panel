@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Deeper;
@@ -124,6 +125,9 @@ public sealed class SpeakCueOverlayTests
         if (Application.Current is null)
         {
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                // The cue builds glyph geometry before drawing. Use the same bundled font
+                // fallback as the desktop head so Linux does not depend on installed Segoe UI.
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();

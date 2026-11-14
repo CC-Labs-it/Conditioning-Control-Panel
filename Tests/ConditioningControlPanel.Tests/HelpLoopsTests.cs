@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Tests;
 ///
 /// Set HELP_LOOPS_SHOTS to a folder to also dump one PNG per scene at its still frame.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public sealed class HelpLoopsTests
 {
     public static readonly string[] DashboardIds =

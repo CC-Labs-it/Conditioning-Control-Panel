@@ -676,6 +676,7 @@ namespace ConditioningControlPanel
                 App.Logger?.Information("BubbleCountWindow.OnLoaded: Calling Play()...");
                 VideoDiag.Log("BUBBLE", $"win[{tag}]: Play() issued +{sw.ElapsedMilliseconds}ms");
                 var playResult = _mediaPlayer.Play(media);
+                if (_isPrimary && playResult) Services.Audio.EngineOffAudioLog.Note("bubblecount-video", _videoPath);
                 VideoDiag.Log("BUBBLE", $"win[{tag}]: Play() returned {playResult} +{sw.ElapsedMilliseconds}ms");
 
                 if (!playResult)

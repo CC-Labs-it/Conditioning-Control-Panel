@@ -185,6 +185,40 @@ internal sealed class FirstShowEffects : Control, IDisposable
         }
         a.Frame = a.Media == null || !moving ? 0 : (int)(age / a.Media.Delay) % a.Media.Frames.Count;
     }
+    // Match Pop's circular hit predicate in local physical pixels, like BubbleOverlay's native regions.
+    internal PixelRect[] BubbleInputRects(double scale)
+    {
+        var buf = Array.Empty<PixelRect>();
+        int n = BubbleInputRects(scale, ref buf);   // separate statement: buf[..Call(ref buf)] reads the old array
+        return buf[..n];
+    }
+    /// <summary>Fills <paramref name="rects"/> (grown, never shrunk) and returns the count; identical
+    /// adjacent rows merge into one rect, as BubbleOverlay.cs does.</summary>
+    internal int BubbleInputRects(double scale, ref PixelRect[] rects)
+    {
+        int n = 0;
+        if (_disposed || _time >= S.GatherAt) return 0;
+        foreach (var a in _actors)
+        {
+            if (!a.Bubble || a.Gone) continue;
+            double r = a.W * .52;
+            for (int y = Math.Max(0, (int)Math.Ceiling((a.Y - r) * scale)); y < Math.Min(H * scale, (a.Y + r) * scale); y++)
+            {
+                double dy = y / scale - a.Y, half = Math.Sqrt(Math.Max(0, r * r - dy * dy));
+                int left = Math.Max(0, (int)Math.Floor((a.X - half) * scale) + 1);
+                int right = Math.Min((int)(W * scale) - 1, (int)Math.Ceiling((a.X + half) * scale) - 1);
+                if (right < left) continue;
+                if (n > 0 && rects[n - 1] is var p && p.X == left && p.Width == right - left + 1 && p.Bottom == y)
+                    rects[n - 1] = new PixelRect(p.X, p.Y, p.Width, p.Height + 1);
+                else
+                {
+                    if (n == rects.Length) Array.Resize(ref rects, Math.Max(64, rects.Length * 2));
+                    rects[n++] = new PixelRect(left, y, right - left + 1, 1);
+                }
+            }
+        }
+        return n;
+    }
     /// <summary>WPF Pop (:310): a click on a live bubble pops it.</summary>
     public void Pop(double x, double y)
     {

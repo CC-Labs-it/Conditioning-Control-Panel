@@ -66,6 +66,27 @@ public class CompanionOnSwitchTests
         Assert.True(h >= 0 && h < sheet, "Hide companion sits on the page, not only inside the sheet");
     }
 
+    /// <summary>The same trap took the ask cards' off switch with it: a player could not turn the
+    /// companion's offers off at all (ask-support, 2026-11-01).</summary>
+    [Fact]
+    public void Permissions_page_carries_the_ask_cards_switch_outside_the_sheet()
+    {
+        var page = ReadSource("Views", "Controls", "Companion", "Pages", "PermissionsPage.xaml");
+        Assert.True(Mentions(page, "{loc:Str companion_asks_toggle}"), "the ask cards switch sits on a page a player can reach");
+        var code = ReadSource("Views", "Controls", "Companion", "Pages", "PermissionsPage.xaml.cs");
+        Assert.True(Mentions(code, "settings.CompanionAsksEnabled = ChkAsks.IsChecked == true"), "and it writes the setting");
+    }
+
+    /// <summary>The perk opt-out drops the quest popup and clip; a ding left behind plays with
+    /// nothing on screen to explain it.</summary>
+    [Fact]
+    public void Quest_ding_follows_the_perk_opt_out()
+    {
+        var app = ReadSource("App.xaml.cs");   // the port plays the ding behind Core's PlayCompletionEffectsProvider
+        Assert.True(Mentions(app, "if (!PerkNotificationsSuppressed) { SystemSounds.Exclamation.Play();"),
+            "the Windows ding respects the same switch as the popup");
+    }
+
     [Fact]
     public void Look_and_personality_offers_the_switch_where_it_says_the_companion_is_off()
     {

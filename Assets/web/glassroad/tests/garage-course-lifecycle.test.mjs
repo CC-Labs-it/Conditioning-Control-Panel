@@ -73,7 +73,7 @@ test('course replacement retains one post pipeline, renderer identity and option
     posts.push(post);return post;
   };
   t.after(()=>delete globalThis.__coursePost);
-  const renderer=await createRenderer({clientWidth:800,clientHeight:600,getContext:()=>null},
+  const renderer=await createRenderer({clientWidth:800,clientHeight:600,getContext:()=>({})},
     {forceRenderer:'webgl2',options:{quality:'high',frameCap:30,renderScale:.75}});
   const gpu=renderer.three,sceneA={},sceneB={},cameraA={},cameraB={},options=renderer.options;
   assert.deepEqual(gpu.bufferSize,[800,600,.75],'initial sizing uses the existing quality and resolution settings');

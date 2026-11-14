@@ -178,6 +178,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserLoadingText.IsVisible = prompt;
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
             BrowserWebHost.IsVisible = !prompt;
+            // Replace only a stuck Loading: Offline/Ready (UpdateOfflineModeUI, whose about:blank park and reload
+            // land here too) own the line, as WPF writes them whether or not the engine is up.
+            if (!BrowserWebHost.HasEngine && BrowserStatusLoading()) SetBrowserFailure(BrowserWebHost.FailureStatusKey);
+        }
+
+        private bool BrowserStatusLoading() => string.Equals(IconText.Bare(TxtBrowserStatus.Text).Trim(),
+            IconText.BareLoc("label_loading").Trim(), StringComparison.OrdinalIgnoreCase);
+
+        private void SetBrowserFailure(string key)
+        {
+            TxtBrowserStatus.Bind(TextBlock.TextProperty, LocBinding(key));
+            TxtBrowserStatus.Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromRgb(255, 107, 107));
         }
 
         /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the

@@ -554,6 +554,20 @@ pose). Gentle and OS reduced motion drop the edge flash and keep fades only; the
 - `contact.slipHoldS` 0.6: slingshot boost hold.
 - `contact.slipCooldownS` 2.5: no second slingshot for this.
 
+## karts (kart bodies, owner 2026-10-31; `sim/kartStats.js`, read from `r.feel.kart` by sim/kart.js, sim/drift.js, sim/contact.js)
+The table is global, the row is the racer's: `createRacers` puts one on `r.feel.kart`. Lovebomb is all ones and stays exactly the old kart. Solo takes the garage pick (`racers.setBody`, boot.js), online the seat's look; bots always drive the default (ai.paceMul and every course test were tuned on it). A missing or unknown body reads as the default. Editing a row applies from the next race start. Any edit here moves every course hash: regenerate the room cards and deploy the room in the same rollout.
+- `karts.default` lovebomb: the row for a missing or unknown body.
+- `karts.maxTopMul` the highest `topMul` in the table (a test holds them equal): the one limit a room holds every seat to, speed cap and `minLapS` both.
+- `karts.bodies`: one row per garage kart, `type` (the word, `TYPE_LABELS`) and the six multipliers below.
+- `topMul`: engine cap only. Never changes `speed.topMps`, `st[S.speedPct]` or a boost amount. Stays within +3% / -2.5%.
+- `accelMul`: throttle gain, the `engine.bandGains` term (power slide too).
+- `gripMul`: multiplies `kart.gripTcS`; higher is looser, slower to bite.
+- `driftMul`: divides `drift.tierS` (higher charges sooner) and multiplies `drift.yawMul` by `1 + (driftMul - 1) / 2`.
+- `wallMul`: multiplies `wall.engineLoss`; lower shrugs off rails.
+- `bumpMul`: the share of a contact push this kart takes (lower wins bumps). Item launches (a bubble ram) are not bumps.
+- Nothing touches `steer.*` or `assist.*`: steering at top speed is the same on every body (owner: no less control at speed).
+- Trade-offs only: no kart beats another on every stat (`tests/kart-stats.test.mjs`). `dev/kart-balance.mjs` prints the same bot's flying laps on every body and course; target within about 2% of Lovebomb. Dev: `?dev=1&kart=<id>` drives and wears a body in solo, owned or not.
+
 ## glide (Keep drawbridge)
 
 - `glide.gravityMps2` 6: descending gravity while jump is held after the drawbridge launch.

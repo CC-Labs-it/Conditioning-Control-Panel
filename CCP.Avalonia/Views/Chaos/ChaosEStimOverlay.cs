@@ -1,9 +1,8 @@
 // PORTED from ConditioningControlPanel/Chaos/ChaosEStimOverlay.cs (ChaosEStimOverlay + ChaosEStimGlow).
 // The maths (bolt path, strike timeline, halo follow and pulse) is Core's ChaosEStimMath; this file only draws.
 //
-// ponytail: nothing calls Strike/Arm yet. WPF fires them from BubbleService (charged pops, :440/:478/:1726)
-// and ChaosModeService's e_stim toy (:2770/:2800); neither the bubble field nor the toys exist on this head
-// (ChaosRunHost header). The e-stim DEVICE output is untouched here.
+// ponytail: Strike/Arm callers wait for charged-pop conduction and e_stim toy effects.
+// The bubble field and toy buttons exist, but their e-stim effects do not. Device output is untouched.
 
 using System;
 using System.Collections.Generic;
@@ -25,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
     /// E-Stim's lightning: jagged tether bolts arcing bubble-to-bubble for a quarter second, on one
-    /// click-through primary-screen window (WPF ChaosEStimOverlay). Created on the first strike, hidden
+    /// click-through stage window (WPF ChaosEStimOverlay). Pre-created at run start, hidden
     /// between strikes, closed only by <see cref="CloseActive"/> (run end, panic). Refuses where there is
     /// no compositor: without per-pixel alpha the "window" would be an opaque screen-sized block.
     /// </summary>
@@ -54,6 +53,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (Dispatcher.UIThread.CheckAccess()) a(); else Dispatcher.UIThread.Post(a);
         }
 
+        internal static Action<Window> RaiseWindow = w => X11Overlay.Raise(w);
+
+        /// <summary>WPF ChaosEStimOverlay.cs:46,329: realize both windows once, then idle hidden.</summary>
+        public static void EnsureCreated() => OnUi(() =>
+        {
+            ChaosEStimGlow.EnsureCreated();
+            try { Create(); }
+            catch (Exception ex) { Log.Debug("ChaosEStim.EnsureCreated: {E}", ex.Message); }
+        });
+
+        private static ChaosEStimOverlay? Create()
+        {
+            if (_active != null) return _active;
+            if (Refused || !CanShow()) return null;
+            var w = new ChaosEStimOverlay(sample: false);
+            if (!w.Prepare()) { Refused = true; w.Close(); return null; }
+            w.Show();
+            w.Hide();
+            return _active = w;
+        }
+
+        // ponytail: the gameplay-layer re-stack caller waits for chaos mandatory-video integration.
+        /// <summary>WPF ChaosEStimOverlay.cs:100,397: re-stack live windows without unhiding them.</summary>
+        public static void RaiseActive()
+        {
+            if (_active is { IsVisible: true } w) RaiseWindow(w);
+            ChaosEStimGlow.RaiseActive();
+        }
+
         /// <summary>Fire one strike along <paramref name="boltsPx"/> (physical-pixel segment endpoints,
         /// in strike order): flicker for the hot window, fade, hide. Safe from any thread.</summary>
         public static void Strike(IReadOnlyList<(PixelPoint From, PixelPoint To)> boltsPx)
@@ -63,16 +91,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 try
                 {
-                    if (Refused || !CanShow()) { Log.Debug("ChaosEStim: no composited click-through overlay here, no lightning"); return; }
-                    if (_active == null)
-                    {
-                        var w = new ChaosEStimOverlay(sample: false);
-                        if (!w.Prepare()) { Refused = true; w.Close(); return; }
-                        _active = w;
-                    }
-                    if (!_active.IsVisible) _active.Show();
-                    X11Overlay.Raise(_active);   // un-hiding doesn't re-stack (WPF RaiseAboveVideo)
-                    _active.BeginStrike(boltsPx);
+                    var w = Create();
+                    if (w == null) return;
+                    if (!w.IsVisible) w.Show();
+                    RaiseWindow(w);   // un-hiding doesn't re-stack (WPF RaiseAboveVideo)
+                    w.BeginStrike(boltsPx);
                 }
                 catch (Exception ex) { Log.Debug("ChaosEStim.Strike: {E}", ex.Message); }
             });
@@ -224,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try { Hide(); } catch (Exception ex) { Log.Debug("ChaosEStim hide: {E}", ex.Message); }
         }
 
+        internal bool IsTicking => _tick.IsEnabled;
         internal int BoltCount => _segments.Count;
         internal double StrikeAlpha => _alpha;
     }
@@ -239,23 +263,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static ChaosEStimGlow? Active => _active;
         internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
 
+        internal static void EnsureCreated()
+        {
+            try { Create(); }
+            catch (Exception ex) { Log.Debug("ChaosEStimGlow.EnsureCreated: {E}", ex.Message); }
+        }
+
+        private static ChaosEStimGlow? Create()
+        {
+            if (_active != null) return _active;
+            if (ChaosEStimOverlay.Refused || !ChaosEStimOverlay.CanShow()) return null;
+            var w = new ChaosEStimGlow();
+            if (!w.Prepare()) { ChaosEStimOverlay.Refused = true; w.Close(); return null; }
+            // Realize without flashing the halo at the desktop origin.
+            w.Opacity = 0;
+            w.Show();
+            w.Hide();
+            w.Opacity = 1;
+            return _active = w;
+        }
+
+        internal static void RaiseActive()
+        {
+            if (_active is { IsVisible: true } w) ChaosEStimOverlay.RaiseWindow(w);
+        }
+
         /// <summary>Charges armed: show the halo and follow the cursor. Safe from any thread.</summary>
         public static void Arm() => ChaosEStimOverlay.OnUi(() =>
         {
             try
             {
-                if (ChaosEStimOverlay.Refused || !ChaosEStimOverlay.CanShow()) { Log.Debug("ChaosEStimGlow: no composited overlay here, no halo"); return; }
-                if (_active == null)
-                {
-                    var w = new ChaosEStimGlow();
-                    if (!w.Prepare()) { ChaosEStimOverlay.Refused = true; w.Close(); return; }
-                    _active = w;
-                }
-                _active._start = ChaosEStimOverlay.Clock.GetTimestamp();
-                _active.Step();   // snap to the cursor before the first frame
-                if (!_active.IsVisible) _active.Show();
-                X11Overlay.Raise(_active);
-                _active._follow.Start();
+                var w = Create();
+                if (w == null) return;
+                w._start = ChaosEStimOverlay.Clock.GetTimestamp();
+                w.Step();   // snap to the cursor before the first frame
+                if (!w.IsVisible) w.Show();
+                ChaosEStimOverlay.RaiseWindow(w);
+                w._follow.Start();
             }
             catch (Exception ex) { Log.Debug("ChaosEStimGlow.Arm: {E}", ex.Message); }
         });
@@ -276,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try { w._follow.Stop(); w.Close(); } catch (Exception ex) { Log.Debug("ChaosEStimGlow close: {E}", ex.Message); }
         });
 
+        internal bool IsTracking => _follow.IsEnabled;
         private readonly FrameClock _follow;
         private readonly ScaleTransform _pulse = new(1, 1);
         private long _start;

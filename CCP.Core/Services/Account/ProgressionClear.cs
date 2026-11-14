@@ -58,6 +58,8 @@ namespace ConditioningControlPanel.Services
             s.IsSeason0Og = false;
             s.CurrentSeason = null;
             s.PatreonTier = 0;
+            s.GraceClosedTier = null;
+            s.GraceClosedAtUtc = null;
             s.InviteGrantUntil = null; // an invite week is the old account's, never the next one's
             // Same for what the server said about the old account: none of it follows to the next one.
             s.ServerTierSeen = null;

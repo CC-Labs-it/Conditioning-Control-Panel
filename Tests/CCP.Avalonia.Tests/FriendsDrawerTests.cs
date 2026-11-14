@@ -26,7 +26,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The friends rail chip and drawer over the real Core FriendsService, its wire faked in
 /// process (never a server), and the service's timer seam.</summary>
-public sealed class FriendsDrawerTests
+public sealed partial class FriendsDrawerTests
 {
     private const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
@@ -117,11 +117,11 @@ public sealed class FriendsDrawerTests
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"flavour\"") && s.Contains("\"id\":\"trance\""));
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"ht\"") && s.Contains("\"id\":\"" + FriendsDrawerRules.NormaliseHtId("ht-1234!") + "\""));
 
-        // The Goon room and the chess board are not hosted on this head: those tiles are shut and say why.
+        // Goon waits for its host; chess challenges use the board host.
         Click(d, "friends-action:invite");
         Assert.Equal("invite", d.OpenPicker);
-        foreach (var shut in new[] { InviteDestination.Goon, InviteDestination.Chess })
-            Assert.False(Tagged<Button>(d, "friends-invite:" + shut)!.IsEnabled);
+        Assert.False(Tagged<Button>(d, "friends-invite:" + InviteDestination.Goon)!.IsEnabled);
+        Assert.True(Tagged<Button>(d, "friends-invite:" + InviteDestination.Chess)!.IsEnabled);
         Click(d, "friends-invite:" + InviteDestination.BackRoom);
         Assert.Equal(SendResult.Sent, await d.InviteAsync("u_on", InviteDestination.Ramp, null));
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"invite\"") && s.Contains("\"destination\":\"backroom\""));
@@ -134,6 +134,27 @@ public sealed class FriendsDrawerTests
         Assert.Null(d.OpenPicker);
     });
 
+    [Fact]
+    public Task ChessPickerWaitsForTheChallengeBeforeSendingItsInvite() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var old = FriendsInviteCodes.ChallengeFriend;
+        var ready = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, wire) = Service();
+        try
+        {
+            FriendsInviteCodes.ChallengeFriend = (id, timeout) => { Assert.Equal("u_on", id); Assert.Equal(TimeSpan.FromSeconds(45), timeout); return ready.Task; };
+            var d = new FriendsRailChip(svc).Drawer;
+            await svc.RefreshAsync(); d.Toggle("u_on");
+            Click(d, "friends-action:invite"); Click(d, "friends-invite:chess");
+            Assert.Empty(wire.Sends);
+            ready.SetResult("c_0123456789abcdef");
+            await Until(() => wire.Sends.Count > 0);
+            Assert.Contains("\"destination\":\"chess\"", wire.Sends.Single());
+            Assert.Contains("c_0123456789abcdef", wire.Sends.Single());
+        }
+        finally { FriendsInviteCodes.ChallengeFriend = old; svc.Dispose(); }
+    });
+
     /// <summary>WPF ShowResult: a send answered after the drawer folded says so outside, over the rail chip's
     /// window (the drawer itself sits in a popup root, then detached). Driven from the rail chip's click.</summary>
     [Fact]
@@ -143,7 +164,7 @@ public sealed class FriendsDrawerTests
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont()
                 .With(AppFonts.Options())
-                .ConfigureFonts(AppFonts.Register).UseSkia()
+                .ConfigureFonts(AppFonts.Register).WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, wire) = Service();
         var chip = new FriendsRailChip(svc) { Width = 200, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom };
@@ -261,7 +282,7 @@ public sealed class FriendsDrawerTests
                 .WithInterFont()
                 .With(AppFonts.Options())
                 .ConfigureFonts(AppFonts.Register)
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (svc, _) = Service();
         var chip = new FriendsRailChip(svc);
@@ -492,7 +513,7 @@ public sealed class FriendsDrawerTests
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont()
                 .With(AppFonts.Options())
-                .ConfigureFonts(AppFonts.Register).UseSkia()
+                .ConfigureFonts(AppFonts.Register).WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsDrawer(svc);
@@ -670,7 +691,7 @@ public sealed class FriendsDrawerTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var feed = new FriendsFeed(() => "u_me");
         var chip = new FriendsRailChip(svc);
@@ -706,9 +727,14 @@ public sealed class FriendsDrawerTests
             Assert.Equal("d", d.FeedLineKeys[0]);
             Assert.Equal(0, feed.Unread);
 
-            // Folded and reopened: nothing new, so FoldMin lines and "more" for the rest.
+            // WPF FriendsRailChip.cs:388: a dismissing press cannot reopen for 250 ms.
             chip.Toggle();
             chip.Toggle();
+            Assert.False(chip.IsOpen);
+            await Task.Delay(260);
+            chip.Toggle();
+            Assert.True(chip.IsOpen);
+            // Reopened: nothing new, so FoldMin lines and "more" for the rest.
             Assert.Equal(FriendsFeedRules.FoldMin, d.FeedLineKeys.Count);
             Assert.Null(Tagged<TextBlock>(d, "friends-feed-count"));
             Assert.DoesNotContain(d.GetLogicalDescendants().OfType<Control>(), c => c.Tag as string == "friends-feed-new");
@@ -755,7 +781,7 @@ public sealed class FriendsDrawerTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register).UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsRailChip(svc).Drawer;
         d.FeedSource = () => null;

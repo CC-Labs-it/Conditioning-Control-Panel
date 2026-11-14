@@ -25,6 +25,32 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class ShellSettingsWiringTests
 {
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public Task SaveDrawsTheTickAndRippleUnlessMotionIsOff(MotionLevel level) => Run(async (shell, service) =>
+    {
+        service.Current.MotionLevel = level;
+        var tick = shell.Named<global::Avalonia.Controls.Shapes.Path>("SaveTick")!;
+        var ripple = shell.Named<Border>("SaveRipple")!;
+        Click(shell.Named<Button>("BtnSaveAll")!);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        if (level == MotionLevel.Off)
+        {
+            Assert.Equal(0, tick.Opacity);
+            Assert.Equal(0, ripple.Opacity);
+        }
+        else
+        {
+            Assert.True(tick.Opacity > 0.5, $"tick opacity {tick.Opacity}");
+            // The ripple fades 0.75 -> 0 in 520ms of wall clock; a slow runner reads it late (0.097 seen
+            // in rgate 39872884951), so only "it started" is stable. Off stays exactly 0.
+            Assert.True(ripple.Opacity > 0, $"ripple opacity {ripple.Opacity}");
+        }
+        (await Dialog<MessageDialog>(shell)).Close();
+    });
+
     [Fact]
     public Task HelpRowsStartTheirTourAndPanicRestoresTheBrowser() => Run(async (shell, _) =>
     {

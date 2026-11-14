@@ -7,6 +7,14 @@
  * player's chosen ids come in through `want` and an unknown id falls back to the default look.
  */
 
+/** The Prize Counter's kart pieces (lane B3-G1): worn only by a player who owns them, never picked for a bot. */
+export const SHOP_PIECES = Object.freeze({
+  outfits: Object.freeze(['emi-outfit-pit-crew', 'emi-outfit-ringmaster', 'emi-outfit-ballerina']),
+  umbrellas: Object.freeze({ lace: 'umbrella-lace' }),
+  trails: Object.freeze({ podium: 'podium-trail' }),
+  paints: Object.freeze(['hearts', 'spiral', 'host-gold']),
+});
+
 /** The catalog from the two jsons (either may be null: then it has no entries). */
 export function catalogFrom(wardrobe, variants) {
   const base = (wardrobe && wardrobe.baseSha256) || (variants && variants.baseSha256) || null;
@@ -15,6 +23,7 @@ export function catalogFrom(wardrobe, variants) {
     base,
     joints: ((wardrobe && wardrobe.jointNames) || (variants && variants.jointNames) || []).slice(),
     outfits: okBase(wardrobe) ? (wardrobe.outfits || []).map((o) => o.id) : [],
+    shopOutfits: SHOP_PIECES.outfits.slice(),
     vehicles: okBase(variants) ? (variants.vehicles || []).map((v) => v.id) : [],
     removeJoints: (variants && variants.replacement && variants.replacement.removedJointNames) || [],
     removedTriangles: (variants && variants.replacement && variants.replacement.removedTriangles) || 0,
@@ -39,9 +48,11 @@ export const DEFAULT_LOOK = Object.freeze({ outfit: null, vehicle: null });
 export function lookForSeat(seat, seed, catalog, want = undefined) {
   const C = catalog || { outfits: [], vehicles: [] };
   if (want !== undefined && want !== null) {
+    const shop = C.shopOutfits || [];
     return {
-      outfit: C.outfits.includes(want.outfit) ? want.outfit : null,
+      outfit: C.outfits.includes(want.outfit) || shop.includes(want.outfit) ? want.outfit : null,
       vehicle: C.vehicles.includes(want.vehicle) ? want.vehicle : null,
+      ...shopExtras(want),
     };
   }
   if (!(seat > 0)) return { ...DEFAULT_LOOK };
@@ -49,6 +60,16 @@ export function lookForSeat(seat, seed, catalog, want = undefined) {
   const outfit = n ? C.outfits[(seat - 1 + h) % n] : null;
   const k = v ? (seat + (h >> 3)) % (v + 1) : 0;
   return { outfit, vehicle: k ? C.vehicles[k - 1] : null };
+}
+
+/** The shop extras of a want (paint, umbrella, trail) that this build knows; unknown ones are dropped. */
+export function shopExtras(want) {
+  const out = {};
+  if (!want || typeof want !== 'object') return out;
+  if (SHOP_PIECES.paints.includes(want.paint)) out.paint = want.paint;
+  if (Object.hasOwn(SHOP_PIECES.umbrellas, String(want.umbrella))) out.umbrella = want.umbrella;
+  if (Object.hasOwn(SHOP_PIECES.trails, String(want.trail))) out.trail = want.trail;
+  return out;
 }
 
 /** True when names is exactly the joint set (order free). */
@@ -84,5 +105,25 @@ export function cutIndex(index, joints, weights, remove, eps = 1e-3) {
 
 /** Phone tier: the vehicles drop to the teacup (fewer triangles and draws); outfits stay, they name the rival. */
 export function lookForTier(look, tierName) {
-  return tierName === 'phone' ? { outfit: look.outfit, vehicle: null } : look;
+  return tierName === 'phone' ? { ...look, vehicle: null } : look;
+}
+
+/** The lace umbrella's IN and OUT (desk run 2026-10-30, it popped in and out): seconds to open and to fold, longer
+ *  under Gentle. */
+export const UMBRELLA_TWEEN = Object.freeze({ openS: 0.3, foldS: 0.2, gentleOpenS: 0.5, gentleFoldS: 0.38 });
+
+/** One step of the umbrella's openness u (0 folded away, 1 open) toward `on`. */
+export function umbrellaStep(u, on, dt, gentle = false) {
+  const T = UMBRELLA_TWEEN, s = on ? (gentle ? T.gentleOpenS : T.openS) : (gentle ? T.gentleFoldS : T.foldS);
+  const d = Math.max(0, dt || 0) / s;
+  return on ? Math.min(1, u + d) : Math.max(0, u - d);
+}
+
+/** The canopy at openness u: { radial, height } scales about the handle's foot. Opening glides out with a small
+ *  overshoot (ease-out-back; Gentle a plain ease-out, no overshoot); folding starts slow and snaps shut. u = 1 is
+ *  exactly { 1, 1 } either way. */
+export function umbrellaShape(u, opening, gentle = false) {
+  const t = Math.min(1, Math.max(0, u)), r = t - 1;
+  const e = !opening ? 1 - r * r : gentle ? 1 - Math.abs(r * r * r) : 1 + 2.6 * r * r * r + 1.6 * r * r;
+  return { radial: 0.08 + 0.92 * e, height: 0.5 + 0.5 * Math.min(1, e) };
 }

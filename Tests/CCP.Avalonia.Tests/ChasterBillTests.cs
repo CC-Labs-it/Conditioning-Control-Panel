@@ -48,10 +48,7 @@ public sealed class ChasterBillTests
     /// <summary>A linked service, the tab on with prices, and a shown shell.</summary>
     internal static async Task Run(Func<ChasterService, MainShellWindow, Task> body)
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
@@ -226,6 +223,7 @@ public sealed class ChasterBillTests
             var layer = AdornerLayer.GetAdornerLayer(shell.Named<ChasterRailChip>("ChasterRail")!)!;
             var flash = layer.Children.OfType<ChasterBookedFlash>().Single();
             Assert.Equal(CircesTab.Format(first.AppliedSeconds), flash.Figure.Text);
+            Assert.Equal(Application.Current!.Resources[FontGuard.MonoResourceKey], flash.Figure.FontFamily);
             Assert.Equal(Color.FromUInt32(BookedFlashPlan.AddColour), ((ISolidColorBrush)flash.Figure.Foreground!).Color);
 
             clock.Advance(TimeSpan.FromMilliseconds(BookedFlashPlan.CoalesceMs - 1));

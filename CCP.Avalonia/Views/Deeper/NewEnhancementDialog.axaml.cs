@@ -1,4 +1,7 @@
 using System.Collections.Generic;
+using ConditioningControlPanel.Avalonia.Tours;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
@@ -8,24 +11,18 @@ using ConditioningControlPanel.Models.Deeper;
 
 namespace ConditioningControlPanel.Avalonia.Views.Deeper
 {
-    /// <summary>
-    /// PORTED from ConditioningControlPanel/Views/Deeper/NewEnhancementDialog.xaml.cs. Deviations:
-    ///  - DialogResult becomes Close(bool); callers use ShowDialog&lt;bool&gt;.
-    ///  - OpenFileDialog becomes the StorageProvider file picker.
-    ///  - The three interactive tutorials remain in follow-up lane
-    ///    wire-views-deeper-new-enhancement-dialog-b: the legacy overlay's native input region
-    ///    and automatic advancement need porting before the walkthroughs can be enabled.
-    ///    Known-video sample selection is shared with WPF through HypnotubeDefaultLinks.
-    /// </summary>
+    // WPF NewEnhancementDialog: Part 1 here, success-only Part 2 in the editor.
     public partial class NewEnhancementDialog : Window
     {
         public string SelectedMediaType { get; private set; } = MediaTypes.Video;
         public string SelectedSource { get; private set; } = "";
 
+        private string? _pendingPart2Tutorial;
+        private TutorialOverlay? _activeTutorialOverlay;
+
         private readonly RadioButton _rbVideo;
         private readonly RadioButton _rbAudio;
         private readonly TextBox _txtSource;
-        private readonly TextBlock _txtError;
 
         public NewEnhancementDialog()
         {
@@ -34,14 +31,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _rbVideo = this.FindControl<RadioButton>("RbVideo")!;
             _rbAudio = this.FindControl<RadioButton>("RbAudio")!;
             _txtSource = this.FindControl<TextBox>("TxtSource")!;
-            _txtError = this.FindControl<TextBlock>("TxtError")!;
 
             this.FindControl<Button>("BtnBrowse")!.Click += async (_, _) => await BrowseAsync();
-            this.FindControl<Button>("BtnLocalVideoTutorial")!.Click += (_, _) => { _rbVideo.IsChecked = true; StartInteractiveTutorial(); };
-            this.FindControl<Button>("BtnLocalAudioTutorial")!.Click += (_, _) => { _rbAudio.IsChecked = true; StartInteractiveTutorial(); };
+            this.FindControl<Button>("BtnLocalVideoTutorial")!.Click += (_, _) => { _rbVideo.IsChecked = true; StartInteractiveTutorial(TutorialType.DeeperEditorInteractiveLocalVideo, TutorialType.DeeperEditorInteractiveLocalVideoPart2); };
+            this.FindControl<Button>("BtnLocalAudioTutorial")!.Click += (_, _) => { _rbAudio.IsChecked = true; StartInteractiveTutorial(TutorialType.DeeperEditorInteractiveLocalAudio, TutorialType.DeeperEditorInteractiveLocalAudioPart2); };
             this.FindControl<Button>("BtnTryHypnoTubeTutorial")!.Click += (_, _) => BtnTryHypnoTubeTutorial_Click();
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => Close(false);
-            this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
+            this.FindControl<Button>("BtnCreate")!.Click += async (_, _) => await BtnCreateAsync();
+            Closed += (_, _) =>
+            {
+                // Part 2 uses a fresh overlay after layout settles; detach Part 1 now so
+                // deferred input from this dialog cannot advance the editor's tour.
+                _activeTutorialOverlay?.Close();
+                _activeTutorialOverlay = null;
+            };
         }
 
         private async System.Threading.Tasks.Task BrowseAsync()
@@ -52,21 +55,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             IStorageFolder? start = null;
             try { start = await StorageProvider.TryGetFolderFromPathAsync(DeeperEditorWindow.LastDirectory); }
             catch { /* a folder that will not resolve just leaves the picker where the OS had it */ }
-            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            var overlay = _activeTutorialOverlay;
+            var restore = overlay?.IsOnStage == true;
+            if (restore) overlay!.Hide();
+            try
             {
-                Title = Loc.Get(isVideo ? "deeper_dialog_pick_video" : "deeper_dialog_pick_audio"),
-                SuggestedStartLocation = start,
-                AllowMultiple = false,
-                FileTypeFilter = new List<FilePickerFileType>
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
                 {
-                    isVideo
-                        ? new FilePickerFileType("Video files") { Patterns = new[] { "*.mp4", "*.webm", "*.mkv", "*.mov", "*.avi", "*.m4v" } }
-                        : new FilePickerFileType("Audio files") { Patterns = new[] { "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg" } },
-                    FilePickerFileTypes.All,
-                },
-            });
-            if (files.Count > 0)
-                _txtSource.Text = files[0].TryGetLocalPath() ?? files[0].Path.ToString();
+                    Title = Loc.Get(isVideo ? "deeper_dialog_pick_video" : "deeper_dialog_pick_audio"),
+                    SuggestedStartLocation = start,
+                    AllowMultiple = false,
+                    FileTypeFilter = new List<FilePickerFileType>
+                    {
+                        isVideo
+                            ? new FilePickerFileType("Video files") { Patterns = new[] { "*.mp4", "*.webm", "*.mkv", "*.mov", "*.avi", "*.m4v" } }
+                            : new FilePickerFileType("Audio files") { Patterns = new[] { "*.mp3", "*.wav", "*.m4a", "*.aac", "*.flac", "*.ogg" } },
+                        FilePickerFileTypes.All,
+                    },
+                });
+                if (files.Count > 0)
+                    _txtSource.Text = files[0].TryGetLocalPath() ?? files[0].Path.ToString();
+            }
+            finally
+            {
+                if (restore && IsVisible && !overlay!.HasClosed && ReferenceEquals(overlay, _activeTutorialOverlay)) overlay!.Show();
+            }
         }
 
         private void BtnTryHypnoTubeTutorial_Click()
@@ -91,30 +104,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             catch { /* a settings write must never take the dialog down */ }
 
-            StartInteractiveTutorial();
+            StartInteractiveTutorial(TutorialType.DeeperEditorInteractiveHT, TutorialType.DeeperEditorInteractiveHTPart2);
         }
 
-        /// <summary>
-        /// ponytail: wire-views-deeper-new-enhancement-dialog-b owns the remaining walkthroughs.
-        /// TutorialHead already seeds CoreTutorial and CoreTutorialEvents already carries Part 2.
-        /// The legacy TutorialOverlay still lacks automatic control/event advancement and native
-        /// partial input regions; opening it here would obscure the Browse/Create controls.
-        /// Port those interactions with success-only editor continuation before enabling the tours.
-        /// </summary>
-        private void StartInteractiveTutorial()
+        private void StartInteractiveTutorial(TutorialType part1, TutorialType part2)
         {
+            _pendingPart2Tutorial = part2.ToString();
+            try
+            {
+                _activeTutorialOverlay?.Close();
+                if (CoreTutorial.IsActive) CoreTutorial.Skip();
+                CoreTutorial.Start(part1.ToString());
+                if (!CoreTutorial.IsActive) return;
+                var overlay = new TutorialOverlay(this);
+                _activeTutorialOverlay = overlay;
+                overlay.Closed += (_, _) =>
+                {
+                    if (ReferenceEquals(_activeTutorialOverlay, overlay)) _activeTutorialOverlay = null;
+                };
+                overlay.Show();
+            }
+            catch (System.Exception ex)
+            {
+                Serilog.Log.Warning(ex, "Failed to start interactive tutorial Part 1");
+            }
         }
 
-        private void BtnCreate_Click()
+        private async System.Threading.Tasks.Task BtnCreateAsync()
         {
             var source = _txtSource.Text?.Trim() ?? "";
             if (string.IsNullOrEmpty(source))
             {
-                _txtError.IsVisible = true;
+                var overlay = _activeTutorialOverlay;
+                var restore = overlay?.IsOnStage == true;
+                if (restore) overlay!.Hide();
+                try { await MessageDialog.ShowAsync(this, Loc.Get("deeper_dialog_new_title"), Loc.Get("deeper_dialog_source_required")); }
+                finally { if (restore && IsVisible && !overlay!.HasClosed && ReferenceEquals(overlay, _activeTutorialOverlay)) overlay!.Show(); }
                 return;
             }
             SelectedMediaType = _rbVideo.IsChecked == true ? MediaTypes.Video : MediaTypes.Audio;
             SelectedSource = source;
+            if (_pendingPart2Tutorial != null) CoreTutorialEvents.PendingPart2Tutorial = _pendingPart2Tutorial;
             Close(true);
         }
     }

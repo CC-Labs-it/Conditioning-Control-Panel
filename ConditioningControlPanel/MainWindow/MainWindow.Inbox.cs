@@ -170,18 +170,19 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>The lapse rows (proposals 4a, 4b): 7 / 3 / 1 days before the grace end once the
-        /// server has reported a lower tier, then one closed row. A dead Patreon grant gets the
+        /// server has reported a lower tier, then one closed row. Since a confirmed reading ends the
+        /// grace, the warnings only show for a window a running session held open (owner, 2026-11-01:
+        /// no advance warning). A dead Patreon grant gets the
         /// Reconnect copy instead, never a lapse row. True when a stamp changed.</summary>
         private bool MaybePostLapseRow(Models.AppSettings settings)
         {
             // Never from memory alone: the server must have answered this run (it may have just cleared the reading).
             if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return false;
-            var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(settings.PatreonTier, settings.ServerTierSeen,
-                settings.PatreonPremiumValidUntil, settings.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
+            var reading = Services.Startup.Conversion.ConversionRules.DecideLapseFor(settings, DateTime.UtcNow);
             if (reading.Row == Services.Startup.Conversion.LapseRow.None || LiveCovers(reading.Tier)) return false;
             var stamps = settings.InboxStamps;
 
-            if (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer())
+            if (Services.EntitlementTierRule.ClosedTierNow(settings, DateTime.UtcNow) == null && (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer()))
             {
                 var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
                 const string reconnectKey = Services.Startup.Conversion.ConversionRules.KeyLapseReconnect;

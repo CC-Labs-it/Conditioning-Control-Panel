@@ -22,6 +22,7 @@ namespace ConditioningControlPanel.Tests;
 ///
 /// <para>Set CCP_NAV_FINAL_DIR to a folder to also save header-xp-band.png.</para>
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class HeaderLevelChipRenderTests
 {
     private const double BandWidth = 1469;

@@ -2,6 +2,26 @@
 import {getGoonworksLayout} from '../track/goonworks-layout.js';
 import {V3} from './mediaMath.js';
 
+/** Joined eight-corner wall sections have one exterior skin, with no stacked box caps. */
+export function goonworksWallGeometry(rows){
+  const P=[],N=[],U=[],I=[],{sub,cross,norm,dot}=V3,faces=[[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]],shared=new Map();
+  const key=(row,face)=>face.map(i=>row.wallCorners[i].map(v=>v.toFixed(6)).join(',')).sort().join('|');
+  for(const row of rows)for(const face of faces){const id=key(row,face);shared.set(id,(shared.get(id)||0)+1);}
+  for(const row of rows){
+    const corners=row.wallCorners;
+    for(const face of faces){
+      if(shared.get(key(row,face))>1)continue;
+      const vertices=face.map(i=>corners[i]),center=vertices[0].map((_,k)=>vertices.reduce((sum,p)=>sum+p[k]/4,0));
+      let normal=norm(cross(sub(vertices[1],vertices[0]),sub(vertices[2],vertices[0])));
+      if(dot(normal,sub(center,row.p))<0){vertices.reverse();normal=normal.map(v=>-v);}
+      const start=P.length/3;
+      for(const p of vertices){P.push(...p);N.push(...normal);U.push(p[0]+p[2],p[1]);}
+      I.push(start,start+1,start+2,start,start+2,start+3);
+    }
+  }
+  return{positions:new Float32Array(P),normals:new Float32Array(N),uvs:new Float32Array(U),indices:new Uint32Array(I)};
+}
+
 /** Shared longitudinal rings make the rabbit shell continuous through every bend. */
 export function goonworksTubeShell(track, outer=false){
   const range=getGoonworksLayout(track)?.tube;if(!range)return null;

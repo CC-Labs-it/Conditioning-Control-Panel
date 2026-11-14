@@ -32,6 +32,9 @@ namespace ConditioningControlPanel.Models
         public const string Dtrh = "dtrh";
         public const string Race = "race";
         public const string PieceByPiece = "pbp";
+        // 7.2: Racing Thoughts 3D (a Glassroad window opened) and a Prize Counter buy that landed.
+        public const string Race3d = "race3d";
+        public const string Shop = "shop";
 
         /// <summary>
         /// The day-log event key (<see cref="FeatureDayEntry.EventKeys"/>) a season feature key
@@ -44,6 +47,7 @@ namespace ConditioningControlPanel.Models
             Bubbles => "e_bb", BubbleCount => "e_bc", BouncingText => "e_bt", LockCard => "e_lk",
             MindWipe => "e_mw", PopQuiz => "e_pq", BlinkTrainer => "e_bl", Companion => "e_cp",
             ChaosMode => "e_ch", Dtrh => "e_dt", Race => "e_rc", PieceByPiece => "e_pb",
+            Race3d => "e_race3d", Shop => "e_shop",
             _ => null
         };
 

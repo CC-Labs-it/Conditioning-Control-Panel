@@ -165,6 +165,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     RadiusY = 8,
                 };
             }
+            // WPF ProgramsTab.cs:1770-1800 retries until measured. Layout can precede the next tick.
+            RefreshLiveSessionProgress();
         }
 
         // ---- BROWSE DATA ----------------------------------------------------------
@@ -351,7 +353,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// True only on the rebuild immediately after the task flipped to complete. On WPF this
-        /// drove the card's pop storyboard, which is dropped here.
+        /// drives the card and done-chip springs on the shared beat here.
         /// </summary>
         public bool JustCompleted { get; set; }
 

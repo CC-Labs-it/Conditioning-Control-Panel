@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Tests;
 /// loads. This suite realizes the control on the shared STA thread and reads the pixels back,
 /// so that failure lands here instead.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class SparkleWalletRenderTests
 {
     [Fact]

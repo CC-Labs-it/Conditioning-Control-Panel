@@ -177,7 +177,7 @@ async function run(backend, httpPort) {
     }
     if (st) await shot('end');
     const ev = (st && st.events) || {}, pick = (re) => Object.fromEntries(Object.entries(ev).filter(([k]) => re.test(k)));
-    report.final = st && { phase: st.phase, backend: st.backend, tier: st.tier, fps: st.fps, drawCalls: st.drawCalls,
+    report.final = st && { phase: st.phase, backend: st.backend, tier: st.tier, fps: st.fps, drawCalls: st.drawCalls, playerBody: st.playerBody, playerLook: st.playerLook,
       triangles: st.triangles, lap: st.lap, place: st.place, s: Math.round(st.s), drops: st.drops, rescues: st.rescues, laps: st.laps,
       result: st.result, effectsSeen: st.effects, gpu: st.gpu, shadowMode: st.shadowMode, sfx: st.sfx, renderScale: st.renderScale, items: pick(/^(item-|bubble-pop)/), screen: pick(/^effect-/),
       race: pick(/^(bump|slipstream|overtake|place-change|race-|racer-event)/), seed: st.seed, chart: st.chart, song: st.song, wordPops: pick(/^word-pop/) };

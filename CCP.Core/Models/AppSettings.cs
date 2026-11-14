@@ -131,6 +131,18 @@ namespace ConditioningControlPanel.Models
     }
 
     /// <summary>
+    /// Studio › Wallpaper mode. Static = the composed still-image collage; Dynamic = the same collage
+    /// with its gifs moving, live behind the desktop icons (not in performance mode); OwnImage = one
+    /// picture the user picked. Only one runs.
+    /// </summary>
+    public enum WallpaperMode
+    {
+        Static,
+        Dynamic,
+        OwnImage
+    }
+
+    /// <summary>
     /// Flashes v2 (Back Room prizes): how a compositor flash moves while it is up. Still is the
     /// base; DriftBounce and Pendulum are owned styles (Services/Prizes/PrizeGrants); Mix rolls
     /// per flash among Still plus whatever is owned. Ownership is never read from settings: an
@@ -395,6 +407,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _rainLook;
             set { _rainLook = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private string _chessLook = "";
+        /// <summary>
+        /// What the player's chess men wear (7.2 shop, Services/PieceByPiece/PbpLookRules), JSON
+        /// <c>{"set":id|null,"banner":id|null,"insignia":id|null,"at":unixMs}</c>. Empty = bare men. Always
+        /// clamped to the account's grants before the board sees it; synced through <c>/v2/equip</c> family
+        /// chess (newer <c>at</c> wins) and rides the settings backup like RainLook.
+        /// </summary>
+        public string ChessLook
+        {
+            get => _chessLook;
+            set { _chessLook = value ?? ""; OnPropertyChanged(); }
         }
 
         private string _avatarGeneration = "v1";
@@ -3397,6 +3422,29 @@ namespace ConditioningControlPanel.Models
             set { _serverTierSeen = value; OnPropertyChanged(); }
         }
 
+        private int? _graceClosedTier = null;
+        /// <summary>
+        /// The tier whose grace a confirmed server reading ended (EntitlementTierRule.ApplyReading), until
+        /// the server gives it back. The close moves <see cref="PatreonTier"/> down, so this is what keeps
+        /// the closed lapse row owed, and what says "subscribe" rather than "reconnect". Machine-local.
+        /// </summary>
+        [JsonProperty("grace_closed_tier")]
+        public int? GraceClosedTier
+        {
+            get => _graceClosedTier;
+            set { _graceClosedTier = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _graceClosedAtUtc = null;
+        /// <summary>When <see cref="GraceClosedTier"/> closed: the closed row's day, and the end of what
+        /// the close still says (EntitlementTierRule.ClosedTierNow). Machine-local.</summary>
+        [JsonProperty("grace_closed_at")]
+        public DateTime? GraceClosedAtUtc
+        {
+            get => _graceClosedAtUtc;
+            set { _graceClosedAtUtc = value; OnPropertyChanged(); }
+        }
+
         private int? _lastKnownEffectiveTier = null;
         /// <summary>
         /// The effective tier (0..2) this install last knew, for the "Your Prime is on" card
@@ -4776,6 +4824,39 @@ namespace ConditioningControlPanel.Models
             set { _rainPackHash = value ?? ""; OnPropertyChanged(); }
         }
 
+        private bool _rainLookPushOwed;
+        /// <summary>Rain look sync (/v2/equip family rain, Services/Companion/RainLookSync): this PC changed
+        /// the look and the server has not taken it yet. While true the next sync PUTs instead of adopting.
+        /// Machine-local (left out of the cloud backup, kept across a restore).</summary>
+        public bool RainLookPushOwed
+        {
+            get => _rainLookPushOwed;
+            set { _rainLookPushOwed = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _rainLookAgreedUtc;
+        /// <summary>The server's equip <c>updatedAt</c> the last time this PC and the server agreed on
+        /// Rain's look (a push landed, an adopt, or both already equal). Null = never synced. A newer server
+        /// copy is adopted. Machine-local like <see cref="RainPackHash"/>.</summary>
+        public DateTime? RainLookAgreedUtc
+        {
+            get => _rainLookAgreedUtc;
+            set { _rainLookAgreedUtc = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, int> _walletNetSeen = new();
+        /// <summary>The last <c>wallet_net</c> a <c>/v2/user/sync</c> reply carried, per unified id
+        /// (<see cref="Services.Prizes.V2WalletNet"/>). Machine-local: it records what THIS PC has seen, so a
+        /// backup carrying it to another PC would invent or hide a spend. Survives signing out, since it
+        /// belongs to the account. Replaced whole on every change, because a save can serialize it on
+        /// another thread.</summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, int> WalletNetSeen
+        {
+            get => _walletNetSeen;
+            set { _walletNetSeen = value ?? new Dictionary<string, int>(); OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the
@@ -5289,6 +5370,15 @@ namespace ConditioningControlPanel.Models
         {
             get => _pinkFilterColor;
             set { _pinkFilterColor = value ?? ""; OnPropertyChanged(); }
+        }
+
+        // ccp-bugs #1546: draw the tint UNDER spirals, subliminals, bubbles and bouncing text so it
+        // stops washing them out. Off = today's order (tint over every session effect). Compositor only.
+        private bool _pinkFilterUnderEffects = false;
+        public bool PinkFilterUnderEffects
+        {
+            get => _pinkFilterUnderEffects;
+            set { _pinkFilterUnderEffects = value; OnPropertyChanged(); }
         }
 
         #endregion
@@ -7414,6 +7504,82 @@ namespace ConditioningControlPanel.Models
             set { _wallpaperSourceFolder = value; OnPropertyChanged(); }
         }
 
+        private bool _collageWallpaperEnabled = false;
+        /// <summary>
+        /// Cinematic collage wallpaper: while a session is active, compose a fresh collage from the
+        /// user's own images (assets/images) and set it as the desktop wallpaper, rotating on
+        /// <see cref="CollageWallpaperIntervalSeconds"/>. Independent of the Takeover
+        /// <see cref="WallpaperEnabled"/> behaviour. The original desktop is restored when it stops.
+        /// </summary>
+        [JsonProperty]
+        public bool CollageWallpaperEnabled
+        {
+            get => _collageWallpaperEnabled;
+            set { _collageWallpaperEnabled = value; OnPropertyChanged(); }
+        }
+
+        private bool _collageRunWithCcp = false;
+        /// <summary>
+        /// "Run with CCP": keep the wallpaper up the whole time CCP is open, not just while the engine
+        /// runs. A Stop leaves it. Panic takes it down until the next Start or launch, like every effect.
+        /// Local to this PC: never in a cloud backup (ProfileSyncService.ExcludedBackupProperties).
+        /// </summary>
+        [JsonProperty]
+        public bool CollageRunWithCcp
+        {
+            get => _collageRunWithCcp;
+            set { _collageRunWithCcp = value; OnPropertyChanged(); }
+        }
+
+        private WallpaperMode _collageMode = WallpaperMode.Static;
+        /// <summary>
+        /// Which wallpaper runs (see <see cref="WallpaperMode"/>): the still collage (default), the moving
+        /// one (<see cref="Services.DynamicWallpaperService"/>, not available in <see cref="PerformanceMode"/>),
+        /// or the user's own picture (<see cref="CollageOwnImagePath"/>). Only one at a time.
+        /// </summary>
+        [JsonProperty]
+        public WallpaperMode CollageMode
+        {
+            get => _collageMode;
+            set { _collageMode = value; OnPropertyChanged(); }
+        }
+
+        private string _collageOwnImagePath = "";
+        /// <summary>The image the user picked for Own image mode (jpg/png/bmp). Used where it is:
+        /// never copied, changed or deleted. Local to this PC: a path means nothing on another one.</summary>
+        [JsonProperty]
+        public string CollageOwnImagePath
+        {
+            get => _collageOwnImagePath;
+            set { _collageOwnImagePath = value ?? ""; OnPropertyChanged(); }
+        }
+
+        private int _collageWallpaperIntervalSeconds = 60;
+        /// <summary>
+        /// How often the collage wallpaper recomposes into a brand-new layout, in seconds. The
+        /// slider spans 10 s to 5 min; the text field can go past that, clamped to 10 s to 24 h.
+        /// Only used while <see cref="CollageWallpaperRotate"/> is on.
+        /// </summary>
+        [JsonProperty]
+        public int CollageWallpaperIntervalSeconds
+        {
+            get => _collageWallpaperIntervalSeconds;
+            set { _collageWallpaperIntervalSeconds = Math.Clamp(value, 10, 86400); OnPropertyChanged(); }
+        }
+
+        private bool _collageWallpaperRotate = true;
+        /// <summary>
+        /// When on, the collage recomposes on <see cref="CollageWallpaperIntervalSeconds"/>. When
+        /// off, it composes ONE collage for the session and holds it (still re-matching the active
+        /// mod's colour, just not cycling).
+        /// </summary>
+        [JsonProperty]
+        public bool CollageWallpaperRotate
+        {
+            get => _collageWallpaperRotate;
+            set { _collageWallpaperRotate = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Patreon Integration
@@ -8748,6 +8914,16 @@ namespace ConditioningControlPanel.Models
         // ---- Piece by Piece pictures (2026-09-28) ----
         // The chess game's Distraction pictures: the Goon Game's flavour model, host-owned.
 
+        private bool? _glassroadPictures;
+        /// <summary>The race's own Scrolller switch: null before the player has pressed it (it then follows the app-wide
+        /// online source), else their last press. App consent is still required (<c>GlassroadRules.PicturesOn</c>).</summary>
+        [JsonProperty("glassroadPictures")]
+        public bool? GlassroadPictures
+        {
+            get => _glassroadPictures;
+            set { _glassroadPictures = value; OnPropertyChanged(); }
+        }
+
         private string _pbpMediaFlavour = "";
         /// <summary>
         /// Piece by Piece's picture flavour (trance, pink, frills, shiny, censored, mine), or ""
@@ -9843,6 +10019,79 @@ namespace ConditioningControlPanel.Models
         {
             get => _emiDeskGlass;
             set { _emiDeskGlass = value; OnPropertyChanged(); }
+        }
+
+        private string? _emiDeskHat;
+        /// <summary>
+        /// Prize Counter hat EMI wears on the desk (<c>desk.hat.*</c>), or null. Clamped to owned grants on
+        /// read (Services/EmiDesk/EmiDeskItems); synced through /v2/equip family desk (DeskEquipSync).
+        /// </summary>
+        [JsonProperty]
+        public string? EmiDeskHat
+        {
+            get => _emiDeskHat;
+            set { _emiDeskHat = value; OnPropertyChanged(); }
+        }
+
+        private string? _emiDeskToy;
+        /// <summary>Prize Counter toy EMI holds on the desk (<c>desk.toy.*</c>), or null. Same rules as the hat.</summary>
+        [JsonProperty]
+        public string? EmiDeskToy
+        {
+            get => _emiDeskToy;
+            set { _emiDeskToy = value; OnPropertyChanged(); }
+        }
+
+        private long _emiDeskEquipUpdatedMs;
+        /// <summary>When the desk pick last changed (unix ms, local or adopted server copy). A server copy is
+        /// adopted only when its updatedAt is newer.</summary>
+        [JsonProperty]
+        public long EmiDeskEquipUpdatedMs
+        {
+            get => _emiDeskEquipUpdatedMs;
+            set { _emiDeskEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _emiDeskEquipPushOwed;
+        /// <summary>True while a local desk pick has not reached /v2/equip (route missing, offline, signed out).
+        /// The launch pull sends it up instead of adopting the server copy, so a pick made before the route
+        /// deployed is never replaced by an empty server copy stamped by another family's PUT.</summary>
+        [JsonProperty]
+        public bool EmiDeskEquipPushOwed
+        {
+            get => _emiDeskEquipPushOwed;
+            set { _emiDeskEquipPushOwed = value; OnPropertyChanged(); }
+        }
+
+        private string? _profileEquipAccount;
+        /// <summary>The account <see cref="ProfileEquipUpdatedMs"/> and <see cref="ProfileEquipPushOwed"/> belong to
+        /// (Services/Profile/ProfileEquipSync). Null = this client has not settled a frame or avatar here, so an
+        /// existing pick goes up once. Machine-local, like the other two: never in a cloud backup.</summary>
+        [JsonProperty]
+        public string? ProfileEquipAccount
+        {
+            get => _profileEquipAccount;
+            set { _profileEquipAccount = value; OnPropertyChanged(); }
+        }
+
+        private long _profileEquipUpdatedMs;
+        /// <summary>The equip stamp of the frame and avatar on this PC (unix ms). A server copy is adopted only
+        /// when its updatedAt is newer.</summary>
+        [JsonProperty]
+        public long ProfileEquipUpdatedMs
+        {
+            get => _profileEquipUpdatedMs;
+            set { _profileEquipUpdatedMs = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _profileEquipPushOwed;
+        /// <summary>True while a local frame or avatar pick has not reached /v2/equip. It goes up instead of being
+        /// judged against the server copy, whose stamp any other family's PUT can move.</summary>
+        [JsonProperty]
+        public bool ProfileEquipPushOwed
+        {
+            get => _profileEquipPushOwed;
+            set { _profileEquipPushOwed = value; OnPropertyChanged(); }
         }
 
         private double _emiDeskWidth = 220;

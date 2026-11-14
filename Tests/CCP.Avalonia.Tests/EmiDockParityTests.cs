@@ -107,11 +107,14 @@ public sealed class EmiDockParityTests
                 Assert.Equal(new global::Avalonia.Animation.IterationCount(3), anim.IterationCount);
                 Assert.Equal(new[] { 0.0, 0.18, 0.55, 1.0 }, anim.Children.Select(f => f.Cue.CueValue));
             }
-            var peak = dock.KnockGlow!.Children[1].Setters.Cast<global::Avalonia.Styling.Setter>().Single();
-            Assert.Equal(Visual.OpacityProperty, peak.Property);
-            Assert.Equal(0.95, peak.Value);
+            global::Avalonia.Styling.Setter GlowAt(int i, AvaloniaProperty p) =>
+                dock.KnockGlow!.Children[i].Setters.Cast<global::Avalonia.Styling.Setter>().Single(x => x.Property == p);
+            Assert.Equal(0.95, GlowAt(1, Visual.OpacityProperty).Value);
+            // WPF DropShadowEffect.BlurRadius 0 -> 16 -> 0 -> 0 (EmiDock.xaml.cs blur keyframes).
+            Assert.Equal(new[] { 0.0, 16.0, 0.0, 0.0 },
+                Enumerable.Range(0, 4).Select(i => ((BoxShadows)GlowAt(i, Border.BoxShadowProperty).Value!)[0].Blur));
             Assert.Equal(3.2, dock.KnockRing!.Children[1].Setters.Cast<global::Avalonia.Styling.Setter>().Single(x => x.Property == global::Avalonia.Controls.Shapes.Shape.StrokeThicknessProperty).Value);
-            Assert.Equal(0.0, dock.KnockGlow.Children[2].Setters.Cast<global::Avalonia.Styling.Setter>().Single().Value);
+            Assert.Equal(0.0, GlowAt(2, Visual.OpacityProperty).Value);
             Assert.Equal("0_0", dock.FindControl<EmiFace>("MiniFace")!.Face);
             dock.Refresh(true);
             Assert.True(dock.IsKnocking); // arrival does not kill the discovery pulse
@@ -120,6 +123,7 @@ public sealed class EmiDockParityTests
             Assert.False(dock.IsKnocking);
             Assert.Null(dock.KnockGlow);
             Assert.Equal(0, glow.Opacity);
+            Assert.Equal(0, glow.BoxShadow[0].Blur);
             Assert.Equal(2, ring.StrokeThickness);
             Assert.Equal(Color.Parse("#FF69B4"), ((SolidColorBrush)ring.Stroke!).Color);
         }

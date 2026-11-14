@@ -36,6 +36,7 @@ internal static class PortalPanicShortcut
     {
         (_session, _onReleased, _held, _reportsRelease) = (session, onReleased, false, false);
     }
+    internal static Func<Action, Action, Task<string?>>? BindForTests;
     private static DBusConnection? _bus;
 
     internal static bool IsBound => !string.IsNullOrEmpty(_session);
@@ -46,6 +47,7 @@ internal static class PortalPanicShortcut
     /// null when the portal is absent, the user refused, or anything failed - never throws.</summary>
     internal static async Task<string?> BindAsync(string key, string description, Action onActivated, Action onDeactivated)
     {
+        if (BindForTests != null) return await BindForTests(onActivated, onDeactivated);
         if (!OperatingSystem.IsLinux() || _session != null) return null;
         _onReleased = onDeactivated;
         _reportsRelease = false;

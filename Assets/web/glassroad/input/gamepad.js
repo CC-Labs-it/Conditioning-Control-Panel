@@ -6,18 +6,25 @@
  * standard mapping read through a fallback layout (input/padmap.js). A pad that was being played
  * with and then leaves sets `padLost` once (the action map turns it into a pause edge). The shared
  * `devices` hears which pad is in use and every connect and leave, for the HUD.
- * takeNav() hands the cards one edge per press: d-pad or stick up / down / left / right, A ok, B back.
+ * takeNav(menuOpen) hands the cards their steps (input/stickNav.js: d-pad or left stick past 0.5, then a
+ * held repeat), A ok, B back, one edge per press. takeNav(false) on a frame with no card makes a held
+ * direction wait for a release, and a stick held through a card steers nothing until it comes back to rest.
  */
 import { readPad, profileFor, padFamily, loadChoices } from './padmap.js';
 import { devices as sharedDevices } from './device.js';
+import { createStickNav } from './stickNav.js';
 
 const DEADZONE = 0.16;
 const usedInput = r => r.south || r.east || r.west || r.north || r.lb || r.rb || r.ls || r.rs || r.start || r.select ||
   r.up || r.down || r.left || r.right || r.lt > 0.1 || r.rt > 0.1 ||
   Math.abs(r.x) > DEADZONE || Math.abs(r.y) > DEADZONE || Math.hypot(r.lookX, r.lookY) > DEADZONE;
 
-export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigator : null, devices = sharedDevices, choices = null } = {}) {
-  let was = {}, navWas = null, navEdge = null, lostEdge = false;
+const wallMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+
+export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigator : null, devices = sharedDevices, choices = null, now = wallMs } = {}) {
+  let was = {}, navEdge = null, lostEdge = false;
+  const stick = createStickNav();
+  let menuOpen = false, steerHeld = false;   // steerHeld: a stick moved on a card steers nothing until it rests
   let active = -1;                       // index of the pad being played with, -1 until one is used
   const known = new Map();               // index -> id, for the connect and leave notes
   const seen = new Map();                // id -> trigger axes seen moving
@@ -56,7 +63,7 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
       if (live.has(k)) continue;
       known.delete(k);
       const wasActive = k === active;
-      if (wasActive) { active = -1; lostEdge = true; was = {}; navWas = null; }
+      if (wasActive) { active = -1; lostEdge = true; was = {}; stick.reset(); }
       devices.lost({ id, active: wasActive });
     }
     return used || pick || std || any;
@@ -66,16 +73,18 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     into.cameraPressed = false; into.rearView = false; into.item = false; into.back = false;
     const hit = scan(true);
     into.padLost = lostEdge; lostEdge = false;
-    if (!hit) { sampled = null; was = {}; navWas = null; navEdge = null; look.x = look.y = 0; return; }
+    if (!hit) { sampled = null; was = {}; stick.reset(); navEdge = null; look.x = look.y = 0; return; }
     const { g, k } = hit, id = idOf(g);
     const key = k + ':' + id;
-    if (sampled !== key) { sampled = key; was = {}; navWas = null; navEdge = null; }
+    if (sampled !== key) { sampled = key; was = {}; stick.reset(); navEdge = null; }
     read(g, k, r);
     const ax = r.x, ay = r.y;
     const magnitude = Math.hypot(r.lookX, r.lookY);
     const gain = magnitude > DEADZONE ? Math.min(1, (magnitude - DEADZONE) / (1 - DEADZONE)) / magnitude : 0;
     look.x = gain ? r.lookX * gain : 0; look.y = gain ? r.lookY * gain : 0;
-    into.steer = Math.abs(ax) > DEADZONE ? Math.sign(ax) * Math.min(1, (Math.abs(ax) - DEADZONE) / (1 - DEADZONE)) : 0;
+    if (menuOpen && Math.abs(ax) > DEADZONE) steerHeld = true;   // this stick is walking a card
+    else if (Math.abs(ax) <= DEADZONE) steerHeld = false;
+    into.steer = !steerHeld && Math.abs(ax) > DEADZONE ? Math.sign(ax) * Math.min(1, (Math.abs(ax) - DEADZONE) / (1 - DEADZONE)) : 0;
     into.steerKind = 'stick';                       // the action map applies the curve (input/steerCurve.js)
     into.throttle = r.rt;
     into.brake = r.lt;
@@ -87,18 +96,22 @@ export function createGamepad({ nav = typeof navigator !== 'undefined' ? navigat
     into.back = dropPressed || ay > 0.5 || r.down;
     into.cameraPressed = r.rs && !was.rs;
     into.rearView = r.ls;
-    // one nav edge per press for the cards (never fed to the sim)
-    const dir = r.up || ay < -0.6 ? 'up' : r.down || ay > 0.6 ? 'down'
-      : r.left || ax < -0.6 ? 'left' : r.right || ax > 0.6 ? 'right'
-        : r.south ? 'ok' : r.east ? 'back' : null;
-    if (dir && dir !== navWas) navEdge = dir;
-    navWas = dir;
+    // card steps (never fed to the sim): A / B on their press, directions through the stick rule
+    const dir = stick.step(r, ax, ay, now());
+    if (r.south && !was.south) navEdge = 'ok';
+    else if (r.east && !was.east) navEdge = 'back';
+    else if (dir) navEdge = dir;
     const used = usedInput(r);
     if (used) { active = k; devices.use('pad', infoOf(g)); }
-    was = { south: r.south, north: r.north, start: r.start, west: r.west, rb: r.rb, rs: r.rs };
+    was = { south: r.south, east: r.east, north: r.north, start: r.start, west: r.west, rb: r.rb, rs: r.rs };
   }
-  /** The last card nav edge since the previous call, or null. */
-  function takeNav() { const d = navEdge; navEdge = null; return d; }
+  /** The last card step since the previous call, or null. menuOpen false (no card): nothing, and a held direction waits for a release. */
+  function takeNav(open = true) {
+    const d = navEdge; navEdge = null;
+    menuOpen = !!open;
+    if (!menuOpen) { stick.block(); return null; }
+    return d;
+  }
   function rumble(strong, weak, ms) {
     const hit = scan(), act = hit && hit.g.vibrationActuator;
     if (!act || typeof act.playEffect !== 'function') return;

@@ -249,6 +249,11 @@ namespace ConditioningControlPanel.Services
                 if (!string.IsNullOrWhiteSpace(hangReport))
                     combined = combined + Environment.NewLine + Environment.NewLine + hangReport;
 
+                // The recent sounds go LAST on purpose. The tracker keeps only the tail of this
+                // field (about 60 KB of a field that can reach 190), so anything earlier can be cut:
+                // that is what happened to the engine-off lines in the video trace (#1537, #1540).
+                combined = AppendRecentSounds(combined, Services.Audio.RecentSounds.Shared.BuildSection());
+
                 (scrubbedApp, appCounts) = LogScrubber.Scrub(combined);
 
                 // Hard cap below the server's 200,000, applied AFTER scrubbing so the cap can never
@@ -704,6 +709,12 @@ namespace ConditioningControlPanel.Services
                 section = section.Substring(section.Length - MaxDiagSectionChars);
             return section;
         }
+
+        /// <summary>The report's last section. Pure, so the "survives the tail cut" shape has a test.</summary>
+        internal static string AppendRecentSounds(string combined, string section) =>
+            string.IsNullOrEmpty(section)
+                ? combined
+                : combined + Environment.NewLine + Environment.NewLine + section;
 
         internal const string HangReportHeader = "===== UI-hang report (logs/hang_*.txt) =====";
 

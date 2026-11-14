@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Tests;
 ///
 /// <para>Set CCP_NAV_PNG_DIR to a folder to also save header-chrome.png and header-wallet.png.</para>
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class HeaderChromeRenderTests
 {
     private const double BandWidth = 1469;

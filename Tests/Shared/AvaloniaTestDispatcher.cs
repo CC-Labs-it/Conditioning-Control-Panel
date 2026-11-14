@@ -1,10 +1,13 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+#if !CCP_ASSEMBLYINFO_GUARD_ONLY
 using Avalonia.Threading;
+#endif
 
 namespace CCP.Avalonia.Testing;
 
+#if !CCP_ASSEMBLYINFO_GUARD_ONLY
 /// <summary>
 /// Runs each Avalonia test assembly on one long-lived dispatcher thread. Windows native controls
 /// require the thread that creates them to be STA; keeping the dispatcher alive also keeps every
@@ -173,6 +176,8 @@ internal static class TestXdgConfigSandbox
         };
     }
 }
+
+#endif
 
 /// <summary>
 /// Before running anything, xUnit's VSTest adapter launches the test exe with <c>-assemblyInfo</c>, waits for it

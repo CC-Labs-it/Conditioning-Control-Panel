@@ -37,7 +37,7 @@ export function buildGoonworks() {
     items: [], boosts: [], jumps: [{ node: node('pinball-gap'), airLen: 20, height: 26 }], routes: [], fields: [], courts: [], hazards: [], media: [],
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: -45, edgeGraceM: 1.2, edgeGraceS: .8 } };
-  const base = loadTrack(track, { aerials: false, boostSafety: false, courseShape: false }), nearest = s => base.nodeS.slice(0, nodes.length).reduce((best, v, i) => Math.abs(v-s)<Math.abs(base.nodeS[best]-s)?i:best,0);
+  const base = loadTrack(track, { aerials: false, boostSafety: false, courseShape: false, ramps: false }), nearest = s => base.nodeS.slice(0, nodes.length).reduce((best, v, i) => Math.abs(v-s)<Math.abs(base.nodeS[best]-s)?i:best,0);
   for (const id of ['start-terrace','grotto-gallery','mill-hall','quiz-ballroom','ribbon-braid','leapfrog-exit','pinball-table','fold-overlook','finish-crossing'])
     for (const x of [-6,-2,2,6]) track.items.push({ node: node(id, .5), x, kind: 'box' });
   // Side-lane chains reward holding a line while leaving the centre free to coast.
@@ -78,6 +78,20 @@ export function buildGoonworks() {
     track.routes.push({ id: 'grand-fold-cut-' + (i+1), kind: 'drop', side: 'L', from, to,
       land: { from: target-3, to: Math.min(descent.to-1,target+13) }, pad: { node: target+6, x: -4 } });
   }
+  // Jump ramps (handoff-1030/GLASSROAD-RAMPS.md). tests/ramps-goonworks.test.mjs flies every lip at 40-66.7 m/s.
+  const table = spans['pinball-table'].from + 9, cut = track.routes[0];
+  track.ramps = [
+    { id: 'goon-ramp-crest', node: spans['ribbon-braid'].from + 112, x: 0, widthM: 7, lenM: 7, heightM: 1.2, upMps: 14,
+      purpose: 'air', note: 'top turn of the ribbon helix: a pop over the whole funhouse before the leapfrog field' },
+    { id: 'goon-ramp-pinball', node: table, x: 0, widthM: 8, lenM: 8, heightM: 1.2, upMps: 13,
+      purpose: 'item', note: 'mid pinball table, a straight flat deck: the arc runs through three floating boxes' },
+    { id: 'goon-ramp-fold-drop', node: cut.from, x: -16, widthM: 4, lenM: 6, heightM: 1.4, upMps: 16,
+      purpose: 'shortcut', note: 'on the open lip of grand-fold-cut-1: the lean outward carries every speed onto the lower turn' },
+    { id: 'goon-ramp-fold-inside', node: descent.from + 12, x: 10, widthM: 6, lenM: 7, heightM: 1.2, upMps: 14,
+      purpose: 'cut', note: 'inside line of the grand fold between the two drops: chord across the spiral' },
+  ];
+  // Lifted boxes sit on the pinball ramp arc (heights measured at 40-66.7 m/s in the ramp test).
+  for (const [ds, liftM] of [[12, 3.5], [22, 4], [32, 3.5]]) track.items.push({ node: table, x: 0, kind: 'box', ds, liftM });
   const result = validate(track); if (!result.ok || result.warnings.length) throw Error(JSON.stringify(result));
   return track;
 }

@@ -45,7 +45,7 @@ test('bridge timer ignores tempo, has a warned exit and extends continuously acr
 });
 
 test('long horizontal heads extend their real contact while retaining permanent bypasses', () => {
-  assert.equal(MOVING_REVISION, 4);
+  assert.equal(MOVING_REVISION, 5);
   for (const id of courses) {
     const track = loadTrack(jsonFor(id), { moving: true });
     for (const row of track.moving.traps) {
@@ -56,10 +56,11 @@ test('long horizontal heads extend their real contact while retaining permanent 
         continue;
       }
       const pose = movingPoseAt(track, row, .5);
-      assert.ok(movingOverlap(row, { ...pose, active: true }, { x: pose.x + row.w / 2 + .69, z: 0, h: 1 }));
-      assert.equal(movingOverlap(row, { ...pose, active: true }, { x: pose.x + row.w / 2 + .71, z: 0, h: 1 }), false);
-      assert.ok(movingOverlap(row, { ...pose, active: true }, { x: pose.x, z: row.len / 2 + .69, h: 1 }));
-      assert.equal(movingOverlap(row, { ...pose, active: true }, { x: pose.x, z: row.len / 2 + .71, h: 1 }), false);
+      assert.ok(row.contactW < row.w && row.contactLen < row.len, row.id + ' hits with the piece it draws, not its envelope');
+      assert.ok(movingOverlap(row, { ...pose, active: true }, { x: pose.x + row.contactW / 2 + .61, z: 0, h: 1 }));
+      assert.equal(movingOverlap(row, { ...pose, active: true }, { x: pose.x + row.contactW / 2 + .63, z: 0, h: 1 }), false);
+      assert.ok(movingOverlap(row, { ...pose, active: true }, { x: pose.x, z: row.contactLen / 2 + .61, h: 1 }));
+      assert.equal(movingOverlap(row, { ...pose, active: true }, { x: pose.x, z: row.contactLen / 2 + .63, h: 1 }), false);
     }
   }
 });

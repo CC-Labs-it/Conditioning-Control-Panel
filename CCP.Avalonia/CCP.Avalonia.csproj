@@ -35,31 +35,35 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
-    <PackageReference Include="Avalonia" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageReference Include="Avalonia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.5" />
     <!-- Renders the real window offscreen so CI can prove the Linux head DRAWS, not just boots.
          A desktop screenshot cannot run on a headless runner; this can. -->
-    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.5" />
     <!-- The Linux/Windows web view. Wraps WebKitGTK on Linux and WebView2 on Windows, so the
          WPF head's Microsoft.Web.WebView2 dependency does not follow us across. Only Views/Controls/WebHost
          touches it, and that control draws a fallback panel wherever no web view exists. -->
-    <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.1" />
     <!-- ColorView, the inline colour panel behind ColorPickerDialog. WPF opened
          System.Windows.Forms.ColorDialog; this is the cross-platform twin. PINNED to the same
-         12.1.2 as Avalonia itself - a control package built against a different Avalonia minor
+         12.1.5 as Avalonia itself - a control package built against a different Avalonia minor
          throws at attach, which no compiler catches. -->
-    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.5" />
     <!-- Fluent UI System Icons (docs/avalonia-decisions.html, 2026-10-10). Only Controls/Icons/* may
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
-         IconGlyphRenderTests proves it draws on 12.1.2 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
+         IconGlyphRenderTests proves it draws on 12.1.5 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the
          system libvlc (libvlc.so.5); only Windows needs the bundled natives. -->
     <PackageReference Include="LibVLCSharp" Version="3.10.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- Pure managed MP3 decoding for WPF-style sequential quiz loops. -->
+    <PackageReference Include="NLayer" Version="1.16.0" />
+    <Content Include="ThirdPartyNotices\NLayer.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Vosk speech (Core SpeechEngine): the head references it itself so libvosk ships with it.
          Vosk.targets picks the native lib by the BUILD machine's OS; build Linux releases on Linux. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
@@ -152,6 +156,7 @@
                       ..\Assets\web\**\*demo.html;..\Assets\web\backroom\stations\breakout\**\*.test.js;
                       ..\Assets\web\backroom\stations\breakout\dev.html;..\Assets\web\backroom\stations\breakout\showcase*;
                       ..\Assets\web\piecebypiece\dev\**\*;..\Assets\web\piecebypiece\package.json;
+                      ..\Assets\web\prizecounter\mock\**\*;..\Assets\web\prizecounter\dev.html;
                       ..\Assets\web\intake\assets\vo\**\*.mp3;..\Assets\web\intake\assets\sfx\**\*.mp3;
                       ..\Assets\web\intake\assets\music\**\*.mp3;..\Assets\web\dtrh\assets\**\*.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -205,6 +210,8 @@
       Folders where the views use everything are globbed, so a new file is picked up without a
       csproj edit. Folders where they use a fraction are explicit, so growth stays a decision.
     -->
+    <!-- WPF ConditioningControlPanel.csproj:665: line engine reads this from disk. -->
+    <Content Include="..\Assets\emi\desk-lines.json" Link="Resources\emi\desk-lines.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\Assets\quests\**\*"
                       Link="Resources\quests\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\nav\**\*"
@@ -236,7 +243,15 @@
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <!-- WPF unlock-card art convention, without staging artwork. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
+             Link="assets\Chaos\boons\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
+             Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
+    <!-- WPF ChaosAnnouncerOverlay.cs:177-195: shared announce word-art. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\announce\*.png" Link="assets\Chaos\announce\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -314,4 +329,11 @@
     </ItemGroup>
     <Copy SourceFiles="@(LibVLCFiles)" DestinationFolder="$(PublishDir)libvlc\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
+  <ItemGroup>
+    <Content Include="../Assets/DeeperDemos/**/*" Link="Resources/DeeperDemos/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
 </Project>

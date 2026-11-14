@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Features
                 ChkEnable.IsChecked = s.PinkFilterEnabled;
                 SliderOpacity.Value = s.PinkFilterOpacity;
                 TxtOpacity.Text = $"{s.PinkFilterOpacity}%";
+                ChkUnderEffects.IsChecked = s.PinkFilterUnderEffects;
                 UpdateSwatch();
                 PopulateMonitors();
             }
@@ -78,10 +79,22 @@ namespace ConditioningControlPanel.Features
             if (e.PropertyName == nameof(Models.AppSettings.PinkFilterEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.PinkFilterOpacity) ||
                 e.PropertyName == nameof(Models.AppSettings.PinkFilterColor) ||
+                e.PropertyName == nameof(Models.AppSettings.PinkFilterUnderEffects) ||
                 e.PropertyName == nameof(Models.AppSettings.PinkFilterTargetMonitor))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
             }
+        }
+
+        // #1546: tint under spirals, subliminals, bubbles and text. Re-sorts a live tint at once.
+        private void ChkUnderEffects_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.PinkFilterUnderEffects = ChkUnderEffects.IsChecked ?? false;
+            App.Settings?.Save();
+            App.Overlay?.RefreshPinkFilterOrder();
         }
 
         private void ChkEnable_Changed(object sender, RoutedEventArgs e)

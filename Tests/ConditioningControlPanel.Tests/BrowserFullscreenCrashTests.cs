@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// crash.log as a crash of its own. #1512: the Blink Trainer preview decoded pictures on the UI
 /// thread inside the webcam's blink op.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public sealed class BrowserFullscreenCrashTests
 {
     [Fact]

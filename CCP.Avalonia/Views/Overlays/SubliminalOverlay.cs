@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var hold = TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(s.SubliminalDuration));
             var alpha = SubliminalCard.Alpha(opacity ?? s.SubliminalOpacity);
+            bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var w = new SubliminalOverlayWindow(text);
@@ -62,7 +63,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     w.Close();
                     return;
                 }
-                Present(w);
+                Present(w, raiseBark: !barkRaised);
+                barkRaised = true;
                 w.Run(alpha, hold);
             }
         }
@@ -91,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF ShowSubliminalVisuals: show passively, then activate when SubliminalStealsFocus
         /// is on (SubliminalService.cs:661-662). A refused focus request never prevents the card's
         /// visual envelope or its Stop lifecycle.</summary>
-        internal static void Present(Window card)
+        internal static void Present(Window card, bool raiseBark = true)
         {
             var stealsFocus = CoreSettings.Current.SubliminalStealsFocus;
             if (card is SubliminalOverlayWindow overlay)
@@ -100,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Active.Add(overlay);
             }
             card.Show();
+            if (raiseBark) Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
             if (!stealsFocus) return;
             try { ActivateCard(card); }
             catch (Exception ex) { Log.Debug("Subliminal: focus steal refused: {E}", ex.Message); }

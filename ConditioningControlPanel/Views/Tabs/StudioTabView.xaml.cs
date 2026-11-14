@@ -498,6 +498,18 @@ namespace ConditioningControlPanel.Views.Tabs
                 () => App.Settings?.Current?.SpiralEnabled);
             Add("pinkfilter", "💗", "Pink_filter.png", "Pink Filter", "label_pink_filter", HostPinkFilter, PanelPinkFilter, "PinkFilter",
                 () => App.Settings?.Current?.PinkFilterEnabled);
+            // Wallpaper is OFF-ONLY on right-click, like Scheduler below: with Run with CCP on, or in a
+            // session, switching it on puts pictures on the desktop at once. No bark key: no mod has
+            // voiced rules for it. Turning it on opens the panel and leaves the box to the user.
+            Add("wallpaper", "🖼", "wallpaper.png", "Wallpaper", "set2_section_wallpaper", HostWallpaper, PanelWallpaper, null,
+                () => App.Settings?.Current?.CollageWallpaperEnabled,
+                toggle: () =>
+                {
+                    if (App.Settings?.Current?.CollageWallpaperEnabled == true)
+                        PanelWallpaper?.SwitchOffFromRack();
+                    else
+                        SelectEntry("wallpaper", announce: true, animate: true);
+                });
             // Visuals has no single master toggle - the dashboard card is deliberately neutral
             // too (MainWindow.Presets.cs:800). A dot that cannot be wired honestly is omitted.
             Add("visuals", "👁", null, "Visuals", "section_visuals", HostVisuals, PanelVisuals, "Visuals", null);
@@ -1460,6 +1472,7 @@ namespace ConditioningControlPanel.Views.Tabs
             nameof(Models.AppSettings.SubliminalEnabled),
             nameof(Models.AppSettings.SpiralEnabled),
             nameof(Models.AppSettings.PinkFilterEnabled),
+            nameof(Models.AppSettings.CollageWallpaperEnabled),
             nameof(Models.AppSettings.BubblesEnabled),
             nameof(Models.AppSettings.BubbleCountEnabled),
             nameof(Models.AppSettings.LockCardEnabled),

@@ -156,6 +156,58 @@ internal static class AccountSeed
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
 
+    /// <summary>A confirmed reading ended a grace window: the same repaint as a tier change, with no
+    /// celebration, which is why it is not TierChanged (WPF EntitlementTierSync.GraceClosed).</summary>
+    internal static event Action? GraceClosed;
+
+    private static readonly EntitlementReadings Readings = new();
+
+    /// <summary>WPF EntitlementTierSync.HoldGraceClose: the window closes after a session or a game,
+    /// never during, because a close switches premium features off. Anything unreadable holds.</summary>
+    private static bool HoldGraceClose()
+    {
+        try
+        {
+            return CoreSession.IsSessionRunning || CoreEngine.IsRunning || LockdownService.Current?.IsActive == true
+                || Views.Windows.PanicSurfaces.AnyOwnsTheScreen();
+        }
+        catch { return true; }
+    }
+
+    /// <summary>WPF EntitlementTierSync.EffectiveTierNow: 2 Prime, 1 Basic (an invite week is not a plan), else 0.</summary>
+    private static int EffectiveTierNow()
+    {
+        if (CoreAccount.HasLabAccess) return 2;
+        return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
+    }
+
+    /// <summary>WPF EntitlementTierSync.ApplyOnUi: one server tier reading, from the profile load or a
+    /// heartbeat. A rise unlocks, a tier renews its grace, and the same lower reading 90 s later closes
+    /// it. Never throws.</summary>
+    internal static void ApplyTierReading(int? serverTier, string source)
+    {
+        try
+        {
+            var s = CoreSettings.Current;
+            var before = EffectiveTierNow();
+            var reading = Readings.Apply(s, serverTier, HoldGraceClose, DateTime.UtcNow);
+            if (reading.Dirty) CoreSettings.Save();
+            if (reading.Closed)
+            {
+                Log.Information("[Entitlement] {Source}: server tier {Server} closed the grace window", source, serverTier);
+                GraceClosed?.Invoke();
+                return;
+            }
+            // A rise, or a renewal that brought back a lapsed window: the doors have to repaint.
+            var after = EffectiveTierNow();
+            if (!reading.Rose && after <= before) return;
+            var tier = reading.Rose ? serverTier!.Value : after;
+            Log.Information("[Entitlement] {Source}: access now tier {Tier}", source, tier);
+            Patreon?.NotifyEntitlementRaised(tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1);
+        }
+        catch (Exception ex) { Log.Warning(ex, "[Entitlement] apply failed ({Source})", source); }
+    }
+
     private static async Task<bool> LoadProfileCoreAsync(V2AuthService v2)
     {
         var s = CoreSettings.Current;
@@ -168,10 +220,8 @@ internal static class AccountSeed
             return false;
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
-        // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
-        if (!string.IsNullOrEmpty(s.AuthToken))
-            EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
-        ProfileAdopt.AdoptReadBeforeWrite(s, user);
+        ApplyTierReading(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "profile");
+        ProfileAdopt.AdoptReadBeforeWrite(s, user, adoptConditioningMinutes: true);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);
         if (Sync is { } sync)

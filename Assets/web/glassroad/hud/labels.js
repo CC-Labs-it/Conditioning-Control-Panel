@@ -31,8 +31,8 @@ export function controlRows(family = 'xbox', profile = 'standard') {
     ['Look behind', 'Hold V', 'Hold ' + p.ls, 'Hold Rear button'],
     ['Throttle', k.throttle, p.rt, 'Automatic'],
     ['Brake', k.brake, p.lt, ''],
-    ['Hop and drift', k.hop, p.south + ', hold', 'Hold the right half'],
-    ['Use item', k.item, p.west + ' or ' + p.rb, 'Throw button'],
+    ['Hop and drift', k.hop, p.south + ', hold', 'Hold Jump or the right half'],
+    ['Use item', k.item, p.west + ' or ' + p.rb, 'Throw button or the item'],
     ['Drop it behind', k.drop, p.north + ', or stick down + ' + p.west, 'Drop button'],
     ['Pause', k.pause, p.start, 'Pause button'],
   ];
@@ -51,8 +51,8 @@ export function deviceView(d = {}) {
 
 /**
  * The fire key shown under the item slot while an item is held (playtest 2026-10-28: the slot was not read as an
- * item). Keyboard E / Enter, the pad's West button, touch the Throw button (input/touch.js; the touch layer sits over the
- * slot, so the slot itself never takes a tap there).
+ * item). Keyboard E / Enter, the pad's West button, touch the Throw button (input/touch.js). The slot takes taps too
+ * (#hud sits over the touch layer); in portrait it stands in for the button, under the thumb.
  */
 export function itemKey(d = {}) {
   const v = deviceView(d);

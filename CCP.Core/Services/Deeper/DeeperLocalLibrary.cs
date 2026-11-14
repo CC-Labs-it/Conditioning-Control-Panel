@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 var metadata = enhancement.Metadata;
                 var duration = metadata?.MediaDurationSeconds ?? 0;
                 if (!double.IsFinite(duration) || duration < 0) duration = 0;
+                if (duration <= 0 && MediaDurationCache.TryGetCached(enhancement.MediaSource, out var cached)) duration = cached;
 
                 entry = new EnhancementLibraryEntry
                 {

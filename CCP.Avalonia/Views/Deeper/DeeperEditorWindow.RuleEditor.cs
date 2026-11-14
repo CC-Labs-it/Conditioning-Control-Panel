@@ -732,8 +732,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     break;
                 case TimeReachedTrigger tr:
                     AddDoubleField(TriggerFields, Loc.Get("deeper_editor_trigger_time"),
-                        tr.Time, v => { tr.Time = Math.Max(0, v); RebuildRuleVisuals(); });
-                    AssignNameToLastTextBox(TriggerFields, "TutorialTriggerTimeField");
+                        tr.Time, v => { tr.Time = Math.Max(0, v); RebuildRuleVisuals(); }, "TutorialTriggerTimeField");
                     break;
                 case RegionEnteredTrigger re:
                     AddRegionPicker(TriggerFields, re.RegionId, id => re.RegionId = id);
@@ -780,8 +779,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     break;
                 case ScreenShakeAction ss:
                     AddDoubleField(ActionFields, Loc.Get("deeper_editor_action_intensity"),
-                        ss.Intensity, v => ss.Intensity = Math.Clamp(v, 0, 1));
-                    AssignNameToLastTextBox(ActionFields, "TutorialActionIntensityField");
+                        ss.Intensity, v => ss.Intensity = Math.Clamp(v, 0, 1), "TutorialActionIntensityField");
                     AddIntField(ActionFields, Loc.Get("deeper_editor_action_duration_ms"),
                         ss.DurationMs, v => ss.DurationMs = Math.Max(50, v));
                     break;
@@ -1399,10 +1397,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             host.Children.Add(tb);
         }
 
-        private void AddDoubleField(Panel host, string label, double value, Action<double> setter)
+        private void AddDoubleField(Panel host, string label, double value, Action<double> setter, string? name = null)
         {
             host.Children.Add(NewEditorLabel(label));
             var tb = NewEditorTextBox(value.ToString("0.###", CultureInfo.InvariantCulture));
+            if (name != null) tb.Name = name;
             tb.TextChanged += (_, _) =>
             {
                 if (_suppressRuleSync) return;
@@ -1445,22 +1444,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 ScheduleValidation();
             };
             host.Children.Add(cb);
-        }
-
-        // Assigns a name to the most recently-added TextBox in a dynamic field host so the
-        // interactive tutorial can spotlight and gate on it. Avalonia refuses to rename an element
-        // that is already in a tree, so this is best-effort - the try/catch is the port, not a
-        // shortcut.
-        private static void AssignNameToLastTextBox(Panel host, string name)
-        {
-            for (int i = host.Children.Count - 1; i >= 0; i--)
-            {
-                if (host.Children[i] is TextBox tb)
-                {
-                    try { tb.Name = name; } catch { }
-                    return;
-                }
-            }
         }
 
         private void AddInfoText(Panel host, string text)

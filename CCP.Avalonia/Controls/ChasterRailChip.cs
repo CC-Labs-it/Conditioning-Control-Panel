@@ -14,6 +14,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -47,7 +48,6 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private static readonly Color BadgeRed = Color.FromRgb(0xFF, 0x2D, 0x55);
         private static readonly Color CreditMint = Color.FromRgb(0x5F, 0xFF, 0xD0);
         private static readonly IBrush Keyline = new SolidColorBrush(Color.FromRgb(0x17, 0x12, 0x2A));
-        private static readonly FontFamily Mono = new("Consolas, Courier New");
         private static readonly FontFamily Display = new("Fredoka, Segoe UI");
         private static readonly Color DebtRed = Color.FromRgb(0xFF, 0x6B, 0x8A);
         private static readonly Color PeekMuted = Color.FromRgb(0xB8, 0xB0, 0xCC);
@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             };
             _clock = new TextBlock
             {
-                FontFamily = Mono, FontSize = 10, FontWeight = FontWeight.Bold, Foreground = _inkBrush,
+                [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"), FontSize = 10, FontWeight = FontWeight.Bold, Foreground = _inkBrush,
                 HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0),
                 IsHitTestVisible = false, Tag = NavRailStaticTextTag, IsVisible = false,
             };
@@ -140,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
             _badgeText = new TextBlock
             {
-                FontFamily = Mono, FontSize = 8.5, FontWeight = FontWeight.Bold, Foreground = _badgeInk,
+                [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"), FontSize = 8.5, FontWeight = FontWeight.Bold, Foreground = _badgeInk,
                 Margin = new Thickness(3, 0), VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center, Tag = NavRailStaticTextTag,
             };

@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Services
         internal bool AutoPoll = true;
 
         public bool IsActive { get; private set; }
+        /// <summary>WPF RemoteControlService.cs:377: session end starts Chaster RemoteGrace.</summary>
+        public DateTime? LastEndedUtc { get; private set; }
         public string? SessionCode { get; private set; }
         public string? ConnectPin { get; private set; }
         public string? Tier { get; private set; }
@@ -187,6 +189,7 @@ namespace ConditioningControlPanel.Services
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
+            LastEndedUtc = Now();
             (_pollBackedOff, _lastControllerCommand) = (false, DateTime.MinValue);
             (_lastOptInTags, _lastOptInStatus) = (null, null);
             Interlocked.Increment(ref _sessionGeneration);   // an opt-in still in flight must not list the next session
@@ -309,6 +312,20 @@ namespace ConditioningControlPanel.Services
             // instead, so it still runs. Running it twice is harmless (every step is idempotent).
             var (done, _) = CoreDispatch.Invoke(() => { ReleaseOnLeave(); return 0; }, TimeSpan.FromSeconds(10));
             if (!done) CoreDispatch.Post(ReleaseOnLeave);
+        }
+
+        /// <summary>WPF ReleaseHoldingsForExit (RemoteControlService.V2.cs:261, main bafe52cfc): the app exits with a
+        /// controller connected, so hand back what it holds BEFORE the final save, or the save keeps its strict
+        /// lock as the wearer's own. Also refuses a command already queued (the leave generation). Idempotent.</summary>
+        public void ReleaseHoldingsForExit()
+        {
+            if (!IsActive) return;
+            _loop?.Cancel();
+            Interlocked.Increment(ref _leaveGeneration);
+            Remote.RemoteWearer.HandBackAllButStrict();
+            Remote.RemoteWearer.ReleaseSafetyState();
+            Remote.RemoteWearer.Drop();
+            Log.Information("[RemoteControl] Exit with a controller connected: its holdings handed back");
         }
 
         private void ReleaseOnLeave()

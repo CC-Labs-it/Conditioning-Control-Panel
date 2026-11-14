@@ -35,6 +35,85 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void IdleRotatesAcrossRulesAndPersistsWithoutImmediateCycleRepeat()
+    {
+        var old = _s.BarkIdleRotation;
+        try
+        {
+            _s.BarkIdleRotation = new();
+            var rules = Enumerable.Range(0, 4).Select(i => Rule("Idle", "idle" + i)).ToArray();
+            var e = Engine(rules);
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            e.Clock = clock;
+            for (int i = 0; i < 4; i++) { Assert.True(e.DispatchIdle()); clock.Advance(TimeSpan.FromSeconds(61)); }
+            Assert.Equal(4, _said.Select(x => x.Text).Distinct().Count());
+            Assert.Equal(4, _s.BarkIdleRotation.Count);
+            var last = _said.Last().Text;
+            Assert.True(e.DispatchIdle());
+            Assert.NotEqual(last, _said.Last().Text);
+        }
+        finally { _s.BarkIdleRotation = old; }
+    }
+
+    [Fact]
+    public void IdleSkipsMuteAndSpeakingAndUsesConditions()
+    {
+        var rule = Rule("Idle", "eligible");
+        rule.Conditions = new() { ["player_level_gte"] = _s.PlayerLevel + 1 };
+        var e = Engine(rule);
+        Assert.False(e.DispatchIdle());
+        rule.Conditions = null;
+        _s.MasterVolume = 0;
+        Assert.False(e.DispatchIdle());
+        _s.MasterVolume = 50;
+        e.IsSpeaking = () => true;
+        Assert.False(e.DispatchIdle());
+        e.IsSpeaking = () => false;
+        Assert.True(e.DispatchIdle());
+    }
+
+    [Fact]
+    public void IdlePrefersEligibleGatedLinesDespiteAnUngatedMajority()
+    {
+        var old = _s.BarkIdleRotation;
+        int gated = 0;
+        try
+        {
+            var rules = Enumerable.Range(0, 32).Select(i => Rule("Idle", "plain")).ToList();
+            var band = Rule("Idle", "band");
+            band.Conditions = new() { ["player_level_gte"] = 0 };
+            rules.Add(band);
+            for (int seed = 0; seed < 200; seed++)
+            {
+                _s.BarkIdleRotation = new();
+                var e = new BarkEngine(() => new BarkRuleSet(rules), new Random(seed))
+                { Speak = speech => { if (speech.Text == "band") gated++; }, DryRun = false };
+                e.Start();
+                Assert.True(e.DispatchIdle());
+            }
+            Assert.InRange(gated, 45, 110); // uniform selection would yield only about six
+        }
+        finally { _s.BarkIdleRotation = old; }
+    }
+
+    [Fact]
+    public void DryRunExercisesSessionGatesWithoutSpeechOrPersistedWrites()
+    {
+        var rule = Rule("T", "silent");
+        rule.Repeatable = false;
+        rule.ScopeRaw = "lifetime";
+        var e = Engine(rule);
+        e.DryRun = true;
+        var before = _s.BarkVariantRotation.Count;
+        Assert.False(e.Raise("T"));
+        Assert.Empty(_said);
+        Assert.False(_s.IsBarkFired(rule.Id));
+        Assert.Equal(before, _s.BarkVariantRotation.Count);
+        e.DryRun = false;
+        Assert.False(e.Raise("T")); // dry-run still spends the in-memory one-shot
+    }
+
+    [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
         var high = Rule("T", "level {level} in {0}");

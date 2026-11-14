@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// effects over the primary screen. The stage is transparent and click-through (<see cref="X11Overlay"/>); EMI is
 /// the real <see cref="EmiDeskWindow"/> presenting; her speech card is its own window so its buttons stay
 /// clickable (WPF :30). Timings are <see cref="FirstShowScript"/>'s; the guide after the verdict is the Guide
-/// partial. ponytail: bubble pops need input rects on the click-through stage (WPF's layered canvas took the click).</summary>
+/// partial. Live bubble circles take clicks until gather; the rest of the stage stays passive.</summary>
 internal sealed partial class FirstShowStageWindow : Window
 {
     private readonly Canvas _stage = new() { Background = null };
@@ -72,6 +72,12 @@ internal sealed partial class FirstShowStageWindow : Window
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
     private CancellationTokenSource? _load;
+    internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadDesktopInput = X11Pointer.Read;
+    private PixelRect[] _inputBuf = new PixelRect[64];   // reused every frame
+    internal int InputRectCount { get; private set; }
+    internal int InputPushes { get; private set; }
+    internal PixelRect[] InputRects => _inputBuf[..InputRectCount];
+    internal FirstShowEffects? Effects => _effects;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
     private int _beat = -1;
@@ -145,7 +151,9 @@ internal sealed partial class FirstShowStageWindow : Window
         // P51: Tunnel, and only the stop keys, so a focused choice button cannot swallow them.
         AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _speechWindow.AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        _stage.PointerPressed += (_, e) => { if (_playing && ShowTime < S.GatherAt) _effects?.Pop(e.GetPosition(_stage).X, e.GetPosition(_stage).Y); };
+        _stage.PointerPressed += (_, e) => { if (e.GetCurrentPoint(_stage).Properties.IsLeftButtonPressed && _playing && ShowTime < S.GatherAt) {
+            _effects?.Pop(e.GetPosition(_stage).X, e.GetPosition(_stage).Y); UpdateBubbleInput();
+        } };
     }
     /// <summary>Make the stage input-transparent and passive, then show it. False when the platform refuses.</summary>
     internal bool Launch()
@@ -355,6 +363,8 @@ internal sealed partial class FirstShowStageWindow : Window
     internal void Frame()
     {
         if (_closed) return;
+        // WPF FirstShowDesktopWindow.cs:99-104: Escape stops even without speech focus.
+        if (ReadDesktopInput()?.Escape == true) { Close(); return; }
         var now = Clock(); var dt = Math.Min(.05, now - _last); _last = now;
         bool arriving = _emi?.PresentationArriving ?? true;
         if (!_greeted && now > S.GreetAfter && !arriving) { _greeted = true; Greeting(); }
@@ -362,6 +372,7 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_playing)
         {
             _effects?.Tick(time, dt);
+            UpdateBubbleInput();
             while (_beat + 1 < S.Beats.Length && time >= S.Beats[_beat + 1])
             {
                 _beat++;
@@ -377,7 +388,7 @@ internal sealed partial class FirstShowStageWindow : Window
             if (time >= S.Length)
             {
                 _playing = false; _ending = true; _showFrozen = time; _showStart = double.NaN; _stage.Background = null;
-                Credit.SetShown(false);   // WPF :264
+                Credit.SetShown(false); UpdateBubbleInput();   // WPF :264
                 AskVerdict();
             }
         }
@@ -419,6 +430,15 @@ internal sealed partial class FirstShowStageWindow : Window
             _logo.RenderTransform = new ScaleTransform(.82 + .18 * reveal, .82 + .18 * reveal);
         }
         Place();
+    }
+    private void UpdateBubbleInput()
+    {
+        int n = _playing && _effects != null ? _effects.BubbleInputRects(_scale, ref _inputBuf) : 0;
+        // Stayed empty: the region already is (SetClickThrough at open). A non-empty region is re-sent
+        // every frame on purpose: the Win32 path re-reads the cursor on each call.
+        if (n == 0 && InputRectCount == 0) return;
+        InputRectCount = n; InputPushes++;
+        X11Overlay.SetInputRects(this, _inputBuf, n);
     }
     private ShowSize BodySize() => _emi == null ? new ShowSize(0, 0) : new ShowSize(_emi.BodyWidth, _emi.BodyWidth * EmiDeskWindow.BodyAspect);
     private RectD SafeBounds()

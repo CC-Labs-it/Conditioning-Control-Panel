@@ -5,15 +5,20 @@
  *   LEFT 55%   relative drag stick: full lock at +-STEER_LOCK_PX from where the thumb landed,
  *              nothing inside STEER_DEAD_PX, zero the moment it lifts.
  *   RIGHT      hold = hop and drift (the press is the hop, the lift releases the drift and fires
- *              its boost).
+ *              its boost). A finger keeps the side it landed on, however far it slides: in portrait
+ *              the split is a thumb's width away, so a slid thumb must not read as the other hand.
  *   THROTTLE   auto-accelerate, from the first touch on the layer (a touch laptop driven by keys
  *              never cruises on its own).
  *   PAUSE      one 48 px button (Escape does not exist on glass; the phone panic is the host's).
  *   THROW      one 64 px button in the bottom right corner, under the right thumb: the item edge (`item`).
  *   DROP       a separate button above Throw leaves an attack behind without braking or changing steering.
- *              The HUD slot stays the item card at top centre (this layer sits over the HUD, so a tap
- *              there never reached it); the root wears `gr-touch-on` so styles.css lifts the speed
- *              readout and the media credit clear of the button.
+ *              The root wears `gr-touch-on` so styles.css lifts the speed readout and the media credit
+ *              clear of the buttons.
+ *   PORTRAIT   styles.css only (landscape never changes): the HUD item slot takes taps (#hud sits over this
+ *              layer) and moves down to Throw's corner in place of the button, so the held item and its
+ *              fire control are one thing under the thumb. JUMP is a painted ring above it, not a button:
+ *              a press falls through to this layer and is the same right half hop, so the ring only
+ *              shows where to hold, lights while held and says Hold ahead of a held gap (setHoldCue).
  * The WebKit lessons from the old race stay: touchstart's default is prevented over the road, only
  * the wheel pointer is captured, lifts are also heard on the window, and a touchend reconciles held
  * ids with the fingers still down so a swallowed pointerup never strands a drift.
@@ -29,6 +34,8 @@ export const THROW_CSS = 'position:absolute;right:max(16px,env(safe-area-inset-r
   'width:64px;height:64px;border:3px solid #fff;border-radius:50%;background:#201b29;color:#fff;font:700 13px sans-serif;touch-action:none';
 export const DROP_CSS = 'position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(max(14px,env(safe-area-inset-bottom)) + 72px);' +
   'width:64px;height:52px;border:2px solid #fff;border-radius:18px;background:#201b29;color:#fff;font:700 13px sans-serif;touch-action:none';
+
+export const JUMP_LABEL = 'Jump', JUMP_CUE_LABEL = 'Hold';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -62,6 +69,8 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   const pad = mk('gr-touch-pad', layer, 'position:absolute;display:none;width:0;height:0');
   mk('gr-touch-ring', pad, 'position:absolute;left:-48px;top:-48px;width:96px;height:96px;border-radius:50%;border:2px solid rgba(255,255,255,.35)');
   const dot = mk('gr-touch-dot', pad, 'position:absolute;left:-18px;top:-18px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.5)');
+  const jump = mk('gr-touch-jump', layer, '');
+  jump.textContent = JUMP_LABEL; jump.setAttribute('aria-hidden', 'true');
   const pauseBtn = d.createElement('button');
   pauseBtn.type = 'button'; pauseBtn.className = 'gr-touch-btn gr-touch-pause'; pauseBtn.textContent = 'II';
   pauseBtn.setAttribute('aria-label', 'pause');
@@ -88,7 +97,9 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
 
   let steerId = -1, steerX0 = 0, steer = 0, actId = -1, touched = false, disposed = false;
   let hopEdge = false, pauseEdge = false, cameraEdge = false, itemEdge = false, itemBack = false, rearId = -1;
-  const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn'));
+  let jumpLit = false, jumpCue = false;
+  const fingers = new Map();                     // Touch.identifier -> the side that finger landed on
+  const onBtn = (t) => !!(t && typeof t.closest === 'function' && t.closest('.gr-touch-btn, .hud-item'));
   const sideOf = (x) => { const r = layer.getBoundingClientRect(); return x - r.left < (r.width || 1) * STEER_SIDE ? 'left' : 'right'; };
 
   const onPause = (e) => {
@@ -125,6 +136,7 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
   function onBlur() {
     const id = steerId, rear = rearId;
     endSteer(); actId = rearId = -1; hopEdge = pauseEdge = cameraEdge = itemEdge = itemBack = false;
+    fingers.clear();
     try { if (id >= 0) layer.releasePointerCapture(id); } catch (err) { /* already gone */ }
     try { if (rear >= 0) rearBtn.releasePointerCapture(rear); } catch (err) { /* already gone */ }
   }
@@ -165,7 +177,12 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     else return;
     try { layer.releasePointerCapture(e.pointerId); } catch (err) { /* already gone */ }
   }
-  function onTouchStart(e) { if (!disposed && !onBtn(e.target) && e.cancelable) e.preventDefault(); }
+  function onTouchStart(e) {
+    if (disposed) return;
+    const fresh = e.changedTouches || [];
+    for (let i = 0; i < fresh.length; i++) fingers.set(fresh[i].identifier, sideOf(fresh[i].clientX));
+    if (!onBtn(e.target) && e.cancelable) e.preventDefault();
+  }
   function onTouchEnd(e) {
     if (disposed) return;
     let left = false, right = false, rear = false;
@@ -173,8 +190,10 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     for (let i = 0; i < rest.length; i++) {
       if (rest[i].target === rearBtn) rear = true;
       if (onBtn(rest[i].target)) continue;
-      if (sideOf(rest[i].clientX) === 'left') left = true; else right = true;
+      if ((fingers.get(rest[i].identifier) || sideOf(rest[i].clientX)) === 'left') left = true; else right = true;
     }
+    const gone = e.changedTouches || [];
+    for (let i = 0; i < gone.length; i++) fingers.delete(gone[i].identifier);
     if (!left && steerId >= 0) endSteer();
     if (!right) actId = -1;
     if (!rear) rearId = -1;
@@ -208,6 +227,16 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     into.item = itemEdge;
     into.back = itemBack;
     hopEdge = false; pauseEdge = false; cameraEdge = false; itemEdge = false; itemBack = false;
+    const lit = actId >= 0;
+    if (lit !== jumpLit) { jumpLit = lit; if (lit) jump.classList?.add('on'); else jump.classList?.remove('on'); }
+  }
+  /** Boot says when a gap ahead must be held: the Jump ring turns gold and reads Hold (a colour fade, no motion). */
+  function setHoldCue(on) {
+    const cue = !!on;
+    if (cue === jumpCue) return;
+    jumpCue = cue;
+    if (cue) jump.classList?.add('cue'); else jump.classList?.remove('cue');
+    jump.textContent = cue ? JUMP_CUE_LABEL : JUMP_LABEL;
   }
   function dispose() {
     disposed = true;
@@ -238,5 +267,5 @@ export function createTouch({ root = null, win = null, doc = null } = {}) {
     }
     if (layer.parentNode) layer.parentNode.removeChild(layer);
   }
-  return { el: layer, poll, dispose };
+  return { el: layer, poll, setHoldCue, dispose };
 }

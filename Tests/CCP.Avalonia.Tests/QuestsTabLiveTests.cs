@@ -23,13 +23,21 @@ namespace CCP.Avalonia.Tests;
 /// (WPF MainWindow.QuestsTab.cs RefreshQuestUI / MainWindow.Quests.cs OnQuestCompleted).</summary>
 public sealed class QuestsTabLiveTests
 {
-    [Fact]
-    public void TabPaintsTheBoard_FollowsCompletion_AndSpendsRerolls()
+    [Theory]
+    [InlineData("reroll_daily")]
+    [InlineData("reroll_weekly")]
+    public void TabPaintsTheBoard_FollowsCompletion_AndSpendsRerolls(string feedback)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
             var dir = Directory.CreateTempSubdirectory("ccp-quests-tab-").FullName;
             var oldQuests = AvApp.Quests;
+            var uiActions = new List<string?>();
+            ConditioningControlPanel.CoreBark.UiAction = action =>
+            {
+                uiActions.Add(action);
+                throw new InvalidOperationException("Feedback must not block the reroll");
+            };
             Window? host = null;
             QuestService? quests = null;
             // CompleteQuest reads CoreSettings.Service (null when no earlier test set a provider, so it
@@ -121,6 +129,7 @@ public sealed class QuestsTabLiveTests
                 tab.FindControl<Button>("BtnRerollWeekly")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.NotEqual(weekly, quests.Progress.WeeklyQuest!.DefinitionId);
+                Assert.Contains(feedback, uiActions);
                 // WPF "🔄 Reroll (n left)" / "🔄 No rerolls left": Fluent ArrowSync beside the bare text.
                 var weeklyReroll = tab.FindControl<IconLabel>("TxtWeeklyReroll")!;
                 int weeklyLeft = quests.GetRemainingWeeklyRerolls();

@@ -157,6 +157,39 @@ namespace ConditioningControlPanel.Views.Controls
             }
         }
 
+        // ---- the Prize Counter frame -----------------------------------------------------
+
+        public static readonly DependencyProperty FrameIdProperty = DependencyProperty.Register(
+            nameof(FrameId), typeof(string), typeof(AdornedAvatar),
+            new PropertyMetadata(null, (d, _) => (d as AdornedAvatar)?.ApplyFrame()));
+
+        /// <summary>Prize Counter frame id (<see cref="ShopCosmetics"/>), or null. Unknown ids read as none.</summary>
+        public string? FrameId
+        {
+            get => (string?)GetValue(FrameIdProperty);
+            set => SetValue(FrameIdProperty, value);
+        }
+
+        private void ApplyFrame()
+        {
+            try
+            {
+                if (FrameLayer == null) return;
+                var art = CosmeticsCatalog.GetFrameImage(FrameId);
+                FrameLayer.Source = art;
+                FrameLayer.Visibility = art == null ? Visibility.Collapsed : Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("AdornedAvatar: frame {Id} failed: {E}", FrameId ?? "none", ex.Message);
+                if (FrameLayer != null)
+                {
+                    FrameLayer.Source = null;
+                    FrameLayer.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
         // ---- geometry -------------------------------------------------------------------
 
         public static readonly DependencyProperty AvatarSizeProperty = DependencyProperty.Register(
@@ -228,6 +261,16 @@ namespace ConditioningControlPanel.Views.Controls
                     AvatarRing.CornerRadius = new CornerRadius(size / 2d);
                     AvatarRing.BorderThickness = new Thickness(RingThickness);
                     if (RingBrush != null) AvatarRing.BorderBrush = RingBrush;
+                }
+
+                if (FrameLayer != null)
+                {
+                    // Same trick as the decoration below: canvas larger than the slot, margin
+                    // negative so layout never clips it and the avatar still measures `size`.
+                    var frame = size / ShopCosmetics.FrameWindowRatio;
+                    FrameLayer.Width = frame;
+                    FrameLayer.Height = frame;
+                    FrameLayer.Margin = new Thickness(-(frame - size) / 2d);
                 }
 
                 if (DecoLayer != null)

@@ -617,6 +617,59 @@ public sealed class AssetsTabTests
         throw new InvalidOperationException("control never realized");
     }
 
+    // WPF MainWindow.Assets.cs:918: videos get a frame thumbnail (Windows shell there, OpenCV first frame here);
+    // an undecodable file keeps the placeholder.
+    [Fact]
+    public Task SelectingTheVideosFolderGivesADecodableVideoAFrameThumbnail() => Run(async (shell, tab, s) =>
+    {
+        var videos = tab.AssetTree.Single(n => n.Name == "videos");
+        var clip = Path.Combine(videos.FullPath!, "clip.avi");
+        using (var writer = new OpenCvSharp.VideoWriter(clip, OpenCvSharp.FourCC.MJPG, 5, new OpenCvSharp.Size(32, 24)))
+        using (var frame = new OpenCvSharp.Mat(24, 32, OpenCvSharp.MatType.CV_8UC3, new OpenCvSharp.Scalar(180, 105, 255)))
+            for (var i = 0; i < 3; i++) writer.Write(frame);
+        tab.AssetTreeView.SelectedItem = videos;
+        await tab.ThumbnailLoads;
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(tab.CurrentFolderFiles.Single(f => f.Name == "clip.avi").Thumbnail);
+        // Off Windows the placeholder stays. On Windows it is whatever the shell gives (WPF ShellThumbnailHelper):
+        // the icon fallback on one CI run, null on the next, so there is no stable expectation to assert there.
+        if (!OperatingSystem.IsWindows())
+            Assert.Null(tab.CurrentFolderFiles.Single(f => f.Name == "v.mp4").Thumbnail);
+    });
+
+    // WPF MainWindow.Assets.cs:801-806: a pack video is decrypted to a temp file for its thumbnail, which is deleted after.
+    [Fact]
+    public Task APackVideoGetsAFrameThumbnailAndItsTempFileIsDeleted() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var clip = Path.Combine(assets, "clip.avi");
+        using (var writer = new OpenCvSharp.VideoWriter(clip, OpenCvSharp.FourCC.MJPG, 5, new OpenCvSharp.Size(32, 24)))
+        using (var frame = new OpenCvSharp.Mat(24, 32, OpenCvSharp.MatType.CV_8UC3, new OpenCvSharp.Scalar(180, 105, 255)))
+            for (var i = 0; i < 3; i++) writer.Write(frame);
+        var dir = Path.Combine(assets, ".packs", "vid-guid");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        var manifest = new InstalledPackManifest { PackId = "vid-pack", PackGuid = "vid-guid", PackName = "Vid Pack" };
+        manifest.Files.Add(new PackFileEntry { OriginalName = "clip.avi", ObfuscatedName = "clip.enc", FileType = "video", Extension = ".avi" });
+        File.WriteAllBytes(Path.Combine(dir, "content", "clip.enc"), PackEncryptionService.Encrypt(File.ReadAllBytes(clip)));
+        File.Delete(clip);
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        ContentPackStore.Current = new ContentPackStore(() => assets, () => s, () => { });
+        try
+        {
+            shell.ShowTab("settings");
+            shell.ShowTab("assets");
+            var pack = Assert.Single(tab.AssetTree.Single(n => n.IsPackFolder).Children);
+            tab.AssetTreeView.SelectedItem = pack.Children.Single(n => n.PackFileType == "video");
+            await tab.ThumbnailLoads;
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(Assert.Single(tab.CurrentFolderFiles).Thumbnail);
+            var temp = Path.Combine(assets, ".temp");
+            Assert.True(!Directory.Exists(temp) || Directory.GetFiles(temp).Length == 0);
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
     private static async Task Pump(Func<bool> done)
     {
         for (var i = 0; i < 200 && !done(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }

@@ -188,7 +188,7 @@
                                        Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
                             <!-- Media source (status glyph + label) -->
                             <StackPanel Orientation="Horizontal"
-                                        IsVisible="{Binding ShowMediaSource}">
+                                        IsVisible="{Binding ShowMediaSource}" ToolTip.Tip="{Binding MediaSourceTooltip}">
                                 <fx:IconGlyph Kind="{Binding MediaSourceGlyph}"
                                               Foreground="{Binding MediaSourceBrush}"
                                               Size="11" VerticalAlignment="Center"
@@ -199,6 +199,11 @@
                                 <TextBlock Text=" · "
                                            Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
                             </StackPanel>
+                            <!-- Media length (m:ss or h:mm:ss); hidden while unknown (WPF DeeperTabView.xaml:236-241) -->
+                            <TextBlock Text="{Binding DurationDisplay}" IsVisible="{Binding ShowDuration}"
+                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                            <TextBlock Text=" · " IsVisible="{Binding ShowDuration}"
+                                       Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
                             <!-- Auto-tag chips -->
                             <ItemsControl ItemsSource="{Binding Tags}"
                                           IsVisible="{Binding ShowTags}">

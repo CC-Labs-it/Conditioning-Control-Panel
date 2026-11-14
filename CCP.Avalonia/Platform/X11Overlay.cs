@@ -117,6 +117,11 @@ internal static class X11Overlay
         }
     }
 
+    internal static void SetPassive(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) Win32Overlay.SetPassive(window, hwnd);
+    }
+
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,
     /// or gives it back its input. The X11 equivalent of adding and clearing
     /// <c>WS_EX_TRANSPARENT</c>, and reversible at runtime the same way.
@@ -257,7 +262,7 @@ internal static class X11Overlay
         return ok;
     }
 
-    private static bool SetOverrideRedirect(TopLevel window, bool passive)
+    internal static bool SetOverrideRedirect(TopLevel window, bool passive)
     {
         if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd, passive);
         // The struct offsets below are the LP64 layout (x86_64, arm64).
@@ -283,10 +288,13 @@ internal static class X11Overlay
         }
     }
 
+    internal static Action<TopLevel>? RaiseRequestedForTests; // Headless call-order observation only.
+
     /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An
     /// override-redirect window is outside the WM, so the plain XRaiseWindow is the one that holds.</summary>
     internal static bool Raise(TopLevel window)
     {
+        RaiseRequestedForTests?.Invoke(window);
         if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd);
         if (!TryGetXid(window, out var xid)) return false;
         lock (Gate)
