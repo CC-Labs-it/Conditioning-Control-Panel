@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -22,12 +21,7 @@ namespace CCP.Avalonia.Tests;
 /// inputs. Owned hides it, signed out offers the login, signed in reads "not available" (no counter here).</summary>
 public sealed class V2GetItRowTests
 {
-    private static void EnsureApp()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
+    private static void EnsureApp() => BubbleMotionPickerTests.Setup();
 
     [Fact]
     public void Decide_maps_ownership_and_sign_in_to_the_rule_states()
@@ -140,6 +134,373 @@ public sealed class V2GetItRowTests
             return Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public Task OwnedBrainDrainToggleRemainsHiddenUntilEffectExists() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var seam = PrizeOwnership.IsGranted;
+        Window? host = null;
+        try
+        {
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            Assert.True(panel.FindControl<Control>("MotionRow")!.IsVisible);
+            Assert.False(panel.FindControl<CheckBox>("ChkBrainDrainBubble")!.IsVisible);
+        }
+        finally
+        {
+            host?.Close();
+            PrizeOwnership.IsGranted = seam;
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BubbleOfferAndBrainDrainToggleAreUnavailableUntilEffectExists() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var seam = PrizeOwnership.IsGranted;
+        Window? host = null;
+        try
+        {
+            PrizeOwnership.IsGranted = _ => false;
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            var brain = panel.FindControl<CheckBox>("ChkBrainDrainBubble")!;
+            Assert.False(row.IsVisible);
+            Assert.False(brain.IsVisible);
+            var confirms = 0;
+            row.Confirm = (_, _) => { confirms++; return Task.FromResult(true); };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, confirms);
+            Assert.Null(row.LastBuy);
+
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            Task.Run(() => ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged()).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(row.IsVisible);
+            Assert.False(brain.IsVisible);
+            Assert.True(panel.FindControl<Control>("MotionRow")!.IsVisible);
+        }
+        finally
+        {
+            host?.Close();
+            PrizeOwnership.IsGranted = seam;
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BubbleOfferIsVisibleAndCanStartPurchase() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service);
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var proxy = new FakeProxy();
+        Window? host = null;
+        try
+        {
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("bubble-test", "test-token", false, 50);
+            CoreAccount.UnifiedUserId = "bubble-test";
+            PrizeOwnership.IsGranted = _ => false;
+            var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(proxy))!;
+            V2PurchaseHead.Service = svc;
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"sp\":50,\"catalog\":[{\"id\":\"bubbles_v2\",\"priceSp\":30,\"sale\":\"on\"}]}");
+            svc.EnsureState();
+            await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(V2PurchaseRowState.Offer, svc.RowFor(V2PurchaseRule.BubblesPrizeId).State);
+
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            Assert.False(row.IsVisible);
+            var blockedConfirms = 0;
+            row.Confirm = (_, _) => { blockedConfirms++; return Task.FromResult(true); };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, blockedConfirms);
+            Assert.Null(row.LastBuy);
+            Assert.Single(proxy.Seen);
+            // Keep the purchase flow covered for when the effect becomes available.
+            row.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
+            Assert.True(row.IsVisible);
+            Assert.True(panel.FindControl<Border>("V2Box")!.IsVisible);
+            var confirms = 0;
+            row.Confirm = (_, _) => { confirms++; return Task.FromResult(false); };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, confirms);
+            Assert.Null(row.LastBuy);
+            Assert.Single(proxy.Seen); // declining sends no buy
+            row.Confirm = (_, _) => Task.FromResult(true);
+            proxy.Reply("{\"ok\":true,\"sp\":20,\"prizes\":{\"revision\":7,\"grants\":[\"fx.bubble.rain\"]}}");
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"catalog\":[]}");
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(await row.LastBuy!.WaitAsync(TimeSpan.FromSeconds(10)));
+
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(panel.FindControl<Border>("V2Box")!.IsVisible);
+            Assert.True(panel.FindControl<Control>("MotionRow")!.IsVisible);
+            Assert.False(row.IsVisible);
+        }
+        finally
+        {
+            host?.Close();
+            PrizeOwnership.ResetHeld();
+            s.AuthToken = null;
+            (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service) = old;
+        }
+    });
+
+    [Fact]
+    public Task VisibleOfferReadsCounterAfterSignInAndHiddenOfferWaitsUntilShown() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service);
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var proxy = new FakeProxy();
+        EventHandler? invalidate = null;
+        Window? host = null;
+        try
+        {
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = (null, null, false, 50);
+            CoreAccount.UnifiedUserId = null;
+            PrizeOwnership.IsGranted = _ => false;
+            var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(proxy))!;
+            V2PurchaseHead.Service = svc;
+            invalidate = (_, _) => svc.Invalidate(); // App.axaml.cs:739
+            CoreAccount.UnifiedIdentityChanged += invalidate;
+            const string offer = "{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"sp\":50,\"catalog\":[{\"id\":\"flashes_v2\",\"priceSp\":30,\"sale\":\"on\"}]}";
+            proxy.Reply(offer);
+            var firstRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            svc.Changed += () => { if (proxy.Seen.Count >= 1) firstRead.TrySetResult(); };
+            var panel = new FlashFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetFlashesV2")!;
+            var button = row.FindControl<Button>("BtnGet")!;
+            Assert.True(row.IsEffectivelyVisible);
+            Assert.Equal(V2PurchaseRowState.SignIn, row.Row.State);
+            Assert.Empty(proxy.Seen);
+            row.OpenLogin = () =>
+            {
+                (s.UnifiedId, s.AuthToken) = ("signed-in", "test-token");
+                CoreAccount.UnifiedUserId = "signed-in";
+                return Task.CompletedTask;
+            };
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await firstRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(proxy.Seen);
+            Assert.Equal(V2PurchaseRowState.Offer, row.Row.State);
+            Assert.Equal("30", row.FindControl<TextBlock>("TxtPrice")!.Text);
+            Assert.True(button.IsVisible && button.IsEnabled);
+
+            panel.IsVisible = false;
+            (s.UnifiedId, s.AuthToken) = (null, null);
+            CoreAccount.UnifiedUserId = null;
+            Dispatcher.UIThread.RunJobs();
+            proxy.Reply(offer);
+            var secondRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            svc.Changed += () => { if (proxy.Seen.Count >= 2) secondRead.TrySetResult(); };
+            (s.UnifiedId, s.AuthToken) = ("another-user", "test-token");
+            CoreAccount.UnifiedUserId = "another-user";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(proxy.Seen); // no state read for a hidden panel
+            panel.IsVisible = true;
+            await secondRead.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, proxy.Seen.Count);
+            Assert.Equal(V2PurchaseRowState.Offer, row.Row.State);
+        }
+        finally
+        {
+            if (invalidate != null) CoreAccount.UnifiedIdentityChanged -= invalidate;
+            host?.Close();
+            s.AuthToken = null;
+            (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service) = old;
+        }
+    });
+
+    [Fact]
+    public Task SigningBackInToTheSameAccountReadsTheCounter() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service);
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var proxy = new FakeProxy();
+        Window? host = null;
+        try
+        {
+            // The id was restored but the token is absent: the row asks to sign in.
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("same-user", null, false, 50);
+            CoreAccount.UnifiedUserId = "same-user";
+            PrizeOwnership.IsGranted = _ => false;
+            var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(proxy))!;
+            V2PurchaseHead.Service = svc;
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"sp\":50,\"catalog\":[{\"id\":\"flashes_v2\",\"priceSp\":30,\"sale\":\"on\"}]}");
+            var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            svc.Changed += () => { if (proxy.Seen.Count >= 1) read.TrySetResult(); };
+            var panel = new FlashFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetFlashesV2")!;
+            Assert.Equal(V2PurchaseRowState.SignIn, row.Row.State);
+            // Same id, so no UnifiedIdentityChanged: only the token comes back.
+            row.OpenLogin = () => { s.AuthToken = "test-token"; return Task.CompletedTask; };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await read.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(proxy.Seen);
+            Assert.Equal(V2PurchaseRowState.Offer, row.Row.State);
+            Assert.Equal("30", row.FindControl<TextBlock>("TxtPrice")!.Text);
+        }
+        finally
+        {
+            host?.Close();
+            s.AuthToken = null;
+            (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service) = old;
+        }
+    });
+
+    [Fact]
+    public Task VisibleOfferReadsNewAccountAfterAnOlderReadFinishes() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service);
+        var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+        CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        var proxy = new FakeProxy();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler? invalidate = null;
+        Window? host = null;
+        try
+        {
+            (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints) = ("first-user", "test-token", false, 100);
+            CoreAccount.UnifiedUserId = "first-user";
+            PrizeOwnership.IsGranted = _ => false;
+            var svc = V2PurchaseHead.Create(null, "http://127.0.0.1:9", new System.Net.Http.HttpClient(proxy))!;
+            V2PurchaseHead.Service = svc;
+            invalidate = (_, _) => svc.Invalidate();
+            CoreAccount.UnifiedIdentityChanged += invalidate;
+            proxy.PauseNext = release;
+            proxy.Requested += count => { if (count == 1) first.TrySetResult(); };
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":4,\"catalog\":[{\"id\":\"flashes_v2\",\"priceSp\":30,\"sale\":\"on\"}]}");
+            proxy.Reply("{\"ok\":true,\"open\":true,\"catalogVersion\":5,\"catalog\":[{\"id\":\"flashes_v2\",\"priceSp\":45,\"sale\":\"on\"}]}");
+            svc.Changed += () => { if (proxy.Seen.Count >= 2) second.TrySetResult(); };
+            var panel = new FlashFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            await first.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Single(proxy.Seen);
+            (s.UnifiedId, s.AuthToken) = ("second-user", "test-token");
+            CoreAccount.UnifiedUserId = "second-user";
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(proxy.Seen); // the first account's request is still in flight
+            release.TrySetResult();
+            await second.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.LastBackgroundRead.WaitAsync(TimeSpan.FromSeconds(5));
+            Dispatcher.UIThread.RunJobs();
+            var row = panel.FindControl<V2GetItRow>("RowGetFlashesV2")!;
+            Assert.Equal(2, proxy.Seen.Count);
+            Assert.Equal(V2PurchaseRowState.Offer, row.Row.State);
+            Assert.Equal("45", row.FindControl<TextBlock>("TxtPrice")!.Text);
+        }
+        finally
+        {
+            release.TrySetResult();
+            if (invalidate != null) CoreAccount.UnifiedIdentityChanged -= invalidate;
+            host?.Close();
+            s.AuthToken = null;
+            (s.UnifiedId, s.OfflineMode, s.SkillPoints, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, PrizeOwnership.IsGranted, V2PurchaseHead.Service) = old;
+        }
+    });
+
+    [Fact]
+    public Task BubbleCardOffersSignInAndSwitchesToTheOwnedPicker() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var settings = CoreSettings.Current;
+        var old = (settings.UnifiedId, settings.OfflineMode, CoreAccount.UnifiedUserId,
+            CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted);
+        Window? host = null;
+        try
+        {
+            settings.UnifiedId = null;
+            settings.OfflineMode = false;
+            CoreAccount.UnifiedUserId = null;
+            CoreSecrets.RetrieveProvider = _ => null;
+            PrizeOwnership.IsGranted = _ => false;
+            var panel = new BubblePopFeatureControl();
+            host = new Window { Content = panel };
+            host.Show();
+            var row = panel.FindControl<V2GetItRow>("RowGetBubblesV2")!;
+            Assert.False(row.IsVisible);
+            // Exercise the sign-in flow under the future enabled configuration.
+            row.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
+            var box = panel.FindControl<Border>("V2Box")!;
+            var motion = panel.FindControl<Control>("MotionRow")!;
+            Assert.True(box.IsVisible);
+            Assert.True(row.IsVisible);
+            Assert.False(motion.IsVisible);
+            Assert.Equal(Loc.Get("v2_get_bubble_blurb"), row.FindControl<TextBlock>("TxtBlurb")!.Text);
+            Assert.Equal(V2PurchaseRowState.SignIn, row.Row.State);
+            var opened = 0;
+            row.OpenLogin = () => { opened++; return Task.CompletedTask; };
+            row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, opened);
+
+            PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleRain;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(row.IsVisible);
+            Assert.True(box.IsVisible);
+            Assert.True(motion.IsVisible);
+            Assert.Contains(panel.FindControl<ComboBox>("CmbMotion")!.Items.OfType<ComboBoxItem>(),
+                item => item.Tag is ConditioningControlPanel.Models.BubbleMotionStyle.Rain);
+        }
+        finally
+        {
+            host?.Close();
+            (settings.UnifiedId, settings.OfflineMode, CoreAccount.UnifiedUserId,
+                CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted) = old;
+        }
+        return Task.CompletedTask;
+    });
 
     /// <summary>Row feat-backroom-counter-buy: the startup-built service over a fake proxy. The row reads
     /// the counter when shown, Get it confirms at the shown price, buys, toasts, adopts the receipt's
@@ -299,13 +660,19 @@ public sealed class V2GetItRowTests
     {
         public readonly System.Collections.Concurrent.ConcurrentQueue<string> Seen = new();
         private readonly System.Collections.Concurrent.ConcurrentQueue<(string Json, System.Net.HttpStatusCode Code)> _replies = new();
+        public TaskCompletionSource? PauseNext;
+        public event Action<int>? Requested;
         public void Reply(string json, System.Net.HttpStatusCode code = System.Net.HttpStatusCode.OK) => _replies.Enqueue((json, code));
-        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage r, System.Threading.CancellationToken ct)
+        protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage r, System.Threading.CancellationToken ct)
         {
             Seen.Enqueue(r.RequestUri!.AbsolutePath);
             if (!_replies.TryDequeue(out var next)) throw new System.Net.Http.HttpRequestException("no scripted reply");
-            return Task.FromResult(new System.Net.Http.HttpResponseMessage(next.Code)
-                { Content = new System.Net.Http.StringContent(next.Json, System.Text.Encoding.UTF8, "application/json") });
+            var pause = PauseNext;
+            PauseNext = null;
+            Requested?.Invoke(Seen.Count);
+            if (pause != null) await pause.Task.WaitAsync(ct);
+            return new System.Net.Http.HttpResponseMessage(next.Code)
+                { Content = new System.Net.Http.StringContent(next.Json, System.Text.Encoding.UTF8, "application/json") };
         }
     }
 }

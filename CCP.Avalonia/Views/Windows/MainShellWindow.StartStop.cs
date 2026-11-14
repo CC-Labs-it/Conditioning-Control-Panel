@@ -10,6 +10,7 @@ using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -117,9 +118,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!systemInitiated) App.Achievements?.CheckRelapse();
                 // WPF StartEngineFromUser: a resume is not a new run; the parked session comes back after the start.
                 var resuming = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true };
-                CoreEngine.Start(resumingSession: resuming);
+                CoreEngine.Start(resumingSession: resuming, systemInitiated: systemInitiated);   // WPF StartStop.cs:341
                 StartEngineRamp();
                 if (resuming) App.Sessions?.ResumeAfterEngineStart();
+                // WPF StartStop.cs:416-422; refuses unless enabled + consent + entitled. A panic stop holds
+                // Takeover off until the user restarts it (StopAutonomyForPanic), so an engine start never lifts it.
+                if (!AutonomyStoppedForPanic) Autonomy.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -129,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 UpdateStartButton();
                 if (!systemInitiated) _ = MaybePromptMandatoryVideoEnhancement(this, () => CoreEngine.IsRunning,   // WPF StartStop.cs:443
                     () => Platform.WebcamTracker.Instance.IsRunning, () => Named<Tabs.SettingsTabView>("SettingsTab")?.BtnWebcamTracking_Click(null, new()));
+                if (resuming) { SetPauseButton(false); OnSessionTick(); }   // the parked run is live again: repaint Pause and the labels
             });
         }
 
@@ -171,6 +176,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            // WPF StartStop.cs:548-555: Takeover the user did not switch on for itself stops with the engine.
+            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop();
             Deeper.ScreenShake.Stop();
             // WPF MainWindow.StartStop.cs:533-547: preserve only the standalone bed, release ducking.
             if (!CoreSettings.Current.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();

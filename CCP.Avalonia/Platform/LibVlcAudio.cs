@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public void Seed()
         {
             Instance = this;
-            LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
+            LayeredAudio.Instance = new LayeredAudio((path, volume) => new LayeredAudio.VlcLayerPlayer(_vlc, path, initialVolume: volume));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never

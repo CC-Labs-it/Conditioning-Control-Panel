@@ -31,7 +31,7 @@ public sealed class EngineAudioOnlyTests
         CoreSettings.ServiceProvider = () => service;
         var file = Path.GetTempFileName();
         var player = new Player();
-        using var audio = new LayeredAudio(_ => player = new Player());
+        using var audio = new LayeredAudio((_, _) => player = new Player());
         LayeredAudio.Instance = audio;
         var s = CoreSettings.Current;
         s.FlashEnabled = s.SubliminalEnabled = s.BouncingTextEnabled = s.BubblesEnabled = false;
