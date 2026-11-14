@@ -41,7 +41,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try { if (top?.Clipboard is { } c) await c.SetTextAsync(url); } catch { }
         };
 
-        internal static UpdateInfo? Latest { get; private set; }
+        private static UpdateInfo? _latest;
+        internal static event Action? LatestChanged;
+        internal static UpdateInfo? Latest
+        {
+            get => _latest;
+            set { _latest = value; LatestChanged?.Invoke(); }
+        }
+        // The launcher chip's offer and the startup offer are one offer a run (#4511).
+        internal static bool _offered;
         private static bool _busy;
         private static bool _offering;
 
@@ -192,7 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     await Task.Delay(500);
                 if (!closed) StartupLadder.EnqueueModal("update-available", 80, async () =>
                 {
-                    if (shell.IsVisible && CoreSettings.Current.HasAcceptedAgeVerification && !_busy)
+                    if (shell.IsVisible && CoreSettings.Current.HasAcceptedAgeVerification && !_busy && !_offered)
                         await OfferAsync(shell, info);
                 });
             }
@@ -258,8 +266,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
-        private static async Task OfferAsync(Window owner, UpdateInfo info)
+        internal static async Task OfferAsync(Window owner, UpdateInfo info)
         {
+            if (_busy) return;
+            _offered = true;
             _busy = _offering = true;
             try
             {

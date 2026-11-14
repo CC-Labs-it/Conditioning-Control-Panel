@@ -99,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 else { _statusTimer.Stop(); StopLobby(); }
             };
             BuildTiles();
+            HookUpdateChip();
             HookVeil();
             HookFx();
             HookPress(PanelCta);
