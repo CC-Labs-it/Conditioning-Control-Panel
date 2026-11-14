@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Possession;
@@ -40,6 +41,7 @@ internal sealed class DodgeEffect : IPossessionEffect
     private int _count;
     private double _returnMs;
     private TaskCompletionSource? _returned;
+    private IDisposable? _returnTimer;
 
     public bool CanApply(PossessionContext ctx, PossessionTarget? target) => CanApplyCore(ctx, target, false);
 
@@ -139,13 +141,22 @@ internal sealed class DodgeEffect : IPossessionEffect
         _returnMs = Math.Clamp(duration.TotalMilliseconds, 300, 800);
         _start = null;
         _returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _frames!.Subscribe(OnFrame);
-        return _returned.Task;
+        var returned = _returned;
+        try
+        {
+            // A minimized window can stop frames. Keep reassembly bounded on the UI dispatcher.
+            _returnTimer = DispatcherTimer.RunOnce(() => { if (ReferenceEquals(_returned, returned)) Release(); },
+                TimeSpan.FromMilliseconds(_returnMs + 1000));
+            _frames!.Subscribe(OnFrame);
+        }
+        catch { Release(); }
+        return returned.Task;
     }
 
     private void Release()
     {
         _frames?.Unsubscribe(OnFrame);
+        _returnTimer?.Dispose(); _returnTimer = null;
         if (_host != null) _host.PossessionPointer.Moved -= OnMove;
         try { _lease?.ReleaseImmediate(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Possession dodge lease release failed"); }
         _lease = null;

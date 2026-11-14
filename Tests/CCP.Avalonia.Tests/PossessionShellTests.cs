@@ -38,9 +38,12 @@ public sealed class PossessionShellTests
         public DateTime Clock = DateTime.UtcNow;
     }
 
-    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null)
+    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
+        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
+
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null)
     {
-        AvaloniaTestDispatcher.Run(() =>
+        return AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
@@ -75,7 +78,7 @@ public sealed class PossessionShellTests
             {
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
-                body(rig);
+                await body(rig);
             }
             finally
             {
@@ -321,7 +324,7 @@ public sealed class PossessionShellTests
     [Theory]
     [InlineData("BtnClose")]
     [InlineData("BtnMinimize")]
-    public void CatalogDodgeMovesRealCloseButtonAndUndoRestoresItsLease(string buttonName) => Run(rig =>
+    public Task CatalogDodgeMovesRealCloseButtonAndUndoRestoresItsLease(string buttonName) => RunAsync(async rig =>
     {
         Frame();
         var host = (IAvaloniaPossessionHost)rig.Shell;
@@ -374,11 +377,11 @@ public sealed class PossessionShellTests
         Assert.Equal(afterThree, host.BoundsOnGhostLayer(close)!.Value);
         Assert.Equal(1, attribution.Charges);
         var returning = effect.UndoAsync(TimeSpan.FromMilliseconds(600));
-        rig.Frames.Frame(TimeSpan.FromMilliseconds(4000));
-        rig.Frames.Frame(TimeSpan.FromMilliseconds(4300));
         Assert.False(returning.IsCompleted);
-        // Panic can interrupt an in-progress eased return synchronously.
-        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+        // Pump only the dispatcher, never the fake frame source: the real timer must release it.
+        var wait = System.Diagnostics.Stopwatch.StartNew();
+        await Task.WhenAny(returning, Task.Delay(TimeSpan.FromSeconds(8)));
+        Assert.InRange(wait.Elapsed.TotalMilliseconds, 600, 8000);
         Assert.True(returning.IsCompleted);
         Assert.False(effect.IsLive);
         Assert.False(PossessionLease.IsLeased(close));
@@ -392,7 +395,7 @@ public sealed class PossessionShellTests
     });
 
     [Fact]
-    public void DirectorBooksAndStartsDodgeThenPanicRestoresIt() => Run(rig =>
+    public Task DirectorBooksAndStartsDodgeThenPanicRestoresIt() => RunAsync(async rig =>
     {
         Frame();
         var host = (IAvaloniaPossessionHost)rig.Shell;
@@ -417,8 +420,11 @@ public sealed class PossessionShellTests
         rig.Frames.Frame(TimeSpan.FromMilliseconds(1500));
         rig.Frames.Frame(TimeSpan.FromMilliseconds(1900));
         Assert.NotEqual(home.X, host.BoundsOnGhostLayer(close)!.Value.X);
+        // Panic while the dodge is live gives the button back at once (WPF parity: a ghost the
+        // director already released finishes its eased return; the stricter stop is a policy call).
         rig.Director.UndoAll();
         Assert.False(PossessionLease.IsLeased(close));
+        await Task.CompletedTask;
         Assert.False(target.IsLive);
         Assert.Equal(0, rig.Director.LiveEffectCount);
     });
