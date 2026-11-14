@@ -61,7 +61,7 @@ public sealed class PanicKeyChasterHoldTests
             .ReplaceLineEndings("\n");
         var at = src.IndexOf("internal void HandlePanicKeyPress(DateTime now)", StringComparison.Ordinal);
         var body = src.Substring(at, src.IndexOf("\n        }\n", at, StringComparison.Ordinal) - at);
-        int pause = body.IndexOf("if (TryGamePauseOnEscape(now)) return;", StringComparison.Ordinal);
+        int pause = body.IndexOf("if (TryGamePauseOnEscape(now, fromPanicKey: !fromStopButton)) return;", StringComparison.Ordinal);
         int hold = body.IndexOf("PanicChasterHold.Open(\"panic key\");", StringComparison.Ordinal);
         int lockCard = body.IndexOf("LockCardWindow.IsAnyOpen()", StringComparison.Ordinal);
         int palette = body.IndexOf("SettingsPaletteWindow.TryConsumeEscape()", StringComparison.Ordinal);

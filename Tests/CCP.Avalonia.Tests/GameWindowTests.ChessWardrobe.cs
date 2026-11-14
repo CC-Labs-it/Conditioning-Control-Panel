@@ -127,8 +127,8 @@ public sealed partial class GameWindowTests
             w.Posted += json => frames.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
             FinishEquip(w.PbpEquipPending);
-            Assert.Equal("owned", (string?)frames[2]["type"]);
-            Assert.Equal(2, frames[2]["grants"]!.Count());
+            Assert.Equal("owned", (string?)frames[3]["type"]);   // after settings, identity and the media state
+            Assert.Equal(2, frames[3]["grants"]!.Count());
             var adopted = status == 200 && reply != "{bad";
             Assert.Equal(adopted ? "prime.banner.arena" : null, PbpLookRules.Read(CoreSettings.Current.ChessLook).Look.Banner);
             Assert.Equal(adopted ? null : local.Set, PbpLookRules.Read(CoreSettings.Current.ChessLook).Look.Set);

@@ -181,8 +181,9 @@ namespace ConditioningControlPanel.Services
         /// The <c>/v2/user/sync</c> response: conditioning minutes take-higher, then user level/xp/season
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
         /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
-        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe) or
-        /// SeasonResetPending on level_reset. Does not save.
+        /// An accepted level_reset sets SeasonResetPending and raises <see cref="SeasonAdvanced"/> so the shell runs
+        /// its silent bookkeeping (WPF ProfileSyncService.cs:2469). ponytail: no anti-cheat clamp (a downward
+        /// write; skipping it errs safe). Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
@@ -212,6 +213,9 @@ namespace ConditioningControlPanel.Services
                     settings.HighestLevelEver = user.HighestLevelEver;
                     settings.UnlockedSkills = ((response["unlocked_skills"] as JArray)?.Values<string>().OfType<string>() ?? Enumerable.Empty<string>())
                         .Union(settings.UnlockedSkills ?? new List<string>()).ToList();
+                    // WPF ProfileSyncService.cs:2469: a level_reset IS the reset. One-shot from the server, so no loop.
+                    settings.SeasonResetPending = true;
+                    SeasonAdvanced?.Invoke(settings);
                 }
             }
             else if (user.Level > 0)
@@ -264,7 +268,8 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);
             return seasonAdvances;
         }
-        /// <summary>A confirmed server season advanced during profile sync.</summary>
+        /// <summary>A confirmed server season advanced during profile sync, or a level_reset was accepted: the
+        /// head runs its silent season bookkeeping (WPF NudgeSeasonRecap / TryPresentSeasonRecap).</summary>
         public static event Action<AppSettings>? SeasonAdvanced;
 
         /// <summary>Raised after a cloud merge lifted <see cref="AppSettings.TotalConditioningMinutes"/>. The head
