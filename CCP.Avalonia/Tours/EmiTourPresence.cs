@@ -12,7 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Tours;
 /// moments on her one bus (<see cref="EmiDeskService.Fire"/>): <c>tourStarted</c>, <c>tour.&lt;stepId&gt;</c>
 /// or <c>tourStep</c>, <c>tourFinished</c> / <c>tourSkipped</c>. Narration is additive and never
 /// load-bearing: a missing, muted or throwing desk leaves the tour exactly as it is.
-/// The book offer after the ending (WPF <c>EmiCodex.MaybeOfferSoon</c>) is not on this head yet.
+/// One beat after the ending line, the book offer (WPF EmiTourNarrator.cs:195 <c>EmiCodex.MaybeOfferSoon</c>,
+/// here <see cref="EmiBookOffer.Schedule"/>), on both endings; its brakes run at the tick.
 /// </summary>
 internal sealed class EmiTourPresence : IDisposable
 {
@@ -22,6 +23,7 @@ internal sealed class EmiTourPresence : IDisposable
     private readonly Func<Task> _summon;
     private readonly Action<string> _fire;
     private readonly Func<string, bool> _hasMoment;
+    private readonly Action<string> _offerBook;
     private bool _disposed;
     // The tour this attachment narrates: a step or an ending from another run is not ours.
     private bool _narrating;
@@ -39,7 +41,8 @@ internal sealed class EmiTourPresence : IDisposable
             () => EmiDeskService.Instance.IsOut,
             () => EmiDeskService.Instance.Summon("tour"),
             moment => EmiDeskService.Instance.Fire(moment),
-            id => EmiLineEngine.Instance.MomentIds.Contains(id, StringComparer.Ordinal));
+            id => EmiLineEngine.Instance.MomentIds.Contains(id, StringComparer.Ordinal),
+            EmiBookOffer.Schedule);
     }
 
     internal static void Detach()
@@ -49,7 +52,7 @@ internal sealed class EmiTourPresence : IDisposable
     }
 
     internal EmiTourPresence(TutorialService service, Func<bool> enabled, Func<bool> isOut, Func<Task> summon,
-        Action<string>? fire = null, Func<string, bool>? hasMoment = null)
+        Action<string>? fire = null, Func<string, bool>? hasMoment = null, Action<string>? offerBook = null)
     {
         _service = service;
         _enabled = enabled;
@@ -57,6 +60,7 @@ internal sealed class EmiTourPresence : IDisposable
         _summon = summon;
         _fire = fire ?? (_ => { });
         _hasMoment = hasMoment ?? (_ => false);
+        _offerBook = offerBook ?? (_ => { });
         _service.TutorialStarted += OnStarted;
         _service.StepChanged += OnStepChanged;
         _service.TutorialFinished += OnFinished;
@@ -104,7 +108,11 @@ internal sealed class EmiTourPresence : IDisposable
         if (!_narrating) return;
         _narrating = false;
         if (TutorialHead.EndingInstantly) return;
-        Speak(e.Completed ? "tourFinished" : "tourSkipped");
+        var why = e.Completed ? "tourFinished" : "tourSkipped";
+        Speak(why);
+        // WPF :188-195: the book, one beat behind her ending line. Limit ever/1 and EmiCodexRules hold the rest.
+        try { _offerBook(why); }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tour book offer failed"); }
     }
 
     private void Speak(string moment)
