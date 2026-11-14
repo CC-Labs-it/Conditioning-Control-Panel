@@ -184,6 +184,33 @@ public sealed class BubbleOverlayTests
     }
 
     [Fact]
+    public async Task Brain_drain_art_suppresses_tint_only_when_loaded()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var old = BubbleOverlay.BrainDrainImage;
+            var oldImage = BubbleOverlay.Image;
+            var oldRain = BubbleOverlay.GifRainImage;
+            try
+            {
+                BubbleOverlay.LoadBubbleImage();
+                var b = new AmbientBubble { Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec
+                    { VariantId = ConditioningControlPanel.Services.Chaos.BrainDrainBubble.VariantId } };
+                Assert.NotNull(BubbleOverlay.BrainDrainImage);
+                Assert.Same(BubbleOverlay.BrainDrainImage, BubbleOverlay.SpriteFor(b));
+                Assert.False(BubbleOverlay.DrawTint(b));
+                BubbleOverlay.BrainDrainImage = null;
+                Assert.True(BubbleOverlay.DrawTint(b));
+            }
+            finally { BubbleOverlay.BrainDrainImage = old; BubbleOverlay.Image = oldImage; BubbleOverlay.GifRainImage = oldRain; }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Brain_drain_pop_fires_once_and_expiry_and_chaos_do_not_fire()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

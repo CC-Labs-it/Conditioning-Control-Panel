@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Services
         public bool IsAmbientTrigger => Spec?.Payload?.Ambient == true;
         /// <summary>A Chaos run's own bubble: the run pauses, counts and clears these, never a dashboard trigger.</summary>
         public bool IsRunBubble => Spec != null && !IsAmbientTrigger;
-        private double _startX, _top, _speed, _wobbleOffset, _timeAlive;
+        private double _startX, _startY, _top, _bottom, _left, _right, _vx, _vy, _speed, _wobbleOffset, _timeAlive;
         private int _animType;
 
         // ---- live chaos bubble (WPF Bubble _fuseRemainingMs / _isChanneling / TickChannel) ----
@@ -181,6 +181,31 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
+            // WPF BubbleService.cs:3330-3363: the trigger uses the chosen Chaos motion.
+            if (spec.VariantId == BrainDrainBubble.VariantId)
+            {
+                b._left = areaX / scaling;
+                b._right = (areaX + areaW) / scaling - b.Size;
+                b._bottom = (areaY + areaH) / scaling + 50;
+                switch (spec.Motion)
+                {
+                    case ChaosMotion.RainDown:
+                        b.Y = areaY / scaling - b.Size;
+                        break;
+                    case ChaosMotion.RoamBounce:
+                        b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                        double angle = r.NextDouble() * Math.PI * 2;
+                        b._vx = Math.Cos(angle) * b._speed * 1.4;
+                        b._vy = Math.Sin(angle) * b._speed * 1.4;
+                        break;
+                    case ChaosMotion.SideDrift:
+                        b.Y = b._startY = (areaY + r.Next(120, (int)Math.Max(240, areaH - b.Size - 120))) / scaling;
+                        bool fromLeft = r.Next(2) == 0;
+                        b.X = b._startX = fromLeft ? b._left - b.Size : b._right + b.Size;
+                        b._vx = (fromLeft ? 1 : -1) * b._speed * 1.15;
+                        break;
+                }
+            }
             return b;
         }
 
@@ -291,9 +316,26 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
-            X = _startX + offset;
-            if (Y >= _top) return Result.Alive;
+            bool exited;
+            switch (Spec?.VariantId == BrainDrainBubble.VariantId ? Spec.Motion : ChaosMotion.FloatUp)
+            {
+                case ChaosMotion.RainDown:
+                    Y += _speed; X = _startX + offset; exited = Y > _bottom; break;
+                case ChaosMotion.RoamBounce:
+                    X += _vx; Y += _vy;
+                    if (X < _left) { X = _left; _vx = Math.Abs(_vx); }
+                    else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); }
+                    double top = _top + Size + 50, bottom = _bottom - Size - 50;
+                    if (Y < top) { Y = top; _vy = Math.Abs(_vy); }
+                    else if (Y > bottom) { Y = bottom; _vy = -Math.Abs(_vy); }
+                    exited = false; break;
+                case ChaosMotion.SideDrift:
+                    X += _vx; Y = _startY + offset;
+                    exited = _vx > 0 ? X > _right + Size : X < _left - Size; break;
+                default:
+                    Y -= _speed; X = _startX + offset; exited = Y < _top; break;
+            }
+            if (!exited) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
     }
@@ -359,7 +401,8 @@ namespace ConditioningControlPanel.Services
             if (id == BrainDrainBubble.VariantId) return new EffectBubbleSpec
             {
                 VariantId = id, Payload = new BrainDrainMeltPayload { Ambient = true }, SizePx = 220,
-                Tint = 0xFF6A22A8u, Label = "◍", IsLive = false, FuseMs = 0, TreatLifeMs = 7000
+                Tint = 0xFF6A22A8u, Label = "◍", IsLive = false, FuseMs = 0, TreatLifeMs = 7000,
+                Motion = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var motion) ? motion : ChaosMotion.FloatUp
             };
             var variant = ChaosBubbleVariants.All.First(v => v.Id == "htlink");
             var spec = ChaosBubbleVariants.Build(variant, intensity: 0.3, ambient: true);

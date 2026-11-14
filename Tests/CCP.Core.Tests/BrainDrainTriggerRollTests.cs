@@ -35,4 +35,27 @@ public class BrainDrainTriggerRollTests
         bubble.Step();
         Assert.Equal(BrainDrainBubble.PulseAt(0.02), bubble.DisplayFade, 8);
     }
+    [Theory]
+    [InlineData("FloatUp", ChaosMotion.FloatUp)]
+    [InlineData("RainDown", ChaosMotion.RainDown)]
+    [InlineData("RoamBounce", ChaosMotion.RoamBounce)]
+    [InlineData("SideDrift", ChaosMotion.SideDrift)]
+    [InlineData("Mixed", ChaosMotion.FloatUp)]
+    public void Trigger_uses_configured_motion(string mode, ChaosMotion expected)
+    {
+        var s = new AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 50,
+            BubbleBrainDrainEnabled = true, BubbleTriggerVariants = new List<string>(), ChaosMotionMode = mode };
+        var field = new AmbientBubbleField();
+        EffectBubbleSpec? spec = null;
+        for (int i = 0; i < 100 && spec == null; i++) spec = field.RollGifRain(s, true);
+        Assert.NotNull(spec);
+        Assert.Equal(expected, spec.Motion);
+        var b = AmbientBubble.SpawnChaos(new System.Random(3), 0, 0, 0, 1920, 1080, 1, spec);
+        var x = b.X; var y = b.Y;
+        b.Step();
+        if (expected == ChaosMotion.RainDown) { Assert.Equal(-220, y); Assert.True(b.Y > y); }
+        else if (expected == ChaosMotion.FloatUp) { Assert.Equal(1080, y); Assert.True(b.Y < y); }
+        else if (expected == ChaosMotion.SideDrift) Assert.NotEqual(x, b.X);
+        else { Assert.InRange(y, 0, 860); Assert.True(b.X != x || b.Y != y); }
+    }
 }

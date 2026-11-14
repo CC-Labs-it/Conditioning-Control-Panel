@@ -75,6 +75,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Spec?.VariantId == "htlink" ? GifRainImage ?? Image :
             b.Spec?.VariantId == BrainDrainBubble.VariantId ? BrainDrainImage ?? Image : Image;
 
+        internal static bool DrawTint(AmbientBubble b) => b.Spec != null &&
+            !(b.Spec.VariantId == "htlink" && GifRainImage != null) &&
+            !(b.Spec.VariantId == BrainDrainBubble.VariantId && BrainDrainImage != null);
+
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
 
@@ -518,9 +522,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     using (dc.PushOpacity(Math.Clamp(b.DisplayFade, 0, 1)))
                     {
                         var img = BubbleOverlay.SpriteFor(b);
-                        if (b.Spec != null && !(b.Spec.VariantId == "htlink" && BubbleOverlay.GifRainImage != null))
+                        if (BubbleOverlay.DrawTint(b))
                         {
-                            var (fill, pen) = TintPaint(b.Spec.Tint);
+                            var (fill, pen) = TintPaint(b.Spec!.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
