@@ -29,6 +29,7 @@ public sealed partial class AccountSeedTests
 
             wire.SyncReply = """{"success":true,"prizes":{"revision":4,"grants":["cos.prime.frame.room-host","cos.profile.avatar.emi-pixel"]}}""";
             Assert.True(await AccountSeed.LoadProfileAsync());
+            DrainPrizes();   // the receipt posts to the UI thread once a headless app exists (class order)
             Assert.Contains("cos.profile.avatar.emi-pixel", PrizeOwnership.KnownGrants()!);
             Assert.Equal(ProfileSlots.Of(slots), ProfileSlots.Of(MainShellWindow.SanitizeOwnWardrobe(slots)));
             PrizeOwnership.ApplySnapshot("u1", 5, new[] { "cos.prime.frame.room-host" });
