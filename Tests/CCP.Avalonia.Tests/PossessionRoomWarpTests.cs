@@ -24,6 +24,7 @@ public class PossessionRoomWarpTests
         public IFrameSource PossessionFrames => Frames;
         public PossessionRuntime PossessionEffectRuntime => new(Frames);
         public Point PointerPosition => default;
+        public PossessionPointer PossessionPointer { get; } = new();
         public Rect? BoundsOnGhostLayer(Control element) => null;
         public IReadOnlyList<PossessionTarget> Targets => Array.Empty<PossessionTarget>();
         public bool IsUsable => true;
