@@ -315,6 +315,7 @@ public sealed class CompanionBarkHeadTests
             tube.Close();
             tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
             tube.SpeechAudioPlayer = (_, path, bark, done) => { playedPath = path; barkVoice = bark; done?.Invoke(); };
+            tube.Show();   // a hidden avatar skips every bubble (WPF Speech.cs:481, trunk IsAvatarVisibleOnScreen)
             historyCount = tube.ChatHistory.Count;
             turns = 0;
             while (!tube.TrySpeakOwnVoiceLine() && ++turns < 200) { }
