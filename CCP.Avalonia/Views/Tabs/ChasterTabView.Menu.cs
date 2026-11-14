@@ -218,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PopRow(row);
             // One hand-flipped row can land exactly on a preset, or step off one.
             RefreshPresets();
+            RefreshSetupHint(); // WPF RefreshPresets also refreshes the empty-menu hint.
         }
 
         /// <summary>Red flashes with a 4 s ring to dodge them, or none at all (the default).</summary>
