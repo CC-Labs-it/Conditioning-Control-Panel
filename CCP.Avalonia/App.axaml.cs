@@ -1283,6 +1283,7 @@ namespace ConditioningControlPanel.Avalonia
                     JournalDir = CorePaths.UserData,
                     // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
                     SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
+                    NoteFeatureDayEvent = ev => FeatureDayLog?.Note(ev),
                 };
                 IntakePunchCard = new IntakePunchCardService();
                 WireIntakeSessionCredit(Sessions);

@@ -21,7 +21,9 @@ public sealed class SessionRunnerTests : IDisposable
 {
     private const string Id = "runner-golden";
     private static readonly string[] AllowedSettingsChanges =
-        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun" };
+        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun",
+          // Restack b213: the season session and feature counts are kept, as WPF (SessionEngine.cs:296-318).
+          "SeasonStatsSeason", "SeasonSessionsStarted", "SeasonFeatureUse" };
     private static readonly string[] Timestamps = { "started_at", "ended_at", "timestamp", "session_time_seconds" };
 
     private readonly SessionLogService _logs = new();
@@ -396,8 +398,12 @@ public sealed class SessionRunnerTests : IDisposable
         var s = CoreSettings.Current;
         s.SubliminalDuration = 3;
         var before = SettingsJson();
+        var startsBefore = s.SeasonSessionsStarted;
+        var flashBefore = s.SeasonFeatureUse.TryGetValue(SeasonFeatureKeys.Flash, out var f) ? f : 0;
 
         _runner.Start(OneMinute());
+        Assert.Equal(startsBefore + 1, s.SeasonSessionsStarted);   // once per start
+        Assert.Equal(flashBefore + 1, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
         Assert.True(CoreSession.IsSessionRunning && CoreEngine.IsRunning);
         Assert.NotNull(CoreSession.UserPhrasePoolsWhileOverriding!());
         Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning);
