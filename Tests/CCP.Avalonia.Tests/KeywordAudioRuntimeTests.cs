@@ -176,6 +176,117 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF MainWindow.xaml.cs:1157,1192-1206 (restack b221, #4551)
+    public Task PanicSuspendsOcrAndRecoveryChecksSwitchesAndAccess() => RunAsync(async (_, s, _) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        var oldTeardown = PanicWatchdog.Teardown;
+        var oldPost = PanicWatchdog.PostRecovery;
+        Action? recovery = null;
+        var scans = 0;
+        var scansDuringFallback = -1;
+        KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]); };
+        try
+        {
+            s.KeywordTriggersEnabled = true; s.ScreenOcrEnabled = true; s.ScreenOcrIntervalMs = 60000;
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            PanicWatchdog.PostRecovery = action => recovery = action;
+            PanicWatchdog.Teardown = () =>
+            {
+                KeywordTriggerHead.SyncOcr(); // a concurrent switch sync cannot restart capture
+                _ = KeywordTriggerHead.TickOcrForTest();
+                scansDuringFallback = scans;
+            };
+            await PanicWatchdog.Arm(new TaskCompletionSource().Task, TimeSpan.FromMilliseconds(10));
+            Assert.Equal(1, scansDuringFallback);
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            Assert.NotNull(recovery);
+            s.KeywordTriggersEnabled = false; recovery!();
+            s.KeywordTriggersEnabled = true; await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            var generation = KeywordTriggerHead.SuspendOcrForPanic();
+            s.ScreenOcrEnabled = false; KeywordTriggerHead.RecoverOcrAfterPanic(generation);
+            s.ScreenOcrEnabled = true; await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            generation = KeywordTriggerHead.SuspendOcrForPanic();
+            CoreEntitlement.HasPremiumProvider = () => false;
+            KeywordTriggerHead.RecoverOcrAfterPanic(generation);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            var older = KeywordTriggerHead.SuspendOcrForPanic();
+            generation = KeywordTriggerHead.SuspendOcrForPanic();
+            KeywordTriggerHead.RecoverOcrAfterPanic(older);
+            KeywordTriggerHead.SyncOcr(); await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            KeywordTriggerHead.RecoverOcrAfterPanic(generation);
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+        }
+        finally
+        {
+            PanicWatchdog.Teardown = oldTeardown; PanicWatchdog.PostRecovery = oldPost;
+            KeywordTriggerHead.RecoverOcrAfterPanic(KeywordTriggerHead.SuspendOcrForPanic());
+            KeywordTriggerHead.OcrSource = null;
+            (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs) = saved;
+        }
+    });
+
+
+    [Fact] // owner call 2026-10-10 (handoff-1010/PARITY-CHECKPOINT-1010.md): panic switches keyword triggers off
+    public Task PanicPassSwitchesKeywordTriggersOffUntilTheUserTurnsThemBackOn() => RunAsync(async (_, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        var scans = 0;
+        KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]); };
+        try
+        {
+            s.KeywordTriggersEnabled = true; s.ScreenOcrEnabled = true; s.ScreenOcrIntervalMs = 60000;
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            var row = Assert.Single(PanicSurfaces.All, x => x.Id == "keyword-triggers");
+            row.Stop(null);
+            Assert.False(s.KeywordTriggersEnabled);   // the per-run master
+            Assert.False(s.ScreenOcrEnabled);         // the saved screen read
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            KeywordTriggerHead.SyncOcr(); KeywordTriggerHead.Sync();   // nothing re-arms on its own
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            Type(KeywordTriggerHead.Engine, "sit"); Assert.Empty(played);
+            row.Stop(null);   // idempotent with nothing on
+            s.KeywordTriggersEnabled = true; s.ScreenOcrEnabled = true; KeywordTriggerHead.Sync();   // the user turns them back on
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+        }
+        finally
+        {
+            KeywordTriggerHead.OcrSource = null;
+            (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs) = saved;
+        }
+    });
+
+    [Fact] // WPF BarkService.cs:1972,2008 (SelfEchoMuteMs 8000); KeywordTriggerService.cs:128-146
+    public void SpokenBarkMutesItsExactLineForEightSeconds() => Run((engine, s, played) =>
+    {
+        var saved = (s.AwarenessLoopProtectionEnabled, s.AvatarEnabled, s.BarkChatSuppressionMs, s.BarkVariantRotation, BarkHead.EchoTarget);
+        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        try
+        {
+            s.BarkVariantRotation = s.BarkVariantRotation.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+            s.AwarenessLoopProtectionEnabled = false; s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
+            engine.Now = () => clock;
+            BarkHead.EchoTarget = () => engine;
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule { Id = "echo", Trigger = "T",
+                VariantPool = [new ConditioningControlPanel.Services.Bark.BarkVariant("sit")] };
+            var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
+                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet([rule]), new Random(7)) { Speak = _ => { } };
+            BarkHead.AttachEcho(bark); bark.Start();
+            Assert.True(bark.Raise("T"));
+            Type(engine, "sit"); Assert.Empty(played);
+            engine.ClearInput(); clock = clock.AddSeconds(7.9); Type(engine, "sit"); Assert.Empty(played);
+            engine.ClearInput(); clock = new DateTime(2026, 10, 14, 12, 0, 8); Type(engine, "sit"); Assert.Single(played);
+        }
+        finally
+        {
+            (s.AwarenessLoopProtectionEnabled, s.AvatarEnabled, s.BarkChatSuppressionMs, s.BarkVariantRotation, BarkHead.EchoTarget) = saved;
+        }
+    });
+
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     // restack b186: ducking slices of #3968, #4057 and #4139 (Mich), adapted to the trunk dispatcher.
@@ -831,7 +942,7 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
-    public void AwarenessSwitchStartsRuntimeAndPanicCutsOnlyTheClip() => Run((_, s, played) =>
+    public void AwarenessSwitchStartsRuntimeAndPanicSwitchesItOff() => Run((_, s, played) =>
     {
         // Linux headless test deliberately never installs a native keyboard hook.
         s.KeywordTriggersEnabled = false;
@@ -847,8 +958,15 @@ public sealed class KeywordAudioRuntimeTests
         Assert.Single(played);
         PanicSurfaces.All.Single(x => x.Id == "keyword-triggers").Stop(null);
         Assert.Equal("stopped", played.Last().Path);
-        Assert.True(KeywordTriggerHead.Engine.IsActive);   // WPF panic leaves the service running
+        // Owner call 2026-10-10: panic switches them off (WPF main leaves the service running).
+        Assert.False(KeywordTriggerHead.Engine.IsActive);
+        Assert.False(s.KeywordTriggersEnabled);
         clock = clock.AddHours(2);   // the view clamps cooldowns to AwarenessCooldownScale (1 s..1 h); step past them
+        Type(KeywordTriggerHead.Engine, "sit"); Assert.Equal(2, played.Count);
+        view.SyncAwarenessTabUi();   // the shell repaints the tab after the stop pass
+        Assert.False(view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked);
+        view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = true;   // the user turns them back on
+        Assert.True(KeywordTriggerHead.Engine.IsActive);
         Type(KeywordTriggerHead.Engine, "sit"); Assert.Equal(3, played.Count);
         // WPF MainWindow.Awareness.cs:493: Keyboard off drops the key source only; engine and clip stay.
         view.FindControl<CheckBox>("ChkAwarenessKeyboard")!.IsChecked = false;

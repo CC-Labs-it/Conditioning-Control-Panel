@@ -254,7 +254,8 @@ public sealed class TubeTriggerModeTests
             Assert.True(linkedTyping.Stopped());
             var link = Assert.IsType<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>(Assert.Single(text.Inlines!.OfType<InlineUIContainer>()).Child);
             Assert.Equal("Watch", Assert.IsType<TextBlock>(link.Content).Text);
-            Assert.Equal(new[] { "Before ", " ", "Local", " after" }, text.Inlines!.OfType<Run>().Select(r => r.Text));
+            // WPF BuildLinkedInlines collapses a non-web markdown link to its label inside the plain text.
+            Assert.Equal(new[] { "Before ", " Local after" }, text.Inlines!.OfType<Run>().Select(r => r.Text));
             var previousNavigate = CompanionLinkLauncher.Navigate;
             string? opened = null;
             try

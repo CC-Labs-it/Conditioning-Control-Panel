@@ -1362,7 +1362,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     SyncAskButtonsFor(text);
                     // WPF Speech.cs:513,559: non-AI bubbles type slowly; triggers type after their lead-in.
                     if (preset && !trigger) TypeBubble(text, static () => true);
-                    else _txtSpeech.Text = text;
+                    else RenderSpeechLinks(_txtSpeech, text);   // WPF Speech.cs:1351 PopulateSpeechBubble
                     // WPF AdjustBubbleSize (Speech.cs:857-881): real DIPs now, 14 only for long replies.
                     _txtSpeech.FontSize = text.Length > 250 ? 14 : 15;
                     if (!_isShowingChatHistory) _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
