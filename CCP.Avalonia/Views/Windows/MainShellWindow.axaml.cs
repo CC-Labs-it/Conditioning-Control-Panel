@@ -266,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     }
 }
 
-// Members of ConditioningControlPanel/MainWindow/MainWindow.xaml.cs dropped (182). Named here so
+// Members of ConditioningControlPanel/MainWindow/MainWindow.xaml.cs dropped (181). Named here so
 // nothing disappears silently; each one reaches App.*, a service, a device, WebView2 or Win32.
 //   private static extern void DwmSetWindowAttribute(…)
 //   private const int DWMWA_WINDOW_CORNER_PREFERENCE
@@ -321,7 +321,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private bool _skillTreeAnimationsActive
 //   private static readonly Dictionary<string, string> CommandLabels
 //   private static readonly HashSet<string> SuppressedCommands
-//   public event EventHandler? EngineStopped
 //   private DateTime _lastPanicTime
 //   private string? _lastKnownUnifiedId
 //   public Microsoft.Web.WebView2.Wpf.WebView2? GetBrowserWebView(…)
