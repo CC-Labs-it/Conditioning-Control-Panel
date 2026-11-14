@@ -266,6 +266,7 @@ namespace ConditioningControlPanel.Services
             else LockCardScheduler.Instance.Stop();
 
             // WPF SessionEngine.cs:1602-1614: the session owns both halves, even when its block is off.
+            // WPF's second Stop for an off block is the inherited stop Start already ran (SessionEngine.cs:1495).
             _brainDrainActive = ss.BrainDrainEnabled && ss.BrainDrainStartMinute == 0;
             s.BrainDrainEnabled = _brainDrainActive;
             if (_brainDrainActive)
@@ -273,7 +274,6 @@ namespace ConditioningControlPanel.Services
                 s.BrainDrainIntensity = ss.BrainDrainStartIntensity;
                 CoreEngine.StartBrainDrain?.Invoke();
             }
-            else CoreEngine.StopBrainDrain?.Invoke();
 
             // WPF Services/Session/SessionEngine.cs:1528-1547.
             s.MandatoryVideosEnabled = ss.MandatoryVideosEnabled;

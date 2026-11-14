@@ -726,12 +726,12 @@ public sealed class SessionRunnerTests : IDisposable
             var session = OneMinute(); session.Settings.BrainDrainEnabled = enabled;
             session.Settings.BrainDrainStartIntensity = 25;
             _runner.Start(session);
-            Assert.Equal(enabled ? new[] { "start True 25" } : new[] { "stop" }, calls);
+            Assert.Equal(enabled ? new[] { "stop", "start True 25" } : new[] { "stop" }, calls); // inherited stop first
             Assert.Equal(enabled, s.BrainDrainEnabled);
             calls.Clear(); _runner.Pause(); _runner.Resume();
             Assert.Equal(enabled ? new[] { "stop", "start True 25" } : new[] { "stop" }, calls);
             calls.Clear(); _runner.Stop();
-            Assert.Equal(enabled ? new[] { "stop", "stop" } : new[] { "stop" }, calls); // session then engine teardown
+            Assert.Equal(new[] { "stop", "stop" }, calls); // session then engine teardown (WPF SessionEngine.cs:395)
             Assert.False(s.BrainDrainEnabled); Assert.Equal(73, s.BrainDrainIntensity);
         }
         finally
