@@ -211,7 +211,7 @@ internal static class KeywordTriggerHead
             uint processId = 0;
             // WPF KeywordTriggerService.cs:618-622: sample even in Everywhere mode, at most every 2 s.
             var needsForeground = Engine.NeedsForeground(DateTime.UtcNow);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            if (needsForeground && OperatingSystem.IsWindows()) GetWindowThreadProcessId(GetForegroundWindow(), out processId);   // user32 only exists there (as DeliverOcr)
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;

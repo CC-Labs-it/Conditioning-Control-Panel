@@ -148,7 +148,10 @@ public class FlashVoiceTests
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
-    public async Task Live_flash_off_retires_a_pending_burst_and_stops_a_playing_voice(int phase)
+    // On the dispatcher thread, as the feature card toggles it: off that thread CoreFlash.StopProvider posts a
+    // second CloseAll, and the test dispatcher thread could run it between BeginBurst and the busy check
+    // (the wave 4 Windows flake), retiring the new burst the test just began.
+    public Task Live_flash_off_retires_a_pending_burst_and_stops_a_playing_voice(int phase) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var file = Path.GetTempFileName();
         var running = typeof(CoreEngine).GetField("_running", BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -185,7 +188,7 @@ public class FlashVoiceTests
                 (oldStop, oldPost, oldLead, oldPlay);
             File.Delete(file);
         }
-    }
+    });
     [Fact]
     public async Task Playback_starts_without_probe_and_zero_length_does_not_block_presentation_or_stop()
     {
