@@ -23,6 +23,10 @@ internal sealed class GazeRefineOverlay : Window
 
     private static double Distance(Point a, Point b) => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
 
+    /// <summary>--render-all only: a bubble and a plain flash tile, too close to pick apart by gaze.</summary>
+    internal GazeRefineOverlay() : this(new object[] { new AmbientBubble(), new object() },
+        new[] { new Rect(500, 360, 60, 60), new Rect(540, 370, 50, 50) }, new Rect(0, 0, 1100, 780), 1) { }
+
     // The supplied work area and source bounds are desktop DIPs. Position is physical pixels.
     internal GazeRefineOverlay(IReadOnlyList<object> choices, IReadOnlyList<Rect> bounds, Rect work, double scale)
     {
