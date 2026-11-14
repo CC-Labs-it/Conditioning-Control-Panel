@@ -9,18 +9,18 @@ fam=$ID; case " $ID ${ID_LIKE:-} " in *" debian "*|*" ubuntu "*) fam=debian;; *"
 install() {
   # Runtime deps: exactly the docs/avalonia-linux-install.html row for this family. Fonts: none added (distro default only).
   case $fam in
-    debian) deps="libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libwpe-1.0-1 libvlc5 vlc-plugin-base libsecret-1-0 libx11-6 libxi6"
+    debian) deps="libwebkit2gtk-4.1-0 libwpewebkit-2.0-1 libwpebackend-fdo-1.0-1 libwpe-1.0-1 libvlc5 vlc-plugin-base libsecret-1-0 libx11-6 libxi6 libxss1"
             tools="xvfb openbox imagemagick xdotool x11-utils fontconfig procps"
             export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null
             add() { apt-get install -y -qq --no-install-recommends "$1" >/dev/null 2>&1; } ;;
-    fedora) deps="webkit2gtk4.1 wpewebkit wpebackend-fdo libwpe vlc-libs libsecret libX11 libXi openssl3-libs"   # openssl3-libs: F45+ ships OpenSSL 4; .NET 10 needs libssl.so.3 (absent on F44, recorded as unavailable)
+    fedora) deps="webkit2gtk4.1 wpewebkit wpebackend-fdo libwpe vlc-libs libsecret libX11 libXi libXScrnSaver openssl3-libs"   # openssl3-libs: F45+ ships OpenSSL 4; .NET 10 needs libssl.so.3 (absent on F44, recorded as unavailable)
             tools="xorg-x11-server-Xvfb openbox ImageMagick xdotool xwininfo fontconfig procps-ng"
             add() { dnf install -y -q --setopt=install_weak_deps=False "$1" >/dev/null 2>&1; } ;;
-    arch)   deps="webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libsecret libx11 libxi"
+    arch)   deps="webkit2gtk-4.1 wpewebkit wpebackend-fdo libwpe vlc libsecret libx11 libxi libxss"
             tools="xorg-server-xvfb openbox imagemagick xdotool xorg-xwininfo fontconfig procps-ng"
             pacman -Sy --noconfirm >/dev/null 2>&1
             add() { pacman -S --noconfirm --needed "$1" >/dev/null 2>&1; } ;;
-    suse)   deps="libwebkit2gtk-4_1-0 libWPEWebKit-2_0-1 libWPEBackend-fdo-1_0-1 libwpe-1_0-1 libvlc5 vlc-noX libsecret-1-0 libX11-6 libXi6"
+    suse)   deps="libwebkit2gtk-4_1-0 libWPEWebKit-2_0-1 libWPEBackend-fdo-1_0-1 libwpe-1_0-1 libvlc5 vlc-noX libsecret-1-0 libX11-6 libXi6 libXss1"
             tools="xvfb-run xorg-x11-server-Xvfb openbox ImageMagick xdotool xwininfo fontconfig procps gzip tar gawk"
             add() { zypper -n -q --gpg-auto-import-keys install --no-recommends "$1" >/dev/null 2>&1; } ;;
     *) echo "unknown distro $ID" >&2; exit 2 ;;
