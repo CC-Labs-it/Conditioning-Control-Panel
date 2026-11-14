@@ -67,6 +67,25 @@ public sealed class IntakePendingDraftTests : IDisposable
     }
 
     [Fact]
+    public void ReturnVisitIgnoresExpiredAndBlankDraftsButKeepsRealProgress()
+    {
+        var card = new IntakePunchCardState { CardStartedUtc = DateTime.UtcNow, PunchedCount = 1 };
+        card.PendingDrafts.Add(new PendingIntakeDraft { SessionId = "old", DraftedUtc = DateTime.UtcNow.AddDays(-91) });
+        card.PendingDrafts.Add(new PendingIntakeDraft { SessionId = " ", DraftedUtc = DateTime.UtcNow });
+        File.WriteAllText(Pathname, JsonSerializer.Serialize(card));
+        Assert.False(IntakePunchCardState.ReadEverCompletedIntake(_dir));
+
+        card.PendingDrafts.Add(new PendingIntakeDraft { SessionId = "fresh", DraftedUtc = DateTime.UtcNow.AddDays(-89) });
+        File.WriteAllText(Pathname, JsonSerializer.Serialize(card));
+        Assert.True(IntakePunchCardState.ReadEverCompletedIntake(_dir));
+
+        card.PendingDrafts.Clear();
+        card.PunchedCount = 2;
+        File.WriteAllText(Pathname, JsonSerializer.Serialize(card));
+        Assert.True(IntakePunchCardState.ReadEverCompletedIntake(_dir));
+    }
+
+    [Fact]
     public void CorruptMainRecoversTheTemporaryCardWithoutLosingProgress()
     {
         var card = new IntakePunchCardState { CardStartedUtc = DateTime.UtcNow, PunchedCount = 4 };

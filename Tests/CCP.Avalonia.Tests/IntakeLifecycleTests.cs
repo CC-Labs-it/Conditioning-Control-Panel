@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Text.Json;
+using ConditioningControlPanel.Models;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -69,6 +72,36 @@ public sealed class IntakeLifecycleTests
         GradedIntakeTabView.OpenIntake(main, duckMain: false);     // first-ever run: no duck
         Assert.Equal(WindowState.Maximized, main.WindowState);
         main.Close();
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ExpiredDraftLeavesThePanelVisibleOnLaunch() => WithCleanState(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("intake-return-").FullName;
+        var main = new Window();
+        try
+        {
+            var card = new IntakePunchCardState { CardStartedUtc = DateTime.UtcNow, PunchedCount = 1 };
+            card.PendingDrafts.Add(new PendingIntakeDraft { SessionId = "old", DraftedUtc = DateTime.UtcNow.AddDays(-91) });
+            var path = Path.Combine(dir, IntakePunchCardState.FileName);
+            File.WriteAllText(path, JsonSerializer.Serialize(card));
+            main.Show();
+            GradedIntakeTabView.OpenIntake(main, IntakePunchCardState.ReadEverCompletedIntake(dir));
+            Assert.NotEqual(WindowState.Minimized, main.WindowState);
+            IntakeHostWindow.CloseAllForPanic();
+
+            card.PendingDrafts.Add(new PendingIntakeDraft { SessionId = "new", DraftedUtc = DateTime.UtcNow });
+            File.WriteAllText(path, JsonSerializer.Serialize(card));
+            GradedIntakeTabView.OpenIntake(main, IntakePunchCardState.ReadEverCompletedIntake(dir));
+            Assert.Equal(WindowState.Minimized, main.WindowState);
+        }
+        finally
+        {
+            IntakeHostWindow.CloseAllForPanic();
+            main.Close();
+            Directory.Delete(dir, true);
+        }
         return Task.CompletedTask;
     });
 

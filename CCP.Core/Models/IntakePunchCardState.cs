@@ -95,7 +95,7 @@ public class IntakePunchCardState
             state.PunchedUtc.Add(now);
         }
         // WPF Sanitize and NotifyIntakeCompleted: bounded queue, newest drafts win.
-        state.PendingDrafts.RemoveAll(d => string.IsNullOrWhiteSpace(d.SessionId) || d.DraftedUtc < now.AddDays(-90));
+        RemoveStaleDrafts(state, now);
         if (!state.CompletedUtc.HasValue && state.PunchedCount < 8
             && !state.PendingDrafts.Exists(d => string.Equals(d.SessionId, sessionId, StringComparison.Ordinal)))
             state.PendingDrafts.Add(new PendingIntakeDraft { SessionId = sessionId, DraftedUtc = now });
@@ -106,6 +106,9 @@ public class IntakePunchCardState
         System.IO.File.Move(tmp, path, overwrite: true);
     }
 
+    private static void RemoveStaleDrafts(IntakePunchCardState state, DateTime now) =>
+        state.PendingDrafts.RemoveAll(d => string.IsNullOrWhiteSpace(d.SessionId) || d.DraftedUtc < now.AddDays(-90));
+
     /// <summary><see cref="EverCompletedIntake()"/> read from the card on disk; no card or an
     /// unreadable one is a first-ever run.</summary>
     public static bool ReadEverCompletedIntake(string userDataDir)
@@ -113,8 +116,13 @@ public class IntakePunchCardState
         try
         {
             var path = System.IO.Path.Combine(userDataDir, FileName);
-            return System.IO.File.Exists(path)
-                && System.Text.Json.JsonSerializer.Deserialize<IntakePunchCardState>(System.IO.File.ReadAllText(path))?.EverCompletedIntake() == true;
+            if (!System.IO.File.Exists(path)) return false;
+            var state = System.Text.Json.JsonSerializer.Deserialize<IntakePunchCardState>(System.IO.File.ReadAllText(path));
+            if (state == null) return false;
+            // WPF IntakePunchCardService.Sanitize removes stale drafts before the launch decision.
+            state.PendingDrafts ??= new();
+            RemoveStaleDrafts(state, DateTime.UtcNow);
+            return state.EverCompletedIntake();
         }
         catch { return false; }
     }

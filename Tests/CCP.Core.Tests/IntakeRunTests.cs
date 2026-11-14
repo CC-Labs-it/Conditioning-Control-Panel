@@ -192,7 +192,7 @@ public class IntakeRunTests
             Assert.False(IntakePunchCardState.ReadEverCompletedIntake(root));                 // no card yet
             File.WriteAllText(card, "{\"PunchedCount\":1,\"PendingDrafts\":[]}");
             Assert.False(IntakePunchCardState.ReadEverCompletedIntake(root));                 // the free first hole
-            File.WriteAllText(card, "{\"PunchedCount\":1,\"PendingDrafts\":[{\"SessionId\":\"s\"}]}");
+            File.WriteAllText(card, System.Text.Json.JsonSerializer.Serialize(new IntakePunchCardState { PunchedCount = 1, PendingDrafts = new() { new PendingIntakeDraft { SessionId = "s", DraftedUtc = DateTime.UtcNow } } }));
             Assert.True(IntakePunchCardState.ReadEverCompletedIntake(root));                  // a stamp pending
             File.WriteAllText(card, "{\"PunchedCount\":3}");
             Assert.True(IntakePunchCardState.ReadEverCompletedIntake(root));
