@@ -146,7 +146,7 @@ public sealed class V2PurchaseService
         LastBackgroundRead = Task.Run(FetchAsync);
     }
 
-    /// <summary>Test seam: the most recent background read Start launched, so tests await it instead of sleeping.</summary>
+    /// <summary>The most recent background read, for waiting on an in-flight account switch and in tests.</summary>
     internal Task LastBackgroundRead { get; private set; } = Task.CompletedTask;
 
     /// <summary>

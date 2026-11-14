@@ -21,7 +21,9 @@ public sealed class SessionRunnerTests : IDisposable
 {
     private const string Id = "runner-golden";
     private static readonly string[] AllowedSettingsChanges =
-        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun" };
+        { "TotalSessions", "RecentSessionStartsUtc", "LastSessionModId", "SameModRun",
+          // Restack b213: the season session and feature counts are kept, as WPF (SessionEngine.cs:296-318).
+          "SeasonStatsSeason", "SeasonSessionsStarted", "SeasonFeatureUse" };
     private static readonly string[] Timestamps = { "started_at", "ended_at", "timestamp", "session_time_seconds" };
 
     private readonly SessionLogService _logs = new();
@@ -396,8 +398,12 @@ public sealed class SessionRunnerTests : IDisposable
         var s = CoreSettings.Current;
         s.SubliminalDuration = 3;
         var before = SettingsJson();
+        var startsBefore = s.SeasonSessionsStarted;
+        var flashBefore = s.SeasonFeatureUse.TryGetValue(SeasonFeatureKeys.Flash, out var f) ? f : 0;
 
         _runner.Start(OneMinute());
+        Assert.Equal(startsBefore + 1, s.SeasonSessionsStarted);   // once per start
+        Assert.Equal(flashBefore + 1, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
         Assert.True(CoreSession.IsSessionRunning && CoreEngine.IsRunning);
         Assert.NotNull(CoreSession.UserPhrasePoolsWhileOverriding!());
         Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning);
@@ -474,6 +480,77 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(1, btStarts);
         Assert.True(LockCardScheduler.Instance.IsRunning);
         Assert.Equal(1.0, LockCardScheduler.Instance.LastWindowMinutes);   // #736: minutes left, not the duration
+    }
+
+    [Fact]
+    public void UserRestartReassertsDeferredEffectsAndDoesNotCountAnotherSession()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        session.Settings.FlashStartMinute = 3;
+        session.Settings.SubliminalStartMinute = 3;
+        session.Settings.LockCardStartMinute = 3;
+        session.Settings.BouncingTextStartMinute = 3;
+        var bouncing = false;
+        CoreBouncingText.StartAction = () => bouncing = true;
+        CoreBouncingText.StopAction = () => bouncing = false;
+        var mindWipe = false;
+        var oldMindWipeEnabled = CoreSettings.Current.MindWipeEnabled;
+        var oldAudioOnly = CoreSettings.Current.AudioOnlySession;
+        CoreMindWipe.StartProvider = (_, _) => mindWipe = true;
+        CoreMindWipe.StopProvider = () => mindWipe = false;
+        try
+        {
+            CoreSettings.Current.MindWipeEnabled = true;
+            CoreSettings.Current.AudioOnlySession = false;
+            _runner.Start(session);
+            var count = CoreSettings.Current.TotalSessions;
+            _runner.Pause();
+            CoreEngine.Stop();
+            CoreEngine.Start(resumingSession: true);
+            Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && bouncing && mindWipe);
+            _runner.ResumeAfterEngineStart();   // the trunk folds Resume and the reassert into one call
+            Assert.Equal(count, CoreSettings.Current.TotalSessions);
+            Assert.False(CoreFlash.IsRunning || CoreSubliminal.IsRunning || LockCardScheduler.Instance.IsRunning || bouncing || mindWipe);
+            _runner.Tick(TimeSpan.FromMinutes(3));
+            Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning && bouncing);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreBouncingText.StartAction = CoreBouncingText.StopAction = null;
+            CoreMindWipe.StartProvider = null;
+            CoreMindWipe.StopProvider = null;
+            CoreSettings.Current.MindWipeEnabled = oldMindWipeEnabled;
+            CoreSettings.Current.AudioOnlySession = oldAudioOnly;
+        }
+    }
+
+    [Fact]
+    public void RestartRearmsActiveLockCardsWithinTheRemainingSession()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        var oldAudioOnly = CoreSettings.Current.AudioOnlySession;
+        try
+        {
+            CoreSettings.Current.AudioOnlySession = false;
+            _runner.Start(session);
+            _runner.Pause();
+            CoreEngine.Stop();
+            CoreEngine.Start(resumingSession: true);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.Null(LockCardScheduler.Instance.LastWindowMinutes);
+            _runner.ResumeAfterEngineStart();   // the trunk folds Resume and the reassert into one call
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.NotNull(LockCardScheduler.Instance.LastWindowMinutes);
+            Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes.Value, 9.9, 10.0);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreSettings.Current.AudioOnlySession = oldAudioOnly;
+        }
     }
 
     [Fact]

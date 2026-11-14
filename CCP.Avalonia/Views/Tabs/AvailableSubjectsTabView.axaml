@@ -63,13 +63,17 @@
    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Setter Property="FontSize" Value="12.5"/>
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
+  <!-- WPF AvailableSubjectsTabView.xaml:22: the card glass, light at the top -->
+  <LinearGradientBrush x:Key="LobbyGlass" StartPoint="0%,0%" EndPoint="0%,100%">
+   <GradientStop Color="#24FFFFFF" Offset="0"/><GradientStop Color="#0CFFFFFF" Offset="1"/>
+  </LinearGradientBrush>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
    <Grid Margin="0,0,6,8" Tag="lobby-card">
     <!-- WPF AvailableSubjectsTabView.xaml:134: the ring a new table sends out (AvailableSubjectsTabView.Fx.cs) -->
     <Rectangle Tag="lobby-ring" RadiusX="16" RadiusY="16" Stroke="#FF8CC0" StrokeThickness="2" Opacity="0" IsHitTestVisible="False"/>
     <Rectangle Tag="lobby-float" Fill="{Binding CardShadow}" Height="{Binding CardShadowPx}" RadiusX="7" RadiusY="7"
                VerticalAlignment="Bottom" Margin="8,0,8,-6" IsHitTestVisible="False"/>
-   <Border CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="{Binding CardRim}" BorderThickness="1">
+   <Border CornerRadius="14" Padding="10,9" Background="{StaticResource LobbyGlass}" BorderBrush="{Binding CardRim}" BorderThickness="1">
     <Grid ColumnDefinitions="Auto,*,Auto">
      <!-- WPF AvailableSubjectsTabView.xaml:150-165: game art with the host's face and frame on its corner -->
      <Grid Width="40" Height="40" Margin="0,0,10,0" VerticalAlignment="Center">
@@ -86,7 +90,7 @@
       </StackPanel>
       <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
      </StackPanel>
-     <!-- ponytail: Goon and Remote doors still require their head hosts. -->
+     <!-- ponytail: Goon doors still require their head host. -->
      <Button Theme="{StaticResource LobbyJoin}" Grid.Column="2" Click="BtnLobbyRow_Click" IsEnabled="{Binding DoorAvailable}" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
       <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
      </Button>

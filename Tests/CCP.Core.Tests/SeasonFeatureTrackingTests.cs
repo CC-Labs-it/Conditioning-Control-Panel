@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -49,5 +50,28 @@ public class SeasonFeatureTrackingTests
         Assert.Equal(new[] { "e_pb" }, notes);
         Assert.Empty(s.SeasonFeatureUse);
         Assert.True(string.IsNullOrEmpty(s.SeasonStatsSeason));
+    }
+
+    // Restack b213 (#4264, #4265): WPF SessionEngine.cs:296-318.
+    [Fact]
+    public void RecordSessionStart_CountsTheSessionAndEachEnabledFeatureOnce()
+    {
+        var s = new AppSettings { CurrentSeason = "2026-06" };
+        var notes = new List<string>();
+        var all = new SessionSettings { FlashEnabled = true, MandatoryVideosEnabled = true, SubliminalEnabled = true,
+            SpiralEnabled = true, PinkFilterEnabled = true, BubblesEnabled = true, BubbleCountEnabled = true,
+            BouncingTextEnabled = true, LockCardEnabled = true, MindWipeEnabled = true };
+        SeasonFeatureTracking.RecordSessionStart(s, all, notes.Add, Now);
+        Assert.Equal("2026-06", s.SeasonStatsSeason);
+        Assert.Equal(1, s.SeasonSessionsStarted);
+        var keys = new[] { SeasonFeatureKeys.Flash, SeasonFeatureKeys.Video, SeasonFeatureKeys.Subliminal, SeasonFeatureKeys.Overlay,
+            SeasonFeatureKeys.Bubbles, SeasonFeatureKeys.BubbleCount, SeasonFeatureKeys.BouncingText, SeasonFeatureKeys.LockCard, SeasonFeatureKeys.MindWipe };
+        Assert.Equal(keys.Length, s.SeasonFeatureUse.Count);
+        foreach (var k in keys) Assert.Equal(1, s.SeasonFeatureUse[k]);   // Spiral and Pink share one Overlay credit
+        Assert.Equal(keys.Select(SeasonFeatureKeys.ToDayLogEvent).Where(e => e != null), notes);
+
+        SeasonFeatureTracking.RecordSessionStart(s, new SessionSettings(), notes.Add, Now);
+        Assert.Equal(2, s.SeasonSessionsStarted);
+        Assert.Equal(1, s.SeasonFeatureUse[SeasonFeatureKeys.Flash]);
     }
 }

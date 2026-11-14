@@ -385,7 +385,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (change.Property != IsVisibleProperty) return;
             try
             {
-                if (IsVisible) { StartAlive(); return; }
+                if (IsVisible) { StartAlive(); StartGlassWatch(); return; }
+                StopGlassWatch();
                 StopAlive();
                 CloseOptionsPanel();
                 ResetChrome();
@@ -1317,7 +1318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (handled) return;
                 }
 
-                if (glassLive) CloseRainGlass();
+                if (glassLive) { CloseRainGlass(); CloseGlass(); }
 
                 // QA ONLY, and deliberately awkward to hit by accident: Ctrl+Shift+Alt+click replays
                 // the gesture tutorial. Checked BEFORE the pat so the pat cannot eat it.
@@ -2772,6 +2773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                StopGlassWatch();
                 _player.Dispose();
                 UnhookDeskItems();
                 _bodyImage.Source = null;

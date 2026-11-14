@@ -16,6 +16,7 @@
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:ctl="using:ConditioningControlPanel.Avalonia.Views.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.BubblePopFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root IS the StackPanel (the old Grid wrapper is gone):
@@ -168,7 +169,7 @@
                             </Grid>
 
                             <!-- Bubbles v2 (Back Room prizes, WPF BubblePopFeatureControl.xaml:195-224): its own
-                                 box, hidden while no v2 grant is owned (RebuildMotionPicker). -->
+                                 box, shown for the purchase row or an owned motion. -->
                             <Border x:Name="V2Box" IsVisible="False" Margin="0,8,0,2"
                                     CornerRadius="10" Padding="12,8,12,8"
                                     Background="#14FFE08A" BorderBrush="#33FFE08A" BorderThickness="1">
@@ -182,6 +183,8 @@
                                             <TextBlock Text="{loc:Str badge_v2}" FontSize="9" FontWeight="Bold" Foreground="#FFE08A"/>
                                         </Border>
                                     </StackPanel>
+
+                                    <ctl:V2GetItRow x:Name="RowGetBubblesV2"/>
 
                                     <Grid x:Name="MotionRow" Height="36" Background="Transparent"
                                           ToolTip.Tip="{loc:Str tooltip_bubble_motion}">
@@ -269,6 +272,7 @@
                                     <CheckBox x:Name="ChkTypeGlitch"     Tag="glitch"     Content="Glitch"      Foreground="White" Margin="0,0,16,8"/>
                                     <CheckBox x:Name="ChkTypeCascade"    Tag="htlink"     Content="Cascade"     Foreground="White" Margin="0,0,16,8"/>
                                     <CheckBox x:Name="ChkTypeVideo"      Tag="video"      Content="Video"       Foreground="White" Margin="0,0,16,8"/>
+                                    <CheckBox x:Name="ChkBrainDrainBubble" Content="{loc:Str setting_bubble_braindrain}" ToolTip.Tip="{loc:Str tooltip_bubble_braindrain}" Foreground="White" Margin="0,0,16,8" IsVisible="False"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Grid>

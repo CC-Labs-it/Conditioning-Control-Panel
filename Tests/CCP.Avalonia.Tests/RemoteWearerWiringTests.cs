@@ -24,7 +24,8 @@ public sealed class RemoteWearerWiringTests
     public void The_relay_runs_cores_executor_and_stop_so_every_end_path_hands_back()
     {
         var tab = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Tabs", "RemoteControlTabView.axaml.cs"));
-        // The head intercepts only pause_session (it needs the shell); every other verb falls through to Core.
+        // The head intercepts pause_session and stop_session (they need the shell); every other verb falls through to Core.
+        Assert.Contains("Relay = NewRelay();", tab);
         Assert.Contains("ExecuteRemoteCommand, RemoteCommands.StopEffects", tab);
         var exec = tab.Substring(tab.IndexOf("internal static string? ExecuteRemoteCommand(", StringComparison.Ordinal));
         exec = exec.Substring(0, exec.IndexOf("\n        }", StringComparison.Ordinal));
