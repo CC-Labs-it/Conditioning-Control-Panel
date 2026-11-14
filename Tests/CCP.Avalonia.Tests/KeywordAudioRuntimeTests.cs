@@ -260,6 +260,36 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // hard rule 6 (restack fixkwstop): the 6-blink stop reaches the same real row, never a second copy
+    public Task BlinkStopSwitchesKeywordTriggersOffThroughThePanicRow() => RunAsync(async (_, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        var prev = PanicSurfaces.All;
+        var scans = 0;
+        KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]); };
+        try
+        {
+            // Only the real keyword row: the other blink rows (engine, audio) are not this test's business.
+            PanicSurfaces.All = new[] { Assert.Single(prev, x => x.Id == "keyword-triggers") };
+            s.KeywordTriggersEnabled = true; s.ScreenOcrEnabled = true; s.ScreenOcrIntervalMs = 60000;
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            MainShellWindow.StopAllForRecalibration(null);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.False(s.ScreenOcrEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            Type(KeywordTriggerHead.Engine, "sit"); Assert.Empty(played);
+        }
+        finally
+        {
+            PanicSurfaces.All = prev;
+            KeywordTriggerHead.Stop();
+            KeywordTriggerHead.OcrSource = null;
+            (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs) = saved;
+        }
+    });
+
     [Fact] // WPF BarkService.cs:1972,2008 (SelfEchoMuteMs 8000); KeywordTriggerService.cs:128-146
     public void SpokenBarkMutesItsExactLineForEightSeconds() => Run((engine, s, played) =>
     {

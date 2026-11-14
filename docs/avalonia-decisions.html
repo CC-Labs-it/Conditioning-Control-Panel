@@ -1207,6 +1207,7 @@ cancels the mic and AI follow-ups and stops the toys; (B) only what WPF <code>St
 never ended), <code>pink-rush</code>, <code>lock-cards</code> (WPF closes them: App.xaml.cs:1778 <code>LockCard.Stop(dismissOpenCards: true)</code> and
 StartStop.cs:~516 <code>LockCardWindow.ForceCloseAll()</code>) and <code>tube-speech</code> (KillAllAudio's <code>StopVoiceLineAudio</code>). The program
 run, camera, mic, AI and haptics are left alone; the panic key stays the way to stop everything.</li>
+<li>Amended 2026-11-14 (restack fixkwstop, hard rule 6 with the owner call 2026-10-10 that panic switches keyword triggers off): the set also runs the panic pass's own <code>keyword-triggers</code> row (<code>KeywordTriggerHead.SwitchOffForPanic</code>), so a hands-free stop never leaves keyword triggers armed where the panic key would switch them off. Stricter than WPF; everything else stays option B.</li>
 <li>Test: <code>BlinkStopTests.SixTrackerBlinksStopEverythingButTheCamera</code> asserts the exact set and the kept surfaces.</li>
 </ul>
 <h2 id="2026-10-12-flashclickable-is-honoured-by-the-avalonia-flash-overlay-flash-core">2026-10-12: FlashClickable is honoured by the Avalonia flash overlay (flash-core)</h2>

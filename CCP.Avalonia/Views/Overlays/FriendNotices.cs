@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -12,6 +13,8 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Safety;
+using MotionLevel = ConditioningControlPanel.Models.MotionLevel;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal sealed class NoticeLook
 {
@@ -28,10 +31,21 @@ internal sealed class FriendNotices : Window
     internal readonly FriendNoticeStack Stack = new();
     private readonly Dictionary<FriendNotice, NoticeLook> _looks = new();
     private readonly Dictionary<FriendNotice, (ScaleTransform Bar, TextBlock Ago)> _drawn = new();
+    private readonly Dictionary<FriendNotice, Border> _cards = new();
     private readonly StackPanel _column = new();
+    // A dismissed card fades on the beat before it leaves the column (WPF FriendNotices.cs:174).
+    private readonly Dictionary<Border, (double Start, double Ms, long At)> _fades = new();
     private readonly BeatLoop _beat;
     private Window? _anchor;
     private double _lastT;
+    private Border? _enterCard;
+    private TranslateTransform? _enterShift;
+    private MotionLevel _enterLevel;
+    private bool _enterFolded;
+    private double _enterMs;
+    private long _enterStarted;
+    /// <summary>WPF FriendNotices.cs:174: 140 ms; Gentle visuals only lengthen it.</summary>
+    internal static double DismissFadeMs => GentleVisuals.FadeMs(140);
     internal FriendNotices() {
         WindowDecorations = WindowDecorations.None;
         Background = Brushes.Transparent;
@@ -52,17 +66,27 @@ internal sealed class FriendNotices : Window
                 Win32Overlay.SetOverrideRedirect(this, handle.Handle, passive: true);
         };
         // Lifetimes count real elapsed time on the window's shared beat (P40, AmbientBeatLoopsTests).
-        _beat = new BeatLoop(this, t => { Advance((t - _lastT) * 1000); _lastT = t; });
+        _beat = new BeatLoop(this, t =>
+        {
+            if (_enterCard != null)
+            {
+                _enterMs = Math.Max(0, BeatLoop.Time.GetElapsedTime(_enterStarted).TotalMilliseconds);
+                StepEnter(0);
+            }
+            StepFades(null);
+            Tick((t - _lastT) * 1000);
+            _lastT = t;
+        });
         Closed += (_, _) => { _beat.Stop(); if (ReferenceEquals(Current, this)) Current = null; };
     }
     internal static void Present(Window? anchor, FriendNotice notice, NoticeLook look) {
         try {
             var w = Current ??= new FriendNotices();
             w._anchor = anchor ?? w._anchor;
-            var (up, _) = w.Stack.Add(notice);
+            var (up, folded) = w.Stack.Add(notice);
             foreach (var evicted in w.Stack.TakeEvicted()) w.Leave(evicted, false, true);
             w._looks[up] = look;
-            w.Rebuild();
+            w.Rebuild(up, folded);
             if (!w.IsVisible) { w.Show(); w._beat.Start(); }
             w.Place();
         }
@@ -75,7 +99,8 @@ internal sealed class FriendNotices : Window
         w.Stack.Clear();
         w.Close();
     }
-    internal void Advance(double ms) {
+    internal void Advance(double ms) { StepEnter(ms); StepFades(ms); Tick(ms); }
+    private void Tick(double ms) {
         var gone = Stack.Tick(ms);
         foreach (var n in Stack.Visible)
             if (_drawn.TryGetValue(n, out var d)) { d.Bar.ScaleX = n.Fraction; d.Ago.Text = Ago(n); }
@@ -92,11 +117,30 @@ internal sealed class FriendNotices : Window
     internal void Dismiss(FriendNotice n, bool acted, bool open = false) {
         if (!_looks.TryGetValue(n, out var look) || !Stack.Remove(n)) return;
         Leave(n, acted, false);
-        AfterRemoval();
+        var card = _cards.GetValueOrDefault(n);
+        if (card != null && AmbientFxCanvas.Env.Level != MotionLevel.Off)
+        {
+            if (ReferenceEquals(_enterCard, card)) { _enterCard = null; _enterShift = null; }
+            card.IsHitTestVisible = false;
+            _fades[card] = (card.Opacity, 0, BeatLoop.Time.GetTimestamp());
+        }
+        else AfterRemoval();
         try { if (acted) look.Act?.Invoke(n.Payload); else if (open) look.Open?.Invoke(n.Payload); }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice action"); }
     }
-    private void AfterRemoval() { if (Stack.All.Count == 0) Close(); else Rebuild(); }
+    private void StepFades(double? elapsed) {
+        var completed = false;
+        var length = DismissFadeMs;
+        foreach (var (card, fade) in new List<KeyValuePair<Border, (double Start, double Ms, long At)>>(_fades))
+        {
+            var ms = elapsed.HasValue ? fade.Ms + Math.Max(0, elapsed.Value) : BeatLoop.Time.GetElapsedTime(fade.At).TotalMilliseconds;
+            card.Opacity = fade.Start * Math.Max(0, 1 - ms / length);
+            if (ms >= length) { _fades.Remove(card); _column.Children.Remove(card); completed = true; }
+            else _fades[card] = (fade.Start, ms, fade.At);
+        }
+        if (completed && IsVisible) AfterRemoval();
+    }
+    private void AfterRemoval() { if (Stack.All.Count == 0 && _fades.Count == 0) Close(); else Rebuild(); }
     private void Place() {
         // WPF Windows/Friends/FriendNotices.cs:204-225: closed anchors fall back; placement never escapes.
         try {
@@ -112,22 +156,40 @@ internal sealed class FriendNotices : Window
         catch (Exception ex) { Serilog.Log.Debug(ex, "Friend notice place"); }
     }
     private static string Ago(FriendNotice n) { var (key, arg) = FriendNoticeRules.Ago(n.At, DateTimeOffset.UtcNow); return string.Format(Loc.Get(key), arg); }
-    private void Rebuild() {
+    private void Rebuild(FriendNotice? fresh = null, bool folded = false) {
+        _enterCard = null;
+        _enterShift = null;
         _column.Children.Clear();
         _drawn.Clear();
+        _cards.Clear();
         foreach (var n in Stack.Visible) {
             var look = _looks[n];
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-            // ponytail: initials reuse the drawer avatar; proxy pictures and arrival/fade motion remain unported.
-            grid.Children.Add(FriendsDrawer.Avatar(n.Name, 34, null));
+            // WPF FriendNotices.cs:278 and LandingChrome.cs:35-77: proxy picture over initials.
+            var avatar = KnockCard.BuildAvatar(n.Name, look.AvatarUrl, 34);
+            avatar.VerticalAlignment = VerticalAlignment.Top;
+            grid.Children.Add(avatar);
             var words = new StackPanel { Margin = new Thickness(10, 0, 4, 0) };
-            var ago = new TextBlock { Text = Ago(n), FontSize = 10.5, Foreground = FriendsDrawer.Muted };
-            words.Children.Add(new TextBlock { Text = n.Name, FontFamily = FriendsDrawer.Display,
-                FontSize = 13.5, Foreground = FriendsDrawer.Text, TextTrimming = TextTrimming.CharacterEllipsis });
-            words.Children.Add(ago);
-            words.Children.Add(new TextBlock { Text = look.Line + (look.Word == null ? "" : " " + look.Word)
-                + FriendNoticeRules.CountSuffix(n.Count), FontSize = 12, TextWrapping = TextWrapping.Wrap,
-                Foreground = look.Word == null ? FriendsDrawer.Muted : look.Pink ? FriendsDrawer.Pink : FriendsDrawer.Mint });
+            // WPF FriendNotices.cs:283-325: time beside the name; only the word and count are accented.
+            var ago = new TextBlock { Text = Ago(n), FontSize = 10.5, Foreground = FriendsDrawer.Muted,
+                Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var headRow = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(ago, Dock.Right);
+            headRow.Children.Add(ago);
+            headRow.Children.Add(new TextBlock { Text = n.Name, FontFamily = FriendsDrawer.Display,
+                FontSize = 13.5, FontWeight = FontWeight.SemiBold, Foreground = FriendsDrawer.Text,
+                TextTrimming = TextTrimming.CharacterEllipsis });
+            words.Children.Add(headRow);
+            var line = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 1, 0, 0), Foreground = FriendsDrawer.Muted };
+            line.Inlines!.Add(new Run(look.Line));
+            if (!string.IsNullOrEmpty(look.Word))
+                line.Inlines.Add(new Run(" " + look.Word) { FontWeight = FontWeight.SemiBold,
+                    Foreground = look.Pink ? FriendsDrawer.Pink : FriendsDrawer.Mint });
+            if (n.Count > 1)
+                line.Inlines.Add(new Run(FriendNoticeRules.CountSuffix(n.Count)) {
+                    FontWeight = FontWeight.SemiBold, Foreground = FriendsDrawer.Gold });
+            words.Children.Add(line);
             if (look.ActionLabel != null && look.Act != null)
             {
                 var act = FriendsDrawer.Pill(look.ActionLabel, FriendsDrawer.Mint, Brushes.Black, "friend-notice-action");
@@ -154,19 +216,50 @@ internal sealed class FriendNotices : Window
                 Background = FriendsDrawer.Pink, RenderTransform = bar,
                 RenderTransformOrigin = new RelativePoint(0, 0.5, RelativeUnit.Relative) });
             var card = new Border { Width = 300, Padding = new Thickness(11, 10, 9, 8),
-                Margin = new Thickness(0, 0, 0, 8), Background = new SolidColorBrush(Color.Parse("#F2221641")),
+                Margin = new Thickness(16, 0, 0, 8), Background = new SolidColorBrush(Color.Parse("#F2221641")),
                 BorderBrush = FriendsDrawer.Line2, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),
-                Child = body };
+                Child = body, RenderTransform = new TranslateTransform() };
             // WPF card.MouseLeftButtonUp (FriendNotices.cs:386): left button only.
             card.PointerReleased += (_, e) =>
             {
                 if (!e.Handled && e.InitialPressMouseButton == MouseButton.Left) Dismiss(n, false, true);
             };
             _column.Children.Add(card);
+            if (ReferenceEquals(n, fresh)) Enter(card, folded);
             _drawn[n] = (bar, ago);
+            _cards[n] = card;
         }
+        foreach (var card in _fades.Keys) _column.Children.Add(card);
         if (Stack.Hidden > 0) _column.Children.Add(new TextBlock {
             Text = string.Format(Loc.Get("friends_notice_more"), Stack.Hidden), Foreground = FriendsDrawer.Muted,
             HorizontalAlignment = HorizontalAlignment.Right });
+    }
+    // WPF FriendNotices.cs:101-108,395-411: a new card fades and slides in; a repeat only nudges.
+    // Off: no motion. Reduced: fade only, no repeat nudge. Gentle visuals keep the 300 ms rise floor.
+    private void Enter(Border card, bool folded) {
+        var level = AmbientFxCanvas.Env.Level;
+        if (level == MotionLevel.Off || (folded && level != MotionLevel.Full)) return;
+        _enterCard = card;
+        _enterShift = (TranslateTransform)card.RenderTransform!;
+        _enterLevel = level;
+        _enterFolded = folded;
+        _enterMs = 0;
+        _enterStarted = BeatLoop.Time.GetTimestamp();
+        StepEnter(0);
+    }
+    private void StepEnter(double elapsedMs) {
+        if (_enterCard == null || _enterShift == null) return;
+        _enterMs += Math.Max(0, elapsedMs);
+        var full = _enterLevel == MotionLevel.Full;
+        var slideMs = _enterFolded ? 220.0 : 260.0;
+        var riseMs = (double)GentleVisuals.RiseMs(full ? 200 : 140);
+        if (full)
+        {
+            var start = _enterFolded ? -6.0 : 28.0;
+            var ease = FloatingWord.BackOut(Math.Min(1, _enterMs / slideMs), _enterFolded ? 0.6 : 0.4);
+            _enterShift.X = start * (1 - ease);
+        }
+        if (!_enterFolded) _enterCard.Opacity = Math.Min(1, _enterMs / riseMs);
+        if (_enterMs >= Math.Max(full ? slideMs : 0, _enterFolded ? 0 : riseMs)) { _enterCard = null; _enterShift = null; }
     }
 }

@@ -106,7 +106,7 @@ internal sealed class KnockCard : Window
         DockPanel.SetDock(clock, Dock.Right);
 
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        top.Children.Add(BuildAvatar(item.FromName, item.FromAvatarUrl, 28));
+        top.Children.Add(BuildAvatar(item.FromName, item.FromAvatarUrl, 28, face => AvatarFace = face));
         var words = new StackPanel { Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
         var head = new DockPanel();
         head.Children.Add(clock);
@@ -189,18 +189,18 @@ internal sealed class KnockCard : Window
 
     /// <summary>WPF LandingChrome.Avatar :35: initials on lilac, the server picture over them when it loads.
     /// Only a first-party proxy path ("/...") is fetched; anything else keeps the initials.</summary>
-    private Control BuildAvatar(string name, string? avatarPath, double size)
+    internal static Control BuildAvatar(string name, string? avatarPath, double size, Action<Ellipse>? loaded = null)
     {
         var grid = new Grid { Width = size, Height = size };
         grid.Children.Add(FriendsDrawer.Avatar(name, size, null));
         if (string.IsNullOrEmpty(avatarPath) || !avatarPath.StartsWith('/')) return grid;
         var face = new Ellipse { Width = size, Height = size, Opacity = 0 };
         grid.Children.Add(face);
-        _ = LoadFace(face, ProviderSubscription.ProxyBaseUrl + avatarPath, (int)Math.Ceiling(size * 2));
+        _ = LoadFace(face, ProviderSubscription.ProxyBaseUrl + avatarPath, (int)Math.Ceiling(size * 2), loaded);
         return grid;
     }
 
-    private async Task LoadFace(Ellipse face, string url, int width)
+    private static async Task LoadFace(Ellipse face, string url, int width, Action<Ellipse>? loaded)
     {
         try
         {
@@ -208,7 +208,7 @@ internal sealed class KnockCard : Window
             using var ms = new System.IO.MemoryStream(bytes);
             face.Fill = new ImageBrush(Bitmap.DecodeToWidth(ms, width)) { Stretch = Stretch.UniformToFill };
             face.Opacity = 1;
-            AvatarFace = face;
+            loaded?.Invoke(face);
         }
         catch (Exception ex) { Log.Debug("[Friends] avatar load: {E}", ex.Message); }
     }

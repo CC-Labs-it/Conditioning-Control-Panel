@@ -20,17 +20,7 @@ public sealed class PanicSurfacesTests
     [Fact]
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
-        if (Application.Current is null)
-            // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
-            // decides process-wide fonts, including the subliminal card closed by panic.
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                .With(new global::Avalonia.Media.FontManagerOptions {
-                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
-                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
-                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
-                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        EnsureApp();
         var s = CoreSettings.Current;
         var (enabled, key) = (s.PanicKeyEnabled, s.PanicKey);
         (s.PanicKeyEnabled, s.PanicKey) = (true, "F8");
@@ -59,6 +49,62 @@ public sealed class PanicSurfacesTests
             PanicSurfaces.All = prev;
             shell.Close();
             (s.PanicKeyEnabled, s.PanicKey) = (enabled, key);
+        }
+    });
+
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
+            // decides process-wide fonts, including the subliminal card closed by panic.
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .With(new global::Avalonia.Media.FontManagerOptions {
+                    DefaultFamilyName = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter,
+                    FontFamilyMappings = new System.Collections.Generic.Dictionary<string, global::Avalonia.Media.FontFamily> {
+                        ["Segoe UI"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter),
+                        ["Segoe UI Black"] = new(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter) } })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+    }
+
+    /// <summary>Hard rule 6 with the owner call 2026-10-10 (restack fixkwstop): every "stop everything" route,
+    /// the hands-free ones included, switches keyword triggers off through the one <c>keyword-triggers</c> row,
+    /// as the panic key's full press does. The 6-blink stop is a recalibration subset otherwise (decision
+    /// 2026-10-12). The key's pause, lock-card, palette and grace rungs are partial by design and not listed.</summary>
+    [Fact]
+    public void EveryStopEverythingRouteReachesTheKeywordTriggerRow() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var old = (s.PanicKeyEnabled, s.PanicKey, s.BlinkRecalibrateShortcutEnabled, s.StrictLockEnabled);
+        (s.PanicKeyEnabled, s.PanicKey, s.BlinkRecalibrateShortcutEnabled, s.StrictLockEnabled) = (true, "F8", true, false);
+        var prev = PanicSurfaces.All;
+        var stopped = new List<string>();
+        PanicSurfaces.All = prev.Select(x => new PanicSurfaces.Surface(x.Id, _ => stopped.Add(x.Id))).ToArray();
+        var shell = new MainShellWindow { BlinkRecalOfferForTests = () => System.Threading.Tasks.Task.CompletedTask };
+        shell.Show();
+        try
+        {
+            var t = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+            foreach (var (name, stop) in new (string, Action)[]
+            {
+                ("panic key", () => shell.HandlePanicKeyPress(new DateTime(2026, 1, 1))),
+                ("tray", MainShellWindow.StopEverything),
+                ("voice", shell.VoicePanic),
+                ("6-blink", () => { for (var i = 0; i < MainShellWindow.RapidBlinkRecalCount; i++) shell.OnRapidBlink(t = t.AddMilliseconds(500)); }),
+            })
+            {
+                stopped.Clear();
+                stop();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(stopped.Contains("keyword-triggers"), $"{name} left keyword triggers on ({stopped.Count} rows stopped)");
+            }
+        }
+        finally
+        {
+            PanicSurfaces.All = prev;
+            shell.Close();
+            (s.PanicKeyEnabled, s.PanicKey, s.BlinkRecalibrateShortcutEnabled, s.StrictLockEnabled) = old;
         }
     });
 
