@@ -154,6 +154,19 @@ public sealed class PossessionDirector : IDisposable
             foreach (var g in _live.ToArray()) UndoGhostSync(g);
             _live.Clear();
             _liveKeys.Clear();
+            // An ordinary undo releases its ghost before awaiting its fade. Panic must also
+            // finish effects still unwinding after they have left the live ledger.
+            foreach (var effect in _effects)
+            {
+                try
+                {
+                    if (!effect.IsLive) continue;
+                    var undo = effect.UndoAsync(TimeSpan.Zero);
+                    _ = undo.ContinueWith(t => Log.Warning("Possession emergency undo failed: {Error}", t.Exception?.GetBaseException().Message),
+                        TaskContinuationOptions.OnlyOnFaulted);
+                }
+                catch (Exception ex) { Log.Warning("Possession emergency undo failed: {Error}", ex.Message); }
+            }
             foreach (var h in _hosts) { try { h.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); } }
         }
         catch (Exception ex) { Log.Warning("Possession UndoAll failed: {Error}", ex.Message); }

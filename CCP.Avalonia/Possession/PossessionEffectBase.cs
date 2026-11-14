@@ -70,7 +70,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
             await ApplyCoreAsync(ctx, Target, token).ConfigureAwait(true);
             token.ThrowIfCancellationRequested();
         }
-        catch (OperationCanceledException) { if (ReferenceEquals(_cts, source)) await UndoAsync(TimeSpan.Zero).ConfigureAwait(true); }
+        catch (OperationCanceledException) { if (!_undoing && ReferenceEquals(_cts, source)) await UndoAsync(TimeSpan.Zero).ConfigureAwait(true); }
         catch (Exception ex)
         {
             Serilog.Log.Warning("Possession {Id} failed to apply: {Error}", Id, ex.Message);
@@ -111,7 +111,16 @@ internal abstract class PossessionEffectBase : IPossessionEffect
 
     public async Task UndoAsync(TimeSpan duration)
     {
-        if (!IsLive || _undoing) return;
+        if (!IsLive) return;
+        if (_undoing)
+        {
+            if (duration <= TimeSpan.Zero)
+            {
+                try { await UndoCoreAsync(TimeSpan.Zero).ConfigureAwait(true); }
+                catch (Exception ex) { Serilog.Log.Warning("Possession {Id} emergency undo failed: {Error}", Id, ex.Message); }
+            }
+            return;
+        }
         _undoing = true;
         try { _cts?.Cancel(); } catch { }
         try { await UndoCoreAsync(duration).ConfigureAwait(true); }

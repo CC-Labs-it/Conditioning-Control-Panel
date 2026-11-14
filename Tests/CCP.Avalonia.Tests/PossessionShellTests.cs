@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Animation;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -36,9 +38,12 @@ public sealed class PossessionShellTests
         public DateTime Clock = DateTime.UtcNow;
     }
 
-    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null)
+    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
+        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
+
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null)
     {
-        AvaloniaTestDispatcher.Run(() =>
+        return AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
@@ -73,7 +78,7 @@ public sealed class PossessionShellTests
             {
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
-                body(rig);
+                await body(rig);
             }
             finally
             {
@@ -341,10 +346,10 @@ public sealed class PossessionShellTests
         public void ReleaseAll() { }
     }
 
-    private static PossessionContext DokiContext(Rig rig, PossessionRung rung, PossessionIntensity intensity) => new()
+    private static PossessionContext DokiContext(Rig rig, PossessionRung rung, PossessionIntensity intensity, Random? rng = null) => new()
     {
         Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = rung, Intensity = intensity,
-        Photosafe = false, Rng = new Random(1), ElapsedFraction = 0.9,
+        Photosafe = false, Rng = rng ?? new Random(1), ElapsedFraction = 0.9,
         Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { }
     };
 
@@ -362,7 +367,8 @@ public sealed class PossessionShellTests
     public void DokiDialog_RendersLocalizedTextAndClosesOnUndo() => Run(rig =>
     {
         var effect = new DokiDialogEffect();
-        effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None).GetAwaiter().GetResult();
+        var apply = effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+        Assert.False(apply.IsCompleted);
         var dialog = Assert.IsType<Window>(effect.Dialog);
         Frame();
         Assert.True(dialog.IsVisible);
@@ -382,7 +388,8 @@ public sealed class PossessionShellTests
     public void DokiDialog_ProgressAdmitsNothingHappened_AndFailsafeCloses() => Run(rig =>
     {
         var effect = new DokiDialogEffect();
-        effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None).GetAwaiter().GetResult();
+        var apply = effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+        Assert.False(apply.IsCompleted);
         var dialog = Assert.IsType<Window>(effect.Dialog);
         effect.StepProgress(2200);
         Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("possession_doki_done"));
@@ -390,6 +397,114 @@ public sealed class PossessionShellTests
         Assert.False(dialog.IsVisible);
         Assert.Null(effect.Dialog);
         effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+    });
+
+    [Fact]
+    public Task DokiDialog_ApplyWaitsForProgressAndCancellationCloses() => RunAsync(async rig =>
+    {
+        var effect = new DokiDialogEffect();
+        using var cancel = new CancellationTokenSource();
+        var apply = effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, cancel.Token);
+        Assert.False(apply.IsCompleted);
+        effect.StepProgress(2199);
+        Assert.False(apply.IsCompleted);
+        effect.StepProgress(2200);
+        Assert.False(apply.IsCompleted);
+        effect.StepProgress(2250);
+        await apply;
+        Assert.True(effect.Dialog!.IsVisible);
+        await effect.UndoAsync(TimeSpan.Zero);
+        var second = new DokiDialogEffect();
+        var pending = second.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, cancel.Token);
+        cancel.Cancel();
+        await pending;
+        Assert.Null(second.Dialog);
+    });
+
+    private sealed class FirstChoice : Random { public override int Next(int maxValue) => 0; }
+
+    [Fact]
+    public void DokiDialog_BambiTitleOnlyWhenTheModIsActive() => Run(rig =>
+    {
+        var saved = CoreMods.ActiveModIdProvider;
+        try
+        {
+            foreach (var bambi in new[] { false, true })
+            {
+                CoreMods.ActiveModIdProvider = () => bambi ? BuiltInMods.BambiSleepId.ToUpperInvariant() : BuiltInMods.CCPDefaultId;
+                var effect = new DokiDialogEffect();
+                var context = DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki, new FirstChoice());
+                _ = effect.ApplyAsync(context, null, CancellationToken.None);
+                var title = effect.Dialog!.Title;
+                Assert.Equal(Loc.Get(bambi ? "possession_doki_title_bambi" : "possession_doki_title_1"), title);
+                Assert.Equal(bambi, title!.Contains("bambi.exe", StringComparison.OrdinalIgnoreCase));
+                effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            }
+        }
+        finally { CoreMods.ActiveModIdProvider = saved; }
+    });
+
+    [Fact]
+    public void DokiDialog_LongTextAndButtonStayInsideWindow() => Run(rig =>
+    {
+        var effect = new DokiDialogEffect();
+        _ = effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+        var dialog = effect.Dialog!;
+        var status = dialog.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "DokiStatus");
+        var ok = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DokiOk");
+        status.Text = "dein langer ausweg wird gerade für immer gelöscht und du bleibst hier";
+        dialog.UpdateLayout();
+        var statusAt = status.TranslatePoint(default, dialog)!.Value;
+        var buttonAt = ok.TranslatePoint(default, dialog)!.Value;
+        Assert.True(status.Bounds.Height > 20);
+        Assert.True(statusAt.X + status.Bounds.Width <= dialog.ClientSize.Width);
+        Assert.True(buttonAt.X + ok.Bounds.Width <= dialog.ClientSize.Width);
+        Assert.True(buttonAt.Y + ok.Bounds.Height <= dialog.ClientSize.Height);
+        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+    });
+
+    [Fact]
+    public Task DokiDialog_OrdinaryUndoFades() => RunAsync(async rig =>
+    {
+        var effect = new DokiDialogEffect();
+        var apply = effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+        effect.StepProgress(2250);
+        await apply;
+        var dialog = effect.Dialog!;
+        var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(600));
+        Assert.False(undo.IsCompleted);
+        Assert.True(dialog.IsVisible);
+        Assert.Contains(dialog.Transitions!, t => t is DoubleTransition d && d.Duration == TimeSpan.FromMilliseconds(320));
+        await undo;
+        Assert.False(dialog.IsVisible);
+        var second = new DokiDialogEffect();
+        var applied = second.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+        second.StepProgress(2250);
+        await applied;
+        var fade = second.UndoAsync(TimeSpan.FromMilliseconds(1));
+        Assert.False(fade.IsCompleted);
+        Assert.Contains(second.Dialog!.Transitions!, t => t is DoubleTransition d && d.Duration == TimeSpan.FromMilliseconds(120));
+        await fade;
+        Assert.Null(second.Dialog);
+    });
+
+    [Fact]
+    public Task DokiDialog_PanicInterruptsAnOrdinaryFade() => RunAsync(async rig =>
+    {
+        var effect = new DokiDialogEffect();
+        var effects = (List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(rig.Director)!;
+        effects.Clear(); effects.Add(effect);
+        var apply = effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+        effect.StepProgress(2250);
+        await apply;
+        var dialog = effect.Dialog!;
+        var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(600));
+        Assert.False(undo.IsCompleted);
+        Assert.True(dialog.IsVisible);
+        rig.Director.UndoAll();
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+        await undo;
     });
 
     [Fact]
