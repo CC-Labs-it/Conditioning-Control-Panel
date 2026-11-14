@@ -34,7 +34,10 @@ public sealed partial class AccountSeedTests
         public string SyncReply = "{\"success\":true}";
         public TaskCompletionSource? HeartbeatHold;
         public TaskCompletionSource? HeartbeatStarted;
+        public TaskCompletionSource? ReadHold;
+        public readonly TaskCompletionSource ReadSeen = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource? Hold;   // a sync answer that waits until released
+        public readonly TaskCompletionSource SyncSeen = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly Queue<(HttpStatusCode, string)> Next = new();   // one-shot sync answers, then SyncStatus
         // A snapshot under the lock: the heartbeat LoadProfile starts can still be adding while a test reads.
         public IEnumerable<JObject> Syncs { get { lock (Seen) return Seen.Where(r => r.Path == "POST /v2/user/sync").Select(r => r.Body!).ToList(); } }
@@ -45,8 +48,12 @@ public sealed partial class AccountSeedTests
             var path = $"{r.Method} {r.RequestUri!.AbsolutePath}";
             lock (Seen) Seen.Add((path, body));
             if (path == "GET /v2/user/profile")
+            {
+                ReadSeen.TrySetResult();
+                if (ReadHold is { } readHold) await readHold.Task;
                 return Profile == null ? new(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") }
                     : new(HttpStatusCode.OK) { Content = new StringContent(Profile) };
+            }
             if (path == "POST /v2/user/heartbeat" && HeartbeatHold is { } heartbeatHold)
             {
                 HeartbeatStarted?.TrySetResult();
@@ -55,6 +62,7 @@ public sealed partial class AccountSeedTests
             }
             if (path == "POST /v2/user/sync")
             {
+                SyncSeen.TrySetResult();
                 var (status, reply) = Next.Count > 0 ? Next.Dequeue() : (SyncStatus, SyncReply);
                 if (Hold is { } hold) await hold.Task;
                 return new(status) { Content = new StringContent(reply) };
@@ -132,6 +140,30 @@ public sealed partial class AccountSeedTests
         Assert.Equal("first", id);
         Assert.Equal("tok", token);
         Assert.Equal(2, EntitlementTierRule.ParseHeartbeatTier(body!));
+    });
+
+    [Fact]
+    public void ProfileRead_DiscardedAfterIdentityChanges() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        var hold = wire.ReadHold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifications = 0;
+        void OnLoaded() => notifications++;
+        AccountSeed.ProfileLoaded += OnLoaded;
+        try
+        {
+            var loading = AccountSeed.LoadProfileAsync();
+            await wire.ReadSeen.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            CoreSettings.Current.UnifiedId = "u2";
+            CoreAccount.UnifiedUserId = "u2";
+            hold.SetResult();
+            Assert.False(await loading);
+            Assert.Equal(1, CoreSettings.Current.PlayerLevel);
+            Assert.False(sync.Loaded);
+            Assert.Empty(wire.Syncs);
+            Assert.Equal(0, notifications);
+        }
+        finally { hold.TrySetResult(); AccountSeed.ProfileLoaded -= OnLoaded; }
     });
 
     [Fact]
@@ -366,6 +398,37 @@ public sealed partial class AccountSeedTests
         local.Add("linux_only");
         Assert.True(await AccountSeed.LoadProfileAsync());
         Assert.Null(Assert.Single(wire.Syncs)["achievements"]);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ReadProgressNotification_PrecedesThePushOnlyWhenProgressChanged(bool changed) => WithFreshInstall(async () =>
+    {
+        // WPF ProfileSyncService RaiseProfileLoadedIfProgressionChanged("read-before-write"): a read that
+        // moved level or XP repaints before the push answers, even when that push then fails.
+        var profile = changed ? L40Profile("u1")
+            : """{"user":{"unified_id":"u1","level":1,"xp":0,"current_season":"2026-08"}}""";
+        var (wire, _, _) = SignIn("u1", profile);
+        wire.SyncStatus = (HttpStatusCode)429;
+        var hold = wire.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifications = 0;
+        void OnLoaded() => notifications++;
+        AccountSeed.ProfileLoaded += OnLoaded;
+        try
+        {
+            var loading = AccountSeed.LoadProfileAsync();
+            await wire.SyncSeen.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(changed ? 1 : 0, notifications);
+            hold.SetResult();
+            Assert.True(await loading);
+            Assert.Equal(changed ? 2 : 1, notifications); // plus the load's own notification
+        }
+        finally
+        {
+            hold.TrySetResult();
+            AccountSeed.ProfileLoaded -= OnLoaded;
+        }
     });
 
     [Fact]
