@@ -46,6 +46,16 @@ internal static class LeashHead
         if (_offerAccount != CoreSettings.Current.UnifiedId) ResetOffers();
     }
     internal static void OfferChanged() => OffersChanged?.Invoke();
+
+    /// <summary>WPF LeashSurfaces._iCut: a cut pressed here already sounded and was said, so the Ended
+    /// event it brings back is swallowed once (MainShellWindow.LeashAsks OnLeashEvent).</summary>
+    internal static bool SelfCut;
+    /// <summary>WPF LeashSurfaces.NoteCut (:268-273): the cut sound plays once, before the service cut runs.</summary>
+    internal static void NoteCut()
+    {
+        SelfCut = true;
+        LeashSound.Cut(DateTime.UtcNow);
+    }
     private static void OfferSnapshot(LeashSnapshot snap)
     {
         CheckOfferAccount();

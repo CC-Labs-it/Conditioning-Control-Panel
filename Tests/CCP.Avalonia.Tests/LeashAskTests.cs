@@ -127,7 +127,8 @@ public sealed class LeashAskTests
             Assert.Equal("u_juno", (string?)sent["from"]);
             Assert.True((bool?)sent["accept"]);
             Assert.Equal("strict", (string?)sent["intensity"]);
-            Assert.Null(LeashAskWindow.Current);
+            // WPF LeashSurfaces.ShowAsk :205-209: the accept swaps the ask for the snap in the one overlay slot.
+            Assert.Equal("Juno", Assert.IsType<LeashSnapCard>(LeashAskWindow.Current!.Body).Holder.Name);
             Assert.False(ask.IsVisible);
             Assert.True(CoreSettings.Current.LeashIntroSeenLeashed);
         });

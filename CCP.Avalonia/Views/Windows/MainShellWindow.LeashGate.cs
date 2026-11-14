@@ -274,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             LeashTaskHost.EndTask("cut", this);   // WPF LeashSurfaces.CutDone -> EndLeashTask
             App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
+            try { LeashHead.NoteCut(); } catch { }   // WPF LeashSurfaces.NoteCut: cut sound, Ended swallowed once
             try { if (LeashHead.Service is { } s) await s.CutAsync(); }
             catch (Exception ex) { Serilog.Log.Debug("[Leash] cut failed (service retries): {E}", ex.Message); }
         }
