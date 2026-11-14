@@ -168,7 +168,7 @@ public class PossessionDropTests
         finally { window.Close(); }
     });
     [Fact]
-    public Task PanicDuringReturnRemovesPiecesImmediately() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task PanicDuringReturnStillEndsWithinTheReturnBound() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var (text, layer, window, frames, host, effect) = Setup("Returning");
         using var cts = new CancellationTokenSource();

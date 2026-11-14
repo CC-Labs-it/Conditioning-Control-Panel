@@ -231,7 +231,9 @@ internal sealed class DropEffect : PossessionEffectBase
     internal static void UndoAllLive()
     {
         foreach (var effect in Live.ToArray())
-            if (effect._returning) effect.Finish(); else _ = effect.UndoAsync(TimeSpan.Zero);
+            // A drop already easing home (released by the director) finishes its bounded return, as on WPF;
+            // stopping it at once would be a panic cleanup stricter than WPF (owner call).
+            if (!effect._returning) _ = effect.UndoAsync(TimeSpan.Zero);
     }
 
     internal static TextBlock? FindTarget(PossessionTarget? target)
