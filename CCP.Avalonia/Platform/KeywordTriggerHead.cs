@@ -229,6 +229,7 @@ internal sealed class KeywordAudioRuntime
     private readonly KeywordTextInput _input = new();
     private KeywordCooldowns _cooldowns = new();
     internal void ResetCooldownsForTest() { _cooldowns = new(); ClearOcr(); }   // Stop keeps the OCR guards
+    internal void MuteKeywordEcho(string text, int milliseconds) => _cooldowns.Mute(text, milliseconds, Now().ToUniversalTime());
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private int _playGeneration;

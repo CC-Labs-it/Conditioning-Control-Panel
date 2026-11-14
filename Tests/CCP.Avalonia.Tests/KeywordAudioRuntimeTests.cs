@@ -176,6 +176,33 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF BarkService.cs:1972,2008 (SelfEchoMuteMs 8000); KeywordTriggerService.cs:128-146
+    public void SpokenBarkMutesItsExactLineForEightSeconds() => Run((engine, s, played) =>
+    {
+        var saved = (s.AwarenessLoopProtectionEnabled, s.AvatarEnabled, s.BarkChatSuppressionMs, s.BarkVariantRotation, BarkHead.EchoTarget);
+        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        try
+        {
+            s.BarkVariantRotation = s.BarkVariantRotation.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+            s.AwarenessLoopProtectionEnabled = false; s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
+            engine.Now = () => clock;
+            BarkHead.EchoTarget = () => engine;
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule { Id = "echo", Trigger = "T",
+                VariantPool = [new ConditioningControlPanel.Services.Bark.BarkVariant("sit")] };
+            var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
+                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet([rule]), new Random(7)) { Speak = _ => { } };
+            BarkHead.AttachEcho(bark); bark.Start();
+            Assert.True(bark.Raise("T"));
+            Type(engine, "sit"); Assert.Empty(played);
+            clock = clock.AddSeconds(7.9); Type(engine, "sit"); Assert.Empty(played);
+            clock = new DateTime(2026, 10, 14, 12, 0, 8); Type(engine, "sit"); Assert.Single(played);
+        }
+        finally
+        {
+            (s.AwarenessLoopProtectionEnabled, s.AvatarEnabled, s.BarkChatSuppressionMs, s.BarkVariantRotation, BarkHead.EchoTarget) = saved;
+        }
+    });
+
     private static void Type(KeywordAudioRuntime engine, string text) { foreach (var ch in text) engine.Character(ch); }
 
     // restack b186: ducking slices of #3968, #4057 and #4139 (Mich), adapted to the trunk dispatcher.
