@@ -26,6 +26,7 @@
   "mod_emote_title": "アニメーションエモート", "mod_emote_help": "GIFとemotes.jsonを含む準備済みフォルダーを読み込みます。各セットはアバターを置き換えます。", "mod_emote_add": "セットを追加", "mod_emote_import": "フォルダーを読み込む", "mod_emote_picker": "準備済みフォルダーを選択", "mod_emote_empty": "フォルダー未選択", "mod_emote_set": "セット {0}", "mod_emote_taken": "セット {0} は使用中です。", "mod_emote_all_used": "7つのセットはすべて使用中です。", "mod_emote_stats": "GIF {0} 個、{1}", "mod_emote_invalid": "無効なセットは書き出されません。", "mod_emote_folder_missing": "フォルダーが見つかりません。", "mod_emote_map_missing": "emotes.json がありません。", "mod_emote_map_invalid": "emotes.json が無効です: {0}", "mod_emote_clips_missing": "不足しているクリップ: {0}", "mod_emote_unused": "未使用のGIF: {0}", "mod_emote_no_talk": "発話プールと talkA.gif がありません。", "mod_emote_no_timing": "clip_timing.json がありません。", "mod_emote_large": "フォルダーは推奨上限の50 MBを超えています。", "mod_emote_read_error": "フォルダーを読み取れません: {0}",
   "mod_mantra_intro": "音声の指示に続けてフレーズを繰り返します。音声は省略できます。指示にはフレーズを含めてください。", "mod_mantra_add": "+ マントラを追加", "mod_mantra_retry_title": "再試行", "mod_mantra_retry_help": "失敗時や声が小さい時の共通メッセージ。", "mod_mantra_retry_add": "+ 再試行メッセージを追加", "mod_mantra_timeout_title": "タイムアウト", "mod_mantra_timeout_help": "声が聞こえない時の共通メッセージ。", "mod_mantra_timeout_add": "+ タイムアウトメッセージを追加", "mod_mantra_phrase_label": "話すフレーズ *", "mod_mantra_phrase_example": "言うことを聞きます", "mod_mantra_prompt_label": "指示文（フレーズを含む）", "mod_mantra_prompt_example": "言ってください：言うことを聞きます", "mod_mantra_hint": "指示文にはフレーズをそのまま含めてください。", "mod_mantra_prompt_audio": "指示音声（任意）", "mod_mantra_prompt_picker": "指示音声を選択", "mod_mantra_response_label": "応答文",
   "mod_mantra_response_example": "よくできました", "mod_mantra_response_audio": "応答音声（任意）", "mod_mantra_response_picker": "応答音声を選択", "mod_mantra_retry_example": "もう一度言ってください。", "mod_mantra_timeout_example": "言ってください。", "mod_mantra_retry_picker": "再試行音声を選択", "mod_mantra_timeout_picker": "タイムアウト音声を選択", "mod_mantra_remove_audio": "音声を削除", "mod_mantra_missing_fmt": "{0}（見つかりません）", "mod_mantra_missing_tip": "読み込んだ mod にこの音声がありません。", "mod_mantra_unnamed": "（名前のないマントラ）", "mod_mantra_no_phrase": "{0} - フレーズが未設定です。", "mod_mantra_no_contain": "{0} - 指示文にフレーズが含まれていません。", "mod_mantra_load_title": "マントラ - 読み込み警告", "mod_mantra_load_error": "この mod の mantras.json を読み取れませんでした：\n{0}", "mod_mantra_skipped_title": "マントラ - スキップした項目",
+  "possession_target_page": "そのページ",
   "scheduler_started_title": "スケジュール有効",
   "scheduler_started_body": "スケジュールに従ってセッションを自動的に開始しました。",
   "scheduler_ended_title": "スケジュール",
@@ -8496,5 +8497,11 @@
   "webcam_capture_retry_fmt": "カメラの応答が遅いため、別の方法を試しています（{0}/{1}）。",
   "installer_fileassoc_task": "メディアファイル (.mp4、.mp3 など) の右クリックメニューに「CCP で開く」を追加",
   "installer_fileassoc_group": "ファイルの関連付け:",
-  "installer_avalonia_upgrade_notice": "Avalonia へのアップグレード\n\nWPF からアップグレードすると、内蔵ブラウザーのログイン状態がリセットされます。CCP 内で開くサイトに再度ログインしてください。\n\n新しいブラウザープロファイル browser_data_avalonia は CCP のユーザーデータフォルダーにあります。古い browser_data プロファイルは保持されます。\n\nこの変更によって CCP のアカウントトークン、設定、進行状況が消去されることはありません。"
+  "installer_avalonia_upgrade_notice": "Avalonia へのアップグレード\n\nWPF からアップグレードすると、内蔵ブラウザーのログイン状態がリセットされます。CCP 内で開くサイトに再度ログインしてください。\n\n新しいブラウザープロファイル browser_data_avalonia は CCP のユーザーデータフォルダーにあります。古い browser_data プロファイルは保持されます。\n\nこの変更によって CCP のアカウントトークン、設定、進行状況が消去されることはありません。",
+  "possession_doki_title_1": "パネルはもう演じない",
+  "possession_doki_title_2": "ロックダウンは応答しない",
+  "possession_doki_message": "出て行こうとしたね。",
+  "possession_doki_progress": "出口を削除中...",
+  "possession_doki_done": "何も起きなかった。削除するものはなかった。",
+  "possession_doki_ok": "ok"
 }

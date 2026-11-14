@@ -37,11 +37,13 @@ namespace ConditioningControlPanel.Avalonia.Possession
         Window? PossessionWindow { get; }
         /// <summary>Transparent, non-hit-testable Canvas over the whole window, above everything.</summary>
         Canvas? GhostLayer { get; }
+        Canvas? RubbleFloor => null;
         IFrameSource PossessionFrames { get; }
         /// <summary>The runtime the bridged effects lease controls through (one per window).</summary>
         PossessionRuntime PossessionEffectRuntime { get; }
         /// <summary>Last pointer position in ghost-layer coordinates; (0,0) until the pointer has moved.</summary>
         Point PointerPosition { get; }
+        PossessionPointer PossessionPointer { get; }
         /// <summary>A control's bounds in ghost-layer coordinates, render transform included; null when it has none.</summary>
         Rect? BoundsOnGhostLayer(Control element);
     }
@@ -148,15 +150,23 @@ namespace ConditioningControlPanel.Avalonia.Possession
         {
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
+            list.Add(new RetitleEffect());
+            list.Add(new DokiDialogEffect());
+            list.Add(new DeleteDialogEffect());
+            list.Add(new DodgeEffect());
+            list.Add(new SliderCreepEffect());
+            list.Add(new ScrollHijackEffect());
+            list.Add(new DropEffect());
+            list.Add(new ToggleLieEffect());
             return list;
         }
 
-        /// <summary>True when the catalog carries a Full-Doki-only effect (the themed fake-crash dialogs).
+        /// <summary>True when the catalog carries a Full-Doki-only effect (the themed fake dialogs).
         /// The consent text names those scares only when this head can actually show one.</summary>
         internal static bool HasFullDokiEffects()
         {
             foreach (var e in CreateEffects())
-                if (e.MinIntensity == PossessionIntensity.FullDoki) return true;
+                if (e.Id is "dokidialog" or "deletedialog") return true;
             return false;
         }
 
