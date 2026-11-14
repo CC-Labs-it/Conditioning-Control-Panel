@@ -62,8 +62,11 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
-    [Fact] // WPF BarkService.cs:1942,1978; KeywordTriggerService.cs:92-102
-    public void SpokenBarkMutesItsExactLineForEightSeconds() => Run((_, s, played) =>
+    [Theory] // WPF BarkService.cs:1942,1978; KeywordTriggerService.cs:92-102
+    [InlineData("normal")]
+    [InlineData("priority")]
+    [InlineData("silent")]
+    public void SpokenBarkMutesItsExactLineForEightSeconds(string delivery) => Run((_, s, played) =>
     {
         var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled,
             s.AvatarEnabled, s.BarkChatSuppressionMs, KeywordTriggerHead.Engine.Now);
@@ -72,6 +75,7 @@ public sealed class KeywordAudioRuntimeTests
         var history = RecentFires(engine);
         var priorFires = history.ToArray();
         var rotation = s.BarkVariantRotation;
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
         try
         {
             s.BarkVariantRotation = rotation.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
@@ -80,9 +84,11 @@ public sealed class KeywordAudioRuntimeTests
             engine.Now = () => clock; engine.Start();
             var rule = new ConditioningControlPanel.Services.Bark.BarkRule { Id = "echo", Trigger = "T",
                 VariantPool = [new ConditioningControlPanel.Services.Bark.BarkVariant("sit")] };
+            if (delivery == "priority") rule.Priority = 100;
+            if (delivery == "silent") { rule.ClassRaw = "easter_egg"; s.MasterVolume = 0; }
             var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
-                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet([rule]), new Random(7)) { Speak = _ => { } };
-            BarkHead.AttachEcho(bark); bark.Start();
+                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet([rule]), new Random(7)) { Speak = speech => BarkHead.Speak(speech, tube) };
+            bark.Start();
             Assert.True(bark.Raise("T"));
             var words = new[] { new ScreenOcrService.Word("sit", new System.Drawing.Rectangle(0, 0, 20, 10)) };
             var fired = 0; engine.TriggerFired += OnFire;
@@ -97,10 +103,47 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally
         {
+            tube.Close();
             lock (history) { history.Clear(); foreach (var fire in priorFires) history.AddLast(fire); }
             s.BarkVariantRotation = rotation;
             (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled,
                 s.AvatarEnabled, s.BarkChatSuppressionMs, engine.Now) = saved;
+        }
+    });
+
+    [Fact] // WPF BarkService.cs:1928-1933 returns before the echo mute
+    public void BarkWithoutAvatarDoesNotMuteKeyboardTrigger() => Run((_, s, played) =>
+    {
+        var engine = KeywordTriggerHead.Engine;
+        var history = RecentFires(engine);
+        var priorFires = history.ToArray();
+        var rotation = s.BarkVariantRotation;
+        var saved = (s.AvatarEnabled, s.BarkChatSuppressionMs, s.AwarenessLoopProtectionEnabled, engine.Now);
+        try
+        {
+            s.BarkVariantRotation = rotation.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+            s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0; s.AwarenessLoopProtectionEnabled = false;
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0); engine.Start();
+            Assert.Null(ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live);
+            var rule = new ConditioningControlPanel.Services.Bark.BarkRule { Id = "echo", Trigger = "T",
+                VariantPool = [new ConditioningControlPanel.Services.Bark.BarkVariant("sit")] };
+            var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
+                () => new ConditioningControlPanel.Services.Bark.BarkRuleSet([rule]), new Random(7)) { Speak = BarkHead.Speak };
+            bark.Start(); Assert.True(bark.Raise("T"));
+            var fired = 0; engine.TriggerFired += OnFire;
+            void OnFire(KeywordTrigger _) => fired++;
+            try
+            {
+                foreach (var ch in "sit") engine.Character(ch);
+                Assert.Equal(1, fired);
+            }
+            finally { engine.TriggerFired -= OnFire; }
+        }
+        finally
+        {
+            lock (history) { history.Clear(); foreach (var fire in priorFires) history.AddLast(fire); }
+            s.BarkVariantRotation = rotation;
+            (s.AvatarEnabled, s.BarkChatSuppressionMs, s.AwarenessLoopProtectionEnabled, engine.Now) = saved;
         }
     });
 
@@ -122,7 +165,7 @@ public sealed class KeywordAudioRuntimeTests
         {
             lock (history) { history.Clear(); history.AddLast(sentinel); }
             settings.BarkVariantRotation = seededRotation;
-            SpokenBarkMutesItsExactLineForEightSeconds();
+            SpokenBarkMutesItsExactLineForEightSeconds("normal");
             Assert.Equal(new[] { sentinel }, engine.GetRecentFires());
             Assert.Same(seededRotation, settings.BarkVariantRotation);
             Assert.Equal(new[] { "prior" }, settings.BarkVariantRotation.Keys);

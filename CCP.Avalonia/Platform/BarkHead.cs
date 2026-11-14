@@ -22,7 +22,6 @@ internal static class BarkHead
         if (Engine != null) return;
         var e = Engine = new BarkEngine();
         Seed(e);
-        AttachEcho(e);
         e.Start();
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
@@ -37,9 +36,6 @@ internal static class BarkHead
             };
     }
 
-    internal static void AttachEcho(BarkEngine e) => e.BarkSpoken += OnBarkSpoken;
-    private static void OnBarkSpoken(BarkRule _, string line) => KeywordTriggerHead.Engine.MuteKeywordEcho(line, 8000);
-
     private static Action? _onUserMessage;
     private static EventHandler<ModPackage>? _onModChanged;
     private static ModService? _mods;
@@ -47,7 +43,6 @@ internal static class BarkHead
     /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
-        if (Engine != null) Engine.BarkSpoken -= OnBarkSpoken;
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);
@@ -92,13 +87,15 @@ internal static class BarkHead
     /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
     /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
     /// already dropped it if she was speaking, so it never cuts a line off.</summary>
-    internal static void Speak(BarkSpeech s)
+    internal static void Speak(BarkSpeech s) => Speak(s, Views.AvatarTube.AvatarTubeWindow.Live);
+
+    internal static void Speak(BarkSpeech s, Views.AvatarTube.AvatarTubeWindow? tube)
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
-        if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
-        tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
+        if (tube == null) return;   // WPF BarkService.cs:1928-1933
+        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) tube.Giggle(s.Text);
+        else tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
             phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
+        KeywordTriggerHead.Engine.MuteKeywordEcho(s.Text, 8000);   // WPF :1942,1978
     }
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);
