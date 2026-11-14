@@ -209,6 +209,33 @@ public sealed class HomeMarqueeTests
         return Task.CompletedTask;
     });
 
+    // WPF MainWindow.Marquee.cs:454-458 and BannerFx.cs:240-247: support arrival forces a sheen.
+    [Fact]
+    public Task SupportArrivalSweepsInsideThrottle() => WithShell((w, _) =>
+    {
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        w.SweepBannerSheen(force: true);
+        Assert.True(w.BannerSheenSweeping);
+        double now = 0;
+        At(time, ref now, 800);
+        Assert.False(w.BannerSheenSweeping);
+        var primary = w.Named<TextBlock>("TxtBannerPrimary")!;
+        for (int i = 0; i < 4; i++)
+        {
+            w.BannerRotationTimer_Tick(null, EventArgs.Empty);
+            if (primary.IsHitTestVisible)
+            {
+                Assert.True(w.BannerSheenSweeping);
+                return Task.CompletedTask;
+            }
+            Assert.False(w.BannerSheenSweeping);
+        }
+        Assert.Fail("Support beat did not return");
+        return Task.CompletedTask;
+    });
+
     // ---------------------------------------------------------------- the interludes
 
     /// <summary>A scrolling strip with an eligible read (rd_001: streak >= 3) and the cadence on a stepped clock;
