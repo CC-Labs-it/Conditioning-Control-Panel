@@ -29,6 +29,9 @@
     <Compile Include="..\..\ConditioningControlPanel\Services\Diagnostics\UiThreadExit.cs" Link="UiThreadExit.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\UiThreadExitTests.cs" Link="UiThreadExitTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\ProfileSyncPrizesFeedTests.cs" Link="PrizesFeedTests.cs" />
+    <!-- The WPF PbpMediaRules tests run against the Core copy (own namespace, see PbpMediaRules.cs). -->
+    <Compile Include="..\ConditioningControlPanel.Tests\PbpMediaRulesTests.cs" Link="PbpMediaRulesTests.cs" />
+    <Using Include="ConditioningControlPanel.Services.PieceByPieceMedia" />
     <!-- The ledger is now shared Core logic: run its existing WPF-source boundary tests on Linux too. -->
     <Compile Include="..\ConditioningControlPanel.Tests\RemoteFlashPoolTests.cs" Link="RemoteFlashPoolTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\AwarenessLedgerTests.cs" Link="AwarenessLedgerTests.cs" />
