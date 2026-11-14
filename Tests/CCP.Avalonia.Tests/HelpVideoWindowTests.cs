@@ -159,6 +159,7 @@ public sealed class HelpVideoWindowTests
                     var container = win.FindControl<Border>("VideoContainer")!;
                     Assert.True(container.IsVisible);
                     Assert.False(win.FindControl<TextBlock>("TxtCaption")!.IsVisible);   // a playing clip needs no blurb
+                    Assert.False(win.Player!.EnableHardwareDecoding); // the RV32 callback sink needs CPU frames
                     var sink = win.Sink!;
                     // The sink can drop frames when the UI is busy. Check both the original
                     // 70 displayed frames and a frame after the third completed pass restarts.
