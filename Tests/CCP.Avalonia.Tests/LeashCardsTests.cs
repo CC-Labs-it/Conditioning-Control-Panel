@@ -49,7 +49,8 @@ public sealed class LeashCardsTests
         public void Receipts() => ReceiptsChanged?.Invoke();
         public void NoteShown(string? id) { if (id != null) Seen.Add(id); }
         public IReadOnlyList<LeashSentItem> SentTo(string id) => new[] { new LeashSentItem("l1", LeashItemKind.Tug, id, null, LeashStep.Seen, Now, Now) };
-        private Task<LeashSendResult> Send(string call, LeashWatch? watch = null) { Calls.Add(call); Watch = watch; return System.Threading.Tasks.Task.FromResult(new LeashSendResult(Reply)); }
+        public bool Throw;
+        private Task<LeashSendResult> Send(string call, LeashWatch? watch = null) { if (Throw) throw new InvalidOperationException("down"); Calls.Add(call); Watch = watch; return System.Threading.Tasks.Task.FromResult(new LeashSendResult(Reply)); }
         public Task<LeashSendResult> OfferAsync(string id) => Send("offer");
         public Task<LeashSendResult> AssignAsync(string id, AssignKind k, int size, LeashWatch? watch = null) => Send($"assign:{k}:{size}", watch);
         public Task<LeashSendResult> PunishAsync(string id, PunishKind k, int size, LeashWatch? watch = null) => Send($"punish:{k}:{size}", watch);
@@ -325,6 +326,33 @@ public sealed class LeashCardsTests
         svc.Reply = LeashSendStatus.Queued; Click(card, "leash-btn:punish"); Click(card, "leash-punish:lines:5");
         Assert.Equal(Loc.GetF("leash_done_punish_queued", Person.Name), Find<TextBlock>(card, "leash-holder-result").Text);
     });
+    // restack b226 (#4589): WPF LeashHolderCard.Guarded / TugAsync (:751-780): Sent when the server took it, Denied on
+    // TooFast / Dnd / Failed or a throw; a tug jingles as it goes out and a throttled tug is Denied.
+    [Fact]
+    public void HolderSendAndTugCuesFollowTheResult() => Run(() =>
+    {
+        var svc = new Service();
+        var card = new LeashHolderCard(Held() with { Who = Person with { Id = Guid.NewGuid().ToString() } }, () => svc);
+        var cues = new List<LeashCue>();
+        card.PlayCue = cues.Add;
+        Click(card, "leash-btn:assign"); Click(card, "leash-assign:quests:2");
+        Assert.Equal(new[] { LeashCue.Sent }, cues); cues.Clear();
+        foreach (var status in new[] { LeashSendStatus.TooFast, LeashSendStatus.Dnd, LeashSendStatus.Failed })
+        {
+            svc.Reply = status;
+            Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
+            Assert.Equal(new[] { LeashCue.Denied }, cues); cues.Clear();
+            Click(card, "leash-btn:reward");   // the failed send keeps the sheet open: fold it for the next round
+        }
+        svc.Throw = true;
+        Click(card, "leash-btn:punish"); Click(card, "leash-punish:lines:5");
+        Assert.Equal(new[] { LeashCue.Denied }, cues); cues.Clear();
+        svc.Throw = false; svc.Reply = LeashSendStatus.Sent;
+        Click(card, "leash-btn:tug");
+        Assert.Equal(new[] { LeashCue.Jingle }, cues); cues.Clear();
+        Click(card, "leash-btn:tug");
+        Assert.Equal(new[] { LeashCue.Denied }, cues);
+    });
     private sealed class WindowCleanup : IDisposable
     {
         private readonly Window _window;
@@ -409,6 +437,35 @@ public sealed class LeashCardsTests
             ConditioningControlPanel.CoreSettings.ServiceProvider = oldSettings;
             System.IO.File.Delete(file);
         }
+    });
+
+    // restack b226 (#4211): the user's own cut prompt replaces an open Let go confirm, never the other way round,
+    // so a held-open release dialog can never block (or stand in for) the escape from the user's own leash.
+    [Fact]
+    public void CutPromptAlwaysWinsOverTheReleaseConfirm() => Run(() =>
+    {
+        var svc = new Service();
+        var card = new LeashHolderCard(Held(), () => svc);
+        var cut = 0;
+        try
+        {
+            Release(card).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var release = LeashCutConfirmWindow.Current!;
+            Assert.Equal("leash-release-confirm:yes", release.YesButton.Tag);
+            LeashCutConfirmWindow.Ask(Person.Name, () => cut++);
+            var prompt = LeashCutConfirmWindow.Current!;
+            Assert.NotSame(release, prompt);
+            Assert.False(release.IsVisible);
+            Assert.Equal("leash-cut-confirm:yes", prompt.YesButton.Tag);
+            // A Let go request while the cut prompt is up must not replace it.
+            Release(card).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Same(prompt, LeashCutConfirmWindow.Current);
+            prompt.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, cut);
+            Assert.Empty(svc.Calls);
+            Assert.Null(LeashCutConfirmWindow.Current);
+        }
+        finally { LeashCutConfirmWindow.Current?.Close(); }
     });
 
     [Fact]

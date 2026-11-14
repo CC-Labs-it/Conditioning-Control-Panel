@@ -20,6 +20,26 @@ internal static class ScrolllerWebView2Gate
     // WPF BrowserService.cs:665-675 reads the live core, not the control's cached Source.
     public static string? CurrentDocumentUrl(IntPtr core) => core == IntPtr.Zero ? null
         : CoreWebView2.CreateFromComICoreWebView2(core).Source;
+    // WPF BrowserService.cs:580-606: answer matching requests with an empty 204.
+    public static bool AttachAds(IntPtr pointer, Func<string?, string?, bool> shouldBlockAds)
+    {
+        try
+        {
+            var core = CoreWebView2.CreateFromComICoreWebView2(pointer);
+            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            core.WebResourceRequested += (_, e) =>
+            {
+                try
+                {
+                    if (shouldBlockAds(core.Source, e.Request.Uri))
+                        e.Response = core.Environment.CreateWebResourceResponse(null, 204, "No Content", "");
+                }
+                catch (Exception ex) { Log.Debug("Browser ad request check failed: {E}", ex.Message); }
+            };
+            return true;
+        }
+        catch (Exception ex) { Log.Warning("Browser ad filter attach failed: {E}", ex.Message); return false; }
+    }
     /// <summary>Hooks one raw ICoreWebView2. False when there is none (the caller retries until the core exists).</summary>
     public static bool Attach(IntPtr coreWebView2)
     {
