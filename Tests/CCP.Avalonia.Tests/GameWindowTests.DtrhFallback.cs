@@ -72,6 +72,31 @@ public sealed partial class GameWindowTests
             }
         });
 
+    // Restack b192 (#3984): WPF owns the fallback hub by the main window, so it closes with the shell,
+    // also when the shell was hidden and the hub could not take it as its owner.
+    [Fact]
+    public void Dtrh_fallback_hub_closes_with_its_hidden_shell() => RunDtrh(lab: true, (shell, _, _, _) =>
+    {
+        var oldOwner = ChaosHubWindow.OwnerWindow;
+        ChaosHubWindow.OwnerWindow = () => shell;
+        try
+        {
+            ChaosHubWindow.OpenAt();
+            var hub = ChaosHubWindow.Current!;
+            Assert.NotNull(hub);
+            Assert.Null(hub.Owner);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(hub.IsVisible);
+            Assert.Null(ChaosHubWindow.Current);
+        }
+        finally
+        {
+            ChaosHubWindow.Current?.Close();
+            ChaosHubWindow.OwnerWindow = oldOwner;
+        }
+    });
+
     [Fact]
     public void Dtrh_queued_fallback_does_not_interrupt_a_new_run() => RunDtrh(lab: true, (_, _, _, _) =>
     {

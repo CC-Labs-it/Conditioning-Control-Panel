@@ -24,6 +24,12 @@ public sealed class BubbleCountSchedulerTests
         public void SetEffectsHold(bool hold) => EffectsHolds.Add(hold);
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
+        public Action? Skipped;
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped)
+        {
+            Skipped = onSkipped;
+            Show(path, difficulty, strict, onComplete);
+        }
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
         public void CloseAll() { Closes++; Closing?.Invoke(); }
         public bool Feed;
@@ -349,6 +355,21 @@ public sealed class BubbleCountSchedulerTests
             Assert.Equal(2, host.Shown.Count);
         }
         finally { s.MercyAfterFails = saved; }
+    });
+
+    [Fact]
+    public void Native_start_skip_releases_strict_game_without_retry() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var scheduler = new BubbleCountScheduler(host, clock, () => Clips);
+        scheduler.Trigger(forceTest: true);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(scheduler.IsBusy);
+        host.Skipped!();
+        Assert.False(scheduler.IsBusy);
+        Assert.Empty(host.Messages);
+        host.Shown[0].Done(false);
+        Assert.Empty(host.Messages);
     });
 
     [Fact]

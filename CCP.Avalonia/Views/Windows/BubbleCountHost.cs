@@ -55,11 +55,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // The app seeds CoreDispatch (AvaloniaCoreDispatch), but headless tests do not: every door hops onto the UI thread.
         // WPF skips the game outright when the shared LibVLC is unusable (BubbleCountService.cs:373):
         // opening it would end as a failed count and, in strict mode, retry forever.
-        public bool CanPlay => Platform.LibVlcAudio.Shared != null;
+        internal static Func<bool> NativePlayerAvailable = () => Platform.LibVlcAudio.Shared != null;
+        public bool CanPlay => !BubbleCountWindow.NativeBlocked && NativePlayerAvailable();
         public bool CanPlayPath(string path) => CanPlay || (!Platform.BrowserVideoSurface.StoodDown && !Platform.BrowserVideoSurface.SessionActive && Services.Video.Browser.BrowserVideoGate.ShouldUseBrowser(path));
 
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Dispatcher.UIThread.Invoke(() =>
             BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete));
+
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) => Dispatcher.UIThread.Invoke(() =>
+            BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete, onSkipped));
 
         /// <summary>WPF: magenta 64 pt bold text on black, maximised on every screen, then <paramref name="then"/>.</summary>
         public void ShowMessage(string text, int ms, Action then) => Dispatcher.UIThread.Invoke(() =>
