@@ -67,7 +67,8 @@ public class SeasonFeatureWriterTests
     [Fact]
     public Task Race() => AvaloniaTestDispatcher.RunAsync(() => WithLog(log =>
     {
-        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        // The 2D race window is "raceclassic" since b237 (#4514, as WPF): "race" is Racing Thoughts 3D (e_race3d).
+        var w = new GameWindow(new GameWindow.Game("raceclassic", "launcher_game_race_title", "dtrh/race.html"));
         try
         {
             w.HandleMessage("{\"type\":\"run-started\"}");

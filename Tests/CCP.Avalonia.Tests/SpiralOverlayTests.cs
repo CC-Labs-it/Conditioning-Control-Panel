@@ -42,11 +42,18 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
                 var s = CoreSettings.Current;
-                var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider);
+                var saved = (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider,
+                    SpiralOverlay.SkipPlatformChecksForTests);
                 try
                 {
+                    // As StaleDecodeCannotDisposeFramesShownAfterRestart: settle any decode another class left
+                    // running, and pass the compositor gate itself (a Linux runner has none, so the decode
+                    // only started when a parallel class happened to leave the seam on).
+                    if (SpiralOverlay.Decoding is { } prior) await prior;
+                    SpiralOverlay.Stop();
                     s.SpiralEnabled = true; s.SpiralPath = gif; s.SpiralRandomize = false;
                     CoreSession.IsEngineRunningProvider = () => true;
+                    SpiralOverlay.SkipPlatformChecksForTests = true;
                     var host = new Window();
                     SpiralOverlay.Refresh(host);
                     var pending = SpiralOverlay.Decoding;
@@ -59,7 +66,8 @@ public sealed class SpiralOverlayTests(ITestOutputHelper output)
                 finally
                 {
                     SpiralOverlay.Stop();
-                    (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider) = saved;
+                    (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, CoreSession.IsEngineRunningProvider,
+                        SpiralOverlay.SkipPlatformChecksForTests) = saved;
                 }
             });
         }
