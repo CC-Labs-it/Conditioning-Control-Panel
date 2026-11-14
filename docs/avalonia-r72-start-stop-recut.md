@@ -40,7 +40,7 @@ Each next complete lane plus focused tests would exceed the remaining budget whe
 | --- | --- | --- |
 | Scheduler startup/poll/manual-stop memory | MainWindow/MainWindow.StartStop.cs:795,834,875 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:5; no SchedulerRun on base |
 | Start hero charge/exhale/ignition/heartbeat and lifecycle | MainWindow/MainWindow.HeroFx.cs:169 | CCP.Avalonia/Views/Windows/MainShellWindow.HeroFx.cs:17; rings exist in MainShellWindow.axaml:2036 |
-| Time-of-day counters, crash sentinel and autonomy engine start | MainWindow/MainWindow.StartStop.cs:343,454,421 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:88; old EngineTimers.cs:21-32 not copied |
+| Time-of-day counters, crash sentinel and autonomy engine start | MainWindow/MainWindow.StartStop.cs:343,454,421 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:88; old EngineTimers.cs:21-32 not copied; autonomy engine start landed later in restack b206 (#4354) |
 | Empty flash/wallpaper notices and second toast action | MainWindow/MainWindow.StartStop.cs:258,286 | CCP.Avalonia/Helpers/NotificationService.cs:37; old StartStop.cs:96 and BambiTakeoverTabView.axaml.cs:547 not copied |
 | Presets running label | MainWindow/MainWindow.StartStop.cs:91 | CCP.Avalonia/Views/Windows/MainShellWindow.StartStop.cs:133 |
 | Modal ordering, settle/timeout, launcher hold, game park and deferred passive draining | Services/Startup/StartupPresenter.cs:98 | CCP.Avalonia/Platform/StartupLadder.cs:21,56,66 remains passive-only |

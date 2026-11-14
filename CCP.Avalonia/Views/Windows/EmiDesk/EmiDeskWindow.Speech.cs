@@ -24,13 +24,15 @@ public partial class EmiDeskWindow
         }
         Say(line.Text, line.Face);
     }
-    // WPF EmiDeskWindow.Bubble.cs:545-565 HoldFace: a face, held, no bubble, then back to rest.
+    // WPF EmiDeskWindow.Bubble.cs:545-565 HoldFace: a face, held, no bubble, then back to rest. A live glass
+    // channel closes first (WPF :553 CloseChannel), so a panic or intake hold never sits behind a saver.
     private const int IgnoreFaceMs = 1400;
     private DispatcherTimer? _holdTimer;
     internal bool HoldPending => _holdTimer != null;
     private void HoldFace(LineDraw line)
     {
         CancelHold();
+        CloseGlass();
         StopIdleBeats();
         DrawFace(string.IsNullOrEmpty(line.Face) ? "-_-" : line.Face);
         _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(line.HoldMs > 0 ? line.HoldMs : IgnoreFaceMs) };

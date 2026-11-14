@@ -238,6 +238,100 @@ public sealed class SessionRunWireTests
         }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UserStartAfterPanicResumesTheSameSession(bool menu)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                shell.Show();
+                CoreSettings.Current.PanicKeyEnabled = false;
+                var session = new Session { Id = "restart", Name = "Restart", DurationMinutes = 10 };
+                session.Settings.FlashEnabled = true;
+                session.Settings.FlashStartMinute = 3;
+                runner.Start(session);
+                var count = CoreSettings.Current.TotalSessions;
+                MainShellWindow.StopEngine();
+                Assert.True(runner.IsPaused);
+                Assert.False(CoreEngine.IsRunning);
+                if (menu) shell.Named<MenuItem>("MenuStartNormal")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+                else shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.Same(session, runner.CurrentSession);
+                Assert.True(runner.IsRunning && !runner.IsPaused && CoreEngine.IsRunning);
+                Assert.Equal(count, CoreSettings.Current.TotalSessions);
+                Assert.False(CoreFlash.IsRunning);
+                Assert.Equal("⏸", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
+            }
+            finally
+            {
+                foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                await Task.Yield(); // drain a dismissed confirmation before resetting shared state
+                runner.Stop();
+                CoreEngine.Stop();
+                AvApp.Sessions = null;
+                CoreSession.IsSessionRunningProvider = null;
+                shell.Close();
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopDialogShowsWpfPenaltyAndButtonOrder(bool presets)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            try
+            {
+                shell.Show();
+                CoreSettings.Current.PlayerLevel = 1;
+                CoreMods.MakeModAwareProvider = value => value == "Penalty" ? "Mode name" : value;
+                var session = new Session { Id = "penalty", Name = "Penalty", Source = SessionSource.Custom, BonusXP = 50, DurationMinutes = 60 };
+                runner.Start(session);
+                runner.Pause();
+                runner.Resume();
+                if (presets) shell.BtnStartSession_Click(null);
+                else shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                var yes = dialog.FindControl<Button>("BtnOk")!;
+                var no = dialog.FindControl<Button>("BtnCancel")!;
+                Assert.True(Grid.GetColumn(yes) < Grid.GetColumn(no));
+                var body = dialog.FindControl<TextBlock>("TxtMessage")!.Text!;
+                var expected = presets ? Loc.GetF("msg_plus_pause_penalty_0", 100) : Loc.GetF("dialog_stop_session_penalty", 100, 0);
+                Assert.Contains(expected, body);
+                Assert.Contains(presets ? "Mode name" : "Penalty", body);
+                no.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await Task.Yield();
+                Assert.True(runner.IsRunning);
+            }
+            finally
+            {
+                foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                await Task.Yield();
+                runner.Stop();
+                CoreEngine.Stop();
+                AvApp.Sessions = null;
+                CoreSession.IsSessionRunningProvider = null;
+                shell.Close();
+            }
+        });
+    }
+
     [Fact]
     public Task Bottom_bar_projection_uses_the_runner_clock_without_a_shell() => AvaloniaTestDispatcher.RunAsync(() =>
     {

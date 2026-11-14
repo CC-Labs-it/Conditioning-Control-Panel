@@ -13,14 +13,13 @@
 //   * The wizard opens LATER, once the window is actually on screen, and hands the first run back
 //     if it never gets there. The ladder waits for a visible shell and hands the first run back
 //     after five minutes, matching StartupPresenter's wait and hand-back.
+//   * EMI's `firstLaunchEver` HOLD (WPF MainWindow.xaml.cs:569-571,593-599,609): armed with the claim,
+//     released on the far side of the wizard (in a finally) or when the ladder gives the run back.
 //   * The post is at DispatcherPriority.Normal, never Loaded. WPF's comment on that line is
 //     load-bearing: this app keeps the dispatcher busy enough that Loaded-priority work is starved
 //     and the first-launch tour silently never started.
 //
 // WHAT IS DELIBERATELY NOT PORTED:
-//   * `App.EmiDesk.Fire("firstLaunchEver") / ReleaseHold(...)`. There is no EmiDesk seam in Core -
-//     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
-//     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
 //   * The automatic season recap modal is retired; silent bookkeeping runs below.
 
@@ -58,10 +57,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
                 if (fresh)
                 {
+                    // WPF MainWindow.xaml.cs:569-571: a HOLD, never a line; she does not talk over the wizard.
+                    EmiDesk.EmiDeskService.Instance.Fire("firstLaunchEver");
                     StartupLadder.EnqueueModal("first-run-wizard", 20, async () =>
                     {
                         if (!IsVisible) { AbandonFirstRun("shell window is not visible"); return; }
-                        await FirstRunWizard.Run(this);
+                        // WPF :593-599: the far side of the modal wizard, in a finally so a throw never mutes her.
+                        try { await FirstRunWizard.Run(this); }
+                        finally { ReleaseFirstRunHold(); }
                         if (CoreSettings.Current.HasAcceptedAgeVerification && IsVisible)
                             StartupLadder.EnqueueModal("first-show", 25, () => { OfferWelcomeShowAfterFirstRun(); return Task.CompletedTask; });
                     }, () => AbandonFirstRun("the ladder gave up on the wizard"));
@@ -121,8 +124,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "By clicking \"OK\", you confirm that you are at least 18 years old and that viewing adult content is legal in your jurisdiction.\n\n" +
             "Do you wish to continue?";
 
+        private static void ReleaseFirstRunHold()
+        {
+            try { EmiDesk.EmiDeskService.Instance.LineEngine.ReleaseHold("firstLaunchEver"); }
+            catch (Exception ex) { Log.Debug(ex, "[FirstRun] EMI hold release failed"); }
+        }
+
         private void AbandonFirstRun(string why)
         {
+            ReleaseFirstRunHold();   // WPF :609: nothing was shown, so nothing is owed the screen
             FirstRunWizard.HandBackFirstRun(why);
             FirstRunWizard.AbortUngatedLaunch(this, why);
         }

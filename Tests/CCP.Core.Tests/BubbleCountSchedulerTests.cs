@@ -334,6 +334,45 @@ public sealed class BubbleCountSchedulerTests
         Assert.Equal(3, host.Shown.Count);
     });
 
+    [Theory]
+    [InlineData("clip")]
+    [InlineData("retry")]
+    [InlineData("mercy")]
+    public void Old_callbacks_cannot_change_a_new_round_after_cleanup(string phase) => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var oldThreshold = CoreSettings.Current.MercyAfterFails;
+        CoreSettings.Current.MercyAfterFails = 2;
+        try
+        {
+            b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            Action stale;
+            if (phase == "clip") stale = () => host.Shown[0].Done(false);
+            else
+            {
+                host.Shown[0].Done(false);
+                if (phase == "mercy")
+                {
+                    host.Messages[0].Then();
+                    host.Shown[1].Done(false);
+                }
+                stale = host.Messages[^1].Then;
+            }
+            b.ForceCleanup();
+            b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            var shown = host.Shown.Count;
+            var messages = host.Messages.Count;
+            stale();
+            Assert.True(b.IsBusy);
+            Assert.Equal(shown, host.Shown.Count);
+            Assert.Equal(messages, host.Messages.Count);
+        }
+        finally { b.ForceCleanup(); CoreSettings.Current.MercyAfterFails = oldThreshold; }
+    });
+
     /// <summary>#1145: the Mercy picker moves the threshold (here 2 wrong tries).</summary>
     [Fact]
     public void Mercy_comes_after_the_picked_number_of_fails() => With(true, true, true, () =>
@@ -607,6 +646,76 @@ public sealed class BubbleCountSchedulerTests
             Assert.Single(host.Shown);
         }
         finally { b.Stop(); b.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = oldFreeze; }
+    });
+
+    [Fact]
+    public void Test_now_deferred_by_feed_survives_service_stop() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start();
+            b.Trigger(forceTest: true);
+            b.Stop();
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown);
+        }
+        finally { b.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void Stop_releases_feed_latch_for_test_now_while_old_poll_survives() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start(); b.Trigger(); // scheduled game parks first
+            b.Stop();
+            CoreSettings.Current.BubbleCountEnabled = false;
+            b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromMilliseconds(500)); // both polls remain while feed is visible
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown); // the old scheduled replay drops; Test Now plays
+        }
+        finally { b.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void Old_feed_poll_expiry_does_not_cancel_a_new_test_poll() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Start(); b.Trigger();
+            clock.Advance(TimeSpan.FromSeconds(89));
+            b.Stop(); b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromSeconds(1)); // old poll expires, new poll still has time
+            host.Feed = false;
+            clock.Advance(TimeSpan.FromMilliseconds(500) + BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown);
+        }
+        finally { b.ForceCleanup(); }
+    });
+
+    [Fact]
+    public void Force_cleanup_cancels_all_feed_polls_after_stop() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { Feed = true };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            b.Trigger(forceTest: true); b.Stop(); b.Trigger(forceTest: true);
+            b.ForceCleanup(); host.Feed = false;
+            clock.Advance(TimeSpan.FromSeconds(2));
+            Assert.Empty(host.Shown);
+            Assert.False(b.IsBusy);
+        }
+        finally { b.ForceCleanup(); }
     });
 
     [Theory]

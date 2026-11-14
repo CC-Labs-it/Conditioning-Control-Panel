@@ -40,8 +40,11 @@ public sealed class EmiRainReviewTests
                     File.WriteAllBytes(Path.Combine(dir.FullName, "a.gif"), Convert.FromBase64String(Gif));
                     w = new EmiDeskWindow(); w.Show(); Dispatcher.UIThread.RunJobs();
                     var type = typeof(EmiDeskWindow);
-                    type.GetField("_rainActivity", Private)!.SetValue(w, DateTime.UtcNow.AddMinutes(-2));
-                    type.GetMethod("RainTick", Private)!.Invoke(w, new object?[] { null, EventArgs.Empty });
+                    // One glass director (b209): the idle flip is PollGlass's, and rain is one of its channels.
+                    var oldRain = EmiDeskWindow.GlassChooseRain;
+                    EmiDeskWindow.GlassChooseRain = () => true;
+                    try { w.PollGlass(DateTime.UtcNow.AddMinutes(2)); }
+                    finally { EmiDeskWindow.GlassChooseRain = oldRain; }
                     var glitch = Assert.IsType<Canvas>(type.GetField("_rainGlitch", Private)!.GetValue(w));
                     Assert.InRange(glitch.Children.Count, 3, 5);
                     Assert.NotEmpty(w.GlassHost.Children);
