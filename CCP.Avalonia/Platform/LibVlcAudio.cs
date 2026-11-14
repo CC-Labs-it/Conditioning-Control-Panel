@@ -64,14 +64,22 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>The process's one LibVLC, shared with video (MiniPlayerWindow), as WPF shares
         /// VideoService.SharedLibVLC. Null when libvlc did not load.</summary>
         internal static LibVLC? Shared { get; private set; }
+        private static string[] _sharedOptions = Array.Empty<string>();
+        // WPF VideoService.cs:1139-1163 retires a poisoned engine. Bubble Count instead
+        // owns an isolated engine, so a wedged game cannot poison shared audio or video.
+        internal static Func<string[], LibVLC> VideoFactory = options => CreateVideoEngine(options, o => new LibVLC(o), (v, name, agent) => v.SetUserAgent(name, agent));
+        internal static LibVLC CreateVideoEngine(string[] options, Func<string[], LibVLC> create, Action<LibVLC, string, string> setAgent)
+        { var engine = create(options); setAgent(engine, "Conditioning Control Panel", "CCP"); return engine; }
+        internal static LibVLC CreateIsolatedVideo() => VideoFactory(_sharedOptions);
 
         /// <summary>Throws when libvlc is not installed; the caller then leaves CoreAudio unseeded.</summary>
         public LibVlcAudio(params string[] options)
         {
             InitializeNative();
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
-            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
-            Shared ??= _vlc;
+            var effectiveOptions = WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray();
+            _vlc = new LibVLC(effectiveOptions);
+            if (Shared == null) { _sharedOptions = effectiveOptions; Shared = _vlc; }
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
