@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ public partial class PresetsTabView
     private Control? _sheenHost;
     private Window? _fxWindow;
     private CancellationTokenSource? _entranceCancellation;
+    private readonly Dictionary<Control, CancellationTokenSource> _rowEntrances = new();
 
     private void InitializeFocalFx()
     {
@@ -172,14 +174,23 @@ public partial class PresetsTabView
         scale.ScaleX = scale.ScaleY = target;
     }
 
-    private static void LiftSessionRow(Control row, bool on)
+    private void LiftSessionRow(Control row, bool on)
     {
         var slide = CardTransforms(row)?.Children.OfType<TranslateTransform>().FirstOrDefault();
         if (slide == null) return;
-        slide.Transitions = Env.AllowTransitions ? new Transitions
+        // WPF replaces the row's entrance animation from its current position, leaving the fade
+        // and the other rows alone. Clearing the old animation/transition first would snap to its base.
+        var current = slide.Y;
+        if (_rowEntrances.Remove(row, out var entrance)) entrance.Cancel();
+        slide.Transitions = null;
+        if (Env.AllowTransitions)
         {
-            new DoubleTransition { Property = TranslateTransform.YProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
-        } : null;
+            slide.Y = current;
+            slide.Transitions = new Transitions
+            {
+                new DoubleTransition { Property = TranslateTransform.YProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+            };
+        }
         slide.Y = on ? -2 : 0; // no scale: full-width rows must not grow beyond their viewport
     }
 
@@ -214,10 +225,26 @@ public partial class PresetsTabView
                 if (CardTransforms(card) == null) continue;
                 var delay = TimeSpan.FromMilliseconds(40 * Math.Min(index++, 6));
                 _ = EnterAsync(card, delay, 220, OpacityProperty, 0, 1, _entranceCancellation.Token);
-                _ = EnterAsync(card, delay, 260, TranslateTransform.YProperty, 10, 0, _entranceCancellation.Token);
+                if (ReferenceEquals(zone, SessionRackPanel))
+                    _ = EnterRowAsync(card, delay, _entranceCancellation.Token);
+                else
+                    _ = EnterAsync(card, delay, 260, TranslateTransform.YProperty, 10, 0, _entranceCancellation.Token);
             }
         }
     }
+
+    private async Task EnterRowAsync(Control row, TimeSpan delay, CancellationToken cancellation)
+    {
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        _rowEntrances[row] = run;
+        try { await EnterAsync(row, delay, 260, TranslateTransform.YProperty, 10, 0, run.Token); }
+        finally
+        {
+            if (_rowEntrances.TryGetValue(row, out var current) && ReferenceEquals(current, run))
+                _rowEntrances.Remove(row);
+        }
+    }
+
     private static async Task EnterAsync(Control card, TimeSpan delay, int ms, AvaloniaProperty property,
                                          double from, double to, CancellationToken cancellation)
     {
