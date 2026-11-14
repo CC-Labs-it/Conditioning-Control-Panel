@@ -30,6 +30,7 @@
 import * as THREE from 'three';
 import { worldToSquare, squareToWorld } from './scene.js';
 import { createMarkers } from './markers.js';
+import { readCastles, castleAlias } from '../game/castle-hint.js';
 
 /** Every number the hand is made of. One place, on purpose. */
 export const TUNING = Object.freeze({
@@ -82,6 +83,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   let from = null;        // the square it was picked up from
   let legal = [];         // every square it may land on
   let takes = new Set();  // the ones holding a man it may take
+  let castles = readCastles();   // a king's castles: his square and the rook's (game/castle-hint.js)
   let hover = null;
   let holdY = T.lift;     // world height of the plane the cursor drags along
   const at = { x: 0, y: 0 };   // last pointer position, in client pixels
@@ -112,6 +114,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   let selSquare = null;
   let selLegal = [];
   let selTakes = new Set();
+  let selCastles = readCastles();
   let selHover = null;
 
   function toNdc(ev) {
@@ -181,12 +184,13 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
    * view.setHighlights, so a lane holding only the view sees the same list.
    */
   function paint() {
-    const src = held ? { at: from, list: legal, take: takes, hot: hover }
-      : (selected ? { at: selSquare, list: selLegal, take: selTakes, hot: selHover } : null);
+    const src = held ? { at: from, list: legal, take: takes, castle: castles, hot: hover }
+      : (selected ? { at: selSquare, list: selLegal, take: selTakes, castle: selCastles, hot: selHover } : null);
     if (!src) { view.setHighlights([]); return; }
     const out = src.list.map((sq) => ({
       square: sq,
-      kind: src.take.has(sq) ? 'capture' : 'move',
+      kind: src.take.has(sq) ? 'capture'
+        : (src.castle.targets.has(sq) ? 'castle' : (src.castle.rooks.has(sq) ? 'castle-rook' : 'move')),
       hover: sq === src.hot,
     }));
     if (src.at) out.push({ square: src.at, kind: 'origin' });
@@ -196,18 +200,20 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   /**
    * chess.js hands back a flag string per move: 'c' is a capture and 'e' is en
    * passant, which takes a man standing on a square the pawn does not land on.
-   * Castling ('k' and 'q') takes nothing, so it stays a plain dot.
+   * Castling ('k' and 'q') takes nothing; it gets its own marker instead, and
+   * the king's own rook joins the legal squares, since putting him on it castles.
    */
   function readMoves(sq) {
     const rules = game.rules;
     const verbose = rules && rules.movesFrom ? rules.movesFrom(sq) : [];
-    if (!verbose.length) return { squares: game.legalTargets(sq), captures: new Set() };
+    if (!verbose.length) return { squares: game.legalTargets(sq), captures: new Set(), castles: readCastles() };
     const captures = new Set();
     for (const m of verbose) {
       const flags = String(m.flags || '');
       if (m.captured || flags.includes('c') || flags.includes('e')) captures.add(m.to);
     }
-    return { squares: verbose.map((m) => m.to), captures };
+    const castling = readCastles(verbose);
+    return { squares: [...verbose.map((m) => m.to), ...castling.rooks.keys()], captures, castles: castling };
   }
 
   // --- lift -------------------------------------------------------------------
@@ -288,6 +294,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     const moves = readMoves(square);
     selLegal = moves.squares;
     selTakes = moves.captures;
+    selCastles = moves.castles;
     selHover = null;
     const home = piece.userData.home;
     if (home) { piece.position.x = home.x; piece.position.z = home.z; }
@@ -301,7 +308,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     if (!selected) return;
     const piece = selected;
     describe(null);
-    selected = null; selSquare = null; selLegal = []; selTakes = new Set(); selHover = null;
+    selected = null; selSquare = null; selLegal = []; selTakes = new Set(); selCastles = readCastles(); selHover = null;
     wantLift(piece, piece === hoverPiece && !reducedMotion() ? T.hoverLift : 0);
     if (repaint) paint();
   }
@@ -319,8 +326,9 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   /** A click on a legal square: the man waiting on his own flies over. */
   function playSelected(to) {
     const start = selSquare;
+    const dest = castleAlias(selCastles, to);   // the king on his own rook castles
     clearSelection();
-    return play(start, to);
+    return play(start, dest);
   }
 
   function onDown(ev) {
@@ -356,6 +364,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     const moves = readMoves(sq);
     legal = moves.squares;
     takes = moves.captures;
+    castles = moves.castles;
     hover = null;
     held.userData.held = true;
     held.userData.busy = true;
@@ -407,6 +416,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     const start = from;
     aim(ev);
     const to = overSquare();
+    const dest = castleAlias(castles, to);   // the king dropped on his own rook castles
     const tap = pending && press
       && performance.now() - press.t <= T.tapMs
       && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) <= T.tapPx;
@@ -415,6 +425,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     hover = null;
     legal = [];
     takes = new Set();
+    castles = readCastles();
     pending = false;
     press = null;
     markers.clear();
@@ -439,7 +450,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
 
     // A legal drop is played by the game, which moves the man and lets anim.js
     // fly it down from where it was being held.
-    const played = to && to !== start ? play(start, to) : null;
+    const played = to && to !== start ? play(start, dest) : null;
     if (played) {
       describe(null);
       bus.emit('drop', { ok: true });
@@ -452,7 +463,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   function onCancel() {
     if (!held) return;
     const piece = held;
-    held = null; from = null; hover = null; legal = []; takes = new Set();
+    held = null; from = null; hover = null; legal = []; takes = new Set(); castles = readCastles();
     pending = false; press = null;
     markers.clear();
     piece.userData.held = false;
@@ -583,6 +594,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
         hoverLift: hoverPiece ? Number(hoverPiece.position.y.toFixed(4)) : 0,
         selectLift: selected ? Number(selected.position.y.toFixed(4)) : 0,
         markers: markers.count(),
+        kinds: markers.kinds(),  // square -> marker kind ('castle', 'castle-rook', ...)
       };
     },
     dispose() {
