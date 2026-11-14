@@ -39,7 +39,9 @@ public sealed class InputComboChromeTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(combo.IsDropDownOpen);
             Assert.Equal(10, border.BoxShadow[0].Blur);
-            Assert.Equal(Color.FromArgb(89, 255, 105, 180), border.BoxShadow[0].Color);
+            // The accent at 35%: read the live PinkColor (a mod palette is app-wide), as the row checks below do.
+            var accent = (Color)window.FindResource("PinkColor")!;
+            Assert.Equal(Color.FromArgb(89, accent.R, accent.G, accent.B), border.BoxShadow[0].Color);
             var selected = (ComboBoxItem)combo.ContainerFromIndex(0)!;
             var other = (ComboBoxItem)combo.ContainerFromIndex(1)!;
             other.Focus(); Dispatcher.UIThread.RunJobs();
