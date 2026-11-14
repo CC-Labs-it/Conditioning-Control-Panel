@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Possession;
 
@@ -15,7 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Possession;
 internal sealed class DokiDialogEffect : PossessionEffectBase
 {
     private Window? _dialog;
-    private DispatcherTimer? _timer;
+    private BeatLoop? _progress;
+    private DispatcherTimer? _failsafe;
     private TextBlock? _status;
     private Border? _bar;
     internal Window? Dialog => _dialog;
@@ -45,7 +48,7 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
             VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false,
             Source = Views.AvatarTube.AvatarTubeWindow.Live?.FindControl<Image>("ImgAvatar")?.Source };
         var faceArea = new Grid { Width = 76, Height = 110 };
-        faceArea.Children.Add(new TextBlock { Text = "♥", Foreground = crimson, FontSize = 48,
+        faceArea.Children.Add(new IconGlyph { Kind = IconKind.Heart, Variant = IconVariant.Filled, Size = 48, Foreground = crimson,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
         faceArea.Children.Add(face);
         var status = new TextBlock { Text = Loc.Get("possession_doki_progress") + " 0%", Foreground = dim,
@@ -71,10 +74,13 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
         dialog.Closed += (_, _) => { if (ReferenceEquals(_dialog, dialog)) CloseDialog(); };
         dialog.Show(owner);
         _status = status; _bar = bar;
-        var started = DateTime.UtcNow;
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-        _timer.Tick += (_, _) => StepProgress((DateTime.UtcNow - started).TotalMilliseconds);
-        _timer.Start();
+        // The reveal rides the window's shared beat (parked while hidden); the close failsafe is wall
+        // clock, so a dialog whose frames stop still goes away (WPF DokiDialogEffect failsafe timer).
+        _progress = new BeatLoop(bar, seconds => StepProgress(seconds * 1000));
+        _progress.Start();
+        _failsafe = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _failsafe.Tick += (_, _) => CloseDialog();
+        _failsafe.Start();
         return Task.CompletedTask;
     }
 
@@ -91,7 +97,8 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
 
     private void CloseDialog()
     {
-        _timer?.Stop(); _timer = null;
+        _progress?.Stop(); _progress = null;
+        _failsafe?.Stop(); _failsafe = null;
         _status = null; _bar = null;
         var dialog = _dialog; _dialog = null;
         dialog?.Close();
