@@ -146,6 +146,8 @@ namespace ConditioningControlPanel.Services
         }
 
         public PrizesFeed? Prizes { get; set; }
+        /// <summary>Head notification after a successful authenticated receipt has queued its prize snapshot.</summary>
+        public Action<string>? ReceiptReceived { get; set; }
         public bool Loaded { get; private set; }
         internal int SessionVersion => Volatile.Read(ref _sessionVersion);
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
@@ -442,7 +444,13 @@ namespace ConditioningControlPanel.Services
                 {
                     var reply = JObject.Parse(json);
                     // WPF ProfileSyncService.cs:1874: ownership precedes other response flags.
-                    Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
+                    try
+                    {
+                        Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
+                        // Rain's look pulls once the snapshot is queued (#4811; WPF ProfileSyncService.cs:1874-1880).
+                        ReceiptReceived?.Invoke(id);
+                    }
+                    catch (Exception ex) { Log.Debug("V2 Sync: prize receipt failed: {Error}", ex.Message); }
                     if (reply["user"] is JObject user && user["achievements"] is JArray achievements
                         && achievements.All(a => a.Type == JTokenType.String))
                         RestoreCloudAchievements(s, achievements.Values<string>().Select(a => a!), session, id);

@@ -48,6 +48,7 @@ public sealed class RainLookSyncHeadTests
         var s = CoreSettings.Current;
         var old = (s.UnifiedId, s.OfflineMode, s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc);
         var (client, root, secrets, grants) = (RainLookSyncHead.Client, RainLookSyncHead.PackRoot, CoreSecrets.RetrieveProvider, RainLookSyncHead.Grants);
+        var account = CoreAccount.UnifiedUserId;
         var dir = Path.Combine(Path.GetTempPath(), "ccp-rainhead-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -58,6 +59,7 @@ public sealed class RainLookSyncHeadTests
             // This test's own ownership service and feed: the app's shared grants are never touched.
             var ownership = new OwnershipService(() => "rain-u1", null, a => a());
             var sink = PrizeOwnership.SinkFor(new PrizesFeed(() => ownership, () => "rain-u1", a => a()));
+            CoreAccount.UnifiedUserId = "rain-u1";   // the receipt pulls only for the signed-in account
             RainLookSyncHead.Grants = () => ownership.Grants;
             var wire = new Wire();
             RainLookSyncHead.Client = new RainLookSync(new HttpClient(wire), RainLookSyncHead.Hooks("https://proxy.test"));
@@ -93,9 +95,77 @@ public sealed class RainLookSyncHeadTests
             RainLookSyncHead.Client = client;
             RainLookSyncHead.PackRoot = root;
             RainLookSyncHead.Grants = grants;
+            CoreAccount.UnifiedUserId = account;
             CoreSecrets.RetrieveProvider = secrets;
             (s.UnifiedId, s.OfflineMode, s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc) = old;
             try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    });
+
+    private sealed class NoPrizesWire : HttpMessageHandler
+    {
+        internal readonly List<HttpMethod> Methods = new();
+        internal const string Look = "{\"rev\":1,\"items\":{\"hair\":\"original-blonde\"},\"colors\":{}}";
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Methods.Add(request.Method);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"ok\":true,\"equip\":{\"rain\":" + Look + ",\"updatedAt\":\"2026-11-01T12:00:00Z\"}}"),
+            });
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task Matching_validation_without_a_snapshot_syncs_once(bool owed, bool emptyBlock) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.UnifiedId, s.OfflineMode, s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc);
+        var (client, root, secrets, grants, account) = (RainLookSyncHead.Client, RainLookSyncHead.PackRoot,
+            CoreSecrets.RetrieveProvider, RainLookSyncHead.Grants, CoreAccount.UnifiedUserId);
+        using var wire = new NoPrizesWire();
+        try
+        {
+            RainLookSyncHead.ForgetPulled();
+            (s.UnifiedId, s.OfflineMode) = ("rain-u1", false);
+            CoreAccount.UnifiedUserId = "rain-u1";
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok-1" : null;
+            (s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc) =
+                (owed ? RainLookCodec.Normalize(NoPrizesWire.Look) : "", "", owed, null);
+            var ownership = new OwnershipService(() => CoreAccount.UnifiedUserId, null, a => a());
+            var sink = PrizeOwnership.SinkFor(new PrizesFeed(() => ownership, () => CoreAccount.UnifiedUserId, a => a()));
+            RainLookSyncHead.Grants = () => ownership.Grants;
+            RainLookSyncHead.PackRoot = Path.Combine(Path.GetTempPath(), "ccp-rainhead-absent-" + Guid.NewGuid().ToString("N"));
+            RainLookSyncHead.Client = new RainLookSync(new HttpClient(wire), RainLookSyncHead.Hooks("https://proxy.test"));
+            var prizes = emptyBlock ? new PrizesBlock() : null;
+            sink("rain-u1", "other", prizes, "wrong answer");
+            sink("other", "other", prizes, "wrong account");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(wire.Methods);
+            Assert.Equal(0, ownership.Revision);
+
+            sink("rain-u1", "rain-u1", prizes, "validate");
+            for (var i = 0; i < 200 && s.RainLookAgreedUtc == null; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+            Assert.Equal(owed ? HttpMethod.Put : HttpMethod.Get, Assert.Single(wire.Methods));
+            Assert.Equal(RainLookCodec.Normalize(NoPrizesWire.Look), s.RainLook);
+            Assert.False(s.RainLookPushOwed);
+            Assert.Equal(new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc), s.RainLookAgreedUtc);
+            Assert.Equal(0, ownership.Revision); // readiness does not invent an ownership snapshot
+            sink("rain-u1", "rain-u1", prizes, "validate again");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(wire.Methods);
+        }
+        finally
+        {
+            RainLookSyncHead.ForgetPulled();
+            (RainLookSyncHead.Client, RainLookSyncHead.PackRoot, RainLookSyncHead.Grants) = (client, root, grants);
+            CoreAccount.UnifiedUserId = account;
+            CoreSecrets.RetrieveProvider = secrets;
+            (s.UnifiedId, s.OfflineMode, s.RainLook, s.RainPackHash, s.RainLookPushOwed, s.RainLookAgreedUtc) = old;
         }
     });
 

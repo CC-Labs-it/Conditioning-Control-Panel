@@ -35,16 +35,25 @@ internal static class PrizeOwnership
         ProviderSubscription.PrizesSink = SinkFor(Feed);
         BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
     }
-    /// <summary>The validate sink over <paramref name="feed"/>. Tests pass their own feed, so the shared grants
-    /// stay untouched.</summary>
-    internal static Action<string?, string?, PrizesBlock?, string> SinkFor(PrizesFeed feed) => (requested, answered, prizes, source) =>
+    // Run after Feed.Apply: an absent snapshot must not clamp a shop look against unknown ownership.
+    internal static void SyncReceipt(string account) => SyncReceipt(account, Service);
+    internal static void SyncReceipt(string account, OwnershipService ownership) => Post(() =>
     {
-        feed.Apply(requested, answered, prizes, source);
-        // WPF ProfileSyncService.ApplyValidatePrizes:585-587: Rain's look pulls queued behind the snapshot,
-        // so the clamp sees the grants.
-        if (!string.IsNullOrEmpty(requested) && string.Equals(requested, answered, StringComparison.Ordinal))
-            Post(() => RainLookSyncHead.OnAccountReady(requested));
-    };
+        if (string.Equals(CoreAccount.UnifiedUserId, account, StringComparison.Ordinal)
+            && ownership.Revision > 0 && ownership.HoldsCurrentAccount)   // KnownGrants() over this service
+            RainLookSyncHead.OnAccountReady(account);
+    });
+
+    /// <summary>The validate sink over <paramref name="feed"/>. Tests pass their own feed so shared grants stay untouched.</summary>
+    internal static Action<string?, string?, PrizesBlock?, string> SinkFor(PrizesFeed feed) =>
+        (requested, answered, prizes, source) =>
+        {
+            feed.Apply(requested, answered, prizes, source);
+            // WPF ProfileSyncService.ApplyValidatePrizes:585-587: queue after the snapshot, even when absent.
+            if (!string.IsNullOrEmpty(requested) && string.Equals(requested, answered, StringComparison.Ordinal))
+                Post(() => RainLookSyncHead.OnAccountReady(requested));
+        };
+
     private static volatile bool _shutdown;
     private static void Raise(Action work)
     {
