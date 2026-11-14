@@ -223,6 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SettleEntrance();
             ParkComets();
             _fxClock.Stop();
+            StopSpTween();
             StopSheens();
             SettleStats();
             ParkBadgeMotion();
@@ -278,6 +279,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // edge holds at rest there (Env.SoftwareFloorHoldsIdleLoops).
                 if (Env.AllowTransitions && (!Env.SoftwareFloorHoldsIdleLoops || _edgeFlareT >= 0 || _glintT >= 0))
                 { busy = true; StepEdge(dt); }
+                if (_spTween.On)
+                {
+                    if (!Env.AllowTransitions) StopSpTween();
+                    else { SpReadout.Text = _spTween.Step(dt).ToString("N0"); busy |= _spTween.On; }
+                }
                 if (_fade.On) { busy = true; RootGrid.Opacity = _fade.Step(dt); if (!_fade.On) FinishFade(); }
                 if (_glow.On) { busy = true; GlowLayer.Opacity = _glow.Step(dt); }
                 if (_shakeT >= 0) { busy = true; StepShake(dt); }

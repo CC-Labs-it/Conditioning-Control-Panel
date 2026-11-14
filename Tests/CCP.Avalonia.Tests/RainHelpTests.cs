@@ -25,7 +25,7 @@ public sealed class RainHelpTests
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 
     [Fact]
-    public void HelpRowUsesSharedReleaseGateAndHasNoCounterDoor()
+    public void HelpRowUsesSharedReleaseGate()
     {
         var shell = XDocument.Load(Path.Combine(Root(), "CCP.Avalonia/Views/Windows/MainShellWindow.axaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -38,7 +38,11 @@ public sealed class RainHelpTests
         Assert.Null(button.Attribute("Click"));
         var icon = row.Descendants().Single(e => e.Name.LocalName == "IconGlyph");
         Assert.Equal("Wand", (string?)icon.Attribute("Kind"));
-        Assert.DoesNotContain(shell.Descendants(), e => (string?)e.Attribute(x + "Name") == "BtnHelpPrizeCounter");
+        // The Prize Counter row is its own (b103 landed the counter, restack b218 #4411): it sits before the gated Rain row, ungated.
+        var rows = shell.Descendants().Where(e => e.Name.LocalName == "Border").ToList();
+        var counter = rows.Single(e => e.Descendants().Any(d => (string?)d.Attribute(x + "Name") == "BtnHelpPrizeCounter") && e.Descendants().Count(d => d.Name.LocalName == "Border") == 0);
+        Assert.Null(counter.Attribute("IsVisible"));
+        Assert.True(rows.IndexOf(counter) < rows.IndexOf(row));
     }
 
     [Fact]
