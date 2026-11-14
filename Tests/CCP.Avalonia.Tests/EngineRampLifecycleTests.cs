@@ -56,7 +56,7 @@ public sealed class EngineRampLifecycleTests
             s.MasterVolume = 40; s.RampLinkMasterAudio = true; s.AudioLayersMasterVolume = 100;
             var file = Path.GetTempFileName();
             var player = new RampPlayer();
-            using var layers = new ConditioningControlPanel.Avalonia.Platform.LayeredAudio(_ => player);
+            using var layers = new ConditioningControlPanel.Avalonia.Platform.LayeredAudio((_, volume) => { player.Volume = volume; return player; });
             ConditioningControlPanel.Avalonia.Platform.LayeredAudio.Instance = layers;
             s.AudioLayersEnabled = true;
             s.AudioLayers = new() { new() { Path = file, Volume = 100 } };
@@ -70,6 +70,7 @@ public sealed class EngineRampLifecycleTests
                 Assert.Equal(volume, audio.FindControl<Slider>("SliderMaster")!.Value);
                 Assert.Equal($"{volume}%", audio.FindControl<TextBlock>("TxtMaster")!.Text);
                 Assert.True(layers.IsPlaying);
+                Assert.True(layers.VolumeUpdates.Wait(TimeSpan.FromSeconds(5))); // live gains are written off the caller
                 Assert.Equal((int)Math.Round(Math.Cbrt(volume / 100f) * 100), player.Volume);
             }
             var journal = Path.Combine(CorePaths.UserData, SessionSettingsJournal.RampFileName);
