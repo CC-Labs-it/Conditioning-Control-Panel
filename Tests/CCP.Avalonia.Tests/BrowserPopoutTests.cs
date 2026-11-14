@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -70,7 +71,8 @@ public sealed class BrowserPopoutTests
         Assert.DoesNotContain(host, page.FindControl<Grid>("BrowserContainer")!.Children);
         Assert.True(host.IsVisible);
         Assert.True(page.FindControl<TextBlock>("BrowserLoadingText")!.IsVisible);
-        Assert.Equal(IconText.BareLoc("btn_focus"), ((TextBlock)page.FindControl<Button>("BtnPopOutBrowser")!.Content!).Text);
+        Assert.Equal(IconText.BareLoc("btn_focus"), page.FindControl<TextBlock>("TxtPopOutBrowser")!.Text);
+        Assert.Equal(IconKind.Window, page.FindControl<IconGlyph>("PopOutBrowserIcon")!.Kind);
         popout.WindowState = WindowState.Minimized;
         Click(page, "BtnPopOutBrowser");
         Assert.Equal(WindowState.Normal, popout.WindowState); // Focus un-minimises, WPF :329-330
@@ -82,7 +84,8 @@ public sealed class BrowserPopoutTests
         Assert.Null(popout.Content);
         Assert.Contains(host, page.FindControl<Grid>("BrowserContainer")!.Children);
         Assert.False(page.FindControl<TextBlock>("BrowserLoadingText")!.IsVisible);
-        Assert.Equal(Loc.Get("btn_pop_out"), ((TextBlock)page.FindControl<Button>("BtnPopOutBrowser")!.Content!).Text);
+        Assert.Equal(IconText.BareLoc("btn_pop_out"), page.FindControl<TextBlock>("TxtPopOutBrowser")!.Text);
+        Assert.Equal(IconKind.Open, page.FindControl<IconGlyph>("PopOutBrowserIcon")!.Kind);
         Assert.Equal(requests, host.NavigationRequests);
         Assert.False(host.ScrolllerGate);
     });
@@ -205,6 +208,41 @@ public sealed class BrowserPopoutTests
             ConditioningControlPanel.Services.LockdownService.Current = previousLockdown;
             CoreSettings.Current.StrictLockEnabled = strict;
         }
+    });
+
+    // WPF MainWindow.StartStop.cs:577-580 (#952): any engine stop drops a fullscreen browser (#4423).
+    [Fact]
+    public Task EngineStopExitsPopoutFullscreen() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        shell.OnEngineStopped();
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Same(host, popout.Content);
+    });
+
+    // WPF MainWindow.Browser.cs:2870-2877 RemoteBrowserStopRule: the remote card refuses page fullscreen (#4423).
+    [Fact]
+    public Task RemoteControlCardRefusesPopoutFullscreen() => WithShell((shell, page, host) =>
+    {
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        var overlay = shell.Named<Border>("RemoteControlOverlay")!;
+        overlay.IsVisible = true;
+        try
+        {
+            host.OnNativeFullscreenEntered();
+            Assert.NotEqual(WindowState.FullScreen, popout.WindowState);
+            Assert.False(popout.Topmost);
+            Assert.Contains(scripts, s => s.Contains("document.exitFullscreen"));
+        }
+        finally { overlay.IsVisible = false; }
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
     });
 
     [Fact]
