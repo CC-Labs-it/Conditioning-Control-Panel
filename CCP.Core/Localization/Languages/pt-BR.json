@@ -6372,6 +6372,7 @@
   "lockdown_badge_label": "CONFINAMENTO",
   "lockdown_badge_end": "Encerrar",
   "lockdown_badge_tooltip": "Lockdown em andamento. Clique para abrir a aba Lockdown.",
+  "lockdown_dose_engine_warning": "O lockdown inicia ou reinicia o motor enquanto houver um recurso ativado.",
   "lockdown_poss_safety_dose": "Nada rodando? O Lockdown escolhe por você",
   "lockdown_poss_safety_dose_tip": "Um lockdown se recusa a rodar vazio. Motor desligado no início: ele é ligado por você. Nada ativado (ou você desliga tudo no meio): a guardiã liga recursos, um a mais a cada vez, e devolve tudo quando o tempo acaba.",
   "st4_braindrain_audio_rate": "Frequência do áudio",

@@ -6626,6 +6626,7 @@
   "lockdown_badge_label": "LOCKDOWN",
   "lockdown_badge_end": "Termina",
   "lockdown_badge_tooltip": "Il Lockdown è in corso. Clicca per aprire la scheda Lockdown.",
+  "lockdown_dose_engine_warning": "Il lockdown avvia o riavvia il motore quando una funzione è attiva.",
   "lockdown_poss_safety_dose": "Niente in corso? Ci pensa il Lockdown",
   "lockdown_poss_safety_dose_tip": "Un lockdown non parte mai a vuoto. Se il motore è spento all'avvio, viene avviato per te. Se non c'è niente attivo (o spegni tutto durante il lockdown), il secondino accende le funzioni, una in più ogni volta, e te le restituisce tutte quando il timer finisce.",
   "st4_braindrain_audio_rate": "Frequenza clip audio",

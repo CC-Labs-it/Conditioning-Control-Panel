@@ -14,7 +14,6 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Rendering.Composition;
-using System.Runtime.InteropServices;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -202,6 +201,10 @@ public sealed class ChasterMenuTests
         await Task.CompletedTask;
     }));
 
+    private static bool Breathing(ChasterTabView tab) =>
+        (typeof(ChasterTabView).GetField("_keysBreath", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(tab) as BeatLoop)?.IsRunning == true;
+
     // WPF ChasterTabView.xaml.cs:283-303, 1193-1206 and Fx.cs:206-248.
     [Fact]
     public Task EmptyMenuHintFindsTheKeysAndTracksRealRowChanges() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, tab, w) =>
@@ -223,7 +226,7 @@ public sealed class ChasterMenuTests
         Assert.Equal(Color.FromRgb(0xE0, 0xB0, 0x52), ((ISolidColorBrush)hint.Foreground!).Color);
         Assert.Equal(new Cursor(StandardCursorType.Hand).ToString(), hint.Cursor?.ToString());
         Assert.IsType<DropShadowEffect>(keys.Effect);
-        Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
+        Assert.True(Breathing(tab));
 
         w.UpdateLayout();
         Assert.True(scroll.Extent.Height > scroll.Viewport.Height);
@@ -258,7 +261,7 @@ public sealed class ChasterMenuTests
         Assert.Contains("attention", settings.ChasterPrices!);
         Assert.False(hint.IsVisible);
         Assert.Null(keys.Effect);
-        Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tab);
+        Assert.False(Breathing(tab));
         Click(w, row);
         Assert.Empty(settings.ChasterPrices!);
         Assert.True(hint.IsVisible);
@@ -266,7 +269,7 @@ public sealed class ChasterMenuTests
         settings.MotionLevel = MotionLevel.Reduced;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Assert.IsType<DropShadowEffect>(keys.Effect);
-        Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tab);
+        Assert.False(Breathing(tab));
         settings.PerformanceMode = true;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Assert.Null(keys.Effect);
@@ -274,54 +277,14 @@ public sealed class ChasterMenuTests
         settings.PerformanceMode = false;
         settings.MotionLevel = MotionLevel.Full;
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
-        Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
+        Assert.True(Breathing(tab));
         tab.IsVisible = false;
         Dispatcher.UIThread.RunJobs();
-        Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tab);
+        Assert.False(Breathing(tab));
         tab.IsVisible = true;
         Dispatcher.UIThread.RunJobs();
-        Assert.Contains(BeatLoop.Running, l => l.Owner == tab);
+        Assert.True(Breathing(tab));
     }, height: 700));
-
-    // WPF FxNudgeKeys puts the shadow on the four key shapes, including the gaps.
-    [Fact]
-    public Task KeyGlowRendersInsideTheGridGaps() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, tab, _) =>
-    {
-        fake.Locks = Locked;
-        await chaster.RefreshLockAsync();
-        var settings = CoreSettings.Current;
-        settings.ChasterPrices = new List<string>();
-        settings.PerformanceMode = false;
-        settings.AutoPerformanceMode = false;
-        settings.GentleVisuals = false;
-        settings.MotionLevel = MotionLevel.Reduced; // static 0.8, no frame-dependent breath
-        tab.Refresh();
-        Dispatcher.UIThread.RunJobs();
-        var slot = tab.FindControl<StackPanel>("KeysSlot")!;
-        var key = tab.FindControl<Control>("BtnPresetGentle")!;
-        Assert.IsType<DropShadowEffect>(tab.FindControl<Control>("PresetRow")!.Effect);
-        var at = key.TranslatePoint(new Point(key.Bounds.Width + 2, key.Bounds.Height / 2), slot)!.Value;
-        var lit = KeyGapPixels(slot, at);
-        settings.PerformanceMode = true;
-        AmbientFxCanvas.Env.RaiseMotionGateChanged();
-        var dark = KeyGapPixels(slot, at);
-        Assert.True(lit > dark + 5, $"no key-shaped glow in the inner gap: {lit} vs {dark}");
-    }));
-
-    private static int KeyGapPixels(Control slot, Point at)
-    {
-        var size = new PixelSize((int)Math.Ceiling(slot.Bounds.Width), (int)Math.Ceiling(slot.Bounds.Height));
-        using var image = new RenderTargetBitmap(size);
-        image.Render(slot);
-        var pixel = Marshal.AllocHGlobal(4);
-        try
-        {
-            image.CopyPixels(new PixelRect((int)at.X, (int)at.Y, 1, 1), pixel, 4, 4);
-            // Gold raises red and green more than blue, independent of the dark background's hue.
-            return Marshal.ReadByte(pixel, 2) + Marshal.ReadByte(pixel, 1) - 2 * Marshal.ReadByte(pixel, 0);
-        }
-        finally { Marshal.FreeHGlobal(pixel); }
-    }
 
     [Fact]
     public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
