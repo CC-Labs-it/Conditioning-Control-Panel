@@ -4,8 +4,8 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
-// document-created scripts, media/audio-sync reporting, remote video takeover, playlist autoplay and page
-// fullscreen/mirroring. Watch links request video autoplay after navigation completes (#3961); WPF also has an
+// document-created scripts, media/audio-sync reporting, playlist autoplay and page fullscreen/mirroring.
+// The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
 
@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             host.CancelPendingNavigation();
             host.CancelBrowserZoom();
             _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            // WPF PanicEndBrowserMedia -> EndWebVideoTakeover (Browser.cs:995): the controller's page goes too.
+            EndRemoteBrowserVideo();
         }
 
         /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
@@ -52,6 +54,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelVideoAutoPlay();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
+            EndRemoteBrowserVideo();
+        }
+
+        // ============================== the remote controller's video ==============================
+
+        // WPF Browser.cs:3150: true only while a controller's play_hypnotube page is up, so a stop never
+        // takes the page the user was browsing themselves.
+        private bool _remoteBrowserVideoActive;
+
+        /// <summary>WPF ScreenOwningWebHostName (Browser.cs:3162): a host above the panel that would hide the
+        /// video. The Arcademy is not on this head.</summary>
+        private static string? ScreenOwningWebHostName() =>
+            Games.GameWindow.IsDtrhOpen() ? "Down the Rabbit Hole"
+            : IntakeHostWindow.IsAnyOpen() ? "Graded Intake" : null;
+
+        /// <summary>WPF PlayHypnotubeFromRemote (Browser.cs:3188): the URL is already allowlisted by Core
+        /// RemoteCommands. Null = handed to the browser, else the reason the controller sees.</summary>
+        internal string? PlayHypnotubeFromRemote(string url)
+        {
+            var ownedBy = ScreenOwningWebHostName();
+            if (ownedBy != null) return Loc.GetF("remote_browser_screen_busy", ownedBy);
+            // WPF NavigateToUrlInBrowser returns false with no browser (:698): a web view with no engine draws only
+            // its fallback panel (and NavigateToUrlInBrowser would open the link outside CCP), so the controller
+            // is refused instead of told "ok" for a video that cannot play.
+            if (BrowserView is not { HasEngine: true } || BrowserBlockedOffline(userInitiated: false))
+                return Loc.Get("remote_browser_unavailable");
+            _remoteBrowserVideoActive = true;
+            RevealBrowserForRemoteVideo(true);
+            if (NavigateToUrlInBrowser(url, autoPlayFullscreen: true, userInitiated: false)) return null;
+            _remoteBrowserVideoActive = false;
+            RevealBrowserForRemoteVideo(false);
+            return Loc.Get("remote_browser_unavailable");
+        }
+
+        /// <summary>WPF StopBrowserVideoFromRemote (Browser.cs:3228) via EndWebVideoTakeover's remote branch
+        /// (:995): the page stops, back to the site home, then the blindfold goes back on.</summary>
+        internal void StopBrowserVideoFromRemote()
+        {
+            if (_remoteBrowserVideoActive) EndWebVideoTakeover();
+        }
+
+        /// <summary>The remote branch of WPF EndWebVideoTakeover (:995); a no-op unless a controller's video is up.</summary>
+        private void EndRemoteBrowserVideo()
+        {
+            if (!_remoteBrowserVideoActive) return;
+            _remoteBrowserVideoActive = false;
+            try { NavigateBrowserToCurrentSiteHome(); }
+            finally { RevealBrowserForRemoteVideo(false); }
         }
 
         private int _browserRequestGeneration;
@@ -138,13 +188,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
                 if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) ArmVideoAutoPlay(host);
                 if (!host.Navigate(target)) { CancelVideoAutoPlay(); return false; }   // even when equal: WPF #867, re-click goes home
-                Log.Information("Browser navigated to {Url}", url);
+                Log.Information("Browser navigated to {Host}", ConditioningControlPanel.Services.Logging.UrlLog.Host(url));
                 return true;
             }
             catch (Exception ex)
             {
                 CancelVideoAutoPlay();
-                Log.Warning(ex, "Browser navigation failed for {Url}", url);
+                Log.Warning("Browser navigation failed for {Host}: {ErrorType}", ConditioningControlPanel.Services.Logging.UrlLog.Host(url), ex.GetType().Name);
                 return false;
             }
         }

@@ -8503,5 +8503,8 @@
   "possession_doki_message": "出て行こうとしたね。",
   "possession_doki_progress": "出口を削除中...",
   "possession_doki_done": "何も起きなかった。削除するものはなかった。",
-  "possession_doki_ok": "ok"
+  "possession_doki_ok": "ok",
+  "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません",
+  "remote_browser_unavailable": "ブラウザーで開けませんでした",
+  "remote_browser_screen_busy": "{0}が画面に表示されています"
 }
