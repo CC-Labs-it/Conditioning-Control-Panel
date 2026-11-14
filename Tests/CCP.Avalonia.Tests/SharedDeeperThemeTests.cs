@@ -271,6 +271,131 @@ public sealed class SharedDeeperThemeTests
         await Task.CompletedTask;
     });
 
+    // Restack b179 (#3773 #3989).
+    // WPF Controls.xaml:272-277,308-314. Exercise a real click on the shared toggle.
+    [Fact]
+    public Task ToggleSparkSnapshotsTheOnDecayAndFadesOutOver80ms() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var toggle = new CheckBox { Theme = Theme("ToggleStyle"), Width = 44, Height = 22 };
+        var window = new Window { Content = toggle, Width = 200, Height = 100 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var spark = toggle.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(b => b.Name == "spark");
+            var clock = new StepClock();
+            spark.SetValue(StepClock.Property, clock.Instance);
+            void Click()
+            {
+                window.MouseDown(new Point(100, 50), MouseButton.Left);
+                window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            }
+            Click(); Assert.True(toggle.IsChecked);
+            clock.Step(0); clock.Step(60);
+            Assert.Equal(0.9, spark.Opacity, 4);
+            clock.Step(100);
+            double visible = spark.Opacity;
+            Assert.InRange(visible, 0.7, 0.9);
+            Click(); Assert.False(toggle.IsChecked);
+            clock.Step(100); // Replacement starts at the visible ON value, without a snap.
+            Assert.Equal(visible, spark.Opacity, 4);
+            clock.Step(140);
+            Assert.Equal(visible / 2, spark.Opacity, 4);
+            clock.Step(180);
+            Assert.Equal(0, spark.Opacity, 4);
+            // A fresh ON restarts the one-shot; a settled OFF stays dark.
+            Click(); clock.Step(200); clock.Step(260);
+            Assert.Equal(0.9, spark.Opacity, 4);
+            clock.Step(650);
+            Assert.Equal(0, spark.Opacity, 4);
+            Click(); clock.Step(700); clock.Step(780);
+            Assert.Equal(0, spark.Opacity, 4);
+            Click(); clock.Step(800); clock.Step(860);
+            Assert.Equal(0.9, spark.Opacity, 4);
+            window.Content = null; Dispatcher.UIThread.RunJobs();
+            clock.Step(900);
+            Assert.Equal(0, spark.Opacity, 4);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
+    // WPF Controls.xaml:278-290,295-314: OFF leaves the scale clock alone; ON starts at 0.4.
+    [Fact]
+    public Task ToggleSparkGrowthContinuesOnOffAndRestartsOnEachOn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var toggle = new CheckBox { Theme = Theme("ToggleStyle"), Width = 44, Height = 22 };
+        var window = new Window { Content = toggle, Width = 200, Height = 100 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var spark = toggle.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(b => b.Name == "spark");
+            var clock = new StepClock();
+            spark.SetValue(StepClock.Property, clock.Instance);
+            void Click()
+            {
+                window.MouseDown(new Point(100, 50), MouseButton.Left);
+                window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            }
+            double Scale() => spark.RenderTransform!.Value.M11;
+            Click(); clock.Step(0); clock.Step(100);
+            Assert.Equal(0.4 + 2.6 * (1 - Math.Pow(350.0 / 450, 2)), Scale(), 4);
+            Click(); clock.Step(200);
+            Assert.Equal(0.4 + 2.6 * (1 - Math.Pow(250.0 / 450, 2)), Scale(), 4);
+            Click(); clock.Step(200);
+            Assert.Equal(0.4, Scale(), 4);
+            clock.Step(425);
+            Assert.Equal(2.35, Scale(), 4);
+            clock.Step(650);
+            Assert.Equal(3, Scale(), 4);
+            Click(); clock.Step(900);
+            Assert.Equal(3, Scale(), 4);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BlinkTrainerIncludeVideosUsesTheSparkOnItsLiveToggle() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settings = CoreSettings.Current;
+        var old = settings.BlinkTrainerIncludeVideos;
+        var premium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        settings.BlinkTrainerIncludeVideos = false;
+        var tab = new BlinkTrainerTabView { IsVisible = false };
+        var window = new Window { Content = tab, Width = 1400, Height = 1800 };
+        try
+        {
+            window.Show(); tab.IsVisible = true; Dispatcher.UIThread.RunJobs();
+            var toggle = tab.FindControl<CheckBox>("ToggleBlinkTrainerIncludeVideos")!;
+            Assert.Same(Theme("ToggleStyle"), toggle.Theme);
+            Assert.True(toggle.Focus());
+            var spark = toggle.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Single(b => b.Name == "spark");
+            var clock = new StepClock();
+            spark.SetValue(StepClock.Property, clock.Instance);
+            void Press()
+            {
+                window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+                window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+                Dispatcher.UIThread.RunJobs();
+            }
+            Press(); Assert.True(settings.BlinkTrainerIncludeVideos);
+            clock.Step(0); clock.Step(100);
+            Press(); Assert.False(settings.BlinkTrainerIncludeVideos);
+            clock.Step(200);
+            Assert.Equal(0.4 + 2.6 * (1 - Math.Pow(250.0 / 450, 2)), spark.RenderTransform!.Value.M11, 4);
+        }
+        finally
+        {
+            window.Close(); CoreEntitlement.HasPremiumProvider = premium;
+            settings.BlinkTrainerIncludeVideos = old;
+        }
+        await Task.CompletedTask;
+    });
+
     /// <summary>Hand-stepped animation clock, so transitions advance only when the test says so. Avalonia 12 made
     /// IClock internal, and the headless render clock is real time, so this reaches Avalonia's own ClockBase by
     /// reflection; a rename there fails loudly here instead of silently passing.</summary>

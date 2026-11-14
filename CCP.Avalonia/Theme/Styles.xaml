@@ -16,8 +16,8 @@
      in docs/avalonia-parity.html for the named follow-up lane.
      Controls.xaml keys are shared here, including the three Deeper button themes.
      Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
-     SecondaryButton/PinkButton include opt-in HudPlank depth. ToggleStyle spark exit remains
-     wire-theme-controls-b. -->
+     SecondaryButton/PinkButton include opt-in HudPlank depth. The ToggleStyle spark exit fades
+     through ToggleSpark (restack b179). -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -336,7 +336,9 @@
 
   <!-- WPF Controls.xaml:257-267,295-303: ToggleKnob owns one transition per thumb,
        updating timing before the target so reversals snapshot the visible position.
-       Part B: WPF Controls.xaml:311-313 spark exit still snaps instead of fading for 80ms. -->
+       ToggleSpark owns the spark (restack b179, #3773 #3989; WPF Controls.xaml:272-290,295-314):
+       every ON restarts the growth at 0.4 with the 450ms opacity decay; OFF snapshots the
+       visible opacity and fades it over 80ms, leaving the scale where it is. -->
   <ControlTheme x:Key="ToggleStyle" TargetType="CheckBox">
     <!-- The spark grows to 36px around x = 33, past the 44x22 box. An Avalonia CheckBox clips
          to its bounds, which cut WPF's soft round halo into a hard-edged square (measured in
@@ -370,7 +372,7 @@
                    HorizontalAlignment="Left" VerticalAlignment="Center"
                    Margin="27,0,0,0" Opacity="0" IsHitTestVisible="False"
                    RenderTransformOrigin="50%,50%"
-                   RenderTransform="scale(0.4)">
+                   RenderTransform="scale(0.4)" theme:ToggleSpark.IsOn="{TemplateBinding IsChecked}">
             <Ellipse.Transitions>
               <Transitions>
                 <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.45">
@@ -388,28 +390,9 @@
     <Style Selector="^:checked /template/ Border#trackOn">
       <Setter Property="Opacity" Value="1"/>
     </Style>
-    <Style Selector="^:checked /template/ Ellipse#spark">
-      <!-- The 0.4 -> 3 growth is a Setter + the transition above, NOT a keyframe: Avalonia ships
-           no keyframe animator for RenderTransform, and an <Animation> touching it dies at
-           TEMPLATE APPLY time with "No animator registered for the property RenderTransform" -
-           i.e. the toggle takes the whole window down before it ever draws. Found by rendering.
-           The opacity decay below is genuinely keyframed (three WPF LinearDoubleKeyFrames), and
-           Opacity does have a built-in animator. -->
-      <Setter Property="RenderTransform" Value="scale(3)"/>
-      <Style.Animations>
-        <Animation Duration="0:0:0.45" FillMode="Forward">
-          <KeyFrame Cue="0%">
-            <Setter Property="Opacity" Value="0"/>
-          </KeyFrame>
-          <KeyFrame Cue="13%">
-            <Setter Property="Opacity" Value="0.9"/>
-          </KeyFrame>
-          <KeyFrame Cue="100%">
-            <Setter Property="Opacity" Value="0"/>
-          </KeyFrame>
-        </Animation>
-      </Style.Animations>
-    </Style>
+    <!-- The spark's 0.4 -> 3 growth stays a TransformOperationsTransition driven from ToggleSpark:
+         Avalonia ships no keyframe animator for RenderTransform, and an <Animation> touching it
+         dies at TEMPLATE APPLY time. Only Opacity is keyframed there. -->
 
     <!-- A locked toggle used to be pixel-identical to a live one (users read the two as "a bit
          lost graphically"), because nothing here reacted to IsEnabled. Dim the whole template
