@@ -463,6 +463,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ApplyRestOpacity();
                 ApplyMute(0);
                 RefreshHover();
+                // #4144: a card turning into a Home tile under the pointer drops its art pop too.
+                if (value) HoverPop.Leave(_imgIconHost);
             }
         }
         public static readonly StyledProperty<bool> DimWhenInactiveProperty =

@@ -66,6 +66,7 @@ Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip dr
 Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
 Views/Controls/Leash/LeashHelpSlip.cs :: * :: path: D6 art - leash ink-slip pictograms (WPF owner-approved mockup drawings)
 Views/Controls/Leash/LeashHolderIntro.cs :: * :: path: D6 art - leash explainer card drawings (offer, collar and level, eye, scissors; WPF LeashExplainCard.cs:99)
+Views/Controls/Leash/LeashSnapCard.cs :: * :: path: D6 art - the snap heart tag charm (ring, heart, shine; WPF LeashLook.HeartTag :254-276)
 Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
 Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
 Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows

@@ -143,6 +143,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // Core caches peaks decoded through LibVLC. Local audio and video playback use _localAudio;
         // remote video polls the page media element.
         private float[]? _waveformPeaks;
+        // WPF DeeperEditorWindow.xaml.cs:1199: a decoded waveform's duration is the timeline's; the
+        // playback reading only stands in when the decode failed (#4136).
+        private bool _hasWaveformDuration;
+        // Bumped by every preview start, so a decode or open from an earlier start of the same file is dropped.
+        private int _previewGeneration;
         private IDeeperLocalAudio? _localAudio;
 
         /// <summary>Open editors (UI thread): the panic sweep and the player's one-editor-per-file
@@ -303,6 +308,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             Closed += (_, _) => { StopPart2Timer(); _part2Overlay?.Close(); _part2Overlay = null; };
             KeyDown += DeeperEditorWindow_KeyDown;
             HookPreviewZoomKeys();
+            SidebarRoot.AddHandler(PointerPressedEvent, (_, _) => ArmInspectorSnapshot(true), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(KeyDownEvent, (_, _) => ArmInspectorSnapshot(false), RoutingStrategies.Tunnel);
+            SidebarRoot.AddHandler(GotFocusEvent, (_, _) => _inspectorSessionSnapshotted = false, RoutingStrategies.Bubble, true);
             Closing += Window_Closing;
 
             _validationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
@@ -404,6 +412,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     ItemsListDelete_Click(b, e);
             }, RoutingStrategies.Bubble);
             SidebarSplitter.DragCompleted += SidebarSplitter_DragCompleted;
+            TimelineSplitter.DragCompleted += TimelineSplitter_DragCompleted;
 
             // -- Metadata fields
             foreach (var tb in new[] { TxtMetaName, TxtMetaCreator, TxtMetaRemixer,
@@ -415,6 +424,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             TxtRegionLabel.TextChanged += RegionField_TextChanged;
             TxtRegionStart.TextChanged += RegionField_TextChanged;
             TxtRegionEnd.TextChanged += RegionField_TextChanged;
+            TxtRegionEnd.LostFocus += TxtRegionEnd_LostFocus;
             TxtRegionColor.TextChanged += RegionField_TextChanged;
             BtnSnapRegionStartPrev.Click += BtnSnapRegionStartPrev_Click;
             BtnSnapRegionEndNext.Click += BtnSnapRegionEndNext_Click;
@@ -621,7 +631,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             ApplyPersistedSidebarWidth();
 
             _ = InitializePreviewAsync();
-
             CoreTutorialEvents.Emit("WindowLoaded:DeeperEditorWindow");
             // WPF DeeperEditorWindow.xaml.cs:350-362: once-only coachmarks yield to Part 2.
             if (!RenderProof.Rendering && !CoreSettings.Current.HasSeenDeeperEditorIntro &&
@@ -737,9 +746,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // A swap from a URL to a local file must blank the old page first, or its audio
                 // keeps playing behind the waveform this method is about to show.
                 _panicStoppedLocalVideo = null;
+                var generation = ++_previewGeneration;
                 StopBrowserPreview();
                 DisposeLocalAudio();
                 _waveformPeaks = null;
+                _hasWaveformDuration = false;
                 UpdateWaveformPath();
 
                 var source = _enhancement.MediaSource;
@@ -758,9 +769,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 }
 
                 if (_enhancement.MediaType == MediaTypes.Audio)
-                    await InitializeAudioAsync(source);
+                    await InitializeAudioAsync(source, generation);
                 else
-                    await InitializeVideoAsync(source);
+                    await InitializeVideoAsync(source, generation);
             }
             catch (Exception ex)
             {
@@ -1023,16 +1034,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>Local video uses the shared LibVLC transport and frame sink.</summary>
-        private async Task InitializeVideoAsync(string path)
+        private async Task InitializeVideoAsync(string path, int generation)
         {
             if (!DeeperPreview.IsLocalVideoFile(path)) { InitializeBrowserLocalVideo(path); return; }
-            await InitializeAudioAsync(path, video: true);
+            await InitializeAudioAsync(path, generation, video: true);
         }
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
         /// use LibVLC; Core AudioWaveformCache supplies the peaks beside audio playback. With
         /// <paramref name="video"/> the same transport feeds <c>LocalVideoImage</c> instead.</summary>
-        private async Task InitializeAudioAsync(string path, bool video = false)
+        private async Task InitializeAudioAsync(string path, int generation, bool video = false)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
@@ -1041,9 +1052,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             LocalVideoImage.IsVisible = video;
             if (!video)
             {
-                _waveformLoad = LoadWaveformAsync(path);
+                _waveformLoad = LoadWaveformAsync(path, generation);
                 await _waveformLoad;
-                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                if (_playbackDisposed || generation != _previewGeneration || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
             }
 
             IDeeperLocalAudio? audio = null;
@@ -1052,14 +1063,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (audio == null)
             {
                 Log.Debug("DeeperEditor: local media unavailable: {Path}", path);
-                if (!_playbackDisposed && string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
+                if (!_playbackDisposed && generation == _previewGeneration && string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
                 {
                     if (video) { LocalVideoImage.IsVisible = false; InitializeBrowserLocalVideo(path); }
                 }
                 return;
             }
             // Swapped or closed while the parse ran: this clip is no longer the project's.
-            if (_playbackDisposed || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
+            if (_playbackDisposed || generation != _previewGeneration || _localAudio != null || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal))
             {
                 audio.Dispose();
                 return;
@@ -1082,7 +1093,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Log.Warning("DeeperEditor: local audio playback failed: {Path}", path);
                 LocalAudioStopped();
             });
-            if (audio.DurationSeconds > 0) _totalSeconds = audio.DurationSeconds;
+            if (!_hasWaveformDuration && audio.DurationSeconds > 0) _totalSeconds = audio.DurationSeconds;
             TxtTotalTime.Text = FormatTime(_totalSeconds);
             UpdateWaveformPath();
             RebuildTimelineRuler();
@@ -1097,13 +1108,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         /// <summary>WPF DeeperEditorWindow.xaml.cs:1196-1211: peaks from AudioWaveformCache, then the
         /// waveform path and timeline duration before playback. Decode failure leaves a flat strip.</summary>
-        private async Task LoadWaveformAsync(string path)
+        private async Task LoadWaveformAsync(string path, int generation)
         {
             try
             {
                 var data = await AudioWaveformCache.LoadAsync(path);
-                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                if (_playbackDisposed || generation != _previewGeneration || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
                 _waveformPeaks = data.Peaks;
+                _hasWaveformDuration = data.DurationSeconds > 0;
                 _totalSeconds = data.DurationSeconds;
                 TxtTotalTime.Text = FormatTime(_totalSeconds);
                 UpdateWaveformPath();
@@ -1280,7 +1292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (_localAudio == null) return;
             // The pre-play duration can be a header estimate; re-lay the timeline only on a change.
             var duration = _localAudio.DurationSeconds;
-            if (duration > 0 && Math.Abs(duration - _totalSeconds) > 0.05)
+            if (!_hasWaveformDuration && duration > 0 && Math.Abs(duration - _totalSeconds) > 0.05)
             {
                 _totalSeconds = duration;
                 TxtTotalTime.Text = FormatTime(_totalSeconds);
@@ -1555,7 +1567,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     RebuildHapticVisuals();
                     RebuildEffectVisuals();
                 }
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.ResizeRegionStart && _draggedRegion != null)
@@ -1565,7 +1577,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _draggedRegion.Start = newStart;
                 MarkDirty();
                 RebuildRegionVisuals();
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.ResizeRegionEnd && _draggedRegion != null)
@@ -1575,7 +1587,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _draggedRegion.End = newEnd;
                 MarkDirty();
                 RebuildRegionVisuals();
-                if (_selectedRegion == _draggedRegion) UpdateSelectedSidePanel();
+                RefreshInspectorForDraggedRegion();
                 return;
             }
             if (_dragMode == DragMode.DragEffect && _draggedEffect != null)
@@ -1711,6 +1723,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _draggedRegion = null;
             _draggedEffect = null;
             EndMultiDragCapture();
+        }
+
+        private void RefreshInspectorForDraggedRegion()
+        {
+            if (_draggedRegion == null) return;
+            if (_selectedRegion == _draggedRegion) { UpdateSelectedSidePanel(); return; }
+            if (_selectedRule == null || _selectedRule.RegionConstraint != _draggedRegion.Id) return;
+            _suppressRuleSync = true;
+            try
+            {
+                TxtRuleBandStart.Text = _draggedRegion.Start.ToString("0.##", CultureInfo.InvariantCulture);
+                TxtRuleBandEnd.Text = _draggedRegion.End.ToString("0.##", CultureInfo.InvariantCulture);
+            }
+            finally { ClearWhenEventsDrained(() => _suppressRuleSync = false); }
         }
 
         private void ApplyScrubFromMouse(PointerEventArgs e)
@@ -1906,6 +1932,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
             // Always reset the unified-editor groups; the unified path repopulates if needed.
             HideAllEditors();
+            ResetInspectorSession();
 
             if (_selectedEffect != null)
             {
@@ -1970,13 +1997,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (double.TryParse(TxtRegionStart.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var s))
                 _selectedRegion.Start = Math.Max(0, s);
             if (double.TryParse(TxtRegionEnd.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var ev))
-                _selectedRegion.End = ev;
+                _selectedRegion.End = Math.Clamp(ev, 0, _totalSeconds > 0 ? _totalSeconds : double.MaxValue);
             if (!string.IsNullOrWhiteSpace(TxtRegionColor.Text))
             {
                 _selectedRegion.Color = TxtRegionColor.Text!.Trim();
                 UpdateRegionColorSwatchPreview();
             }
             MarkDirty();
+            RebuildRegionVisuals();
+            ScheduleValidation();
+        }
+
+        private void TxtRegionEnd_LostFocus(object? sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null) return;
+            var minEnd = _selectedRegion.Start + 0.05;
+            if (_selectedRegion.End >= minEnd) return;
+            _selectedRegion.End = _totalSeconds > 0 ? Math.Min(_totalSeconds, minEnd) : minEnd;
+            MarkDirty();
+            _suppressDirty = true;
+            try { TxtRegionEnd.Text = _selectedRegion.End.ToString("0.##", CultureInfo.InvariantCulture); }
+            finally { ClearWhenEventsDrained(() => _suppressDirty = false); }
             RebuildRegionVisuals();
             ScheduleValidation();
         }
@@ -2433,7 +2474,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void MarkDirty()
         {
             if (_suppressDirty) return;
-            _isDirty = true;
+            CommitPendingInspectorSnapshot();
+            if (!_isDirty)
+            {
+                _isDirty = true;
+                ApplyWindowTitle();
+            }
             TxtDirty.IsVisible = true;
             // Lane counts piggyback here (cheap) so the chrome stays in sync with any
             // add/remove/edit that touches the data model.
@@ -2834,11 +2880,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
                 ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
             TxtTitle.Text = name;
-            Title = $"Deeper — {name}";
+            ApplyWindowTitle();
             // Linked-files strip shows the file path; keep it in sync.
             RefreshLinkedFilesUi();
             // Metadata drawer subtitle ("Metadata · {name}") shown when collapsed.
             UpdateMetadataDrawerSubtitle();
+        }
+
+        private void ApplyWindowTitle()
+        {
+            var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
+                ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
+            Title = $"Deeper - {name}{(_isDirty ? "*" : "")}";
         }
 
         // ---------------------------------------------------------------------------------
