@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Program;
@@ -16,15 +17,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             QuestCategory.Flash, QuestCategory.Video, QuestCategory.Spiral, QuestCategory.PinkFilter,
             QuestCategory.Bubbles, QuestCategory.LockCard, QuestCategory.BubbleCount, QuestCategory.Mantra,
-            QuestCategory.Autonomy, QuestCategory.Lockdown, QuestCategory.BlinkTrainer,
-            // Not raised: KeywordTrigger (engine not ported), Remote/RemoteIssue, Session, Streak, Combined.
+            QuestCategory.Autonomy, QuestCategory.Lockdown, QuestCategory.BlinkTrainer, QuestCategory.KeywordTrigger,
+            // Not raised: Remote/RemoteIssue, Session, Streak, Combined.
         };
 
         /// <summary>Ritual tasks: SubmitRitualTask + the seeded roadmap (programs 3b). Tests flip it to prove the gate.</summary>
         internal static bool RitualsAvailable = true;
 
+        /// <summary>Keyword tasks need a key source; the only one is the Windows hook (KeywordTriggerHead.Sync),
+        /// read per check so a sandbox profile or a failed install refuses them. Tests swap it.</summary>
+        internal static Func<bool> KeywordInputAvailable = KeywordTriggerHead.KeyboardSourceAvailable;
+
         internal static bool IsAvailable(ProgramTask task) =>
             task.Kind == ProgramTaskKind.Ritual ? RitualsAvailable
-            : task.Verifier is { } category && Raised.Contains(category);
+            : task.Verifier is { } category && Raised.Contains(category)
+              && (category != QuestCategory.KeywordTrigger || KeywordInputAvailable());
     }
 }

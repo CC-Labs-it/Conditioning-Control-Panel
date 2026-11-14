@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -106,6 +107,61 @@ public sealed class CatalogueShellTests
             }
         });
     }
+
+    // WPF MainWindow.xaml.cs:642 and MainWindow.DeeperTab.cs:677: the library change reaches
+    // the shell even when the reused player was opened while the shell was hidden.
+    [Fact]
+    public Task HiddenShellCataloguePlayerRefreshesVisibleLibrary() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-hidden-catalogue-").FullName;
+        var name = "unowned-" + Guid.NewGuid().ToString("N");
+        var media = Path.Combine(dir, name + ".mp4");
+        var promoted = Path.Combine(DeeperLocalLibrary.DefaultFolder, name + ".ccpenh.json");
+        File.WriteAllBytes(media, new byte[] { 0, 0, 0, 8, (byte)'f', (byte)'t', (byte)'y', (byte)'p' });
+        var embedded = new Enhancement { MediaType = MediaTypes.Video, MediaSource = media };
+        embedded.Metadata.Name = name;
+        Assert.True(EnhancementMediaBundler.Export(embedded, media, media).Success);
+
+        var fake = new Fake { Respond = _ => EnhancementSerializer.Save(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }) };
+        var (oldLookup, oldClient) = (AppA.CatalogueLookup, AppA.Catalogue);
+        AppA.CatalogueLookup = new CatalogueLookup(() => Path.Combine(dir, "catalogue"), "test", AppA.OnUiThread, fake);
+        AppA.Catalogue = new CatalogueClient(() => null, () => null, "test", fake);
+        var shell = new MainShellWindow();
+        EnhancementPlayerWindow? player = null;
+        try
+        {
+            shell.Show();
+            shell.Hide();
+            await shell.DownloadAndOpenCatalogueEntryAsync(new CatalogueEntry("a", "Alpha", "", "c", null,
+                new List<string>(), null, 0, "", null, "http://127.0.0.1:9/a"));
+            Assert.True(File.Exists(Path.Combine(dir, "catalogue", "Alpha.ccpenh.json")));
+            player = Assert.IsType<EnhancementPlayerWindow>(typeof(MainShellWindow)
+                .GetField("_deeperPlayer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(shell));
+            Assert.Null(player.Owner);
+
+            shell.Show();
+            shell.ShowTab("deeper");
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            var vm = (DeeperTabViewModel)view.DataContext!;
+            Assert.True(view.IsVisible);
+            Assert.DoesNotContain(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, promoted));
+            Assert.Null(MainShellWindow.Current);
+            player.OpenLocalMediaFile(media);
+            Dispatcher.UIThread.RunJobs(); // the shell library's LibraryChanged posts the reload (restack b208)
+            Assert.True(File.Exists(promoted));
+            Assert.Contains(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, promoted));
+        }
+        finally
+        {
+            player?.Close();
+            shell.Close();
+            (AppA.CatalogueLookup, AppA.Catalogue) = (oldLookup, oldClient);
+            File.Delete(promoted);
+            Directory.Delete(dir, true);
+        }
+    });
 
     /// <summary>The user path WPF has (MainWindow.Browser.cs:132-158): a site radio navigates the
     /// browser, and the lookup fires from the WebHost's NavigationCompleted with the LIVE url (here a

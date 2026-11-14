@@ -225,6 +225,7 @@ public sealed class ProgramsRunControlsTests
             var path = Path.Combine(dir, "programs.json");
             var (oldPrograms, oldSessions, oldTask) = (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider);
             var (oldPremium, oldRituals) = (CoreProgram.HasPremiumProvider, ProgramCapabilities.RitualsAvailable);
+            var oldKeyword = ProgramCapabilities.KeywordInputAvailable;
             var settings = CoreSettings.Current;
             var (seenTab, seenIntro) = (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro);
             settings.HasSeenProgramsTab = settings.HasSeenProgramsIntro = true;
@@ -233,6 +234,7 @@ public sealed class ProgramsRunControlsTests
             {
                 CoreProgram.TaskAvailableProvider = ProgramCapabilities.IsAvailable;
                 ProgramCapabilities.RitualsAvailable = false;
+                ProgramCapabilities.KeywordInputAvailable = () => false;   // a head with no key source, also on Windows CI
                 var svc = AvApp.Programs = new ProgramService(path, readOnly: false);
                 AvApp.Sessions = new SessionRunner(new SessionLogService());
                 shell = new MainShellWindow();
@@ -252,6 +254,7 @@ public sealed class ProgramsRunControlsTests
                 AvApp.Programs?.Dispose();
                 (AvApp.Programs, AvApp.Sessions, CoreProgram.TaskAvailableProvider) = (oldPrograms, oldSessions, oldTask);
                 (CoreProgram.HasPremiumProvider, ProgramCapabilities.RitualsAvailable) = (oldPremium, oldRituals);
+                ProgramCapabilities.KeywordInputAvailable = oldKeyword;
                 (settings.HasSeenProgramsTab, settings.HasSeenProgramsIntro) = (seenTab, seenIntro);
                 CoreSession.IsSessionRunningProvider = null;
                 Directory.Delete(dir, true);
