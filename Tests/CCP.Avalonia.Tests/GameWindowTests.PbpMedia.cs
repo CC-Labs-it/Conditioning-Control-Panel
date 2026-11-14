@@ -77,27 +77,6 @@ public sealed partial class GameWindowTests
         w.PostPbpOnline(snap); w.Close(); sent.Clear(); Dispatcher.UIThread.RunJobs();
         Assert.Empty(sent);
     });
-    [Fact]
-    public void PieceByPiece_MediaSavedConsentStartsPoolAndOwnOnlyAndCloseStopIt() => RunBoard(() =>
-    {
-        ScrolllerPolicy.Apply(false, null); // no network in this test
-        var s = CoreSettings.Current;
-        s.PbpMediaOnline = true; s.PbpMediaFlavour = "pink"; s.PbpMediaSubs = "valid";
-        s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false;
-        var w = GameWindow.Launch(GameWindow.PbpId)!;
-        var sent = new List<JObject>(); w.Posted += json => sent.Add(JObject.Parse(json));
-        w.PbpOsAnimations = () => Task.FromResult(true);
-        w.HandleMessage("{\"type\":\"ready\"}"); Dispatcher.UIThread.RunJobs();
-        var pool = (GoonOnlineMedia)typeof(GameWindow).GetField("_pbpOnline", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(w)!;
-        Assert.NotNull(pool); Assert.NotNull(GoonOnlineMedia.Materialize); Assert.NotNull(GoonOnlineMedia.ReleaseTempFile);
-        Assert.Contains(sent, o => (string?)o["state"] == "loading" && (int)o["share"]! == 70);
-        w.HandleMessage("{\"type\":\"pbp:media-more\"}"); // running wave: bounded pool ignores refill
-        w.HandleMessage("{\"type\":\"pbp:media-flavour\",\"online\":false}");
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal("off", (string?)sent.Last(o => (string?)o["type"] == "pbp:online-media")["state"]);
-        Assert.False(pool.More());
-        w.Close(); Assert.False(pool.More());
-    });
 
     [Fact]
     public void PieceByPiece_MediaProbeStartsOptimisticThenRefreshesEmptyLibrary() => RunBoard(() =>
@@ -116,4 +95,39 @@ public sealed partial class GameWindowTests
         var count = sent.Count; Dispatcher.UIThread.RunJobs(); Assert.Equal(count, sent.Count);
     });
 
+}
+
+/// <summary>Runs alone: it switches the process-wide ScrolllerPolicy off for the whole test, and a parallel
+/// class that plays a Scrolller clip in that window reads the licence as off.</summary>
+[Collection(RunsAloneCollection.Name)]
+public sealed class PbpMediaPoolTests
+{
+    [Fact]
+    public void PieceByPiece_MediaSavedConsentStartsPoolAndOwnOnlyAndCloseStopIt() => GameWindowTests.RunBoard(() =>
+    {
+        // ScrolllerPolicy is process-wide: switched off here (no network in this test) and put back,
+        // or every later reader in the process sees the licence off (MandatoryVideoRemoteTests, wave 4).
+        var (wasOn, wasCap) = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        ScrolllerPolicy.Apply(false, null);
+        try
+        {
+            var s = CoreSettings.Current;
+            s.PbpMediaOnline = true; s.PbpMediaFlavour = "pink"; s.PbpMediaSubs = "valid";
+            s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>(); w.Posted += json => sent.Add(JObject.Parse(json));
+            w.PbpOsAnimations = () => Task.FromResult(true);
+            w.HandleMessage("{\"type\":\"ready\"}"); Dispatcher.UIThread.RunJobs();
+            var pool = (GoonOnlineMedia)typeof(GameWindow).GetField("_pbpOnline", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(w)!;
+            Assert.NotNull(pool); Assert.NotNull(GoonOnlineMedia.Materialize); Assert.NotNull(GoonOnlineMedia.ReleaseTempFile);
+            Assert.Contains(sent, o => (string?)o["state"] == "loading" && (int)o["share"]! == 70);
+            w.HandleMessage("{\"type\":\"pbp:media-more\"}"); // running wave: bounded pool ignores refill
+            w.HandleMessage("{\"type\":\"pbp:media-flavour\",\"online\":false}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("off", (string?)sent.Last(o => (string?)o["type"] == "pbp:online-media")["state"]);
+            Assert.False(pool.More());
+            w.Close(); Assert.False(pool.More());
+        }
+        finally { ScrolllerPolicy.Apply(wasOn, wasCap); }
+    });
 }

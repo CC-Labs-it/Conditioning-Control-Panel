@@ -799,7 +799,7 @@ public sealed partial class GameWindowTests
         GameWindow.CloseAllForPanic();
         Assert.Empty(GameWindow.OpenWindowsForTests());
     });
-    private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
