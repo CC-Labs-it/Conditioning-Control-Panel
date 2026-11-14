@@ -698,6 +698,28 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void PausedSessionDoesNotDetectKeysAndResumeRestoresDetection() => Run((engine, s, played) =>
+    {
+        var running = CoreSession.IsSessionRunningProvider;
+        var paused = CoreSession.IsSessionPausedProvider;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = () => true;
+            CoreSession.IsSessionPausedProvider = () => true;
+            Type(engine, "sit");
+            Assert.Empty(engine.GetRecentFires());
+            CoreSession.IsSessionPausedProvider = () => false;
+            Type(engine, "sit");
+            Assert.Single(engine.GetRecentFires());
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = running;
+            CoreSession.IsSessionPausedProvider = paused;
+        }
+    });
+
+    [Fact]
     public void TypedMatchPlaysConfiguredClipAtWpfVolumeAndStopCutsIt() => Run((engine, s, played) =>
     {
         Type(engine, "intensity"); Assert.Empty(played);

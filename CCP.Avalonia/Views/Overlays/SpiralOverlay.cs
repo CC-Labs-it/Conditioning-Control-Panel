@@ -51,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
         internal static Task? Decoding { get; private set; }
+        private static string? _wantedPath;
 
         /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
         internal static int Refreshes { get; private set; }
@@ -222,6 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _dualMonitor = s.DualMonitorEnabled;
 
             var path = SourcePath();
+            _wantedPath = path;   // #4512: a decode for any other path is stale
             if (IsUnchangedFailure(path))
             {
                 if (Windows.Count > 0) CloseWindows();
@@ -367,6 +369,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static void ResetRun()
         {
+            _wantedPath = null;
             _pulseWeight = null;
             // WPF OverlayService.cs:1562,1633,1731 retries outside the failed compositor route.
             _runId++;
@@ -430,6 +433,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var frame in frames) frame.Dispose();
                 Decoding = null;
                 if (IsReconciling) Refresh(host); // a new run may be waiting for this worker
+                return;
+            }
+            // #4512: a newer request may already be showing cached frames. Never dispose those for a stale decode.
+            if (_wantedPath != path)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                Decoding = null;   // Refresh can now start a decode for the newer path
+                if (_wantedPath != null) Refresh(host);
                 return;
             }
             if (frames.Count == 0)
