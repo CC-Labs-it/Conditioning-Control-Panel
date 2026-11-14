@@ -106,6 +106,7 @@
     <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_logo.png" Link="assets\Chaos\menu_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\recap.png" Link="assets\Chaos\recap.png"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_?_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_fx.json" Link="assets\Chaos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
              Link="assets\Chaos\boons\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
@@ -284,7 +285,7 @@
     <AvaloniaResource Include="..\Assets\fonts\fredoka\*.ttf" Link="Resources\fonts\fredoka\%(Filename)%(Extension)" />
     <!-- WPF unlock-card art convention, without staging artwork. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
-             Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+             Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
     <!-- WPF ChaosAnnouncerOverlay.cs:177-195: shared announce word-art. -->
     <Content Include="..\ConditioningControlPanel\assets\Chaos\announce\*.png" Link="assets\Chaos\announce\%(Filename)%(Extension)"
