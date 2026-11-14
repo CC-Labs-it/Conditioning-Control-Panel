@@ -132,6 +132,19 @@ public sealed class RemoteFlashSourceTests
             finally { Directory.Delete(dir, recursive: true); }
         }, clipConsumer: false);
     }
+    [Fact]
+    public Task FailedClipDownloadSkipsTheEntryAsWpf() => WithSource(async () =>
+    {
+        // WPF FlashService.cs:3982 `if (path == null) continue;`: no poster-only fallback item.
+        var urls = new List<string>();
+        RemoteFlashSource.Download = (url, _, _) => { urls.Add(url); return Task.FromResult<string?>(null); };
+        RemoteFlashSource.EnsurePrefetch();
+        await RemoteFlashSource.Prefetching;
+        Assert.Contains(Clip.Url, urls);
+        Assert.DoesNotContain(Clip.PosterUrl, urls);
+        Assert.Null(RemoteFlashSource.TryTake(new Random(1)));
+        Assert.Null(RemoteFlashSource.ClipPath(Clip.Url));
+    });
     [Theory]
     [InlineData(0)] // poster failed
     [InlineData(1)] // poster threw cancellation
