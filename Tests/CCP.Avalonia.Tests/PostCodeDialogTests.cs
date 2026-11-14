@@ -6,6 +6,7 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Startup.PostCodes;
+using ConditioningControlPanel.Services.Startup.Conversion;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -117,5 +118,35 @@ public class PostCodeDialogTests
             else Assert.Contains(box.GetLogicalDescendants().OfType<TextBlock>(), t => t.IsVisible && ((ISolidColorBrush)t.Foreground!).Color == Color.Parse("#7FD8A6"));
         }
         finally { box.Close(); CoreSettings.Current.PostGrants = grants; }
+    });
+    /// <summary>WPF main 2ecd886350: a pass code goes to the pass wire (never the post code wire), a refusal
+    /// keeps the box editable with its reason, and a redeem names the tier and its end date.</summary>
+    [Fact]
+    public Task PassCodeRedeemsOnThePassWire() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup(); var box = new PostCodeDialog(false, null, null, passDoor: true); box.Show();
+        var sent = new System.Collections.Generic.List<string>(); var postWire = 0;
+        var until = new DateTime(2027, 2, 1, 12, 0, 0, DateTimeKind.Utc);
+        var reply = new CryptoPassRedeem(false, 0, null, "already_redeemed");
+        box.Send = _ => { postWire++; return Task.FromResult(new PostCodeRedeem(false, null, null, "offline")); };
+        box.SendPass = c => { sent.Add(c); return Task.FromResult(reply); };
+        string[] Shown() => box.GetLogicalDescendants().OfType<TextBlock>().Where(t => t.IsVisible).Select(t => t.Text ?? "").ToArray();
+        try
+        {
+            Assert.Contains(Loc.Get("pass_dialog_hint"), Shown());
+            var field = box.GetLogicalDescendants().OfType<TextBox>().Single();
+            field.Text = "ccp prime 3m 7k4q x9wd m2ht abcd";
+            await box.Redeem();
+            Assert.Contains(Loc.Get("pass_redeem_used"), Shown());
+            Assert.True(field.IsEnabled);
+
+            reply = new CryptoPassRedeem(true, 2, until, null);
+            await box.Redeem();
+            Assert.Equal(new[] { "CCP-PRIME-3M-7K4Q-X9WD-M2HT-ABCD", "CCP-PRIME-3M-7K4Q-X9WD-M2HT-ABCD" }, sent);
+            Assert.Equal(0, postWire);
+            Assert.Contains(Loc.GetF("pass_redeem_ok", Loc.Get("vaultgate_tier_lab_name"), until.ToLocalTime().ToString("d MMM yyyy")), Shown());
+            Assert.False(field.IsEnabled);
+        }
+        finally { box.Close(); }
     });
 }

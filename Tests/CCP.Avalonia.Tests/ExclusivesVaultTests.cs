@@ -121,14 +121,14 @@ public sealed class ExclusivesVaultTests
                 Assert.True(fyp.BadgeFreeToday);   // tiered: the badge re-stamps, no pill
                 Assert.False(view.FindControl<Border>("SpotVeil")!.IsVisible);
 
-                // Open doors lead their shelf: today's free Haptics jumps ahead of the locked Basic doors. Graded
+                // Open doors lead their shelf: today's free Awareness jumps ahead of the locked Basic doors. Graded
                 // Intake sits in Basic since 5ce1a6cd1 and its unspent pass is an open door (WPF IsVaultDoorOpen), so
-                // it leads, then Haptics (roster order within the open half).
-                CoreEntitlement.IsFreeTodayProvider = key => key == "haptics";
+                // it leads, then Awareness (roster order within the open half). Haptics left Basic (free, main f54203401b).
+                CoreEntitlement.IsFreeTodayProvider = key => key == "awareness";
                 view.RefreshVault();
                 var shelf = view.FindControl<ItemsControl>("ExclusivesShelf")!.Items.Cast<object>().ToList();
                 Assert.Equal("gradedintake", ((ExclusiveCardRow)shelf[1]).Feature.Key);
-                Assert.Equal("haptics", ((ExclusiveCardRow)shelf[2]).Feature.Key);
+                Assert.Equal("awareness", ((ExclusiveCardRow)shelf[2]).Feature.Key);
                 var basicCards = shelf.Skip(1).TakeWhile(i => i is ExclusiveCardRow).Count();
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("premium_group_count", 2, basicCards),
                              ((ExclusiveGroupRow)shelf[0]).Count);

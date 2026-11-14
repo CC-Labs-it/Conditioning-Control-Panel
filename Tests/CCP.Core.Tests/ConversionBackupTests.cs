@@ -13,11 +13,12 @@ public sealed class ConversionBackupTests
     [InlineData(nameof(AppSettings.PatreonMember))]
     [InlineData(nameof(AppSettings.PostGrants))]
     [InlineData(nameof(AppSettings.ServerPaidUntil))]
+    [InlineData(nameof(AppSettings.PassEndsUtc))]
     public void ConversionFieldsNeverEnterAnUpload(string field)
     {
         var settings = new AppSettings
         {
-            ServerTierSeen = 1, PatreonMember = true, ServerPaidUntil = DateTime.UtcNow,
+            ServerTierSeen = 1, PatreonMember = true, ServerPaidUntil = DateTime.UtcNow, PassEndsUtc = DateTime.UtcNow,
         };
         settings.InboxStamps["welcome"] = "2026-10-30";
         settings.PostGrants["dtrh"] = "2026-11-01T00:00:00Z";

@@ -35,12 +35,13 @@ public sealed class EntitlementLapseTests
             CoreEntitlement.HasPremiumProvider = () => false;
             CoreEntitlement.IsFreeTodayProvider = k => k == "takeover";
             s = AllOn();
-            Assert.Equal(new[] { "awareness", "awareness-mode", "voice", "voice-mic", "haptics" }, EntitlementLapse.Enforce(s));
+            Assert.Equal(new[] { "awareness", "awareness-mode", "voice", "voice-mic" }, EntitlementLapse.Enforce(s));
             Assert.False(s.KeywordTriggersEnabled || s.AwarenessModeEnabled || s.SpokenMantrasEnabled
-                || s.SpeechWakeWordEnabled || s.SpeechPushToTalkEnabled || s.Haptics.Enabled);
+                || s.SpeechWakeWordEnabled || s.SpeechPushToTalkEnabled);
             Assert.True(s.AutonomyModeEnabled && s.MantraChantEnabled);   // the free day's two
+            Assert.True(s.Haptics.Enabled);   // toys are free for everyone (main f54203401b, HapticsAccess)
 
-            foreach (var key in new[] { "voice", "haptics", "awareness" })
+            foreach (var key in new[] { "voice", "awareness" })
             {
                 CoreEntitlement.IsFreeTodayProvider = k => k == key;
                 Assert.DoesNotContain(key, EntitlementLapse.Enforce(AllOn()));
@@ -48,7 +49,7 @@ public sealed class EntitlementLapseTests
 
             CoreEntitlement.IsFreeTodayProvider = null;
             s = AllOn();
-            Assert.Equal(7, EntitlementLapse.Enforce(s).Count);
+            Assert.Equal(6, EntitlementLapse.Enforce(s).Count);
             Assert.Empty(EntitlementLapse.Enforce(s));   // idempotent; never writes true
             Assert.False(s.AutonomyModeEnabled || s.MantraChantEnabled);
         }
