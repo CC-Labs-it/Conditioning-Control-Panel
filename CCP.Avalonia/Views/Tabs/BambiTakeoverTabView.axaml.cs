@@ -532,8 +532,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_isLoading) return;
             var s = CoreSettings.Current;
             var on = ChkAutonomyVoice.IsChecked == true;
-            if (s.AutonomyCanTriggerVoiceCommand == on) return;
-
+            // WPF MainWindow.Autonomy.cs:466-492 asks even when a stale saved flag is already on (#3969):
+            // the box shows off without mic consent, so comparing it to the flag would skip the prompt.
             if (on && !s.MicConsentGiven)
             {
                 var owner = TopLevel.GetTopLevel(this) as Window;

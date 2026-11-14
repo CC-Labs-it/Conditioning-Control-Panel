@@ -4,10 +4,13 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Missing: native engine mute (cross-origin frames), crash/init retry, document-created scripts,
-// media/audio-sync reporting, remote video takeover, autoplay and page fullscreen/mirroring.
+// media/audio-sync reporting, remote video takeover, playlist autoplay and page fullscreen/mirroring.
+// Watch links request video autoplay after navigation completes (#3961); WPF also has an earlier
+// DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
 
 using System;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -35,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void PanicPauseBrowserMedia()
         {
             ExitBrowserPopoutFullscreen();
+            // Invalidate a delayed autoplay before the page is asked to stop (WPF MainWindow.Browser.cs:973-990).
+            CancelVideoAutoPlay();
             if (BrowserView is not { } host) return;
             // A watch-chip request still waiting for the gate must not load after panic.
             host.CancelPendingNavigation();
@@ -45,7 +50,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
         internal void EndWebVideoTakeover()
         {
+            CancelVideoAutoPlay();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
+        }
+
+        private int _browserRequestGeneration;
+        private Action<Uri, bool>? _pendingVideoAutoPlay;
+        private WebHost? _pendingVideoHost;
+
+        // WPF MainWindow.Browser.cs:793-815 arms once before navigation, and :835-837
+        // waits 1.5 seconds before injection. WebHost has completion but no DOM-ready event.
+        internal Func<Task> BrowserAutoPlayDelay = () => Task.Delay(1500);
+
+        /// <summary>Any new navigation, panic or takeover stop drops a pending or delayed autoplay.</summary>
+        private void CancelVideoAutoPlay()
+        {
+            ++_browserRequestGeneration;
+            if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
+                _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
+            _pendingVideoHost = null;
+            _pendingVideoAutoPlay = null;
+        }
+
+        // Playlists are a separate WPF path (AutoPlayBambiCloudPlaylistAsync), not ported here.
+        private static bool WantsVideoAutoPlay(string url, WebHost host) => host.HasEngine
+            && !url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Runs the autoplay script once, after the next successful navigation completes.</summary>
+        private void ArmVideoAutoPlay(WebHost host)
+        {
+            var request = _browserRequestGeneration;
+            void OnFinished(Uri completedUrl, bool success)
+            {
+                host.NavigationFinished -= OnFinished;
+                _pendingVideoHost = null;
+                _pendingVideoAutoPlay = null;
+                if (success) _ = PlayVideoAfterLoadAsync(host, request);
+            }
+            _pendingVideoHost = host;
+            _pendingVideoAutoPlay = OnFinished;
+            host.NavigationFinished += OnFinished;
+        }
+
+        private async Task PlayVideoAfterLoadAsync(WebHost host, int request)
+        {
+            await BrowserAutoPlayDelay();
+            if (request != _browserRequestGeneration) return;
+            await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
@@ -74,8 +125,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url, bool linkNavigation = false)
+        private bool NavigateBrowser(string url, bool linkNavigation = false, bool autoPlayFullscreen = false)
         {
+            CancelVideoAutoPlay();
             try
             {
                 var host = BrowserView;
@@ -84,12 +136,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
                 // WPF MainWindow.Browser.cs:458,730: later links waiting for init use 50%.
                 host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
-                if (!host.Navigate(target)) return false;   // even when equal: WPF #867, re-click goes home
+                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) ArmVideoAutoPlay(host);
+                if (!host.Navigate(target)) { CancelVideoAutoPlay(); return false; }   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
             }
             catch (Exception ex)
             {
+                CancelVideoAutoPlay();
                 Log.Warning(ex, "Browser navigation failed for {Url}", url);
                 return false;
             }
@@ -147,12 +201,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
-        /// <param name="autoPlayFullscreen">Accepted for caller compatibility; takeover is still missing.
-        /// The browser media/takeover host is not ported. The plain
-        /// navigation still happens, which is what every caller needs first.</param>
+        /// <param name="autoPlayFullscreen">Requests video playback and fullscreen once the page has loaded.
+        /// Playlist autoplay and the browser media session are not ported.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
-            if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) return false;
+            if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) { CancelVideoAutoPlay(); return false; }
             // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
             if (BrowserView is { HasEngine: false })
@@ -162,17 +215,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.ExternalOpener.Open(url);
                 return true;
             }
-            return NavigateBrowser(url, linkNavigation: true);
+            return NavigateBrowser(url, linkNavigation: true, autoPlayFullscreen: autoPlayFullscreen);
         }
 
         internal async System.Threading.Tasks.Task<bool?> NavigateCompanionUrlAsync(string url)
         {
+            CancelVideoAutoPlay();
             if (!PrepareBrowserNavigation(url, true, true)) return false;
             var host = BrowserView;
             if (host == null) return false;
             // A companion link is a link (WPF NavigateToUrlInBrowser :729): 50% once the browser exists.
             host.SetBrowserZoom(host.BrowserZoomReady || host.BrowserZoom is not null ? 0.5 : 0.75);
-            return await host.NavigateWhenReadyAsync(new Uri(url));
+            var request = _browserRequestGeneration;
+            var result = await host.NavigateWhenReadyAsync(new Uri(url));
+            // Armed only once this request was the one that loaded: panic or a newer navigation
+            // during the gate wait bumps the generation, and a refused or cancelled wait plays nothing.
+            if (result == true && request == _browserRequestGeneration && WantsVideoAutoPlay(url, host))
+                ArmVideoAutoPlay(host);
+            return result;
         }
 
         private bool PrepareBrowserNavigation(string url, bool autoPlayFullscreen, bool userInitiated)
@@ -190,9 +250,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var hypno = BrowserPage?.FindControl<RadioButton>("RbHypnoTube");
             if (bambi != null) bambi.IsChecked = lower.Contains("bambicloud.com");
             if (hypno != null) hypno.IsChecked = lower.Contains("hypnotube.com");
-
-            if (autoPlayFullscreen)
-                Log.Warning("Auto-play/fullscreen takeover is not ported; navigating without takeover");
 
             return true;
         }

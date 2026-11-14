@@ -1,14 +1,15 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Text;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
-/// The Linux title source for <c>WindowAwarenessService</c> (WPF: user32 GetForegroundWindow +
+/// The Linux foreground source for <c>WindowAwarenessService</c> (WPF: user32 GetForegroundWindow +
 /// GetWindowText, App.xaml.cs ReadForegroundWindowTitle). Reads the EWMH root property
 /// <c>_NET_ACTIVE_WINDOW</c>, then that window's <c>_NET_WM_NAME</c> (UTF-8), falling back to
-/// <c>WM_NAME</c>.
+/// <c>WM_NAME</c>, and the same window's <c>_NET_WM_PID</c> when available.
 ///
 /// <para><b>Only X11/XWayland windows are visible to it.</b> Under a Wayland session the compositor
 /// exposes no focused-window title to clients at all, so a native Wayland window (most GTK4/Qt apps
@@ -43,40 +44,63 @@ internal static class X11ActiveWindow
 
     private static IntPtr _display;
     private static bool _tried;
-    private static IntPtr _root, _active, _netWmName, _utf8, _wmName;
+    private static IntPtr _root, _active, _netWmName, _utf8, _wmName, _netWmPid, _cardinal;
 
     /// <summary>Set once by the test assembly's module initializer: no test may read the real desktop.</summary>
     internal static bool Disabled;
 
-    public static string ReadTitle()
+    public static string ReadTitle() => ReadForeground().Title;
+
+    // WPF AwarenessProbes.cs:72-90 reads title and process from the same foreground handle.
+    // X11 exposes the client PID on that window; missing or stale PIDs leave the process unknown.
+    internal static (string Title, string Process) ReadForeground()
     {
-        if (Disabled) return "";
+        if (Disabled) return ("", "");
         try
         {
             if (!_tried)
             {
                 _tried = true;
-                if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))) return "";
+                if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))) return ("", "");
                 _display = XOpenDisplay(IntPtr.Zero);
-                if (_display == IntPtr.Zero) return "";
+                if (_display == IntPtr.Zero) return ("", "");
                 _root = XDefaultRootWindow(_display);
                 _active = XInternAtom(_display, "_NET_ACTIVE_WINDOW", false);
                 _netWmName = XInternAtom(_display, "_NET_WM_NAME", false);
                 _utf8 = XInternAtom(_display, "UTF8_STRING", false);
                 _wmName = XInternAtom(_display, "WM_NAME", false);
+                _netWmPid = XInternAtom(_display, "_NET_WM_PID", false);
+                _cardinal = XInternAtom(_display, "CARDINAL", false);
             }
-            if (_display == IntPtr.Zero) return "";
+            if (_display == IntPtr.Zero) return ("", "");
 
             var previous = XSetErrorHandler(IgnoreErrors);
             try
             {
                 var window = ReadWindow(_root, _active);
-                if (window == IntPtr.Zero) return "";
-                return ReadString(window, _netWmName, _utf8) ?? ReadString(window, _wmName, IntPtr.Zero /* AnyPropertyType */) ?? "";
+                if (window == IntPtr.Zero) return ("", "");
+                var title = ReadString(window, _netWmName, _utf8) ?? ReadString(window, _wmName, IntPtr.Zero /* AnyPropertyType */) ?? "";
+                return (title, ReadProcessName(window));
             }
             finally { XRestoreErrorHandler(previous); }
         }
-        catch { return ""; }   // no libX11 on this machine: nothing to observe
+        catch { return ("", ""); }   // no libX11 on this machine: nothing to observe
+    }
+
+    private static string ReadProcessName(IntPtr window)
+    {
+        if (XGetWindowProperty(_display, window, _netWmPid, 0, 1, false, _cardinal,
+                out var actualType, out var format, out var n, out _, out var prop) != 0 || prop == IntPtr.Zero) return "";
+        try
+        {
+            if (actualType != _cardinal || format != 32 || n != 1) return "";
+            var pid = Marshal.ReadIntPtr(prop).ToInt64(); // Xlib stores format-32 values as longs
+            if (pid <= 0 || pid > int.MaxValue) return "";
+            using var process = Process.GetProcessById((int)pid);
+            return process.ProcessName ?? "";
+        }
+        catch { return ""; }
+        finally { XFree(prop); }
     }
 
     private static IntPtr ReadWindow(IntPtr window, IntPtr property)

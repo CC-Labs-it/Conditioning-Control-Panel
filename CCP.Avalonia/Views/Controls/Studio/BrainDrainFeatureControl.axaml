@@ -85,7 +85,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ONE dense controls card. Both sliders keep their EXPLICIT 1-100 range: the WPF
+                <!-- ONE dense controls card. Both sliders keep their EXPLICIT 0-100 range (WPF): the WPF
                      default Maximum=10 silently clamped these percent values on the settings
                      round-trip, and the range is what the read-outs assume. -->
                 <Border Theme="{StaticResource SettingCardStyle}">
