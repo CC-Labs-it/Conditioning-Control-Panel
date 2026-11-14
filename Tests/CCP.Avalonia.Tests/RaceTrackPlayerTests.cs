@@ -210,6 +210,39 @@ public sealed class RaceTrackPlayerTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>restack fixw4d: Load starts the length parse without waiting for it, and a track change or a
+    /// teardown right after used to free the media while libvlc's preparser still held it (the fixw4c heap
+    /// corruption class). The release now waits for the parse, resumed off libvlc's thread; a file libvlc
+    /// cannot parse and a real one both survive back-to-back loads.</summary>
+    [Fact]
+    public async System.Threading.Tasks.Task UnloadWaitsForTheLengthParse()
+    {
+        NeedVlc();
+        var dir = Directory.CreateTempSubdirectory("ccp-race-unload-").FullName;
+        var real = Path.Combine(dir, "short.wav");
+        File.WriteAllBytes(real, Wav(16000, 1, new short[16000]));
+        var bogus = Path.Combine(dir, "bogus.mp4");
+        File.WriteAllBytes(bogus, new byte[] { 0, 0, 0, 8, (byte)'f', (byte)'t', (byte)'y', (byte)'p' });
+        var parseField = typeof(RaceTrackPlayer).GetField("_parse", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        try
+        {
+            for (int i = 0; i < 20; i++)
+            {
+                var player = new RaceTrackPlayer();
+                player.Load(i % 2 == 0 ? bogus : real);
+                var parse = (System.Threading.Tasks.Task)parseField.GetValue(player)!;
+                player.Load(real);           // a track change mid-parse
+                var first = player.Released;
+                var parse2 = (System.Threading.Tasks.Task)parseField.GetValue(player)!;
+                player.Dispose();            // and a teardown mid-parse
+                await first.WaitAsync(TimeSpan.FromSeconds(15));
+                await player.Released.WaitAsync(TimeSpan.FromSeconds(15));
+                Assert.True(parse.IsCompleted && parse2.IsCompleted, "the media is freed only after its parse settled");
+            }
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     private sealed class SyncProgress(Action<double> report) : IProgress<double>
     {
         public void Report(double value) { lock (this) report(value); }

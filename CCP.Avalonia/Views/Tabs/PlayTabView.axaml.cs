@@ -116,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ("PlayBackRoomHeroPlate", "features/backroom.png", Stretch.UniformToFill, null),
             ("PlayDtrhHeroPlate", "features/dtrh.png", Stretch.UniformToFill, null),
             ("PlayArcademyHeroPlate", "features/arcademy.png", Stretch.UniformToFill, null),
+            ("PlayRacingThoughtsClassicHeroPlate", "features/race_classic.png", Stretch.UniformToFill, null),
             ("PlayRacingThoughtsHeroPlate", "features/race.png", Stretch.UniformToFill, null),
             ("PlayWebAppHeroPlate", "billboard/webapp.png", Stretch.UniformToFill, null),
             ("PlayGoonHeroPlate",     "features/goon_game_tile.png",    Stretch.UniformToFill, 512),
@@ -309,6 +310,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // WPF PlayTabView.Cards.cs:59-66 -> LaunchExclusiveGame: sign-in first, then DtRH's Basic gate, before any focus.
         private void BtnPlayDtrh_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame(Games.GameWindow.DtrhId);
 
+        private void BtnPlayRacingThoughtsClassic_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("raceclassic");
         private void BtnPlayRacingThoughts_Click(object? sender, RoutedEventArgs e) => Owner?.LaunchPlayLauncherGame("race");
 
         // ---- TOGETHER --------------------------------------------------------------------

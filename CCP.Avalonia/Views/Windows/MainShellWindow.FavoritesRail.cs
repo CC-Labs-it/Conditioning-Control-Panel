@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow/MainWindow.FavoritesRail.cs:78-79, including hostless cards.
             ("BtnPlayBackRoom", "game.backroom"), ("BtnPlayDtrh", "game.dtrh"),
             ("BtnPlayArcademy", "game.arcademy"), ("BtnPlayRacingThoughts", "game.race"),
+            ("BtnPlayRacingThoughtsClassic", "game.raceclassic"),
         };
 
         /// <summary>WPF InitFavoritesRail (MainWindow.xaml.cs:3501): pin menus, first paint, and a

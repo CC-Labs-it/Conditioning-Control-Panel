@@ -72,9 +72,11 @@ internal static class FunnelPageMessage
     {
         try
         {
-            if (AccountSeed.Patreon is { IsAuthenticated: true } patreon) await patreon.ValidateSubscriptionAsync(forceRefresh: true);
+            Task validation = AccountSeed.Patreon is { IsAuthenticated: true } patreon
+                ? Task.Run(() => patreon.ValidateSubscriptionAsync(forceRefresh: true)) : Task.CompletedTask;
             await AccountSeed.LoadProfileAsync();   // offers the server tier rise (EntitlementTierRule.ApplyRise)
             if (CoreAccount.HasPremiumAccess) CheckoutWatch.Disarm();   // WPF EntitlementTierSync.cs:90
+            await validation;
         }
         catch (Exception ex) { Log.Debug("[Entitlement] checkout refresh failed: {Error}", ex.Message); }
     }

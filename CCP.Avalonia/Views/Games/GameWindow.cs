@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF #3126: the 2D bridge remains, but no production door opens it.
             ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
+            ["raceclassic"] = new("raceclassic", "launcher_game_raceclassic_title", "dtrh/race.html", RaceGate),
             ["race"] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Basic door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
@@ -100,7 +101,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
-            return spec.Id == GlassroadId ? LaunchRacingThoughts() : LaunchWindow(spec, panel: panel);
+            return spec.Id == GlassroadId ? LaunchRacingThoughts() :
+                spec.Id == "raceclassic" ? (PassesGate(spec) ? LaunchWindow(spec, gated: true, panel: panel) : null) : LaunchWindow(spec, panel: panel);
         }
 
         /// <summary>A friend's Racing Thoughts invite: the same race gate and window, plus the room to join
@@ -485,7 +487,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.CloseFor(PrizeCounterRules.ClosePanic); }
+                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else if (w.IsRace) w.CloseRaceForPanic(); else w.CloseFor(PrizeCounterRules.ClosePanic); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }

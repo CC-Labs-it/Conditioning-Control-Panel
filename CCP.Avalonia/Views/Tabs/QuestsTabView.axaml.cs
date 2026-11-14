@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeComponent();
 
             _dailyCards = new[] { DailyCard0, DailyCard1, DailyCard2 };
+            InitQuestDoors();
             InitDepth();
             RoadmapScrollContainer.TemplateApplied += (_, _) => _rescanParticles = true; // QuestsTabView.Fx.cs
 

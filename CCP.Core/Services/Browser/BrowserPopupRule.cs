@@ -15,16 +15,25 @@ public static class BrowserPopupRule
         "ads.exoclick.com", "ero-advertising.com", "eroads.com", "traffichaus.com", "awempire.com", "aweptjmp.com", "contentabc.com", "malware-site.com", "adexchangegate.com", "adexchangetracker.com",
         "newrelic.com", "nr-data.net", "onetrust.com", "cookielaw.org", "trustarc.com", "evidon.com", "bounceexchange.com", "bouncex.net"
     };
+    internal static System.Collections.Generic.IReadOnlyList<string> BlockedDomains => Array.AsReadOnly(_blockedDomains);
+
+    internal static bool IsPartner(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var page)
+        && (page.Host.Equals("hypnotube.com", StringComparison.OrdinalIgnoreCase)
+            || page.Host.EndsWith(".hypnotube.com", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsBlockedHost(string host)
+    {
+        foreach (var domain in _blockedDomains)
+            if (host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     public static bool ShouldBlock(string? currentUrl, string targetUrl)
     {
-        if (Uri.TryCreate(currentUrl, UriKind.Absolute, out var page)
-            && (page.Host.Equals("hypnotube.com", StringComparison.OrdinalIgnoreCase)
-                || page.Host.EndsWith(".hypnotube.com", StringComparison.OrdinalIgnoreCase)))
-            return false;
+        if (IsPartner(currentUrl)) return false;
         if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var target)) return false;
-        foreach (var domain in _blockedDomains)
-            if (target.Host.Equals(domain, StringComparison.OrdinalIgnoreCase)
-                || target.Host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)) return true;
+        if (IsBlockedHost(target.Host)) return true;
         var lower = targetUrl.ToLowerInvariant();
         return lower.Contains("/ads/") || lower.Contains("/ad/") || lower.Contains("doubleclick")
             || lower.Contains("googlesyndication") || lower.Contains("/popup")
