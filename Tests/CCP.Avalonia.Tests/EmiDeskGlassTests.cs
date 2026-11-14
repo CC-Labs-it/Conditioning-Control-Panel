@@ -37,6 +37,7 @@ public class EmiDeskGlassTests
         var section = new EmiDeskSettingsSection();
         var host = new Window { Content = section };
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow();
         try
         {
@@ -78,7 +79,7 @@ public class EmiDeskGlassTests
         finally
         {
             EmiLineEngine.Instance.ResetForTests();
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -114,6 +115,7 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow();
         try
         {
@@ -140,7 +142,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -159,6 +161,7 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow();
         try
         {
@@ -180,7 +183,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -199,6 +202,7 @@ public class EmiDeskGlassTests
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow();
         try
         {
@@ -227,7 +231,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -249,6 +253,7 @@ public class EmiDeskGlassTests
         var time = new SteppedTime();
         BeatLoop.Time = time;
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         EmiLineEngine.Instance.ResetForTests();
         var desk = new EmiDeskWindow();
         try
@@ -281,7 +286,7 @@ public class EmiDeskGlassTests
         finally
         {
             EmiLineEngine.Instance.ResetForTests();
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             BeatLoop.Time = oldTime; CoreSettings.ServiceProvider = oldSettings;
         }
@@ -300,6 +305,7 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var engine = EmiLineEngine.Instance;
         engine.ResetForTests();
         var desk = new EmiDeskWindow();
@@ -322,7 +328,7 @@ public class EmiDeskGlassTests
         finally
         {
             engine.ResetForTests();
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = oldSettings;
         }
@@ -342,6 +348,7 @@ public class EmiDeskGlassTests
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldPick = EmiDeskWindow.GlassPick; EmiDeskWindow.GlassPick = _ => "offair";
+        var oldRoll = EmiDeskWindow.GlassRollWrong; EmiDeskWindow.GlassRollWrong = () => false; // the 1-in-40 wrong channel rides exits
         var desk = new EmiDeskWindow();
         try
         {
@@ -378,7 +385,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassPick = oldPick;
+            EmiDeskWindow.GlassPick = oldPick; EmiDeskWindow.GlassRollWrong = oldRoll;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language); CoreSettings.ServiceProvider = oldSettings;
         }
