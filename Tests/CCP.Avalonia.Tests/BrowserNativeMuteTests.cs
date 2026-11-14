@@ -1,24 +1,43 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+// Restack b175 (#3723): native engine mute first, page script as the fallback, reapplied to each new engine.
+// The tests use their own SettingsService and put settings.json back: the toolbar click saves.
 public sealed class BrowserNativeMuteTests
 {
+    private static Task WithSettings(Func<SettingsService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+        var saved = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        try { await body(service); }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldProvider;
+            if (saved is null) File.Delete(settingsPath); else File.WriteAllBytes(settingsPath, saved);
+        }
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public Task ToolbarUsesNativeMuteEvenWhenPageScriptFails(bool initial) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ToolbarUsesNativeMuteEvenWhenPageScriptFails(bool initial) => WithSettings(async service =>
     {
-        ChatThresholdLinksTests.Setup();
-        CoreSettings.Current.BrowserVideoMuted = initial;
+        service.Current.BrowserVideoMuted = initial;
         var tab = new SettingsTabView();
         var host = tab.FindControl<WebHost>("BrowserWebHost")!;
         var calls = new List<bool>();
@@ -26,15 +45,14 @@ public sealed class BrowserNativeMuteTests
         host.ScriptInvoker = _ => throw new InvalidOperationException("page script unavailable");
         tab.FindControl<Button>("BtnMuteBrowser")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(new[] { !initial }, calls);
-        Assert.Equal(!initial, CoreSettings.Current.BrowserVideoMuted);
+        Assert.Equal(!initial, service.Current.BrowserVideoMuted);
         Assert.True(await host.SetMutedAsync(initial));
     });
 
     [Fact]
-    public Task SavedMuteIsReappliedBeforeEveryNewEngineCanNavigate() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task SavedMuteIsReappliedBeforeEveryNewEngineCanNavigate() => WithSettings(async service =>
     {
-        ChatThresholdLinksTests.Setup();
-        CoreSettings.Current.BrowserVideoMuted = true;
+        service.Current.BrowserVideoMuted = true;
         var tab = new SettingsTabView(); // seeds mute while there is no engine
         var host = tab.FindControl<WebHost>("BrowserWebHost")!;
         var calls = new List<bool>();
