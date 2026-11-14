@@ -56,16 +56,123 @@ public sealed class KeywordAudioRuntimeTests
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             CoreSession.IsEngineRunningProvider = () => true;
             CoreSession.IsSessionRunningProvider = () => false;
+            KeywordTriggerHead.Engine.ResetCooldownsForTest();   // the shared engine outlives each test (Stop keeps OCR guards)
             engine.Start();
             await body(engine, s, played);
         }
         finally
         {
-            engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
+            engine.Stop(); KeywordTriggerHead.Stop(); KeywordTriggerHead.Engine.ResetCooldownsForTest(); File.Delete(file);
             KeywordTriggerHead.Engine.Now = singletonClock;
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = saved;
+        }
+    });
+
+    // restack b220 (#4299, Mich): the OCR consumer and scan lifecycle.
+    [Fact] // WPF KeywordTriggerService.cs:193-200,712-739,842-862,913-943
+    public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndStopAndClearsOnScopeLoss() => Run((engine, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 2; s.OcrHighlightAll = true;
+            s.AwarenessLoopProtectionEnabled = false;
+            var words = new[] { new ScreenOcrService.Word("sit.", new System.Drawing.Rectangle(120, 200, 30, 20)) };
+            var fired = 0; engine.TriggerFired += _ => fired++;
+            Assert.True(engine.CheckOcrWords(words)); Assert.Equal(0, fired);
+            CoreEntitlement.HasPremiumProvider = () => false;
+            Assert.False(engine.CheckOcrWords(words));   // WPF :719 returns without clearing the streak
+            CoreEntitlement.HasPremiumProvider = () => true;
+            Assert.False(engine.CheckOcrWords(words)); Assert.Equal(1, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 10);   // cooldowns clamp to at least 1 s
+            s.KeywordTriggerIgnoreOwnFocus = true;
+            Assert.False(engine.CheckOcrWords(words, "ccp", true));
+            Assert.True(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(1, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(2, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 20);
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>(), "editor", false);
+            Assert.True(engine.CheckOcrWords(words, "editor", false));
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(3, fired);
+            engine.Stop(); engine.Start();
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 30);   // past every cooldown
+            Assert.False(engine.CheckOcrWords(words, "editor", false)); Assert.Equal(3, fired);   // still guarded
+            Assert.Equal("OCR", engine.GetRecentFires()[0].Source);
+        }
+        finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:774-784,999-1154
+    public void OcrWholeWordsPhrasesAndRegexMatchWithoutSubstrings() => Run((engine, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.OcrHighlightAll = true;
+            s.AwarenessLoopProtectionEnabled = false;
+            var fired = 0; engine.TriggerFired += _ => fired++;
+            ScreenOcrService.Word W(string text, int x) => new(text, new System.Drawing.Rectangle(x, 0, 20, 10));
+            engine.CheckOcrWords([W("sitting", 0)]); Assert.Equal(0, fired);
+            s.KeywordTriggers[0].Keyword = "good boy";
+            engine.CheckOcrWords([W("Good,", 0), W("boy!", 30)]); Assert.Equal(1, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 10);
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>());
+            s.KeywordTriggers[0].MatchType = KeywordMatchType.Regex;
+            s.KeywordTriggers[0].Keyword = "good\\s+boy";
+            engine.CheckOcrWords([W("good", 0), W("boy", 30)]); Assert.Equal(2, fired);
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>());
+            s.KeywordTriggers[0].Keyword = "[";
+            engine.CheckOcrWords([W("good", 0)]); Assert.Equal(2, fired);
+        }
+        finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessLoopProtectionEnabled) = saved; }
+    });
+
+    [Fact] // WPF MainWindow.Awareness.cs:414-428,461-468, Patreon.cs:190; ScreenOcrService.cs:143-198
+    public Task AwarenessSwitchesDriveTheOcrSourceIntoTheConsumer() => RunAsync(async (_, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs, s.AwarenessLoopProtectionEnabled);
+        var realNow = KeywordTriggerHead.Engine.Now;
+        var scans = 0;
+        var clock = new DateTime(2026, 10, 14, 12, 0, 0);
+        KeywordTriggerHead.Engine.Now = () => clock;
+        KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>(
+            [new("sit", new System.Drawing.Rectangle(500, 500, 20, 10))]); };
+        try
+        {
+            s.KeywordTriggersEnabled = false; s.ScreenOcrEnabled = false;
+            s.OcrConfirmationScans = 1; s.OcrHighlightAll = true; s.AwarenessIgnoreOwnUi = true;
+            s.ScreenOcrIntervalMs = 10000;   // the real timer must not tick between the manual ticks
+            s.AwarenessLoopProtectionEnabled = false;   // no echo mute: only the position guard keeps it quiet
+            var view = new AwarenessTabView();
+            var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+            var ocr = view.FindControl<CheckBox>("ChkAwarenessOcr")!;
+            master.IsChecked = true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(0, scans);   // OCR switch off
+            ocr.IsChecked = true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            Assert.Single(played);
+            Assert.Equal("OCR", KeywordTriggerHead.Engine.GetRecentFires()[0].Source);
+            CoreEntitlement.HasPremiumProvider = () => false;   // lapse: the screen is not even captured
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            clock = clock.AddSeconds(10);   // past every cooldown
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+            Assert.Single(played);   // the fired position stays guarded while it is on screen
+            master.IsChecked = false;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+            clock = clock.AddSeconds(10);
+            master.IsChecked = true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(3, scans);
+            ocr.IsChecked = false;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(3, scans);
+            Assert.Equal(1, played.Count(p => p.Path != "stopped"));   // the guard survived the restart (WPF :193-200)
+        }
+        finally
+        {
+            KeywordTriggerHead.OcrSource = null; KeywordTriggerHead.Engine.Now = realNow;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.AwarenessIgnoreOwnUi, s.ScreenOcrIntervalMs, s.AwarenessLoopProtectionEnabled) = saved;
         }
     });
 
@@ -167,6 +274,63 @@ public sealed class KeywordAudioRuntimeTests
                 try { await unducked.Task.WaitAsync(TimeSpan.FromSeconds(5)); } catch (TimeoutException) { }
             engine.StopAudio();
             (CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, s.AudioDuckingEnabled) = old;
+        }
+    });
+
+    // restack b220 (#4235, Mich): WPF DispatchActionAsync :1638 plays every audio action of one trigger in order.
+    [Fact]
+    public void SingleTriggerDispatchesBothAudioActionsInOrder() => Run((engine, s, played) =>
+    {
+        var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+        s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = first.FilePath, Volume = 100, DuckSystemAudio = false });
+        Type(engine, "sit");
+        Assert.Equal(new[] { 0.125f, (float)Math.Pow(0.5, 1.5) }, played.Where(p => p.Path != "stopped").Select(p => p.Volume));
+        Assert.Equal(new[] { first.FilePath, "stopped", first.FilePath }, played.Select(p => p.Path));   // the second replaces the first
+    });
+
+    // restack b220 (#4235): one duck over the response (WPF :1594-1628). The second clip ducks before the
+    // replaced first clip lets go, so the shared count never reaches zero between them; the last clip's duck
+    // ends 500 ms after it finishes, and a stop releases it at once.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task BatchDuckSurvivesClipReplacementAndReleasesAfterTheLastClip(bool firstDuck, bool secondDuck) => RunAsync(async (engine, s, played) =>
+    {
+        var saved = (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, CoreAudio.PlayStoppableProvider);
+        var finishes = new List<Action>();
+        var calls = new List<string>();
+        var tail = new TaskCompletionSource();
+        var tailStarted = new TaskCompletionSource();
+        var count = 0;
+        try
+        {
+            s.AudioDuckingEnabled = true;
+            CoreAudio.DuckProvider = _ => calls.Add("duck:" + ++count);
+            CoreAudio.DuckGenerationProvider = () => 42;
+            CoreAudio.UnduckProvider = gen => calls.Add($"unduck:{gen}:{--count}");
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, finish) => { finishes.Add(finish!); return () => calls.Add("stop"); };
+            engine.Delay = (ms, _) => { Assert.Equal(500, ms); tailStarted.TrySetResult(); return tail.Task; };
+            var first = (PlayAudioAction)s.KeywordTriggers[0].Actions[0];
+            first.DuckSystemAudio = firstDuck;
+            s.KeywordTriggers[0].Actions.Add(new PlayAudioAction { FilePath = first.FilePath, DuckSystemAudio = secondDuck });
+            Type(engine, "sit");
+            Assert.Equal(2, finishes.Count);
+            Assert.Equal(new[] { "duck:1", "duck:2", "stop", "unduck:42:1" }, calls);   // never back to zero
+            finishes[1]();
+            await tailStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(4, calls.Count);
+            tail.SetResult();
+            for (var until = DateTime.UtcNow.AddSeconds(5); calls.Count < 6 && DateTime.UtcNow < until;)
+                await Task.Delay(10);
+            Assert.Equal(new[] { "duck:1", "duck:2", "stop", "unduck:42:1", "stop", "unduck:42:0" }, calls);
+            engine.StopAudio();
+            Assert.Equal(6, calls.Count);   // nothing left to release
+        }
+        finally
+        {
+            tail.TrySetResult();
+            engine.StopAudio();
+            (s.AudioDuckingEnabled, CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider, CoreAudio.PlayStoppableProvider) = saved;
         }
     });
 
