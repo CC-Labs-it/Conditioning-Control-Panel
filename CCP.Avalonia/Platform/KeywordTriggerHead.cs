@@ -211,7 +211,7 @@ internal static class KeywordTriggerHead
             uint processId = 0;
             // WPF KeywordTriggerService.cs:618-622: sample even in Everywhere mode, at most every 2 s.
             var needsForeground = Engine.NeedsForeground(DateTime.UtcNow);
-            if (needsForeground) GetWindowThreadProcessId(GetForegroundWindow(), out processId);
+            if (needsForeground && OperatingSystem.IsWindows()) GetWindowThreadProcessId(GetForegroundWindow(), out processId);   // user32 only exists there (as DeliverOcr)
             Dispatcher.UIThread.Post(() =>
             {
                 if (generation != Volatile.Read(ref _generation)) return;
@@ -302,10 +302,13 @@ internal sealed class KeywordAudioRuntime
     internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }   // WPF :193-200 keeps the OCR guards
     internal void ClearInput() => _input.Clear();
 
+    internal static bool ShouldListen(bool active, bool disposed, bool sessionPaused)
+        => active && !disposed && !sessionPaused;
+
     private bool Accept(string? process, bool own)
     {
         var s = CoreSettings.Current;
-        if (!IsActive || !s.KeywordTriggersEnabled ||
+        if (!ShouldListen(IsActive, false, CoreSession.IsSessionRunning && CoreSession.IsSessionPaused) || !s.KeywordTriggersEnabled ||
             !HasAccess) return false;
         RememberSeenApp(process, own);
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;

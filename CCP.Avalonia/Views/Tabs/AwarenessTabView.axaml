@@ -132,6 +132,8 @@
                             <TextBlock x:Name="TxtAwarenessStatus" Text="Off"
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock Text="{loc:Str label_awareness_start_on_launch}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <CheckBox x:Name="ChkAwarenessStartOnLaunch" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center" Margin="0,0,12,0" IsCheckedChanged="ChkAwarenessStartOnLaunch_Changed"/>
                             <Border CornerRadius="99" Background="#8C131320" VerticalAlignment="Center"
                                     BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1"
                                     Padding="12,5,12,5">

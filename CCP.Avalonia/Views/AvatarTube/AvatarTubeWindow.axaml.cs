@@ -1206,16 +1206,20 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true,
                                    string? phraseAudioPath = null, bool barkVoice = false,
-                                   string? mood = null, Action? onSpoken = null, bool unprompted = false)
+                                   string? mood = null, Action? onSpoken = null, bool unprompted = false,
+                                   [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "",
+                                   [System.Runtime.CompilerServices.CallerMemberName] string callerMember = "")
         {
             // onSpoken: fires once her voiced clip has finished (at once when nothing plays) - the
             // spoken mantra holds the mic shut on it so the recognizer never hears her (SpokenMantra).
             if (_isPlayingUninterruptibleClip) { onSpoken?.Invoke(); return; }
+            var who = ConditioningControlPanel.Services.Audio.RecentSounds.DuckCaller(callerFile, callerMember);
             RunOnAvatar(() =>
             {
+                Log.Debug("Priority speech, queue cleared ({Chars} chars, from {Caller}, unprompted={Unprompted})", (text ?? "").Length, who, unprompted);
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted, soundCaller: who);
             });
         }
 
@@ -1255,7 +1259,31 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             if (_idleTimer != null) _idleTimer.Interval = TimeSpan.FromSeconds(CoreSettings.Current.IdleGiggleIntervalSeconds);
             ClearStaleSpeechLatch();   // WPF Speech.cs:1612-1614: the one beat still running once she is wedged
-            if (IsSpeechReady()) Platform.BarkHead.Engine?.DispatchIdle();
+            if (!IsSpeechReady()) return;
+            if (!ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced() && TrySpeakOwnVoiceLine()) return;
+            Platform.BarkHead.Engine?.DispatchIdle();
+        }
+
+        private string? _lastOwnVoiceLine;
+
+        /// <summary>WPF Speech.cs:1880: speak an own clip as an unprompted voiced line.</summary>
+        internal bool TrySpeakOwnVoiceLine()
+        {
+            var phrases = CoreSettings.Current.CustomCompanionPhrases;
+            var clips = ConditioningControlPanel.Services.Companion.IdleVoiceLines.OwnClips(phrases, CompanionPhrase.DefaultAudioFolder, File.Exists);
+            if (!ConditioningControlPanel.Services.Companion.IdleVoiceLines.TakesTurn(clips.Count,
+                    _random.Next(ConditioningControlPanel.Services.Companion.IdleVoiceLines.OneIn))) return false;
+            var path = ConditioningControlPanel.Services.Companion.IdleVoiceLines.Pick(clips, _lastOwnVoiceLine, _random);
+            if (path == null) return false;
+            var file = System.IO.Path.GetFileName(path);
+            var text = phrases.FirstOrDefault(p => p?.Category == ConditioningControlPanel.Services.CompanionPhraseIds.VoiceLineCategory
+                && string.Equals(p.AudioFileName, file, StringComparison.OrdinalIgnoreCase))?.Text;
+            text = ConditioningControlPanel.Services.Companion.IdleVoiceLines.ResolvePlaceholder(text,
+                App.WindowAwareness.CurrentServiceName, App.WindowAwareness.CurrentDetectedName);
+            if (string.IsNullOrWhiteSpace(text)) text = System.IO.Path.GetFileNameWithoutExtension(path);
+            _lastOwnVoiceLine = path;
+            Giggle(text, unprompted: true, phraseAudioPath: path, barkVoice: true);
+            return true;
         }
 
         /// <summary>WPF ClearStaleSpeechLatch (Speech.cs:3070): drop a latch nothing can lower any more.
@@ -1301,7 +1329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null)
         {
             ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
@@ -1355,7 +1383,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     {
                         // WPF Speech.cs:546-552: a non-AI bubble without its own sound takes the fallback cue.
                         if (SpeechAudioPlayer is { } player) player(playSound, phraseAudioPath, barkVoice, spoken);
-                        else PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, fallbackCue: preset && !trigger);
+                        else PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, fallbackCue: preset && !trigger, soundCaller: soundCaller);
                         spokenHandled = true;
                     }
 
@@ -1528,7 +1556,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 App.Sessions?.IsPaused == true || CoreSession.IsSessionPaused, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
                 ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
 
-        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null, bool fallbackCue = false)
+        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null, bool fallbackCue = false, string? soundCaller = null)
         {
             var handedOff = false;
             try
@@ -1541,7 +1569,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 {
                     if (barkVoice && CoreSettings.Current.CompanionVoiceLinesMuted)
                     {
-                        PlayGiggleSound(curved);
+                        PlayGiggleSound(curved, soundCaller);
                         return;
                     }
                     if (!File.Exists(phraseAudioPath)) return;
@@ -1554,7 +1582,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     return;
                 }
 
-                if (playSound) PlayGiggleSound(curved);
+                if (playSound) PlayGiggleSound(curved, soundCaller);
                 else if (fallbackCue) PlayFallbackBubbleSound(curved);
             }
             catch (Exception ex) { Log.Debug("AvatarTube speech audio failed: {Error}", ex.Message); }
@@ -1580,7 +1608,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (File.Exists(path)) CoreAudio.PlayOneShot(path, curvedVolume * 0.5f, "bubble-fallback");
         }
 
-        private void PlayGiggleSound(float curvedVolume)
+        private void PlayGiggleSound(float curvedVolume, string? soundCaller = null)
         {
             if (CoreMods.ActiveModId.Contains("bambi", StringComparison.OrdinalIgnoreCase)) return;
 
@@ -1589,7 +1617,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                        ?? System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", name);
             if (!File.Exists(path)) return;
             _stopSpoken();   // as above: one clip at a time, so panic's single stop reaches it
-            _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, "giggle");
+            _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, string.IsNullOrEmpty(soundCaller) ? "giggle" : "giggle (" + soundCaller + ")");
         }
 
         // =========================================================================================

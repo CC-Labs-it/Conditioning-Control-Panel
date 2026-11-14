@@ -31,6 +31,7 @@ public sealed class PlayWallTests
     [Theory]
     [InlineData("BtnPlayDtrh", "dtrh")]
     [InlineData("BtnPlayRacingThoughts", "glassroad")]
+    [InlineData("BtnPlayRacingThoughtsClassic", "raceclassic")]
     public void AvailableGameCardUsesTheExistingLauncherDoor(string buttonName, string gameId)
     {
         AvaloniaTestDispatcher.Run(() =>
@@ -211,7 +212,7 @@ public sealed class PlayWallTests
             }
             var games = (Panel)C<Grid>("SlotBackRoom").Parent!;
             Assert.Equal(3, ((global::Avalonia.Controls.Primitives.UniformGrid)games).Columns);
-            Assert.Equal(new[] { "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp" },
+            Assert.Equal(new[] { "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotRacingThoughtsClassic", "SlotWebApp" },
                 games.Children.Skip(4).Select(c => c.Name));
             foreach (var name in new[] { "BackRoom", "Dtrh", "Arcademy", "RacingThoughts", "WebApp" })
                 Assert.NotNull(C<Border>("Play" + name + "HeroPlate").Background);
@@ -444,7 +445,7 @@ public sealed class PlayWallTests
                 var grid = C<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid");
                 Assert.Equal(3, grid.Columns);
                 Assert.Equal(new[] { "SlotBreakoutDemo", "SlotBreakout", "SlotGoon", "SlotPieceByPiece", "SlotBackRoom",
-                    "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp" }, grid.Children.Select(c => c.Name));
+                    "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotRacingThoughtsClassic", "SlotWebApp" }, grid.Children.Select(c => c.Name));
                 var wall = (StackPanel)C<ScrollViewer>("WallScroll").Content!;
                 Assert.Equal(Loc.Get("pl6_play_subtitle"), Assert.IsType<TextBlock>(wall.Children[0]).Text);
 
@@ -653,6 +654,7 @@ public sealed class PlayWallTests
     [InlineData("PlayBackRoomHeroPlate", "features/backroom.png")]
     [InlineData("PlayDtrhHeroPlate", "features/dtrh.png")]
     [InlineData("PlayArcademyHeroPlate", "features/arcademy.png")]
+    [InlineData("PlayRacingThoughtsClassicHeroPlate", "features/race_classic.png")]
     [InlineData("PlayRacingThoughtsHeroPlate", "features/race.png")]
     [InlineData("PlayWebAppHeroPlate", "billboard/webapp.png")]
     public void AddedGameArtUsesModOverrides_OnAttachAndModChange(string plate, string art)
@@ -687,6 +689,7 @@ public sealed class PlayWallTests
     [Theory]
     [InlineData("BtnPlayDtrh", "game.dtrh")]
     [InlineData("BtnPlayRacingThoughts", "game.race")]
+    [InlineData("BtnPlayRacingThoughtsClassic", "game.raceclassic")]
     public void GameCardsPinAndUnpinThroughTheirContextMenu(string buttonName, string id)
     {
         AvaloniaTestDispatcher.Run(() =>
@@ -720,6 +723,7 @@ public sealed class PlayWallTests
                 menu.Close();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(new[] { id }, settings.RailFavorites);
+                Assert.Equal(id.Substring("game.".Length), SettingsPaletteIndex.All.Single(e => e.Id == id).GameId);
 
                 button.RaiseEvent(new ContextRequestedEventArgs());
                 Dispatcher.UIThread.RunJobs();

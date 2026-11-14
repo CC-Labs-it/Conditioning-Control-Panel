@@ -799,7 +799,7 @@ public sealed partial class GameWindowTests
         GameWindow.CloseAllForPanic();
         Assert.Empty(GameWindow.OpenWindowsForTests());
     });
-    private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -944,14 +944,90 @@ public sealed partial class GameWindowTests
         }
     });
 
-    // Retained 2D bridge regressions run directly, never through a production door.
+    // Exercise the 2D bridge through its registered Classic specification.
     private static GameWindow OpenRetiredRace()
     {
-        var w = new GameWindow(new GameWindow.Game("race", "launcher_game_race_title", "dtrh/race.html"));
+        var w = new GameWindow(GameWindow.Games["raceclassic"]);
         w.Load(GameWindow.Server());
         w.Show();
         return w;
     }
+
+    [Fact]
+    public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
+    {
+        launcher.BuildTiles();
+        Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
+            c => Equals(c.Tag, "raceclassic"));
+        var w = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
+        Assert.Equal("dtrh/race.html", w.Spec.Page);
+        Assert.True(w.RaceWatchRunning);
+        Assert.Same(w, GameWindow.Launch("raceclassic"));
+        w.Close();
+        Dispatcher.UIThread.RunJobs();
+    });
+
+    [Fact]
+    public void Classic_FirstEscapePauses_SecondRequestsExit() => Run((shell, launcher) =>
+    {
+        var settings = CoreSettings.Current;
+        var (oldKey, oldEnabled, oldOverride) = (settings.PanicKey, settings.PanicKeyEnabled, settings.PanicOverridesAll);
+        try
+        {
+            (settings.PanicKey, settings.PanicKeyEnabled, settings.PanicOverridesAll) = ("Escape", true, false);
+            launcher.Hide();
+            var w = GameWindow.Launch("raceclassic")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(w.IsActive);
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            var now = DateTime.Now;
+            shell.HandlePanicKeyPress(now);
+            Assert.True(w.IsVisible);
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+            shell.HandlePanicKeyPress(now.AddSeconds(1));
+            Assert.True(w.IsVisible);
+            Assert.False(w.KeptEscapeReady);
+            Assert.Equal("exit-request", (string?)sent.Last()["type"]);
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Assert.False(w.IsVisible);
+        }
+        finally { (settings.PanicKey, settings.PanicKeyEnabled, settings.PanicOverridesAll) = (oldKey, oldEnabled, oldOverride); }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Classic_PanicSettlesOrTimesOut(bool responds) => RunRace("rt.original.03", (_, xp, _) =>
+    {
+        var w = GameWindow.Launch("raceclassic")!;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"run-started\"}");
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        GameWindow.CloseAllForPanic();
+        Assert.True(w.IsVisible);
+        Assert.Equal("exit-request", (string?)Assert.Single(sent)["type"]);
+        if (responds)
+        {
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
+            Assert.Equal(250.0, Assert.Single(xp));
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+        }
+        else
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            w.Closed += (_, _) => deadline.Cancel();
+            Dispatcher.UIThread.MainLoop(deadline.Token);
+            Assert.InRange(clock.ElapsedMilliseconds, 1100, 2999);
+            Assert.Empty(xp);
+        }
+        Assert.False(w.IsVisible);
+    });
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
     /// one payout per run, score / 5 under 250 XP a minute, Sparks banked on score / 5.</summary>
@@ -967,6 +1043,7 @@ public sealed partial class GameWindowTests
         // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
         Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
+        Assert.False((bool)sent[0]["settings"]!["hostSfx"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // no run-started: nothing
         Assert.Empty(sent);
@@ -2084,6 +2161,7 @@ public sealed partial class GameWindowTests
     /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
     [Theory]
     [InlineData("race", "Glassroad", "kept-escape")]
+    [InlineData("raceclassic", "Race", "kept-escape")]
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]

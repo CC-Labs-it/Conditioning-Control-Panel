@@ -505,6 +505,31 @@ public sealed class ChasterMenuLimitsTests
     }));
 
     [Fact]
+    public Task PriceWarningTracksSavedFigureTypingAndDayLimit() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
+    {
+        var s = CoreSettings.Current;
+        s.ChasterDayLimit = new LimitSetting(120, 0, null);
+        s.ChasterBacklogLimit = new LimitSetting(360, 0, null);
+        s.ChasterPriceOverrides = new() { ["typo"] = 5400 };
+        await chaster.RefreshLockAsync();
+        tab.Refresh();
+        var big = Loc.Get("chaster_price_warn_big");
+        Assert.Equal(big, tab.WarningFor("typo"));
+        Assert.True(tab.BeginPriceEdit("typo"));
+        tab.PriceEditor!.Text = "30";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(tab.WarningFor("typo"));
+        tab.PriceEditor.Text = "90";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(big, tab.WarningFor("typo"));
+        tab.FindControl<Slider>("SliderDayLimit")!.Value = 60;
+        var both = TabPriceEdit.WarningText(TabPriceEdit.WarningFor(5400, 3600), 3600, Loc.Get);
+        Assert.Equal(both, tab.WarningFor("typo"));
+        tab.CancelPriceEdit();
+        Assert.Equal(both, tab.WarningFor("typo"));
+    }, locked: false));
+
+    [Fact]
     public Task LimitsLowerImmediatelyRaiseAfterADayAndBacklogFollowsDay() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, w) =>
     {
         var s = CoreSettings.Current;

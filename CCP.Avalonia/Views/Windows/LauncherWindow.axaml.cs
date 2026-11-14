@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
                 ["race"] = (Games.GameWindow.GlassroadLocked, _ => Games.GameWindow.Launch("race")),
+                ["raceclassic"] = (() => !ConditioningControlPanel.Services.Race.RacingAccess.CanLaunch, _ => Games.GameWindow.Launch("raceclassic")),
                 // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
             };
@@ -99,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 else { _statusTimer.Stop(); StopLobby(); }
             };
             BuildTiles();
+            HookUpdateChip();
             HookVeil();
             HookFx();
             HookPress(PanelCta);

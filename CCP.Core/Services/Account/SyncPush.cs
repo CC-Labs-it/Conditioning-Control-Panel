@@ -149,6 +149,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>Head notification after a successful authenticated receipt has queued its prize snapshot.</summary>
         public Action<string>? ReceiptReceived { get; set; }
         public bool Loaded { get; private set; }
+        /// <summary>The account whose sync answer has been through the cloud-loadout fill (WPF: the sync precedes
+        /// ProfileLoaded). The frame/avatar equip pull waits for it, so it never makes an empty loadout non-empty first.</summary>
+        public string? CosmeticsAccount { get; private set; }
+        /// <summary>Raised (on the sync's thread) the first time <see cref="CosmeticsAccount"/> becomes an account.</summary>
+        public event Action? CosmeticsReady;
         internal int SessionVersion => Volatile.Read(ref _sessionVersion);
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
@@ -226,6 +231,7 @@ namespace ConditioningControlPanel.Services
             DescentReader?.Reset();
             Interlocked.Increment(ref _sessionVersion);
             Loaded = false;
+            CosmeticsAccount = null;
             _adopted = false;
             _knownProgress = SyncBody.Field.None;
             _serverAchievements = null;
@@ -456,6 +462,13 @@ namespace ConditioningControlPanel.Services
                         RestoreCloudAchievements(s, achievements.Values<string>().Select(a => a!), session, id);
                     AdoptMobileQuestTotals(s, reply);
                     if (AdoptFromResponse(s, reply, id)) _adopted = true;
+                    // #3898: the loadout fill has run for this account (an answer that carries cosmetics, even null).
+                    if (_sanitizeCosmetics != null
+                        && (reply["cosmetics"] is JObject || reply["cosmetics"]?.Type == JTokenType.Null) && CosmeticsAccount != id)
+                    {
+                        CosmeticsAccount = id;
+                        try { CosmeticsReady?.Invoke(); } catch (Exception ex) { Log.Debug("V2 Sync: CosmeticsReady handler threw: {Error}", ex.Message); }
+                    }
                     ClaimWebXp(s, reply, allowUnread, session, id);
                     ApplyQuestResets(s, id, session, reply);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
@@ -601,7 +614,9 @@ namespace ConditioningControlPanel.Services
             }
             try
             {
-                if (_sanitizeCosmetics != null && reply["cosmetics"] is JObject c && s.ProfileCosmetics.IsEmpty)
+                // WPF AdoptCloudCosmetics (ProfileSyncService.cs:2845): an unequip still owed to /v2/equip means the
+                // echo's frame and avatar are what the player just took off.
+                if (_sanitizeCosmetics != null && reply["cosmetics"] is JObject c && s.ProfileCosmetics.IsEmpty && !s.ProfileEquipPushOwed)
                 {
                     var clean = _sanitizeCosmetics(c.ToObject<ProfileCosmetics>());
                     if (!clean.IsEmpty)

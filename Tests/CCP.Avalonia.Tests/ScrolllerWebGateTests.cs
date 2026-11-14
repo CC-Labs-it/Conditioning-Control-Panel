@@ -32,7 +32,8 @@ public sealed class ScrolllerWebGateTests
     public void The_first_navigation_waits_for_the_gate()
     {
         var host = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Controls", "WebHost.axaml.cs"));
-        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { });", host);
+        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { },", host);
+        Assert.Contains("() => BlockAds, ShouldBlockAdRequest);", host);
         // Both roads into the engine (Source and Navigate) return while the gate has not reported. Navigate reports
         // the held request as accepted (#4397: it loads once the gate reports), so its return carries true.
         Assert.Equal(2, Regex.Matches(host, @"if \(_scrolllerGate is null\) return(?: true)?;").Count);
@@ -194,6 +195,16 @@ public sealed class ScrolllerWebGateTests
         var gate = File.ReadAllText(Path.Combine(avalonia, "Platform", "ScrolllerWebHostGate.cs"));
         Assert.Contains("ScrolllerWebView2Gate.Attach(", gate);
         Assert.Contains("ScrolllerWebKitFilter.Attach(", gate);
+    }
+
+    [Fact]
+    public void Windows_gate_connects_audio_events_to_the_tracker()
+    {
+        var gate = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ScrolllerWebView2Gate.cs"));
+        Assert.Contains("ScrolllerWebGate.AttachHook = WatchAudio;", gate);
+        Assert.Contains("Audio.Attach(core,", gate);
+        Assert.Contains("core.IsDocumentPlayingAudioChanged +=", gate);
+        Assert.Contains("core.IsDocumentPlayingAudio, core.Source, core.IsMuted", gate);
     }
 
     private static string RepoRoot()

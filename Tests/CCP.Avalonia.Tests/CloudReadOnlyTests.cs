@@ -157,6 +157,26 @@ public sealed partial class AccountSeedTests
         }
     }
 
+    private sealed class SlowPatreon : HttpMessageHandler {
+        public readonly TaskCompletionSource<HttpResponseMessage> Reply = new(TaskCreationOptions.RunContinuationsAsynchronously); public readonly TaskCompletionSource<bool> Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) { Started.TrySetResult(true); return Reply.Task; }
+    }
+    [Fact] public async Task CheckoutProfileRiseNotifiesBeforeSlowPatreonCompletes() {
+        var s = CoreSettings.Current; var saved = Touched.ToDictionary(n => n, n => Get(s, n)); var (token, newV2, offline) = (s.AuthToken, AccountSeed.NewV2, s.OfflineMode);
+        var slow = new SlowPatreon(); var rise = new TaskCompletionSource<PatreonTier>(TaskCreationOptions.RunContinuationsAsynchronously); var wire = new Wire { Profile = """{"user":{"unified_id":"u1","effective_tier":1}}""" }; Task? refresh = null;
+        try {
+            s.UnifiedId = "u1"; s.AuthToken = "tok"; s.PatreonTier = 0; s.OfflineMode = false;
+            _secrets["patreon_auth"] = Newtonsoft.Json.JsonConvert.SerializeObject(new PatreonTokenData { AccessToken = "a", RefreshToken = "r", ExpiresAt = DateTime.UtcNow.AddDays(1) });
+            Assert.True(AccountSeed.Seed(prefix => new ProviderSubscription(prefix, () => s, prefix == "patreon" ? slow : null)));
+            int events = 0; AccountSeed.Patreon!.TierChanged += (_, tier) => { events++; rise.TrySetResult(tier); }; AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
+            FunnelPageMessage.ResetForTests(); refresh = FunnelPageMessage.RefreshAccount();
+            await slow.Started.Task.WaitAsync(TimeSpan.FromSeconds(5)); Assert.Equal(PatreonTier.Level1, await rise.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(1, s.PatreonTier); Assert.False(slow.Reply.Task.IsCompleted); Assert.Contains("GET /v2/user/profile", wire.Seen); await AccountSeed.LoadProfileAsync(); Assert.Equal(1, events);
+        } finally {
+            slow.Reply.TrySetResult(new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") });
+            if (refresh != null) await refresh; foreach (var n in Touched) Set(s, n, saved[n]);
+            (s.AuthToken, AccountSeed.NewV2, s.OfflineMode) = (token, newV2, offline); FunnelPageMessage.ResetForTests();
+        } }
     [Fact]
     public async Task LoginSuccess_LoadsTheProfile_WithoutAnyWriteEndpoint()
     {

@@ -127,8 +127,10 @@ public sealed class LeashHolderCard : Border
             {
                 if (id == "tug")
                 {
-                    if (!TugThrottle.TryTug(h.Who.Id, DateTime.UtcNow)) { Word(new(LeashSendStatus.TooFast), ""); return; }
-                    await Send(s => s.TugAsync(h.Who.Id), Honest("leash_done_tug"), close: false);
+                    // WPF LeashHolderCard.cs:751-759: a throttled tug is Denied, a sent one jingles before the call.
+                    if (!TugThrottle.TryTug(h.Who.Id, DateTime.UtcNow)) { Cue(LeashCue.Denied); Word(new(LeashSendStatus.TooFast), ""); return; }
+                    Cue(LeashCue.Jingle);
+                    await Send(s => s.TugAsync(h.Who.Id), Honest("leash_done_tug"), close: false, sentCue: false);
                 }
                 else { _sheet = _sheet == id ? null : id; _videoFor = null; Render(); }
             }, icon);
@@ -363,11 +365,30 @@ public sealed class LeashHolderCard : Border
     private string Punished(LeashSendResult r) => Loc.GetF(r.Status == LeashSendStatus.Queued ? "leash_done_punish_queued" : "leash_done_punish", _held.Who.Name);
     private Func<LeashSendResult, string> Honest(string oldKey) => _ =>
         _service()?.ReceiptsSupported == true ? Loc.Get("leash_res_sent") : Loc.GetF(oldKey, _held.Who.Name);
-    private async Task Send(Func<ILeashService, Task<LeashSendResult>> call, Func<LeashSendResult, string> good, bool close = true)
+    /// <summary>Test seam: the holder's own action cues (WPF LeashFx.Sent / Denied / Jingle).</summary>
+    internal Action<LeashCue> PlayCue { get; set; } = cue =>
+    {
+        var now = DateTime.UtcNow;
+        if (cue == LeashCue.Sent) LeashSound.Sent(now);
+        else if (cue == LeashCue.Jingle) LeashSound.Jingle(now);
+        else if (cue == LeashCue.Denied) LeashSound.Denied(now);
+    };
+    private void Cue(LeashCue cue) { try { PlayCue(cue); } catch { } }
+    // WPF LeashHolderCard.Guarded (:765-780): Sent when the server took it, Denied on TooFast / Dnd / Failed or a throw.
+    private async Task Send(Func<ILeashService, Task<LeashSendResult>> call, Func<LeashSendResult, string> good, bool close = true, bool sentCue = true)
     {
         LeashSendResult result;
-        try { result = _service() is { } s ? await call(s) : new(LeashSendStatus.Off); }
-        catch { result = new(LeashSendStatus.Failed); }
+        try
+        {
+            if (_service() is { } s)
+            {
+                result = await call(s);
+                if (R.IsGood(result.Status)) { if (sentCue) Cue(LeashCue.Sent); }
+                else if (result.Status is LeashSendStatus.TooFast or LeashSendStatus.Dnd or LeashSendStatus.Failed) Cue(LeashCue.Denied);
+            }
+            else result = new(LeashSendStatus.Off);
+        }
+        catch { Cue(LeashCue.Denied); result = new(LeashSendStatus.Failed); }
         if (close && R.IsGood(result.Status)) _sheet = _videoFor = null;
         Word(result, R.IsGood(result.Status) ? good(result) : "");
     }

@@ -4,6 +4,11 @@ using System.Reflection;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -17,6 +22,72 @@ namespace CCP.Avalonia.Tests;
 
 public class MergedAccountRecoveryHeadTests
 {
+    private sealed class MergedWire : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+            { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") });
+    }
+
+    [Fact]
+    public void FriendsReplyReachesRecovery() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var saved = new MergedRecoveryState();
+        string? token = "old";
+        CoreSecrets.RetrieveProvider = _ => token;
+        CoreSecrets.StoreProvider = (_, value) => token = value;
+        var settings = CoreSettings.Current;
+        settings.UnifiedId = "u_tombstone1";
+        settings.OfflineMode = false;
+        settings.AuthToken = "old";
+        var sync = new SyncPush(() => null, () => false);
+        sync.MarkLoaded(null);
+        AccountSeed.Sync = sync;
+        MergedAccountRecovery.ResetForTest();
+        MergedAccountRecovery.SettingsForTest = () => settings;
+        MergedAccountRecoveryHead.Seed();
+        string? stamped = null;
+        MergedAccountRecovery.StampQuests = id => stamped = id;
+        var service = FriendsHead.Create("sandbox", "http://127.0.0.1:9", new HttpClient(new MergedWire()))!;
+        service.RefreshAsync().GetAwaiter().GetResult();
+        MergedAccountRecovery.LastSwap.GetAwaiter().GetResult();
+        Assert.Equal("u_canon123", settings.UnifiedId);
+        Assert.False(sync.Loaded);
+        Assert.Equal("u_canon123", stamped);
+    });
+
+    [Fact]
+    public void FinishedRefreshesAccountSection() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<App>().WithInterFont().With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        using var saved = new MergedRecoveryState();
+        CoreAccount.IsLoggedInProvider = () => true;
+        string name = "Before";
+        CoreAccount.DisplayNameProvider = () => name;
+        var shell = new MainShellWindow();
+        var field = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var previous = field.GetValue(Application.Current);
+        using var lifetime = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+        { MainWindow = shell, ShutdownMode = global::Avalonia.Controls.ShutdownMode.OnExplicitShutdown };
+        field.SetValue(Application.Current, lifetime);
+        try
+        {
+            var section = shell.AppSettingsPage!.FindControl<AccountSettingsSection>("SectionAccount")!;
+            section.Refresh();
+            var label = section.FindControl<TextBlock>("TxtAccountSectionName")!;
+            Assert.Equal("Before", label.Text);
+            name = "After";
+            MergedAccountRecoveryHead.Seed();
+            MergedAccountRecovery.Finished!("u_canon123", true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("After", label.Text);
+        }
+        finally { shell.Close(); field.SetValue(Application.Current, previous); lifetime.MainWindow = null; }
+    });
+
     [Fact]
     public void MergedResponsePreservesProgressAndDefersSignIn() => AvaloniaTestDispatcher.Run(() =>
     {

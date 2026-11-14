@@ -76,6 +76,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (_speechBubble.IsVisible) ApplySpeechBubblePlacement();
                 SyncSpeechPopupOpen();
             };
+            _inputPanel.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == IsVisibleProperty && _speechBubble.IsVisible) ApplySpeechBubblePlacement();
+            };
+            _inputPanel.SizeChanged += (_, _) => { if (_inputPanel.IsVisible && _speechBubble.IsVisible) ApplySpeechBubblePlacement(); };
             // The typewriter growing it, a scroll bar appearing, chat history swapping in.
             _speechBubble.SizeChanged += (_, _) => { if (_speechBubble.IsVisible) ApplySpeechBubblePlacement(); };
             PositionChanged += (_, _) => { if (_speechBubble.IsVisible) ApplySpeechBubblePlacement(); };
@@ -195,6 +200,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 var a0 = _avatarBorder.PointToScreen(new Point(0, 0));
                 var a1 = _avatarBorder.PointToScreen(new Point(_avatarBorder.Bounds.Width, _avatarBorder.Bounds.Height));
                 var avatar = Box.FromEdges(Math.Min(a0.X, a1.X), Math.Min(a0.Y, a1.Y), Math.Max(a0.X, a1.X), Math.Max(a0.Y, a1.Y));
+
+                if (_inputPanel.IsVisible && _inputPanel.Bounds.Width > 0 && _inputPanel.Bounds.Height > 0)
+                {
+                    var i0 = _inputPanel.PointToScreen(new Point(0, 0));
+                    var i1 = _inputPanel.PointToScreen(new Point(_inputPanel.Bounds.Width, _inputPanel.Bounds.Height));
+                    avatar = SpeechBubblePlacement.ClearOfInput(avatar, Box.FromEdges(
+                        Math.Min(i0.X, i1.X), Math.Min(i0.Y, i1.Y), Math.Max(i0.X, i1.X), Math.Max(i0.Y, i1.Y)));
+                }
 
                 var screen = Screens.ScreenFromPoint(new PixelPoint((int)Math.Round(avatar.X + avatar.W / 2), (int)Math.Round(avatar.Y + avatar.H / 2)))
                              ?? Screens.ScreenFromWindow(this) ?? Screens.Primary;
