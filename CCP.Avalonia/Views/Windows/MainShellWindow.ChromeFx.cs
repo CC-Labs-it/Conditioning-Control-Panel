@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 ApplyStartButtonGlow();
                 ApplyXpSheen();
+                ApplyBannerFxLoops();   // WPF ApplyChromeFxLoops -> ApplyBannerFxLoops (BannerFx.cs:166)
             }
             catch (Exception ex) { Log.Debug("ApplyChromeFxLoops: {E}", ex.Message); }
         }
@@ -96,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _startChromeBeat = null;
             _xpGlossBeat?.Stop();
             _xpGlossBeat = null;
+            StopBannerFx();
         }
 
         /// <summary>
