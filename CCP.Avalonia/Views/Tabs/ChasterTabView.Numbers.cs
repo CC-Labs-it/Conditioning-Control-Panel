@@ -1,8 +1,6 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: RefreshNumbers (:223),
 // RefreshDay (:848), LayoutCap (:868), RefreshRun (:886), StatRun_Click + BuildBill (:893-903).
 // The tab's own receipt: the third number opens and closes the bill on paper under the numbers.
-// ponytail: FxBill's print-down (height grow/fade/settle, Fx.cs:810) and the cap bloom are not ported;
-// the receipt opens and closes at once, as WPF does under reduced motion.
 using System;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -69,8 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _billOpen = !_billOpen;
             if (_billOpen) Receipt.Show(ChasterHead.Service?.Bill());
-            ReceiptHost.IsVisible = _billOpen;
-            TxtRunChevron.Kind = _billOpen ? IconKind.ChevronUp : IconKind.ChevronDown;
+            FxBill(_billOpen);
         }
 
         private IBrush FigureBrush(int seconds) =>

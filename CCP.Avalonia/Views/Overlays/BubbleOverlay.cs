@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
         internal static Bitmap? TeaseImage;
+        internal static Bitmap? BrainDrainImage;   // WPF the bundled molten-spiral bubble (braindrain_melt.png)
         internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, double Delay, long Start, bool Animated)> TeaseFaces = new();
         private static int _teaseAnimated;
 
@@ -196,6 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             LoadBubbleImage();
             TeaseImage = ChaosArt.Resolve("bubbles", "tease");
+            BrainDrainImage = ChaosArt.Resolve("bubbles", Services.Chaos.BrainDrainBubble.VariantId);
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
@@ -300,7 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var rng = random ?? Field.Random;
             var spec = AmbientBubblePayloads.Roll(settings, rng,
-                Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }));
+                Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }), PrizeOwnership.BubbleV2Owned());
             AmbientBubble b;
             if (spec == null)
             {
@@ -1185,7 +1187,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
                     var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var img = teaseImage ?? BubbleOverlay.Image;
+                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
@@ -1193,21 +1196,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         using (dc.PushTransform(m))
-                        using (dc.PushOpacity(Math.Clamp(b.Fade * b.MotionFade, 0, 1)))
+                        using (dc.PushOpacity(Math.Clamp(b.DisplayFade * b.MotionFade, 0, 1)))
                         {
                             if (b.Spec != null && BubbleOverlay.Field.FreezeChaos)
                             {
                                 using (dc.PushOpacity(BubbleOverlay.Field.FreezeAuraOpacity))
                                     dc.DrawEllipse(FreezeAura, null, new Point(cx, cy), (size + 6 * k) / 2, (size + 6 * k) / 2);
                             }
-                            if (b.Spec != null && teaseImage == null)   // WPF skips tint for a variant sprite
+                            if (b.Spec != null && variantImage == null)   // WPF skips tint for a variant sprite
                             {
                                 var (fill, pen) = TintPaint(b.Spec.Tint);
                                 dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             }
                             if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
-                            if (HasChaosShine(b, teaseImage != null))
+                            if (HasChaosShine(b, variantImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
                             // WPF's no-sprite path: the label carries the variant. Only the freeze pickup draws it so far.
                             if (b.Spec is { IsFreeze: true, Label.Length: > 0 }) DrawLabel(dc, b.Spec.Label, cx, cy, size, k);

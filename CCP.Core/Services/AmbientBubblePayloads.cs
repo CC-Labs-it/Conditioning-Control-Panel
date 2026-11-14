@@ -8,11 +8,14 @@ namespace ConditioningControlPanel.Services;
 public static class AmbientBubblePayloads
 {
     public const int MaxTriggers = 4;
-    public static EffectBubbleSpec? Roll(AppSettings s, Random random, int activeTriggers)
+    /// <summary><paramref name="v2Owned"/> is any Bubbles v2 grant, read from PrizeGrants by the caller:
+    /// it (and BubbleBrainDrainEnabled) adds the Brain Drain bubble as one more equal entry (WPF BubbleService.cs:1150).</summary>
+    public static EffectBubbleSpec? Roll(AppSettings s, Random random, int activeTriggers, bool v2Owned = false)
     {
         if (!s.BubbleTriggersEnabled || activeTriggers >= MaxTriggers) return null;
-        // ponytail: v2 Brain Drain ownership remains with the bubble-motion lane.
-        var ids = (s.BubbleTriggerVariants ?? new()).Where(id => id != MagnetBubble.VariantId).ToArray();
+        var selected = (s.BubbleTriggerVariants ?? new())
+            .Where(id => id != MagnetBubble.VariantId && id != BrainDrainBubble.VariantId).ToArray();
+        var ids = BrainDrainBubble.RollPool(selected, v2Owned, s.BubbleBrainDrainEnabled).ToArray();
         if (ids.Length == 0 || random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
         // WPF BuildTriggerSpec: the dashboard Motion setting; "Mixed" does not parse -> FloatUp.
         ChaosMotion? motion = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var m) ? m : null;
@@ -20,6 +23,13 @@ public static class AmbientBubblePayloads
     }
     public static EffectBubbleSpec? Build(string id, ChaosMotion? motion = null)
     {
+        // WPF BubbleService.cs:1202: benign, deep violet, breathes (AmbientBubble.DisplayFade).
+        if (id == BrainDrainBubble.VariantId) return new EffectBubbleSpec
+        {
+            VariantId = id, Payload = new BrainDrainMeltPayload { Ambient = true }, SizePx = 220,
+            Tint = 0xFF000000u | ((uint)BrainDrainBubble.TintR << 16) | ((uint)BrainDrainBubble.TintG << 8) | BrainDrainBubble.TintB,
+            IsLive = false, FuseMs = 0, Motion = motion ?? ChaosMotion.FloatUp, TreatLifeMs = 7000,
+        };
         if (id == "glitch") return new EffectBubbleSpec
         {
             VariantId = id, Payload = new OverlayPayload("braindrain", 0.30) { Strength = 60, DurationMult = 1.2, Ambient = true },
