@@ -192,7 +192,8 @@ namespace ConditioningControlPanel.Services.Bark
                     (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
                     if (!fire) { LogDecision(trigger, winner, pool, false, idx, reason); return false; }
                     LogDecision(trigger, winner, pool, true, idx, reason);
-                    if (Speak == null) return false;
+                    // WPF BarkService.cs:180-184: dry-run decides and spends the session even with no mouth.
+                    if (!DryRun && Speak == null) return false;
                     CommitFire(winner, idx, pool);
                 }
                 return !DryRun && SpeakLine(winner, pool[idx], ctx);
@@ -254,8 +255,11 @@ namespace ConditioningControlPanel.Services.Bark
                     DryRun ? "dry-run WOULD FIRE" : "FIRE", trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, idx,
                     idx >= 0 && idx < pool.Count ? pool[idx].Text?.Length ?? 0 : -1);
             else
-                Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
-                    trigger, rule.Id, rule.Class, rule.Priority, reason);
+                // WPF BarkService.cs:2024-2028 logs blocks at Debug; a dry run raises them to the Avalonia
+                // default floor (Information) so its block reasons are readable.
+                Log.Write(DryRun ? Serilog.Events.LogEventLevel.Information : Serilog.Events.LogEventLevel.Debug,
+                    "[BARK] {Decision} trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
+                    DryRun ? "dry-run blocked" : "blocked", trigger, rule.Id, rule.Class, rule.Priority, reason);
         }
 
         public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>

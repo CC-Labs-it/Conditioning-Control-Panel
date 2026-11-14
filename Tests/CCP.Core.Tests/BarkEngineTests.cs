@@ -319,4 +319,105 @@ public sealed class BarkEngineTests : IDisposable
         Assert.True(rule.Conditions!.ContainsKey("level_gte"));
         Directory.Delete(dir, true);
     }
+
+    // Restack b192 (#3998): WPF BarkService.cs:197-200: only the exact value 1 enables the mode at startup.
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("true", false)]
+    [InlineData("0", false)]
+    public void StartupReadsDryRunOptIn(string value, bool expected)
+    {
+        var old = Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN");
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", value);
+            Assert.Equal(expected, Engine().DryRun);
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", old); }
+    }
+
+    [Fact] // WPF BarkService.cs:1159-1166, 1772-1821, 1900-1907, 2006-2029.
+    public void DryRunLogsAndAdvancesTheSessionWithoutSpeakingOrPersisting()
+    {
+        var once = Rule("AttentionCheckFail", "private once");
+        (once.Repeatable, once.ScopeRaw) = (false, "lifetime");
+        var repeat = Rule("PossessionEffect", "private a", "private b");
+        var oldLogger = Serilog.Log.Logger;
+        var sink = new BarkLogSink();
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information().WriteTo.Sink(sink).CreateLogger();
+        try
+        {
+            // Seed a fully used pool to exercise the recycle path as well as the commit path.
+            var oldRotation = repeat.VariantPool!.Select(v => BarkEngine.BarkLineId(repeat.Id, v)).ToList();
+            _s.BarkVariantRotation[repeat.Id] = new List<string>(oldRotation);
+            var e = new BarkEngine(() => new BarkRuleSet(new[] { once, repeat }), new ZeroRandom())
+                { Speak = _said.Add, DryRun = true };
+            e.Start();
+            int echoes = 0;
+            e.BarkSpoken += (_, _) => echoes++;
+            Assert.False(e.Raise("AttentionCheckFail"));
+            Assert.False(e.Raise("AttentionCheckFail", guaranteed: true)); // session latch still applies
+            e.Speak = null; // WPF dry-run also decides when no avatar mouth exists
+            Assert.False(e.Raise("PossessionEffect"));
+            Assert.False(e.Raise("PossessionEffect"));
+            Assert.Empty(_said);
+            Assert.Equal(0, echoes);
+            Assert.False(_s.IsBarkFired(once.Id));
+            Assert.False(_s.BarkVariantRotation.ContainsKey(once.Id));
+            Assert.Equal(oldRotation, _s.BarkVariantRotation[repeat.Id]);
+            var messages = sink.Events.Select(x => x.RenderMessage())
+                .Where(m => m.Contains(once.Id) || m.Contains(repeat.Id)).ToList();
+            Assert.Contains(messages, m => m.Contains("dry-run WOULD FIRE") && m.Contains(once.Id));
+            Assert.Contains(messages, m => m.Contains("dry-run blocked") && m.Contains("already-fired"));
+            Assert.Contains(sink.Events, ev => ev.Level == Serilog.Events.LogEventLevel.Information
+                && ev.RenderMessage().Contains("dry-run blocked") && ev.RenderMessage().Contains(once.Id));
+            var picks = messages.Where(m => m.Contains("WOULD FIRE") && m.Contains(repeat.Id)).ToList();
+            Assert.Equal(2, picks.Count);
+            Assert.NotEqual(picks[0].Split("variant#=")[1], picks[1].Split("variant#=")[1]);
+            Assert.DoesNotContain(messages, m => m.Contains("private"));
+            Assert.True(Engine(once).Raise("AttentionCheckFail")); // no lifetime latch survived the dry run
+        }
+        finally
+        {
+            Serilog.Log.Logger = oldLogger;
+            _s.BarkVariantRotation.Remove(once.Id);
+            _s.BarkVariantRotation.Remove(repeat.Id);
+            _s.BarkLifetimeFired.Remove(once.Id);
+        }
+    }
+
+    [Fact] // WPF BarkService.cs:2024-2028: ordinary blocked decisions remain Debug.
+    public void OrdinaryBlockedDecisionsStayAtDebug()
+    {
+        var rule = Rule("AttentionCheckFail", "private line");
+        var e = Engine(rule);
+        e.DryRun = false;
+        _s.AvatarEnabled = false;
+        var oldLogger = Serilog.Log.Logger;
+        var sink = new BarkLogSink();
+        try
+        {
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information().WriteTo.Sink(sink).CreateLogger();
+            Assert.False(e.Raise("AttentionCheckFail"));
+            Assert.Empty(sink.Events); // the Avalonia default does not log ordinary blocks
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.Sink(sink).CreateLogger();
+            Assert.False(e.Raise("AttentionCheckFail"));
+            var blocked = Assert.Single(sink.Events);
+            Assert.Equal(Serilog.Events.LogEventLevel.Debug, blocked.Level);
+            Assert.Contains("companion-off", blocked.RenderMessage());
+            Assert.DoesNotContain("private line", blocked.RenderMessage());
+        }
+        finally { Serilog.Log.Logger = oldLogger; }
+    }
+
+    private sealed class ZeroRandom : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
+    private sealed class BarkLogSink : Serilog.Core.ILogEventSink
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<Serilog.Events.LogEvent> Events { get; } = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Enqueue(e);
+    }
 }
