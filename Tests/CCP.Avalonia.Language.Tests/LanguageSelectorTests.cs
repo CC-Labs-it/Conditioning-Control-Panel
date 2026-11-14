@@ -495,6 +495,10 @@ public sealed class LanguageSelectorTests
         settings.Current.LastSeenVersion = $"{version.Major}.{version.Minor}.{version.Build}";
         // Returning profile: first-run demo seeding legitimately saves this flag, as WPF does.
         settings.Current.HasSeededDeeperDemos = true;
+        // An upgrader's launch seeds the awareness deny groups and migrates intensity once, then saves,
+        // as WPF App.xaml.cs:3125 does (restack b231, #4762); a returning profile has both done.
+        ConditioningControlPanel.Services.Awareness.AwarenessPrivacyRules.EnsureSeeded(settings.Current);
+        ConditioningControlPanel.Services.Awareness.AwarenessIntensityMigration.EnsureMigrated(settings.Current);
         // The Dashboard's launch cards spend their seen-flag (a real save) when they open, like WPF;
         // spent here so the no-startup-save assertion keeps measuring startup itself.
         settings.Current.SeenFeatureIntros.AddRange(new[] { "daily-free", "one-account" });

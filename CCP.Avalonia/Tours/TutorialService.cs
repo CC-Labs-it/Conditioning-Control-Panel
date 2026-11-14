@@ -119,8 +119,10 @@ namespace ConditioningControlPanel.Avalonia.Tours
                 try { enh = ConditioningControlPanel.Services.Deeper.EnhancementSerializer.LoadFromFile(path); }
                 catch (Exception ex) { Serilog.Log.Debug("TutorialService: failed to load tutorial enhancement {Path}: {Error}", path, ex.Message); }
             }
-            var player = new EnhancementPlayerWindow(enh, enh != null ? "tutorial-followup" : null);
-            if (Shell is { } owner) player.Show(owner); else player.Show();
+            // WPF EnhancementPlayerWindow.ShowOrActivate: the shell's one player, reused.
+            var player = Shell?.ShowOrActivateDeeperPlayer();
+            if (player == null) { player = new EnhancementPlayerWindow(null, null); player.Show(); }
+            if (enh != null) player.LoadEnhancementFromMemory(enh, "tutorial-followup");
         }
 
         internal static T? FindDescendant<T>(Visual? root) where T : class

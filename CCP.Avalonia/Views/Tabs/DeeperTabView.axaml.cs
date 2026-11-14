@@ -423,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     var vlc = Platform.LibVlcAudio.Shared;
                     if (vlc == null) return (double?)null;
                     using var media = new LibVLCSharp.Shared.Media(vlc, path, LibVLCSharp.Shared.FromType.FromPath);
-                    var status = await media.Parse(LibVLCSharp.Shared.MediaParseOptions.ParseLocal, 5000);
+                    var status = await Platform.LibVlcAudio.ParseAsync(media, LibVLCSharp.Shared.MediaParseOptions.ParseLocal, 5000);
                     return status == LibVLCSharp.Shared.MediaParsedStatus.Done && media.Duration > 0
                         ? media.Duration / 1000.0 : (double?)null;
                 }

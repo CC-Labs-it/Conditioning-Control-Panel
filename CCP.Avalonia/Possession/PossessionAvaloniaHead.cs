@@ -163,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new MisrouteEffect());
             list.Add(new RoomWarpEffect());
             list.Add(new GlitchPortraitEffect());
+            list.Add(new StealCardEffect());
             return list;
         }
 
