@@ -40,6 +40,30 @@ public sealed class EnhancementImportBatchTests
     }
 
     [Fact]
+    public void ImportFindsAnExistingUppercaseSuffixWithoutAnotherCopy()
+    {
+        var source = Directory.CreateTempSubdirectory("ccp-enh-uppercase-");
+        using var library = new EnhancementLibrary();
+        var existing = Path.Combine(library.LibraryFolder, Guid.NewGuid() + ".CCPENH.JSON");
+        string? duplicateCopy = null;
+        try
+        {
+            var input = Path.Combine(source.FullName, "input.json");
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "test.mp3" };
+            enhancement.Metadata.Name = Guid.NewGuid().ToString("N");
+            var json = EnhancementSerializer.Save(enhancement);
+            File.WriteAllText(existing, json);
+            File.WriteAllText(input, json);
+            var result = EnhancementImportBatch.Run(library, new[] { input });
+            duplicateCopy = result.LastImportedPath;
+            Assert.Empty(result.Imported);
+            Assert.Equal(existing, result.DuplicateOfPath);
+            Assert.Equal(existing, result.RevealPath);
+        }
+        finally { if (duplicateCopy != null) File.Delete(duplicateCopy); File.Delete(existing); source.Delete(true); }
+    }
+
+    [Fact]
     public void BatchSkipsOtherJsonReportsErrorsAndContinuesToValidFile()
     {
         var source = Directory.CreateTempSubdirectory("ccp-enh-batch-");

@@ -6877,6 +6877,7 @@
   "lockdown_badge_label": "封锁",
   "lockdown_badge_end": "结束",
   "lockdown_badge_tooltip": "封锁进行中。点击打开封锁标签页。",
+  "lockdown_dose_engine_warning": "只要有功能启用，封锁就会启动或重新启动引擎。",
   "lockdown_poss_safety_dose": "什么都没开？封锁替你选",
   "lockdown_poss_safety_dose_tip": "封锁不会空转。开始时引擎没开：替你启动。什么功能都没开（或你中途全部关掉）：看守会替你打开功能，每次多一个，计时结束时全部还原。",
   "st4_braindrain_audio_rate": "音频片段频率",

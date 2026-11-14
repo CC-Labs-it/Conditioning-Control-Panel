@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
@@ -328,4 +329,109 @@ public sealed partial class DeeperFollowupTests
         return Task.CompletedTask;
     });
 
+}
+
+public sealed partial class DeeperFollowupTests
+{
+    [Fact]
+    public Task FreshWelcomeDemoIsSeededAndOpensInEditor() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.PerformanceMode = true;
+        CoreSettings.Current.HasSeededDeeperDemos = false;
+        CoreSettings.Current.HasSeenDeeperWelcome = false;
+        var path = Path.Combine(DeeperLocalLibrary.DefaultFolder, "welcome.ccpenh.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var previous = File.Exists(path) ? File.ReadAllBytes(path) : null;
+        File.Delete(path);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("deeper");
+            Assert.True(File.Exists(path));
+            Assert.True(CoreSettings.Current.HasSeededDeeperDemos);
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            Click(view, "BtnDeeperWelcomeDemo");
+            Assert.True(CoreSettings.Current.HasSeenDeeperWelcome);
+            var editor = Assert.Single(shell.OwnedWindows.OfType<DeeperEditorWindow>());
+            Assert.Equal(path, editor.LoadedFilePath);
+
+            editor.Close();
+            File.Delete(path);
+            using (var library = new EnhancementLibrary())
+                Assert.False(File.Exists(path)); // a deleted demo stays deleted
+            File.WriteAllText(path, "user edit");
+            CoreSettings.Current.HasSeededDeeperDemos = false;
+            using (var library = new EnhancementLibrary())
+                Assert.Equal("user edit", File.ReadAllText(path)); // existing files win
+        }
+        finally
+        {
+            foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
+            shell.Close();
+            if (previous == null) File.Delete(path); else File.WriteAllBytes(path, previous);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FirstRunKeepsAndOpensTheEditedMixedCaseWelcomeDemo() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var folder = DeeperLocalLibrary.DefaultFolder;
+        Directory.CreateDirectory(folder);
+        bool IsWelcome(string path) => string.Equals(Path.GetFileName(path), "welcome.ccpenh.json", StringComparison.OrdinalIgnoreCase);
+        var previous = Directory.GetFiles(folder).Where(IsWelcome).Select(path => (path, bytes: File.ReadAllBytes(path))).ToArray();
+        var editedPath = Path.Combine(folder, "WELCOME.CCPENH.JSON");
+        MainShellWindow? shell = null;
+        try
+        {
+            foreach (var (path, _) in previous) File.Delete(path);
+            var demo = EnhancementSerializer.LoadFromFile(Path.Combine(AppContext.BaseDirectory, "Resources", "DeeperDemos", "welcome.ccpenh.json"));
+            demo.Metadata.Name = "Edited welcome";
+            var editedJson = EnhancementSerializer.Save(demo);
+            File.WriteAllText(editedPath, editedJson);
+            CoreSettings.Current.HasSeededDeeperDemos = false;
+            CoreSettings.Current.HasSeenDeeperWelcome = false;
+            CoreSettings.Current.PerformanceMode = true;
+            ConditioningControlPanel.Avalonia.App.StartDeeperLibrary();
+            Assert.True(CoreSettings.Current.HasSeededDeeperDemos);
+            Assert.Equal(editedJson, File.ReadAllText(editedPath));
+            Assert.Single(Directory.GetFiles(folder), IsWelcome);
+
+            shell = new MainShellWindow();
+            shell.Show();
+            shell.ShowTab("deeper");
+            var view = shell.Named<DeeperTabView>("DeeperTab")!;
+            Click(view, "BtnDeeperWelcomeDemo");
+            Assert.Equal(editedPath, Assert.Single(shell.OwnedWindows.OfType<DeeperEditorWindow>()).LoadedFilePath);
+        }
+        finally
+        {
+            if (shell != null) { foreach (var window in shell.OwnedWindows.ToArray()) window.Close(); shell.Close(); }
+            ConditioningControlPanel.Avalonia.App.StopDeeperLibrary();
+            foreach (var path in Directory.GetFiles(folder).Where(IsWelcome)) File.Delete(path);
+            foreach (var (path, bytes) in previous) File.WriteAllBytes(path, bytes);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task WelcomeCardUsesTheWpfDemoCopy() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        CoreSettings.Current.PerformanceMode = true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("deeper");
+            var card = shell.Named<DeeperTabView>("DeeperTab")!.FindControl<Border>("DeeperWelcomeCard")!;
+            var text = card.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
+            Assert.Contains(Loc.Get("deeper_welcome_card_body"), text);
+        }
+        finally { shell.Close(); }
+        return Task.CompletedTask;
+    });
 }

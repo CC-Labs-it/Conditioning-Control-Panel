@@ -20,6 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+        // The generation of a user engine or session start still waiting on the portal: the Lockdown
+        // dose keeper never starts over it (its own start would bump _engineGen and drop the user's).
+        private static int? _pendingUserEngineGen;
         private System.DateTime? _emiEngineStartedUtc;
         internal System.Action<string, object> EmiMoment = (name, context) => EmiDesk.EmiDeskService.Instance.Fire(name, context);
         internal System.Func<System.DateTime> EmiNow = () => System.DateTime.UtcNow;
@@ -111,12 +114,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine(bool systemInitiated = true, bool resumeSession = false)
+        internal void StartEngine(bool systemInitiated = true, bool resumeSession = false, bool lockdownDose = false)
         {
             var gen = ++_engineGen;
+            if (!systemInitiated) _pendingUserEngineGen = gen;
             StartEffect(() =>
             {
+                if (!systemInitiated && _pendingUserEngineGen == gen) _pendingUserEngineGen = null;
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
+                // The dose keeper re-checks at the moment the portal lets it start (MainShellWindow.LockdownDose.cs).
+                if (lockdownDose && !CanStartLockdownDoseEngine()) return;
+                if (lockdownDose) _doseEngineStarted = true;
                 // WPF StartStop.cs:345-350: no notice for audio-only or system starts.
                 if (!systemInitiated && !CoreSettings.Current.AudioOnlySession) WarnIfFlashLibraryEmpty();
                 if (!systemInitiated) App.Achievements?.CheckRelapse();
@@ -157,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StopEngine()
         {
             _engineGen++;
+            _pendingUserEngineGen = null;
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }

@@ -37,11 +37,11 @@ public sealed class ContentPackServiceTests : IDisposable
     }
 
     private (ContentPackService Svc, ContentPackStore Store) New(string? baseUrl = Base, string? token = "pat",
-        (string, string)? identity = null)
+        (string, string)? identity = null, string? discordToken = null)
     {
         var store = new ContentPackStore(() => _root, () => _settings, () => { }, tempDir: () => Path.Combine(_root, ".temp"));
         var svc = new ContentPackService(store, new HttpClient(_h), () => baseUrl, () => _settings, () => { },
-            () => token, () => identity, _ => Task.CompletedTask, () => Path.Combine(_root, "previews"));
+            () => token, () => identity, _ => Task.CompletedTask, () => Path.Combine(_root, "previews"), () => discordToken);
         return (svc, store);
     }
 
@@ -269,6 +269,61 @@ public sealed class ContentPackServiceTests : IDisposable
         var status = await svc.GetFullPackStatusAsync();
         Assert.Equal(5, status!.DailyLimit);
         Assert.Equal(3, status.Packs!["p1"].DownloadsRemaining);
+    }
+
+    // WPF ContentPackService.cs:831-884. Each provider has its own bearer and endpoint.
+    [Theory]
+    [InlineData("absent")]
+    [InlineData("refused")]
+    [InlineData("throws")]
+    [InlineData("malformed")]
+    public async Task PackStatus_FallsBackToDiscord(string failure)
+    {
+        _h.On("GET", Base + "/pack/status", _ => failure switch
+        {
+            "throws" => throw new HttpRequestException("connection lost"),
+            "malformed" => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{") },
+            _ => new HttpResponseMessage(HttpStatusCode.Unauthorized),
+        });
+        _h.On("GET", Base + "/discord/pack/status", _ => Json(HttpStatusCode.OK,
+            new { dailyLimit = 7, packs = new Dictionary<string, object> { ["d"] = new { downloadsRemaining = 2 } } }));
+        var (svc, _) = New(token: failure == "absent" ? null : "pat", discordToken: "discord");
+
+        var status = await svc.GetFullPackStatusAsync();
+
+        Assert.Equal(7, status!.DailyLimit);
+        Assert.Equal(2, status.Packs!["d"].DownloadsRemaining);
+        Assert.Equal(failure == "absent" ? 1 : 2, _h.Requests.Count);
+        Assert.Equal("Bearer discord", _h.Requests.Last().Authorization);
+        Assert.EndsWith("/discord/pack/status", _h.Requests.Last().Url);
+        if (failure != "absent") Assert.Equal("Bearer pat", _h.Requests.First().Authorization);
+    }
+
+    [Theory]
+    [InlineData("{\"dailyLimit\":5}", 5)]
+    [InlineData("null", null)]
+    public async Task PackStatus_PatreonSuccessDoesNotAskDiscord(string body, int? limit)
+    {
+        _h.On("GET", Base + "/pack/status", _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        var (svc, _) = New(discordToken: "discord");
+        Assert.Equal(limit, (await svc.GetFullPackStatusAsync())?.DailyLimit);
+        Assert.Single(_h.Requests);
+    }
+
+    [Fact]
+    public async Task PackStatus_SignedOutOfflineAndFailedDiscordReturnNull()
+    {
+        var (signedOut, _) = New(token: null);
+        Assert.Null(await signedOut.GetFullPackStatusAsync());
+        var (sandbox, _) = New(baseUrl: null, discordToken: "discord");
+        Assert.Null(await sandbox.GetFullPackStatusAsync());
+        _settings.OfflineMode = true;
+        var (svc, _) = New(discordToken: "discord");
+        Assert.Null(await svc.GetFullPackStatusAsync());
+        Assert.Empty(_h.Requests);
+        _settings.OfflineMode = false;
+        Assert.Null(await svc.GetPackDownloadStatusAsync()); // both endpoints refuse
+        Assert.Equal(2, _h.Requests.Count);
     }
 
     [Fact]

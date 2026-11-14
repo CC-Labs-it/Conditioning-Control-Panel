@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action RaiseAll = () => { foreach (var w in Windows) X11Overlay.Raise(w); };
         private static readonly List<BouncingTextOverlayWindow> Windows = new();
         private static bool _running, _paused;
+        private static double _screenScale = 1;
         private static int _chain;   // bumped by PauseForVideo: a frame requested before it is dropped
         private static TimeSpan? _last;
         private static Visual? _host;
@@ -57,6 +58,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool ManualFramesForTests;
         internal static event Action? Bounced;
         internal static event Action? Stopped;
+
+        // WPF BouncingTextService.cs:58: physical pixels, padded for motion and transforms.
+        internal static IReadOnlyList<System.Drawing.Rectangle> ActiveTextRects()
+        {
+            if (!_running) return Array.Empty<System.Drawing.Rectangle>();
+            return Engine.Logos.Select(l =>
+            {
+                var pad = (l.TextWidth + l.TextHeight) / 2 + 80;
+                var left = (int)Math.Floor((l.PosX - pad) * _screenScale);
+                var top = (int)Math.Floor((l.PosY - pad) * _screenScale);
+                var right = (int)Math.Ceiling((l.PosX + l.TextWidth + pad) * _screenScale);
+                var bottom = (int)Math.Ceiling((l.PosY + l.TextHeight + pad) * _screenScale);
+                return new System.Drawing.Rectangle(left, top, right - left, bottom - top);
+            }).ToArray();
+        }
 
         /// <summary>Is a logo (engine DIPs) close enough to this screen to draw on it? Padded the way
         /// WPF pads its OCR rects, (w+h)/2 + 80, which covers the scale/rotate effects; plus the
@@ -88,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
             var k = screens[primary].Scaling > 0 ? screens[primary].Scaling : 1.0;
+            _screenScale = k;
             var targets = PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary)
                 .Select(i => screens[i]).ToList();
 
