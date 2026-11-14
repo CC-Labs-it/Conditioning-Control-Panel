@@ -133,13 +133,8 @@ public class KeywordVoiceTests
             KeywordTriggerHead.HasKeyboardInput);
         KeywordTriggerHead.KeyboardSupportedForTests = false;
         Assert.DoesNotContain("trigger words on", shell.VoiceCmds.Grammar());
-        Assert.DoesNotContain("trigger words off", shell.VoiceCmds.Grammar());
-        shell.ShowTab("shelistening");
-        Dispatcher.UIThread.RunJobs();
-        var row = shell.SheListeningPage!.GetLogicalDescendants()
-            .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>()
-            .Single(x => Equals(x.Tag, "voice:keyword_on|keyword_off"));
-        Assert.False(row.IsVisible);
+        // Restack b188: stopping stays available without a key source (trunk ListeningKeywordStopTests).
+        Assert.Contains("trigger words off", shell.VoiceCmds.Grammar());
         return Task.CompletedTask;
     });
 
@@ -229,6 +224,13 @@ public class KeywordVoiceTests
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        // Trunk rules the PR predates: keyword audio waits for a running engine or session, and a panic
+        // quiet left by another test holds every keyword (see ListeningKeywordStopTests).
+        var engineRunning = CoreSession.IsEngineRunningProvider;
+        var sessionRunning = CoreSession.IsSessionRunningProvider;
+        CoreSession.IsEngineRunningProvider = () => true;
+        CoreSession.IsSessionRunningProvider = () => false;
+        ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
         KeywordTriggerHead.KeyboardSupportedForTests = true;
         KeywordTriggerHead.TranslateForTests = vk => vk is >= 'A' and <= 'Z' ? char.ToLowerInvariant((char)vk) : null;
         CoreEntitlement.HasPremiumProvider = () => true;
@@ -242,6 +244,6 @@ public class KeywordVoiceTests
         KeywordTriggerHead.Engine.Now = () => new DateTime(2026, 10, 10, 12, 0, 0);
         var shell = new MainShellWindow();
         try { shell.Show(); await body(shell); }
-        finally { KeywordTriggerHead.Stop(); KeywordTriggerHead.KeyboardSupportedForTests = null; KeywordTriggerHead.TranslateForTests = null; KeywordTriggerHead.Engine.Now = now; cooldowns.LastGlobal = lastGlobal; shell.RequestExit(); }
+        finally { KeywordTriggerHead.Stop(); KeywordTriggerHead.KeyboardSupportedForTests = null; KeywordTriggerHead.TranslateForTests = null; KeywordTriggerHead.Engine.Now = now; cooldowns.LastGlobal = lastGlobal; CoreSession.IsEngineRunningProvider = engineRunning; CoreSession.IsSessionRunningProvider = sessionRunning; shell.RequestExit(); }
     });
 }
