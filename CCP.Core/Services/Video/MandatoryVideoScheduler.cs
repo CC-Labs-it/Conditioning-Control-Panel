@@ -719,12 +719,21 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
-        /// <summary>WPF VideoService.ReloadAssets: drop the dealt queue so the next pick re-reads the
-        /// enabled library (an untick or preset switch takes effect on the very next video, #130).</summary>
+        /// <summary>WPF VideoService.ReloadAssets (VideoService.cs:1583-1592): drop both dealt queues so the
+        /// next pick re-reads the enabled library (an untick or preset switch takes effect on the very next
+        /// video, #130), then sweep the pack decrypts.</summary>
         public void ReloadAssets()
         {
-            _queue = new Queue<string>();
+            RefreshVideosPath();
             PackVideos?.CleanupTemps();
+        }
+
+        /// <summary>WPF VideoService.RefreshVideosPath (VideoService.cs:1570-1577), the asset-import refresh:
+        /// drop both dealt queues but keep every decrypt, since one may still be playing.</summary>
+        public void RefreshVideosPath()
+        {
+            _queue = new Queue<string>();
+            PackVideos?.ResetShuffle();
         }
 
         /// <summary>WPF GetNextVideo, local half: a shuffled queue refilled when it runs dry.</summary>

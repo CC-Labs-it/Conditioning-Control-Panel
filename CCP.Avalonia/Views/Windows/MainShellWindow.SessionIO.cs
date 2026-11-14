@@ -218,8 +218,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _assetImportService ??= new AssetImportService();
                 var result = await Task.Run(() => _assetImportService.ImportAsync(paths));
                 // WPF MainWindow.SessionIO.cs:1814-1818 (RefreshVideosPath): the dealt video queue
-                // must see the new files.
-                if (result.VideosImported > 0) CoreEngine.Video?.ReloadAssets();
+                // must see the new files. Pack decrypts stay: a clip may be playing (WPF does not sweep here).
+                if (result.VideosImported > 0) Overlays.MandatoryVideoOverlay.Instance.Scheduler.RefreshVideosPath();
                 ShowTab("assets");
                 Log.Information("Asset import complete: {Summary}", result.GetSummary());
                 await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_import_complete"), result.GetSummary());
