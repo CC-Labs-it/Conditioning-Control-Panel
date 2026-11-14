@@ -139,8 +139,8 @@
 
                             <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
-                            <!-- Melting mode: same overlay, blur + slow Perlin displacement warp. -->
-                            <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_melt_hint}">
+                            <!-- Melt is unavailable until capture displacement is ported. -->
+                            <Grid x:Name="MeltRow" Height="34" IsEnabled="False" Background="Transparent" ToolTip.Tip="{loc:Str exclusives_not_on_this_build}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -151,6 +151,7 @@
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
 
+                            <TextBlock x:Name="TxtMeltUnavailable" Text="{loc:Str exclusives_not_on_this_build}" FontSize="11" Foreground="{StaticResource TextLightBrush}" TextWrapping="Wrap"/>
                             <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Keep pictures clear (BrainDrainKeepPicturesClear): the blur tucks under
@@ -168,8 +169,8 @@
 
                             <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
-                            <!-- High refresh. Comfort/perf knob, stays editable mid-session. -->
-                            <Grid x:Name="HighRefreshRow" Height="34" Background="Transparent" ToolTip.Tip="{loc:Str st4_braindrain_audio_unavailable}">
+                            <!-- High refresh is unavailable until capture cadence is ported. -->
+                            <Grid x:Name="HighRefreshRow" Height="34" IsEnabled="False" Background="Transparent" ToolTip.Tip="{loc:Str exclusives_not_on_this_build}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -180,6 +181,7 @@
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
 
+                            <TextBlock x:Name="TxtHighRefreshUnavailable" Text="{loc:Str exclusives_not_on_this_build}" FontSize="11" Foreground="{StaticResource TextLightBrush}" TextWrapping="Wrap"/>
                             <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Show in screenshots (AllowOverlayCapture). Privacy stays the

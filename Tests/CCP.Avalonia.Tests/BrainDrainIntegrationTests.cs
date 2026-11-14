@@ -26,8 +26,15 @@ public sealed class BrainDrainIntegrationTests
 {
     private static Task Run(Func<Window, Task> test, bool supported = true) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var owner = Setup(supported); try { await test(owner); }
-        finally { BrainDrainOverlay.CloseAll(); owner.Close(); }
+        var previous = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        global::ConditioningControlPanel.Avalonia.App.Notifications = new();
+        Window? owner = null;
+        try { owner = Setup(supported); await test(owner); }
+        finally
+        {
+            try { BrainDrainOverlay.CloseAll(); owner?.Close(); }
+            finally { global::ConditioningControlPanel.Avalonia.App.Notifications = previous; }
+        }
     });
     private static Window Setup(bool supported = true)
     {
@@ -380,5 +387,34 @@ public sealed class BrainDrainIntegrationTests
         Assert.Single(notices);
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public async Task FixtureRestoresNotificationHostAndQueuedStateEvenOnFailure()
+    {
+        var original = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        var previous = new ConditioningControlPanel.Avalonia.Helpers.NotificationService();
+        var host = new StackPanel();
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() => {
+                global::ConditioningControlPanel.Avalonia.App.Notifications = previous;
+                previous.Show("queued"); return Task.CompletedTask;
+            });
+            await Run(owner => { BrainDrainOverlay.Prepare = _ => false; BrainDrainOverlay.Start(owner); return Task.CompletedTask; });
+            await AvaloniaTestDispatcher.RunAsync(() => {
+                Assert.Same(previous, global::ConditioningControlPanel.Avalonia.App.Notifications);
+                previous.AttachHost(host);
+                Assert.Single(host.Children);
+                return Task.CompletedTask;
+            });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Run(_ => throw new InvalidOperationException()));
+            await AvaloniaTestDispatcher.RunAsync(() => {
+                Assert.Same(previous, global::ConditioningControlPanel.Avalonia.App.Notifications);
+                previous.Show("after"); Assert.Equal(2, host.Children.Count);
+                return Task.CompletedTask;
+            });
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.Notifications = original; }
+    }
 
 }
