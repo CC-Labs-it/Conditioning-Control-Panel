@@ -224,8 +224,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
         /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
         /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
-        /// With <see cref="InjectCarrier"/> it runs after every completed navigation: the engine has
-        /// no document-created script seam, so a page that probes the carrier only at load misses it.
+        /// With <see cref="InjectCarrier"/> WebKitGTK installs it at document start, before the first navigation
+        /// of each engine (<see cref="Platform.WebViewCarrier"/>); it also runs after every completed navigation
+        /// as the fallback on engines without that seam (WPE) or when the native install fails.
         /// </summary>
         internal const string CarrierShim =
             "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
@@ -235,7 +236,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             + "if(typeof w.__ccpRnPush!=='function')w.__ccpRnPush=function(j){var m;try{m=JSON.parse(j);}catch(e){return;}"
             + "t.dispatchEvent(new MessageEvent('message',{data:m}));};})();";
 
-        /// <summary>Run <see cref="CarrierShim"/> after each completed navigation (see there).</summary>
+        /// <summary>Install <see cref="CarrierShim"/> at document start where supported, else after each completed
+        /// navigation (see there). Set before attaching the host or navigating.</summary>
         public bool InjectCarrier { get; set; }
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
@@ -326,6 +328,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
         /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
         internal bool MediaPaused { get; set; }
+
+        // WPF BrowserService.cs:119-122, 245-246: engine-level mute (cross-origin frames included). The preference is
+        // remembered before an adapter exists and reapplied to every rebuilt engine before its first navigation.
+        private bool? _engineMuted;
+        internal Func<bool, Task<bool>>? NativeMuteInvoker { get; set; }
+        internal Task<bool> SetEngineMutedAsync(bool muted)
+        {
+            _engineMuted = muted;
+            if (NativeMuteInvoker != null) return NativeMuteInvoker(muted);
+            try { return Platform.WebViewAudio.SetMutedAsync(_web?.TryGetPlatformHandle(), muted); }
+            catch (Exception ex) { Log.Debug("WebHost: native mute failed: {E}", ex.Message); return Task.FromResult(false); }
+        }
 
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
@@ -418,6 +432,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Only the Home browser opts in. Other embeds keep their existing popup policy.
         public bool RouteBrowserPopups { get; set; }
+
+        // Home retries a synchronous adapter construction failure on the next navigation (Navigate).
+        public bool RetryFailedConstruction { get; set; }
 
         // Native URL boundary, like ScriptInvoker. No cached URL fallback: unknown pages get no exemption.
         internal Func<string?>? DocumentUrlReader { get; set; }
@@ -609,6 +626,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
+            // WPF MainWindow.Browser.cs:48, :297: a failed adapter construction is retried on the next navigation.
+            if (RetryFailedConstruction && _web is null && NavigationInvoker is null && (IsAvailable || NativeViewFactory != null))
+                CreateNativeView();
             if (_web is null && NavigationInvoker is null) return false;
             if (_scrolllerGate is null) return true; // held until the gate reports
             try
@@ -686,6 +706,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal async Task PrepareScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            var report = ++_gateReport;
+            bool Stale() => engine != _scrolllerEngine || report != _gateReport;
+            // WPF BrowserService.cs:245-246: a fresh engine gets the saved mute before navigation.
+            if (_engineMuted is { } muted)
+            {
+                await BoundedNativeStep(SetEngineMutedAsync(muted), "native mute");
+                if (Stale()) return;
+            }
+            // WebKitGTK: the opt-in carrier before the page's own scripts, once per engine.
+            if (InjectCarrier)
+            {
+                _carrierInstall ??= InstallCarrierAsync();
+                await BoundedNativeStep(_carrierInstall, "carrier install");
+                if (Stale()) return;
+            }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
             {
                 try
@@ -696,6 +731,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
             }
             OnScrolllerGate(engine, gated);
+        }
+
+        private int _gateReport;
+        private Task<bool>? _carrierInstall;
+        internal Func<string, Task<bool>>? NativeCarrierInvoker { get; set; }
+
+        // A GLib idle callback that never runs must not hold the first navigation forever.
+        private static async Task BoundedNativeStep(Task<bool> step, string what)
+        {
+            try { await step.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (Exception ex) { Log.Debug("WebHost: {What} failed: {E}", what, ex.Message); }
+        }
+
+        private async Task<bool> InstallCarrierAsync()
+        {
+            try
+            {
+                return await (NativeCarrierInvoker?.Invoke(CarrierShim)
+                    ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), CarrierShim));
+            }
+            catch (Exception ex) { Log.Debug("WebHost: carrier install failed: {E}", ex.Message); return false; }
         }
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -728,6 +784,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _scrolllerGate = null;
             ActiveNavigation = null;
             _loadedOnThisEngine = false;
+            _carrierInstall = null;
+            _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
             return gated => _ = PrepareScrolllerGate(engine, gated);

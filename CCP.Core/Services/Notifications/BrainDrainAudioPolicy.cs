@@ -26,6 +26,7 @@ public static class BrainDrainAudioPolicy
     }
     public static TimeSpan Interval(bool highRefresh) => TimeSpan.FromMilliseconds(highRefresh ? 500 : 5000);
     /// <summary>0 = no clips, blur only (WPF 7.2.3 ca1dc0dbb, ccp-bugs #1536).</summary>
-    public static double Probability(int intensity, TimeSpan interval) => Math.Clamp(intensity, 0, 100) / 100.0 * interval.TotalSeconds / 60;
+    public static double Probability(int intensity, TimeSpan interval) => Probability((double)intensity, interval);
+    public static double Probability(double intensity, TimeSpan interval) => Math.Clamp(intensity, 0, 100) / 100.0 * interval.TotalSeconds / 60;
     public static double Volume(int master, int own) => Math.Clamp(master, 0, 100) / 100.0 * Math.Clamp(own, 0, 100) / 100;
 }

@@ -28,6 +28,9 @@ namespace ConditioningControlPanel
 
         // Head-owned Brain Drain audio. WPF MainWindow.StartStop.cs:411-414,531.
         public static volatile Action? StartBrainDrain, StopBrainDrain;
+        /// <summary>A session ramp sets the running player's rate, never the saved preference
+        /// (WPF SessionEngine.cs:874-886, App.BrainDrain.Intensity).</summary>
+        public static volatile Action<double>? SetBrainDrainIntensity;
 
         /// <summary>When the running engine started (WPF MainWindow._emiEngineStartedUtc); null when stopped.</summary>
         public static DateTime? StartedUtc { get; private set; }

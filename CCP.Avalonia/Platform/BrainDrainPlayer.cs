@@ -21,6 +21,9 @@ internal sealed class BrainDrainPlayer
     private ITimer? _timer;
     private MindWipePlayer.IVoice? _voice;
     private bool _busy, _running;
+    // WPF BrainDrainService.Intensity: a session ramp drives the running player, never the saved preference.
+    // Null = follow BrainDrainIntensity live (the Studio slider, presets).
+    private double? _rampIntensity;
     private long _generation, _runGeneration;
     private AppSettings? _settings;
     private SettingsService? _service;
@@ -29,12 +32,15 @@ internal sealed class BrainDrainPlayer
     { _prepare = prepare; _time = time ?? TimeProvider.System; _roll = roll ?? Random.Shared.NextDouble;
       _dispatch = dispatch ?? (action => Dispatcher.UIThread.Post(action)); }
     internal bool IsRunning { get { lock (_gate) return _running; } }
+    internal double? RampIntensity { get { lock (_gate) return _rampIntensity; } }
+    internal void SetIntensity(double intensity) { lock (_gate) if (_running) _rampIntensity = Math.Clamp(intensity, 0, 100); }
     internal void Start()
     {
         lock (_gate)
         {
             if (_running || !CoreSettings.Current.BrainDrainEnabled) return;
             _running = true;
+            _rampIntensity = null;
             _settings = CoreSettings.Current;
             _settings.PropertyChanged += Changed;
             _service = CoreSettings.Service;
@@ -66,7 +72,7 @@ internal sealed class BrainDrainPlayer
         long generation, runGeneration;
         lock (_gate)
         {
-            if (!_running || _busy || _roll() >= BrainDrainAudioPolicy.Probability(CoreSettings.Current.BrainDrainIntensity, interval)) return;
+            if (!_running || _busy || _roll() >= BrainDrainAudioPolicy.Probability(_rampIntensity ?? CoreSettings.Current.BrainDrainIntensity, interval)) return;
             _busy = true; generation = ++_generation; runGeneration = _runGeneration;
         }
         LibVlcAudio.IPreparedVoice? voice = null;
