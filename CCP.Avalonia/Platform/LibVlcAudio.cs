@@ -161,16 +161,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Same contract as WPF's AudioService.PlayOneShot: onStarted gets the clip length
-        /// once playing; onFinished fires exactly once - off the UI thread when the clip ends or
+        /// once playing (flash may report zero, then its known length); onFinished fires exactly once - off the UI thread when the clip ends or
         /// errors, synchronously on the caller's thread when it is refused (muted, missing file).
         /// Returns the clip's stop (WPF handle.Stop): it ends the clip early, and onFinished still fires once.</summary>
         public Action PlayOneShot(string path, float volume, string tag, Action<TimeSpan>? onStarted, Action? onFinished)
         {
-            if (volume <= 0f || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
+            if ((volume <= 0f && !(volume == 0f && tag == "flash-voice")) || string.IsNullOrWhiteSpace(path) || !File.Exists(path)) { Fire(onFinished); return static () => { }; }
 
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
             var player = new MediaPlayer(media);
+            // WPF's zero voice level keeps the clip's clock but cannot leak its samples.
+            if (volume == 0f && !player.SetAudioOutput("dummy"))
+            { player.Dispose(); media.Dispose(); Fire(onFinished); return static () => { }; }
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
             var vol = VlcVolume(volume);
             var done = 0;
@@ -184,15 +187,24 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     Fire(onFinished);
                 });
             }
+            long knownLength = 0;
+            int playing = 0;
+            if (tag == "flash-voice" && onStarted != null)
+                player.LengthChanged += (_, e) =>
+                {
+                    Interlocked.Exchange(ref knownLength, e.Length);
+                    if (e.Length > 0 && Volatile.Read(ref playing) != 0) Fire(() => onStarted(TimeSpan.FromMilliseconds(e.Length)));
+                };
             player.Playing += (_, _) =>
             {
+                Volatile.Write(ref playing, 1);
                 // The bug report's last section (#4076): every sound, engine on or off.
                 ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning, false, DateTime.Now);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
-                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });
+                ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { if (volume != 0f) ApplyPreferredDevice(player); player.Volume = vol; } });
                 if (onStarted is null) return;
-                try { onStarted(TimeSpan.FromMilliseconds(Math.Max(0, player.Length))); }
+                try { onStarted(TimeSpan.FromMilliseconds(Math.Max(0, Math.Max(player.Length, Interlocked.Read(ref knownLength))))); }
                 catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: onStarted threw", tag); }
             };
             player.EndReached += (_, _) => Finish();
