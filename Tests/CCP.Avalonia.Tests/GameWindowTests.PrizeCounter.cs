@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -67,6 +68,43 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"ready\",\"protocol\":1}");
         return w;
     }
+
+    /// <summary>WPF LauncherWindow WalletChip_Click (:250): the signed-in wallet opens the counter over the launcher
+    /// (door "launcher"), the launcher stays up, a second click brings the same window forward, and panic closes it.</summary>
+    [Fact]
+    public void PrizeCounter_LauncherWalletOpensIt() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldHttp, oldBase, oldSecret, oldIn, oldId, oldSp) = (GameWindow.CounterHttp, GameWindow.CounterServerBase, CoreSecrets.RetrieveProvider, CoreAccount.IsLoggedInProvider, s.UnifiedId, s.SkillPoints);
+        try
+        {
+            GameWindow.CounterHttp = () => new HttpClient(new ShopWire());   // no network in tests
+            GameWindow.CounterServerBase = () => "http://shop.test";
+            CoreSecrets.RetrieveProvider = n => n == CoreSecrets.AuthToken ? "tok" : null;   // P02: never the keyring
+            CoreAccount.IsLoggedInProvider = () => true;
+            (s.UnifiedId, s.SkillPoints) = ("acct-1", 123);
+            launcher.RefreshAccount();
+            var chip = launcher.FindControl<global::Avalonia.Controls.Button>("SpChip")!;
+            Assert.True(chip.IsVisible);
+            chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            var w = GameWindow.LaunchPrizeCounter("", null)!;   // the open window, brought forward; a blank door keeps the source
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\",\"protocol\":1}");
+            Assert.Equal("launcher", (string?)sent.Single(o => (string?)o["type"] == "init")["from"]);
+            Assert.True(launcher.IsVisible);
+            chip.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Assert.Same(w, GameWindow.LaunchPrizeCounter("", null));
+            GameWindow.CloseAllForPanic();
+            Assert.False(w.IsVisible);
+            Assert.True(launcher.IsVisible);
+        }
+        finally
+        {
+            (GameWindow.CounterHttp, GameWindow.CounterServerBase, CoreSecrets.RetrieveProvider, CoreAccount.IsLoggedInProvider) = (oldHttp, oldBase, oldSecret, oldIn);
+            (s.UnifiedId, s.SkillPoints) = (oldId, oldSp);
+        }
+    });
 
     /// <summary>WPF BuildInit / OnPageMessage: init never carries the token; a state read goes out with the door and
     /// comes back with Rain hidden (RainV2Gate off); a Rain buy is refused and never relayed.</summary>

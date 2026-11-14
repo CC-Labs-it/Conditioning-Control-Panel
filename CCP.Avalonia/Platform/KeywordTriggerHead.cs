@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -16,7 +17,8 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
-/// comment actions. OCR and the Brain Drain visual remain a follow-up.</summary>
+/// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The OCR engine itself
+/// (<see cref="OcrSource"/>) and the Brain Drain visual remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -33,6 +35,7 @@ internal static class KeywordTriggerHead
         {
             Engine.Start();
             AttachKeyboard();
+            SyncOcr();
         }
         else Stop();
     }
@@ -63,7 +66,65 @@ internal static class KeywordTriggerHead
         windows && string.IsNullOrEmpty(sandboxDir) && ensureListening();
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
+    internal static void Stop() { DetachKeyboard(); _ocr?.Stop(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
+
+    /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
+    /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland
+    /// capture is interactive only. While null the scanner never starts; everything after the source is live.</summary>
+    internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
+    private static ScreenOcrService? _ocr;
+
+    /// <summary>WPF MainWindow.Awareness.cs:414-428,461-468 and KeywordTriggers.cs:119: master, OCR switch and interval.</summary>
+    internal static void SyncOcr()
+    {
+        var s = CoreSettings.Current;
+        if (OcrSource == null) { _ocr?.Stop(); return; }
+        _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
+            () => KeywordAudioRuntime.HasAccess, DeliverOcr);
+        _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+    }
+
+    internal static Task TickOcrForTest() => _ocr?.TickAsync() ?? Task.CompletedTask;
+
+    // WPF ScreenOcrService.cs:143-198: own-UI filter, then the consumer on the UI thread. Stop runs on the
+    // UI thread too, so a scan that finished after it is dropped here.
+    private static Task<bool> DeliverOcr(IReadOnlyList<ScreenOcrService.Word> words, CancellationToken token) =>
+        Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            if (token.IsCancellationRequested) return false;
+            var s = CoreSettings.Current;
+            if (s.AwarenessIgnoreOwnUi) words = WithoutOwnWindows(words, OwnWindowRects());
+            var foreground = (Process: (string?)null, Own: false);
+            if (OperatingSystem.IsWindows() && KeywordMatchRules.NeedsForeground(s))
+            {
+                GetWindowThreadProcessId(GetForegroundWindow(), out var id);
+                foreground = Foreground(id);
+            }
+            return Engine.CheckOcrWords(words, foreground.Process, foreground.Own);
+        }).GetTask();
+
+    internal static IReadOnlyList<ScreenOcrService.Word> WithoutOwnWindows(
+        IReadOnlyList<ScreenOcrService.Word> words, IReadOnlyList<System.Drawing.Rectangle> own) =>
+        own.Count == 0 ? words : words.Where(w => !own.Any(r => r.IntersectsWith(w.Bounds))).ToArray();
+
+    // WPF App.xaml.cs:1600-1720: visible, unminimised windows; one that covers a whole monitor is an
+    // overlay container and is skipped (#273).
+    // shortcut: bouncing/subliminal text rects (WPF :1722-1740) are not added (#4717 in b221 brings them).
+    internal static IReadOnlyList<System.Drawing.Rectangle> OwnWindowRects()
+    {
+        if (global::Avalonia.Application.Current?.ApplicationLifetime is not
+            global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return [];
+        var rects = new List<System.Drawing.Rectangle>();
+        foreach (var w in desktop.Windows)
+        {
+            if (!w.IsVisible || w.WindowState == global::Avalonia.Controls.WindowState.Minimized) continue;
+            var size = global::Avalonia.PixelSize.FromSize(w.FrameSize ?? w.ClientSize, w.RenderScaling);
+            if (size.Width <= 0 || size.Height <= 0 || w.Screens.All.Any(m =>
+                size.Width >= m.Bounds.Width - 4 && size.Height >= m.Bounds.Height - 4)) continue;
+            rects.Add(new System.Drawing.Rectangle(w.Position.X, w.Position.Y, size.Width, size.Height));
+        }
+        return rects;
+    }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()
@@ -166,7 +227,8 @@ internal sealed class KeywordAudioRuntime
     }
 
     private readonly KeywordTextInput _input = new();
-    private readonly KeywordCooldowns _cooldowns = new();
+    private KeywordCooldowns _cooldowns = new();
+    internal void ResetCooldownsForTest() { _cooldowns = new(); ClearOcr(); }   // Stop keeps the OCR guards
     private CancellationTokenSource? _audio;
     private Action? _stop;
     private int _playGeneration;
@@ -180,7 +242,7 @@ internal sealed class KeywordAudioRuntime
     // WPF KeywordTriggerService.cs:176-188: access gate, and Start must preserve a live buffer.
     internal static bool HasAccess => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness");
     internal void Start() { if (IsActive || !HasAccess) return; IsActive = true; _input.Clear(); }
-    internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }
+    internal void Stop() { IsActive = false; _input.Clear(); StopAudio(); }   // WPF :193-200 keeps the OCR guards
     internal void ClearInput() => _input.Clear();
 
     private bool Accept(string? process, bool own)
@@ -215,12 +277,19 @@ internal sealed class KeywordAudioRuntime
             word => _cooldowns.IsMuted(word, now.ToUniversalTime()));
         if (fired.Count == 0) return;
         _input.Clear();
+        Fire(fired, "Keyboard", now);
+    }
+
+    // One fire path for both sources (WPF KeywordTriggerService.cs:126-140 keyboard, :933-943 OCR).
+    private void Fire(List<KeywordTrigger> fired, string source, DateTime now)
+    {
+        var s = CoreSettings.Current;
         _cooldowns.LastGlobal = now;
         foreach (var t in fired)
         {
             t.LastTriggeredAt = now;
             _cooldowns.Record(t, s, now.ToUniversalTime());
-            Fires.Record(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:135,1191-1200 (pulse feed)
+            Fires.Record(t, source, now);   // WPF KeywordTriggerService.cs:135,1191-1200 (pulse feed)
             try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
             TrackAchievement();   // WPF GamificationBridge.OnKeywordTriggerFired: on TriggerFired, before the panic hold
         }
@@ -236,6 +305,124 @@ internal sealed class KeywordAudioRuntime
         var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
         if (fired.Count > 1) comments = comments.Take(1);
         foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
+    }
+
+    // WPF KeywordTriggerService.cs:689-944. Kept on the same thread as keyboard input.
+    private Dictionary<string, int> _ocrSeen = new();
+    private readonly HashSet<string> _ocrFired = new();
+    internal bool NeedsOcrConfirmation { get; private set; }
+    private void ClearOcr() { _ocrSeen.Clear(); _ocrFired.Clear(); NeedsOcrConfirmation = false; }
+
+    /// <summary>One OCR scan: a match fires only after <c>OcrConfirmationScans</c> scans at the same place and
+    /// stays guarded while it stays on screen. True asks the scanner for a quick confirmation rescan.</summary>
+    internal bool CheckOcrWords(IReadOnlyList<ScreenOcrService.Word> words, string? process = null, bool own = false)
+    {
+        NeedsOcrConfirmation = false;
+        var s = CoreSettings.Current;
+        // WPF :716-743: a lapse or stop keeps the streak; an empty scan or a blocked app clears it.
+        if (!IsActive || !HasAccess) return false;
+        if (words.Count == 0 || !KeywordMatchRules.AppAllowed(s, process, own)) { ClearOcr(); return false; }
+        if (!s.KeywordTriggersEnabled || !s.ScreenOcrEnabled) return false;
+        if (s.KeywordTriggers is not { Count: > 0 }) return false; // WPF :741-742 keeps the guards
+        var now = Now();
+        if ((now - _cooldowns.LastGlobal).TotalSeconds < s.KeywordGlobalCooldownSeconds) return false;
+        var matched = new List<ScreenOcrService.Word>();
+        var fired = new List<KeywordTrigger>();
+        foreach (var trigger in KeywordMatchRules.Ordered(s.KeywordTriggers))
+        {
+            if (trigger == null || !trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword) ||
+                (now - trigger.LastTriggeredAt).TotalSeconds < trigger.CooldownSeconds ||
+                _cooldowns.IsMuted(trigger.Keyword, now.ToUniversalTime())) continue;
+            var hits = FindOcrMatches(trigger, words);
+            if (hits.Count == 0) continue;
+            fired.Add(trigger);
+            matched.AddRange(hits);
+        }
+        if (matched.Count == 0) { ClearOcr(); return false; }
+
+        var positions = new HashSet<string>();
+        foreach (var word in matched)
+            positions.Add($"{word.Text.ToLowerInvariant()}_{word.Bounds.X / 120}_{word.Bounds.Y / 120}");
+        _ocrFired.IntersectWith(positions);
+        var seen = new Dictionary<string, int>();
+        var confirmed = new List<string>();
+        foreach (var key in positions)
+        {
+            var count = (_ocrSeen.TryGetValue(key, out var previous) ? previous : 0) + 1;
+            seen[key] = count;
+            if (_ocrFired.Contains(key)) continue;
+            if (count < Math.Max(1, s.OcrConfirmationScans)) NeedsOcrConfirmation = true;
+            else confirmed.Add(key);
+        }
+        _ocrSeen = seen;
+        if (confirmed.Count == 0) return NeedsOcrConfirmation;
+        if (!s.OcrHighlightAll)
+        {
+            for (var i = confirmed.Count - 1; i > 0; i--)
+            {
+                var j = Random.Shared.Next(i + 1);
+                (confirmed[i], confirmed[j]) = (confirmed[j], confirmed[i]);
+            }
+            var count = Random.Shared.Next(1, confirmed.Count + 1);
+            confirmed.RemoveRange(count, confirmed.Count - count);
+        }
+        _ocrFired.UnionWith(confirmed);
+        // Fire holds the response during a panic's quiet, the same as a keyboard match (WPF DispatchMergedAsync).
+        Fire(fired, "OCR", now);
+        return NeedsOcrConfirmation;
+    }
+
+    private static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
+    {
+        var results = new List<ScreenOcrService.Word>();
+        if (trigger.MatchType != KeywordMatchType.Regex)
+        {
+            var parts = trigger.Keyword.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) return results;
+            for (var i = 0; i <= words.Count - parts.Length; i++)
+            {
+                var matches = true;
+                for (var j = 0; j < parts.Length; j++)
+                {
+                    var text = words[i + j].Text;
+                    var start = 0; var end = text.Length;
+                    while (start < end && !char.IsLetterOrDigit(text[start])) start++;
+                    while (end > start && !char.IsLetterOrDigit(text[end - 1])) end--;
+                    if (!text.Substring(start, end - start).Equals(parts[j], StringComparison.OrdinalIgnoreCase))
+                    { matches = false; break; }
+                }
+                if (!matches) continue;
+                var bounds = words[i].Bounds;
+                for (var j = 1; j < parts.Length; j++) bounds = System.Drawing.Rectangle.Union(bounds, words[i + j].Bounds);
+                results.Add(parts.Length == 1 ? words[i] : new ScreenOcrService.Word(trigger.Keyword, bounds));
+            }
+            return results;
+        }
+        var textBuilder = new StringBuilder();
+        var starts = new int[words.Count];
+        for (var i = 0; i < words.Count; i++)
+        {
+            if (i > 0) textBuilder.Append(' ');
+            starts[i] = textBuilder.Length;
+            textBuilder.Append(words[i].Text);
+        }
+        try
+        {
+            foreach (Match match in Regex.Matches(textBuilder.ToString(), trigger.Keyword, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100)))
+            {
+                if (match.Length == 0) continue;
+                System.Drawing.Rectangle? bounds = null;
+                for (var i = 0; i < words.Count; i++)
+                {
+                    if (starts[i] + words[i].Text.Length <= match.Index || starts[i] >= match.Index + match.Length) continue;
+                    bounds = bounds is { } r ? System.Drawing.Rectangle.Union(r, words[i].Bounds) : words[i].Bounds;
+                }
+                if (bounds is { } rect) results.Add(new ScreenOcrService.Word(match.Value, rect));
+            }
+        }
+        catch (ArgumentException) { return new(); }
+        catch (RegexMatchTimeoutException) { return new(); }
+        return results;
     }
     internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
     internal Action AchievementCredit = () => App.Achievements?.TrackKeywordTrigger();
@@ -298,12 +485,13 @@ internal sealed class KeywordAudioRuntime
             {
                 switch (action)
                 {
-                    // The first clip that actually plays wins; a missing first clip lets the next one try.
+                    // WPF DispatchActionAsync :1638: every audio action plays in order, each clip replacing the
+                    // last (PlayTriggerAudio stops the previous one); a missing clip is skipped (restack b220, #4235).
                     // Legacy flat fields check the stored path as is (WPF File.Exists(trigger.AudioFilePath)).
-                    case PlayAudioAction audio when !played:
+                    case PlayAudioAction audio:
                         var result = await PlayAsync(audio, resolveRelative: !legacy, duck);
                         if (result == ClipResult.Stopped) return;
-                        played = result == ClipResult.Played;
+                        played |= result == ClipResult.Played;
                         break;
                     case VisualEffectAction visual: (Visual ?? FireVisual)(visual.Effect, first.Keyword); break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
@@ -440,14 +628,19 @@ internal sealed class KeywordAudioRuntime
             path = File.Exists(resource) ? resource : File.Exists(legacy) ? legacy : path;
         }
         if (!File.Exists(path)) return ClipResult.Skipped;
-        StopClip();
-        var cancellation = _audio ??= new CancellationTokenSource();
-        var token = cancellation.Token;
+        // WPF DispatchActionsAsync :1594-1628 holds one duck over the whole response. The next clip's duck is
+        // taken before the replaced clip lets go of its own, so the shared duck count never touches zero
+        // between two clips of one response; the last clip's duck ends 500 ms after it finishes.
+        long? duckGeneration = null;
         if (duck && CoreSettings.Current.AudioDuckingEnabled)
         {
             CoreAudio.Duck(CoreSettings.Current.DuckingLevel);
-            _duckGeneration = CoreAudio.DuckGeneration;
+            duckGeneration = CoreAudio.DuckGeneration;
         }
+        StopClip();
+        _duckGeneration = duckGeneration;
+        var cancellation = _audio ??= new CancellationTokenSource();
+        var token = cancellation.Token;
         {
             try
             {

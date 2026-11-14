@@ -1,14 +1,16 @@
 // WPF Controls/Leash/LeashSurfaces.cs:203-219 (ask, Ask cue and seen), :221-227 (snap), :230-255 (replace/close),
 // :287-310 (window and Escape). The ask and the snap share this one overlay slot (WPF _overlay).
-// Missing: the overlay Thud on load (:308-311).
+// The overlay THUD on load (:308-311, LeashFx.Thud from 1.08) runs on the window's shared beat (BeatLoop).
 using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Billboard;
 using ConditioningControlPanel.Services.Leash;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 /// <summary>A borderless, see-through window holding one ask (or snap) card over its owner. Escape is the
@@ -22,6 +24,11 @@ public sealed class LeashAskWindow : Window
     internal Control Body { get; }
     internal LeashAskCard Card => (LeashAskCard)Body;
     internal LeashSnapCard? SnapCard => Body as LeashSnapCard;
+    private readonly ScaleTransform _thudScale = new(1, 1);
+    private BeatLoop? _thud;
+    private double _thudAmount;
+    /// <summary>True while the landing thud is still running (tests).</summary>
+    internal bool ThudActive => _thud?.IsRunning == true;
     // RenderProof: a sample ask.
     internal LeashAskWindow() : this(new LeashAskCard()) { }
     private LeashAskWindow(LeashAskCard card) : this(card, card.Dismiss) { }
@@ -37,6 +44,7 @@ public sealed class LeashAskWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Title = Loc.Get("leash_title");
         Content = new Grid { Margin = new Thickness(40), Children = { card } };
+        Closed += (_, _) => StopThud();
         KeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape) return;
@@ -103,7 +111,28 @@ public sealed class LeashAskWindow : Window
             return false;
         }
         Current = w;
+        w.PlayThud();
         return true;
+    }
+    /// <summary>WPF LeashOverlayWindow Loaded (:308-311): the card lands from 1.08 on the house THUD curve (340 ms).
+    /// Motion Off: it is simply there; Reduced lands from half the size (WPF LeashFx.Amount).</summary>
+    private void PlayThud()
+    {
+        _thudAmount = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.FeedMotionAmount;
+        if (_thudAmount <= 0 || RenderProof.Rendering) return;
+        Body.RenderTransformOrigin = RelativePoint.Center;
+        Body.RenderTransform = _thudScale;
+        StopThud();
+        _thud = new BeatLoop(Body, seconds => AdvanceThud(seconds * 1000));
+        _thud.Start();
+    }
+    private void StopThud() { _thud?.Stop(); _thud = null; }
+    /// <summary>One frame of the thud at <paramref name="ms"/> since it started (tests step it).</summary>
+    internal void AdvanceThud(double ms)
+    {
+        if (_thudAmount <= 0) return;
+        _thudScale.ScaleX = _thudScale.ScaleY = 1 + 0.08 * _thudAmount * (1 - BillboardTiming.Thud(Math.Clamp(ms / 340, 0, 1)));
+        if (ms >= 340) StopThud();
     }
     internal static void CloseCurrent()
     {

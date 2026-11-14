@@ -1197,8 +1197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///   <item>The lead-in timer and <paramref name="mood"/>. Both exist to time the avatar's
         ///         emotive-portrait pose swap against the voice; that system did not port, so a
         ///         lead-in would be a pause with nothing happening in it.</item>
-        ///   <item>EMI Desk's <c>NoteAvatarSpeaking</c>: its only consumer is her line engine,
-        ///         whose voice-hold tail is still missing here. Her <c>AvatarMuted</c> IS honoured below, as WPF
+        ///   <item>Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
         ///
@@ -1321,6 +1320,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
                     var source = trigger ? SpeechSource.Trigger : preset ? SpeechSource.Preset : SpeechSource.AI;
+                    // #4071, WPF Speech.cs:442: EMI Desk hears every line, muted or hidden, before the gate below.
+                    Windows.EmiDesk.EmiDeskService.Instance.NoteAvatarSpeaking(this);
                     // WPF Speech.cs:481: a hidden avatar skips the bubble and audio of every line.
                     if (!IsAvatarVisibleOnScreen || Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
                     {
@@ -1510,6 +1511,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF IsSpeakingAudio as a task: completes when her LATEST voiced clip ends (cut or
         /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
         internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
+
+        /// <summary>WPF TubeBubbleLive || TubeSpeakingAudio (EmiDeskService.cs:95-116): a bubble up or a voiced
+        /// clip still playing holds EMI. A closed tube holds nothing.</summary>
+        internal bool VoiceHoldLive => !_avatarSetsClosed && (HasBubbleUp || !SpokenAudioDone.IsCompleted);
 
         // Tests capture delivery here, before file lookup or native audio.
         internal Action<bool, string?, bool, Action?>? SpeechAudioPlayer;
