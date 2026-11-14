@@ -87,7 +87,11 @@ internal sealed partial class MandatoryVideoOverlay
         }, TimeSpan.FromSeconds(GentleVisuals.FadeSeconds));
     }
 
-    internal void OnNaturalVideoEnd() => Scheduler.Ended(renderedFrame: FirstFrameMs >= 0);
+    internal void OnNaturalVideoEnd()
+    {
+        OpenQueuedCreditLink();   // WPF VideoService.Browser.cs:674-684: a full-screen press opens at the clip end
+        Scheduler.Ended(renderedFrame: FirstFrameMs >= 0);
+    }
 
     private void DropEntrance()
     {
