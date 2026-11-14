@@ -77,6 +77,8 @@ namespace ConditioningControlPanel.Services
             public double X, Y, VelX, VelY, Alpha, Size;
         }
         public Sparkle[] Sparkles { get; private set; } = Array.Empty<Sparkle>();
+        /// <summary>WPF Bubble.SetLucky's gold glow radius, chosen by the head at the pop; 0 = none.</summary>
+        public double LuckyGlowBlur;
 
         internal void StartSparkles(Random random, bool boost)
         {
