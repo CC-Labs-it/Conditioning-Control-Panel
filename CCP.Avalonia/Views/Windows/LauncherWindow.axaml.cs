@@ -192,15 +192,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>WPF LauncherHost.LaunchGame for the cards this head can open; false = no such card here.</summary>
+        /// <summary>WPF LauncherHost.LaunchGame (:335) for the cards this head can open; false = no such card here,
+        /// the sign-in ask, or a gate that refused (the companion's open action reads it).</summary>
         internal static bool LaunchGame(MainShellWindow panel, string id)
         {
             var card = VisibleCards.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
             if (card == null) return false;
             // The sign-in ask is owned by the launcher, so only then does it come on screen.
             var w = card.RequiresAccount && !CoreAccount.IsLoggedIn ? OpenFor(panel) : (_window ??= new LauncherWindow()).Link(panel);
-            w.Play(card);
-            return true;
+            return w.Play(card);
         }
 
         /// <summary>WPF LauncherHost.OpenPanel without a launcher instance in hand.</summary>
@@ -568,10 +568,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "[Launcher] mod switch to {Id} failed", modId); }
         }
 
-        /// <summary>WPF LauncherHost.LaunchGame for the destinations this head has.</summary>
-        internal void Play(LauncherCard card)
+        /// <summary>WPF LauncherHost.LaunchGame for the destinations this head has. False like WPF :335-375:
+        /// the sign-in ask or a game whose gate refused; the leash gate and a panel tab count as handled.</summary>
+        internal bool Play(LauncherCard card)
         {
-            if (!Destinations.TryGetValue(card.Id, out var dest)) return;
+            if (!Destinations.TryGetValue(card.Id, out var dest)) return false;
             bool game = Games.GameWindow.Games.ContainsKey(card.Id);
             bool needsAccount = card.RequiresAccount && !CoreAccount.IsLoggedIn;
             // A panel tab that is locked still opens (its own gate paints the refusal), as WPF's does; a
@@ -583,24 +584,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (step == LauncherGameStep.SignIn)
             {
                 OpenSignIn();
-                return;
+                return false;
             }
             if (step == LauncherGameStep.Leash)
             {
                 Log.Information("[Launcher] {Id} waits: a leash punishment is pending", card.Id);
                 OpenPanel(p => p.PresentLeashGateFromLauncher());
-                return;
+                return true;
             }
-            if (game) { LaunchGameWindow(card.Id); return; }
+            if (game) return LaunchGameWindow(card.Id);
             OpenPanel(dest.Open);
+            return true;
         }
 
         /// <summary>WPF LauncherHost.LaunchGame (:335): the game opens, then the launcher hides behind it;
         /// the return poll brings the launcher back when the game closes and the panel is not up. A gate
         /// that refused leaves the launcher where it is.</summary>
-        private void LaunchGameWindow(string id)
+        private bool LaunchGameWindow(string id)
         {
-            HandoffGame(Games.GameWindow.Launch(id), id);
+            var game = Games.GameWindow.Launch(id);
+            HandoffGame(game, id);
+            return game != null;
         }
 
         private void HandoffGame(Window? game, string id)

@@ -169,6 +169,27 @@ public sealed partial class GameWindowTests
         Assert.Equal(Loc.Get("launcher_game_race_title"), refusal.Feature);
     });
 
+    /// <summary>WPF LauncherHost.LaunchGame (:335-375): a launch the gate refused reports false, so the
+    /// companion's open action does not claim it opened the race (restack b128, from #4065).</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Glassroad_LauncherLaunchGame_ReportsWhetherTheRaceOpened(bool lab) => RunGlassroad("1", (shell, _, _) =>
+    {
+        var denied = new List<TierVerdict>();
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        CoreEntitlement.ShowDeniedHandler = denied.Add;
+        try
+        {
+            CoreEntitlement.HasLabProvider = () => lab;
+            Assert.Equal(lab, LauncherWindow.LaunchGame(shell, "race"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(lab, GameWindow.IsAnyOpen());
+            Assert.Equal(lab ? 0 : 1, denied.Count);
+        }
+        finally { CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    }, lab: lab);
+
     [Fact]
     public void Glassroad_RaceTileIsVisibleWithoutPurchase()
     {
