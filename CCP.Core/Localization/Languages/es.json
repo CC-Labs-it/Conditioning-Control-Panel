@@ -6372,6 +6372,7 @@
   "lockdown_badge_label": "ENCIERRO",
   "lockdown_badge_end": "Terminar",
   "lockdown_badge_tooltip": "Lockdown está activo. Haz clic para abrir la pestaña Lockdown.",
+  "lockdown_dose_engine_warning": "El bloqueo inicia o reinicia el motor mientras haya una función activada.",
   "lockdown_poss_safety_dose": "¿Nada en marcha? El bloqueo elige por ti",
   "lockdown_poss_safety_dose_tip": "Un bloqueo se niega a correr vacío. Motor apagado al empezar: se enciende por ti. Nada activado (o lo apagas todo a mitad): la guardiana activa funciones, una más cada vez, y lo devuelve todo cuando acaba el temporizador.",
   "st4_braindrain_audio_rate": "Frecuencia de audio",

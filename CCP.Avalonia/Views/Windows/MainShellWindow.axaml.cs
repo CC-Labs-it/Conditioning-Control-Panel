@@ -156,6 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshIntakePassTile(); // startup Home has no ShowTab call
             InitializeFirstVisitPulses(); // MainShellWindow.TabTransitions.cs (WPF MainWindow.xaml.cs:3795-3830)
             InitializeLockdownGreys(); // MainShellWindow.Lockdown.cs (WPF Lab.cs:612/707)
+            InitializeLockdownDoseEngine(); // MainShellWindow.LockdownDose.cs (WPF LockdownDoseKeeper.Install)
             InitializePossessionHost(); // MainShellWindow.Possession.cs (WPF Lab.cs:42 InitializePossessionHost)
             InitializeInviteTicket(); // MainShellWindow.InviteTicket.cs (WPF MainWindow.xaml.cs, main e2d4e35ef)
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)

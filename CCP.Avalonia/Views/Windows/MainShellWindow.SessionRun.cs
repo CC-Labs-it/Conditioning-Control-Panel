@@ -58,8 +58,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StartSession(Session session)
         {
             var gen = ++_engineGen;
+            _pendingUserEngineGen = gen;
             StartEffect(() =>
             {
+                if (_pendingUserEngineGen == gen) _pendingUserEngineGen = null;
                 if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
                 try
                 {
