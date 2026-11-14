@@ -6,8 +6,12 @@ using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services
 {
-    /// <summary>One stock English text a mod's <c>textReplacements</c> can match.</summary>
-    public sealed record ModTextEntry(string Group, string Text, string Source)
+    /// <summary>
+    /// One stock English text a mod's <c>textReplacements</c> can match. <paramref name="SkillId"/>
+    /// names the skill a skill name, effect, hint or flavour text belongs to (null otherwise), so a
+    /// search for a skill can show its texts together.
+    /// </summary>
+    public sealed record ModTextEntry(string Group, string Text, string Source, string? SkillId = null)
     {
         /// <summary>The list row: the text, with the source in brackets for context.</summary>
         public string Display => Text + "   (" + Source + ")";
@@ -43,6 +47,12 @@ namespace ConditioningControlPanel.Services
         public static readonly IReadOnlyList<string> Groups =
             new[] { Skills, Flavour, Achievements, Quests, Levels, Companions, Presets, Other };
 
+        /// <summary>The <see cref="ModTextEntry.Source"/> of a skill's name.</summary>
+        internal const string SkillName = "skill name";
+
+        /// <summary>Group header for one skill's texts in a search (see <see cref="Search"/>).</summary>
+        public static string SkillGroup(string skillName) => "Skill: " + skillName;
+
         /// <summary>Same cap as the text replacement key check in <c>ModService.SanitizeManifest</c>.</summary>
         internal const int MaxKeyLength = 200;
 
@@ -72,12 +82,12 @@ namespace ConditioningControlPanel.Services
             var list = new List<ModTextEntry>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
 
-            void Add(string group, string? text, string source)
+            void Add(string group, string? text, string source, string? skillId = null)
             {
                 if (string.IsNullOrWhiteSpace(text)) return;
                 text = text.Trim();
                 if (text.Length > MaxKeyLength) return;
-                if (seen.Add(text)) list.Add(new ModTextEntry(group, text, source));
+                if (seen.Add(text)) list.Add(new ModTextEntry(group, text, source, skillId));
             }
 
             void Area(Action read)
@@ -88,13 +98,13 @@ namespace ConditioningControlPanel.Services
 
             Area(() =>
             {
-                foreach (var s in SkillDefinition.All) Add(Skills, s.Name, "skill name");
-                foreach (var s in SkillDefinition.All) Add(Skills, s.Description, "skill effect");
-                foreach (var s in SkillDefinition.All) Add(Skills, s.SecretRequirementDesc, "secret skill hint");
+                foreach (var s in SkillDefinition.All) Add(Skills, s.Name, SkillName, s.Id);
+                foreach (var s in SkillDefinition.All) Add(Skills, s.Description, "skill effect", s.Id);
+                foreach (var s in SkillDefinition.All) Add(Skills, s.SecretRequirementDesc, "secret skill hint", s.Id);
             });
             Area(() =>
             {
-                foreach (var s in SkillDefinition.All) Add(Flavour, s.FlavorText, "skill flavour");
+                foreach (var s in SkillDefinition.All) Add(Flavour, s.FlavorText, "skill flavour", s.Id);
                 foreach (var a in Achievement.All.Values) Add(Flavour, a.FlavorText, "achievement flavour");
             });
             Area(() =>
@@ -173,6 +183,52 @@ namespace ConditioningControlPanel.Services
             }
             return true;
         }
+
+        /// <summary>
+        /// What the browser shows for a query. Without a query, every entry as built. With one,
+        /// every skill whose NAME matches (<see cref="Matches"/>, and at least one word is in the
+        /// name itself, so "skill" alone does not pull in every skill) comes first as its own group
+        /// (<see cref="SkillGroup"/>) holding all its texts in order: name, effect, secret hint,
+        /// flavour, even when those texts do not contain the query. Every other matching entry
+        /// follows in its usual group; a text is never listed twice.
+        /// </summary>
+        public static IReadOnlyList<ModTextEntry> Search(IReadOnlyList<ModTextEntry> entries, string? query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return entries;
+            var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            var result = new List<ModTextEntry>();
+            var shown = new HashSet<string>(StringComparer.Ordinal);
+
+            var bySkill = entries.Where(e => e.SkillId != null)
+                .GroupBy(e => e.SkillId!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+            foreach (var name in entries)
+            {
+                if (name.SkillId == null || name.Source != SkillName) continue;
+                if (!Matches(name, query)) continue;
+                if (!words.Any(w => name.Text.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0)) continue;
+
+                var group = SkillGroup(name.Text);
+                foreach (var e in bySkill[name.SkillId].OrderBy(SkillTextRank))
+                    if (shown.Add(e.Text)) result.Add(e with { Group = group });
+            }
+
+            foreach (var e in entries)
+                if (Matches(e, query) && shown.Add(e.Text)) result.Add(e);
+
+            return result;
+        }
+
+        private static int SkillTextRank(ModTextEntry e) => e.Source switch
+        {
+            SkillName => 0,
+            "skill effect" => 1,
+            "secret skill hint" => 2,
+            "skill flavour" => 3,
+            _ => 4,
+        };
 
         /// <summary>
         /// The "Export list" file: a short how-to, then one section per group with one original

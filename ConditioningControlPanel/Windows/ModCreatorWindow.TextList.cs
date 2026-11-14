@@ -132,7 +132,7 @@ namespace ConditioningControlPanel
             stack.Children.Add(new TextBlock
             {
                 Foreground = grey, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8),
-                Text = "Click a text to use it as the original, then type the new wording. You can still type any other text by hand.",
+                Text = "Click a text to use it as the original, then type the new wording. Searching a skill shows its effect and flavour with it. You can still type any other text by hand.",
             });
 
             // Search box with a placeholder, and the Export button beside it.
@@ -160,13 +160,18 @@ namespace ConditioningControlPanel
             bar.Children.Add(export);
             stack.Children.Add(bar);
 
-            var view = new ListCollectionView(entries.ToList());
-            view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ModTextEntry.Group)));
-            view.Filter = o => o is ModTextEntry e && ModTextCatalog.Matches(e, search.Text);
+            // A search rebuilds the view from ModTextCatalog.Search rather than filtering it: a
+            // skill whose name matches brings its effect and flavour along, grouped under it.
+            static ListCollectionView ViewOf(IReadOnlyList<ModTextEntry> shown)
+            {
+                var v = new ListCollectionView(shown.ToList());
+                v.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ModTextEntry.Group)));
+                return v;
+            }
 
             var list = new ListBox
             {
-                ItemsSource = view,
+                ItemsSource = ViewOf(entries),
                 IsSynchronizedWithCurrentItem = false,
                 Height = 240,
                 Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x2E)),
@@ -186,10 +191,11 @@ namespace ConditioningControlPanel
             search.TextChanged += (_, _) =>
             {
                 placeholder.Visibility = string.IsNullOrEmpty(search.Text) ? Visibility.Visible : Visibility.Collapsed;
-                view.Refresh();
+                var shown = ModTextCatalog.Search(entries, search.Text);
+                list.ItemsSource = ViewOf(shown);
                 title.Text = string.IsNullOrWhiteSpace(search.Text)
                     ? $"Original texts ({entries.Count})"
-                    : $"Original texts ({view.Count} of {entries.Count})";
+                    : $"Original texts ({shown.Count} of {entries.Count})";
             };
 
             // Mouse up, not SelectionChanged: arrow keys must move through the list without

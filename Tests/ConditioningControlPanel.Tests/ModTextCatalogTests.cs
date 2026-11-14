@@ -118,6 +118,71 @@ public class ModTextCatalogTests
         Assert.False(ModTextCatalog.Matches(e, "sparkle quest"));
     }
 
+    /// <summary>
+    /// The tier 2 request of 2026-11-14: searching a skill's name must also show its effect and
+    /// flavour, grouped under that skill, instead of filtering them out.
+    /// </summary>
+    [Fact]
+    public void Searching_a_skill_name_brings_its_effect_and_flavour_grouped_under_it()
+    {
+        var skill = SkillDefinition.All.First(s =>
+            s.Name.Trim().Length > 0
+            && Entries.Any(e => e.Text == s.Description.Trim() && e.SkillId == s.Id)
+            && Entries.Any(e => e.Text == s.FlavorText.Trim() && e.SkillId == s.Id)
+            && s.Description.IndexOf(s.Name.Trim(), StringComparison.OrdinalIgnoreCase) < 0
+            && s.FlavorText.IndexOf(s.Name.Trim(), StringComparison.OrdinalIgnoreCase) < 0
+            && Entries.Count(e => e.Source == "skill name" && ModTextCatalog.Matches(e, s.Name.Trim())) == 1);
+        var name = skill.Name.Trim();
+
+        var shown = ModTextCatalog.Search(Entries, name);
+        var group = ModTextCatalog.SkillGroup(name);
+        var bundle = shown.TakeWhile(e => e.Group == group).ToList();
+
+        Assert.True(bundle.Count >= 3, $"the search for '{name}' should open with its group");
+        Assert.Equal(name, bundle[0].Text);
+        Assert.Contains(bundle, e => e.Text == skill.Description.Trim() && e.Source == "skill effect");
+        Assert.Contains(bundle, e => e.Text == skill.FlavorText.Trim() && e.Source == "skill flavour");
+        Assert.All(bundle, e => Assert.Equal(skill.Id, e.SkillId));
+        // Each text once, and the group stays in one block.
+        Assert.Equal(shown.Count, shown.Select(e => e.Text).Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(shown.Skip(bundle.Count), e => e.Group == group);
+        // The catalogue itself is untouched.
+        Assert.DoesNotContain(Entries, e => e.Group == group);
+    }
+
+    [Fact]
+    public void A_search_with_no_skill_name_hit_is_the_plain_filter()
+    {
+        Assert.Same(Entries, ModTextCatalog.Search(Entries, "  "));
+
+        // "skill" is in every skill's source, not its name: no per-skill groups, same rows as before.
+        foreach (var q in new[] { "skill", "achievement", "zzzz-no-such-text" })
+        {
+            var shown = ModTextCatalog.Search(Entries, q);
+            Assert.Equal(Entries.Where(e => ModTextCatalog.Matches(e, q)).ToList(), shown);
+        }
+    }
+
+    [Fact]
+    public void Search_bundles_by_skill_id_and_keeps_other_matches_after()
+    {
+        var entries = new List<ModTextEntry>
+        {
+            new(ModTextCatalog.Skills, "Pink Glow", "skill name", "a"),
+            new(ModTextCatalog.Skills, "Other Skill", "skill name", "b"),
+            new(ModTextCatalog.Skills, "Doubles XP", "skill effect", "a"),
+            new(ModTextCatalog.Skills, "Triples XP", "skill effect", "b"),
+            new(ModTextCatalog.Flavour, "So shiny.", "skill flavour", "a"),
+            new(ModTextCatalog.Achievements, "Pink Forever", "achievement name"),
+        };
+
+        var shown = ModTextCatalog.Search(entries, "pink");
+
+        Assert.Equal(new[] { "Pink Glow", "Doubles XP", "So shiny.", "Pink Forever" }, shown.Select(e => e.Text));
+        Assert.Equal(new[] { "Skill: Pink Glow", "Skill: Pink Glow", "Skill: Pink Glow", ModTextCatalog.Achievements },
+            shown.Select(e => e.Group));
+    }
+
     [Fact]
     public void The_export_lists_every_text_on_its_own_line_under_its_group()
     {
