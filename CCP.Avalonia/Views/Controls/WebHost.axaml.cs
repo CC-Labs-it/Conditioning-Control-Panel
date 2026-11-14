@@ -83,6 +83,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public string? WindowsBrowserArguments { get; set; }
         public string? WindowsUserDataFolder { get; set; }
 
+        /// <summary>Optional persistent profile for this host, set before attachment. The caller owns
+        /// the directory. Separate profiles keep site cookies and storage apart from other hosts.</summary>
+        internal string? PersistentUserDataFolder { get; set; }
+
+        // WPF RaceCloudWindow.cs:192-209 uses its own browser_data_bambicloud profile.
+        internal void ApplyPersistentProfile(WebViewEnvironmentRequestedEventArgs args)
+        {
+            if (PersistentUserDataFolder is not { Length: > 0 } folder) return;
+            switch (args)
+            {
+                case WindowsWebView2EnvironmentRequestedEventArgs windows:
+                    windows.UserDataFolder = folder;
+                    break;
+                case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                    gtk.BaseDataDirectory = folder;
+                    gtk.BaseCacheDirectory = System.IO.Path.Combine(folder, "cache");
+                    gtk.EphemeralDataManager = false;
+                    break;
+                case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                    wpe.DataDirectory = folder;
+                    wpe.CacheDirectory = System.IO.Path.Combine(folder, "cache");
+                    break;
+            }
+        }
+
         // WPF JustDropHostService.cs:111,132-135. Keep custom arguments off shared profiles.
         internal void ApplyWindowsOptions(object? args)
         {
@@ -526,6 +551,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
                     Platform.WebViewProfile.Apply(e);
                     ApplyWindowsOptions(e);
+                    ApplyPersistentProfile(e);
                 };
                 // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                 // gate has to be live for the FIRST navigation too, and a caller that assigns
