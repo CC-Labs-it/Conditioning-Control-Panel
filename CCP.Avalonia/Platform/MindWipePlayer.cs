@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private IVoice? _oneShot, _loop;
         private bool _running, _sessionMode;
         private int _sessionBase;
-        private long _generation;
+        private long _generation, _loopGeneration;
         private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
 
@@ -270,11 +270,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             StopLoop();
             string clip;
+            long generation;
             lock (_lock)
             {
                 if (_clips.Length == 0) { Log.Warning("MindWipe: No audio files available for loop"); return; }
                 clip = _clips[_random.Next(_clips.Length)];
                 _volume = MindWipeSchedule.ClampVolume(volume);
+                generation = _loopGeneration;   // StopLoop above advanced it
             }
             IVoice? voice = null;
             // A loop that dies (decode error, device gone) is no longer looping: IsLooping says so.
@@ -286,12 +288,28 @@ namespace ConditioningControlPanel.Avalonia.Platform
             });
             if (voice == null) return;
             var started = _time.GetTimestamp();
-            var check = _time.CreateTimer(_ =>
+            bool stale;
+            lock (_lock)
             {
-                lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
-                CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
-            }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
-            lock (_lock) { _loop = voice; _cleanSlate = check; }
+                // Restack b178 (#4375): a Stop (panic) or a newer StartLoop while this one built its
+                // voice wins. WPF MindWipeService.cs:553-563 arbitrates the same way under its lock.
+                stale = generation != _loopGeneration;
+                if (!stale)
+                {
+                    _loop = voice;
+                    _cleanSlate = _time.CreateTimer(_ =>
+                    {
+                        lock (_lock) if (!ReferenceEquals(_loop, voice)) return;
+                        CleanSlate?.Invoke(_time.GetElapsedTime(started).TotalSeconds);
+                    }, null, TimeSpan.FromSeconds(60), Timeout.InfiniteTimeSpan);
+                }
+            }
+            if (stale)
+            {
+                voice.Dispose();
+                Log.Debug("MindWipe: a stop beat the loop start, voice discarded");
+                return;
+            }
             ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("mindwipe-loop", clip, CoreEngine.IsRunning, false, DateTime.Now);   // WPF MindWipeService.cs:485
             Log.Information("MindWipe: Loop started with {File} at {Vol}% volume, {Heard}% after master", Path.GetFileName(clip), volume * 100, Math.Round(CurrentGain * 100));
         }
@@ -300,7 +318,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             IVoice? loop;
             ITimer? check;
-            lock (_lock) { loop = _loop; _loop = null; check = _cleanSlate; _cleanSlate = null; }
+            lock (_lock) { ++_loopGeneration; loop = _loop; _loop = null; check = _cleanSlate; _cleanSlate = null; }
             check?.Dispose();
             loop?.Dispose();
         }

@@ -144,6 +144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Scheduler = new MandatoryVideoScheduler(this)
             {
                 DurationOf = LengthOf,
+                RemoteMedia = true,
                 CascadeIsRaining = () => Views.Chaos.ChaosGifCascadeOverlay.IsRaining,
                 // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
                 PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
@@ -200,6 +201,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
             _capSpent = 0;
+            // WPF VideoService.cs:3082-3085: a cached remote clip keeps its URL identity (credit, remote guards).
+            _source = Scheduler.ShowingPath ?? path;
             Play(path, strict);
         });
 
@@ -213,6 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _wedge = new VideoWedgeWatchdog();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
+            ResetCreditBadges();
             _sinceShow.Restart();
             _sinceReady.Reset();
             _sinceFrame.Reset();
@@ -465,7 +469,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row } },
+                // The WPF browser player credits Scrolller during playback (VideoService.Browser.cs:158).
+                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row, CreditButton(_source) } },
             };
             var floating = Floating;
             // A floating window can be smaller than the 360x200 card: its card opens in its own window (WPF VideoService.cs:6440).
@@ -822,13 +827,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (UpdateFloatingReveal(_sinceReady.Elapsed.TotalSeconds, _player?.IsPlaying == true)
                     == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip) return;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
+            var remote = VideoSelectionRules.IsRemoteMediaPath(_source);
             // The played-time "overran" guard is the same length guillotine: the deadline above owns it then.
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 _playback.HasVideo, enhanced ? double.PositiveInfinity : _playback.Length / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
-                _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
+                _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew, remote);
             if (why == null) return;
-            if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
+            if (MandatoryVideoScheduler.GuardHeals(why, _healUsed, remote))
             {
                 // WPF DispatchVoutHeal(retry): the same clip once more, same strictness.
                 Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, Elapsed);
@@ -845,6 +851,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - ending the clip", why, Elapsed);
+            // WPF VideoService.cs:6759-6762: the duration cap also releases a queued credit link.
+            if (why == "max length") OpenQueuedCreditLink();
             Scheduler.End();
         }
 
@@ -1312,6 +1320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _videoReveal?.Dispose();
                 _videoReveal = null;
                 _attention = _gracePaused = false;
+                ResetCreditBadges();
                 SafetyDeadline.Reset();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;

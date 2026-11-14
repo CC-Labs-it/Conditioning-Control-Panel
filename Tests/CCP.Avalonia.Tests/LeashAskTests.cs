@@ -61,12 +61,21 @@ public sealed class LeashAskTests
                 });
                 LeashHead.Service = svc;
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
+                var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+                var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
                 try
                 {
+                    Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
+                    Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", null);
                     shell.Show(); shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
                     body(shell, shell.Named<LeashTabView>("LeashTab")!, wire, seen);
                 }
-                finally { LeashAskWindow.CloseCurrent(); }
+                finally
+                {
+                    Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+                    Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+                    LeashAskWindow.CloseCurrent();
+                }
             });
         });
 

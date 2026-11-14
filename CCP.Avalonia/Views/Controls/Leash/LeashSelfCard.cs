@@ -104,8 +104,10 @@ public sealed class LeashSelfCard : Border
         ToolTip.SetTip(cap, Loc.Get("leash_video_max_hint"));
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
-        // WPF Controls/Leash/LeashSelfCard.cs:220-224; the head already owns the hold route.
-        _body.Children.Add(Caption(Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold"));
+        // WPF Controls/Leash/LeashSelfCard.cs:220-224; the head owns the hold route, but on Wayland the
+        // shortcuts portal may be unbound or unable to report a key release, so point at the button above.
+        _body.Children.Add(Caption(LeashHead.WaylandSession ? Loc.Get("leash_self_cut_wayland")
+            : Loc.GetF("leash_self_hold_hint", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey)), "leash-self-hold"));
         if (_me.Stickers.Count > 0)
         {
             // WPF Controls/Leash/LeashSelfCard.cs:248-264: compact shelf, newest first.
