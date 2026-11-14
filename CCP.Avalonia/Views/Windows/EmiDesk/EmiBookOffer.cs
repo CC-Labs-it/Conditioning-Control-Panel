@@ -14,6 +14,8 @@ internal static class EmiBookOffer
         Path.Combine(AppContext.BaseDirectory, "Resources", "web", "codex"));
     internal static Func<bool> IsOpen = () => EmiDeskService.Instance.Window?.Book != null;
     internal static Func<int> Opens = () => EmiState.Current.CodexOpens;
+    // The desk's one moment bus (EmiDeskService.Fire); a seam so tests can see the offer.
+    internal static Action<string, object?> Fire = (moment, context) => EmiDeskService.Instance.Fire(moment, context);
 
     internal static void Schedule(string why)
     {
@@ -27,7 +29,7 @@ internal static class EmiBookOffer
             try
             {
                 if (EmiCodexRules.OfferRefusal(HasContent(), IsOpen(), Opens) == null)
-                    EmiDeskService.Instance.Fire("bookOffer", new { why });
+                    Fire("bookOffer", new { why });
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] delayed book offer failed"); }
         };

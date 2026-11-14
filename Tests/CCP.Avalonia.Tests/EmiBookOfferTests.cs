@@ -84,8 +84,8 @@ public class EmiBookOfferTests
     public Task EndingOffersOnce(bool completed, string why) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         using var emi = new EmiTestScope();
-        var events = new List<EmiMoment>();
-        void OnMoment(object? sender, EmiMoment e) { if (e.Id == "bookOffer") events.Add(e); }
+        var events = new List<(string Id, object? Context)>();
+        var fire = EmiBookOffer.Fire;
         var desk = EmiDeskService.Instance;
         var content = EmiBookOffer.HasContent; var open = EmiBookOffer.IsOpen; var opens = EmiBookOffer.Opens;
         var delay = EmiBookOffer.DelayMs;
@@ -96,7 +96,7 @@ public class EmiBookOfferTests
         var previousShell = TutorialHeadHooks.ShellProvider;
         MainShellWindow? shell = null;
         bool deliveredWhileOut = false;
-        void OnDelivery(object? sender, EmiMoment e) { if (e.Id == "bookOffer") deliveredWhileOut = desk.IsOut && desk.Window?.IsVisible == true; }
+        
         try
         {
             if (Application.Current is null)
@@ -110,9 +110,8 @@ public class EmiBookOfferTests
             shell = new MainShellWindow(); shell.Show();
             TutorialHeadHooks.ShellProvider = () => shell;
             Assert.False(desk.IsOut);
-            desk.MomentFired += OnDelivery;
             EmiBookOffer.HasContent = () => true; EmiBookOffer.IsOpen = () => false; EmiBookOffer.Opens = () => 0;
-            EmiBookOffer.DelayMs = 30; desk.MomentFired += OnMoment;
+            EmiBookOffer.DelayMs = 30; EmiBookOffer.Fire = (id, context) => { if (id == "bookOffer") { deliveredWhileOut = desk.IsOut && desk.Window?.IsVisible == true; events.Add((id, context)); } };
             TutorialHead.Seed(); TutorialHead.StartOnShell(TutorialType.ShortWalk);
             await TutorialHead.ShellStartup; // the trunk summons before the first card
             Assert.True(desk.IsOut);
@@ -128,8 +127,7 @@ public class EmiBookOfferTests
         }
         finally
         {
-            desk.MomentFired -= OnDelivery;
-            desk.MomentFired -= OnMoment; TutorialHead.ResetForTests();
+            EmiBookOffer.Fire = fire; TutorialHead.ResetForTests();
             desk.Window?.ShutDown(); shell?.Close(); Dispatcher.UIThread.RunJobs();
             TutorialHeadHooks.ShellProvider = previousShell;
             TutorialService.CompletionStore = previousStore;
@@ -142,15 +140,15 @@ public class EmiBookOfferTests
     public Task OtherWindowTourDoesNotScheduleAnOffer() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         using var emi = new EmiTestScope();
-        var events = new List<EmiMoment>();
-        void OnMoment(object? sender, EmiMoment e) { if (e.Id == "bookOffer") events.Add(e); }
+        var events = new List<(string Id, object? Context)>();
+        var fire = EmiBookOffer.Fire; bool deliveredWhileOut = false;
         var desk = EmiDeskService.Instance;
         var content = EmiBookOffer.HasContent; var open = EmiBookOffer.IsOpen; var opens = EmiBookOffer.Opens;
         var delay = EmiBookOffer.DelayMs;
         try
         {
             EmiBookOffer.HasContent = () => true; EmiBookOffer.IsOpen = () => false; EmiBookOffer.Opens = () => 0;
-            EmiBookOffer.DelayMs = 30; desk.MomentFired += OnMoment;
+            EmiBookOffer.DelayMs = 30; EmiBookOffer.Fire = (id, context) => { if (id == "bookOffer") { deliveredWhileOut = desk.IsOut && desk.Window?.IsVisible == true; events.Add((id, context)); } };
             TutorialHead.Seed(); TutorialHead.StartByName(nameof(TutorialType.Modding));
             Assert.True(TutorialHead.Service.IsActive);
             TutorialHead.Service.Skip(); await Task.Delay(150);
@@ -158,7 +156,7 @@ public class EmiBookOfferTests
         }
         finally
         {
-            desk.MomentFired -= OnMoment; TutorialHead.ResetForTests();
+            EmiBookOffer.Fire = fire; TutorialHead.ResetForTests();
             EmiBookOffer.HasContent = content; EmiBookOffer.IsOpen = open; EmiBookOffer.Opens = opens; EmiBookOffer.DelayMs = delay;
         }
     });
@@ -167,15 +165,15 @@ public class EmiBookOfferTests
     public Task RearmBrakesAndStop() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         using var emi = new EmiTestScope();
-        var events = new List<EmiMoment>();
-        void OnMoment(object? sender, EmiMoment e) { if (e.Id == "bookOffer") events.Add(e); }
+        var events = new List<(string Id, object? Context)>();
+        var fire = EmiBookOffer.Fire; bool deliveredWhileOut = false;
         var desk = EmiDeskService.Instance;
         var content = EmiBookOffer.HasContent; var open = EmiBookOffer.IsOpen; var opens = EmiBookOffer.Opens;
         var delay = EmiBookOffer.DelayMs;
         try
         {
             EmiBookOffer.HasContent = () => true; EmiBookOffer.IsOpen = () => false; EmiBookOffer.Opens = () => 0;
-            EmiBookOffer.DelayMs = 80; desk.MomentFired += OnMoment;
+            EmiBookOffer.DelayMs = 80; EmiBookOffer.Fire = (id, context) => { if (id == "bookOffer") { deliveredWhileOut = desk.IsOut && desk.Window?.IsVisible == true; events.Add((id, context)); } };
             EmiBookOffer.Schedule("tourFinished"); await Task.Delay(40); EmiBookOffer.Schedule("tourSkipped");
             await Task.Delay(160);
             var moment = Assert.Single(events);
@@ -191,7 +189,7 @@ public class EmiBookOfferTests
         }
         finally
         {
-            desk.MomentFired -= OnMoment; TutorialHead.ResetForTests();
+            EmiBookOffer.Fire = fire; TutorialHead.ResetForTests();
             EmiBookOffer.HasContent = content; EmiBookOffer.IsOpen = open; EmiBookOffer.Opens = opens; EmiBookOffer.DelayMs = delay;
         }
     });
