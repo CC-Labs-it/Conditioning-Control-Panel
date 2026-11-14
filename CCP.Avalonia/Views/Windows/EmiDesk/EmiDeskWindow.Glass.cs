@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -13,21 +14,28 @@ using ConditioningControlPanel.Services.EmiDesk;
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 // WPF EmiDeskWindow.Glass.cs:77-88, 174-215, 256-283, 294-342, 385-419, 440-477.
-// Off-air and Shop At Home savers; the other channels and effects remain pending.
+// Off-air, Shop At Home, Reruns and Pong savers plus the GIF rain offer; the other channels and effects remain pending.
 // ONE director (WPF EmiChannels.Pick, uniform over the feasible channels): PollGlass owns the idle flip for
-// every channel on this head, the GIF rain channel (EmiDeskWindow.Rain.cs) included.
+// every channel on this head, the GIF rain channel (EmiDeskWindow.Rain.cs) included. A new channel goes in
+// GlassChannels + GlassFeasible + LandGlassChannel, never its own watcher or timer.
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
-    internal static Func<bool> GlassChooseShop = () => GlassRng.Next(2) != 0;
-    // Rain is the third channel when the user has images (WPF EmiChannels.Feasible "rain" => HasImages).
-    internal static Func<bool> GlassChooseRain = () => GlassRng.Next(3) == 0;
+    // WPF EmiChannels.All order, the channels this head can paint.
+    internal static readonly string[] GlassChannels = { "pong", "rain", "shop", "reruns", "offair" };
+    // Uniform over the feasible pool (WPF EmiChannels.Pick); tests swap it and restore it in finally.
+    internal static Func<IReadOnlyList<string>, string> GlassPick = pool => pool[GlassRng.Next(pool.Count)];
+    // Per-window test seam: always land this channel when it is feasible, else off-air.
+    internal string? GlassChannelOverride { get; set; }
     private DispatcherTimer? _glassWatch;
     private BeatLoop? _glassFrames;
     private DateTime _glassActivity = DateTime.UtcNow, _glassPhase;
     private TimeSpan _glassIdle = NextGlassIdle();
     private Canvas? _glassLayer;
+    private string? _glassChannel;
     private ShopPainter? _glassShop;
+    private RerunsPainter? _glassReruns;
+    private PongPainter? _glassPong;
     private Rectangle? _glassDim;
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion;
@@ -83,17 +91,27 @@ public partial class EmiDeskWindow
             EmiLineEngine.BedtimeSet || EmiLineEngine.Instance.HoldActive || CoreEngine.Video?.IsPlaying == true)
             return;
         if (now - _glassActivity < _glassIdle) return;
-        if (GlassChooseRain() && TryShowRainChannel())
+        var pool = new List<string>(GlassChannels.Length);
+        foreach (var id in GlassChannels) if (GlassFeasible(id)) pool.Add(id);
+        var pick = ChooseGlassChannel(pool);
+        if (pick == "rain")
         {
-            _glassActivity = now;
-            _glassIdle = NextGlassIdle();
-            return;
+            if (TryShowRainChannel())
+            {
+                _glassActivity = now;
+                _glassIdle = NextGlassIdle();
+                return;
+            }
+            // No usable picture: draw again without rain, so the pick stays uniform over what can show.
+            pool.Remove("rain");
+            pick = ChooseGlassChannel(pool);
         }
 
         var rect = GlassRect;
         if (rect.Width <= 4 || rect.Height <= 4) return;
         _glassLayer = new Canvas { Width = rect.Width, Height = rect.Height, ClipToBounds = true, IsHitTestVisible = false };
         GlassHost.Children.Add(_glassLayer);
+        _glassChannel = pick;
         _glassLive = true;
         _glassLanded = false;
         _glassPhase = now;
@@ -121,25 +139,73 @@ public partial class EmiDeskWindow
             }
             _glassLanded = true;
             _glassPhase = now;
-            if (!GlassChooseShop()) PaintOffAir();
-            else _glassShop = new ShopPainter(_glassLayer!, GlassRng.Next(3));
+            LandGlassChannel();
             return;
         }
         if (elapsed >= 10_000)
         {
             // WPF EmiChannels.cs:58-59 and EmiDeskWindow.Glass.cs:472-477: an untouched channel ends in the
             // wordless effectDeclined hold (a HOLD row: a face, no bubble).
-            var channel = _glassShop != null ? "shop" : "offair";
+            var channel = _glassChannel ?? "offair";
             CloseGlass();
             EmiDeskService.Instance.Fire("effectDeclined", new { channel });
             return;
         }
+        if (_glassPong != null)
+        {
+            // The moving ball IS the channel: a motion drop mid-air puts her face back (WPF EmiChannels.cs:130-135).
+            if (!PongFeasible(AmbientFxCanvas.Env.Level)) { CloseGlass(); return; }
+            _glassPong.Tick(elapsed);
+        }
+        _glassReruns?.Tick(elapsed);
         _glassShop?.Tick(elapsed);
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {
             Canvas.SetLeft(_glassSignal, (10 + (int)(elapsed / 1000) % 6 * 4) * _glassScale);
             _glassDim.Opacity = .45 + .02 * Math.Sin(elapsed / 900) + (elapsed % 3300 < 60 ? -.06 : 0);
         }
+    }
+
+    // WPF EmiChannels.Feasible: a channel with nothing behind it is never offered.
+    private static bool GlassFeasible(string id) => id switch
+    {
+        "pong" => PongFeasible(AmbientFxCanvas.Env.Level),
+        "reruns" => RerunsPainter.HasMaterial(),
+        // Rain refuses in TryShowRainChannel when no picture decodes; PollGlass then draws again without it.
+        _ => true,
+    };
+
+    private string ChooseGlassChannel(List<string> pool)
+    {
+        if (pool.Count == 0) return "offair";
+        var pick = GlassChannelOverride ?? GlassPick(pool);
+        return pick != null && pool.Contains(pick) ? pick : "offair";
+    }
+
+    private void LandGlassChannel()
+    {
+        if (_glassLayer == null) return;
+        if (_glassChannel == "pong" && PongFeasible(AmbientFxCanvas.Env.Level))
+        {
+            _glassLayer.Children.Clear();
+            _glassPong = new PongPainter(_glassLayer.Width, _glassLayer.Height, GlassRng);
+            _glassPong.Attach(_glassLayer);
+            return;
+        }
+        if (_glassChannel == "reruns" && RerunsPainter.GetTape() is { } tape)
+        {
+            _glassLayer.Children.Clear();
+            _glassReruns = new RerunsPainter(_glassLayer, tape);
+            _glassReruns.Tick(0);
+            return;
+        }
+        if (_glassChannel == "shop")
+        {
+            _glassShop = new ShopPainter(_glassLayer, GlassRng.Next(3));
+            return;
+        }
+        _glassChannel = "offair";
+        PaintOffAir();
     }
 
     private void PaintGlassGlitch()
@@ -204,7 +270,8 @@ public partial class EmiDeskWindow
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
-        _glassShop = null; _glassLayer = null; _glassDim = null; _glassSignal = null;
+        _glassShop = null; _glassReruns = null; _glassPong = null; _glassChannel = null;
+        _glassLayer = null; _glassDim = null; _glassSignal = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();
         if (wasLive && !_closingForGood && IsVisible && !ChainLive) RestartIdleBeats();

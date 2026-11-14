@@ -41,10 +41,10 @@ public sealed class EmiRainReviewTests
                     w = new EmiDeskWindow(); w.Show(); Dispatcher.UIThread.RunJobs();
                     var type = typeof(EmiDeskWindow);
                     // One glass director (b209): the idle flip is PollGlass's, and rain is one of its channels.
-                    var oldRain = EmiDeskWindow.GlassChooseRain;
-                    EmiDeskWindow.GlassChooseRain = () => true;
+                    var oldPick = EmiDeskWindow.GlassPick;
+                    EmiDeskWindow.GlassPick = _ => "rain";
                     try { w.PollGlass(DateTime.UtcNow.AddMinutes(2)); }
-                    finally { EmiDeskWindow.GlassChooseRain = oldRain; }
+                    finally { EmiDeskWindow.GlassPick = oldPick; }
                     var glitch = Assert.IsType<Canvas>(type.GetField("_rainGlitch", Private)!.GetValue(w));
                     Assert.InRange(glitch.Children.Count, 3, 5);
                     Assert.NotEmpty(w.GlassHost.Children);
