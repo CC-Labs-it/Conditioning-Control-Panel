@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Controls.Leash;
 using ConditioningControlPanel.Localization;
@@ -23,6 +24,7 @@ internal sealed class FriendLeashOffer : StackPanel
     private readonly HashSet<string> _pending;
     private readonly Action? _refresh;
     private bool _sending;
+    internal Action<LeashCue> PlayCue = cue => { if (cue == LeashCue.Sent) LeashSound.Sent(DateTime.UtcNow); else LeashSound.Denied(DateTime.UtcNow); };
     internal LeashHolderIntro? Intro { get; private set; }
     private bool _shared;
     private string? _error;
@@ -93,7 +95,7 @@ internal sealed class FriendLeashOffer : StackPanel
             try { if (LeashUiRules.OfferStep(_service.ReceiptsSupported, _service.SentTo(_friend.Id)) is { } step) word += " · " + Loc.Get(LeashUiRules.StepKey(step)); }
             catch { }
         }
-        var chip = FriendsDrawer.Pill(_error ?? word, FriendsDrawer.Raised, FriendsDrawer.Gold, "leash-offer");
+        var chip = FriendsDrawer.Pill(FriendsDrawer.GlyphContent(IconKind.Link, _error ?? word, center: true), FriendsDrawer.Raised, FriendsDrawer.Gold, "leash-offer");
         chip.IsEnabled = !_sending && !_pending.Contains(_friend.Id) && _error == null && state == LeashUiRules.OfferChip.Offer;
         if (state == LeashUiRules.OfferChip.Greyed) ToolTip.SetTip(chip, Loc.Get("leash_offer_greyed"));
         chip.Click += async (_, _) =>
@@ -136,8 +138,10 @@ internal sealed class FriendLeashOffer : StackPanel
         LeashSendStatus status;
         try { status = (await _service.OfferAsync(_friend.Id)).Status; }
         catch { status = LeashSendStatus.Failed; }
-        if (LeashUiRules.IsGood(status)) _sent.Add(_friend.Id);
-        else _error = Loc.Get(LeashUiRules.ResultKey(status));
+        // WPF LeashDrawerSection.cs:281-282: Sent on a good answer, Denied on too fast, do not disturb or a failure.
+        if (LeashUiRules.IsGood(status)) { _sent.Add(_friend.Id); PlayCue(LeashCue.Sent); }
+        else if (status is LeashSendStatus.TooFast or LeashSendStatus.Dnd or LeashSendStatus.Failed) PlayCue(LeashCue.Denied);
+        if (!LeashUiRules.IsGood(status)) _error = Loc.Get(LeashUiRules.ResultKey(status));
         _pending.Remove(_friend.Id); _sending = false; Draw();
         if (_shared && Current()) LeashHead.OfferChanged();
         if (LeashUiRules.IsGood(status)) _refresh?.Invoke();
