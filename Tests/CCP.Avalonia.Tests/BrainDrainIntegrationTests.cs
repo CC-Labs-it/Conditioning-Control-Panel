@@ -183,17 +183,28 @@ public sealed class BrainDrainIntegrationTests
     public Task CaptureIntervalUsesRefreshRequestAndTier(bool high, bool performance, int fps) => Run(owner =>
     {
         var settings = CoreSettings.Current;
-        settings.BrainDrainHighRefresh = high;
-        settings.PerformanceMode = performance;
-        settings.AutoPerformanceMode = false;
-        var intervals = new List<TimeSpan>();
-        BrainDrainOverlay.CreatePump = (_, interval) => {
-            intervals.Add(interval);
-            return new BrainDrainCapturePump(() => null, interval);
-        };
-        BrainDrainOverlay.Start(owner);
-        Assert.Equal(2, intervals.Count);
-        Assert.All(intervals, interval => Assert.Equal(TimeSpan.FromSeconds(1.0 / fps), interval));
+        var original = (settings.BrainDrainHighRefresh, settings.PerformanceMode, settings.AutoPerformanceMode);
+        var factory = BrainDrainOverlay.CreatePump;
+        try
+        {
+            settings.BrainDrainHighRefresh = high;
+            settings.PerformanceMode = performance;
+            settings.AutoPerformanceMode = false;
+            var intervals = new List<TimeSpan>();
+            BrainDrainOverlay.CreatePump = (_, interval) => {
+                intervals.Add(interval);
+                return new BrainDrainCapturePump(() => null, interval);
+            };
+            BrainDrainOverlay.Start(owner);
+            Assert.Equal(2, intervals.Count);
+            Assert.All(intervals, interval => Assert.Equal(TimeSpan.FromSeconds(1.0 / fps), interval));
+        }
+        finally
+        {
+            BrainDrainOverlay.CloseAll();
+            (settings.BrainDrainHighRefresh, settings.PerformanceMode, settings.AutoPerformanceMode) = original;
+            BrainDrainOverlay.CreatePump = factory;
+        }
         return Task.CompletedTask;
     });
 
@@ -201,13 +212,15 @@ public sealed class BrainDrainIntegrationTests
     public Task AutomaticBalancedTierCapsCaptureAt20Fps() => Run(owner =>
     {
         var settings = CoreSettings.Current;
-        settings.BrainDrainHighRefresh = true;
-        settings.PerformanceMode = false;
-        settings.AutoPerformanceMode = true;
+        var original = (settings.BrainDrainHighRefresh, settings.PerformanceMode, settings.AutoPerformanceMode);
+        var factory = BrainDrainOverlay.CreatePump;
         var flashes = FlashOverlay.Active;
         int start = flashes.Count;
         try
         {
+            settings.BrainDrainHighRefresh = true;
+            settings.PerformanceMode = false;
+            settings.AutoPerformanceMode = true;
             for (int i = 0; i < 8; i++) flashes.Add((null!, default));
             var intervals = new List<TimeSpan>();
             BrainDrainOverlay.CreatePump = (_, interval) => {
@@ -217,9 +230,50 @@ public sealed class BrainDrainIntegrationTests
             Assert.Equal(2, intervals.Count);
             Assert.All(intervals, interval => Assert.Equal(TimeSpan.FromSeconds(1.0 / 20), interval));
         }
-        finally { flashes.RemoveRange(start, flashes.Count - start); }
+        finally
+        {
+            BrainDrainOverlay.CloseAll();
+            flashes.RemoveRange(start, flashes.Count - start);
+            (settings.BrainDrainHighRefresh, settings.PerformanceMode, settings.AutoPerformanceMode) = original;
+            BrainDrainOverlay.CreatePump = factory;
+        }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CaptureRateCasesRestoreSettingsAndFactory(bool balanced)
+    {
+        var settings = CoreSettings.Current;
+        var original = (settings.BrainDrainHighRefresh, settings.PerformanceMode, settings.AutoPerformanceMode);
+        var originalFactory = BrainDrainOverlay.CreatePump;
+        Func<PixelRect, TimeSpan, BrainDrainCapturePump?> sentinel = (_, _) => null;
+        try
+        {
+            AvaloniaTestDispatcher.Run(() => {
+                settings.BrainDrainHighRefresh = false;
+                settings.PerformanceMode = true;
+                settings.AutoPerformanceMode = !balanced;
+                BrainDrainOverlay.CreatePump = sentinel;
+            });
+            if (balanced) await AutomaticBalancedTierCapsCaptureAt20Fps();
+            else await CaptureIntervalUsesRefreshRequestAndTier(true, false, 30);
+            AvaloniaTestDispatcher.Run(() => {
+                Assert.False(settings.BrainDrainHighRefresh);
+                Assert.True(settings.PerformanceMode);
+                Assert.Equal(!balanced, settings.AutoPerformanceMode);
+                Assert.Same(sentinel, BrainDrainOverlay.CreatePump);
+            });
+        }
+        finally
+        {
+            AvaloniaTestDispatcher.Run(() => {
+                (settings.BrainDrainHighRefresh, settings.PerformanceMode, settings.AutoPerformanceMode) = original;
+                BrainDrainOverlay.CreatePump = originalFactory;
+            });
+        }
+    }
 
     [Fact]
     public Task CapturedPixelsArePresentedWithLiveBlur() => Run(async owner =>
