@@ -55,7 +55,10 @@ public class FeatureDayLogService : IDisposable
         }
     }
 
-    /// <summary>The local day key, identical to the quest log's (QuestService.DayKey).</summary>
+    /// <summary>New activity uses the UTC day shared by the server journey.</summary>
+    internal static DateTime ActivityDay(DateTimeOffset instant) => instant.UtcDateTime.Date;
+
+    /// <summary>Format an already selected activity day without moving historical entries.</summary>
     private static string DayKey(DateTime day) =>
         day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
@@ -92,7 +95,7 @@ public class FeatureDayLogService : IDisposable
 
         lock (_lock)
         {
-            var today = DateTime.Today;
+            var today = ActivityDay(DateTimeOffset.UtcNow);
             var todayKey = DayKey(today);
             FeatureDayEntry? entry = null;
 
@@ -136,7 +139,7 @@ public class FeatureDayLogService : IDisposable
         if (amount <= 0 || string.IsNullOrEmpty(eventKey) || !FeatureDayEntry.IsEventKey(eventKey)) return;
         lock (_lock)
         {
-            var today = DateTime.Today;
+            var today = ActivityDay(DateTimeOffset.UtcNow);
             Log.GetOrAddDay(DayKey(today)).Add(eventKey, amount);
             Log.Prune(DayKey(today.AddDays(-FeatureDayLog.MaxDays)));
             _dirty = true;

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Descent;
 using Microsoft.Web.WebView2.Core;
@@ -28,7 +29,7 @@ namespace ConditioningControlPanel.Controls
     /// PROTOCOL (§9 v2, exact):
     ///   host → page   { type: 'spiral:state', devotion_days, stage, relapse_multiplier?,
     ///                   vat_fill_pct?, lit_station_ids?, reduced_motion?, perf_tier?,
-    ///                   descent? }
+    ///                   descent?, active_quests? }
     ///   page → host   { type: 'spiral:ready' }
     /// v2 ADDS ONE OPTIONAL FIELD and changes nothing else. `descent` is the server's
     /// own block, forwarded VERBATIM (DescentBlock.RawJson), and it is present only when
@@ -67,6 +68,10 @@ namespace ConditioningControlPanel.Controls
         private WebView2? _web;
         private bool _initStarted;
         private bool _disposed;
+        private QuestService? _questSource;
+        private DispatcherTimer? _questRefreshTimer;
+        private DescentBlock? _lastBlock;
+        private bool _hasPostedState;
 
         /// <summary>True once the canvas has posted 'spiral:ready'.</summary>
         public bool IsReady { get; private set; }
@@ -124,7 +129,37 @@ namespace ConditioningControlPanel.Controls
         {
             if (_initStarted || _disposed) return;
             _initStarted = true;
+            _questSource = App.Quests;
+            if (_questSource != null)
+            {
+                _questSource.QuestProgressChanged += OnQuestChanged;
+                _questSource.QuestCompleted += OnQuestChanged;
+                _questSource.QuestsRefreshed += OnQuestChanged;
+                _questRefreshTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+                {
+                    Interval = TimeSpan.FromMilliseconds(150)
+                };
+                _questRefreshTimer.Tick += OnQuestRefresh;
+            }
             _ = InitAsync();
+        }
+
+        private void OnQuestChanged(object? sender, EventArgs e)
+        {
+            if (_disposed || Dispatcher.HasShutdownStarted) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_disposed || !_hasPostedState) return;
+                // Coalesce bursts of progress and completion events into one snapshot.
+                _questRefreshTimer?.Stop();
+                _questRefreshTimer?.Start();
+            }));
+        }
+
+        private void OnQuestRefresh(object? sender, EventArgs e)
+        {
+            _questRefreshTimer?.Stop();
+            if (!_disposed) PostState(_lastBlock);
         }
 
         private async Task InitAsync()
@@ -247,6 +282,8 @@ namespace ConditioningControlPanel.Controls
         public void PostState(DescentBlock? block)
         {
             if (_disposed) return;
+            _lastBlock = block;
+            _hasPostedState = true;
             try
             {
                 // ToString, not JsonConvert.SerializeObject: the state is already a JObject
@@ -322,6 +359,9 @@ namespace ConditioningControlPanel.Controls
             var raw = ParseVerbatim(block?.RawJson);
             if (raw is not null) state["descent"] = raw;
 
+            // Current assignments belong to desktop, separately from server history.
+            var quests = SpiralQuestSnapshot.Capture(App.Quests);
+            if (quests is not null) state["active_quests"] = quests;
             return state;
         }
 
@@ -397,6 +437,20 @@ namespace ConditioningControlPanel.Controls
             _disposed = true;
             IsReady = false;
             _pending.Clear();
+            _lastBlock = null;
+            if (_questSource != null)
+            {
+                _questSource.QuestProgressChanged -= OnQuestChanged;
+                _questSource.QuestCompleted -= OnQuestChanged;
+                _questSource.QuestsRefreshed -= OnQuestChanged;
+                _questSource = null;
+            }
+            if (_questRefreshTimer != null)
+            {
+                _questRefreshTimer.Stop();
+                _questRefreshTimer.Tick -= OnQuestRefresh;
+                _questRefreshTimer = null;
+            }
             try
             {
                 if (_web != null)
