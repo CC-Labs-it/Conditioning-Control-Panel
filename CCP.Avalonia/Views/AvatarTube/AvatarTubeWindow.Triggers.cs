@@ -176,51 +176,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal Action? TypewriterFrame { get; private set; }
         internal TimeSpan? TypewriterInterval { get; private set; }
 
-        // WPF Speech.cs:1278-1295,1392-1407,1448-1455: final markdown and bare URLs become links.
-        private void RenderTriggerText(string text)
-        {
-            var matches = System.Text.RegularExpressions.Regex.Matches(text,
-                @"\[(?<label>[^\]]+)\]\((?<url>[^)]+)\)|(?<raw>https?://[^\s,""'<>]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (matches.Count == 0) { _txtSpeech.Text = text; return; }
-            _txtSpeech.Text = "";
-            _txtSpeech.Inlines!.Clear();
-            var at = 0;
-            Dictionary<string, string>? knownLinks = null;
-            foreach (System.Text.RegularExpressions.Match match in matches)
-            {
-                _txtSpeech.Inlines!.Add(new Run(text[at..match.Index]));
-                var raw = match.Groups["raw"].Value;
-                var target = raw.Length > 0 ? raw : match.Groups["url"].Value.Trim();
-                if (raw.Length > 0 && knownLinks == null)
-                {
-                    // WPF Speech.cs:1323-1343: active mod first, then built-in videos and playlists.
-                    knownLinks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    if (CoreMods.Service?.GetVideoLinks() is { } modLinks)
-                        foreach (var (title, url) in modLinks)
-                            if (Uri.TryCreate(url, UriKind.Absolute, out var link) && link.Scheme == "https")
-                                knownLinks[title] = url;
-                    foreach (var (title, url) in HypnotubeDefaultLinks.KnownVideoTitles)
-                        knownLinks.TryAdd(title, url);
-                }
-                var label = raw.Length > 0
-                    ? knownLinks!.FirstOrDefault(pair => string.Equals(pair.Value, target, StringComparison.OrdinalIgnoreCase)).Key
-                      ?? global::ConditioningControlPanel.Helpers.HtUrlHelper.DeriveTitleFromUrl(target)
-                    : match.Groups["label"].Value;
-                if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
-                    _txtSpeech.Inlines.Add(new InlineUIContainer(new global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton
-                    {
-                        // A TextBlock, not a string: Avalonia reads "_" in string Content as an access key.
-                        Content = new TextBlock { Text = label, FontSize = _txtSpeech.FontSize, FontFamily = _txtSpeech.FontFamily,
-                                                  FontWeight = _txtSpeech.FontWeight },
-                        Padding = new(0), FontSize = _txtSpeech.FontSize, FontFamily = _txtSpeech.FontFamily,
-                        Foreground = global::Avalonia.Media.Brush.Parse("#ffb0e0"),
-                        Command = Controls.Companion.CompanionLinkLauncher.CommandFor(uri.AbsoluteUri)
-                    }));
-                else _txtSpeech.Inlines.Add(new Run(label));
-                at = match.Index + match.Length;
-            }
-            _txtSpeech.Inlines!.Add(new Run(text[at..]));
-        }
+        // WPF Speech.cs:3033 PopulateSpeechBubble: the final pass shares the bubble's link builder
+        // (AvatarTubeWindow.SpeechLinks.cs).
+        private void RenderTriggerText(string text) => RenderSpeechLinks(_txtSpeech, text);
 
         // WPF IsAvatarVisibleOnScreen (Windowing.cs:2210-2233), read by every bubble (Speech.cs:481).
         // The head's parent visibility handler also hides the dock.
