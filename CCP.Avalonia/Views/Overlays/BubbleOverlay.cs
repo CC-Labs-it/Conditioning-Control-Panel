@@ -757,6 +757,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, motion);
             }
+            // WPF BubbleService.cs:3060,5085: golden chaos bubbles glow while alive.
+            var tier = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier;
+            if (spec.IsGolden && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(tier))
+                b.LuckyGlowBlur = Math.Min(20, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
             b.ApplyChaosHitbox(hitboxScale, liveMagnet);
             Field.Bubbles.Add(b);
             if (spec.IsTease) LoadTeaseFace(b);
@@ -1143,6 +1147,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return false;
         }
 
+        private static readonly Dictionary<(double Blur, double Opacity), DropShadowEffect> LuckyShadows = new();
+        internal static DropShadowEffect? GlowEffect(AmbientBubble b, double k)
+        {
+            if (b.LuckyGlowBlur <= 0) return null;
+            var key = (b.LuckyGlowBlur * k, b.Spec?.IsGolden == true ? 0.55 : 0.8);
+            if (!LuckyShadows.TryGetValue(key, out var effect))
+                LuckyShadows[key] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = key.Item1, OffsetX = 0, OffsetY = 0, Opacity = key.Item2 };
+            return effect;
+        }
+
         private sealed class Layer : Control
         {
             private readonly BubbleOverlayWindow _w;
@@ -1275,16 +1289,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     finally { glow?.Dispose(); }
                 }
             }
-            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
             /// <summary>WPF Bubble.SetLucky: #FFD700 at 0.8, no offset. The shadow is taken of what is drawn,
             /// so it fades with the bubble and its sparkles. Bounds cover the turned sprite and every live sparkle.</summary>
             private static DrawingContext.PushedState? LuckyGlow(DrawingContext dc, AmbientBubble b, double cx, double cy,
                 double size, double scale, double k, double ox, double oy)
             {
-                if (b.LuckyGlowBlur <= 0) return null;
-                var blur = b.LuckyGlowBlur * k;
-                if (!LuckyShadows.TryGetValue(blur, out var effect))
-                    LuckyShadows[blur] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+                var effect = GlowEffect(b, k);
+                if (effect == null) return null;
                 var angle = b.Angle * Math.PI / 180;
                 var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
                 double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;
