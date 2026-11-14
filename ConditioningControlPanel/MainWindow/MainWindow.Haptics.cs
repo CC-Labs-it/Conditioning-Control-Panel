@@ -460,10 +460,9 @@ namespace ConditioningControlPanel
             if (_isLoading) return;
             var isEnabled = HapticsTab.ChkHapticsEnabled.IsChecked == true;
 
-            // HapticMixer.IsGateOpen already ORs the "haptics" free day in; this toggle has to
-            // ask the same question or the ? box hands out a feature the checkbox then refuses.
-            if (isEnabled && App.Patreon?.HasPremiumAccess != true
-                && App.DailyFree?.IsFreeToday("haptics") != true)
+            // Same question HapticMixer.IsGateOpen asks (HapticsAccess), or the switch and the
+            // mixer disagree about who may use toys.
+            if (isEnabled && !Services.Haptics.HapticsAccess.IsOpen)
             {
                 HapticsTab.ChkHapticsEnabled.IsChecked = false;
                 MessageBox.Show(
@@ -542,8 +541,7 @@ namespace ConditioningControlPanel
 
         internal async void BtnHapticConnect_Click(object sender, RoutedEventArgs e)
         {
-            if (App.Patreon?.HasPremiumAccess != true
-                && App.DailyFree?.IsFreeToday("haptics") != true)
+            if (!Services.Haptics.HapticsAccess.IsOpen)
             {
                 MessageBox.Show(
                     Loc.Get("msg_haptic_feedback_patreon_only"),

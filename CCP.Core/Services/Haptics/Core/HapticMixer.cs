@@ -188,25 +188,20 @@ namespace ConditioningControlPanel.Services.Haptics.Core
 
         // ===================================================================== gate
 
-        /// <summary>Premium + master toggle, evaluated ONCE here rather than in every consumer.</summary>
+        /// <summary>Access + master toggle, evaluated ONCE here rather than in every consumer.
+        /// Toys are free for every account since 2026-11-11 (<see cref="HapticsAccess"/>).</summary>
         public bool IsGateOpen
         {
             get
             {
                 if (!_settings.Enabled && Environment.TickCount64 > Interlocked.Read(ref _testGateUntil)) return false;
-                // The ? box's free day opens this gate too, or the rail chip would flip the
-                // toggle while the mixer stayed silent (DailyFreeService).
-                try
-                {
-                    return CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("haptics");
-                }
-                catch { return false; }
+                return HapticsAccess.IsOpen;
             }
         }
 
         /// <summary>Let the "Test" button prove the hardware works even when the master toggle is
-        /// off (the old code drove the provider directly and so was never gated). Premium is still
-        /// required — this only waives <c>Settings.Enabled</c>, and only for a few seconds.</summary>
+        /// off (the old code drove the provider directly and so was never gated). Access is still
+        /// asked - this only waives <c>Settings.Enabled</c>, and only for a few seconds.</summary>
         public void AllowTestWindow(int ms)
             => Interlocked.Exchange(ref _testGateUntil, Environment.TickCount64 + Math.Clamp(ms, 0, 10_000));
 

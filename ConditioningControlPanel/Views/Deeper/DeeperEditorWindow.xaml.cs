@@ -1176,10 +1176,17 @@ namespace ConditioningControlPanel.Views.Deeper
             // bare Play() is a no-op. Stop()+seek-to-zero means the next Play
             // (whether from Space or BtnPlayPause) actually replays — the
             // "replay-after-stop" promise from bb6f503.
-            try { _mediaPlayer?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // The Stop runs on the UI thread, never here: this handler is libvlc's own event
+            // thread, where Stop waits on the thread it is running on, and DisposePlayback (UI
+            // thread) could free the player under it.
+            var player = _mediaPlayer;
             Dispatcher.InvokeAsync(() =>
             {
                 if (Dispatcher.HasShutdownStarted) return;
+                if (player != null && ReferenceEquals(player, _mediaPlayer))
+                {
+                    try { player.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                }
                 _currentSeconds = 0;
                 TxtCurrentTime.Text = FormatTime(_currentSeconds);
                 UpdatePlayheadPosition();

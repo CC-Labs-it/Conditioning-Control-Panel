@@ -34,20 +34,20 @@ namespace ConditioningControlPanel.Services
         /// is safe but reordering reshuffles everyone's calendar.
         ///
         /// <para>Haptics and Voice were CUT from the rotation (owner, 2026-08-11: "kinda shallow,
-        /// I don't want them in the pool") but stay in <see cref="OverridableKeys"/> - their
-        /// TierGate keys and engine gates are still wired, so a server override can still hand
-        /// either out on a chosen day even though the wheel never lands on them.</para>
+        /// I don't want them in the pool"). Voice stays in <see cref="OverridableKeys"/>, so a
+        /// server override can still hand it out on a chosen day. Haptics left that list too on
+        /// 2026-11-11, when toys became free for everyone: there is nothing left to give away.</para>
         /// </summary>
         public static readonly string[] Pool = { "takeover", "awareness", "fyp", "remote" };
 
         /// <summary>
         /// What the SERVER may name, which is wider than what the wheel spins: the live pool,
-        /// the two benched features whose unlock plumbing remains in place, and "dtrh" - the
+        /// the benched Voice feature whose unlock plumbing remains in place, and "dtrh" - the
         /// off-pool drop (owner, 2026-08-11: promo Saturdays). DtRH is wired through
         /// TierGate's keyed premium overloads at every gate site (it moved to Basic on 2026-10-31),
         /// but the WHEEL never lands on it: it is only ever given away on a day the owner names.
         /// </summary>
-        private static readonly string[] OverridableKeys = { "takeover", "awareness", "fyp", "remote", "haptics", "voice", "dtrh" };
+        private static readonly string[] OverridableKeys = { "takeover", "awareness", "fyp", "remote", "voice", "dtrh" };
 
         private const string OverrideEndpoint = "https://codebambi-proxy.vercel.app/config/daily-feature";
         private static readonly TimeSpan RefetchEvery = TimeSpan.FromHours(6);
