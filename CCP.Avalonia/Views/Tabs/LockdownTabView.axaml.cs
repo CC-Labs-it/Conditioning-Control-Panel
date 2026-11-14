@@ -384,7 +384,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 .Append("): the app's own UI will misbehave, on purpose.\n")
                 .Append("  Ember glow = it was Lockdown, not a bug. Nothing you see is real damage.");
             if (cfg.LockdownPossessionIntensity == 2 && fullDokiScares)
-                warn.Append("\n- Full Doki adds themed fake deletion scares. They are theatre.");
+                warn.Append("\n- ").Append(Loc.Get("possession_delete_consent"));
         }
 
         private void BtnGateUnlock_Click(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
