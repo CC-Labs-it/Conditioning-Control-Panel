@@ -42,6 +42,10 @@ public sealed class RemoteHypnotubeShellTests
         var offline = s.OfflineMode;
         var (oldPlay, oldStop) = (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo);
         const string video = "https://hypnotube.com/video/example-123.html";
+        // The test profile is a network sandbox (SandboxNet): only a loopback page really loads, so the paths
+        // that need a loaded page hand the shell a loopback URL (Core already allowlisted the real one).
+        const string page = "https://127.0.0.1/video/example-123.html";
+        var home = new Uri("https://bambicloud.com/");   // no site radio matches a loopback page: BambiCloud
         MainShellWindow? shell = null;
         Func<string, string?>? hookAfterClose = null;
         try
@@ -70,29 +74,29 @@ public sealed class RemoteHypnotubeShellTests
             web.ScriptInvoker = js => { scripts.Add(js); return Task.FromResult<string?>(null); };
             web.NavigationInvoker = _ => true;
 
-            Assert.Null(Play(video));
+            Assert.Null(shell.PlayHypnotubeFromRemote(page));
             Assert.True(browser.IsVisible);
             Assert.False(shell.BrowserCovered);   // the overlay stops covering while the controller's video plays
-            Assert.Equal(new Uri(video), web.Source);
+            Assert.Equal(new Uri(page), web.Source);
 
             // stop_video: back to the site home and under the overlay again (WPF :1410, :995).
             Assert.Null(RemoteCommands.Execute("stop_video", null));
             Assert.False(browser.IsVisible);
             Assert.True(shell.BrowserCovered);
-            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+            Assert.Equal(home, web.Source);
             Assert.Contains(WebHostTakeover.StopScript, scripts);
 
             // A second stop with no controller video leaves the page the user browses alone.
-            web.Navigate(new Uri(video));
+            web.Navigate(new Uri(page));
             Assert.Null(RemoteCommands.Execute("stop_video", null));
-            Assert.Equal(new Uri(video), web.Source);
+            Assert.Equal(new Uri(page), web.Source);
 
             // The local panic ends the controller's video too (WPF MainWindow.xaml.cs:2066 PanicEndBrowserMedia).
-            Assert.Null(Play(video));
+            Assert.Null(shell.PlayHypnotubeFromRemote(page));
             Assert.True(browser.IsVisible);
             PanicSurfaces.All.Single(x => x.Id == "browser-media").Stop(shell);
             Assert.False(browser.IsVisible);
-            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+            Assert.Equal(home, web.Source);
 
             // Graded Intake owns the screen: refused, the blindfold stays, the page is untouched (WPF Browser.cs:3195).
             var intake = new IntakeHostWindow();
@@ -101,7 +105,7 @@ public sealed class RemoteHypnotubeShellTests
                 intake.Show();
                 Assert.Equal(Loc.GetF("remote_browser_screen_busy", "Graded Intake"), Play(video));
                 Assert.False(browser.IsVisible);
-                Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+                Assert.Equal(home, web.Source);
             }
             finally { intake.Close(); }
 
@@ -119,9 +123,9 @@ public sealed class RemoteHypnotubeShellTests
             Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Verbose().WriteTo.Sink(sink).CreateLogger();
             try
             {
-                Assert.True(shell.NavigateToUrlInBrowser("https://hypnotube.com/video/private-title-123.html?token=private-secret", true));
+                Assert.True(shell.NavigateToUrlInBrowser("https://127.0.0.1/video/private-title-123.html?token=private-secret", true));
                 var logged = string.Join("\n", sink.Events.Select(e => e.RenderMessage() + e.Exception));
-                Assert.Contains("hypnotube.com", logged);
+                Assert.Contains("127.0.0.1", logged);
                 Assert.DoesNotContain("private-title", logged);
                 Assert.DoesNotContain("private-secret", logged);
             }

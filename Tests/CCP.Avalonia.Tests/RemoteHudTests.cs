@@ -425,6 +425,8 @@ public class RemoteHudTests
             Assert.NotNull(leash.Snapshot.Me);
             var runner = new PanicReachHeadTests.FakeRunner();
             (LeashHead.Service, LeashTaskHost.Runner) = (leash, runner);
+            // The first session's end handed the panic key back on (RemoteWearer.ReleaseSafetyState).
+            settings.PanicKeyEnabled = false;
             (forced, _, _) = await HudStop(shell);
             Assert.Equal(new[] { "park+session" }, runner.Calls);   // the leash-only stop, nothing more
             Assert.Equal(0, stopped);
