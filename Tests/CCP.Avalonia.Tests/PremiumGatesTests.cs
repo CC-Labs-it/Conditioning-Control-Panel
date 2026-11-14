@@ -91,6 +91,59 @@ public sealed class PremiumGatesTests
     }
 
     [Fact]
+    public void TakeoverAutonomyFollowsPremiumAndFreeDay()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+            var settings = CoreSettings.Current;
+            var flags = (settings.KeywordTriggersEnabled, settings.AwarenessModeEnabled, settings.AutonomyModeEnabled,
+                settings.SpokenMantrasEnabled, settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                settings.MantraChantEnabled);
+            var haptics = settings.Haptics;
+            var hapticsEnabled = haptics?.Enabled;
+            MainShellWindow? shell = null;
+            try
+            {
+                bool premium = false, free = false;
+                CoreEntitlement.HasPremiumProvider = () => premium;
+                CoreEntitlement.IsFreeTodayProvider = key => free && key == "takeover";
+                shell = new MainShellWindow();
+                shell.Show();
+                var tab = shell.Named<Control>("BambiTakeoverTab")!;
+                var locked = tab.FindControl<Control>("AutonomyLocked")!;
+                var unlocked = tab.FindControl<Control>("AutonomyUnlocked")!;
+                void Check(bool open)
+                {
+                    shell.RefreshEntitlementVeils();
+                    Assert.Equal(!open, locked.IsVisible);
+                    Assert.Equal(open, unlocked.IsVisible);
+                }
+                Check(false);
+                free = true; Check(true);
+                free = false; premium = true; Check(true);
+                premium = false; Check(false);
+            }
+            finally
+            {
+                try { shell?.Close(); }
+                finally
+                {
+                    (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = old;
+                    (settings.KeywordTriggersEnabled, settings.AwarenessModeEnabled, settings.AutonomyModeEnabled,
+                        settings.SpokenMantrasEnabled, settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                        settings.MantraChantEnabled) = flags;
+                    if (haptics != null && hapticsEnabled.HasValue) haptics.Enabled = hapticsEnabled.Value;
+                }
+            }
+        });
+    }
+
+    [Fact]
     public void FlippingTheSeam_UnlocksEveryVeilAndLockband()
     {
         AvaloniaTestDispatcher.Run(() =>

@@ -422,6 +422,26 @@ public sealed class PremiumCelebrationTests
     });
 
     [Fact]
+    public void ProviderTierChangeRefreshesProfileBubble() => Run(premiumAtLaunch: false, (shell, opened, grant) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.DisplayNameProvider = () => "Alice Brown";
+        shell.RefreshProfileBubble();
+        var initials = shell.FindControl<TextBlock>("ProfileBubbleInitials")!;
+        Assert.Equal("AB", initials.Text);
+
+        CoreAccount.DisplayNameProvider = () => "Carol Davis";
+        AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("CD", initials.Text);
+
+        CoreAccount.DisplayNameProvider = () => "Eve Fox";
+        AccountSeed.SubscribeStar!.NotifyEntitlementRaised(PatreonTier.Level1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("EF", initials.Text);
+    });
+
+    [Fact]
     public void PremiumHeldAtLaunchIsCelebratedButAnInviteWeekIsNot() => Run(premiumAtLaunch: true, (shell, opened, grant) =>
     {
         Assert.Equal(FeatureIntros.All[TierCelebration.KeyT1].Title, Celebration(opened, TierCelebration.KeyT1));
