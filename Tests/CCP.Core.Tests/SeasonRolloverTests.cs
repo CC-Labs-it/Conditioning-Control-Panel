@@ -117,4 +117,26 @@ public class SeasonRolloverTests
         Assert.Null(SeasonRollover.CaptureAndRollover(s, "2026-08", _ => throw new System.Exception()));
         Assert.Equal("2026-08", s.SeasonStatsSeason);
     }
+
+    // WPF ProfileSyncService.cs:2469 (restack b223, #4669 slice).
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void LevelResetSetsPendingAndAsksForBookkeepingUnlessDescentRefusesIt(bool descentDone, bool accepted)
+    {
+        var s = new AppSettings { CurrentSeason = "2026-08", DescentMigrationCompleted = descentDone };
+        var reply = Newtonsoft.Json.Linq.JObject.Parse("{\"level_reset\":true,\"user\":{\"level\":1,\"xp\":0,\"current_season\":\"2026-08\"}}");
+        int nudges = 0;
+        System.Action<AppSettings> seen = x => { if (ReferenceEquals(x, s)) nudges++; };
+        ProfileAdopt.SeasonAdvanced += seen;
+        try
+        {
+            ProfileAdopt.ApplySyncResponse(s, reply, new System.DateTime(2026, 8, 1));
+            Assert.Equal(accepted, s.SeasonResetPending);
+            Assert.Equal(accepted ? 1 : 0, nudges);
+            if (accepted) Assert.True(SeasonRollover.UpdateBookkeeping(s));   // the shell's silent pass consumes it
+            Assert.False(s.SeasonResetPending);
+        }
+        finally { ProfileAdopt.SeasonAdvanced -= seen; }
+    }
 }

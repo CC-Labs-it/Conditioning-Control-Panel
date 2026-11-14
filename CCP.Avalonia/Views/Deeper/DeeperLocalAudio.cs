@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var media = new Media(vlc, path, FromType.FromPath);
             if (image == null) media.AddOption(LibVlcAudio.NoVideo);
             // AudioFileReader.TotalTime: the parse gives the duration before anything plays.
-            var status = await media.Parse(MediaParseOptions.ParseLocal, 5000);
+            var status = await LibVlcAudio.ParseAsync(media, MediaParseOptions.ParseLocal, 5000);
             if (status != MediaParsedStatus.Done || media.Duration <= 0) { media.Dispose(); return null; }
             // Prime with audio disabled at the media level: LibVLC mute is not reliable before
             // an output exists. The original media is used only after an explicit Play.

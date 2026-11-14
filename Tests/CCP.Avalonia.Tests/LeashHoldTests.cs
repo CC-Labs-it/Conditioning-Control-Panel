@@ -387,6 +387,38 @@ public sealed class LeashHoldTests
     });
 
     [Fact]
+    public void X11Hold_LostKeyStateDismissesAndNeverAsks_NextProvenHoldStillWorks()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        // The shell uses Windows-only font names; the shared setup maps them to the bundled font.
+        AvaloniaTestDispatcher.Run(AmbientBeatLoopsTests.Setup);
+        bool? keyDown = true;
+        WithPortalShell(() => keyDown, (shell, clock) =>
+        {
+            shell.OnX11PanicPress();
+            Dispatcher.UIThread.RunJobs();
+            for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.True(LeashHoldRing.IsShown);
+
+            // The key-up may be lost when X11 becomes unavailable. Unknown is not proof of a hold.
+            keyDown = null;
+            clock.Now += TimeSpan.FromMilliseconds(250);
+            shell.LeashHoldClockTick();
+            Assert.False(LeashHoldRing.IsShown);
+            for (int t = 500; t <= 6000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.Null(LeashCutConfirmWindow.Current);
+
+            keyDown = true;
+            shell.OnX11PanicPress();
+            Dispatcher.UIThread.RunJobs();
+            for (int t = 250; t <= 5000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.NotNull(LeashCutConfirmWindow.Current);
+            Click(LeashCutConfirmWindow.Current!.NoButton);
+            shell.LeashHoldReleased();
+        });
+    }
+
+    [Fact]
     public void UnprovenPortalHold_NoX11Listener_EndsOnFirstTick_NeverAsks() => WithPortalShell(() => null, (shell, clock) =>
     {
         // A portal that never sent Deactivated, and no X11 listener (key state unknown): treat as released.
