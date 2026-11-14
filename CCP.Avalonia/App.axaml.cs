@@ -26,7 +26,8 @@ namespace ConditioningControlPanel.Avalonia
                 shell.RefreshEntitlementVeils(persist: true);
                 shell.RefreshExclusivesTab();
                 shell.RefreshNavPremiumTags();
-                shell.RefreshProfileBubble();
+                // The profile bubble repaints from the shell's own tier and grace handlers (MainShellWindow.Patreon.cs);
+                // WPF's daily rotation never touches it (MainWindow.xaml.cs:502), #4130.
             });
             dailyFree.TodayChanged += RepaintVeils;
             return RepaintVeils;

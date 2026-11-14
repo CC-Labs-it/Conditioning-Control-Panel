@@ -255,6 +255,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF OnPatreonTierChanged: Programs rebuilds on a tier change only, not on every navigation. A SubscribeStar
                 // change rebuilds it once, in InitializeSubscribeStarDependents (WPF OnSubscribeStarTierChanged).
                 if (ReferenceEquals(sender, patreon)) Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+                // WPF ProgramsTab.cs:469-478: the Dashboard's Today card refreshes with every Programs refresh,
+                // even while Programs is hidden (#3920).
+                SettingsPage?.RefreshProgramTodayCard();
                 RefreshTierDependentViews();
                 RefreshProfileBubble();
                 MaybeShowPremiumCelebration();
@@ -266,7 +269,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             void Focused(object? sender, System.EventArgs e) => _ = Platform.AccountSeed.OnAppFocusedAsync();
             Activated += Focused;
             // WPF OnGraceClosed: the veils repaint from App.axaml.cs; Programs gate on the same entitlement at build time.
-            void GraceClosed() => Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+            void GraceClosed()
+            {
+                Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshPrograms();
+                SettingsPage?.RefreshProgramTodayCard();
+                RefreshProfileBubble();   // WPF OnGraceClosed (MainWindow.Patreon.cs:1206)
+            }
             Platform.AccountSeed.GraceClosed += GraceClosed;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
