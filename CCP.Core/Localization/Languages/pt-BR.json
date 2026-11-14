@@ -8469,5 +8469,7 @@
   "chaos_expiry_name_gif": "cascata de GIFs",
   "webcam_camera_unavailable_detail": "Câmera indisponível. Outro aplicativo pode estar usando a câmera ou as configurações de privacidade podem estar bloqueando o acesso.",
   "webcam_capture_retry_fmt": "A câmera está demorando para responder. Tentando outro método ({0}/{1}).",
+  "installer_fileassoc_task": "Adicionar 'Abrir com CCP' ao menu de clique direito de arquivos de mídia (.mp4, .mp3 etc.)",
+  "installer_fileassoc_group": "Associações de arquivos:",
   "installer_avalonia_upgrade_notice": "Atualização para Avalonia\n\nAo atualizar do WPF, os logins do navegador integrado são redefinidos. Entre novamente nos sites abertos no CCP.\n\nO novo perfil browser_data_avalonia fica na pasta de dados do usuário do CCP. O perfil antigo browser_data é mantido.\n\nEssa alteração não apaga os tokens da conta CCP, as configurações ou o progresso."
 }
