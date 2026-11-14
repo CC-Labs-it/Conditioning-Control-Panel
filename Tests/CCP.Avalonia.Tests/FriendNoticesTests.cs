@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -47,11 +48,222 @@ public sealed class FriendNoticesTests
             w.Dismiss(n, true);
             Assert.Equal("new", acted);
             Assert.Equal(0, missed);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
         }
         finally { FriendNotices.CloseAll(); }
         return Task.CompletedTask;
     });
+    [Theory]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Off)]
+    public Task DismissalFadesOnceAndSurvivesExpiry(global::ConditioningControlPanel.Models.MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe, oldTime) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe, BeatLoop.Time);
+        try
+        {
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = level; settings.GentleVisuals = false;
+            int actions = 0, missed = 0;
+            var at = DateTimeOffset.UtcNow;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", at, 6000), new NoticeLook { Act = _ => actions++ });
+            var w = FriendNotices.Current!;
+            w.Advance(260);
+            var n = Assert.Single(w.Stack.All);
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().Single();
+            w.Dismiss(n, true); w.Dismiss(n, true);
+            Assert.Equal(1, actions);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Off)
+                Assert.Null(FriendNotices.Current);
+            else
+            {
+                Assert.Same(w, FriendNotices.Current);
+                w.Advance(70);
+                Assert.Equal(0.5, card.Opacity, 5);
+                FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "b", "B", at, 1), new NoticeLook { Missed = _ => missed++ });
+                w.Advance(1);
+                Assert.Equal(1, missed);
+                Assert.Contains(card, ((StackPanel)w.Content!).Children);
+                w.Advance(68);
+                Assert.Same(w, FriendNotices.Current);
+                w.Advance(1);
+                Assert.Null(FriendNotices.Current);
+            }
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    // House rule (Gentle visuals): a rise never beats the 300 ms floor and a fade only lengthens (restack b151 review).
+    [Fact]
+    public Task GentleVisualsSlowTheArrivalAndLengthenTheDismissFade() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe, oldTime) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe, BeatLoop.Time);
+        try
+        {
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = true;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", DateTimeOffset.UtcNow, 6000), new NoticeLook());
+            var w = FriendNotices.Current!;
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().Single();
+            w.Advance(200);
+            Assert.True(card.Opacity < 0.7, $"rise {card.Opacity} at 200 ms");
+            w.Advance(100);
+            Assert.Equal(1, card.Opacity);
+            Assert.True(FriendNotices.DismissFadeMs > 140);
+            w.Dismiss(Assert.Single(w.Stack.All), false);
+            w.Advance(140);
+            Assert.Same(w, FriendNotices.Current);
+            Assert.True(card.Opacity > 0);
+            w.Advance(FriendNotices.DismissFadeMs);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    [Fact]
+    public Task ClosingDuringDismissalDoesNotRepeatTheAction() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldGentle, oldProbe) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        try
+        {
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false;
+            int actions = 0;
+            FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", DateTimeOffset.UtcNow, 6000), new NoticeLook { Act = _ => actions++ });
+            var w = FriendNotices.Current!;
+            var n = Assert.Single(w.Stack.All);
+            w.Dismiss(n, true);
+            Assert.Same(w, FriendNotices.Current);
+            FriendNotices.CloseAll();
+            w.Advance(140);
+            w.Dismiss(n, true);
+            Assert.Equal(1, actions);
+            Assert.Null(FriendNotices.Current);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+    // WPF FriendNotices.cs:101-108,234-245,395-411. Only the fresh card moves.
+    [Theory]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Full)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Reduced)]
+    [InlineData(global::ConditioningControlPanel.Models.MotionLevel.Off)]
+    public Task ArrivalAndRepeatFollowTheMotionSetting(global::ConditioningControlPanel.Models.MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldGentle = settings.GentleVisuals;
+        var oldProbe = UiMotionPreference.OsProbe;
+        var oldTime = BeatLoop.Time;
+        try
+        {
+            BeatLoop.Time = new SteppedTime();
+            UiMotionPreference.OsProbe = () => true;
+            UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = level;
+            settings.GentleVisuals = false;
+            var at = DateTimeOffset.UtcNow;
+            FriendNotice Notice(string id) => new(NoticeKind.Poke, id, "Friend", at, 6000);
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            var w = FriendNotices.Current!;
+            Border Card() => ((StackPanel)w.Content!).Children.OfType<Border>().Last();
+            var card = Card();
+            Assert.Equal(new Thickness(16, 0, 0, 8), card.Margin); // WPF :376 leaves room for the nudge
+            var shift = (TranslateTransform)card.RenderTransform!;
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Full ? 28 : 0, shift.X);
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Off ? 1 : 0, card.Opacity);
+            w.Advance(140);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Reduced) Assert.Equal(1, card.Opacity);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Full)
+            {
+                Assert.Equal(0.7, card.Opacity, 5);
+                Assert.NotEqual(0, shift.X);
+            }
+            w.Advance(120);
+            Assert.Equal(0, shift.X, 5);
+            Assert.Equal(1, card.Opacity);
+
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            card = Card();
+            shift = (TranslateTransform)card.RenderTransform!;
+            Assert.Equal(level == global::ConditioningControlPanel.Models.MotionLevel.Full ? -6 : 0, shift.X, 5);
+            Assert.Equal(1, card.Opacity);
+            w.Advance(110);
+            if (level == global::ConditioningControlPanel.Models.MotionLevel.Full) Assert.NotEqual(0, shift.X);
+            w.Advance(110);
+            Assert.Equal(0, shift.X, 5);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
+    // WPF FriendNotices.cs:101-108,395-411: motion begins with this arrival, not the preceding tick.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DelayedBeatStartsArrivalAndRepeatAtTheirOwnTimes(bool repeat) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Platform();
+        var settings = CoreSettings.Current;
+        var oldTime = BeatLoop.Time;
+        var (oldLevel, oldGentle, oldProbe) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe);
+        var time = new SteppedTime();
+        try
+        {
+            BeatLoop.Time = time;
+            UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
+            settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = false;
+            FriendNotice Notice(string id) => new(NoticeKind.Poke, id, "Friend", DateTimeOffset.UtcNow, 30000);
+            FriendNotices.Present(null, Notice("a"), new NoticeLook());
+            var w = FriendNotices.Current!;
+            Assert.True(w.IsVisible);
+            Assert.Contains(BeatLoop.Running, loop => ReferenceEquals(loop.Owner, w));
+            time.Advance(TimeSpan.FromSeconds(5)); // no beat since the first card appeared
+            FriendNotices.Present(null, Notice(repeat ? "a" : "b"), new NoticeLook());
+            var card = ((StackPanel)w.Content!).Children.OfType<Border>().First();
+            time.Advance(TimeSpan.FromMilliseconds(110));
+            BeatLoop.StepAll();
+            Assert.Equal(repeat ? 1 : 0.55, card.Opacity, 5);
+            Assert.NotEqual(0, ((TranslateTransform)card.RenderTransform!).X);
+        }
+        finally
+        {
+            FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
+            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -296,6 +508,7 @@ public sealed class FriendNoticesTests
             Assert.Single(w.Stack.All);
             Press(w, onName, MouseButton.Left);
             Assert.Equal(1, opened);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "b", "Friend", DateTimeOffset.UtcNow, 6000), Look());
             w = FriendNotices.Current!;
@@ -303,6 +516,7 @@ public sealed class FriendNoticesTests
             Press(w, Centre(Tagged(w, "friend-notice-action"), w), MouseButton.Left);
             Assert.Equal(1, acted);
             Assert.Equal(1, opened);
+            w.Advance(140);
             Assert.Null(FriendNotices.Current);
         }
         finally { FriendNotices.CloseAll(); }

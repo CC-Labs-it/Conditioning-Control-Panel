@@ -69,6 +69,7 @@ public sealed class KnockCardTests
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motion, bell, volume) = (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume);
+        var media = (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented);
         var (oldSvc, oldClock, oldWorld, oldAnchor) = (FriendsHead.Service, KnockCard.Clock, FriendsLanding.World, FriendsLanding.Anchor);
         var oldOpenTab = FriendsLanding.OpenPanelTab;
         var oldFetch = KnockCard.FetchPicture;
@@ -99,6 +100,7 @@ public sealed class KnockCardTests
             FriendsLanding.OpenPanelTab = oldOpenTab;
             KnockCard.FetchPicture = oldFetch;
             (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume) = (motion, bell, volume);
+            (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented) = media;
             StartupLadder.ResetForTests();
             FriendsSeen.Shared.Clear();
             foreach (var w in host.OwnedWindows.ToArray()) w.Close();
@@ -371,6 +373,111 @@ public sealed class KnockCardTests
         Assert.Same(before.FypOnlineNiches, settings.FypOnlineNiches);
         Assert.Same(before.BackRoomMediaSubs, settings.BackRoomMediaSubs);
         Assert.Same(before.BackRoomMediaSubsOff, settings.BackRoomMediaSubsOff);
+    }
+
+    // WPF FriendsLanding.cs:667-685: accepting a flavour discards already dealt media.
+    [Fact]
+    public Task AcceptingAFlavourRefreshesBothDealtMediaQueues() => Run((svc, _, _, _) =>
+    {
+        var video = MandatoryVideoOverlay.Instance;
+        var bubbles = BubbleCountHost.Instance;
+        var (oldVideo, oldBubbles, oldWord) = (video.Scheduler, bubbles.Scheduler, FriendsLanding.ShowWatchWord);
+        IReadOnlyList<string> library = new[] { "old-a.mp4", "old-b.mp4" };
+        video.Scheduler = new MandatoryVideoScheduler(video, library: () => library);
+        bubbles.Scheduler = new BubbleCountScheduler(bubbles, library: () => library);
+        FriendsLanding.ShowWatchWord = (_, _) => { };
+        try
+        {
+            Assert.StartsWith("old-", video.Scheduler.PickNext());
+            Assert.StartsWith("old-", bubbles.Scheduler.PickNext());
+            library = new[] { "new.mp4" };
+            svc.Deliver(WatchItem("00000000000000d6", new WatchRef(WatchKind.Flavour, "pink", null)));
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            Assert.Equal("new.mp4", video.Scheduler.PickNext());
+            Assert.Equal("new.mp4", bubbles.Scheduler.PickNext());
+        }
+        finally
+        {
+            video.Scheduler = oldVideo;
+            bubbles.Scheduler = oldBubbles;
+            FriendsLanding.ShowWatchWord = oldWord;
+        }
+    });
+
+    // WPF FriendsLanding.cs:681-685 and both services' ReloadAssets: pack decrypts are also cleared.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task AcceptingAFlavourCleansBothPackPools(bool checkVideo) => Run((svc, _, _, _) =>
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-watch-packs-").FullName;
+        var dir = Path.Combine(root, ".packs", "watch-pack");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        File.WriteAllBytes(Path.Combine(dir, "content", "v.enc"), new byte[] { 1 });
+        var manifest = new InstalledPackManifest { PackId = "p1", PackGuid = "watch-pack", PackName = "One" };
+        manifest.Files.Add(new PackFileEntry { OriginalName = "v.mp4", ObfuscatedName = "v.enc", FileType = "video", Extension = ".mp4" });
+        PackEncryptionService.SaveEncryptedManifest(Newtonsoft.Json.JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var packSettings = new AppSettings();
+        var store = new ContentPackStore(() => root, () => packSettings, () => { }, decryptFile: _ => new byte[] { 1 }, tempDir: () => Path.Combine(root, ".temp"));
+        var video = MandatoryVideoOverlay.Instance; var bubbles = BubbleCountHost.Instance;
+        var (oldVideo, oldBubbles, oldWord) = (video.Scheduler, bubbles.Scheduler, FriendsLanding.ShowWatchWord);
+        var videoPack = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        var bubblePack = new PackMediaPool(ContentPackStore.VideoType, store: () => store);
+        video.Scheduler = new MandatoryVideoScheduler(video, library: () => Array.Empty<string>()) { PackVideos = videoPack };
+        bubbles.Scheduler = new BubbleCountScheduler(bubbles, library: () => Array.Empty<string>()) { PackVideos = bubblePack };
+        FriendsLanding.ShowWatchWord = (_, _) => { };
+        try
+        {
+            var videoTemp = video.Scheduler.PickNext()!; var bubbleTemp = bubbles.Scheduler.PickNext()!;
+            Assert.True(File.Exists(videoTemp)); Assert.True(File.Exists(bubbleTemp));
+            svc.Deliver(WatchItem("00000000000000d7", new WatchRef(WatchKind.Flavour, "pink", null)));
+            var notice = FriendNotices.Current!;
+            notice.Dismiss(Assert.Single(notice.Stack.All), acted: true);
+            var temp = checkVideo ? videoTemp : bubbleTemp;
+            var pool = checkVideo ? videoPack : bubblePack;
+            Assert.False(File.Exists(temp));
+            Assert.Equal(0, pool.TempCount);
+            Assert.Single(store.GetAllActivePackVideos());
+        }
+        finally
+        {
+            videoPack.CleanupTemps(); bubblePack.CleanupTemps();
+            video.Scheduler = oldVideo; bubbles.Scheduler = oldBubbles; FriendsLanding.ShowWatchWord = oldWord;
+            try { Directory.Delete(root, true); } catch { }
+        }
+    });
+
+    [Fact]
+    public async Task FlavourFixtureRestoresSharedMediaSettings()
+    {
+        var s = CoreSettings.Current;
+        var old = (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented);
+        try
+        {
+            s.MediaSource = "online"; s.RemoteMediaRatio = 47; s.FypOnlineNiches = new() { "hypno" };
+            s.BackRoomMediaSource = "bundled"; s.BackRoomMediaSubs = new() { "pink" }; s.BackRoomMediaSubsOff = new() { "trance" };
+            s.RemoteMediaConsented = false; s.FypOnlineConsented = true;
+            await Run((_, _, _, _) =>
+            {
+                var oldWord = FriendsLanding.ShowWatchWord;
+                try
+                {
+                    FriendsLanding.ShowWatchWord = (_, _) => { };
+                    s.RemoteMediaConsented = true; s.FypOnlineConsented = false;
+                    FriendsLanding.Watch(new WatchRef(WatchKind.Flavour, "pink", null));
+                }
+                finally { FriendsLanding.ShowWatchWord = oldWord; }
+            });
+            Assert.Equal("online", s.MediaSource); Assert.Equal(47, s.RemoteMediaRatio); Assert.Equal(new[] { "hypno" }, s.FypOnlineNiches);
+            Assert.Equal("bundled", s.BackRoomMediaSource); Assert.Equal(new[] { "pink" }, s.BackRoomMediaSubs);
+            Assert.Equal(new[] { "trance" }, s.BackRoomMediaSubsOff);
+            Assert.False(s.RemoteMediaConsented); Assert.True(s.FypOnlineConsented);
+        }
+        finally
+        {
+            (s.MediaSource, s.RemoteMediaRatio, s.FypOnlineNiches, s.BackRoomMediaSource, s.BackRoomMediaSubs, s.BackRoomMediaSubsOff, s.RemoteMediaConsented, s.FypOnlineConsented) = old;
+        }
     }
 
     private static global::Avalonia.Media.IBrush FriendsDrawerGold => ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer.Gold;
