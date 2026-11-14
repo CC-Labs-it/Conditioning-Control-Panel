@@ -102,6 +102,9 @@ public sealed class ChaosRunHostTests
             Setup();
             FreshMeta();
             var log = Juice();
+            var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            var previousLanguage = loc.CurrentLanguage;
+            loc.SetLanguage("en");
             try
             {
                 var meta = ChaosMeta.State;
@@ -165,7 +168,56 @@ public sealed class ChaosRunHostTests
                 Ticks(1);
                 Assert.False(Assert.Single(ChaosRunHost.ToyButtons).Toy.IsEffectActive);
             }
-            finally { Unjuice(); ChaosRunHost.ForceShutdown(); FreshMeta(); }
+            finally { Unjuice(); ChaosRunHost.ForceShutdown(); loc.SetLanguage(previousLanguage); FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF ChaosModeService.cs:2750: both snap feed variants use the selected language.</summary>
+    [Theory]
+    [InlineData("en", "✋ snapped. every live one let go", "✋ snapped. all of it.")]
+    [InlineData("de", "✋ geschnappt. alle aktiven blasen sind frei", "✋ geschnappt. alles.")]
+    [InlineData("es", "✋ liberadas. todas las burbujas activas", "✋ liberado. todo.")]
+    [InlineData("fr", "✋ libérées. toutes les bulles actives", "✋ libéré. tout.")]
+    [InlineData("it", "✋ liberate. tutte le bolle attive", "✋ liberato. tutto.")]
+    [InlineData("ja", "✋ スナップ。すべてのライブバブルを解放", "✋ スナップ。すべて解放")]
+    [InlineData("ko", "✋ 해제. 모든 활성 버블이 풀렸어요", "✋ 해제. 전부 풀렸어요")]
+    [InlineData("pt-BR", "✋ soltas. todas as bolhas ativas", "✋ solto. tudo.")]
+    [InlineData("ru", "✋ освобождены все активные пузыри", "✋ освобождено всё")]
+    [InlineData("zh-CN", "✋ 已释放所有活跃气泡", "✋ 已释放全部气泡")]
+    public async Task Snap_field_feed_uses_selected_language(string language, string live, string all)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+            var previousLanguage = loc.CurrentLanguage;
+            try
+            {
+                var meta = ChaosMeta.State;
+                meta.ToyPockets = 1;
+                meta.ActiveLifetimeBoons.Add("snap_field");
+                meta.LifetimeBoonLevels["snap_field"] = 1;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                var toy = Assert.Single(ChaosRunHost.ToyButtons).Toy;
+                loc.SetLanguage(language);
+                ChaosRunHost.UseToyById("snap_field");
+                Assert.Equal(live, state.RecentEvents.First());
+                toy.CooldownRemainingSec = 0;
+                state.MaxedBoons.Add("snap_field");
+                ChaosRunHost.UseToyById("snap_field");
+                Assert.Equal(all, state.RecentEvents.First());
+                toy.CooldownRemainingSec = 0;
+                state.MaxedBoons.Remove("snap_field");
+                loc.SetLanguage("en");
+                ChaosRunHost.UseToyById("snap_field");
+                Assert.Equal("✋ snapped. every live one let go", state.RecentEvents.First());
+            }
+            finally { ChaosRunHost.ForceShutdown(); loc.SetLanguage(previousLanguage); FreshMeta(); }
             return Task.CompletedTask;
         });
     }
