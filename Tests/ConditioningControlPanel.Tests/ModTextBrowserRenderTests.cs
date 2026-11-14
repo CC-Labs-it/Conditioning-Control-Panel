@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -38,8 +39,18 @@ public class ModTextBrowserRenderTests
             var shown = list.Items.Cast<ModTextEntry>().ToList();
             Assert.NotEmpty(shown);
             Assert.True(shown.Count < entries.Count);
-            Assert.All(shown, e => Assert.True(ModTextCatalog.Matches(e, "sparkle")));
+            Assert.Equal(ModTextCatalog.Search(entries, "sparkle"), shown);
             Assert.Contains($"{shown.Count} of {entries.Count}", title.Text);
+
+            // A skill's name pulls its effect and flavour into a group of its own, listed first.
+            var names = entries.Where(e => e.Source == "skill name").ToList();
+            var skill = names.First(e => entries.Count(x => x.SkillId == e.SkillId) >= 3
+                                         && names.Count(n => ModTextCatalog.Matches(n, e.Text)) == 1);
+            search.Text = skill.Text;
+            var group = list.Items.Groups!.Cast<CollectionViewGroup>().First();
+            Assert.Equal(ModTextCatalog.SkillGroup(skill.Text), group.Name);
+            Assert.Equal(entries.Count(x => x.SkillId == skill.SkillId), group.ItemCount);
+            Assert.Contains(group.Items.Cast<ModTextEntry>(), e => e.Source == "skill flavour");
 
             search.Text = "";
             Assert.Equal(entries.Count, list.Items.Count);
