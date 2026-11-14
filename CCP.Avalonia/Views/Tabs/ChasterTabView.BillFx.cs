@@ -33,13 +33,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var generation = ++BillGeneration;
             var from = ReceiptHost.IsVisible ? ReceiptHost.Bounds.Height : 0;
             var opacity = ReceiptHost.IsVisible ? ReceiptHost.Opacity : 0;
+            var turn = TxtRunChevron.RenderTransform as RotateTransform;
+            if (turn == null) TxtRunChevron.RenderTransform = turn = new RotateTransform();
+            var angle = turn.Angle;
             _billAnimation?.Cancel();
             _billAnimation?.Dispose();
             _billAnimation = new CancellationTokenSource();
             var token = _billAnimation.Token;
-            var turn = TxtRunChevron.RenderTransform as RotateTransform;
-            if (turn == null) TxtRunChevron.RenderTransform = turn = new RotateTransform();
-            var angle = turn.Angle;
             var targetAngle = open ? 180 : 0;
             var settle = ReceiptHost.RenderTransform as TranslateTransform;
             if (settle == null) ReceiptHost.RenderTransform = settle = new TranslateTransform();
@@ -55,8 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
 
             var ms = open ? 420 : 260;
-            _ = BillTween(RotateTransform.AngleProperty, angle, targetAngle, ms, new CubicEaseOut()).RunAsync(TxtRunChevron, token);
-            turn.Angle = targetAngle;
+            _ = TurnBill(turn, angle, targetAngle, ms, generation, token);
             if (open)
             {
                 ReceiptHost.Height = double.NaN;
@@ -80,6 +79,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             catch (OperationCanceledException) { }
             FinishBill(generation, open);
+        }
+
+        private async Task TurnBill(RotateTransform turn, double from, double to, int ms, int generation, CancellationToken token)
+        {
+            // Keep the sampled angle as the base until the first animation frame arrives.
+            turn.Angle = from;
+            try
+            {
+                await BillTween(RotateTransform.AngleProperty, from, to, ms, new CubicEaseOut()).RunAsync(TxtRunChevron, token);
+            }
+            catch (OperationCanceledException) { return; }
+            if (generation == BillGeneration) turn.Angle = to;
         }
 
         internal void FinishBill(int generation, bool open)

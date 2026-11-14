@@ -347,6 +347,43 @@ public sealed class ChasterBillTests
     }));
 
     [Fact]
+    public Task ChevronReversesFromItsCurrentAngle() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var old = settings.MotionLevel;
+        settings.MotionLevel = MotionLevel.Full;
+        var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView();
+        var arrow = tab.FindControl<IconGlyph>("TxtRunChevron")!;
+        var receiptHost = tab.FindControl<Border>("ReceiptHost")!;
+        // Keep the real controls while avoiding unrelated system fonts in the rest of the page.
+        ((Panel)arrow.Parent!).Children.Remove(arrow);
+        ((Panel)receiptHost.Parent!).Children.Remove(receiptHost);
+        receiptHost.Child = new Border { Width = 120, Height = 40 };
+        var w = new Window { Content = new StackPanel { Children = { arrow, receiptHost } } };
+        try
+        {
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            tab.ToggleBill();
+            await Task.Delay(120);
+            var turn = (RotateTransform)arrow.RenderTransform!;
+            var before = turn.Angle;
+            Assert.InRange(before, 1, 179);
+            tab.ToggleBill();
+            Assert.InRange(Math.Abs(turn.Angle - before), 0, 2);
+            await Task.Delay(60);
+            Assert.InRange(turn.Angle, 0, before);
+            await Task.Delay(340);
+            Assert.Equal(0, turn.Angle, 1);
+        }
+        finally { settings.MotionLevel = old; w.Close(); }
+    });
+
+    [Fact]
     public Task CapFillAnimatesChangesAndSeatsResizesAndMotionOff() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _) =>
     {
         var settings = CoreSettings.Current;
