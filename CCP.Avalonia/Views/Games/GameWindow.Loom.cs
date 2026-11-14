@@ -82,16 +82,26 @@ internal sealed partial class GameWindow
         }
     }
 
-    private void PostLoomList() => Post(new
+    // WPF DtrhHostService.cs:464-479 and LoomHostService.cs:134-149: a failed list post is best effort
+    // (the DtRH ready path goes on to post favorites).
+    private void PostLoomList()
     {
-        type = "loom-list",
-        spirals = DtrhLoomStore.List().Select(s => new
+        if (_server == null) return;
+        try
         {
-            slug = s.Slug,
-            url = _server!.Url("__spirals__/loom_" + s.Slug + ".gif"),
-            @params = LoomParams(s.ParamsJson),
-        }),
-    });
+            Post(new
+            {
+                type = "loom-list",
+                spirals = DtrhLoomStore.List().Select(s => new
+                {
+                    slug = s.Slug,
+                    url = _server.Url("__spirals__/loom_" + s.Slug + ".gif"),
+                    @params = LoomParams(s.ParamsJson),
+                }),
+            });
+        }
+        catch (Exception ex) { Log.Debug("LoomHost: list failed: {E}", ex.Message); }
+    }
 
     private static JObject? LoomParams(string? json)
     {

@@ -5,6 +5,7 @@
 // Remaining lifecycle gaps are listed in docs/avalonia-r72-start-stop-recut.md.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
+using System;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
@@ -36,6 +37,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             int minutes = start == null ? 0 : System.Math.Max(0, (int)(EmiNow() - start.Value).TotalMinutes);
             EmiMoment("engineStopped", new { minutes });
         }
+
+        // WPF MainWindow.xaml.cs:146 / MainWindow.StartStop.cs:607.
+        internal event EventHandler? EngineStopped;
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -193,6 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             StopEngineRamp();
+            EngineStopped?.Invoke(this, EventArgs.Empty);
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
             if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); OnSessionTick(); return; }
             // WPF OnSessionStopped: the session button and the dials come back on every exit path.

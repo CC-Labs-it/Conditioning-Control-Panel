@@ -208,6 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => CaptureDtrhWindowedFrame();
                 PositionChanged += (_, _) => CaptureDtrhWindowedFrame();
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
+                PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnDtrhWindowStateChanged(); };
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
