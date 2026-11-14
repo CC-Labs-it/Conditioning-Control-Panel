@@ -1165,6 +1165,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (PresentationActive || InputLocked || _transiting) { e.Handled = true; return; }   // the show owns her
             try
             {
+                // The intrusion is a saver: a tap dismisses it without becoming a pat.
+                if (GlassIsWrong && GlassRect.Contains(e.GetPosition(_bodyRoot)))
+                {
+                    CloseGlass();
+                    e.Handled = true;
+                    return;
+                }
                 RaiseActivity();
                 DisarmPet();
                 // Moving her walks the pointer off her silhouette in the first few pixels at any

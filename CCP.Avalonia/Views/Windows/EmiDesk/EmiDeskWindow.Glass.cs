@@ -8,11 +8,12 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.EmiDesk;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 // WPF EmiDeskWindow.Glass.cs:77-88, 174-215, 256-283, 294-342, 385-419, 440-477.
-// This part ports the off-air saver; the other channels and their effects are still pending.
+// Off-air and its wrong-channel exit are wired; the other channels remain pending.
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
@@ -25,6 +26,10 @@ public partial class EmiDeskWindow
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion;
     private double _glassScale;
+    private WrongPainter? _wrongPainter;
+    private bool _wrongAired;
+    internal Func<bool>? GlassWrongRoll { get; set; }
+    internal bool GlassIsWrong => _wrongPainter != null;
 
     private DispatcherTimer? _holdFaceTimer;
 
@@ -68,7 +73,7 @@ public partial class EmiDeskWindow
     {
         if (!_glassLive) return;
         handled = true;
-        CloseGlass(); // WPF EmiChannels.cs:50-56: a saver fires nothing.
+        CloseGlass(rollWrong: true); // WPF EmiChannels.cs:50-56: a saver fires nothing.
     }
 
     private void StartGlassWatch()
@@ -91,7 +96,7 @@ public partial class EmiDeskWindow
     internal void NoteGlassActivity()
     {
         _glassActivity = DateTime.UtcNow;
-        if (_glassLive) CloseGlass();
+        if (_glassLive) CloseGlass(rollWrong: true);
     }
 
     internal bool GlassIsLive => _glassLive;
@@ -141,7 +146,13 @@ public partial class EmiDeskWindow
             PaintOffAir();
             return;
         }
-        if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
+        if (_wrongPainter != null)
+        {
+            if (elapsed >= 1400) { CloseGlass(); return; }
+            _wrongPainter.Tick(elapsed);
+            return;
+        }
+        if (elapsed >= 10_000) { CloseGlass(rollWrong: true, now); return; } // WPF EmiChannels.cs:58-59
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {
             Canvas.SetLeft(_glassSignal, (10 + (int)(elapsed / 1000) % 6 * 4) * _glassScale);
@@ -192,15 +203,51 @@ public partial class EmiDeskWindow
         Canvas.SetLeft(box, x); Canvas.SetTop(box, y); c.Children.Add(box); return box;
     }
 
-    private void CloseGlass()
+    // WPF Glass.cs:440-489: only a live channel exit can roll, once per desk session.
+    private void CloseGlass(bool rollWrong = false, DateTime? now = null)
     {
         bool wasLive = _glassLive;
+        bool wasWrong = _wrongPainter != null;
+        bool landWrong = rollWrong && wasLive && !wasWrong && !_wrongAired && !_closingForGood &&
+            IsVisible && !ChainLive && !PresentationActive && !InputLocked && !Transiting && !RingOpen &&
+            AmbientFxCanvas.Env.Level == MotionLevel.Full && (GlassWrongRoll?.Invoke() ?? GlassRng.Next(40) == 0);
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
-        _glassLayer = null; _glassDim = null; _glassSignal = null;
+        _glassLayer = null; _glassDim = null; _glassSignal = null; _wrongPainter = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();
-        if (wasLive && !_closingForGood && IsVisible && !ChainLive) RestartIdleBeats();
+        if (landWrong)
+        {
+            _wrongAired = true;
+            LandWrong(now ?? DateTime.UtcNow);
+        }
+        else if (wasLive && !_closingForGood && IsVisible && !ChainLive) RestartIdleBeats();
     }
+
+    // WPF Glass.cs:498-529: no offer or lead-in, and a hard 1400 ms lifetime.
+    private void LandWrong(DateTime now)
+    {
+        var rect = GlassRect;
+        if (rect.Width <= 4 || rect.Height <= 4) { RestartIdleBeats(); return; }
+        try
+        {
+            _glassLayer = new Canvas { Width = rect.Width, Height = rect.Height, ClipToBounds = true, IsHitTestVisible = false };
+            GlassHost.Children.Add(_glassLayer);
+            _wrongPainter = new WrongPainter(rect.Width, rect.Height);
+            _glassLive = _glassLanded = true;
+            _glassPhase = now;
+            StopIdleBeats();
+            _wrongPainter.Attach(_glassLayer);
+            _wrongPainter.Tick(0);
+            _glassFrames = new BeatLoop(this, elapsed => AdvanceGlass(now.AddTicks((long)Math.Round(elapsed * TimeSpan.TicksPerSecond))));
+            _glassFrames.Start();
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "[EmiDesk] wrong channel failed to land");
+            CloseGlass();
+        }
+    }
+
 }

@@ -1,7 +1,16 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Threading;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 using Avalonia.Controls.Shapes;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -94,4 +103,90 @@ public class EmiGlassWrongTests
     {
         public override double NextDouble() => .5;
     }
+    // WPF Glass.cs:440-489, 498-529, EmiChannels.cs:150-160.
+    [Fact]
+    public Task ExitRollLandsOnceAndExpires() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var bedtime = EmiState.Current.BedtimeUntil;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var desk = new EmiDeskWindow { GlassWrongRoll = () => true };
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            CoreSettings.Current.EmiDeskGlass = true;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.GentleVisuals = false;
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            var start = DateTime.UtcNow.AddSeconds(61);
+            desk.PollGlass(start);
+            Assert.False(desk.GlassIsWrong);
+            time.Advance(TimeSpan.FromMilliseconds(220)); BeatLoop.StepAll();
+            Assert.True(desk.GlassHasLanded);
+            time.Advance(TimeSpan.FromSeconds(10)); BeatLoop.StepAll();
+            Assert.True(desk.GlassIsWrong);
+            Assert.Single(desk.GlassHost.Children);
+            time.Advance(TimeSpan.FromMilliseconds(1399)); BeatLoop.StepAll();
+            Assert.True(desk.GlassIsWrong);
+            time.Advance(TimeSpan.FromMilliseconds(1)); BeatLoop.StepAll();
+            Assert.False(desk.GlassIsLive);
+            Assert.Empty(desk.GlassHost.Children);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == desk);
+            desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
+            desk.AdvanceGlass(DateTime.UtcNow.AddSeconds(62));
+            desk.NoteGlassActivity();
+            Assert.False(desk.GlassIsWrong); // once per session, including after timeout
+        }
+        finally
+        {
+            desk.ShutDown(); BeatLoop.Time = TimeProvider.System;
+            EmiState.Current.BedtimeUntil = bedtime; CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task MotionGateAndRealTapDismissal() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var old = CoreSettings.ServiceProvider;
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        var bedtime = EmiState.Current.BedtimeUntil;
+        var desk = new EmiDeskWindow { GlassWrongRoll = () => true };
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            CoreSettings.Current.EmiDeskGlass = true;
+            CoreSettings.Current.GentleVisuals = false;
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
+            Assert.True(desk.GlassIsLive);
+            desk.NoteGlassActivity();
+            Assert.False(desk.GlassIsWrong);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
+            desk.NoteGlassActivity();
+            Assert.True(desk.GlassIsWrong);
+            var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(desk)!;
+            var point = body.TranslatePoint(desk.GlassRect.Center, desk)!.Value;
+            var pets = EmiState.Current.PetsTotal;
+            desk.MouseDown(point, MouseButton.Left);
+            desk.MouseUp(point, MouseButton.Left);
+            Assert.False(desk.GlassIsLive);
+            Assert.Empty(desk.GlassHost.Children);
+            Assert.Equal(pets, EmiState.Current.PetsTotal);
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == desk);
+        }
+        finally
+        {
+            desk.ShutDown(); EmiState.Current.BedtimeUntil = bedtime; CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
+    });
+
 }
