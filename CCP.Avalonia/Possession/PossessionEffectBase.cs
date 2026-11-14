@@ -112,7 +112,12 @@ internal abstract class PossessionEffectBase : IPossessionEffect
 
     public async Task UndoAsync(TimeSpan duration)
     {
-        if (!IsLive || _undoing) return;
+        if (!IsLive) return;
+        if (_undoing)
+        {
+            if (duration <= TimeSpan.Zero) await UndoCoreAsync(TimeSpan.Zero).ConfigureAwait(true);
+            return;
+        }
         _undoing = true;
         try { _cts?.Cancel(); } catch { }
         try { await UndoCoreAsync(duration).ConfigureAwait(true); }

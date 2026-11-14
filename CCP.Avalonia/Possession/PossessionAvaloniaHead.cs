@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         Window? PossessionWindow { get; }
         /// <summary>Transparent, non-hit-testable Canvas over the whole window, above everything.</summary>
         Canvas? GhostLayer { get; }
+        Canvas? RubbleFloor => null;
         IFrameSource PossessionFrames { get; }
         /// <summary>The runtime the bridged effects lease controls through (one per window).</summary>
         PossessionRuntime PossessionEffectRuntime { get; }
@@ -155,6 +156,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new DodgeEffect());
             list.Add(new SliderCreepEffect());
             list.Add(new ScrollHijackEffect());
+            list.Add(new DropEffect());
+            list.Add(new ToggleLieEffect());
             return list;
         }
 
