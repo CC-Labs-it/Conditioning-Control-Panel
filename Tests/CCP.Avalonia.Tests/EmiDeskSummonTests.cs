@@ -286,7 +286,8 @@ public sealed class EmiDeskSummonTests
     [InlineData(false)]
     public Task InterruptedWakeFinishesOnceAndLaterLinesEatPats(bool panic) => Muted(() => Task.FromResult(EmiMuteChoice.Keep), async _ =>
     {
-        var win = new EmiDeskWindow();
+        // Hold the real chain frames until the test advances them, even if pointer dispatch is slow.
+        var win = new EmiDeskWindow((_, _) => () => { });
         int completed = 0;
         try
         {
@@ -296,13 +297,29 @@ public sealed class EmiDeskSummonTests
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
             win.PlayChain("shock");
+            await Pump(300); // Longer than the first shock frame; the test clock holds it.
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
-            win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
-            win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            var chain = win.ChainPlayer.Current;
+            Assert.Equal("shock", chain?.Id);
+            var pets = ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal;
+            void Click()
+            {
+                win.MouseDown(point, global::Avalonia.Input.MouseButton.Left);
+                win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
+            }
+            Click();
             Assert.Equal("o_o", win.Face);
+            Assert.Same(chain, win.ChainPlayer.Current);
+            Assert.Equal(pets, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
             Assert.True(win.ChainLive);
+            win.ChainPlayer.ElapsePendingHold();
+            Assert.Equal("0_0", win.Face);
+            Click();
+            Assert.Equal("0_0", win.Face);
+            Assert.Same(chain, win.ChainPlayer.Current);
+            Assert.Equal(pets, ConditioningControlPanel.Services.EmiDesk.EmiState.Current.PetsTotal);
             await Pump(2000);
             Assert.Equal(1, completed);
         }
