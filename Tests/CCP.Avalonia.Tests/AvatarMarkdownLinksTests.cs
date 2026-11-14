@@ -33,7 +33,7 @@ public sealed class AvatarMarkdownLinksTests
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
         _ = RemoteControlTabView.Relay.Value;
         var urls = new List<string>();
-        CompanionLinkLauncher.Navigate = url => { urls.Add(url); return true; };
+        CompanionLinkLauncher.Navigate = url => { urls.Add(url); return Task.FromResult<bool?>(true); };
         var parent = new Window();
         var tube = new AvatarTubeWindow(parent);
         try
@@ -82,7 +82,7 @@ public sealed class AvatarMarkdownLinksTests
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
         _ = RemoteControlTabView.Relay.Value;
         var urls = new List<string>();
-        CompanionLinkLauncher.Navigate = value => { urls.Add(value); return true; };
+        CompanionLinkLauncher.Navigate = value => { urls.Add(value); return Task.FromResult<bool?>(true); };
         var parent = new Window();
         var tube = new AvatarTubeWindow(parent);
         try
@@ -123,7 +123,7 @@ public sealed class AvatarMarkdownLinksTests
         CoreSettings.Current.AvatarMuted = false;
         var oldNavigate = CompanionLinkLauncher.Navigate;
         var urls = new List<string>();
-        CompanionLinkLauncher.Navigate = url => { urls.Add(url); return true; };
+        CompanionLinkLauncher.Navigate = url => { urls.Add(url); return Task.FromResult<bool?>(true); };
         var parent = new Window();
         var tube = new AvatarTubeWindow(parent);
         var label = unbroken ? new string('x', 200) : string.Join(" ", Enumerable.Repeat("Long linked title", 12));
