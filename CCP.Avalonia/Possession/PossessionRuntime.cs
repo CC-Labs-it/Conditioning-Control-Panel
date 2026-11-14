@@ -111,7 +111,15 @@ namespace ConditioningControlPanel.Avalonia.Possession
             // Text effects (typo, rewrite, glyph rot) leave the control's transform alone (no lease).
             var lease = effect.UsesTransform ? PossessionLease.Take(el) : null;
             if (effect.UsesTransform && lease == null) return false;
-            effect.Begin(el, lease, _rng, Photosafe);
+            try { effect.Begin(el, lease, _rng, Photosafe); }
+            catch (Exception ex)
+            {
+                // A start that throws hands the control straight back: its own transform, text and lease.
+                Serilog.Log.Warning(ex, "Possession {Id} start failed", effect.Id);
+                try { effect.Release(); } catch (Exception rex) { Serilog.Log.Debug(rex, "Possession {Id} release failed", effect.Id); }
+                lease?.ReleaseImmediate();
+                return false;
+            }
             _ghosts.Add(new Ghost
             {
                 Effect = effect, Lease = lease, Target = target,
@@ -155,7 +163,13 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 double ms = (now - g.Start.Value).TotalMilliseconds;
                 if (g.ReturnAsked && !g.Returning) g.HoldMs = Math.Min(g.HoldMs, ms);   // home starts now
                 double hold = g.HoldMs;
-                if (ms < hold) { g.Effect.Frame(ms); continue; }
+                if (ms < hold)
+                {
+                    // One effect that throws on a frame ends there; the frame loop and the other ghosts go on.
+                    try { g.Effect.Frame(ms); }
+                    catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} frame failed", g.Effect.Id); Finish(g); }
+                    continue;
+                }
                 // WPF TypoEffect.UndoCoreAsync ignores duration: text returns at the hold boundary.
                 if (g.ReturnMs <= 0 || g.Lease is not { } l) { Finish(g); continue; }
                 if (!g.Returning)

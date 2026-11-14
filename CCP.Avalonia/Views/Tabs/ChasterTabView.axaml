@@ -156,7 +156,35 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid>
+    <!-- WPF ChasterTabView.xaml:262-308: the page ground stays behind the scroll content. -->
+    <Grid ClipToBounds="True">
+        <Border x:Name="GroundBackdrop" CornerRadius="18" IsHitTestVisible="False">
+            <Border.Background>
+                <RadialGradientBrush Center="22%,18%" GradientOrigin="22%,18%" RadiusX="100%" RadiusY="95%">
+                    <GradientStop Color="#FF2C1450" Offset="0"/>
+                    <GradientStop Color="#FF1C1233" Offset="0.42"/>
+                    <GradientStop Color="#FF100A1E" Offset="0.74"/>
+                    <GradientStop Color="#FF07040F" Offset="1"/>
+                </RadialGradientBrush>
+            </Border.Background>
+        </Border>
+        <Border x:Name="GroundGlow" CornerRadius="18" Opacity="0.3" IsHitTestVisible="False">
+            <Border.Background>
+                <RadialGradientBrush Center="78%,12%" GradientOrigin="78%,12%" RadiusX="50%" RadiusY="55%">
+                    <GradientStop Color="{DynamicResource FxGlowColor}" Offset="0"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </RadialGradientBrush>
+            </Border.Background>
+        </Border>
+        <Border x:Name="GroundVignette" CornerRadius="18" IsHitTestVisible="False">
+            <Border.Background>
+                <RadialGradientBrush Center="50%,45%" GradientOrigin="50%,45%" RadiusX="85%" RadiusY="85%">
+                    <GradientStop Color="#00000000" Offset="0.45"/>
+                    <GradientStop Color="#55000000" Offset="0.8"/>
+                    <GradientStop Color="#B0000000" Offset="1"/>
+                </RadialGradientBrush>
+            </Border.Background>
+        </Border>
     <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="26,22,26,20" MaxWidth="1080" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
             <!-- header: the name, and the account -->

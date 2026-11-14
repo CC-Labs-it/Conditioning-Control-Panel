@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -245,6 +246,60 @@ public sealed class PossessionRuntimeTests
             time.Advance(TimeSpan.FromSeconds(2));
             Assert.True(rt.PickAndApply(new HeadEffect[] { nudge }, onlyA, PossessionRung.Settle, PossessionIntensity.Eerie));
             rt.UndoAll();
+        }
+        finally { win.Close(); }
+        return Task.CompletedTask;
+    });
+
+    private sealed class ThrowingEffect(bool onStart) : HeadEffect
+    {
+        public override string Id => onStart ? "throw-start" : "throw-frame";
+        public override PossessionRung MinRung => PossessionRung.Settle;
+        public override double Weight => 1;
+        public override TimeSpan HoldFor => TimeSpan.FromSeconds(5);
+        public override IReadOnlyList<PossessionRole> Roles => new[] { PossessionRole.Button };
+        public int Released;
+        internal override void Release() => Released++;
+        protected override void Start()
+        {
+            Lease.Translate.X = 7;
+            if (onStart) throw new InvalidOperationException("start");
+        }
+        internal override void Frame(double ms) => throw new InvalidOperationException("frame");
+    }
+
+    /// <summary>Restack b223 (#4278 slice): an effect that throws when it starts or on a frame hands the control
+    /// back (its own transform, no lease left), and the other ghosts keep running.</summary>
+    [Fact]
+    public Task ThrowingEffectNeverLeavesItsControlLeased() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var a = Btn("BtnA"); var b = Btn("BtnB"); var c = Btn("BtnC");
+        var prior = new ScaleTransform(1, 1);
+        a.RenderTransform = prior;
+        var win = Host(new StackPanel { Children = { a, b, c } });
+        try
+        {
+            var frames = new FakeFrames();
+            var rt = new PossessionRuntime(frames, rng: new Random(3));
+            var start = new ThrowingEffect(onStart: true);
+            Assert.False(rt.TryApply(start, new PossessionHeadTarget(a, PossessionRole.Button, "a")));
+            Assert.False(PossessionLease.IsLeased(a));
+            Assert.Same(prior, a.RenderTransform);
+            Assert.Equal(1, start.Released);
+
+            var frame = new ThrowingEffect(onStart: false);
+            Assert.True(rt.TryApply(frame, new PossessionHeadTarget(b, PossessionRole.Button, "b")));
+            var nudge = PossessionRuntime.CreateAll().First(e => e.Roles.Contains(PossessionRole.Button) && e.UsesTransform);
+            Assert.True(rt.TryApply(nudge, new PossessionHeadTarget(c, PossessionRole.Button, "c")));
+            frames.Frame(TimeSpan.FromMilliseconds(1000));
+            frames.Frame(TimeSpan.FromMilliseconds(1100));
+            Assert.False(rt.IsRunning(frame));
+            Assert.False(PossessionLease.IsLeased(b));
+            Assert.Equal(1, frame.Released);
+            Assert.True(rt.IsRunning(nudge));   // the frame loop went on for the others
+            rt.UndoAll();
+            Assert.False(PossessionLease.IsLeased(c));
         }
         finally { win.Close(); }
         return Task.CompletedTask;

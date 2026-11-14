@@ -33,8 +33,8 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>The ids this head can draw: avatars (preset plus shop) and shop frames. The WPF head seeds it
-        /// from <c>CosmeticsCatalog.AllAvatarIds</c> and <c>ShopCosmetics.FrameIds</c>; unseeded means the Core
-        /// preset avatars and no frames.</summary>
+        /// from <c>CosmeticsCatalog.AllAvatarIds</c> and <c>ShopCosmetics.FrameIds</c>; unseeded uses
+        /// the shared registry and preset avatars.</summary>
         public static volatile Func<(ISet<string> Avatars, ISet<string>? Frames)>? KnownIdsProvider;
 
         /// <summary>The app's read: preset plus shop avatars, shop frames.</summary>
@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
-                var known = KnownIdsProvider?.Invoke() ?? (CosmeticsPool.AvatarIds, null);
+                var known = KnownIdsProvider?.Invoke() ?? (ShopCosmeticsRegistry.AllAvatarIds(), ShopCosmeticsRegistry.FrameIds());
                 return From(cosmetics, known.Avatars, known.Frames);
             }
             catch { return None; }

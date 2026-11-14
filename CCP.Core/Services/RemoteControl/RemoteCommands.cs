@@ -8,8 +8,7 @@ namespace ConditioningControlPanel.Services
     /// WPF RemoteControlService.ExecuteCommand's dispatch table for the features Core drives. Runs on the
     /// UI thread (RemoteRelay marshals). Returns null when the verb ran, else the refusal the controller
     /// sees: a verb with no surface on this head says so rather than reporting "ok" and doing nothing.
-    /// ponytail: HypnoTube,
-    /// wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
+    /// ponytail: wallpaper and the remaining session verbs have no Core entry point yet; they refuse until their services move.
     /// </summary>
     public static class RemoteCommands
     {
@@ -51,6 +50,12 @@ namespace ConditioningControlPanel.Services
         /// (remote panic, the wearer's Stop signal) ends the running session. Core owns no session runner, so the
         /// shell sets this to its one MainShellWindow.StopSessionFromRemote.</summary>
         public static Action? StopSession;
+
+        /// <summary>The head's embedded browser (WPF MainWindow.PlayHypnotubeFromRemote / StopBrowserVideoFromRemote,
+        /// MainWindow.Browser.cs:3188 / :3228). Play returns null when the page was handed to the browser, else the
+        /// refusal. Null = this head has no browser to put it in.</summary>
+        public static Func<string, string?>? PlayHypnotube;
+        public static Action? StopBrowserVideo;
 
         /// <summary>WPF ApplyEasy (RemoteControlService.V2.cs:87): a controller-set or showing spiral / pink
         /// fades, the remote haptic replays at the new level. UI thread.</summary>
@@ -222,13 +227,20 @@ namespace ConditioningControlPanel.Services
                 case "stop_bubbles": CoreBubbles.Stop(); return null;
                 case "start_bounce_text": CoreBouncingText.Start(); return null;
                 case "stop_bounce_text": CoreBouncingText.Stop(); return null;
+                // WPF RemoteControlService.cs:1413: the URL is the only thing crossing the trust boundary, so
+                // only a real hypnotube.com video page reaches the browser. WPF drops a bad one silently;
+                // here it is reported, as every other refusal (ccp-bugs#1138).
+                case "play_hypnotube":
+                    var htUrl = p?["url"]?.ToString();
+                    if (!Helpers.HtUrlHelper.IsEligibleHtUrl(htUrl)) return Localization.Loc.Get("remote_invalid_hypnotube_url");
+                    return PlayHypnotube is { } play ? play(htUrl!) : NotOnThisBuild;
                 case "trigger_video":
                     if (CoreEngine.Video is not { } video) return NotOnThisBuild;
                     // WPF RemoteControlService.cs:1395 acknowledges every trigger (held behind the feed, empty
                     // library): only a video that is really playing is refused (#3776).
                     return video.Trigger() || !video.IsPlaying ? null : "a video is already playing";
                 case "start_video": if (CoreEngine.Video == null) return NotOnThisBuild; CoreEngine.Video.Start(); return null;
-                case "stop_video": CoreEngine.Video?.Stop(); return null;
+                case "stop_video": CoreEngine.Video?.Stop(); StopBrowserVideo?.Invoke(); return null;
                 case "trigger_bubble_count": if (CoreEngine.BubbleCount == null) return NotOnThisBuild; CoreEngine.BubbleCount.Trigger(forceTest: true); return null;
                 case "trigger_mind_wipe":
                     if (CoreMindWipe.TriggerOnceProvider == null) return NotOnThisBuild;
@@ -299,6 +311,8 @@ namespace ConditioningControlPanel.Services
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();
+            // WPF StopAllRemoteEffects (:1001, :1164): the controller's browser video stops too; a no-op unless one plays.
+            try { StopBrowserVideo?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] browser video stop failed"); }
             // Keep the base's wearer restoration; never clear the subject's saved switches.
             if (force || !CoreEngine.IsRunning) StopOverlays();
             var playerStopped = force || !CoreEngine.IsRunning;

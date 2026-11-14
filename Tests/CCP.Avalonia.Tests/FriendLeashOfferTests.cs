@@ -30,12 +30,13 @@ public sealed class FriendLeashOfferTests
     {
         internal int Calls;
         internal bool Fail;
+        internal string Status = "sent";
         internal TaskCompletionSource<JObject?>? Hold;
         public Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)
         {
             Calls++;
             if (Hold != null) return Hold.Task;
-            return Task.FromResult<JObject?>(Fail ? null : new JObject { ["ok"] = true, ["status"] = "sent", ["offer_id"] = "0123456789abcdef" });
+            return Task.FromResult<JObject?>(Fail ? null : new JObject { ["ok"] = true, ["status"] = Status, ["offer_id"] = "0123456789abcdef" });
         }
     }
     private static Button Button(Control root, string tag) => root.GetLogicalDescendants().OfType<Button>().Single(b => (string?)b.Tag == tag);
@@ -49,6 +50,20 @@ public sealed class FriendLeashOfferTests
         LocalizationManager.Instance.SetLanguage("en");
         CoreSettings.Current.LeashIntroSeenHolder = false;
     }
+    [Theory]
+    [InlineData("sent", LeashCue.Sent)]
+    [InlineData("too_fast", LeashCue.Denied)]
+    [InlineData("dnd", LeashCue.Denied)]
+    [InlineData("unknown", LeashCue.Denied)]
+    public void OfferPlaysCueAndShowsLink(string status, LeashCue expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); CoreSettings.Current.LeashIntroSeenHolder = true;
+        var card = new FriendLeashOffer(Friend(), new LeashService(new Wire { Status = status }, () => "me"), new HashSet<string>());
+        var played = new List<LeashCue>(); card.PlayCue = played.Add;
+        Assert.Contains(Button(card, "leash-offer").GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(), x => x.Kind == FluentIcons.Common.Symbol.Link);
+        Click(card, "leash-offer");
+        Assert.Equal(expected, Assert.Single(played));
+    });
     [Fact]
     public void FirstOfferRequiresConfirmationAndRemembersIt() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -87,7 +102,7 @@ public sealed class FriendLeashOfferTests
         Click(card, "leash-offer");
         Assert.Empty(sent);
         Assert.False(Button(card, "leash-offer").IsEnabled);
-        Assert.Equal(Loc.Get("leash_res_failed"), ((TextBlock)Button(card, "leash-offer").Content!).Text);
+        Assert.Equal(Loc.Get("leash_res_failed"), ((StackPanel)Button(card, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
     });
     [Fact]
     public void SentReceiptAndHoldingStatesAreShown() => AvaloniaTestDispatcher.Run(() =>
@@ -98,7 +113,7 @@ public sealed class FriendLeashOfferTests
         service.OfferAsync("friend").GetAwaiter().GetResult();
         service.ApplyReceipts(new[] { new LeashReceipt("0123456789abcdef", LeashItemKind.Offer, "friend", "Mia", LeashStep.Seen, DateTimeOffset.UtcNow) });
         var offered = new FriendLeashOffer(Friend(), service, sent);
-        Assert.Contains(Loc.Get("leash_step_seen"), ((TextBlock)Button(offered, "leash-offer").Content!).Text);
+        Assert.Contains(Loc.Get("leash_step_seen"), ((StackPanel)Button(offered, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
         Assert.False(Button(offered, "leash-offer").IsEnabled);
         var held = new JObject
         {
@@ -108,7 +123,7 @@ public sealed class FriendLeashOfferTests
         };
         service.ApplyBlock(new JObject { ["holding"] = new JArray { held }, ["offers"] = new JArray(), ["events"] = new JArray() });
         var holding = new FriendLeashOffer(Friend(), service, sent);
-        Assert.Equal(Loc.Get("leash_offer_holding"), ((TextBlock)Button(holding, "leash-offer").Content!).Text);
+        Assert.Equal(Loc.Get("leash_offer_holding"), ((StackPanel)Button(holding, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
         Assert.False(Button(holding, "leash-offer").IsEnabled);
     });
 

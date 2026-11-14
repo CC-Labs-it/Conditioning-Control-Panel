@@ -4,9 +4,8 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session start, the directory opt-in chain, tray minimise
-// for remote and remote
-// browser video playback and reveal.
+// ponytail: still missing here - remote-driven session start, the directory opt-in chain and tray minimise
+// for remote.
 
 using System;
 using System.Linq;
@@ -18,8 +17,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.RemoteHud;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -70,6 +69,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RemoteCommands.RefreshOverlays = refreshOverlays;
             Action stopSession = StopSessionFromRemote;   // the one remote session stop (trigger_panic calls it too)
             RemoteCommands.StopSession = stopSession;
+            Func<string, string?> playHypnotube = PlayHypnotubeFromRemote;
+            Action stopBrowserVideo = StopBrowserVideoFromRemote;
+            (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (playHypnotube, stopBrowserVideo);
             var r = RemoteControlTabView.Relay.Value;
             r.SessionsProvider = () => ConditioningControlPanel.Models.Session.GetAllSessions()
                 .Concat(Named<Tabs.PresetsTabView>("PresetsTab")?.RemoteSessionManager?.CustomSessions ?? Enumerable.Empty<ConditioningControlPanel.Models.Session>());
@@ -104,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             r.CommandReceived += command;
             Closed += (_, _) =>
             {
+                _remoteControlClosed = true;
                 r.SessionsProvider = null;
                 r.SessionRunnerProvider = null;
                 if (r.ResumeSession == ResumeRemoteSession) r.ResumeSession = null;
@@ -116,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CancelRemoteMoreConfirmation();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;
                 if (RemoteCommands.StopSession == stopSession) RemoteCommands.StopSession = null;
+                if (RemoteCommands.PlayHypnotube == playHypnotube) (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (null, null);
                 DisposeRemoteHud();   // WPF OnClosing: an unowned visible window would hold the app open
             };
             // WPF fades the overlay in 300 ms and the toast in 200 ms (out: 200 / 300 ms).
@@ -128,6 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF OnRemoteControllerChanged (:784).</summary>
         internal void OnRemoteControllerChanged()
         {
+            if (_remoteControlClosed) return;   // a posted change after close must not open a new pill
             var connected = RemoteControllerConnected;
             UpdateStartButtonForRemoteControl(connected);
             if (connected) { ShowRemoteControlOverlay(); NotifyRemoteControllerJoined(); EnsureRemoteHud(); }
@@ -145,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.RemoteHud.cs: the subject's More / Easy / Stop pill.</summary>
         internal RemoteHudWindow? RemoteHudPill { get; private set; }
+        private bool _remoteControlClosed;
 
         private void EnsureRemoteHud()
         {
@@ -163,12 +169,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             hud?.Dispose();
         }
 
-        /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now; with the
-        /// panic key off only the leash safety, else nothing local (the signal still stops the remote's effects).</summary>
-        internal void StopFromRemoteHud()
+        /// <summary>WPF StopFromRemoteHud: the local half is exactly what the panic key would do now (Core
+        /// VoicePanicReach), so Lockdown or panic off refuses it and a leash alone gets the leash-only stop. True when
+        /// the full panic ran; RemoteRelay.SendSignalAsync applies the same rule to its forced stop.</summary>
+        internal bool StopFromRemoteHud()
         {
-            if (RemoteHudRules.LocalPanicAllowed(CoreSettings.Current.PanicKeyEnabled)) HandlePanicKeyPress(DateTime.Now);
-            else if (LeashHoldLeashed) PanicKeyLeashOnly();   // WPF LeashOnPanicPress(panicRuns: false); else the signal only
+            var full = VoicePanicReach.PanicKeyRuns(LockdownActive, CoreSettings.Current.PanicKeyEnabled);
+            HandlePanicKeyPress(DateTime.Now, fromStopButton: true);
+            return full;
         }
 
         /// <summary>WPF OnRemoteControllerIdleChanged (:818): orange "may be idle", else the grey default.</summary>
@@ -207,7 +215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var r = RemoteControlTabView.Relay.Value;
             CancelRemoteMoreConfirmation();
-            if (LeashBrowser is { } browser) browser.IsVisible = false; // native web view airspace, WPF :904
+            // Native web view airspace, WPF :904; not while the controller's own video plays (a reconnect mid-video keeps it).
+            if (!_remoteOverlayBrowserRevealed && LeashBrowser is { } browser) browser.IsVisible = false;
             var text = string.IsNullOrEmpty(r.SessionCode) ? "" : $"Session: {string.Join(" ", r.SessionCode.ToCharArray())}";
             if (!string.IsNullOrEmpty(r.ConnectPin)) text += $"  PIN: {r.ConnectPin}";
             if (Named<TextBlock>("TxtOverlaySessionCode") is { } code) code.Text = text;
@@ -220,6 +229,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _remoteOverlayTimer ??= new DispatcherTimer(RemoteOverlaySlowTick, DispatcherPriority.Background, (_, _) => RemoteOverlayTick());
             _remoteOverlayTimer.Start();
             RemoteOverlayTick();
+        }
+
+        // WPF :946: a controller video has lifted the blindfold; Show must not put it back underneath.
+        private bool _remoteOverlayBrowserRevealed;
+
+        /// <summary>WPF RevealBrowserForRemoteVideo (:951): the controller's video wins over the overlay card (never
+        /// over a leash gate or a tour: RestoreBrowser keeps those); when it stops and the controller is still here,
+        /// the card gets the browser's space back.</summary>
+        private void RevealBrowserForRemoteVideo(bool reveal)
+        {
+            _remoteOverlayBrowserRevealed = reveal;
+            if (reveal) RestoreBrowser();
+            else if (Named<Border>("RemoteControlOverlay")?.IsVisible == true && LeashBrowser is { } browser) browser.IsVisible = false;
         }
 
         /// <summary>WPF's 1 s session-info cadence; 100 ms only while a toast or fade-out is pending (P07).</summary>
@@ -255,6 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (Named<Border>("RemoteControlOverlay") is { } o) o.IsVisible = false;
                 // WPF MainWindow.Leash.cs:185-201: the gate owns the browser until it goes; a tour that is
                 // still up keeps it hidden too (#4384). One rule: RestoreBrowser (MainShellWindow.BrowserCover.cs).
+                _remoteOverlayBrowserRevealed = false;
                 RestoreBrowser();
                 if (Named<Border>("RemoteCommandNotification") is { } n0) n0.Opacity = 0;
                 return;
