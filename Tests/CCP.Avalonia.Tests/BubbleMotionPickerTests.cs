@@ -10,9 +10,11 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -33,10 +35,14 @@ public sealed class BubbleMotionPickerTests
         Window? host = null;
         try
         {
-            // Nothing owned: WPF collapses the whole box.
+            // Nothing owned and the offer withheld on this head: the whole box collapses.
             PrizeOwnership.IsGranted = _ => false;
             var bare = new BubblePopFeatureControl();
             Assert.False(bare.FindControl<Border>("V2Box")!.IsVisible);
+            // With the offer enabled, WPF hides the picker but keeps the purchase row.
+            bare.FindControl<V2GetItRow>("RowGetBubblesV2")!.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
+            Assert.True(bare.FindControl<Border>("V2Box")!.IsVisible);
+            Assert.False(bare.FindControl<Control>("MotionRow")!.IsVisible);
 
             CoreSettings.Current.BubbleMotionStyle = BubbleMotionStyle.FloatUp;
             PrizeOwnership.IsGranted = id => id == PrizeOwnership.BubbleSpiralIn;
@@ -157,7 +163,7 @@ public sealed class BubbleMotionPickerTests
             CoreSecrets.RetrieveProvider, PrizeOwnership.IsGranted, s.BubbleMotionStyle));
     }
 
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
         {
