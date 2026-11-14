@@ -8,6 +8,11 @@
  * victim actually stands on). The square he was picked up from gets a faint
  * outline, so it is clear where putting him back means.
  *
+ * Castling has its own look (owner's cup thread, 2026-11-13: the rook was
+ * moved two squares instead of castling, twice): a gold target on the king's
+ * castling square, and a thin gold ring on the rook he may be dropped on to
+ * castle (game/castle-hint.js). Both appear only while that castle is legal.
+ *
  * The board also remembers the move that was just played: setLastMove(from, to)
  * leaves a thin ring where the man was standing and a soft fill where he came
  * to rest, faint enough to sit under everything else and kept until the next
@@ -57,6 +62,15 @@ export const TUNING = Object.freeze({
   captureGlowOpacity: 0.42,
   originColor: 0xF7E7CC,
   originOpacity: 0.3,
+  // Castling: a gold target on the king's square, a thin gold ring on his rook.
+  castleColor: 0xFFD45E,
+  castleGlow: 0xFFB431,
+  castleOpacity: 0.95,
+  castleGlowOpacity: 0.5,
+  castleInner: 0.22,
+  castleOuter: 0.3,
+  castleDot: 0.085,
+  castleRookOpacity: 0.7,
   // The last move, kept until the next one. Lower than the hints and drawn
   // before them, so a legal dot always sits on top of the memory.
   lastY: 0.008,
@@ -117,6 +131,8 @@ export function createMarkers({ group }) {
     glow: new THREE.PlaneGeometry(T.glowSize, T.glowSize).rotateX(-Math.PI / 2),
     ring: new THREE.RingGeometry(T.ringInner, T.ringOuter, 44).rotateX(-Math.PI / 2),
     origin: new THREE.RingGeometry(T.originInner, T.originOuter, 44).rotateX(-Math.PI / 2),
+    castleRing: new THREE.RingGeometry(T.castleInner, T.castleOuter, 44).rotateX(-Math.PI / 2),
+    castleDot: new THREE.CircleGeometry(T.castleDot, 24).rotateX(-Math.PI / 2),
     lastRing: new THREE.RingGeometry(T.lastRingInner, T.lastRingOuter, 44).rotateX(-Math.PI / 2),
     lastFill: new THREE.PlaneGeometry(T.lastToSize, T.lastToSize).rotateX(-Math.PI / 2),
   };
@@ -151,6 +167,12 @@ export function createMarkers({ group }) {
       layer(m, 'ring', T.captureColor, T.captureOpacity, false);
     } else if (kind === 'origin') {
       layer(m, 'origin', T.originColor, T.originOpacity, false);
+    } else if (kind === 'castle') {
+      layer(m, 'glow', T.castleGlow, T.castleGlowOpacity, true);
+      layer(m, 'castleRing', T.castleColor, T.castleOpacity, false);
+      layer(m, 'castleDot', T.castleColor, T.castleOpacity, false);
+    } else if (kind === 'castle-rook') {
+      layer(m, 'origin', T.castleColor, T.castleRookOpacity, false);
     } else {
       layer(m, 'glow', T.moveGlow, T.moveGlowOpacity, true);
       layer(m, 'dot', T.moveColor, T.moveOpacity, false);
@@ -168,7 +190,7 @@ export function createMarkers({ group }) {
 
   /**
    * Set the whole hint layer at once. `list` is
-   *   [{ square, kind: 'move' | 'capture' | 'origin', hover: boolean }]
+   *   [{ square, kind: 'move' | 'capture' | 'castle' | 'castle-rook' | 'origin', hover: boolean }]
    * A square that is already showing the same kind stays put and keeps its pop,
    * so moving the cursor does not restart every animation. `kind` is optional
    * and falls back to a plain move, which is what an older caller passes.
@@ -300,6 +322,8 @@ export function createMarkers({ group }) {
   return {
     show, clear, update, dispose, root, setLastMove, lastRoot,
     count: () => live.size,
+    /** square -> kind of every live hint, for the smoke harness. */
+    kinds: () => Object.fromEntries([...live].map(([square, m]) => [square, m.kind])),
     lastMove: () => (lastMark ? lastMark.key : null),
   };
 }
