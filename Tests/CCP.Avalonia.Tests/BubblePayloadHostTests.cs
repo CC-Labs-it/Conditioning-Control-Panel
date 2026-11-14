@@ -52,10 +52,14 @@ public sealed class BubblePayloadHostTests
     public void BothHeadsRetainThePeakAcrossWeakerShorterPops(bool spiral) => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp(); var host = new Window(); var enabled = CoreSettings.Current.SpiralEnabled;
+        // A desktop with no compositor (the headless Linux runner) makes the spiral CloseAll, which drops the hold:
+        // pin the platform check instead of inheriting whatever an earlier test left in the static.
+        var checks = SpiralOverlay.SkipPlatformChecksForTests;
         void Show(int ms, double opacity) { if (spiral) SpiralOverlay.ShowTimed(host, ms, opacity); else PinkFilterOverlay.ShowTimed(host, ms, opacity); }
-        try { CoreSettings.Current.SpiralEnabled = false; Show(10000, 0.385); Show(50, 0.2); Assert.Equal(0.385, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity);
+        try { SpiralOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.SpiralEnabled = false; Show(10000, 0.385); Show(50, 0.2); Assert.Equal(0.385, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity);
             if (spiral) Assert.Equal(0.0385, SpiralOverlay.PaintedOpacity, 6); }
-        finally { CoreSettings.Current.SpiralEnabled = enabled; PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); }
+        finally { CoreSettings.Current.SpiralEnabled = enabled; PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); SpiralOverlay.SkipPlatformChecksForTests = checks; }
     });
 
     [Fact]
@@ -116,8 +120,10 @@ public sealed class BubblePayloadHostTests
         EnsureApp();
         var s = CoreSettings.Current;
         var before = (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity);
+        var checks = SpiralOverlay.SkipPlatformChecksForTests;   // see BothHeadsRetainThePeakAcrossWeakerShorterPops
         try
         {
+            SpiralOverlay.SkipPlatformChecksForTests = true;
             var host = new Window();
             PinkFilterOverlay.ShowTimed(host, 10000, 0.5);
             SpiralOverlay.ShowTimed(host, 10000, 0.5);
@@ -130,6 +136,6 @@ public sealed class BubblePayloadHostTests
             queued!(); Assert.False(fired);
             Assert.False(PinkFilterOverlay.HasTimedPayload); Assert.False(SpiralOverlay.HasTimedPayload);
         }
-        finally { PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); BubbleOverlay.Stop(); }
+        finally { PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); BubbleOverlay.Stop(); SpiralOverlay.SkipPlatformChecksForTests = checks; }
     });
 }
