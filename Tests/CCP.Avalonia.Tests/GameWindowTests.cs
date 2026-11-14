@@ -1232,6 +1232,7 @@ public sealed partial class GameWindowTests
         var (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var (oldFavorites, oldMerge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
         var oldRelaunched = GameWindow.DtrhRelaunchedOnce;
         GameWindow.DtrhRelaunchedOnce = false;
         var lib = Directory.CreateTempSubdirectory("dtrh-lib-").FullName;
@@ -1240,6 +1241,9 @@ public sealed partial class GameWindowTests
         var denied = new List<string>();
         try
         {
+            // The engagement store stays out of lifecycle tests: no profile write, no ambient history.
+            GameWindow.DtrhFavorites = _ => new List<string>();
+            GameWindow.DtrhMergeAssetStats = _ => { };
             CoreAccount.IsLoggedInProvider = () => true;
             CoreEntitlement.HasLabProvider = () => lab;
             CoreEntitlement.HasPremiumProvider = () => lab;
@@ -1262,6 +1266,7 @@ public sealed partial class GameWindowTests
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
+            (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (oldFavorites, oldMerge);
             GameWindow.DtrhRelaunchedOnce = oldRelaunched;
             Directory.Delete(lib, true);
         }
@@ -1499,7 +1504,7 @@ public sealed partial class GameWindowTests
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
-            Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
             Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
             Assert.Equal("Basic", (string?)sent[0]["plans"]!["basic"]!["name"]);
