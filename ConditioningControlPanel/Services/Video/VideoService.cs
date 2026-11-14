@@ -66,6 +66,12 @@ namespace ConditioningControlPanel.Services
         // "Loop short videos": how many times this run's clip plays (1 = once, as always). Fixed at
         // the start of the run (LibVLC :input-repeat) or at the page's meta (browser).
         private int _loopPasses = 1;
+        // "Fill the minimum with other videos": seconds of the clips planned after the first one
+        // (0 = no fill). Set by the browser start only; the safety timer allows for them.
+        private double _fillSeconds;
+        // The local clips the last refill kept (after the disabled and duration filters): the pool
+        // the fill draws from. Swapped whole, never edited.
+        private string[] _localFillPool = Array.Empty<string>();
         private MediaElement? _fallbackMedia;
 
         // ---- UI-thread wedge watchdog (freeze/lockout rescue, #529/#532 storm) ----
@@ -3168,6 +3174,7 @@ namespace ConditioningControlPanel.Services
             // clip's length and was credited with it on the skip path (#767).
             _duration = 0;
             _loopPasses = 1;
+            _fillSeconds = 0;
             _playRate = Video.GentleWindowRules.PlaybackRate(Safety.GentleVisuals.On, Safety.GentleVisuals.Speed);
             _hits = _total = 0;
             _spawnTimes.Clear();
@@ -3297,6 +3304,8 @@ namespace ConditioningControlPanel.Services
 
             // "Loop short videos": LibVLC needs the pass count before the Media exists, so it comes
             // from the duration cache. An unknown length plays once, as the queue filter falls open.
+            // LibVLC never fills with other clips ("Fill the minimum" loops here instead).
+            _fillSeconds = 0;
             _loopPasses = Video.VideoMinLoop.Passes(LoopShortClipApplies(path),
                 App.Settings?.Current?.VideoMinDurationSeconds ?? 0,
                 (long)Math.Round((MetadataCache?.TryGetDuration(path) ?? 0) * 1000));
@@ -6866,7 +6875,10 @@ namespace ConditioningControlPanel.Services
             _fallbackSafetyTimer = null;
 
             // "Loop short videos": the run is every pass, not one, or the guillotine cuts the loop.
-            videoDurationSeconds = Video.VideoMinLoop.SafetySeconds(videoDurationSeconds, _loopPasses);
+            // "Fill the minimum": the run is the first clip plus every planned clip after it.
+            videoDurationSeconds = _fillSeconds > 0
+                ? videoDurationSeconds + _fillSeconds
+                : Video.VideoMinLoop.SafetySeconds(videoDurationSeconds, _loopPasses);
 
             // Extend stuck detection timeout so long videos aren't killed prematurely
             // Gentle visuals: a slowed clip runs longer on the wall clock (rate 1 = unchanged).
@@ -7014,19 +7026,24 @@ namespace ConditioningControlPanel.Services
             App.Logger?.Debug("VideoService: Fallback safety timer started for {Duration}s", MaxVideoFallbackSeconds);
         }
 
-        /// <summary>"Loop short videos until the minimum time" for this clip (Video.VideoMinLoop.Applies).</summary>
+        /// <summary>"Loop short videos until the minimum time" for this clip (Video.VideoMinLoop.Applies).
+        /// "Fill the minimum with other videos" keeps a short clip on the same terms: it fills on the
+        /// browser engine (PlanFillClips) and loops wherever it cannot.</summary>
         private bool LoopShortClipApplies(string? path)
         {
             var s = App.Settings?.Current;
-            if (s == null || !s.MandatoryVideoLoopShortClips || s.VideoMinDurationSeconds <= 0 || string.IsNullOrEmpty(path)) return false;
-            bool enhanced = false;
-            if (s.VideoEnhanceIfPossible)
-            {
-                try { enhanced = Deeper.EnhancementResolver.ResolveForLocalMedia(path).Enhancement != null; }
-                catch (Exception ex) { Diag.Swallowed(ex, "loop short clip enhancement probe"); enhanced = true; }
-            }
+            if (s == null || !(s.MandatoryVideoLoopShortClips || s.MandatoryVideoFillShortWithOthers)
+                || s.VideoMinDurationSeconds <= 0 || string.IsNullOrEmpty(path)) return false;
+            bool enhanced = s.VideoEnhanceIfPossible && ClipHasEnhancement(path);
             return Video.VideoMinLoop.Applies(true, s.VideoMinDurationSeconds, IsFloating, SegmentArmed, enhanced,
                 credited: Video.ScrolllerCredit.For(path) != null);
+        }
+
+        /// <summary>True when Deeper would drive this clip (a failed probe counts as yes: play it plain).</summary>
+        private static bool ClipHasEnhancement(string path)
+        {
+            try { return Deeper.EnhancementResolver.ResolveForLocalMedia(path).Enhancement != null; }
+            catch (Exception ex) { Diag.Swallowed(ex, "loop short clip enhancement probe"); return true; }
         }
 
         /// <summary>
@@ -8879,8 +8896,9 @@ namespace ConditioningControlPanel.Services
                         _ = MetadataCache.GetOrComputeDurationAsync(f);
                         return true;
                     }
-                    // "Loop short videos" on: a short clip stays in the pool and replays in place.
-                    if (Video.VideoMinLoop.FilterDropsShortClip(App.Settings?.Current?.MandatoryVideoLoopShortClips == true,
+                    // "Loop short videos" or "Fill the minimum" on: a short clip stays in the pool.
+                    if (Video.VideoMinLoop.FilterDropsShortClip(App.Settings?.Current?.MandatoryVideoLoopShortClips == true
+                            || App.Settings?.Current?.MandatoryVideoFillShortWithOthers == true,
                             minSec, IsFloating, dur.Value)) return false;
                     return true;
                 }).ToList();
@@ -8915,6 +8933,7 @@ namespace ConditioningControlPanel.Services
             // Shuffle using Fisher-Yates algorithm for reliable randomization
             ShuffleList(files);
             _videoQueue = new Queue<string>(files);
+            _localFillPool = files.ToArray();
 
             // Load pack videos from active packs
             var packVideos = App.ContentPacks?.GetAllActivePackVideos() ?? new List<(string, PackFileEntry)>();

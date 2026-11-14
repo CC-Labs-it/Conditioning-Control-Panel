@@ -133,8 +133,24 @@ namespace ConditioningControlPanel.Services
                 _browserHasCredit = Video.ScrolllerCredit.For(path) != null;
                 _browserOutroSent = false;
                 // "Loop short videos": the page replays up to this; meta turns it into a pass count.
-                _browserLoopUntilMs = Video.VideoMinLoop.PageLoopUntilMs(LoopShortClipApplies(path),
+                var keepShort = LoopShortClipApplies(path);
+                _browserLoopUntilMs = Video.VideoMinLoop.PageLoopUntilMs(keepShort,
                     App.Settings?.Current?.VideoMinDurationSeconds ?? 0);
+                // "Fill the minimum with other videos": the page plays these after the first clip,
+                // in order, until the minimum has played. None (a pool of one) = the loop above.
+                var fillUrls = new List<string>();
+                _fillSeconds = 0;
+                if (keepShort && App.Settings?.Current?.MandatoryVideoFillShortWithOthers == true)
+                {
+                    foreach (var f in PlanFillClips(path))
+                    {
+                        var u = Video.Browser.BrowserVideoEngine.BuildPageUrl(f.Path);
+                        if (u == null) continue;
+                        fillUrls.Add(u);
+                        _fillSeconds += f.Ms / 1000.0;
+                    }
+                    if (fillUrls.Count > 0) VideoDiag.Log("VIDEO", $"short clip - {fillUrls.Count} other clip(s) fill the minimum");
+                }
 
                 // Chaos random-segment mode: the LibVLC path seeks from LengthChanged, but the page
                 // takes a start offset directly. The fraction needs the duration, which only arrives
@@ -155,6 +171,7 @@ namespace ConditioningControlPanel.Services
                     // Gentle visuals: slowed playback + a fade in from black inside the page.
                     PlaybackRate = _playRate,
                     LoopUntilMs = _browserLoopUntilMs,
+                    FillUrls = fillUrls,
                     FadeInMs = Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0,
                     // The SAME flag SetupStrictHandlers is given below, not the live IsStrictActive
                     // probe: the page wants one fixed answer at load time, and this is the value the
@@ -482,7 +499,8 @@ namespace ConditioningControlPanel.Services
             }
 
             _duration = durationMs / 1000.0;
-            _loopPasses = _browserLoopUntilMs > 0
+            // A filled run counts the planned clips instead of passes (StartSafetyTimer).
+            _loopPasses = _browserLoopUntilMs > 0 && _fillSeconds <= 0
                 ? Video.VideoMinLoop.Passes(true, (int)(_browserLoopUntilMs / 1000), durationMs) : 1;
             App.Logger?.Information("VideoService: browser meta - duration={Duration}s ({W}x{H})", _duration, width, height);
 
@@ -531,6 +549,45 @@ namespace ConditioningControlPanel.Services
                 }
             }
             catch (Exception ex) { App.Logger?.Debug("VideoService: browser random-segment seek - {Error}", ex.Message); }
+        }
+
+        /// <summary>Candidates looked at per fill plan: enough for variety, bounded for a huge folder.</summary>
+        private const int FillCandidateProbe = 48;
+
+        /// <summary>
+        /// "Fill the minimum with other videos": the clips that follow <paramref name="path"/>, from
+        /// the local pool the last refill kept. Only clips with a cached length (so the safety timer
+        /// can allow for them), that the page can reach, and that keep today's behaviour on their own
+        /// (no Scrolller credit, no Deeper enhancement). Empty = loop the clip instead.
+        /// </summary>
+        private List<(string Path, long Ms)> PlanFillClips(string path)
+        {
+            var s = App.Settings?.Current;
+            var cache = MetadataCache;
+            if (s == null || cache == null) return new List<(string Path, long Ms)>();
+            var candidates = new List<(string Path, long Ms)>();
+            try
+            {
+                foreach (var f in _localFillPool.OrderBy(_ => Random.Shared.Next()))
+                {
+                    if (candidates.Count >= FillCandidateProbe) break;
+                    if (string.Equals(f, path, StringComparison.OrdinalIgnoreCase)) continue;
+                    var sec = cache.TryGetDuration(f);
+                    if (sec is not > 0) continue;
+                    if (!File.Exists(f) || BrowserVideoEngine.BuildPageUrl(f) == null) continue;
+                    if (Video.ScrolllerCredit.For(f) != null) continue;
+                    if (s.VideoEnhanceIfPossible && ClipHasEnhancement(f)) continue;
+                    candidates.Add((f, (long)Math.Round(sec.Value * 1000)));
+                }
+            }
+            catch (Exception ex)
+            {
+                // A broken probe means no fill, never a broken video: the clip loops instead.
+                Diag.Swallowed(ex, "fill the minimum candidate probe");
+                return new List<(string Path, long Ms)>();
+            }
+            long firstMs = (long)Math.Round((cache.TryGetDuration(path) ?? 0) * 1000);
+            return Video.VideoMinFill.Plan(path, firstMs, s.VideoMinDurationSeconds, candidates, Random.Shared);
         }
 
         /// <summary>True for a content-pack clip's per-play decrypt path (App.GetMediaTempPath()).
