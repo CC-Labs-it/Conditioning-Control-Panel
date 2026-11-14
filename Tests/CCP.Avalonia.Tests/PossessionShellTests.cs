@@ -672,4 +672,18 @@ public sealed class PossessionShellTests
         Press(a.Button); Assert.Equal(0, starts); rig.Clock += TimeSpan.FromMinutes(19); Tick(rig.Lockdown); Frame(); Assert.Equal(PossessionRung.Collapse, rig.Director.CurrentRung);
         Press(a.Button); Assert.Equal(1, starts); rig.Director.UndoAll(); Press(b.Button); Assert.Equal(1, starts);
     });
+    /// <summary>WPF PossessionEvents.OnPressed (:83-99), restack b223 (#4310 slice): a press on a card asks it to
+    /// breathe from the first rung.</summary>
+    [Fact]
+    public void CardPressRequestsBreathe() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30)); Frame();
+        var card = ((IPossessionHost)rig.Shell).Targets.First(t => t.Role == PossessionRole.Card);
+        var el = Assert.IsAssignableFrom<Control>(card.Visual);
+        Assert.Null(rig.Director.TargetFor(el, PossessionRole.TabHeader));
+        int starts = 0; rig.Director.EffectStarted += (id, _, _) => { if (id == "breathe") starts++; };
+        el.RaiseEvent(new global::Avalonia.Input.PointerPressedEventArgs(el, new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), global::Avalonia.Input.PointerType.Mouse, true), rig.Shell, default, 0, new global::Avalonia.Input.PointerPointProperties(global::Avalonia.Input.RawInputModifiers.LeftMouseButton, global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed), global::Avalonia.Input.KeyModifiers.None));
+        Frame();
+        Assert.Equal(1, starts);
+    });
 }
