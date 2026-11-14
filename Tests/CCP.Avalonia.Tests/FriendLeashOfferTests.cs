@@ -57,13 +57,35 @@ public sealed class FriendLeashOfferTests
     [InlineData("unknown", LeashCue.Denied)]
     public void OfferPlaysCueAndShowsLink(string status, LeashCue expected) => AvaloniaTestDispatcher.Run(() =>
     {
-        Setup(); CoreSettings.Current.LeashIntroSeenHolder = true;
-        var card = new FriendLeashOffer(Friend(), new LeashService(new Wire { Status = status }, () => "me"), new HashSet<string>());
-        var played = new List<LeashCue>(); card.PlayCue = played.Add;
-        Assert.Contains(Button(card, "leash-offer").GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(), x => x.Kind == FluentIcons.Common.Symbol.Link);
-        Click(card, "leash-offer");
-        Assert.Equal(expected, Assert.Single(played));
+        var settings = CoreSettings.Current;
+        var previous = settings.LeashIntroSeenHolder;
+        try
+        {
+            Setup(); settings.LeashIntroSeenHolder = true;
+            var card = new FriendLeashOffer(Friend(), new LeashService(new Wire { Status = status }, () => "me"), new HashSet<string>());
+            var played = new List<LeashCue>(); card.PlayCue = played.Add;
+            Assert.Contains(Button(card, "leash-offer").GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(), x => x.Kind == FluentIcons.Common.Symbol.Link);
+            Click(card, "leash-offer");
+            Assert.Equal(expected, Assert.Single(played));
+        }
+        finally { settings.LeashIntroSeenHolder = previous; }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OfferCueTestRestoresIntroSetting(bool previous)
+    {
+        var settings = CoreSettings.Current;
+        var original = settings.LeashIntroSeenHolder;
+        try
+        {
+            settings.LeashIntroSeenHolder = previous;
+            OfferPlaysCueAndShowsLink("sent", LeashCue.Sent);
+            Assert.Equal(previous, settings.LeashIntroSeenHolder);
+        }
+        finally { settings.LeashIntroSeenHolder = original; }
+    }
     [Fact]
     public void FirstOfferRequiresConfirmationAndRemembersIt() => AvaloniaTestDispatcher.Run(() =>
     {
