@@ -194,7 +194,7 @@ public sealed class FlashWireTests
             var completed = 0;
             typeof(FlashOverlay).GetMethod("Schedule", flags)!.Invoke(null, new object?[] {
                 flashes, 0, 100, generation, 1d, TimeSpan.Zero, TimeSpan.FromSeconds(6),
-                true, false, 0, (Action)(() => completed++), null });
+                true, false, 0, (Action)(() => completed++), null, null });
             Assert.Equal(2, ticks.Count);
             s.HydraLimit = 1;
             if (platformRefused)

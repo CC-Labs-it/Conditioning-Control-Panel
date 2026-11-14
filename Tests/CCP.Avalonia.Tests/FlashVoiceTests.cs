@@ -77,13 +77,17 @@ public class FlashVoiceTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
-        var muted = s.AvatarMuted;
-        s.AvatarMuted = false;
+        var muted = s.AvatarMuted; var enabled = s.AvatarEnabled;
+        s.AvatarMuted = false; s.AvatarEnabled = true; // the trunk bubble needs a visible avatar (WPF Speech.cs:481)
         var tube = new AvatarTubeWindow(null);
         try {
-            tube.Show(); var text = tube.FindControl<TextBlock>("TxtSpeech")!; tube.ShowFlashVoice("first clip"); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("first clip", text.Text); tube.ShowFlashVoice("second clip"); Dispatcher.UIThread.RunJobs(); Assert.Equal("first clip", text.Text);
-        } finally { tube.Close(); s.AvatarMuted = muted; }
+            // The trunk types preset bubbles out (WPF StartTypewriter), so read the line the bubble holds.
+            var length = typeof(AvatarTubeWindow).GetField("_currentSpeechLength", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var bubble = tube.FindControl<Border>("SpeechBubble")!;
+            tube.Show(); tube.ShowFlashVoice("first clip"); Dispatcher.UIThread.RunJobs();
+            Assert.True(bubble.IsVisible); Assert.Equal("first clip".Length, (int)length.GetValue(tube)!);
+            tube.ShowFlashVoice("second clip"); Dispatcher.UIThread.RunJobs(); Assert.Equal("first clip".Length, (int)length.GetValue(tube)!);
+        } finally { tube.Close(); s.AvatarMuted = muted; s.AvatarEnabled = enabled; }
         return Task.CompletedTask;
     });
 
