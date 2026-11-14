@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -28,6 +29,7 @@ public partial class InstallerHandoffContractTests
                 m => File.ReadAllText(Path.Combine(RepoRoot(), m.Groups[1].Value)));
         return text;
     }
+    private static string RepoPath(string path) => Path.Combine(RepoRoot(), path);
     private static string Define(string source, string name) =>
         Regex.Match(source, "#define " + name + " \"([^\"]+)\"").Groups[1].Value;
     private static string Directive(string source, string name) =>
@@ -159,10 +161,37 @@ public partial class InstallerHandoffContractTests
         Assert.Matches(@"if not WizardIsTaskSelected\('fileassoc'\) then\s+CleanupFileAssociations\(\);", ava);
     }
 
+    // WPF csproj:146,945-953 ships LibVLC 3.0.21 under {app}\libvlc; Avalonia
+    // csproj:81,311-315 ships 3.0.24 there. These are the old-only publish paths.
+    [Fact]
+    public void UpgradeRemovesOnlyRetiredWpfLibVlcFiles()
+    {
+        Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.21\"", Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
+        Assert.Contains("VideoLAN.LibVLC.Windows\" Version=\"3.0.24\"", Read("CCP.Avalonia/CCP.Avalonia.csproj"));
+        var installer = Read("installer-avalonia.iss");
+        var section = installer.Replace("\r\n", "\n").Split("\n[InstallDelete]\n")[1].Split("\n[Icons]\n")[0];
+        var rows = Regex.Matches(section, @"(?im)^Type:\s*([^;]+);\s*Name:\s*""(\{app\}\\libvlc(?:\\[^""\r\n]*)?)""")
+            .Select(m => (Type: m.Groups[1].Value.Trim(), Path: m.Groups[2].Value)).ToArray();
+        var expected = new[]
+        {
+            @"{app}\libvlc\lua\playlist\youtube.luac",
+            @"{app}\libvlc\plugins\access\libbluray-awt-j2se-1.3.2.jar",
+            @"{app}\libvlc\plugins\access\libbluray-j2se-1.3.2.jar",
+            @"{app}\libvlc\plugins\codec\libschroedinger_plugin.dll",
+            @"{app}\libvlc\plugins\codec\libsdl_image_plugin.dll",
+            @"{app}\libvlc\win-x64\lua\playlist\youtube.luac",
+            @"{app}\libvlc\win-x86\lua\playlist\youtube.luac",
+        };
+        Assert.All(rows, row => Assert.Equal("files", row.Type));
+        Assert.Equal(expected.OrderBy(x => x), rows.Select(row => row.Path).OrderBy(x => x));
+    }
+
     // Transcribed from origin/main aa9918833722f057079e455167cb3d1b14462340:
     // ConditioningControlPanel/Services/Update/UpdateService.cs:775-786 (ordered patterns + regex),
     // :1044 (relaunch exe), :1163 and :1197 (/DIR and silent arguments).
-    // No moving remote ref is fetched during tests. Recheck the shipping release in Part B.
+    // The published v7.1.15 tag b46f52ece11dc78a88c2c77f0a6f8922646e7d7f has the same
+    // UpdateService.cs:775-786,1044,1163,1197 contract. No moving ref is fetched in tests;
+    // a live Windows handoff and any later shipping release still need verification.
     [Fact]
     public void MainWpfUpdaterSelectsProductionButRejectsUnsignedCiArtifact()
     {
@@ -207,6 +236,69 @@ public partial class InstallerHandoffContractTests
         Assert.Contains("The old browser_data profile is kept.", notice);
         Assert.Contains("does not clear CCP account tokens, settings or progress.", notice);
         Assert.DoesNotContain("InfoBeforeFile=INSTALL_AVALONIA.txt", Read("installer.iss"));
+    }
+
+    [Fact]
+    public void WpfInstallerUsesProjectPublishOutputAndIcon()
+    {
+        var project = XDocument.Parse(Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
+        var framework = project.Descendants("TargetFramework").Single().Value;
+        var icon = project.Descendants("ApplicationIcon").Single().Value;
+        var installer = Read("installer.iss");
+        var batch = Read("build-installer.bat");
+        Assert.Equal($@"ConditioningControlPanel\bin\Release\{framework}\win-x64\publish", Define(installer, "PublishDir"));
+        Assert.Contains($@"set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\{framework}\win-x64\publish", batch);
+        Assert.Equal(@"..\Assets\app.ico", icon);
+        Assert.Equal(@"Assets\app.ico", Directive(installer, "SetupIconFile"));
+        Assert.NotEmpty(Read(Directive(installer, "SetupIconFile").Replace('\\', '/')));
+    }
+
+    [Fact]
+    public void InstallerNoticeUsesTheSelectedLanguageAndMatchesCoreTranslations()
+    {
+        var languages = new[]
+        {
+            ("en", "english", "Default.isl", "INSTALL_AVALONIA.txt"),
+            ("zh-CN", "chinesesimplified", @"Default.isl,installer-notices\zh-CN.isl", "installer-notices/zh-CN.txt"),
+            ("ja", "japanese", @"Languages\Japanese.isl", "installer-notices/ja.txt"),
+            ("ko", "korean", @"Default.isl,installer-notices\ko.isl", "installer-notices/ko.txt"),
+            ("es", "spanish", @"Languages\Spanish.isl", "installer-notices/es.txt"),
+            ("pt-BR", "brazilianportuguese", @"Languages\BrazilianPortuguese.isl", "installer-notices/pt-BR.txt"),
+            ("fr", "french", @"Languages\French.isl", "installer-notices/fr.txt"),
+            ("it", "italian", @"Languages\Italian.isl", "installer-notices/it.txt"),
+            ("de", "german", @"Languages\German.isl", "installer-notices/de.txt"),
+            ("ru", "russian", @"Languages\Russian.isl", "installer-notices/ru.txt"),
+        };
+        Assert.Equal(LocalizationManager.AvailableLanguages.Select(x => x.Code).OrderBy(x => x), languages.Select(x => x.Item1).OrderBy(x => x));
+        var section = Read("installer-avalonia.iss").Split("[Languages]")[1].Split("[Tasks]")[0];
+        Assert.Equal(languages.Length, section.Split('\n').Count(line => line.TrimStart().StartsWith("Name: \"")));
+        var utf8Bom = new byte[] { 0xef, 0xbb, 0xbf };
+        foreach (var (code, nativeName, id, page) in new[] { ("zh-CN", "简体中文", "$0804", "936"), ("ko", "한국어", "$0412", "949") })
+        {
+            var overlayFile = $"installer-notices/{code}.isl";
+            Assert.True(File.ReadAllBytes(RepoPath(overlayFile)).AsSpan().StartsWith(utf8Bom));
+            var overlay = Read(overlayFile);
+            Assert.Contains("[LangOptions]", overlay);
+            Assert.Contains("LanguageName=" + nativeName, overlay);
+            Assert.Contains("LanguageID=" + id, overlay);
+            Assert.Contains("LanguageCodePage=" + page, overlay);
+        }
+        string? english = null;
+        foreach (var (code, name, messages, file) in languages)
+        {
+            Assert.Contains($"Name: \"{name}\"; MessagesFile: \"compiler:{messages}\"; InfoBeforeFile: \"{file.Replace('/', '\\')}\"", section);
+            using var json = JsonDocument.Parse(Read($"CCP.Core/Localization/Languages/{code}.json"));
+            var translation = json.RootElement.GetProperty("installer_avalonia_upgrade_notice").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(translation));
+            if (code != "en") Assert.True(File.ReadAllBytes(RepoPath(file)).AsSpan().StartsWith(utf8Bom));
+            Assert.Equal(translation!.Replace("\r\n", "\n").TrimEnd(), Read(file).Replace("\r\n", "\n").TrimEnd());
+            Assert.Contains("browser_data_avalonia", translation);
+            Assert.Contains("browser_data", translation);
+            Assert.DoesNotContain("!", translation);
+            Assert.DoesNotContain("—", translation);
+            Assert.DoesNotContain("–", translation);
+            if (code == "en") english = translation; else Assert.NotEqual(english, translation);
+        }
     }
 
     [Fact]

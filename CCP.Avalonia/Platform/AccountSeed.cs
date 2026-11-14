@@ -40,7 +40,9 @@ internal static class AccountSeed
 
     /// <param name="make">Tests only: builds the provider for a prefix.</param>
     /// <param name="makeDiscord">Tests only: builds the Discord account.</param>
-    internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null)
+    /// <param name="intakePass">Tests only: isolates the entitlement subscriptions.</param>
+    internal static bool Seed(Func<string, ProviderSubscription>? make = null, Func<ProviderSubscription, DiscordAccount>? makeDiscord = null,
+        IntakePassService? intakePass = null)
     {
         PrizeOwnership.Seed();
         make ??= prefix => new ProviderSubscription(prefix);
@@ -92,9 +94,9 @@ internal static class AccountSeed
             if (discord.IsAuthenticated) { await discord.ValidateAndRefreshUserAsync(forceRefresh: true); return true; }
             return false;   // invite-code / email sessions have no provider to mint from
         };
-        // WPF App.xaml.cs:2937: the weekly intake pass re-evaluates (and refunds a pre-premium spend)
+        // WPF App.xaml.cs:3124: the weekly intake pass re-evaluates (and refunds a pre-premium spend)
         // on either provider's TierChanged. Here, because this is where the providers now exist.
-        App.IntakePass.AttachEntitlementSources(
+        (intakePass ?? App.IntakePass).AttachEntitlementSources(
             h => { patreon.TierChanged += h; substar.TierChanged += h; },
             h => { patreon.TierChanged -= h; substar.TierChanged -= h; });
         return true;
