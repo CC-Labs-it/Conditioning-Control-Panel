@@ -204,8 +204,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// loadout is WPF's explicit unequip-everything clear); fire-and-forget, as WPF.</summary>
         internal void PersistOwnCosmetics(ProfileCosmetics chosen)
         {
+            var slotsBefore = ConditioningControlPanel.Services.ProfileEquip.ProfileSlots.Of(SanitizeOwnWardrobe(CoreSettings.Current.ProfileCosmetics));
             CoreSettings.Current.ProfileCosmetics = chosen;
             CoreSettings.Save();
+            Platform.ProfileEquipSync.Saved(slotsBefore, chosen);   // WPF MainWindow.ProfileCosmetics.cs:416
             Log.Information(
                 "Profile cosmetics saved: banner={Banner}, accent={Accent}, title={Title}, pins={Pins}, deco={Deco}, charms={Charms}",
                 chosen.BannerId ?? "none", chosen.Accent ?? "none", chosen.TitleId ?? "none",
