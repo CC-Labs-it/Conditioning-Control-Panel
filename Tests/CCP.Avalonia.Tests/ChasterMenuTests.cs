@@ -200,6 +200,8 @@ public sealed class ChasterMenuTests
             }
         }
         await Task.CompletedTask;
+    }));
+
     // WPF ChasterTabView.xaml.cs:283-303, 1193-1206 and Fx.cs:206-248.
     [Fact]
     public Task EmptyMenuHintFindsTheKeysAndTracksRealRowChanges() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, tab, w) =>
