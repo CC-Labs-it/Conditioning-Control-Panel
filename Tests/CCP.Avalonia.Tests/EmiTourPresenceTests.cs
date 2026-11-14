@@ -35,6 +35,24 @@ public sealed class EmiTourPresenceTests
         service.Skip();
     }
 
+    // Restack b189 (#4645): WPF EmiTourNarrator.cs:195 offers the book after either ending, once per ending.
+    [Theory]
+    [InlineData(true, "tourFinished")]
+    [InlineData(false, "tourSkipped")]
+    public async Task EndingSchedulesTheBookOfferOnce(bool complete, string why)
+    {
+        var service = new TutorialService();
+        var offers = new System.Collections.Generic.List<string>();
+        using var presence = new EmiTourPresence(service, () => true, () => true, () => Task.CompletedTask,
+            _ => { }, _ => false, offers.Add);
+        service.Start(TutorialType.ShortWalk);
+        await presence.PendingSummon;
+        Assert.Empty(offers);
+        if (complete) while (service.IsActive) service.Next();
+        else service.Skip();
+        Assert.Equal(new[] { why }, offers);
+    }
+
     // WPF EmiTourNarrator.cs:61-88: replacement detaches the previous service too.
     [Fact]
     public void AttachmentIsIdempotentAndReplacementDisposesTheOldAttachment()

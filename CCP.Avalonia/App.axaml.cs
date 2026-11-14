@@ -1914,6 +1914,7 @@ namespace ConditioningControlPanel.Avalonia
             catch { /* one service cannot prevent the head from exiting */ }
 
             Descent?.Reset();
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();   // its dispatcher timer must not fire past exit
             DescentCountdown?.Dispose();   // its pool timer outlives the dispatcher otherwise
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Stop();   // same
             _desktopDispatch?.Stop();

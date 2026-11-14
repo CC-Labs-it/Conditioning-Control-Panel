@@ -13,6 +13,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>Open the game (clip, count bubbles, then the answer window) and call
         /// <paramref name="onComplete"/> once with the answer's outcome (WPF BubbleCountWindow.ShowOnAllMonitors).</summary>
         void Show(string path, int difficulty, bool strict, Action<bool> onComplete);
+        // WPF BubbleCountWindow.xaml.cs:308-319: a poisoned native start is a skip, not a loss.
+        void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) =>
+            Show(path, difficulty, strict, onComplete);
         /// <summary>Full-screen retry/mercy message for <paramref name="ms"/>, then <paramref name="then"/>
         /// (WPF ShowFullscreenMessage).</summary>
         void ShowMessage(string text, int ms, Action then);
@@ -274,9 +277,16 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
-            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
+            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete, OnSkipped); }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
+        }
+
+        private void OnSkipped()
+        {
+            if (!IsBusy) return;
+            _retryCount = 0;
+            Idle();
         }
 
         /// <summary>WPF OnGameComplete.</summary>

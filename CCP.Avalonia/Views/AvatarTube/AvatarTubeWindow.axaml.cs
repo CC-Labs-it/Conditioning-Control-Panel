@@ -1220,6 +1220,19 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             });
         }
 
+        /// <summary>WPF AvatarTubeWindow.Reactions.cs:440-463: display a flash clip's filename
+        /// without replaying its audio, only when no bubble is already showing.</summary>
+        internal void ShowFlashVoice(string text)
+        {
+            if (IsMuted || string.IsNullOrWhiteSpace(text) || _isGiggling) return;
+            RunOnAvatar(() =>
+            {
+                if (IsMuted || _isGiggling) return;
+                ClearSpeechQueue();
+                ShowSpeech(text, playSound: false, aiGenerated: false, null, false, preset: true);
+            });
+        }
+
         private int _presetGiggleCounter;
 
         /// <summary>WPF RestartIdleTimer (Speech.cs): the idle cadence restarts after every line.</summary>
