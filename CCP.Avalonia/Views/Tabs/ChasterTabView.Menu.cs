@@ -118,21 +118,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     PaintRowLit(id, on.Contains(id));
                 }
                 ChkFlashDodge.IsChecked = CoreSettings.Current.ChasterFlashDodge;
-                SliderNatashaTriggerWeight.Value = CoreSettings.Current.ChasterNatashaTriggerWeight;
-                TxtNatashaTriggerWeight.Text = $"{CoreSettings.Current.ChasterNatashaTriggerWeight}x";
-                if (CoreSettings.Current.ChasterNatashaTriggerWeight != 1) NatashaFold.IsOpen = true;
             }
             finally { _loading = false; }
             PaintStamps();
-        }
-
-        private void SliderNatashaTriggerWeight_Changed(object? sender, global::Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-        {
-            var weight = (int)Math.Round(e.NewValue);
-            if (TxtNatashaTriggerWeight != null) TxtNatashaTriggerWeight.Text = $"{weight}x";
-            if (_loading || !_attached) return;
-            CoreSettings.Current.ChasterNatashaTriggerWeight = weight;
-            CoreSettings.Save();
         }
 
         /// <summary>A picture, a short name, where it happens with the tier sign, and the price on a

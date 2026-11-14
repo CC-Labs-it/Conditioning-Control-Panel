@@ -4,7 +4,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:p="using:Avalonia.Controls.Primitives"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView">
     <UserControl.Resources>
@@ -665,13 +664,6 @@
                                                Foreground="{DynamicResource TextSecondaryBrush}"/>
                                 </StackPanel>
                             </Grid>
-                            <feat:MoreFold x:Name="NatashaFold" Margin="2,0,8,4">
-                            <Grid Margin="0,2,0,2" ColumnDefinitions="Auto,*,Auto" ToolTip.Tip="{loc:Str chaster_natasha_trigger_weight_hint}">
-                                <TextBlock Text="{loc:Str chaster_natasha_trigger_weight}" FontSize="12.5" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderNatashaTriggerWeight" Minimum="1" Maximum="10" Value="1" TickFrequency="1" IsSnapToTickEnabled="True" Margin="10,0" ValueChanged="SliderNatashaTriggerWeight_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtNatashaTriggerWeight" Text="1x" VerticalAlignment="Center"/>
-                            </Grid>
-                            </feat:MoreFold>
                         </StackPanel>
                     </Border>
                     <Border x:Name="EarnBoard" Grid.Column="2" Theme="{StaticResource CirceCard}" Padding="14,12,6,6" BorderBrush="#665FFFD0">
