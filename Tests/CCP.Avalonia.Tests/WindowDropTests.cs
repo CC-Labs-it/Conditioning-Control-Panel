@@ -88,6 +88,64 @@ public sealed class WindowDropTests
         done.Close();
     });
 
+    private sealed class PackWinsRandom : Random
+    {
+        public readonly System.Collections.Generic.List<int> Bounds = new();
+        public override int Next(int maxValue) { Bounds.Add(maxValue); return maxValue - 1; }
+    }
+
+    // WPF MainWindow.SessionIO.cs:1814-1818 -> VideoService.RefreshVideosPath: a video import clears the
+    // local AND pack dealt queues but keeps every decrypt (restack b199, from #3944 / #4036).
+    [Fact]
+    public Task VideoImportRestartsThePackCycleWithoutDeletingThePlayingDecrypt() => Run(async (shell, root, assets) =>
+    {
+        var packRoot = Path.Combine(root, "pack-root");
+        var packDir = Path.Combine(packRoot, ".packs", "guid");
+        Directory.CreateDirectory(Path.Combine(packDir, "content"));
+        var manifest = new InstalledPackManifest { PackId = "p1", PackGuid = "guid", PackName = "One" };
+        for (var i = 0; i < 3; i++)
+        {
+            var name = $"{i}.enc";
+            File.WriteAllText(Path.Combine(packDir, "content", name), name);
+            manifest.Files.Add(new PackFileEntry
+                { OriginalName = $"{i}.mp4", ObfuscatedName = name, FileType = "video", Extension = ".mp4" });
+        }
+        File.WriteAllText(Path.Combine(packDir, ".manifest.enc"), "manifest");
+        var settings = new ConditioningControlPanel.Models.AppSettings();
+        var store = new ContentPackStore(() => packRoot, () => settings, () => { },
+            loadManifest: _ => Newtonsoft.Json.JsonConvert.SerializeObject(manifest),
+            decryptFile: File.ReadAllBytes, tempDir: () => Path.Combine(root, "temps"));
+        var random = new PackWinsRandom();
+        var pool = new PackMediaPool(ContentPackStore.VideoType, random, () => store);
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var original = overlay.Scheduler;
+        var available = new[] { "old-a.mp4", "old-b.mp4" };
+        var scheduler = new MandatoryVideoScheduler(overlay, library: () => available) { PackVideos = pool };
+        overlay.Scheduler = scheduler;
+        try
+        {
+            var playing = scheduler.PickNext()!;   // one of three pack clips dealt, two locals remain
+            Assert.True(File.Exists(playing));
+            Assert.Equal(5, random.Bounds[0]);     // two local + three pack clips
+            var video = Path.Combine(root, "new.mp4");
+            File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
+            available = new[] { Path.Combine(assets, "videos", "new.mp4") };
+
+            Drop(shell, video);
+            var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
+            Click(ask, "BtnOk");
+            var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+
+            Assert.True(File.Exists(playing));     // fail-proof: the old sweep deleted the playing decrypt
+            Assert.True(store.TryGetSourceKey(playing, out _));
+            random.Bounds.Clear();
+            Assert.NotNull(scheduler.PickNext());
+            Assert.Equal(4, random.Bounds[0]);     // one refreshed local + all three pack clips
+            done.Close();
+        }
+        finally { overlay.Scheduler = original; pool.CleanupTemps(); }
+    });
+
     // WPF MainWindow.SessionIO.cs:1481; DeeperTab.cs:604-608: reuse player and load media.
     [Fact]
     public Task MediaDropPlayOpensTheFileAndReusesThePlayer() => Run(async (shell, root, assets) =>
