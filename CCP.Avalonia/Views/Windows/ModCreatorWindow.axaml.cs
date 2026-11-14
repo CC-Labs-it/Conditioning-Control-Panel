@@ -455,7 +455,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // when it is ported. In the WPF head these three aggregate hooks let export write each
         // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
         // an extracted tree, and let reset clear them.
-        private async Task WriteSideFilesTo(string resourcesDir) { WriteBarksTo(resourcesDir); WriteEventAudioTo(resourcesDir); WriteEmotesTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_skipped_title"), string.Join("\n", skipped)); }
+        private async Task WriteSideFilesTo(string resourcesDir) { var badBarkConditions = WriteBarksTo(resourcesDir); if (badBarkConditions.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_barks_conditions_title"), Loc.GetF("mod_barks_conditions_invalid", string.Join(", ", badBarkConditions))); WriteEventAudioTo(resourcesDir); WriteEmotesTo(resourcesDir); var skipped = WriteMantrasTo(resourcesDir); if (skipped.Count > 0) await MessageDialog.ShowAsync(this, Loc.Get("mod_mantra_skipped_title"), string.Join("\n", skipped)); }
         private void LoadSideFilesFrom(string resourcesDir) { LoadBarksFrom(resourcesDir); _ = LoadMantrasFrom(resourcesDir); LoadEventAudioFrom(resourcesDir); LoadEmotesFrom(resourcesDir); }
         private void ClearSideFileState() { ClearBarksSection(); ClearMantrasSection(); ClearEventAudioSection(); ClearEmotesSection(); }
 
