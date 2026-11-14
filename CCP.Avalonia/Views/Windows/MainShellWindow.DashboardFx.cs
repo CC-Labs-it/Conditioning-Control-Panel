@@ -6,9 +6,8 @@
 // the vault CTA breath (ApplyVaultCtaBreath, :213). WPF reaches the same funnel through
 // ApplyChromeFxLoops; this head has no chrome-FX funnel yet, so the dashboard hooks its own.
 //
+// LIVE: the "? box" doorbell and hover flip (MainShellWindow.MysteryTile.cs:62).
 // STILL MISSING (each a WPF member of MainWindow.DashboardFx.cs):
-//   the "? box" doorbell + hover flip - ApplyMysteryFx/ApplyMysteryBreath/ApplyMysteryBadgeVisibility/
-//     EnsureMysteryTileFx/RequestMysteryFace/RunMysteryFlip/Open/SettleMysteryPlate/StartMysteryPop;
 //   the centre wordmark's sheen - ApplyLogoSheenTimer/SweepLogoSheen (ApplyLogoDrift is LIVE for the logo's
 //     AmbientAllowed gate; its Ken Burns drift only runs for a mod's still logo in WPF, and is not ported);
 // LIVE: browser frame sweep and localized loading-status pulse (ApplyBrowserFx), shared BeatLoop.
@@ -94,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var card in tab.GetLogicalDescendants().OfType<FeatureCard>()) card.RefreshFx();
                 foreach (var combo in tab.GetLogicalDescendants().OfType<SplitFeatureCard>()) combo.RefreshFx();
                 ApplyVaultCtaBreath();
+                ApplyMysteryFx();
                 ApplyBrowserFx();
                 // WPF ApplyLogoDrift (:753): the logo animates under the chrome gate; BeatLoop parks it hidden.
                 if (tab.FindControl<AnimatedLogoImage>("ImgLogo") is { } logo)

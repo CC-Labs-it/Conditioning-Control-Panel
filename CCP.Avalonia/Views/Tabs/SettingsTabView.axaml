@@ -791,11 +791,11 @@
            painted by RefreshMysteryTile() and is ALWAYS the offer ("FREE TODAY"), never the
            day's feature - naming it on this face would spend the reveal before the plate ever
            turned. The tile is a TWO-SIDED PLATE: HOVER turns it onto today's feature, and
-           unhovering turns it back. The flip transform lives on THIS host so both faces share
-           it, and the enter/leave hooks are on the host too (the faces swap visibility
+           unhovering turns it back. Both faces share the inner plate transform. The outer
+           host stays flat for stable enter/leave hit testing (the faces swap visibility
            mid-turn, so a handler on a face would see leaves the pointer never made). -->
-      <Grid Grid.Row="2" Grid.Column="0" x:Name="MysteryFlipHost"
-            RenderTransformOrigin="50%,50%">
+      <Grid Grid.Row="2" Grid.Column="0" x:Name="MysteryFlipHost" Background="Transparent">
+       <Grid x:Name="MysteryPlate" RenderTransformOrigin="50%,50%">
         <Grid.RenderTransform>
           <TransformGroup>
             <ScaleTransform ScaleX="1" ScaleY="1"/>
@@ -861,6 +861,7 @@
             <DropShadowEffect Color="#FFD54A" BlurRadius="16" OffsetX="0" OffsetY="0" Opacity="0.8"/>
           </Border.Effect>
         </Border>
+       </Grid>
       </Grid>
 
       <!-- The badge sits OUTSIDE the flip host so it stays legible while the plate is edge-on
