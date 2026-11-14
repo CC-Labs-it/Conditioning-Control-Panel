@@ -43,7 +43,8 @@ public sealed class NavRailModTwinTests
     private static byte[] Shipped(string path, int width = 128)
     {
         using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + path));
-        using var bitmap = Bitmap.DecodeToWidth(stream, width);
+        // Same decode quality as ModArt (MediumQuality), so a resolved picture and the shipped file compare equal.
+        using var bitmap = Bitmap.DecodeToWidth(stream, width, ModArt.DecodeQuality);
         return Digest(bitmap);
     }
 

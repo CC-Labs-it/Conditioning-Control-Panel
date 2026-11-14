@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using Avalonia.Controls;
 using ConditioningControlPanel.Services.Possession;
 
 namespace ConditioningControlPanel.Avalonia.Possession
@@ -29,13 +30,27 @@ namespace ConditioningControlPanel.Avalonia.Possession
         /// <summary>The Core deck's view of this effect (WPF PossessionDeckMeta.MetaOf).</summary>
         public PossessionEffectMeta Meta => new(Id, MinRung, MinIntensity, UsesFlicker, Weight, Roles);
 
+        protected Control Element = null!;
+        /// <summary>The transform lease; null for a text effect (<see cref="UsesTransform"/> false).</summary>
         protected PossessionLease Lease = null!;
         private Random _rng = Random.Shared;
+        protected Random Rng => _rng;
         private bool _photosafe;
+        protected bool Photosafe => _photosafe;
 
-        internal void Begin(PossessionLease lease, Random rng, bool photosafe)
+        /// <summary>False for the text effects (typo, rewrite, glyph rot): they never take the transform lease.</summary>
+        internal virtual bool UsesTransform => true;
+        /// <summary>The effect's own gate on top of the runtime's (WPF CanApply overrides).</summary>
+        internal virtual bool CanApply(Control target) => true;
+        /// <summary>Longest ease home; 0 = the text comes back at once (WPF TypoEffect.UndoCoreAsync ignores duration).</summary>
+        internal virtual double UndoMs => PossessionRuntime.ReturnMs;
+        /// <summary>Hand back anything the effect wrote (text). Runs on every finish, panic included.</summary>
+        internal virtual void Release() { }
+
+        internal void Begin(Control element, PossessionLease? lease, Random rng, bool photosafe)
         {
-            Lease = lease;
+            Element = element;
+            Lease = lease!;
             _rng = rng;
             _photosafe = photosafe;
             Start();
