@@ -148,6 +148,8 @@
   "Chaos_Ripple_Teach": "🌊 이것이 파문입니다. 저절로 충전됩니다",
   "Chaos_Ripple_Skips": "🌊 돌이 튑니다 - 세 개의 파도",
   "Chaos_Ripple_Cast": "🌊 파문",
+  "mod_barks_no_id": "ID 없음",
+  "mod_barks_skipped": "Barks: 불완전한 규칙 {0}개를 건너뛰었습니다 ({1}).",
   "deeper_submission_badge_published": "게시됨",
   "deeper_submission_badge_published_tip": "이 인핸스먼트는 커뮤니티 카탈로그에 게시되어 있습니다.",
   "deeper_submission_badge_pending": "대기 중",

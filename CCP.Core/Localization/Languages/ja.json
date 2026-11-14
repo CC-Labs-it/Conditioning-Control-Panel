@@ -148,6 +148,8 @@
   "Chaos_Ripple_Teach": "🌊 これが波紋。自然に回復します",
   "Chaos_Ripple_Skips": "🌊 石が跳ねる - 3つの波",
   "Chaos_Ripple_Cast": "🌊 波紋",
+  "mod_barks_no_id": "IDなし",
+  "mod_barks_skipped": "Barks: 不完全なルールを {0} 件スキップしました ({1})。",
   "deeper_submission_badge_published": "公開済み",
   "deeper_submission_badge_published_tip": "このエンハンスメントはコミュニティカタログで公開中です。",
   "deeper_submission_badge_pending": "審査中",

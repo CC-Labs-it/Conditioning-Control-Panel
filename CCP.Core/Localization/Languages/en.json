@@ -145,6 +145,8 @@
   "Chaos_Ripple_Teach": "🌊 that's the ripple. it gathers back on its own",
   "Chaos_Ripple_Skips": "🌊 the stone skips - three waves",
   "Chaos_Ripple_Cast": "🌊 ripple",
+  "mod_barks_no_id": "no id",
+  "mod_barks_skipped": "Barks: {0} incomplete rule(s) skipped ({1}).",
   "Sparkles_Slip_Paid": "Paid",
   "Sparkles_Slip_Place": "Place {0} of {1}",
   "Sparkles_Slip_Gold": "Gold",

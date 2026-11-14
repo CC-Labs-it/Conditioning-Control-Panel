@@ -148,6 +148,8 @@
   "Chaos_Ripple_Teach": "🌊 esa es la onda. se recupera sola",
   "Chaos_Ripple_Skips": "🌊 la piedra rebota - tres ondas",
   "Chaos_Ripple_Cast": "🌊 onda",
+  "mod_barks_no_id": "sin id",
+  "mod_barks_skipped": "Barks: {0} reglas incompletas omitidas ({1}).",
   "deeper_submission_badge_published": "Publicado",
   "deeper_submission_badge_published_tip": "Esta mejora está publicada en el catálogo de la comunidad.",
   "deeper_submission_badge_pending": "Pendiente",

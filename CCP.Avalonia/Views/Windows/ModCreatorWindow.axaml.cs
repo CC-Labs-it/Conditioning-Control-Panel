@@ -2529,7 +2529,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Cleanup temp
                 try { Directory.Delete(tempDir, recursive: true); } catch { }
 
-                _txtStatus.Text = Loc.GetF("mod_exported_filename", Path.GetFileName(savePath!));
+                _txtStatus.Text = BarkExportStatus(Loc.GetF("mod_exported_filename", Path.GetFileName(savePath!)));
                 await MessageDialog.ShowAsync(this, Loc.Get("title_export_complete"),
                     Loc.GetF("msg_mod_exported_successfully", savePath!));
             }

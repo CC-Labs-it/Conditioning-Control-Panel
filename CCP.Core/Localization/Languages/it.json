@@ -143,6 +143,8 @@
   "Chaos_Ripple_Teach": "🌊 ecco l'onda. si ricarica da sola",
   "Chaos_Ripple_Skips": "🌊 la pietra rimbalza - tre onde",
   "Chaos_Ripple_Cast": "🌊 onda",
+  "mod_barks_no_id": "senza id",
+  "mod_barks_skipped": "Barks: {0} regole incomplete saltate ({1}).",
   "Sparkles_Slip_Paid": "Pagato",
   "Sparkles_Slip_Place": "Posto {0} su {1}",
   "Sparkles_Slip_Gold": "Oro",

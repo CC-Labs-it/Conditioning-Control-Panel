@@ -148,6 +148,8 @@
   "Chaos_Ripple_Teach": "🌊 c'est la vague. elle se recharge toute seule",
   "Chaos_Ripple_Skips": "🌊 la pierre ricoche - trois vagues",
   "Chaos_Ripple_Cast": "🌊 vague",
+  "mod_barks_no_id": "sans identifiant",
+  "mod_barks_skipped": "Barks : {0} règles incomplètes ignorées ({1}).",
   "deeper_submission_badge_published": "Publié",
   "deeper_submission_badge_published_tip": "Cette amélioration est en ligne dans le catalogue communautaire.",
   "deeper_submission_badge_pending": "En attente",

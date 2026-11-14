@@ -50,6 +50,23 @@ public sealed class ModCreatorBarksTests
     }
 
     [Fact]
+    public void IncompleteRulesAreReportedAndReportSurvivesExportStatus() => Run((w, root) =>
+    {
+        Click(w, "mod_barks_add"); Click(w, "mod_barks_add");
+        var card = Card(w);
+        var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
+        boxes[0].Text = "valid"; boxes[1].Text = "Event";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Single(Export(w, root));
+        var report = Loc.GetF("mod_barks_skipped", 1, Loc.Get("mod_barks_no_id"));
+        Assert.Equal(report, w.FindControl<TextBlock>("TxtStatus")!.Text);
+        Assert.Equal("saved " + report, w.BarkExportStatus("saved"));
+        w.ClearBarksSection();
+        w.WriteBarksTo(root);
+        Assert.Equal("saved", w.BarkExportStatus("saved"));
+    });
+
+    [Fact]
     public void NewRuleSlugsIdTrimsVariantsAndSkipsIncompleteCards() => Run((w, root) =>
     {
         Click(w, "mod_barks_add"); Click(w, "mod_barks_add");

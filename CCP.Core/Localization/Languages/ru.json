@@ -148,6 +148,8 @@
   "Chaos_Ripple_Teach": "🌊 это волна. она восстанавливается сама",
   "Chaos_Ripple_Skips": "🌊 камень скачет - три волны",
   "Chaos_Ripple_Cast": "🌊 волна",
+  "mod_barks_no_id": "без ID",
+  "mod_barks_skipped": "Barks: пропущено неполных правил: {0} ({1}).",
   "deeper_submission_badge_published": "Опубликовано",
   "deeper_submission_badge_published_tip": "Это улучшение доступно в каталоге сообщества.",
   "deeper_submission_badge_pending": "На проверке",

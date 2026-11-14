@@ -147,6 +147,8 @@
   "Chaos_Ripple_Teach": "🌊 这就是涟漪。它会自行恢复",
   "Chaos_Ripple_Skips": "🌊 石头跳跃 - 三道波纹",
   "Chaos_Ripple_Cast": "🌊 涟漪",
+  "mod_barks_no_id": "无 ID",
+  "mod_barks_skipped": "Barks：已跳过 {0} 条不完整规则（{1}）。",
   "deeper_submission_badge_published": "已发布",
   "deeper_submission_badge_published_tip": "此增强已在社区目录中上线。",
   "deeper_submission_badge_pending": "待审核",
