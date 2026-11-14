@@ -8470,5 +8470,6 @@
   "chaos_expiry_name_braindrain": "ブレインドレイン",
   "chaos_expiry_name_gif": "GIFの連続表示",
   "webcam_camera_unavailable_detail": "カメラを使用できません。別のアプリが使用中か、カメラのプライバシー設定でブロックされている可能性があります。",
-  "webcam_capture_retry_fmt": "カメラの応答が遅いため、別の方法を試しています（{0}/{1}）。"
+  "webcam_capture_retry_fmt": "カメラの応答が遅いため、別の方法を試しています（{0}/{1}）。",
+  "installer_avalonia_upgrade_notice": "Avalonia へのアップグレード\n\nWPF からアップグレードすると、内蔵ブラウザーのログイン状態がリセットされます。CCP 内で開くサイトに再度ログインしてください。\n\n新しいブラウザープロファイル browser_data_avalonia は CCP のユーザーデータフォルダーにあります。古い browser_data プロファイルは保持されます。\n\nこの変更によって CCP のアカウントトークン、設定、進行状況が消去されることはありません。"
 }

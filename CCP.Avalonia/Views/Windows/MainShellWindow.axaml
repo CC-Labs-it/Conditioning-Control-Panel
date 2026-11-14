@@ -2518,7 +2518,7 @@
                                 <!-- Quick Tip -->
                                 <Border Background="#3A2542" CornerRadius="8" Padding="12" Margin="0,0,0,15" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="💡" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Lightbulb" Size="18" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="{loc:Str label_hover_over_any_control_for_tooltips_click_a_g}"
                                                    Foreground="#D0B0C0" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                     </StackPanel>
@@ -2535,7 +2535,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="🚪" FontSize="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="DoorArrowLeft" Size="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str whatmoved_title}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str help_whatmoved_row_sub}"
@@ -2568,7 +2568,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="🚀" FontSize="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Rocket" Size="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str label_getting_started}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_quick_overview_of_the_basics_start_button_add}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
@@ -2586,7 +2586,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="⚙️" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                        <fx:IconGlyph Grid.Column="0" Kind="Settings" Size="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str label_settings_tab}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_flash_images_videos_subliminals_overlays_audi}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
@@ -2604,7 +2604,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="💾" FontSize="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Save" Size="22" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{loc:Str label_presets_sessions}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_save_configurations_run_timed_sessions_create}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>

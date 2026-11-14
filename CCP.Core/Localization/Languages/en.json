@@ -9213,5 +9213,6 @@
   "chaos_expiry_name_braindrain": "braindrain",
   "chaos_expiry_name_gif": "gif cascade",
   "webcam_camera_unavailable_detail": "Camera unavailable. It may be in use by another app or blocked by camera privacy settings.",
-  "webcam_capture_retry_fmt": "Camera slow to respond. Trying another method ({0}/{1})."
+  "webcam_capture_retry_fmt": "Camera slow to respond. Trying another method ({0}/{1}).",
+  "installer_avalonia_upgrade_notice": "Avalonia upgrade\n\nEmbedded browser logins reset when upgrading from WPF. Sign in again to websites opened inside CCP.\n\nThe new browser profile is browser_data_avalonia under your CCP user data folder. The old browser_data profile is kept.\n\nThis browser change does not clear CCP account tokens, settings or progress."
 }

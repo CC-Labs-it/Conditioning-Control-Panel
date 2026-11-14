@@ -105,6 +105,20 @@ internal sealed class AchievementEngine
         Save();
     }
 
+    /// <summary>WPF ProfileSyncService.cs:2099-2118: union cloud ids directly, including
+    /// ids from newer catalogs, save once, and never announce a historical unlock.</summary>
+    public void RestoreCloudAchievements(System.Collections.Generic.IEnumerable<string> ids)
+    {
+        var changed = false;
+        foreach (var id in ids)
+        {
+            if (string.IsNullOrEmpty(id) || Progress.IsUnlocked(id)) continue;
+            Progress.Unlock(id);
+            changed = true;
+        }
+        if (changed) Save();
+    }
+
     private static readonly ConcurrentDictionary<string, byte> _alreadyUnlockedNoted = new();
 
     /// <summary>True the first time an already-held achievement is re-asked for in this run.</summary>
@@ -242,6 +256,15 @@ internal sealed class AchievementEngine
         Progress.TotalFlashImages++;
         _isDirty = true;
         if (Progress.TotalFlashImages >= AchievementRules.RetinalBurnFlashImages) TryUnlock("retinal_burn");
+    }
+
+    /// <summary>WPF GamificationBridge.OnKeywordTriggerFired: count every fire; magic_word and pavlov (exclusive) at their thresholds.</summary>
+    public void TrackKeywordTrigger()
+    {
+        Progress.KeywordTriggersFired++;
+        _isDirty = true;
+        TryUnlockExclusive("magic_word");
+        if (Progress.KeywordTriggersFired >= AchievementRules.PavlovKeywordTriggers) TryUnlockExclusive("pavlov");
     }
 
     /// <summary>WPF GamificationBridge.OnGazePopped: one bubble popped by gaze, hands_free (exclusive) at 50.</summary>

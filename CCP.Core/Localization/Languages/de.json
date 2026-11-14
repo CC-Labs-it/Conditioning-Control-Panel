@@ -8470,5 +8470,6 @@
   "chaos_expiry_name_braindrain": "Brain Drain",
   "chaos_expiry_name_gif": "GIF-Kaskade",
   "webcam_camera_unavailable_detail": "Kamera nicht verfügbar. Sie wird möglicherweise von einer anderen App verwendet oder durch die Kamera-Datenschutzeinstellungen blockiert.",
-  "webcam_capture_retry_fmt": "Die Kamera reagiert langsam. Eine andere Methode wird versucht ({0}/{1})."
+  "webcam_capture_retry_fmt": "Die Kamera reagiert langsam. Eine andere Methode wird versucht ({0}/{1}).",
+  "installer_avalonia_upgrade_notice": "Upgrade auf Avalonia\n\nBeim Upgrade von WPF werden die Anmeldungen im eingebetteten Browser zurückgesetzt. Melde dich bei den in CCP geöffneten Websites erneut an.\n\nDas neue Browserprofil browser_data_avalonia liegt im CCP-Benutzerdatenordner. Das alte Profil browser_data bleibt erhalten.\n\nDiese Änderung löscht weder CCP-Kontotokens noch Einstellungen oder Fortschritt."
 }

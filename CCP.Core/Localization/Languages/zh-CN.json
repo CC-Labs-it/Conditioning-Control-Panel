@@ -8975,5 +8975,6 @@
   "chaos_expiry_name_braindrain": "脑力消耗",
   "chaos_expiry_name_gif": "GIF 瀑布",
   "webcam_camera_unavailable_detail": "摄像头不可用。它可能正被其他应用使用，或被摄像头隐私设置阻止。",
-  "webcam_capture_retry_fmt": "摄像头响应缓慢。正在尝试其他方法（{0}/{1}）。"
+  "webcam_capture_retry_fmt": "摄像头响应缓慢。正在尝试其他方法（{0}/{1}）。",
+  "installer_avalonia_upgrade_notice": "升级到 Avalonia\n\n从 WPF 升级时，内置浏览器的登录状态会重置。请重新登录在 CCP 中打开的网站。\n\n新的浏览器配置文件 browser_data_avalonia 位于 CCP 用户数据文件夹中。旧的 browser_data 配置文件会保留。\n\n此浏览器更改不会清除 CCP 账户令牌、设置或进度。"
 }

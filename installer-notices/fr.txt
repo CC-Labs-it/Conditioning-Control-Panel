@@ -1,0 +1,7 @@
+﻿Mise à niveau vers Avalonia
+
+La mise à niveau depuis WPF réinitialise les connexions du navigateur intégré. Reconnectez-vous aux sites ouverts dans CCP.
+
+Le nouveau profil browser_data_avalonia se trouve dans le dossier de données utilisateur de CCP. L’ancien profil browser_data est conservé.
+
+Ce changement n’efface pas les jetons du compte CCP, les paramètres ni la progression.
