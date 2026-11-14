@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 using ConditioningControlPanel.Services.Leash;
@@ -19,8 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// </summary>
 internal static class PortalPanicShortcut
 {
-    private const string Portal = "org.freedesktop.portal.Desktop", DesktopPath = "/org/freedesktop/portal/desktop";
-    private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
+    internal const string Portal = "org.freedesktop.portal.Desktop", DesktopPath = "/org/freedesktop/portal/desktop";
+    internal const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
 
     private static string? _session;
     private static IDisposable? _activated, _deactivated;
@@ -245,7 +246,7 @@ internal static class PortalPanicShortcut
     /// <summary>One portal Request round trip: subscribe to the Response on the predicted request
     /// path BEFORE calling (the portal may answer before the call returns), then call and await.</summary>
     internal static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
-        DBusConnection bus, string member, string signature, BodyWriter writeBody)
+        DBusConnection bus, string member, string signature, BodyWriter writeBody, CancellationToken cancellation = default)
     {
         var token = "ccp" + Guid.NewGuid().ToString("N");
         var sender = bus.UniqueName!.TrimStart(':').Replace('.', '_');
@@ -262,7 +263,7 @@ internal static class PortalPanicShortcut
 
         await bus.CallMethodAsync(CallHeader(bus, DesktopPath, Iface, member, signature, (ref MessageWriter w) => writeBody(ref w, token)));
         // KDE may show the user a dialog for BindShortcuts; effects wait at most this long for it.
-        return await answer.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        return await answer.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellation);
     }
 
     // MessageWriter is a STRUCT: handing it to an Action<MessageWriter> writes the body into a copy,
