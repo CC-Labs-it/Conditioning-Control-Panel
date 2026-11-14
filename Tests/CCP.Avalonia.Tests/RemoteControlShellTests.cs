@@ -195,6 +195,7 @@ public sealed class RemoteControlShellTests
                 .SetupWithoutStarting();
         var (oldRelay, oldTime, oldProvider) = (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider);
         var (oldSink, oldPlay, oldStop) = (global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink, RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo);
+        var flashWasRunning = CoreFlash.IsRunning;
         global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = (_, _) => { };
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
@@ -230,22 +231,21 @@ public sealed class RemoteControlShellTests
             await Poll("{\"controller_connected\":true}");
             Assert.True(browser.IsVisible);
 
-            // A landed start_flash ends the remote page, restoring the blindfold and site home.
+            // WPF start_flash starts the schedule without closing the controller's page (:1287).
             await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"flash1\",\"action\":\"start_flash\"}]}");
-            Assert.False(browser.IsVisible);
-            Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
-
-            // With no remote video, start_flash leaves the user's page alone.
-            web.Source = new Uri("https://example.com/");
-            await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"flash2\",\"action\":\"start_flash\"}]}");
-            Assert.Equal(new Uri("https://example.com/"), web.Source);
-            Assert.False(browser.IsVisible);
-            await Poll(play.Replace("ID", "again"));
+            Assert.True(browser.IsVisible);
+            Assert.Equal(new Uri(video), web.Source);
 
             // stop_video: back to the site home and under the overlay again (WPF :1410, :995).
             await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"stop_video\"}]}");
             Assert.False(browser.IsVisible);
             Assert.Equal(new Uri("https://hypnotube.com/"), web.Source);
+
+            // With no remote video, start_flash also leaves the user's page alone.
+            web.Source = new Uri("https://example.com/");
+            await Poll("{\"controller_connected\":true,\"commands\":[{\"id\":\"flash2\",\"action\":\"start_flash\"}]}");
+            Assert.Equal(new Uri("https://example.com/"), web.Source);
+            Assert.False(browser.IsVisible);
 
             // A leave with the stop on: the video goes, then the fade hands the browser back (WPF :1164, :915).
             service.Current.StopEffectsOnRemoteDisconnect = true;
@@ -288,8 +288,10 @@ public sealed class RemoteControlShellTests
         {
             shell?.Close();
             relay.Dispose();
+            CoreFlash.Stop();
             hookAfterClose = RemoteCommands.PlayHypnotube;
             (RemoteControlTabView.Relay, MainShellWindow.RemoteOverlayTime, CoreSettings.ServiceProvider) = (oldRelay, oldTime, oldProvider);
+            if (flashWasRunning) CoreFlash.Start();
             (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (oldPlay, oldStop);
             global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink;
         }

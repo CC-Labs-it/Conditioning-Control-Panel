@@ -77,7 +77,7 @@ namespace ConditioningControlPanel.Services
                     if (CoreSubliminal.ShowProvider is not { } sub) return NotOnThisBuild;
                     sub(text);
                     return null;
-                case "start_flash": s.FlashEnabled = true; CoreFlash.Start(); StopBrowserVideo?.Invoke(); return null;
+                case "start_flash": s.FlashEnabled = true; CoreFlash.Start(); return null;
                 case "stop_flash": CoreFlash.Stop(); return null;
                 case "start_subliminal": s.SubliminalEnabled = true; CoreSubliminal.Start(); return null;
                 case "stop_subliminal": CoreSubliminal.Stop(); return null;

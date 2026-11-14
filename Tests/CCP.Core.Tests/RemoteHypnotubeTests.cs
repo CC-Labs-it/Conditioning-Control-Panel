@@ -50,21 +50,26 @@ public class RemoteHypnotubeTests
     }
 
     [Fact]
-    public void Start_flash_stops_the_controller_browser_video()
+    public void Start_flash_leaves_the_controller_browser_video_open()
     {
         var oldStop = RemoteCommands.StopBrowserVideo;
         var enabled = CoreSettings.Current.FlashEnabled;
+        var wasRunning = CoreFlash.IsRunning;
         var stops = 0;
         RemoteCommands.StopBrowserVideo = () => stops++;
         try
         {
             Assert.Null(RemoteCommands.Execute("start_flash", null));
-            Assert.Equal(1, stops);
+            Assert.Equal(0, stops);
+            Assert.True(CoreFlash.IsRunning);
+            Assert.True(CoreSettings.Current.FlashEnabled);
         }
         finally
         {
+            CoreFlash.Stop();
             RemoteCommands.StopBrowserVideo = oldStop;
             CoreSettings.Current.FlashEnabled = enabled;
+            if (wasRunning) CoreFlash.Start();
         }
     }
 
