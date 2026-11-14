@@ -47,6 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
         private static bool _running;
+        // WPF BubbleService:36,39: the ambient host and its cap are latched until Stop.
+        private static int _ambientCap = 3;
         internal static Func<BubbleOverlayWindow, PixelRect, bool>? PrepareWindowOverride;
         internal static bool SpawnTimerRunning => _spawnTimer?.IsEnabled == true;
         private static TimeSpan? _lastStep;
@@ -117,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void StartSpawning(int? frequency)
         {
             var s = CoreSettings.Current;
+            _ambientCap = AmbientBubbleField.Cap(s);
             _spawnTimer = new DispatcherTimer { Interval = AmbientBubbleField.SpawnInterval(frequency ?? s.BubblesFrequency) };
             _spawnTimer.Tick += (_, _) => Spawn();
             _spawnTimer.Start();
@@ -130,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             // WPF Stop returns early when the ambient game is idle, so a chaos-only teardown keeps presence.
             var wasRunning = IsRunning;
+            _ambientCap = 3;
             if (_chaosPopped != null && _running)
             {
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
@@ -162,7 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF BubbleService.SpawnOnce: one trigger bubble without starting the ambient timer.</summary>
         internal static void SpawnOnce(Visual host)
         {
-            if (DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(CoreSettings.Current)) return;
+            if (DisplayChangeCoordinator.SpawnsSuppressed || Field.Bubbles.Count >= _ambientCap) return;
             if (!_running)
             {
                 Start(host, null, ambient: false);
@@ -175,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Spawn()
         {
             var s = CoreSettings.Current;
-            if (!_running || Targets.Count == 0 || DisplayChangeCoordinator.SpawnsSuppressed || !Field.CanSpawn(s)) return;
+            if (!_running || Targets.Count == 0 || DisplayChangeCoordinator.SpawnsSuppressed || Field.Bubbles.Count >= _ambientCap) return;
             var i = Field.Random.Next(Targets.Count);
             var a = Targets[i].WorkingArea;
             // Outside sessions, bubbles are always clickable (no UI toggle exists for the setting).

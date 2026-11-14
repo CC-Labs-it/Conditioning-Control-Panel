@@ -88,6 +88,49 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void TriggerBubbleCapFollowsTheLatchedAmbientHost() => Run((_, s, _) =>
+    {
+        var oldPrepare = BubbleOverlay.PrepareWindowOverride;
+        var oldShared = s.BubbleSharedHost;
+        var host = new Window();
+        try
+        {
+            BubbleOverlay.Stop();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            BubbleOverlay.PrepareWindowOverride = (_, _) => true;
+            s.BubbleSharedHost = true;
+            host.Show();
+            for (var i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count); // idle, even with the setting on
+            BubbleOverlay.BeginChaos(host, _ => { });
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count); // Chaos windows are not the ambient host
+            BubbleOverlay.Start(host);
+            s.BubbleSharedHost = false; // WPF latches the host until Stop
+            for (var i = 0; i < 45; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(40, BubbleOverlay.Field.Bubbles.Count);
+            BubbleOverlay.Stop(); // Chaos stays open, but the ambient host is gone
+            s.BubbleSharedHost = true;
+            for (var i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count);
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            s.BubbleSharedHost = false;
+            BubbleOverlay.Start(host);
+            s.BubbleSharedHost = true;
+            for (var i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count); // enabling mid-run does not start a host
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos(); BubbleOverlay.Stop(); host.Close();
+            BubbleOverlay.PrepareWindowOverride = oldPrepare;
+            s.BubbleSharedHost = oldShared;
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+        }
+    });
+
+    [Fact]
     public void TriggerBubbleHonoursCapDisplayChangeAndIdleLifetime() => Run((_, s, _) =>
     {
         var oldPrepare = BubbleOverlay.PrepareWindowOverride;
