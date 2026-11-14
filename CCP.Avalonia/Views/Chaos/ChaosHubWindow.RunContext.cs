@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_companionHooksReady) return;
             _companionHooksReady = true;
-            Closed += (_, _) => { if (!_fallingIn) SetCompanionActive(false); };
+            Closed += (_, _) => { ChaosRunHost.CloseLoadoutSidebar(); if (!_fallingIn) SetCompanionActive(false); };
             Part<Button>("BtnBackToMenu").Click += (_, _) => LeaveRunContext();
         }
 
@@ -25,12 +25,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_runContext) return;
             _runContext = true;
             SetCompanionActive(true);
+            ChaosRunHost.ShowLoadoutSidebar();
         }
 
         private void LeaveRunContext()
         {
             if (!_runContext) return;
             _runContext = false;
+            ChaosRunHost.CloseLoadoutSidebar();
             if (!_fallingIn) SetCompanionActive(false);
         }
 

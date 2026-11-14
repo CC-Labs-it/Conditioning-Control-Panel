@@ -94,6 +94,7 @@ public static class ChaosBench
         try { item.ApplyEffect?.Invoke(s); }
         catch (Exception ex) { Log.Warning("Bench effect {Id} failed ({E})", item.Id, ex.Message); }
         ChaosMeta.Save();
+        ChaosMeta.NotifyLoadoutChanged();
         return result;
     }
 }

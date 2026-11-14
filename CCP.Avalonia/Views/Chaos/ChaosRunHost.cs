@@ -204,6 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            CloseLoadoutSidebar();
             if (!isRestart) SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.ChaosMode, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
             try
             {
@@ -1249,6 +1250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            CloseLoadoutSidebar();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
