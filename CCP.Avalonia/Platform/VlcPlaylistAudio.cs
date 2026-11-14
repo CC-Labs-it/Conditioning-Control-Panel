@@ -172,7 +172,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try { mp.Volume = 0; } catch (Exception ex) { Log.Debug("VlcPlaylistAudio stop mute: {E}", ex.Message); }
             void Release()
             {
-                try { mp.Stop(); mp.Dispose(); media?.Dispose(); }
+                // Under the player's lock: OnVlcPlaying on the pool may still be driving it (restack fixw4d).
+                try { lock (mp) { mp.Stop(); mp.Dispose(); } media?.Dispose(); }
                 catch (Exception ex) { Log.Debug("VlcPlaylistAudio release: {E}", ex.Message); }
             }
             if (releaseNow) Release();
@@ -203,15 +204,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
         // libvlc reached Playing (start or resume), on the pool: the device, then a pause or seek that came first.
         private void OnVlcPlaying(MediaPlayer mp)
         {
-            if (!ReferenceEquals(mp, _mp)) return;
-            try
+            // Stop drops _mp before its Release takes this lock, so a player seen here is never freed under us.
+            lock (mp)
             {
-                LibVlcAudio.ApplyPreferredDevice(mp);
-                var pending = Interlocked.Exchange(ref _pendingMs, 0);
-                if (pending > 0) mp.Time = pending;
-                if (_state == State.Paused) mp.SetPause(true);   // a pause pressed while the file was opening
+                if (!ReferenceEquals(mp, _mp)) return;
+                try
+                {
+                    LibVlcAudio.ApplyPreferredDevice(mp);
+                    var pending = Interlocked.Exchange(ref _pendingMs, 0);
+                    if (pending > 0) mp.Time = pending;
+                    if (_state == State.Paused) mp.SetPause(true);   // a pause pressed while the file was opening
+                }
+                catch (Exception ex) { Log.Debug("VlcPlaylistAudio playing: {E}", ex.Message); }
             }
-            catch (Exception ex) { Log.Debug("VlcPlaylistAudio playing: {E}", ex.Message); }
         }
 
         private void OnVlcEnded(MediaPlayer mp)
