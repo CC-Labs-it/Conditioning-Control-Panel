@@ -5,6 +5,12 @@ using ConditioningControlPanel.Services;
 using Newtonsoft.Json.Linq;
 using Xunit;
 namespace CCP.Core.Tests;
+/// <summary>Tests that swap the process-wide <c>PlayerLook.KnownIdsProvider</c> (this class and LobbyWireTests):
+/// one collection so they never run beside each other.</summary>
+[CollectionDefinition(Name)]
+public sealed class PlayerLookProviderStatics { public const string Name = "PlayerLookProviderStatics"; }
+
+[Collection(PlayerLookProviderStatics.Name)]
 public sealed class ShopProfileTests
 {
     [Theory]
