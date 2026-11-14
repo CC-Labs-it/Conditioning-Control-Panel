@@ -3,7 +3,7 @@
 // thread here, so a wedged UI thread can no longer lose the key itself; it can still sit on the queued
 // handler. This watches that handler from a background thread and, if it has not finished inside
 // 2 s, runs the thread-safe part of the stop off the UI thread.
-// ponytail: WPF also stops screen OCR here and queues its restart; OCR has no twin on this head yet.
+// The screen OCR stops here too and its restart is queued (WPF :1157, :1192; restack b221, #4551).
 
 using System;
 using System.Threading;
@@ -21,6 +21,7 @@ internal static class PanicWatchdog
     internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
 
     private static int _fallbackRunning;
+    internal static Action<Action> PostRecovery { get; set; } = action => Dispatcher.UIThread.Post(action);   // tests
 
     /// <summary>WPF's Dispatcher.HasShutdownStarted guard (MainWindow.xaml.cs:1073). Avalonia exposes only the
     /// ShutdownStarted event, so the flag is latched from it: a fallback never races the app's own teardown.</summary>
@@ -94,8 +95,11 @@ internal static class PanicWatchdog
             return;
         }
         if (Interlocked.Exchange(ref _fallbackRunning, 1) == 1) return;
+        int? suspension = null;
         try
         {
+            try { suspension = KeywordTriggerHead.SuspendOcrForPanic(); }
+            catch (Exception ex) { try { Log.Warning(ex, "Panic OCR stop failed"); } catch { } }
             try
             {
                 Log.Warning("PANIC FALLBACK: the UI thread did not handle the panic key within {Ms}ms - tearing down off-thread",
@@ -108,7 +112,19 @@ internal static class PanicWatchdog
         {
             try { Log.Error(ex, "Panic fallback teardown failed"); } catch { }
         }
-        finally { Interlocked.Exchange(ref _fallbackRunning, 0); }
+        finally
+        {
+            Interlocked.Exchange(ref _fallbackRunning, 0);
+            try
+            {
+                if (suspension is int id) PostRecovery(() =>
+                {
+                    try { KeywordTriggerHead.RecoverOcrAfterPanic(id); }
+                    catch (Exception ex) { try { Log.Warning(ex, "Panic OCR recovery failed"); } catch { } }
+                });
+            }
+            catch (Exception ex) { try { Log.Warning(ex, "Panic OCR recovery could not be queued"); } catch { } }
+        }
     }
 
     /// <summary>WPF RunEmergencyPanicTeardown: ONLY thread-safe steps, each guarded on its own. No overlay

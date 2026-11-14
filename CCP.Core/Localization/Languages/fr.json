@@ -157,6 +157,7 @@
   "deeper_submission_badge_pending_tip": "Soumis : en attente de validation pour le catalogue.",
   "deeper_submission_badge_rejected": "Refusé",
   "deeper_submission_badge_rejected_tip": "Cette soumission n'a pas été acceptée. Modifie-la et soumets-la à nouveau.",
+  "deeper_welcome_card_body": "Deeper est un outil de création qui ajoute des effets haptiques, des déclencheurs par le regard et des actions minutées à tout audio ou vidéo. Crée une fois et partage le fichier .ccpenh.json avec toute personne utilisant CCP.\n\nTa bibliothèque contient une démo (\"Welcome to Deeper\"). Ouvre-la pour voir comment les éléments fonctionnent ensemble, ou lance la visite guidée.",
   "deeper_welcome_card_open_demo": "Ouvrir la démo",
   "deeper_library_delete_confirm_fmt": "Supprimer « {0} » ? Le fichier .ccpenh.json part à la corbeille.",
   "deeper_library_delete_title": "Supprimer l'amélioration",

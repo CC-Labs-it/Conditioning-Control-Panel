@@ -427,9 +427,7 @@
 
                 <StackPanel Grid.Column="0" x:Name="DeeperHubColumn">
 
-                    <!-- First-run welcome card. IsVisible flipped to false in code once the user
-                         clicks Tour or Got it. Avalonia does not seed a bundled demo, so this head
-                         deliberately omits the WPF-only Open Demo affordance. -->
+                    <!-- WPF DeeperTabView.xaml:460: dismiss after Tour, Open Demo, or Got it. -->
                     <Border x:Name="DeeperWelcomeCard" x:FieldModifier="internal"
                             IsVisible="{Binding ShowWelcomeCard}"
                             Theme="{StaticResource SettingCardStyle}">
@@ -445,7 +443,7 @@
                                     <TextBlock Text="{loc:Str deeper_welcome_card_title}"
                                                Foreground="{DynamicResource DeeperAccentBrush}"
                                                FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
-                                    <TextBlock Text="{loc:Str deeper_empty_pitch}"
+                                    <TextBlock Text="{loc:Str deeper_welcome_card_body}"
                                                Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
                                                TextWrapping="Wrap" Margin="0,0,0,12"/>
                                     <StackPanel Orientation="Horizontal">

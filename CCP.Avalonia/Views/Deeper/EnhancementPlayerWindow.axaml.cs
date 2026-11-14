@@ -636,8 +636,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         /// <summary>WPF EnhancementPlayerWindow.xaml.cs:472-551: embedded wins over sidecar and library;
         /// an embedded enhancement with no library match is promoted into the library (6 s hint), else it
-        /// loads in memory for this session. This head leaves EnhancementResolver.LibraryMatchProvider
-        /// unset, so the library tier is asked here after the resolver checked embedded and sidecar.</summary>
+        /// loads in memory for this session. App.StartDeeperLibrary sets EnhancementResolver.LibraryMatchProvider;
+        /// the player still asks its own library tier last, so a standalone player (no app library) finds it too.</summary>
         private void TryAutoLoadEnhancement(string mediaPath)
         {
             _lastMediaPathForCreateNew = mediaPath;

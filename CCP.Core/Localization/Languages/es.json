@@ -157,6 +157,7 @@
   "deeper_submission_badge_pending_tip": "Enviado: pendiente de revisión para el catálogo.",
   "deeper_submission_badge_rejected": "Rechazado",
   "deeper_submission_badge_rejected_tip": "Este envío no fue aceptado. Edítalo y vuelve a enviarlo.",
+  "deeper_welcome_card_body": "Deeper es un sistema de creación para añadir efectos hápticos, activadores de mirada y acciones programadas a cualquier audio o vídeo. Crea una vez y comparte el archivo .ccpenh.json con cualquier persona que use CCP.\n\nTu biblioteca incluye una demo (\"Welcome to Deeper\"). Ábrela para ver cómo encajan las piezas o inicia la visita guiada.",
   "deeper_welcome_card_open_demo": "Abrir la demo",
   "deeper_library_delete_confirm_fmt": "¿Eliminar \"{0}\"? El archivo .ccpenh.json irá a la papelera.",
   "deeper_library_delete_title": "Eliminar mejora",

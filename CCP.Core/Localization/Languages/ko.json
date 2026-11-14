@@ -157,6 +157,7 @@
   "deeper_submission_badge_pending_tip": "제출됨: 카탈로그 검토를 기다리는 중입니다.",
   "deeper_submission_badge_rejected": "거부됨",
   "deeper_submission_badge_rejected_tip": "이 제출물은 승인되지 않았습니다. 수정 후 다시 제출하세요.",
+  "deeper_welcome_card_body": "Deeper는 오디오나 동영상에 햅틱, 시선 트리거, 시간 지정 동작을 추가하는 제작 도구입니다. 한 번 만들면 .ccpenh.json 파일을 CCP를 사용하는 누구와도 공유할 수 있습니다.\n\n라이브러리에 데모(\"Welcome to Deeper\")가 들어 있습니다. 데모를 열어 구성을 살펴보거나 투어를 시작해 안내를 받아 보세요.",
   "deeper_welcome_card_open_demo": "데모 열기",
   "deeper_library_delete_confirm_fmt": "\"{0}\"을(를) 삭제할까요? .ccpenh.json 파일은 휴지통으로 이동합니다.",
   "deeper_library_delete_title": "인핸스먼트 삭제",
