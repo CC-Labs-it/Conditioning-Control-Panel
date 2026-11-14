@@ -78,6 +78,9 @@ public class LobbyDepthSeamTests
             var c = Color.FromUInt32(DepthLaw.ShadowColor(NavStripTable.AccentRgb(NavSections.Social) | 0xFF000000, DepthLaw.FloatAlpha));
             Assert.Equal(c, stops[0].Color); Assert.Equal(Color.FromArgb(0, c.R, c.G, c.B), stops[1].Color);
             Assert.Same(row.CardRim, ((Grid)card).Children.OfType<Border>().Single().BorderBrush);
+            // WPF AvailableSubjectsTabView.xaml:22,143: the card glass runs #24FFFFFF at the top to #0CFFFFFF.
+            var glass = Assert.IsAssignableFrom<ILinearGradientBrush>(((Grid)card).Children.OfType<Border>().Single().Background).GradientStops;
+            Assert.Equal(Color.Parse("#24FFFFFF"), glass[0].Color); Assert.Equal(Color.Parse("#0CFFFFFF"), glass[1].Color);
             var face = card.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "face");
             Assert.Same(row.ButtonBevel, face.BorderBrush); Assert.Same(row.ButtonSheen, ((Border)face.Child!).Background);
         }

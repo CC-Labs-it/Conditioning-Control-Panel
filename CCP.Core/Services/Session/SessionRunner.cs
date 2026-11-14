@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Services
     /// Bubble count follows WPF SessionEngine too (schedule, pause, resume).
     ///
     /// ponytail: not driven here - brain drain, phase events,
-    /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
+    /// EMI Desk, friends and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
     public sealed partial class SessionRunner
@@ -93,6 +93,9 @@ namespace ConditioningControlPanel.Services
         /// Takeover pulse borrowed (WPF AutonomyService.SettleSettingPulses).</summary>
         public Action? SettleBeforeSnapshot { get; set; }
 
+        /// <summary>The head's per-day feature log (WPF FeatureDayLogService.Note via SeasonRecapService.TrackFeature).</summary>
+        public Action<string>? NoteFeatureDayEvent { get; set; }
+
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
 
@@ -153,6 +156,9 @@ namespace ConditioningControlPanel.Services
             // Ledger persisted before any override, so a crash mid-session keeps it (as WPF) without
             // leaking session values to disk. Immediate: a debounced save would serialise the overrides.
             try { s.RecordSessionStart(s.ActiveModId); } catch { }
+            // WPF SessionEngine.cs:296-318: this season's session and the features it runs, once per start.
+            try { SeasonFeatureTracking.RecordSessionStart(s, session.Settings, NoteFeatureDayEvent, DateTime.UtcNow); }
+            catch (Exception ex) { Log.Warning(ex, "SeasonRecap: failed to record session feature use"); }
             CoreSettings.SaveImmediate();
 
             // Main 8fe2a80a0: a Takeover pulse from the last 30 s hands its boosted values back first,
