@@ -80,24 +80,43 @@ public sealed partial class GameWindowTests
     [Fact]
     public void PieceByPiece_MediaSavedConsentStartsPoolAndOwnOnlyAndCloseStopIt() => RunBoard(() =>
     {
-        ScrolllerPolicy.Apply(false, null); // no network in this test
-        var s = CoreSettings.Current;
-        s.PbpMediaOnline = true; s.PbpMediaFlavour = "pink"; s.PbpMediaSubs = "valid";
-        s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false;
-        var w = GameWindow.Launch(GameWindow.PbpId)!;
-        var sent = new List<JObject>(); w.Posted += json => sent.Add(JObject.Parse(json));
-        w.PbpOsAnimations = () => Task.FromResult(true);
-        w.HandleMessage("{\"type\":\"ready\"}"); Dispatcher.UIThread.RunJobs();
-        var pool = (GoonOnlineMedia)typeof(GameWindow).GetField("_pbpOnline", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(w)!;
-        Assert.NotNull(pool); Assert.NotNull(GoonOnlineMedia.Materialize); Assert.NotNull(GoonOnlineMedia.ReleaseTempFile);
-        Assert.Contains(sent, o => (string?)o["state"] == "loading" && (int)o["share"]! == 70);
-        w.HandleMessage("{\"type\":\"pbp:media-more\"}"); // running wave: bounded pool ignores refill
-        w.HandleMessage("{\"type\":\"pbp:media-flavour\",\"online\":false}");
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal("off", (string?)sent.Last(o => (string?)o["type"] == "pbp:online-media")["state"]);
-        Assert.False(pool.More());
-        w.Close(); Assert.False(pool.More());
+        var (enabled, cap) = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        try
+        {
+            ScrolllerPolicy.Apply(false, null); // no network in this test
+            var s = CoreSettings.Current;
+            s.PbpMediaOnline = true; s.PbpMediaFlavour = "pink"; s.PbpMediaSubs = "valid";
+            s.MediaSource = "local"; s.RemoteMediaConsented = false; s.FypOnlineConsented = false;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>(); w.Posted += json => sent.Add(JObject.Parse(json));
+            w.PbpOsAnimations = () => Task.FromResult(true);
+            w.HandleMessage("{\"type\":\"ready\"}"); Dispatcher.UIThread.RunJobs();
+            var pool = (GoonOnlineMedia)typeof(GameWindow).GetField("_pbpOnline", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(w)!;
+            Assert.NotNull(pool); Assert.NotNull(GoonOnlineMedia.Materialize); Assert.NotNull(GoonOnlineMedia.ReleaseTempFile);
+            Assert.Contains(sent, o => (string?)o["state"] == "loading" && (int)o["share"]! == 70);
+            w.HandleMessage("{\"type\":\"pbp:media-more\"}"); // running wave: bounded pool ignores refill
+            w.HandleMessage("{\"type\":\"pbp:media-flavour\",\"online\":false}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("off", (string?)sent.Last(o => (string?)o["type"] == "pbp:online-media")["state"]);
+            Assert.False(pool.More());
+            w.Close(); Assert.False(pool.More());
+        }
+        finally { ScrolllerPolicy.Apply(enabled, cap); }
     });
+
+    [Fact]
+    public void PieceByPiece_MediaSavedConsentTestRestoresScrolllerPolicy()
+    {
+        var (enabled, cap) = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        try
+        {
+            ScrolllerPolicy.Apply(true, 640);
+            PieceByPiece_MediaSavedConsentStartsPoolAndOwnOnlyAndCloseStopIt();
+            Assert.True(ScrolllerPolicy.Enabled);
+            Assert.Equal(640, ScrolllerPolicy.MaxClipShortSide);
+        }
+        finally { ScrolllerPolicy.Apply(enabled, cap); }
+    }
 
     [Fact]
     public void PieceByPiece_MediaProbeStartsOptimisticThenRefreshesEmptyLibrary() => RunBoard(() =>

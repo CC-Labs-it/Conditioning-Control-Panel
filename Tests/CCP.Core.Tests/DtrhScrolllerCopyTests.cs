@@ -81,6 +81,55 @@ public sealed class DtrhScrolllerCopyTests : IDisposable
         Assert.Null(await DtrhRemoteMedia.CopyScrolllerAsync(Url, Path.Combine(_dir, ".temp"), CancellationToken.None));
     }
 
+    // WPF RemoteMediaCache.cs:475-482 uses a disk hit before the fresh-download consent gate.
+    [Fact]
+    public async Task Game_only_consent_can_use_a_cached_hit_but_not_fetch_a_miss()
+    {
+        var (root, now, consent, warm, format, cap, age) = (ScrolllerDiskCache.RootProvider,
+            ScrolllerDiskCache.UtcNow, ScrolllerDiskCache.RemoteConsent, ScrolllerDiskCache.WarmInline,
+            ScrolllerDiskCache.FormatCheck, ScrolllerDiskCache.CapBytes, ScrolllerDiskCache.MaxAge);
+        var (enabled, clipCap) = (ScrolllerPolicy.Enabled, ScrolllerPolicy.MaxClipShortSide);
+        try
+        {
+            ScrolllerPolicy.Apply(true, clipCap);
+            ScrolllerDiskCache.ResetForTests();
+            ScrolllerDiskCache.RootProvider = () => Path.Combine(_dir, "cache");
+            ScrolllerDiskCache.RemoteConsent = () => false;
+            using (var writer = ScrolllerDiskCache.BeginWrite(Url, null))
+            {
+                Assert.NotNull(writer);
+                await writer!.Stream.WriteAsync(new byte[] { 0xFF, 0xD8, 0xFF, 1 });
+                writer.Commit();
+            }
+            // Reopen with a cold asynchronous index, as on a quick launch after restart.
+            ScrolllerDiskCache.Flush();
+            ScrolllerDiskCache.ResetForTests();
+            ScrolllerDiskCache.RootProvider = () => Path.Combine(_dir, "cache");
+            ScrolllerDiskCache.WarmInline = false;
+            ScrolllerDiskCache.RemoteConsent = () => false;
+            int fetches = 0;
+            DtrhRemoteMedia.DeviceCacheFetch = (url, max, ct) =>
+            {
+                fetches++;
+                return ScrolllerDiskCache.GetOrFetchAsync(url, null, max, ct);
+            };
+            var copy = await DtrhRemoteMedia.CopyScrolllerAsync(Url, Path.Combine(_dir, "copies"), CancellationToken.None);
+            Assert.NotNull(copy);
+            Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF, 1 }, await File.ReadAllBytesAsync(copy!));
+            Assert.Equal(0, fetches);
+            Assert.Null(await DtrhRemoteMedia.CopyScrolllerAsync(Url + "-missing", Path.Combine(_dir, "copies"), CancellationToken.None));
+            Assert.Equal(1, fetches);
+        }
+        finally
+        {
+            ScrolllerDiskCache.ResetForTests();
+            (ScrolllerDiskCache.RootProvider, ScrolllerDiskCache.UtcNow, ScrolllerDiskCache.RemoteConsent,
+                ScrolllerDiskCache.WarmInline, ScrolllerDiskCache.FormatCheck, ScrolllerDiskCache.CapBytes,
+                ScrolllerDiskCache.MaxAge) = (root, now, consent, warm, format, cap, age);
+            ScrolllerPolicy.Apply(enabled, clipCap);
+        }
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

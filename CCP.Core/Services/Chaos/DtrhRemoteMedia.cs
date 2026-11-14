@@ -469,7 +469,11 @@ namespace ConditioningControlPanel.Services.Chaos
             string? path = null;
             try
             {
-                var cached = await DeviceCacheFetch(url, MaxCopyBytes, ct).ConfigureAwait(false);
+                // WPF RemoteMediaCache.cs:475 checks an existing copy before the fresh-download consent gate.
+                // Wait for the asynchronous index so a quick launch does not miss an existing copy.
+                await ScrolllerDiskCache.WarmAsync().WaitAsync(ct).ConfigureAwait(false);
+                var cached = ScrolllerDiskCache.TryGetPath(url)
+                    ?? await DeviceCacheFetch(url, MaxCopyBytes, ct).ConfigureAwait(false);
                 if (cached == null) return null;
                 var info = new FileInfo(cached);
                 if (!info.Exists || info.Length > MaxCopyBytes) return null;
