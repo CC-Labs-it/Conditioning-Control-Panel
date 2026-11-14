@@ -109,7 +109,7 @@ public sealed class PresetsTabSessionDetailTests
     private static Task Run(System.Action<MainShellWindow> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var level = CoreSettings.Current.PlayerLevel;

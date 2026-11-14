@@ -26,7 +26,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         foreach (var stop in stops) { try { stop(); } catch { } }
     }
     public void StopOneShotFlashes() { }
-    public void StopOneShotSubliminals() { }
+    public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
 
     private void PlayAudio(string path, float volume, bool duckOtherAudio)
     {
@@ -92,7 +92,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 Dispatcher.UIThread.Post(() => { if (!ct.IsCancellationRequested && !_retired && Host is { } h) Views.Overlays.FlashOverlay.TriggerOnce(h, amount: 1, durationMs: effect.DurationMs); }); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Bubble: BubbleBurst(effect.DurationMs, ct); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Subliminal && effect.Phase != EffectPhase.Stop && !string.IsNullOrWhiteSpace(effect.Text):
-                CoreSubliminal.CustomShowProvider?.Invoke(effect.Text); break;
+                Views.Overlays.SubliminalWhisperShow.Custom(effect.Text, durationMs: effect.DurationMs, suppressHaptic: effect.SuppressHaptic); break;
         }
     }
     private static global::Avalonia.Visual? Host => (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;

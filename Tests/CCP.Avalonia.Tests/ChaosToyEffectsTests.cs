@@ -37,6 +37,68 @@ public sealed class ChaosToyEffectsTests
         return toy;
     }
 
+    // #4225: a toy this head cannot run spends no charge or cooldown and never earns first_play.
+    [Theory]
+    [InlineData("rabbit_caller")]   // freeze_trigger runs since restack b145 (ChaosSlowMotionTests)
+    [InlineData("unknown")]
+    public async Task Unavailable_toys_do_not_spend_or_award(string id)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            bool played = ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            try
+            {
+                var toy = Equip(id, 3);
+                toy.ChargesLeft = 3;
+                ChaosRunHost.UseToyById(id);
+                Assert.Equal(3, toy.ChargesLeft);
+                Assert.Equal(0, toy.CooldownRemainingSec);
+                Assert.False(toy.IsEffectActive);
+                Assert.False(ChaosFirstTimes.IsAwarded(ChaosFirstTimes.Play));
+            }
+            finally
+            {
+                if (played) ChaosMeta.State.FirstTimesAwarded.Add(ChaosFirstTimes.Play);
+                ChaosRunHost.ForceShutdown();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    // #3505, WPF ChaosModeService.cs:210-224: every first-time award (not only pop and defuse) floats and feeds once.
+    [Fact]
+    public async Task A_first_whisper_award_floats_and_feeds_once()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var meta = ChaosMeta.State;
+            bool had = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Whisper);
+            int sparks = meta.Sparks;
+            var hook = ChaosRunHost.PopText;
+            var floats = new System.Collections.Generic.List<string>();
+            ChaosRunHost.PopText = (_, _, text, _) => floats.Add(text);
+            try
+            {
+                Assert.True(ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper));
+                Assert.False(ChaosFirstTimes.TryAward(ChaosFirstTimes.Whisper));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                string text = $"+{ChaosFirstTimes.Amounts[ChaosFirstTimes.Whisper]} {ChaosGlyphs.Drops} first whisper";
+                Assert.Equal(new[] { text }, floats);
+                Assert.Single(ChaosRunHost.State!.RecentEvents, e => e == text);
+            }
+            finally
+            {
+                ChaosRunHost.PopText = hook;
+                meta.Sparks = sparks;
+                if (had) meta.FirstTimesAwarded.Add(ChaosFirstTimes.Whisper); else meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Whisper);
+                ChaosRunHost.ForceShutdown();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static AmbientBubble Spawn(bool live) => BubbleOverlay.SpawnChaos(new EffectBubbleSpec
         { VariantId = "pink", IsLive = live, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
 
@@ -126,6 +188,9 @@ public sealed class ChaosToyEffectsTests
             Setup();
             var meta = ChaosMeta.State;
             bool awarded = meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            // This test isolates the first-play award: the snap and taste firsts must not pay here.
+            bool snapped = !meta.FirstTimesAwarded.Add(ChaosFirstTimes.Snap);
+            bool tasted = !meta.FirstTimesAwarded.Add(ChaosFirstTimes.Taste);
             int sparks = meta.Sparks;
             try
             {
@@ -163,6 +228,8 @@ public sealed class ChaosToyEffectsTests
                 ChaosRunHost.ForceShutdown();
                 meta.Sparks = sparks;
                 if (!awarded) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+                if (!snapped) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Snap);
+                if (!tasted) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
                 ChaosMeta.Save();
             }
             return Task.CompletedTask;

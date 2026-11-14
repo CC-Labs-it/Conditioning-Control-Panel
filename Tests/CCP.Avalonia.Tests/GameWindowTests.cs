@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -181,6 +183,24 @@ public sealed partial class GameWindowTests
         shell.HandlePanicKeyPress(DateTime.Now);
         Assert.False(w.IsVisible);
         Assert.Equal(0, shell.PanicPressCountForTest);
+    });
+
+    [Theory]
+    [InlineData("breakoutdemo")]
+    [InlineData("breakout")]
+    public void Breakout_ReadyIncludesCurrentPlans(string id) => Run((_, _) =>
+    {
+        var w = new GameWindow(GameWindow.Games[id]);
+        try
+        {
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var plans = JObject.Parse(Assert.Single(sent))["plans"];
+            Assert.True(JToken.DeepEquals(
+                ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current), plans));
+        }
+        finally { w.Close(); }
     });
 
     [Fact]
@@ -530,6 +550,55 @@ public sealed partial class GameWindowTests
             Assert.True(board.Web.IsFocused);
         }
         finally { board.Close(); }
+    });
+
+    [Theory]
+    [InlineData("windows")]
+    [InlineData("gtk")]
+    [InlineData("wpe")]
+    public void PieceByPiece_NativeEnvironment_IsolatesProfileAndConfiguresAutoplay(string engine) => Run((shell, launcher) =>
+    {
+        var type = engine switch
+        {
+            "windows" => typeof(WindowsWebView2EnvironmentRequestedEventArgs),
+            "gtk" => typeof(GtkWebViewEnvironmentRequestedEventArgs),
+            _ => typeof(LinuxWpeWebViewEnvironmentRequestedEventArgs),
+        };
+        var board = GameWindow.Launch(GameWindow.PbpId)!;
+        var args = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+        // Drive the registered native callback, not the policy helper directly.
+        board.Web.OnEnvironmentRequested(args);
+        var folder = Path.Combine(CorePaths.UserData, "browser_data_piecebypiece_avalonia");
+        Assert.True(Directory.Exists(folder));
+        Assert.NotEqual(WebViewProfile.Folder, folder);
+        switch (args)
+        {
+            case WindowsWebView2EnvironmentRequestedEventArgs windows:
+                Assert.Equal(folder, windows.UserDataFolder);
+                Assert.Equal("--autoplay-policy=no-user-gesture-required", windows.AdditionalBrowserArguments);
+                break;
+            case GtkWebViewEnvironmentRequestedEventArgs gtk:
+                Assert.Equal(folder, gtk.BaseDataDirectory);
+                Assert.Equal(Path.Combine(folder, "cache"), gtk.BaseCacheDirectory);
+                break;
+            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
+                Assert.Equal(folder, wpe.DataDirectory);
+                Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
+                break;
+        }
+        // The board policy must not leak to another game's environment.
+        var other = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        var untouched = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+        other.Web.OnEnvironmentRequested(untouched);
+        switch (untouched)
+        {
+            case WindowsWebView2EnvironmentRequestedEventArgs windows:
+                Assert.Null(windows.UserDataFolder);
+                Assert.Null(windows.AdditionalBrowserArguments);
+                break;
+            case GtkWebViewEnvironmentRequestedEventArgs gtk: Assert.Null(gtk.BaseDataDirectory); break;
+            case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe: Assert.Null(wpe.DataDirectory); break;
+        }
     });
 
     [Theory]
@@ -1208,6 +1277,7 @@ public sealed partial class GameWindowTests
         var oldIntro = ChaosMeta.State.SeenIntroGuide;
         ChaosMeta.State.RunsCompleted = completed;
         ChaosMeta.State.SeenIntroGuide = true;
+        ChaosMeta.Save();   // the fallback routes from the loaded save, as WPF App.xaml.cs:2827 does
         ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
         void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -1220,6 +1290,7 @@ public sealed partial class GameWindowTests
             Assert.True(web.IsVisible);
             web.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
             Assert.False(web.IsVisible);
+            Dispatcher.UIThread.RunJobs();   // the classic door is queued behind the teardown (WPF BeginInvoke)
             if (completed == 1)
             {
                 Assert.NotNull(hub);
@@ -1242,6 +1313,52 @@ public sealed partial class GameWindowTests
             ChaosMeta.State.SeenIntroGuide = oldIntro;
             hub?.Close();
             ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_PayoutUsesSkillTreeMultiplier(bool pinkRush) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var (oldLevel, oldXp, oldRush) = (settings.PlayerLevel, settings.PlayerXP, settings.PinkRushActive);
+        settings.PlayerLevel = 100;
+        settings.PlayerXP = 0;
+        settings.UnlockedSkills.Add("sparkle_boost_1");
+        settings.UnlockedSkills.Add("pink_rush");
+        settings.PinkRushActive = pinkRush;
+        CoreProgression.AddXPProvider = ProgressionBank.Add;
+        var awards = new List<ProgressionBank.XpAward>();
+        var questXp = new List<double>();
+        void Awarded(ProgressionBank.XpAward award) => awards.Add(award);
+        void QuestAwarded(double amount, string source) => questXp.Add(amount);
+        ProgressionBank.XPAwarded += Awarded;
+        ProgressionBank.QuestAwarded += QuestAwarded;
+        try
+        {
+            var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            var payout = Assert.Single(sent);
+            var expected = global::ConditioningControlPanel.Models.SkillTreeRules.GetTotalXpMultiplier(settings, DateTime.Now.Hour, 0.0);
+            Assert.Equal(expected, (double)payout["skillMult"]!, 6);
+            Assert.Equal(300 * expected, (double)payout["finalXp"]!, 6);
+            var credited = 300 * expected * ConditioningControlPanel.Services.Descent.DescentCycleXp.XpBonusFor(settings);
+            Assert.Equal(credited, Assert.Single(awards).Amount, 6);
+            Assert.Equal(credited, settings.PlayerXP, 6);
+            Assert.Equal(300, Assert.Single(questXp), 6);
+            w.Close();
+        }
+        finally
+        {
+            ProgressionBank.XPAwarded -= Awarded;
+            ProgressionBank.QuestAwarded -= QuestAwarded;
+            (settings.PlayerLevel, settings.PlayerXP, settings.PinkRushActive) = (oldLevel, oldXp, oldRush);
+            settings.UnlockedSkills.Remove("pink_rush");
+            settings.UnlockedSkills.Remove("sparkle_boost_1");
         }
     });
 
@@ -1938,6 +2055,7 @@ public sealed partial class GameWindowTests
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
     [InlineData(GameWindow.GlassroadId, "Glassroad", "kept-escape")]
+    [InlineData(GameWindow.PrizeCounterId, "Counter", "kept-escape")]
     [InlineData(GameWindow.FypId, "None", null)]
     [InlineData(GameWindow.JustDropId, "None", null)]
     public void EveryHostedGame_KnowsItsKeptEscapePage(string id, string page, string? frame) => Run((_, launcher) =>

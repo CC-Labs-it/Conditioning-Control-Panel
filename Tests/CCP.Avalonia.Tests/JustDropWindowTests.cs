@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Skia;
@@ -13,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.JustDrop;
+using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -25,7 +28,7 @@ public sealed class JustDropWindowTests
 {
     private static void Run(Action<MainShellWindow> body)
     {
-        AvaloniaTestDispatcher.Run(() =>
+        AvaloniaTestDispatcher.Run(() => WithRestoredEmiUsage(() =>
         {
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -55,7 +58,44 @@ public sealed class JustDropWindowTests
                 CoreSettings.ServiceProvider = null;
                 try { File.Delete(ledger); } catch { }
             }
-        });
+        }));
+    }
+
+    private static readonly FieldInfo EmiSaveTimer = typeof(EmiState).GetField("_saveTimer", BindingFlags.Static | BindingFlags.NonPublic)!;
+    private static readonly FieldInfo EmiSaveContext = typeof(EmiState).GetField("_saveCtx", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+    // A shop open mutates the shared singleton and arms a timer whose callback can already be
+    // queued on the UI thread. Stop and join the timer, then drain queued saves after restoring
+    // the entries, so neither memory nor a delayed write carries the test's usage forward.
+    private static void WithRestoredEmiUsage(Action action, SynchronizationContext? saveContext = null)
+    {
+        const string id = GameWindow.JustDropId;
+        var state = EmiState.Current;
+        bool hadUsage = state.Usage.TryGetValue(id, out int usage);
+        bool hadScore = state.OpenScore.TryGetValue(id, out double score);
+        bool hadAt = state.UsageAt.TryGetValue(id, out long at);
+        var oldContext = EmiSaveContext.GetValue(null);
+        // Every save this test schedules posts back to the dispatcher we can drain.
+        EmiSaveContext.SetValue(null, saveContext ?? SynchronizationContext.Current);
+        try { action(); }
+        finally
+        {
+            try
+            {
+                if (EmiSaveTimer.GetValue(null) is Timer timer)
+                {
+                    using var stopped = new ManualResetEvent(false);
+                    if (timer.Dispose(stopped)) stopped.WaitOne();
+                    EmiSaveTimer.SetValue(null, null);
+                }
+                if (hadUsage) state.Usage[id] = usage; else state.Usage.Remove(id);
+                if (hadScore) state.OpenScore[id] = score; else state.OpenScore.Remove(id);
+                if (hadAt) state.UsageAt[id] = at; else state.UsageAt.Remove(id);
+                Dispatcher.UIThread.RunJobs(); // includes saves posted before the timer was joined
+                EmiState.SaveNow(); // replace any write that landed while the test was running
+            }
+            finally { EmiSaveContext.SetValue(null, oldContext); }
+        }
     }
 
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
@@ -128,6 +168,9 @@ public sealed class JustDropWindowTests
         Assert.Equal(tab, shell.CurrentTab);              // a window, not a tab
         Assert.Equal("https://app.cclabs.app/dashboard/express", w!.PageUrl!.ToString());   // signed out: no handoff
         Assert.True(w.Web.InjectCarrier);                 // the remote page gets the shared chrome.webview carrier
+        Assert.Equal(GameWindow.JustDropEscapeScript, w.Web.WindowsDocumentStartScript);
+        Assert.Contains("keydown", w.Web.WindowsDocumentStartScript);
+        Assert.Contains("ccp-host-escape", w.Web.WindowsDocumentStartScript);
         Assert.False(w.Web.AllowNavigation!(new Uri("https://evil.example/")));
         Assert.True(w.Web.AllowNavigation!(new Uri("https://app.cclabs.app/express/play?order=A")));
 
@@ -138,6 +181,108 @@ public sealed class JustDropWindowTests
         PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.Null(Open());
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShopTestRestoresEmiUsageAndStopsThePendingSave(bool hadEntries) => AvaloniaTestDispatcher.Run(() =>
+        WithRestoredEmiUsage(() =>
+        {
+            var state = EmiState.Current;
+            const string id = GameWindow.JustDropId;
+            state.Usage.Remove(id); state.OpenScore.Remove(id); state.UsageAt.Remove(id);
+            if (hadEntries) { state.Usage[id] = 12; state.OpenScore[id] = 3.5; state.UsageAt[id] = 1234; }
+            Timer? scheduled = null;
+            Assert.Throws<InvalidOperationException>(() => Run(shell =>
+            {
+                JustDropService.SetServerEnabledForTests(true);
+                shell.ShowTab("justdrop");
+                Assert.NotEqual(hadEntries ? 12 : 0, state.Usage[id]);
+                scheduled = Assert.IsType<Timer>(EmiSaveTimer.GetValue(null));
+                throw new InvalidOperationException(); // cleanup must run after a failed assertion too
+            }));
+            Assert.Equal(hadEntries, state.Usage.ContainsKey(id));
+            Assert.Equal(hadEntries, state.OpenScore.ContainsKey(id));
+            Assert.Equal(hadEntries, state.UsageAt.ContainsKey(id));
+            if (hadEntries) { Assert.Equal(12, state.Usage[id]); Assert.Equal(3.5, state.OpenScore[id]); Assert.Equal(1234, state.UsageAt[id]); }
+            Assert.Null(EmiSaveTimer.GetValue(null));
+            Assert.False(scheduled!.Change(500, Timeout.Infinite));
+        }));
+
+    [Fact]
+    public void PostedEmiSaveRunsAfterUsageIsRestored() => AvaloniaTestDispatcher.Run(() =>
+        WithRestoredEmiUsage(() =>
+        {
+            var state = EmiState.Current;
+            const string id = GameWindow.JustDropId;
+            state.Usage[id] = 71;
+            bool ran = false;
+            int observed = 0;
+            using var posted = new ManualResetEvent(false);
+            var context = new SaveProbeContext(posted, () =>
+            {
+                ran = true;
+                state.Usage.TryGetValue(id, out observed);
+            });
+            WithRestoredEmiUsage(() =>
+            {
+                EmiState.NoteUsage(id);
+                Assert.True(posted.WaitOne(TimeSpan.FromSeconds(5))); // callback is queued, UI is still blocked here
+                Assert.False(ran);
+            }, context);
+            Assert.True(ran);
+            Assert.Equal(71, observed);
+        }));
+
+    [Fact]
+    public void EmiSaveThatAlreadyRanIsRewrittenAfterUsageRestoration() => AvaloniaTestDispatcher.Run(() =>
+        WithRestoredEmiUsage(() =>
+        {
+            var state = EmiState.Current;
+            const string id = GameWindow.JustDropId;
+            state.Usage[id] = 71;
+            WithRestoredEmiUsage(() =>
+            {
+                EmiState.NoteUsage(id);
+                EmiState.SaveNow(); // the timer may have fired before cleanup
+            });
+            var saved = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(EmiState.FilePath));
+            Assert.Equal(71, (int?)saved["usage"]?[id]);
+        }));
+
+    private sealed class SaveProbeContext(ManualResetEvent posted, Action beforeSave) : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Dispatcher.UIThread.Post(() => { beforeSave(); callback(state); });
+            posted.Set();
+        }
+    }
+
+    [Fact]
+    public void EscapeDuringTheFirstAllowedNavigationRestoresTheWindow() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var w = Open()!;
+        const string escape = "{\"type\":\"ccp-host-escape\"}";
+        w.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+        w.Web.OnWebMessage(escape); // no accepted navigation
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        w.Web.RecordAllowedNavigation(new Uri("https://app.cclabs.app.evil.example/"));
+        w.Web.OnWebMessage(escape);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        w.Web.RecordAllowedNavigation(new Uri(JustDropHandoff.SiteOrigin + JustDropHandoff.ShopPath));
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
+        Assert.Null(w.Web.CurrentUrl); // still loading, not a simulated completion
+        w.Web.OnWebMessage(escape);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Normal, w.WindowState);
+        w.WindowState = global::Avalonia.Controls.WindowState.FullScreen;
+        w.Web.OnNavigationCompleted(null); // a completion without a URL clears the in-flight authority
+        w.Web.OnWebMessage(escape);
+        Assert.Equal(global::Avalonia.Controls.WindowState.FullScreen, w.WindowState);
     });
 
     [Fact]
@@ -196,6 +341,9 @@ public sealed class JustDropWindowTests
             var complete = "{\"source\":\"justdrop\",\"v\":1,\"type\":\"session-complete\",\"payload\":{\"orderCode\":\"JD-"
                 + Guid.NewGuid().ToString("N") + "\",\"sizeId\":\"S\"}}";
             w.Web.OnWebMessage(complete);   // no completed navigation yet
+            Assert.Equal(0, paid);
+            w.Web.RecordAllowedNavigation(w.PageUrl);
+            w.Web.OnWebMessage(complete);   // even an accepted in-flight page cannot send business frames yet
             Assert.Equal(0, paid);
             foreach (var foreign in new[]
             {

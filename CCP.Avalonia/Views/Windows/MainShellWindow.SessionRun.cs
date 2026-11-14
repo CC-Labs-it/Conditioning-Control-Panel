@@ -70,7 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     App.Achievements?.CheckRelapse();
                     StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
                     _suppressSessionSummaryUntil = DateTime.MinValue;
+                    bool engineWasRunning = CoreEngine.IsRunning;
                     runner.Start(session);
+                    if (!engineWasRunning && CoreEngine.IsRunning) EmiEngineStarted(false); // WPF Presets.cs:1619
                     AnnounceProgramSessionStarted(); // WPF Presets.cs:2013
                     Platform.FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session); // WPF SessionEngine.cs:247
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)

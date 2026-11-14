@@ -16,6 +16,67 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Theory]
+    [InlineData(1.0, 0, false)]
+    [InlineData(1.5, -1920, false)]
+    [InlineData(1.0, 0, true)]
+    public async Task Pop_draws_particles_above_the_sprite_with_screen_scaling(double scale, int left, bool gold)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var s = CoreSettings.Current;
+            var old = (s.FlashGlowEnabled, s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday);
+            var added = !s.UnlockedSkills.Contains("sparkle_boost_1");
+            var lucky = s.UnlockedSkills.Remove("lucky_bubbles");
+            var w = new BubbleOverlayWindow(0, new PixelRect(left, 0, 600, 600), scale);
+            try
+            {
+                if (added) s.UnlockedSkills.Add("sparkle_boost_1");
+                s.FlashGlowEnabled = true;
+                s.AmbientBubbleXpDayKey = "";
+                var b = new AmbientBubble { X = left / scale + 100, Y = 100, Size = 100, Screen = 0 };
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.Add(b);
+                BubbleOverlay.Pop(b); // exercise the real head path, not a render-only fixture
+                Assert.Equal(8, b.Sparkles.Length);
+                // A particle outside the sprite: it must not inherit the sprite's scale/rotation.
+                b.Angle = 90; b.Scale = 1.6; b.Fade = 0.5; b.Lucky = gold;
+                for (var i = 0; i < b.Sparkles.Length; i++)
+                    b.Sparkles[i] = new AmbientBubble.Sparkle { X = 150, Y = 50, Size = 6, Alpha = i == 0 ? 0.5 : 0 };
+                var layer = (Control)w.Content!;
+                layer.Measure(new Size(600, 600));
+                layer.Arrange(new Rect(0, 0, 600, 600));
+                using var image = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(600, 600));
+                image.Render(layer);
+                var buf = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+                try
+                {
+                    image.CopyPixels(new PixelRect((int)(250 * scale), (int)(150 * scale), 1, 1), buf, 4, 4);
+                    var pixel = unchecked((uint)System.Runtime.InteropServices.Marshal.ReadInt32(buf));
+                    Assert.InRange(pixel >> 24, 63u, 64u);
+                    var green = (pixel >> 8) & 255;
+                    var blue = pixel & 255;
+                    Assert.True(gold ? green > blue : blue > green, $"Wrong particle colour: {pixel:X8}");
+                }
+                finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buf); }
+                b.Popping = true;
+                w.Sync();
+                Assert.Equal(0, w.InputRectCount); // sparkles never intercept desktop input
+            }
+            finally
+            {
+                BubbleOverlay.Field.Bubbles.Clear(); w.Close();
+                if (added) s.UnlockedSkills.Remove("sparkle_boost_1");
+                if (lucky) s.UnlockedSkills.Add("lucky_bubbles");
+                (s.FlashGlowEnabled, s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday) = old;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Ambient_pop_credits_achievements_once_after_the_xp_cap()
     {
@@ -116,6 +177,90 @@ public sealed class BubbleOverlayTests
         }
         finally { CoreModArt.AudioOverridePathProvider = previous; dir.Delete(true); }
     }
+    public void One_shots_obey_cap_and_retire_without_starting_ambient_schedule() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldShared = CoreSettings.Current.BubbleSharedHost;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.BubbleSharedHost = false; // legacy cap of three
+            host.Show();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.NotifyDisplayChange("one-shot test");
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            for (var i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(host);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count);
+            Assert.False(BubbleOverlay.IsRunning);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(1));
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(2));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.False(BubbleOverlay.IsRunning);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            // The retired windows must be reopened for the next reward.
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            BubbleOverlay.Start(host);
+            Assert.True(BubbleOverlay.IsRunning); // ambient takes over existing one-shot windows
+            Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count); // immediate first ambient spawn
+        }
+        finally
+        {
+            BubbleOverlay.Stop();
+            ConditioningControlPanel.Services.UI.DisplayChangeCoordinator.ResetForTests();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            CoreSettings.Current.BubbleSharedHost = oldShared;
+            host.Close();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void End_chaos_retires_parked_one_shot_windows_unless_ambient_owns_them(bool ambient) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            host.Show();
+            BubbleOverlay.SpawnOnce(host);
+            Assert.Single(BubbleOverlay.Field.Bubbles);
+            if (ambient) BubbleOverlay.Start(host);
+            var windows = BubbleOverlay.WindowCount;
+            Assert.True(windows > 0);
+            BubbleOverlay.BeginChaos(host, _ => { });
+            // Model expiry, then run the last frame while Chaos still owns the field.
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.OnFrame(System.TimeSpan.FromSeconds(100));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(windows, BubbleOverlay.WindowCount);
+            BubbleOverlay.EndChaos();
+            // No later frame is available to do this cleanup.
+            Assert.Equal(ambient ? windows : 0, BubbleOverlay.WindowCount);
+            Assert.Equal(ambient, BubbleOverlay.IsRunning);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            host.Close();
+        }
+    });
 
     /// <summary>WPF BubbleService.cs:221 LoadBubbleImage: each Start re-resolves bubble.png through the
     /// active mod, so after a mod switch the next start draws the new mod's sprite, not the cached one.</summary>

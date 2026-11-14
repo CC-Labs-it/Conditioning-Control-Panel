@@ -59,7 +59,8 @@ namespace ConditioningControlPanel.Avalonia
             // ccp-avalonia-*.log, so the file sink reports what it opened, rollovers included.
             var reportLog = new ReportLogFile();
             ConditioningControlPanel.Services.BugReportService.SessionLogFile = () => reportLog.CurrentFile;
-            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Information()
+            Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Is(
+                Views.Windows.TabSwitchTiming.Enabled ? Serilog.Events.LogEventLevel.Debug : Serilog.Events.LogEventLevel.Information)
                 .WriteTo.Sink(new StderrSink())
                 .WriteTo.File(System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "logs", "ccp-avalonia-.log"),
                     rollingInterval: Serilog.RollingInterval.Day, retainedFileCountLimit: 14,

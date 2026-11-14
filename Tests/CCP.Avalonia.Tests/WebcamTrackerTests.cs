@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using Avalonia.Controls;
@@ -177,6 +178,43 @@ public sealed class WebcamTrackerTests
             Assert.Equal(WebcamTrackingState.CameraDenied, WebcamTracker.Instance.State);
             Assert.True(src.Disposed);
         });
+    }
+
+    /// <summary>WPF WebcamTrackingService.cs:617-645 (restack b163, #4038): an open that never returns is
+    /// abandoned after the timeout as CameraInUse, the source is disposed only once the driver returns, and
+    /// the next Start waits for that like a wedged capture loop.</summary>
+    [Fact]
+    public void WedgedOpen_TimesOutAsInUseAndHoldsTheNextStartUntilTheDriverReturns()
+    {
+        var src = new FakeSource();
+        using var driver = new ManualResetEventSlim(false);
+        src.Opening = () => driver.Wait(TimeSpan.FromSeconds(20));
+        var timeout = WebcamTracker.Instance.CameraOpenTimeout;
+        try
+        {
+            WithConsent(true, () =>
+            {
+                WebcamTracker.SourceFactory = () => src;
+                WebcamTracker.Instance.CameraOpenTimeout = TimeSpan.FromMilliseconds(200);
+                Assert.False(WebcamTracker.Instance.Start());
+                Assert.Equal(WebcamTrackingState.CameraInUse, WebcamTracker.Instance.State);
+                Assert.False(WebcamTracker.Instance.StartWasStopped);
+                Assert.Equal(Loc.Get("webcam_camera_unavailable_detail"), WebcamTracker.Instance.LastError);
+                Assert.True(WebcamTracker.Instance.IsClosing);
+                Assert.False(src.Disposed);
+                Assert.False(WebcamTracker.Instance.Start());
+                Assert.StartsWith("The previous camera session is still closing", WebcamTracker.Instance.LastError);
+                driver.Set();
+                Assert.True(SpinWait.SpinUntil(() => !WebcamTracker.Instance.IsClosing, TimeSpan.FromSeconds(10)));
+                Assert.True(src.Disposed);
+                Assert.Equal(1, src.Opens);
+            });
+        }
+        finally
+        {
+            driver.Set();
+            WebcamTracker.Instance.CameraOpenTimeout = timeout;
+        }
     }
 
     [Theory]

@@ -43,16 +43,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <list type="bullet">
     ///   <item><c>SpiralRoom.StateFor</c> (Core) reads the real settings and fuse. The withhold
     ///     reads the persisted migration gates through the shared <c>SpiralRoom.SpiralWithheldFor</c>,
-    ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
-    ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
-    ///     unreachable — see the placeholder there.</item>
-    ///   <item>The rig-only first-light reveal holds at the bloom until its independent 12 s deadline.
-    ///     Live block handoff still needs the Descent service.</item>
+    ///     but its live offer-in-hand input is still missing. Ceremony-open is retired on both heads.
+    ///     The block comes from the shared DescentService.</item>
+    ///   <item>The rig-only first-light reveal hands off on block arrival or its independent 12 s deadline.</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
-    ///   <item><c>DescentBarkWatcher</c> still needs the live descent block service.
-    ///     Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
+    ///   <item>Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
     ///
@@ -228,6 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _embedGaveUp;
 
         private SpiralRoomState _state = SpiralRoomState.Waiting;
+        internal SpiralRoomState RoomState => _state;   // test seam
 
         // ---- first light (WPF SpiralTabView.xaml.cs:188-192) ----
         private bool _firstLight;
@@ -240,6 +238,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The fuse subscriptions are held only while the tab is on screen (P01).</summary>
         private DescentCountdownService? _wiredFuse;
+        private DescentService? _wiredDescent;
 
         /// <summary>The phase the fog's pulse is keeping time to (WPF _pulsePhase); null = no loops.</summary>
         private DescentFusePhase? _pulsePhase;
@@ -306,7 +305,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) =>
             {
                 if (e.Property != IsVisibleProperty) return;
-                if (IsVisible) Refresh();
+                if (IsVisible) { Refresh(); AnnounceEntry(); }
                 else Suspend();
             };
         }
@@ -316,21 +315,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// time and from anywhere (the rail entry, the fuse chip, the profile plate, the account
         /// menu, a first light), so the room is re-read from scratch rather than trusted from
         /// whenever this view was last painted.
-        ///
-        /// <para>ponytail: needs <c>DescentBarkWatcher.NotifySpiralOpened()</c> (WPF head), which the
-        /// original calls here and on every entry to let the companion say hello to the room once
-        /// ever. It is decoration and it never blocks the entry it rides on.</para>
         /// </summary>
         internal void OnTabShown()
         {
             // WPF SpiralTabView.xaml.cs:374-378: explicit navigation earns a retry, not another cue.
             _embedGaveUp = false;
             Refresh();
+            AnnounceEntry();
         }
 
-        private DescentService? _wiredDescent;
+        // WPF SpiralTabView.xaml.cs:361-366 (DescentBarkWatcher.NotifySpiralOpened, BarkService.cs:481):
+        // announce only once the entry resolves to the spiral. The bark rule owns the lifetime latch,
+        // so a suppressed bark does not spend it here. Decoration: never throws, never blocks the entry.
+        private void AnnounceEntry()
+        {
+            if (!IsVisible || _state != SpiralRoomState.Spiral) return;
+            try
+            {
+                var block = App.Descent?.Current;
+                Platform.BarkHead.Engine?.Raise("DescentFirstSpiralOpen", c => c
+                    .Set("stage", (double)(block?.Stage?.N ?? 0))
+                    .Set("banked_days", (double)(block?.Stage?.BankedDays ?? block?.DevotionDays ?? 0)));
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] entry bark failed: {E}", ex.Message); }
+        }
 
-        /// <summary>WPF SpiralTabView.xaml.cs:249,307-333: visible-only block updates.</summary>
+        /// <summary>WPF SpiralTabView.xaml.cs:247: subscribe to the block and fuse.</summary>
         private void Wire()
         {
             WireMigrationGate();
@@ -358,11 +368,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             fuse.Tick -= OnFuseTick;
         }
 
+        // WPF SpiralTabView.xaml.cs:307-337. A null re-raise before arrival is not withdrawal.
         private void OnBlockChanged(object? sender, EventArgs e)
         {
-            if (!IsVisible) return;
-            if (_embed != null && _wiredDescent?.Current is { } block) _embed.PostState(block);
-            Refresh();
+            if (!ReferenceEquals(sender, _wiredDescent) || !IsVisible) return;
+            try
+            {
+                var block = _wiredDescent?.Current;
+                if (_firstLight && _awaitingFirstBlock)
+                {
+                    if (block is null) return;
+                    _awaitingFirstBlock = false;
+                    StopBlockWait();
+                    return;
+                }
+                if (_firstLight) return;
+                if (_embed != null && block != null) _embed.PostState(block);
+                Refresh();
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] room block change: {E}", ex.Message); }
         }
 
         /// <summary>WPF OnPhaseChanged: repaint, then flare only if the room is still the fog.</summary>
@@ -538,10 +562,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// ordinary selection on completion, on the twelve-second timeout, on a thrown frame or on
         /// leaving the tab (Suspend).</para>
         ///
-        /// <para>ponytail: DescentService (the block and its BlockChanged) is WPF-head only, so on
-        /// this head the block is never in hand: the reveal always holds at the bloom and the
-        /// timeout hands back. As in WPF, an independent dispatcher timer ends the wait even
-        /// while the visual clock is parked by a minimised window.</para>
+        /// <para>WPF SpiralTabView.xaml.cs:790-800: the current block skips the wait; otherwise
+        /// an independent dispatcher timer ends it even while the visual clock is parked.</para>
         /// </summary>
         internal void BeginFirstLight()
         {
@@ -573,14 +595,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _firstLight = true;
                 _firstLightElapsed = 0;
                 _revealLastAt = 0;
-                _awaitingFirstBlock = true;   // no DescentService.Current on this head
+                _awaitingFirstBlock = App.Descent?.Current is null;
 
                 StopReveal();
                 _revealFrames = new BeatLoop(visual, RevealFrame);
                 _revealFrames.Start();
-                _blockWait = new DispatcherTimer { Interval = FirstLightBlockTimeout };
-                _blockWait.Tick += OnBlockWaitElapsed;
-                _blockWait.Start();
+                if (_awaitingFirstBlock)
+                {
+                    _blockWait = new DispatcherTimer { Interval = FirstLightBlockTimeout };
+                    _blockWait.Tick += OnBlockWaitElapsed;
+                    _blockWait.Start();
+                }
 
                 Log.Information("[Spiral] first light opened in the room ({Motion}, block {State}).",
                     _firstLightReduced ? "reduced motion" : "full motion",
@@ -641,7 +666,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             FinishFirstLight();
         }
 
-        private void StopReveal()
+        private void StopBlockWait()
         {
             if (_blockWait != null)
             {
@@ -649,6 +674,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _blockWait.Tick -= OnBlockWaitElapsed;
                 _blockWait = null;
             }
+        }
+
+        private void StopReveal()
+        {
+            StopBlockWait();
             _revealFrames?.Stop();
             _revealFrames = null;
         }
@@ -771,7 +801,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ============================== the embed ==============================
 
-        // ponytail: bridge wired here; the account descent feed still has no Avalonia publisher.
         private void EnsureEmbed()
         {
             if (_embedGaveUp) { ShowWaitingUnderSpiral(); return; }

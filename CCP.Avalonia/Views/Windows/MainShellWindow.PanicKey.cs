@@ -152,8 +152,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (rung == PanicPolicy.Rung.RunLadder && !Chaos.ChaosRunHost.IsActive)
             {
                 // WPF MainWindow.xaml.cs:1741,1763: DtRH before the Back Room, including Breakout.
+                // WPF :1806-1829: then the For You feed's two rungs (ghost off, then close). Override still stops all.
                 if (Games.GameWindow.HandleDtrhPanic()
-                    || Games.GameWindow.HandleBreakoutPanic(now))
+                    || Games.GameWindow.HandleBreakoutPanic(now)
+                    || Games.GameWindow.ForYouTakesPanicKey())
                 {
                     StopCameraForPanic(); // decision C: every panic that stops a surface stops the camera
                     return;
@@ -227,7 +229,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var game = Games.GameWindow.EscapePauseInFront();
+                // The Linux race shell's session window is never shown, so the shell's focus stands in for IsActive.
+                var game = Games.GameWindow.EscapePauseInFront() ?? Games.LinuxRaceHost.InFrontWindow;
                 var page = game?.KeptEscapePage ?? PanicPolicy.KeptEscapePage.None;
                 bool ready = game?.KeptEscapeReady == true;
                 var intake = game == null ? IntakeHostWindow.InFront() : null;
@@ -237,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
                     In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
                     intakeInFront: intake != null, intakeReady: intakeReady,
+                    counterInFront: In(PanicPolicy.KeptEscapePage.Counter), counterReady: ready,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
                     gameInFront: game != null || intake != null, engineRunning: CoreEngine.IsRunning,
@@ -293,7 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF MainWindow.xaml.cs:878-881,2329-2330: panic-off and Lockdown retain
         // the leash-only route. Decision C still limits the consuming grab to effects/holds.
-        private static bool PanicRouteWanted => CoreSettings.Current.PanicKeyEnabled || LeashHoldLeashed;
+        internal static bool PanicRouteWanted => CoreSettings.Current.PanicKeyEnabled || LeashHoldLeashed;
 
         // Decision C: unlike WPF's non-consuming hook (MainWindow.Leash.cs:434-437),
         // a portal grab must not last the whole leash. Only finish an already-live hold.

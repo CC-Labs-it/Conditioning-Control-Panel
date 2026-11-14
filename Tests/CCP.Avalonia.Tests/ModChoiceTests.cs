@@ -257,6 +257,73 @@ public sealed class ModChoiceTests
         await Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ManagerSwitchRepaintsLeaderboardAfterPalette(bool allTime) => Run(async (shell, svc, server) =>
+    {
+        CoreSettings.Current.OfflineMode = true;
+        shell.ShowTab("leaderboard");
+        Dispatcher.UIThread.RunJobs();
+        var board = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.LeaderboardTabView>("LeaderboardTab")!;
+        await board.SetLeaderboardMode(allTime);
+        Dispatcher.UIThread.RunJobs();
+        var monthly = board.FindControl<Button>("BtnLeaderboardMonthly")!;
+        var all = board.FindControl<Button>("BtnLeaderboardAllTime")!;
+        var inactive = allTime ? monthly : all;
+        var before = ((ISolidColorBrush)inactive.Background!).Color;
+        Assert.Equal(((ISolidColorBrush)Application.Current!.Resources["AccentTintedBgBrush"]!).Color, before);
+
+        shell.FindControl<Button>("BtnManageMods")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var manager = await Owned<ModManagerDialog>(shell);
+        var list = manager.FindControl<ListBox>("ModList")!;
+        list.SelectedItem = list.Items.OfType<ListBoxItem>().Single(i => (string?)i.Tag == BuiltInMods.DronificationId);
+        manager.FindControl<Button>("BtnActivate")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs(); // the mod event runs while the manager is still open
+        Assert.Equal(BuiltInMods.DronificationId, AvApp.Mods!.ActiveModId);
+        var during = ((ISolidColorBrush)Application.Current!.Resources["AccentTintedBgBrush"]!).Color;
+        Assert.NotEqual(before, during);
+        Assert.Equal(during, ((ISolidColorBrush)inactive.Background!).Color);
+        manager.Close();
+        await WaitFor(() => (Color)Application.Current!.Resources["PinkColor"]! == Color.Parse(AvApp.Mods.GetAccentColorHex()));
+        Dispatcher.UIThread.RunJobs();
+        var expected = ((ISolidColorBrush)Application.Current!.Resources["AccentTintedBgBrush"]!).Color;
+        Assert.NotEqual(before, expected);
+        Assert.Equal(expected, ((ISolidColorBrush)inactive.Background!).Color);
+        if (allTime) Assert.Equal(((ISolidColorBrush)Application.Current.Resources["DarkerBgBrush"]!).Color, ((ISolidColorBrush)all.Foreground!).Color);
+        Assert.Equal(allTime, board.IsAllTimeMode);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task LateActivePackageRepaintsPaletteAndLeaderboard(bool allTime) => Run(async (shell, svc, server) =>
+    {
+        CoreSettings.Current.OfflineMode = true;
+        shell.ShowTab("leaderboard");
+        Dispatcher.UIThread.RunJobs();
+        var board = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.LeaderboardTabView>("LeaderboardTab")!;
+        await board.SetLeaderboardMode(allTime);
+        Dispatcher.UIThread.RunJobs();
+        var inactive = board.FindControl<Button>(allTime ? "BtnLeaderboardMonthly" : "BtnLeaderboardAllTime")!;
+        var before = ((ISolidColorBrush)inactive.Background!).Color;
+        var mods = AvApp.Mods!;
+        var id = mods.ActiveModId;
+        var manifest = new ModManifest { Id = id, Name = "Adopted", Theme = new ModTheme { AccentColor = "#1267A3", BackgroundColor = "#152635" } };
+        var package = new ModPackage(manifest, null, true);
+        // Invoke the registry's real late-adoption path: same active id, new manifest, ModChanged.
+        typeof(ModService).GetMethod("AdoptBuiltInPackage", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(mods, new object[] { id, package });
+        Assert.Same(package, mods.ActiveMod);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(id, mods.ActiveModId);
+        Assert.Equal(Color.Parse("#1267A3"), (Color)Application.Current!.Resources["PinkColor"]!);
+        var expected = ((ISolidColorBrush)Application.Current.Resources["AccentTintedBgBrush"]!).Color;
+        Assert.NotEqual(before, expected);
+        Assert.Equal(expected, ((ISolidColorBrush)inactive.Background!).Color);
+        Assert.Equal(allTime, board.IsAllTimeMode);
+    });
+
     [Fact]
     public Task HeaderModSwitchRepaintsHomeArtAndExternalModChangeRestoresShippedArt() => Run(async (shell, svc, server) =>
     {
@@ -596,7 +663,7 @@ public sealed class ModChoiceTests
         CoreSettings.ServiceProvider = () => settings;
         CoreReleaseContent.AppVersionProvider = () => "6.6.3";   // cycle v6.6.0
         using var svc = new ReleaseContentService(server.Prefix + "{0}/", handler);
-        var oldResources = Application.Current!.Resources.Keys.ToHashSet();
+        var oldResources = Application.Current!.Resources.ToDictionary(x => x.Key, x => x.Value);
         MainShellWindow? shell = null;
         try
         {
@@ -621,8 +688,9 @@ public sealed class ModChoiceTests
             foreach (var w in shell?.OwnedWindows.ToList() ?? new()) w.Close();
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
-            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.Contains(k)).ToList())
+            foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.ContainsKey(k)).ToList())
                 Application.Current.Resources.Remove(key);   // the palette must not leak into later tests
+            foreach (var entry in oldResources) Application.Current.Resources[entry.Key] = entry.Value;   // nor overwrite an earlier value
             settings.SaveImmediate();
             settings.SealForReset();
             CoreSettings.ServiceProvider = oldSettings;

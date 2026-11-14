@@ -121,9 +121,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SyncIgnition()
         {
             RefreshLiveSessionProgress();
+            // WPF ProgramsFx.cs:929-936,1095-1101: finite moments and the accent crossfade settle at
+            // their end state instead of parking halfway (an unchanged target never restarts the fade).
             if (!IsVisible || VisualRoot is null || Shell is { WindowState: WindowState.Minimized })
-            { StopIgnitionLoops(); StopMoments(); _programBursts.Stop(); return; }
-            if (!Env.AllowTransitions) StopMoments();
+            { StopIgnitionLoops(); StopMoments(); StopAccentFade(settle: true); _programBursts.Stop(); return; }
+            if (!Env.AllowTransitions) { StopMoments(); StopAccentFade(settle: true); }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
         }
@@ -136,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _programFxSuppressed = false;
             _runKeySeen = key;
             _dayCompletePopped = _chapterSealed = _chapterBaselineRun = _graduationCelebrated = null;
+            _pipPhaseStarted = null;
             _tasksSeenIncomplete.Clear();
             StopMoments();
         }
@@ -173,11 +176,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _accentFadeCts.Token, () => { if (_runAccentTarget == target) brush.Color = target; });
         }
 
-        private void StopAccentFade()
+        private void StopAccentFade(bool settle = false)
         {
             _accentFadeCts?.Cancel();
             _accentFadeCts?.Dispose();
             _accentFadeCts = null;
+            if (settle && _runAccent != null && _runAccentTarget is { } target) _runAccent.Color = target;
         }
 
         private Color AccentNow => _runAccentTarget ?? _runAccent?.Color ?? Colors.HotPink;
@@ -479,21 +483,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var wave = Find<Rectangle>("TodayWave");
             var xp = Find<TextBlock>("TxtTodayXpFloat");
             if (_programFxSuppressed || !Env.AllowTransitions || _waveBrush == null) { wave.Opacity = 0; xp.Opacity = 0; return; }
-            var token = (_momentCts ??= new CancellationTokenSource()).Token;
-
             wave.Fill = _waveBrush;
             var grow = (ScaleTransform)_waveBrush.Transform!;
-            Drive(0.95, new CubicEaseOut(), p => grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * p, token);
-            _ = Run(Keys(0.95, OpacityProperty, (0, 0.0), (0.18, 0.75), (0.95, 0.0)), wave, token, () => wave.Opacity = 0);
-
             xp.Text = Loc.GetF("label_0_xp_3", ProgramHeat.DayXp(day?.Intensity ?? 0.0, day?.IsBoss == true));
             if (_runAccent != null) xp.Foreground = _runAccent;
-            _ = Run(new Animation
+            var slide = (TranslateTransform)xp.RenderTransform!;
+            var ease = new CubicEaseOut();
+            var waveKeys = new[] { (0d, 0d), (.18, .75), (.95, 0d) };
+            var xpKeys = new[] { (0d, 0d), (.22, 1d), (.95, 1d), (1.5, 0d) };
+            // WPF ProgramsFx.cs:943-979: wave radius/opacity and XP rise/fade on independent tracks, on the
+            // rig's beat and written directly (never an Animation on a transform); cancel settles at rest.
+            Moment(wave, 1.5, t =>
             {
-                Duration = TimeSpan.FromSeconds(1.5), Easing = new CubicEaseOut(), FillMode = FillMode.Forward,
-                Children = { Frame(0, TranslateTransform.YProperty, 18.0), Frame(1, TranslateTransform.YProperty, -46.0) },
-            }, xp, token);
-            _ = Run(Keys(1.5, OpacityProperty, (0, 0.0), (0.22, 1.0), (0.95, 1.0), (1.5, 0.0)), xp, token, () => xp.Opacity = 0);
+                grow.ScaleX = grow.ScaleY = 0.02 / 1.15 + (1 - 0.02 / 1.15) * ease.Ease(Math.Min(t / .95, 1));
+                wave.Opacity = BeatLoop.Keys(t, waveKeys);
+                slide.Y = 18 - 64 * ease.Ease(Math.Min(t / 1.5, 1));
+                xp.Opacity = BeatLoop.Keys(t, xpKeys);
+            }, () => { wave.Opacity = xp.Opacity = 0; slide.Y = 0; });
         }
 
         /// <summary>WPF NoteProgramChapterSeal: baseline per run, then only a change from it is live.</summary>
@@ -573,9 +579,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- helpers ----
 
-        private static KeyFrame Frame(double cue, AvaloniaProperty property, object value) =>
-            new() { Cue = new Cue(cue), Setters = { new Setter(property, value) } };
-
         /// <summary>A forever sine yo-yo (WPF AutoReverse + RepeatBehavior.Forever + SineEase) on the
         /// window's 30 fps beat (WPF SetDesiredFrameRate(AmbientFrameRate = 30), MainWindow.AmbientFx.cs:15),
         /// never an infinite Animation (P82). Parks while <paramref name="owner"/> is hidden or the window
@@ -596,24 +599,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static BoxShadows Glow(Color c, double blur, double opacity) =>
             new(new BoxShadow { Blur = blur, Color = WithAlpha(c, (byte)Math.Round(255 * opacity)) });
-
-        /// <summary>WPF DoubleAnimationUsingKeyFrames with linear frames, times in seconds.</summary>
-        private static Animation Keys(double seconds, AvaloniaProperty property, params (double at, double value)[] frames)
-        {
-            var a = new Animation { Duration = TimeSpan.FromSeconds(seconds), Easing = new LinearEasing(), FillMode = FillMode.Forward };
-            foreach (var (at, value) in frames) a.Children.Add(Frame(at / seconds, property, value));
-            return a;
-        }
-
-        /// <summary>Runs one animation; a cancelled or failed run is decoration lost, never a crash. Targets
-        /// are Visuals (a Transform setter reaches the RenderTransform): a bare brush or transform has no
-        /// clock in Avalonia 12 and freezes at its first frame (measured), so those go through Drive.</summary>
-        private static async Task Run(Animation animation, Visual target, CancellationToken token, Action? done = null)
-        {
-            try { await animation.RunAsync(target, token); }
-            catch (Exception ex) { Serilog.Log.Debug("Program FX: {E}", ex.Message); }
-            done?.Invoke();
-        }
 
         /// <summary>Per-frame driver for brushes and their transforms: eased progress 0..1 over
         /// <paramref name="seconds"/>, ends with <paramref name="done"/> (also on cancel).</summary>

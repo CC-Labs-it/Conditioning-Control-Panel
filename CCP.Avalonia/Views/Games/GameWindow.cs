@@ -11,6 +11,7 @@ using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.JustDrop;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.PrizeCounter;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -62,6 +63,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
             // WPF #3132: Racing Thoughts is Prime only, including solo.
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
+            // WPF PrizeCounterHostService.cs:28 StartUrl; no tile, its doors call LaunchPrizeCounter (GameWindow.PrizeCounter.cs).
+            [PrizeCounterId] = new(PrizeCounterId, "shop_title", "prizecounter/index.html"),
         };
 
             RegisterGoon(games);
@@ -104,7 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// (WPF FriendsLanding.cs:568 -> GlassroadHostService.Launch(joinRoomId)).</summary>
         internal static GameWindow? LaunchFriendRace(string? room) => LaunchRacingThoughts(room);
 
-        /// <summary>The race launch seam. The Linux host lane replaces this call with its owned host.
+        /// <summary>The race launch seam; on Linux LaunchWindow tries the owned shell first (GameWindow.FirstRace.cs).
         /// WPF GlassroadHostService.Launch: DemandPrime runs before a live window is re-focused, so a tier
         /// loss cannot bring a live race forward through another door.</summary>
         private static GameWindow? LaunchRacingThoughts(string? room = null)
@@ -130,7 +133,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 // WPF BreakoutHostService.LaunchFull gates even a focus of the live game.
                 if (spec.Id == "breakout" && !BreakoutGate()) return null;
                 live.HandoffRaceRoom(room);
-                live.Activate();
+                // #4286: a feed the WM hid (ghost restored on hide) comes back with its door.
+                if (live.Spec.Id == FypId && !live.IsVisible) live.Show();
+                if (live.RaceShell != null) live.RaceShell.Focus(); else live.Activate();   // the shell's window is never shown
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
@@ -156,8 +161,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var window = new GameWindow(spec);
                 if (spec.Id == GlassroadId && UseLinuxRaceCard())
                 {
-                    window.ShowRaceCard();
-                    window.HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)
+                    var raceShell = window.StartRaceShell(room);   // B2 (#3702): the owned Electron shell first
+                    if (raceShell == true) return window;
+                    window.ShowRaceCard(room, failed: raceShell == false);
                 }
                 else window.Load(Server(), room);
                 window.Show();
@@ -182,6 +188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web = new WebHost();
             if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
+            // Before Load/Show can create the native environment (WPF Pbp host :200-215).
+            if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
@@ -212,12 +220,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (spec.Id == FypId)
+            {
+                // WPF FypHostService.cs:720-748 heals a source hidden or minimized by the WM.
+                // Here the source IS the ghost: return it to normal rather than leave orphaned buttons.
+                PropertyChanged += (_, e) =>
+                {
+                    if (!_fypGhosted) return;
+                    if (e.Property == IsVisibleProperty && !IsVisible) ExitFypGhost();
+                    else if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
+                        Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
+                };
+                Closed += (_, _) => ExitFypGhost();
+            }
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
                 JustDropOrdersService.Invalidate();
                 Windows.MainShellWindow.Current?.RefreshTakeawayShelf();
             };
             if (spec.Id == GlassroadId) Opened += (_, _) => { if (!_raceCard) OpenGlassroad(); };
+            if (spec.Id == PrizeCounterId) WireCounter();
         }
 
         private WebAssetServer? _server;
@@ -228,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
             if (Spec.Id == "loom") DirectoryForLoom();
+            if (Spec.Id == PrizeCounterId) StartCounter(FriendsHead.Identity()?.UnifiedId);
             PageUrl = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
             Web.Navigate(PageUrl);
         }
@@ -248,10 +271,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
         /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
-        /// use its last completed top-level URL, as Intake does.</summary>
+        /// use its last completed top-level URL, as Intake does. Before the first completion only
+        /// host Escape can use an accepted in-flight navigation, not a page business message.</summary>
         private void OnPageMessage(string json)
         {
-            if (PageUrl == null || Web.CurrentUrl == null) return;
+            if (PageUrl == null) return;
+            if (Web.CurrentUrl == null)
+            {
+                // The listener runs at document start. Before the first completion, accept only
+                // host Escape for an allowed Just Drop navigation, never a page business frame.
+                if (Spec.Id != JustDropId || !JustDropHandoff.IsSite(Web.ActiveNavigation)) return;
+                try
+                {
+                    var early = JObject.Parse(Unwrap(json));
+                    if ((string?)early["type"] == "ccp-host-escape") HandleJustDrop(early);
+                }
+                catch (Exception ex) { Log.Debug("[Game] unreadable early message: {E}", ex.Message); }
+                return;
+            }
             if (Spec.Id == JustDropId
                 ? !JustDropHandoff.IsSite(Web.CurrentUrl)
                 : !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(Web.CurrentUrl, PageUrl)) return;
@@ -272,12 +309,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
+            if (Spec.Id == PrizeCounterId) { HandleCounter(o); return; }   // the counter speaks only its own seam (CONTRACT.md)
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
             if (IsDtrh && HandleDtrh(o)) return;
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
+                case "breakout-wall" when IsBreakout:
+                    // WPF BackRoomHostService.cs:511 (Sparkles B1): one medal per cleared wall, the Story Demo included.
+                    DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.BreakoutWall(o), SparklesHead.Service));
+                    break;
                 case "ready":
                     IsReady = true;
                     Post(InitMessage());   // WPF BackRoomHostService.BuildInit (:566); no manifest frame for Breakout
@@ -376,6 +418,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!IsBreakout) return init;
             // WPF BackRoomHostService.cs:589-607: the page must know Off before it starts.
             var frame = JObject.FromObject(init);
+            // WPF BackRoomHostService.cs:684-686: the end card reads the current plan list.
+            frame["plans"] = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current);
             var motion = CoreSettings.Current.MotionLevel;
             frame["motion"] = motion.ToString().ToLowerInvariant();
             frame["reduced"] = motion != ConditioningControlPanel.Models.MotionLevel.Full;
@@ -406,6 +450,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
             if (_closing) return;
+            if (RaceShell != null) { RaceShell.Send(json); return; }
             _ = Web.PostJsonAsync(json);
         }
 
@@ -428,7 +473,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.Close(); }
+                try { if (w.IsDtrh) w.CloseDtrhForPanic(); else w.CloseFor(PrizeCounterRules.ClosePanic); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }

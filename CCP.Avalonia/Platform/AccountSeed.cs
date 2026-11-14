@@ -147,7 +147,6 @@ internal static class AccountSeed
     /// WPF ProfileSyncService.LoadProfileAsync's V2 read-before-write (ReadServerProfileBeforePushAsync), READ-ONLY:
     /// GET /v2/user/profile, follow the curve epoch, offer a tier rise, adopt take-higher (Core <see cref="ProfileAdopt"/>).
     /// Then, as WPF LoadProfileAsync does after the read, the heartbeat and the push (<see cref="Sync"/>; unseeded = none).
-    /// ponytail: no season-recap nudge - the next layer.
     /// </summary>
     /// <param name="v2">Tests only.</param>
     internal static async Task<bool> LoadProfileAsync(V2AuthService? v2 = null)
@@ -232,6 +231,12 @@ internal static class AccountSeed
             Prizes = PrizeOwnership.Feed,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
+            // WPF DescentMigrationService.RaiseStageCeremonyDue (:421-440): the companion carries the moment,
+            // scripted copy, no sound, no AI badge.
+            StageCeremonyDue = stage => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(
+                ConditioningControlPanel.Localization.Loc.GetF("descent_stage_drip",
+                    ConditioningControlPanel.Services.Descent.DescentStageCopy.RomanNumeral(stage)),
+                playSound: false, aiGenerated: false),
         };
 
     /// <summary>The push, seeded by the app at startup only: unseeded (every test that does not set it) nothing is pushed.</summary>
@@ -251,6 +256,11 @@ internal static class AccountSeed
     /// <summary>WPF EntitlementTierSync.TierRaised: a live rise, with the new tier (1 or 2), raised BEFORE the
     /// provider's TierChanged so the shell can arm the immediate card and the profile-bubble fanfare.</summary>
     internal static event Action<int>? TierRaised;
+
+    /// <summary>WPF EntitlementTierSync.ReadingApplied: raised after a reading moved the lower tier the server
+    /// reported (<c>ServerTierSeen</c> stored or cleared again), for the lapse rows. A close raises
+    /// <see cref="GraceClosed"/> instead.</summary>
+    internal static event Action? TierReadingApplied;
 
     /// <summary>Tests only: the clock every reading and the focus throttle read.</summary>
     internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
@@ -282,9 +292,32 @@ internal static class AccountSeed
                 if (node == null || CoreSettings.Current.UnifiedId != id) return;
                 ApplyTierReading(EntitlementTierRule.ParseTier(node["effective_tier"]), "focus");
                 ApplyPatreonReading(PatreonActiveRule.Parse(node), "focus");
+                ApplyProfileExtras(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Parse(node));
             });
         }
         catch (Exception ex) { Log.Debug("[Entitlement] focus refresh failed: {Error}", ex.Message); }
+    }
+
+    /// <summary>Raised on the UI thread after a focus read's conversion fields were applied (the member hello row).</summary>
+    internal static event Action? ProfileExtrasApplied;
+
+    /// <summary>WPF EntitlementTierSync.RefreshAsync -> ProfileExtras.Apply: the same focus read carries the free
+    /// member flag, paid_until and post grants (no second request). Only what the server sent moves; a change saves
+    /// and re-reads the Daily Gift. Never throws.</summary>
+    internal static void ApplyProfileExtras(ConditioningControlPanel.Services.Startup.Conversion.ProfileExtrasReading? reading)
+    {
+        try
+        {
+            var s = CoreSettings.Current;
+            if (reading == null || string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)) return;
+            if (ConditioningControlPanel.Services.Startup.Conversion.ProfileExtras.Apply(s, reading))
+            {
+                CoreSettings.Save();
+                App.DailyFree?.NotifyInputsChanged();
+            }
+            ProfileExtrasApplied?.Invoke();
+        }
+        catch (Exception ex) { Log.Debug("[Entitlement] profile extras failed: {Error}", ex.Message); }
     }
 
     /// <summary>WPF EntitlementTierSync.OfferPatreon: a fresh server Patreon confirmation (patreon_is_active +
@@ -330,6 +363,14 @@ internal static class AccountSeed
         return CoreAccount.HasPremiumAccess && !ProviderSubscription.IsInviteWeekOnly(Patreon, SubscribeStar, CoreSettings.Current) ? 1 : 0;
     }
 
+    // A queued heartbeat can arrive after logout or a new sign-in, even for the same id.
+    internal static void ApplyHeartbeatTier(string id, string? token, string body)
+    {
+        var s = CoreSettings.Current;
+        if (s.OfflineMode || s.UnifiedId != id || string.IsNullOrEmpty(token) || s.AuthToken != token) return;
+        ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat");
+    }
+
     /// <summary>WPF EntitlementTierSync.ApplyOnUi: THE one server tier reading path of this head, from the
     /// profile load, a heartbeat or the focus refresh. A rise unlocks, a tier renews its grace, and the same
     /// lower reading 90 s later closes it. Never throws.</summary>
@@ -342,8 +383,14 @@ internal static class AccountSeed
             if (serverTier.HasValue && !string.IsNullOrEmpty(s.UnifiedId) && !string.IsNullOrEmpty(s.AuthToken))
                 EntitlementRefresh.NoteAnswered(s.UnifiedId);
             var before = EffectiveTierNow();
+            var seenBefore = s.ServerTierSeen;
             var reading = Readings.Apply(s, serverTier, HoldGraceClose, UtcNow());
             if (reading.Dirty) CoreSettings.Save();
+            if (s.ServerTierSeen != seenBefore && !reading.Closed)
+            {
+                try { TierReadingApplied?.Invoke(); }
+                catch (Exception ex) { Log.Debug("[Entitlement] reading listener failed: {Error}", ex.Message); }
+            }
             // WPF: a lower reading keeps the stored tier for its second look (and while a session or a game
             // holds the close); logged once per value.
             if (reading.Verdict == EntitlementVerdict.Lower && !reading.Closed && _lastLowerLogged != serverTier)

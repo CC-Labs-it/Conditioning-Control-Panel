@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
-    internal static class FlashOverlay
+    internal static partial class FlashOverlay
     {
         // FlashService.ResolveFlashCap on the default (compositor) path.
         private const int MaxConcurrent = 30;
@@ -91,6 +91,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 var s = CoreSettings.Current;
+                if (await TryShowRemix(s, screens, durationMs, ambient && amount == null, generation)) return;
+                if (generation != _generation || _closed) return;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
@@ -415,6 +417,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void CloseAll(bool final = true)
         {
             LuckyFlashToast.CloseActive();
+            StopRemix();
             _generation++;
             _busy = false;
             _closed |= final;
@@ -441,6 +444,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Fire(h, ambient);
                 noteUsed();
             }
+            void PrepareRemix()
+            {
+                void Start() { if (CoreFlash.IsRunning && !_closed) EnsureRemix(); }
+                if (Dispatcher.UIThread.CheckAccess()) Start();
+                else Dispatcher.UIThread.Post(Start);
+            }
+            CoreFlash.StartProvider = PrepareRemix;
+            if (CoreFlash.IsRunning) PrepareRemix();
             CoreFlash.StopProvider = () =>
             {
                 if (Dispatcher.UIThread.CheckAccess()) CloseAll(final: false);
@@ -490,7 +501,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
-            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
+            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
             if (s.GentleVisuals)
             {
@@ -529,7 +540,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerMultiplication: the children stay on the parent's screen, play no
         /// sound and spawn 100 ms apart; a CloseAll in between drops them.</summary>
-        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
+        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration) =>
+            await SpawnChildrenAsync(parent, count, lifetime, hydraGeneration);
+
+        internal static async Task SpawnChildrenAsync(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
         {
             if (_closed || parent.SpawnScreen is not { } screen) return;
             var generation = _generation;

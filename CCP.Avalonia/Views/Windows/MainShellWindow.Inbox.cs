@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var poll = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
             poll.Tick += async (_, _) => await CheckPostCode();
             Opened += async (_, _) => { poll.Start(); await CheckPostCode(); };
-            Closed += (_, _) => { _postCodeClosed = true; poll.Stop(); };
+            Closed += (_, _) => { _postCodeClosed = true; poll.Stop(); StopCapWatch(); };
             var inbox = StartupLadder.Inbox.Items;
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;

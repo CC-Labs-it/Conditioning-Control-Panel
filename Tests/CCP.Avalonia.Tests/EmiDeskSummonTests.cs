@@ -132,9 +132,11 @@ public sealed class EmiDeskSummonTests
     {
         var main = new Window { Width = 800, Height = 600 };
         main.Show();
+        CoreSettings.Current.AvatarEnabled = true;
         var tube = new AvatarTubeWindow(main);
         try
         {
+            tube.Show();
             tube.GigglePriority("before", playSound: false);
             Assert.True(tube.IsSpeaking);   // control: she speaks while EMI is away
 

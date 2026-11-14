@@ -59,7 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     ///   <item><c>SetWindowLongPtr(GWL_HWNDPARENT)</c> - native ownership, which is what glued the
     ///         tube directly above main in z-order - -> <see cref="X11Overlay.SetTransientFor"/>
     ///         (WM_TRANSIENT_FOR) while attached, plus <see cref="X11Overlay.RestackAbove"/> on open
-    ///         and when main activates (ApplyStacking). Both return false off X11.</item>
+    ///         and when main activates (ApplyStacking). SetTransientFor is X11 only; RestackAbove also
+    ///         has a Win32 half (the sibling's predecessor, no activation).</item>
     ///   <item><c>SetWindowPos(SWP_FRAMECHANGED)</c>, <c>HwndSource.AddHook(WndProc)</c>,
     ///         <c>WindowInteropHelper</c>, <c>DisableProcessWindowsGhosting</c> - all dropped. They
     ///         exist to flush a LAYERED window's cached frame and to intercept WM_ messages; X11 has
@@ -416,6 +417,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // the user a few seconds after they opened it. WPF's EnterChatHistoryMode kills the
             // same two timers for the same reason.
             _speechTimer?.Stop();
+            CancelTriggerAnimation();   // the log owns the bubble: no typing tick may write into it
             _cancelSpeechDelay();   // WPF ChatInput.cs:475 _speechDelayTimer.Stop (the queue stays)
             _cancelSpeechDelay = NoSpeechDelay;
             _isGiggling = false;
@@ -1306,7 +1308,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
                     var source = trigger ? SpeechSource.Trigger : preset ? SpeechSource.Preset : SpeechSource.AI;
-                    if (Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
+                    // WPF Speech.cs:481: a hidden avatar skips the bubble and audio of every line.
+                    if (!IsAvatarVisibleOnScreen || Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
                     {
                         _isGiggling = false;   // WPF Speech.cs:452-460: skipped, but it still spaces the next
                         NoteSpeechEnded(source, text.Length);
@@ -1332,10 +1335,18 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted && MayVoice(unprompted)) { (SpeechAudioPlayer ?? PlaySpeechAudio)(playSound, phraseAudioPath, barkVoice, spoken); spokenHandled = true; }
+                    if (!IsMuted && MayVoice(unprompted))
+                    {
+                        // WPF Speech.cs:546-552: a non-AI bubble without its own sound takes the fallback cue.
+                        if (SpeechAudioPlayer is { } player) player(playSound, phraseAudioPath, barkVoice, spoken);
+                        else PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, fallbackCue: preset && !trigger);
+                        spokenHandled = true;
+                    }
 
                     SyncAskButtonsFor(text);
-                    _txtSpeech.Text = text;
+                    // WPF Speech.cs:513,559: non-AI bubbles type slowly; triggers type after their lead-in.
+                    if (preset && !trigger) TypeBubble(text, static () => true);
+                    else _txtSpeech.Text = text;
                     // WPF AdjustBubbleSize (Speech.cs:857-881): real DIPs now, 14 only for long replies.
                     _txtSpeech.FontSize = text.Length > 250 ? 14 : 15;
                     _speechBubble.MaxWidth = SpeechBubbleMaxWidth;
@@ -1346,7 +1357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
 
-                    StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : null);
+                    StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : preset ? PresetDisplaySeconds(text) : null);
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
@@ -1497,7 +1508,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 App.Sessions?.IsPaused == true || CoreSession.IsSessionPaused, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff,
                 ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
 
-        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
+        private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null, bool fallbackCue = false)
         {
             var handedOff = false;
             try
@@ -1524,6 +1535,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 }
 
                 if (playSound) PlayGiggleSound(curved);
+                else if (fallbackCue) PlayFallbackBubbleSound(curved);
             }
             catch (Exception ex) { Log.Debug("AvatarTube speech audio failed: {Error}", ex.Message); }
             finally { if (!handedOff) onSpoken?.Invoke(); }
@@ -1538,6 +1550,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// than a bogus path handed to the audio service, which is WPF's own behaviour for
         /// giggle6 (it ships as .wav, and the shipped-file lookup only ever asks for .mp3).</para>
         /// </summary>
+        // WPF AvatarTubeWindow.Reactions.cs:322-347: regular bubbles use giggle1-4 at half volume.
+        private void PlayFallbackBubbleSound(float curvedVolume)
+        {
+            if (ConditioningControlPanel.Services.ModAudioPolicy.SuppressesGiggleSfx(CoreMods.ActiveModId)) return;
+            var name = $"giggle{1 + _random.Next(4)}.MP3";
+            var path = CoreModArt.AudioOverridePath(name)
+                       ?? System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", name);
+            if (File.Exists(path)) CoreAudio.PlayOneShot(path, curvedVolume * 0.5f, "bubble-fallback");
+        }
+
         private void PlayGiggleSound(float curvedVolume)
         {
             if (CoreMods.ActiveModId.Contains("bambi", StringComparison.OrdinalIgnoreCase)) return;

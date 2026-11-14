@@ -61,8 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// finished game asks for the count and resolves on the answer instead of being written off.</para>
     ///
     /// <para><b>Stubbed:</b> the VideoService lease/wedge watchdog/native poison cooldown (HwndHost
-    /// teardown safety with no counterpart here), the metadata-cache duration (LengthChanged corrects
-    /// the 30 s fallback within a second) and VideoDiag.</para>
+    /// teardown safety with no counterpart here), and VideoDiag. The game shares the mandatory-video metadata cache.</para>
     ///
     /// <para>Opened validates the path synchronously so an invalid clip completes once inside Show().
     /// Loaded starts playback after layout, as WPF does. Starting in Opened lets a short clip finish
@@ -213,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
 
             // Register window
-            _allWindows.Add(this);
+            _allWindows.Add(this); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
 
             // Start when opened
             Opened += OnOpened;
@@ -246,13 +245,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _isCleaningUp = false;
             }
             var orphanWindows = _allWindows.ToList();
-            _allWindows.Clear();
+            StopPlayer();
+            _allWindows.Clear(); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
             _sharedBubbleCount = 0;
             _sharedTargetCount = 0;
 
             // Only reachable when a previous game threw partway through its show/teardown;
             // normally the list is already empty.
-            StopPlayer();
             foreach (var window in orphanWindows)
             {
                 try
@@ -324,7 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 StopPlayer();
                 var windowsCopy = _allWindows.ToList();
-                _allWindows.Clear();
+                _allWindows.Clear(); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
                 foreach (var window in windowsCopy)
                 {
                     try
@@ -349,6 +348,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// Check if any bubble count window is currently open
         /// </summary>
+        private static int _videoWindowCount;
+        internal static bool VideoSessionActive => System.Threading.Volatile.Read(ref _videoWindowCount) > 0;
         public static bool IsAnyOpen() => _allWindows.Count > 0;
         internal static IReadOnlyList<BubbleCountWindow> OpenWindows => _allWindows;
         internal Image VideoImage => _videoImage;
@@ -409,23 +410,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void AdoptRealDuration(double seconds)
         {
             if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _isCleaningUp) return;
-            if (!double.IsFinite(seconds) || seconds <= 0 || seconds > TimeSpan.MaxValue.TotalSeconds - 120 || Math.Abs(seconds - _videoDurationSeconds) < 0.5) return;
+            if (!double.IsFinite(seconds) || seconds <= 0 || seconds > TimeSpan.MaxValue.TotalSeconds - 120 || Math.Abs(seconds - _videoDurationSeconds) < 1.0) return;   // WPF BubbleCountWindow.xaml.cs:727 ignores sub-second changes
 
             _videoDurationSeconds = seconds;
             LastVideoDurationSeconds = seconds;
             CalculateTargetBubbles();
             _sharedTargetCount = _targetBubbleCount;
+            // WPF BubbleCountWindow.xaml.cs:736-748: keep every window's target and the
+            // active spawn cadence in step with the corrected clock.
+            foreach (var window in _allWindows) window._targetBubbleCount = _targetBubbleCount;
+            // Same cadence as StartBubbleSpawning (a spawn timer, not a frame loop).
+            if (_bubbleSpawnTimer != null)
+                _bubbleSpawnTimer.Interval = TimeSpan.FromMilliseconds(
+                    (_videoDurationSeconds * 1000) / Math.Max(1, _targetBubbleCount) * 0.7);
             StartSafetyTimer(_videoDurationSeconds);
         }
 
-        /// <summary>WPF's primary LibVLC start: the 30 s fallback clock (the metadata cache is not
-        /// ported; LengthChanged corrects it), bubbles, then Play at master volume. False when no
-        /// LibVLC is available, which ends the game as a start failure does in WPF.</summary>
+        // WPF BubbleCountWindow.xaml.cs:705-718: shared cache, asynchronous warm on miss,
+        // and a 30 s fallback. No metadata parse blocks the UI thread.
+        internal static double ResolveVideoDurationSeconds(string path)
+        {
+            try
+            {
+                if (Overlays.MandatoryVideoOverlay.LengthOf(path) is double seconds && seconds > 0) return seconds;
+            }
+            catch { }
+            return FallbackDurationSeconds;
+        }
+
+        // The game clock: the cached duration or the 30 s fallback, then the safety timer and bubbles.
         // WPF BubbleCountWindow.xaml.cs:293-295, 833-898, 935-1010, 1053-1080.
         // Keep strict failures on the existing retry flow; only media errors poison the file.
         private void InitializePlaybackClock()
         {
-            _videoDurationSeconds = FallbackDurationSeconds;
+            _videoDurationSeconds = ResolveVideoDurationSeconds(_videoPath);
             LastVideoDurationSeconds = _videoDurationSeconds;
             CalculateTargetBubbles();
             _sharedTargetCount = _targetBubbleCount;
@@ -812,7 +830,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 StopPlayer();
                 var windowsCopy = _allWindows.ToList();
-                _allWindows.Clear();
+                _allWindows.Clear(); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
                 foreach (var window in windowsCopy)
                 {
                     try
@@ -839,10 +857,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         protected override void OnClosed(EventArgs e)
         {
             _allWindows.Remove(this);
-            if (_isPrimary && !_gameCompleted && !_isCleaningUp) CloseAllWindows(false);
             _closed = true;
             _browser?.Dispose();
             _browser = null;
+            if (_isPrimary && !_gameCompleted && !_isCleaningUp) CloseAllWindows(false);
             _safetyTimer?.Stop();
             _safetyTimer = null;
             _bubbleSpawnTimer?.Stop();
@@ -858,7 +876,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             _activeBubbles.Clear();
 
-            _allWindows.Remove(this);
+            _allWindows.Remove(this); System.Threading.Volatile.Write(ref _videoWindowCount, _allWindows.Count);
 
             base.OnClosed(e);
         }
@@ -868,12 +886,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// Individual bubble for the counting game - its own window, so it never shares a visual tree
     /// with the video surface.
     ///
-    /// PORTED from the CountBubble class in the same WPF file. The Win32 in it
-    /// (<c>SetWindowPos(HWND_TOPMOST)</c>) is gone: <c>Topmost</c> is the platform's own answer.
-    /// What DOES need the shim is the pair the original got for free from Windows - being
-    /// transparent to the mouse, and sitting above the game window specifically rather than
-    /// somewhere in the keep-above band. Both are applied after Show(), because both need a
-    /// mapped X11 window, and both are no-ops off X11 by design.
+    /// WPF Windows/BubbleCountWindow.xaml.cs:1729 raises every new bubble to HWND_TOPMOST,
+    /// above older bubbles and other topmost windows. Windows uses the same native raise here.
+    /// X11 keeps its owner-relative restack. Both backends also make the bubble click-through.
     /// </summary>
     internal class CountBubble : IDisposable
     {
@@ -962,15 +977,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // IsHitTestVisible only silences Avalonia's own hit testing; the compositor would still
             // send the click here. This is the WS_EX_TRANSPARENT the original got implicitly.
             X11Overlay.SetClickThrough(_window, true);
-            // Topmost puts the bubble in the keep-above band; it does not order it against the game
-            // window, which is topmost too. This pins it directly above its owner - the ordering
-            // the original's SetWindowPos(HWND_TOPMOST)-per-bubble was reaching for.
-            X11Overlay.RestackAbove(_window, owner);
+            StackWindow(X11Overlay.BackendOf(_window.TryGetPlatformHandle()),
+                () => X11Overlay.Raise(_window), () => X11Overlay.RestackAbove(_window, owner));
 
             // Lifespan - bubble stays for 1-1.5 seconds then pops. Driven by the owning
             // window's single shared animation timer (see BubbleCountWindow.AnimateAllCountBubbles)
             // rather than per-bubble timers, which previously meant ~2 DispatcherTimers per bubble.
             _lifeRemainingMs = 1000 + random.Next(500);
+        }
+
+        // WPF Windows/BubbleCountWindow.xaml.cs:1729: each new bubble heads the topmost band.
+        internal static void StackWindow(OverlayBackend backend, Action raise, Action restack)
+        {
+            if (backend == OverlayBackend.Win32) raise();
+            else if (backend == OverlayBackend.X11) restack();
         }
 
         /// <summary>

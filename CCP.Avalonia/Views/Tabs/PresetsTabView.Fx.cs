@@ -84,14 +84,9 @@ public partial class PresetsTabView
     {
         DetachCardSheen();
         DetachRowSweep();
+        // The data half (chips, rack, detail title) is QueuePresetsModRefresh's: one coalesced pass, deferred
+        // while the tab is hidden (WPF UiUpdates.cs:252-259). Here only the sheen and the sweep re-attach.
         if (VisualRoot is null) return;
-        RefreshPresetsList();
-        RepaintSessionRack();
-        if (_selectedPreset is { } preset && PresetDetailScroller.IsVisible)
-        {
-            TxtDetailTitle.Text = PresetNaming.DisplayName(preset);
-            TxtDetailSubtitle.Text = CoreMods.MakeModAware(preset.Description);
-        }
         RefreshCardSheen();
     });
 
@@ -100,14 +95,20 @@ public partial class PresetsTabView
         base.OnPropertyChanged(change);
         if (change.Property != IsVisibleProperty) return;
         // WPF OnPresetsTabVisibilityChanged: DATA BEFORE FX. A session drafted while the tab was hidden
-        // joins the rack, "Recent" re-sorts on the files' new dates, and the shelf repaints - all
+        // joins the rack and "Recent" re-sorts on the files' new dates - all
         // before the stagger animates them in. The shell snaps tabs (no outgoing re-show), so WPF's
         // IsIncomingTab guard has nothing to filter here.
+        // Keep prior receipts while the shell refreshes asynchronously (WPF MainWindow.Takeaway.cs:72-84).
         if (IsVisible && SessionRackPanel != null)
         {
             SyncCustomSessionsFromDisk();
-            RepaintSessionRack();
-            SeedTakeaway();
+            if (_presetsModDirty && IsEffectivelyVisible)
+            {
+                _presetsModDirty = false;
+                RefreshPresetsModVisuals(refreshRack: true);
+            }
+            else RepaintSessionRack();
+            Shell?.RefreshTakeawayShelf(); // WPF TabFxPresetsQuestsAchievements.cs:286, before StaggerPresetCards.
         }
         if (IsVisible && _fxWindow != null) StaggerZones();
         else { CancelEntrances(); DetachRowSweep(); }

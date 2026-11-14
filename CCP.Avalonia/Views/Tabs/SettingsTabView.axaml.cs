@@ -62,6 +62,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) => NotifyShellVisibility();
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { NotifyShellVisibility(); SyncFoldArrowBreath(); } };
 
+            // WPF SettingsTabView.xaml.cs:60-61,424-435: the Flashes and Bubble Pop tiles wear the v2 pill
+            // while a v2 prize of their family is owned (same reads as the favourites rail).
+            AttachedToVisualTree += (_, _) => { Platform.PrizeOwnership.Changed += RefreshV2Badges; RefreshV2Badges(); };
+            DetachedFromVisualTree += (_, _) => Platform.PrizeOwnership.Changed -= RefreshV2Badges;
             WireStubs();
             InitializeClickChoice();
             InitFavoritesDrawer();
@@ -73,6 +77,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------------------
         // The real ports.
         // ------------------------------------------------------------------------------
+
+        internal void RefreshV2Badges() => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            CardFlash.ShowV2Badge = Platform.PrizeOwnership.FlashV2Owned();
+            CardBubblePop.ShowV2Badge = Platform.PrizeOwnership.BubbleV2Owned();
+        });
 
         private void NotifyShellVisibility()
         {

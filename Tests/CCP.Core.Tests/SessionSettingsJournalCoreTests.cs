@@ -25,6 +25,8 @@ public sealed class SessionSettingsJournalCoreTests : IDisposable
 
     public SessionSettingsJournalCoreTests()
     {
+        // Earlier test services share settings.json and may still have a debounced save in flight.
+        SettingsService.DisarmAllPendingSaves();
         Directory.CreateDirectory(_dir);
         PhrasePoolCustody.Seed();
         _runner = new SessionRunner(new SessionLogService()) { JournalDir = _dir };
@@ -34,6 +36,7 @@ public sealed class SessionSettingsJournalCoreTests : IDisposable
     public void Dispose()
     {
         _runner.Stop();
+        SettingsService.DisarmAllPendingSaves();
         CoreEngine.Stop();
         CoreSession.IsSessionRunningProvider = null;
         CoreSession.NoteUserPhrasePoolEdit = null;
@@ -211,5 +214,28 @@ public sealed class SessionSettingsJournalCoreTests : IDisposable
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         while (d != null && !Directory.Exists(Path.Combine(d.FullName, "CCP.Core"))) d = d.Parent;
         return d?.FullName ?? throw new InvalidOperationException("repo root not found");
+    }
+}
+
+[Collection(SessionStatics.Name)]
+public sealed class SessionSettingsJournalIsolationTests
+{
+    [Fact]
+    public void EarlierPendingSaveCannotOverwriteTheNextJournalTest()
+    {
+        var previousService = new SettingsService { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
+        previousService.Current.FlashFrequency = 10;
+        try
+        {
+            previousService.Save();
+            Assert.True(previousService.HasPendingSave);
+            using var next = new SessionSettingsJournalCoreTests();
+            Assert.False(previousService.HasPendingSave);
+            next.Failed_restore_keeps_recovery_data_without_saving_partial_settings(failPools: true);
+        }
+        finally
+        {
+            previousService.SealForReset();
+        }
     }
 }

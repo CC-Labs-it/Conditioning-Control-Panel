@@ -34,6 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _favoritesRailHooked;
         internal global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer? PageFavorites =>
             Named<global::ConditioningControlPanel.Avalonia.Views.Controls.PageFavoritesDrawer>("PageDrawer");
+        private int _railArtRevision;
+        private sealed record RailChipState(string Label, string Context, string Tip, string Glyph,
+                                             bool Locked, int ArtRevision);
+        private readonly Dictionary<Panel, Dictionary<string, (RailChipState State, Button Chip)>> _railChips = new();
+        internal int RailChipBuildCount { get; private set; }
 
         /// <summary>WPF FavoritePinMap (MainWindow.FavoritesRail.cs:63): rail/Play-wall x:Name -> palette id.</summary>
         private static readonly (string Element, string Id)[] FavoritePinMap =
@@ -85,9 +90,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SettingsPage?.ApplyFavoritesDrawerSetting();
         }
 
-        /// <summary>WPF RefreshFavoritesRail (:121): rebuilds both chip stacks from settings.</summary>
-        internal void RefreshFavoritesRail()
+        /// <summary>WPF RefreshFavoritesRail (:121): rebuilds both chip stacks from settings. Every repaint
+        /// source (mod, grants, identity, language, pins, direct calls) repaints the chips as before.</summary>
+        internal void RefreshFavoritesRail() => RefreshFavoritesRail(reuseChips: false);
+
+        /// <summary><paramref name="reuseChips"/>: tab arrival only (#3788). Chips whose label, tip, glyph and lock
+        /// are unchanged keep their visuals; anything else still rebuilds.</summary>
+        internal void RefreshFavoritesRail(bool reuseChips)
         {
+            if (!reuseChips) _railArtRevision++;
             RefreshDashboardToggleHint();
             ApplyDashboardFxLoops();
             // WPF Presets.cs:1167-1170: an opportunistic same-day override check; the service gates it.
@@ -103,14 +114,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     .ToDictionary(e => e.Id, e => e, StringComparer.Ordinal);
                 bool Known(string id) => byId.TryGetValue(id, out var e) && e.Available;
 
-                dash.FavoritesList.Children.Clear();
-                foreach (var id in s.RailFavorites.Where(Known))
-                    dash.FavoritesList.Children.Add(BuildRailChip(dash, byId[id]));
+                SyncRailChips(dash, dash.FavoritesList, s.RailFavorites.Where(Known).Select(id => byId[id]));
                 dash.FavoritesEmpty.IsVisible = dash.FavoritesList.Children.Count == 0;
 
-                dash.RecentList.Children.Clear();
-                foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
-                    dash.RecentList.Children.Add(BuildRailChip(dash, byId[id]));
+                SyncRailChips(dash, dash.RecentList,
+                    FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known).Select(id => byId[id]));
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
@@ -143,6 +151,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
 
+
+        private void SyncRailChips(Tabs.SettingsTabView dash, Panel panel, IEnumerable<SettingsPaletteEntry> entries)
+        {
+            if (!_railChips.TryGetValue(panel, out var cache)) _railChips[panel] = cache = new();
+            var wanted = new List<Button>();
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in entries)
+            {
+                ids.Add(entry.Id);
+                var state = new RailChipState(entry.Label, entry.Context, Loc.Get("rail_chip_tip"),
+                    entry.Glyph, IsNavEntryLocked(entry.TabKey), _railArtRevision);
+                if (!cache.TryGetValue(entry.Id, out var old) || old.State != state)
+                {
+                    RailChipBuildCount++;   // dashboard stacks only; the page drawer rebuilds on its own
+                    cache[entry.Id] = (state, BuildRailChip(dash, entry));
+                }
+                wanted.Add(cache[entry.Id].Chip);
+            }
+            foreach (var id in cache.Keys.Where(id => !ids.Contains(id)).ToArray()) cache.Remove(id);
+            // Remove only retired/repainted chips; moves preserve the button and its handlers.
+            foreach (var child in panel.Children.ToArray())
+                if (child is not Button chip || !wanted.Contains(chip)) panel.Children.Remove(child);
+            for (var i = 0; i < wanted.Count; i++)
+            {
+                var chip = wanted[i];
+                if (i < panel.Children.Count && ReferenceEquals(panel.Children[i], chip)) continue;
+                panel.Children.Remove(chip);
+                panel.Children.Insert(i, chip);
+            }
+        }
 
         private Button BuildRailChip(Tabs.SettingsTabView dash, SettingsPaletteEntry entry)
         {
@@ -324,7 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF NoteDestinationOpened (:378): RECENT's one input, called from ShowTab.</summary>
-        internal void NoteDestinationOpened(string tabKey)
+        internal void NoteDestinationOpened(string tabKey, bool deferRail = false)
         {
             try
             {
@@ -335,8 +373,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var entry = SettingsPaletteIndex.All.FirstOrDefault(e => e.Id == id);
                 if (entry == null || !entry.Available) return;
                 if (!FavoritesRailRule.NoteOpened(s.RailRecent, id)) return;
+                // Home refreshes on arrival. Building its hidden chips here adds layout and
+                // template work to every other page's first frame (including the click leaving Home).
                 CoreSettings.Save();
-                RefreshFavoritesRail();
+                // The page drawer is on screen on every page (WPF RefreshDashboardRail repaints it too), so it
+                // still follows a new RECENT entry when the hidden Home rail waits for arrival.
+                if (!deferRail) RefreshFavoritesRail();
+                else RefreshPageDrawer();
             }
             catch (Exception ex) { Log.Debug("NoteDestinationOpened({Tab}): {E}", tabKey, ex.Message); }
         }

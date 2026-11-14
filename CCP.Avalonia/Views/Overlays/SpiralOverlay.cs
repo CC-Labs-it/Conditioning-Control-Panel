@@ -64,8 +64,58 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static string? _configuredPath;
         private static bool? _randomizeAtStart;
         private static bool _repicked;
+        private static DispatcherTimer? _reconcileTimer;
+        private static (int Index, PixelRect Bounds, double Scale)[]? _layout;
+        private static bool _dualMonitor;
+        private static int _runId;
+        // WPF OverlayService.cs:1562,1590-1594 remembers a failed decode instead of retry churn.
+        // Suppress each failed candidate for this run, or until its file metadata changes.
+        private static readonly Dictionary<string, (DateTime Write, long Length)> FailedSources = new();
 
-        /// <summary>Pick once per run; repainting opacity/monitors never resamples the pool.
+        private static (DateTime Write, long Length) FileVersion(string path)
+        {
+            try
+            {
+                var file = new FileInfo(path);
+                return (file.LastWriteTimeUtc, file.Exists ? file.Length : -1);
+            }
+            catch { return (default, -1); }
+        }
+
+        private static bool IsUnchangedFailure(string path)
+        {
+            if (!FailedSources.TryGetValue(path, out var failed)) return false;
+            if (failed == FileVersion(path)) return true;
+            FailedSources.Remove(path);
+            if (_framesKey == path) _framesKey = "";
+            return false;
+        }
+
+        // WPF OverlayService.cs:463,797-802: retry an absent spiral every 500 ms.
+        // Decode completion still gets one immediate retry; subsequent attempts yield to the timer.
+        internal static void Reconcile(Visual host)
+        {
+            if (!IsShowing && Decoding is not { IsCompleted: false })
+            {
+                _sourcePath = null;
+                _randomizeAtStart = null; // WPF OverlayService.cs:416 rereads policy on restart.
+                _repicked = false;
+            }
+            Refresh(host);
+        }
+
+        private static void StartReconciler(Visual host)
+        {
+            if (_reconcileTimer != null) return;
+            _reconcileTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _reconcileTimer.Tick += (_, _) => Reconcile(host);
+            _reconcileTimer.Start();
+        }
+
+        internal static bool IsReconciling => _reconcileTimer is { IsEnabled: true };
+
+        /// <summary>Pick once per run; repainting opacity never resamples the pool.
+        /// Monitor rebuilds and failed starts clear the pick through the reconciler.
         /// Explicit file changes take effect live. Randomize changes take effect next start.</summary>
         internal static string SourcePath()
         {
@@ -145,7 +195,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             if (VoiceOpacity == null && !HasTimedPayload && (!s.SpiralEnabled || !ShouldShow())) { FadeOut(); return; }
 
+            // No compositor means no per-pixel alpha; a recorded native refusal is permanent.
+            // Gate before the timer and decode so unsupported platforms do no periodic work.
+            if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
+            {
+                CloseAll();
+                return;
+            }
+            StartReconciler(TopLevel.GetTopLevel(host) ?? host);
+            var screens = ScreenList.Enumerate(host);
+            var primary = -1;
+            for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
+            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var layout = want.Select(i => (i, screens[i].Bounds, screens[i].Scaling)).ToArray();
+            // WPF OverlayService.cs:759-765: a monitor rebuild starts with a fresh random pick.
+            // Include geometry so a resolution/scale change cannot leave an old-sized window up.
+            if (_layout != null && (!_layout.SequenceEqual(layout) || _dualMonitor != s.DualMonitorEnabled))
+            {
+                CloseWindows();
+                _sourcePath = null;
+                _randomizeAtStart = null; // WPF OverlayService.cs:416 rereads policy on restart.
+                _repicked = false;
+            }
+            _layout = layout;
+            _dualMonitor = s.DualMonitorEnabled;
+
             var path = SourcePath();
+            if (IsUnchangedFailure(path))
+            {
+                if (Windows.Count > 0) CloseWindows();
+                // One immediate random re-pick; later ticks can try other candidates or changed files.
+                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); }
+                return;
+            }
             var video = IsVideo(path);
             if (_framesKey != path)
             {
@@ -158,18 +240,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var old in _frames) old.Dispose();
                 (_frames, _framesKey, _index) = (new List<Bitmap>(), path, 0);
             }
-            if (_frames.Count == 0 && !video)   // undecodable: logged once by the decode
-            {
-                // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
-                if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
-                CloseWindows();
-                return;
-            }
-
-            var screens = ScreenList.Enumerate(host);
-            var primary = -1;
-            for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var opacity = PulseOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
@@ -179,13 +249,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
 
             CloseWindows();
-            // No compositor = no per-pixel alpha: the spiral would be an opaque screen-sized block.
-            if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
-            {
-                Log.Debug("Spiral: no composited click-through overlay on this platform, so no spiral");
-                return;
-            }
-
             foreach (var i in want)
             {
                 var w = new SpiralOverlayWindow();
@@ -216,10 +279,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             QuestMinutes.Follow(Windows.Count > 0);
             if (video && Windows.Count > 0)
             {
+                var version = FileVersion(path);
                 var videoWindows = Windows.ToArray();
                 try { _videoPlayer = VideoStart(path, frame => ShowVideoFrame(videoWindows, frame)); }
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
-                if (_videoPlayer == null) { CloseWindows(); return; }
+                if (_videoPlayer == null) { FailedSources[path] = version; CloseWindows(); return; }
             }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
@@ -303,6 +367,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void ResetRun()
         {
             _pulseWeight = null;
+            // WPF OverlayService.cs:1562,1633,1731 retries outside the failed compositor route.
+            _runId++;
+            if (FailedSources.ContainsKey(_framesKey)) _framesKey = "";
+            FailedSources.Clear();
+            _reconcileTimer?.Stop();
+            _reconcileTimer = null;
+            _layout = null;
             _sourcePath = null;
             _configuredPath = null;
             _randomizeAtStart = null;
@@ -348,8 +419,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static async Task DecodeThenRefresh(Visual host, string path)
         {
+            var runId = _runId;
+            var version = FileVersion(path);
+            // Publish Decoding before a fast worker can complete and clear it on the UI thread.
+            await Task.Yield();
             var (frames, delay) = await Task.Run(() => Decode(path));
-            if (frames.Count == 0) Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
+            if (runId != _runId)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                Decoding = null;
+                if (IsReconciling) Refresh(host); // a new run may be waiting for this worker
+                return;
+            }
+            if (frames.Count == 0)
+            {
+                FailedSources[path] = version;
+                Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
+            }
             foreach (var old in _frames) old.Dispose();
             (_frames, _framesKey, _delay, _index) = (frames, path, delay, 0);
             Decoding = null;   // or the Refresh below, still inside this task, cannot start a newer path's decode

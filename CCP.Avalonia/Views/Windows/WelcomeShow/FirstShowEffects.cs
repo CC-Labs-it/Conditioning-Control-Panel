@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Media.Immutable;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Compositor;
 using ConditioningControlPanel.Services.FirstShow;
@@ -25,8 +26,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// Core <see cref="ChaosFxLayer"/> (WPF ChaosFxLayerWpf.Create :55), so counts, colours, additive bloom, the electric
 /// ripple and timing are WPF's by construction; it is recorded into an SKPicture the render thread replays, as
 /// ChaosSkiaFxOverlay does. The stage is in DIPs, so the layer's stage scale is 1 (WPF: physical px x DPI scale).
-/// Brain drain: WPF blurred a live desktop capture (BrainDrainCapturePump); this head has no capture, so the
-/// 11-15 s beat is a milky veil with the same .3 s edges, kept lighter than WPF's blur alpha (see DrainAlpha).</summary>
+/// Brain drain: WPF blurred a live desktop capture (BrainDrainCapturePump); this head captures too when the platform
+/// can exclude the stage, EMI and speech windows, otherwise the 11-15 s beat is a lighter milky veil (see DrainAlpha).</summary>
 internal sealed class FirstShowEffects : Control, IDisposable
 {
     private sealed record Media(List<Bitmap> Frames, double Delay);
@@ -45,6 +46,11 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private readonly Action<string> _cue;
     private FirstShowDeck? _deck;
     private Media? _spiral;
+    private Bitmap? _drainFrame;
+    private (Func<byte[]?> Take, Action Stop)? _capture;
+    private int _drainPhase;
+    internal Func<bool, (Func<byte[]?> Take, Action Stop)?>? StartCapture;
+    internal Func<bool> CaptureSafe = () => true;
     private double _time, _nextFlash = S.FlashAt, _nextBubble = S.BubblesAt, _nextSub = S.WordsAt, _subAt = -10;
     private int _serial;
     private bool _disposed, _revealed, _wordsSpawned;
@@ -63,6 +69,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     internal (double X, double Y, double W)[] LiveBubbles => _actors.Where(a => a.Bubble && !a.Gone).Select(a => (a.X, a.Y, a.W)).ToArray();
     internal int WordCount => _actors.Count(a => a.Text != null);
     internal bool HasSpiral => _spiral != null;
+    internal bool HasDrainFrame => _drainFrame != null;
     /// <summary>The subliminal word's opacity now (WPF: in 100 ms, hold 70, out 180, at 70%).</summary>
     internal double SubliminalAlpha
     {
@@ -80,10 +87,15 @@ internal sealed class FirstShowEffects : Control, IDisposable
             return 70 / 255.0 * Math.Clamp(Math.Min(_time - (first ? S.DrainAt : S.DrainDeepAt), (first ? S.DrainDeepAt : S.WordsAt) - _time) / .3, 0, 1);
         }
     }
-    public FirstShowEffects(Action<string> cue, Random? rng = null)
+    public FirstShowEffects(Action<string> cue, Random? rng = null, PixelRect screen = default, Func<bool>? captureAllowed = null)
     {
         _cue = cue; IsHitTestVisible = false;
         Fx = new ChaosFxLayer(() => { }, rng: rng);   // Tick repaints every frame; nothing to wake
+        if (captureAllowed != null && screen.Width > 0 && screen.Height > 0)
+        {
+            CaptureSafe = captureAllowed;
+            StartCapture = melt => { var pump = new FirstShowCapture(screen, melt); return (pump.Take, pump.Stop); };
+        }
     }
     internal FirstShowEffects() : this(_ => { }) { }   // --render-all: an empty layer (no deck loaded)
     private double W => Math.Max(1, double.IsNaN(Width) ? Bounds.Width : Width);
@@ -107,6 +119,20 @@ internal sealed class FirstShowEffects : Control, IDisposable
         if (_disposed) return;
         _time = seconds;
         Fx.Update(TimeSpan.FromSeconds(Math.Clamp(delta, 0, .1)));   // WPF Tick :112, :117: before this frame's spawns
+        // WPF FirstShowEffects.cs:121-127: fresh pump for each two-second beat, melt only
+        // in the second beat when motion is enabled. Stop even if a frame never arrived.
+        int drain = seconds >= S.DrainAt && seconds < S.DrainDeepAt ? 1 : seconds >= S.DrainDeepAt && seconds < S.WordsAt ? 2 : 0;
+        if (drain != _drainPhase || (_capture != null && !CaptureSafe()))
+        {
+            _capture?.Stop(); _capture = null; _drainFrame?.Dispose(); _drainFrame = null;
+            _drainPhase = drain;
+        }
+        if (drain != 0 && _capture == null && CaptureSafe()) _capture = StartCapture?.Invoke(drain == 2 && Motion != MotionLevel.Off);
+        if (_capture?.Take() is { } bytes)
+        {
+            try { using var stream = new MemoryStream(bytes); var frame = new Bitmap(stream); _drainFrame?.Dispose(); _drainFrame = frame; }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "First show capture frame unavailable"); }
+        }
         if (seconds >= _nextBubble && seconds < S.GatherAt && _media.Count > 0) { Spawn(true, seconds); _nextBubble = seconds + S.BubbleEvery; }
         if (seconds >= _nextFlash && seconds < S.GatherAt && _media.Count > 0)
         {
@@ -252,7 +278,16 @@ internal sealed class FirstShowEffects : Control, IDisposable
     {
         if (_disposed) return;
         var all = new Rect(0, 0, W, H);
-        if (DrainAlpha > 0) dc.FillRectangle(new ImmutableSolidColorBrush(Color.FromRgb(236, 228, 244), DrainAlpha), all);
+        if (DrainAlpha > 0)
+        {
+            if (_drainFrame == null) dc.FillRectangle(new ImmutableSolidColorBrush(Color.FromRgb(236, 228, 244), DrainAlpha), all);
+            else
+            {
+                // WPF FirstShowEffects.cs:280-282 and BrainDrainLayer.cs:296-301.
+                double alpha = Math.Round((.10 + (.85 - .10) * Math.Pow(69 / 99.0, .66)) * 255) / 70 * DrainAlpha;
+                using (dc.PushOpacity(alpha)) dc.DrawImage(_drainFrame, all);
+            }
+        }
         if (_time >= S.PinkAt && _time < S.RevealAt)
         {
             double fade = Math.Clamp((_time - S.PinkAt) / .8, 0, 1) * Math.Clamp((S.RevealAt - _time) / 3, 0, 1);
@@ -338,6 +373,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
+        _capture?.Stop(); _capture = null; _drainFrame?.Dispose(); _drainFrame = null;
         _actors.Clear(); Fx.Clear(); _glyphs.Clear(); Free(_media); _media.Clear();
         if (_spiral != null) Free(new[] { _spiral }); _spiral = null;
         InvalidateVisual();

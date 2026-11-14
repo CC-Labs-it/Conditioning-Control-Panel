@@ -48,6 +48,7 @@ public sealed class AwarenessTubeReactionTests
                 ActivityCategory.Gaming, ActivityCategory.Unknown, "Steam", "Steam"));
             Dispatcher.UIThread.RunJobs();
             Assert.True(bubble.IsVisible);
+            while (tube.TypewriterFrame is { } frame) frame();
             Assert.False(string.IsNullOrWhiteSpace(text.Text));
 
             bubble.IsVisible = false;

@@ -97,12 +97,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             switch (type)
             {
                 case "boot-error":
-                    // WPF DtrhHostService.cs:925-954: close the failed web host, then fall back.
+                    // WPF DtrhHostService.cs:1014-1025: close the failed web host, then fall back on the
+                    // dispatcher (BeginInvoke), so a run started in between keeps the screen (#3540).
                     if (_closing) return true;
                     Log.Warning("DtrhHost: page boot-error: {Msg}; opening classic game", (string?)o["msg"]);
                     Close();
-                    try { LaunchDtrhLegacy(); }
-                    catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try { LaunchDtrhLegacy(); }
+                        catch (Exception ex) { Log.Error(ex, "DtrhHost: legacy fallback failed"); }
+                    });
                     return true;
                 case "ready":
                     IsReady = true;
@@ -187,22 +191,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         /// <summary>WPF DtrhHostService.cs:939-954. The existing Core first-run deal is shared
-        /// with ChaosHappyPath; repeat players enter the hub and use its FALL IN button.</summary>
+        /// with ChaosHappyPath; repeat players enter the one live hub (ChaosHubWindow.OpenAt, #3540)
+        /// and use its FALL IN button.</summary>
         private static void LaunchDtrhLegacy()
         {
             if (Chaos.ChaosRunHost.IsActive) return;
+            // WPF App.xaml.cs:2746 loads the active save first: only the hub's constructor loads it here,
+            // so an unloaded State would read RunsCompleted 0 and deal a repeat player the first run.
+            // A live hub already holds the loaded save; reloading under it would swap its state.
+            if (Chaos.ChaosHubWindow.Current == null) ChaosMeta.Init();
             if (ChaosMeta.State.RunsCompleted == 0)
             {
                 Chaos.ChaosRunHost.StartRun(DtrhRunWire.FirstRunConfig());
                 return;
             }
-            var desktop = global::Avalonia.Application.Current?.ApplicationLifetime
-                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var hub = desktop?.Windows.OfType<Chaos.ChaosHubWindow>().FirstOrDefault();
-            if (hub != null) { hub.Activate(); return; }
-            hub = new Chaos.ChaosHubWindow();
-            if (desktop?.MainWindow is { IsVisible: true } owner) hub.Show(owner);
-            else hub.Show();
+            Chaos.ChaosHubWindow.OpenAt();
         }
 
         // Avalonia has no RestoreBounds. Remember the normal frame while the user moves or resizes it.
@@ -347,7 +350,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var booking = DtrhRunWire.Book(o, hostElapsed);
-                double skillMult = ChaosRunState.SkillMultProvider?.Invoke() ?? 1.0;
+                // WPF DtrhHostService.cs:622 (Sparkles B1): a descent that reached its own ending claims a medal
+                // against this run's XP ceiling. A left descent pays nothing.
+                if (!((bool?)o["abandoned"] ?? false))
+                    DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.Claim(SparklesHead.Service, "dtrh", "solo",
+                        ConditioningControlPanel.Services.Sparkles.Claims.SparklesResult.ForMedal(ConditioningControlPanel.Services.Sparkles.Claims.SparklesGameEnd.RatioMedal(booking.Score, 250.0 * (booking.DurationSec / 60.0) * booking.DiffMult)),
+                        TimeSpan.FromSeconds(booking.DurationSec), new JObject { ["difficulty"] = booking.Difficulty }));
+                double skillMult = global::ConditioningControlPanel.Models.SkillTreeRules.GetTotalXpMultiplier(CoreSettings.Current, DateTime.Now.Hour, 0.0);
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);

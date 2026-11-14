@@ -341,8 +341,10 @@ public sealed class SessionRunWireTests
         return Task.CompletedTask;
     });
 
-    [Fact]
-    public async Task StartLocksAndLabelsTrayStopPausesResumeRestartsStopOpensTheRecap()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartLocksAndLabelsTrayStopPausesResumeRestartsStopOpensTheRecap(bool directCoreStop)
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -370,7 +372,8 @@ public sealed class SessionRunWireTests
                 var stopLabel = Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!;
                 Assert.StartsWith("STOP SESSION (00:", stopLabel);
 
-                MainShellWindow.StopEverything();   // the tray's Stop everything (and the panic tail)
+                if (directCoreStop) CoreEngine.Stop(); // a remote panic bypasses the shell stop
+                else MainShellWindow.StopEverything(); // the tray's Stop everything (and the panic tail)
                 // WPF MainWindow.xaml.cs:1726: the session is paused, not ended; the engine stops.
                 Assert.True(runner.IsRunning && runner.IsPaused);
                 Assert.Equal(1, runner.PauseCount);

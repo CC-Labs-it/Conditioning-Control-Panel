@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
     /// GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. Home browser popups are routed in place. It has NO zoom factor, no document-created script
+    /// them yet, so they are not wrapped. Home browser popups are routed in place. Native zoom is applied through WebViewZoom; it has no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -59,11 +59,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public Func<Uri, bool>? AllowNavigation { get; set; }
         internal bool SuppressNewWindows { get; set; }
         internal event Action? BrowserProcessFailed;
+        /// <summary>Per-host native settings, run on the UI thread once for every engine the view builds
+        /// (Spiral's WebView2 chrome switches). A throwing hook is logged, never fatal.</summary>
+        internal Action<IPlatformHandle?>? ConfigureNative { get; set; }
         private IDisposable? _failureWatch;
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
         /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
         /// Native only: a page message can never raise it.</summary>
         internal event Action? NativeFullscreenEntered;
+        internal event Action? NativeFullscreenExited;
         private IDisposable? _fullscreenWatch;
         internal void OnNativeFullscreenEntered() => NativeFullscreenEntered?.Invoke();
         /// <summary>Keys the page never sees, taken at the engine's input (Platform/WebKeySignal), any frame.
@@ -72,6 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal event Action<global::Avalonia.Input.Key, global::Avalonia.Input.KeyModifiers>? NativeKeyDown;
         private IDisposable? _keyWatch;
         internal void OnNativeKeyDown(global::Avalonia.Input.Key key, global::Avalonia.Input.KeyModifiers mods) => NativeKeyDown?.Invoke(key, mods);
+        internal void OnNativeFullscreenExited() => NativeFullscreenExited?.Invoke();
         internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
 
         /// <summary>Per-host WebView2 options, set before attachment. Other adapters ignore these.</summary>
@@ -94,6 +99,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Uri? CurrentUrl { get; private set; }
 
+        // The last accepted top-level start, only while it has not completed. NativeWebView's
+        // message event has no source, so callers must not treat this as a message's proven origin.
+        internal Uri? ActiveNavigation { get; private set; }
+
         /// <summary>
         /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
         /// completes, failed ones included, as WPF's <c>BrowserService.NavigationCompleted</c>
@@ -114,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
+            ActiveNavigation = null;
             if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
@@ -129,6 +139,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // The native adapter asks at first attachment, before navigation. Keep OS setup in the caller.
         internal event Action<WebViewEnvironmentRequestedEventArgs>? EnvironmentRequested;
+
+        // Same callback for the native adapter and headless environment-policy tests.
+        internal void OnEnvironmentRequested(WebViewEnvironmentRequestedEventArgs args) =>
+            EnvironmentRequested?.Invoke(args);
 
         /// <summary>
         /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
@@ -405,6 +419,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; }
         }
 
+        private void ApplyNativeSettings(NativeWebView native, IPlatformHandle? handle)
+        {
+            if (!ReferenceEquals(_web, native) || ConfigureNative is not { } configure) return;
+            try { configure(handle ?? native.TryGetPlatformHandle()); }
+            catch (Exception ex) { Log.Debug(ex, "Native browser settings failed"); }
+        }
+
         private void AttachFailureWatch(NativeWebView native, bool reportFailure)
         {
             if (!ReferenceEquals(_web, native) || BrowserProcessFailed == null || _failureWatch != null) return;
@@ -426,6 +447,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             try
             {
+                BrowserZoomAdapterDestroyed();
                 ClearNativeWatches();
                 if (_web is { } old) _webSlot.Children.Remove(old);
                 _web = null;
@@ -463,12 +485,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                 // gate has to be live for the FIRST navigation too, and a caller that assigns
                 // the predicate and the Source in that order would otherwise race the engine.
-                native.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
-                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) ClearNativeWatches(); };
-                native.AdapterCreated += (_, _) =>
+                native.EnvironmentRequested += (_, e) => OnEnvironmentRequested(e);
+                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
+                native.AdapterCreated += (_, e) =>
                 {
-                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) AttachFailureWatch(native, false);
-                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => AttachFailureWatch(native, false));
+                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { ApplyNativeSettings(native, e.TryGetPlatformHandle()); AttachFailureWatch(native, false); ZoomAdapterCreated(native, () => e.TryGetPlatformHandle()); }
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { ApplyNativeSettings(native, null); AttachFailureWatch(native, false); if (ReferenceEquals(_web, native)) TryBrowserZoomAdapterReady(); });
                 };
                 native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native)) OnNavigationStarted(native, e); else e.Cancel = true; };
                 native.NavigationCompleted += (_, e) => {
@@ -476,8 +498,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // The native core exists now; subscribe before observers can reveal a scene.
                     AttachFailureWatch(native, true);
                     if (BrowserProcessFailed != null && _failureWatch == null) return;
-                    if (NativeFullscreenEntered != null && _fullscreenWatch == null)
-                        try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(native.TryGetPlatformHandle(), OnNativeFullscreenEntered); }
+                    if ((NativeFullscreenEntered != null || NativeFullscreenExited != null) && _fullscreenWatch == null)
+                        try { _fullscreenWatch = Platform.WebFullscreenSignal.Attach(native.TryGetPlatformHandle(), OnNativeFullscreenEntered, OnNativeFullscreenExited); }
                         catch (Exception ex) { Log.Debug(ex, "Fullscreen signal subscription failed"); }
                     if (NativeKeyFilter is { } wants && _keyWatch == null)
                         try { _keyWatch = Platform.WebKeySignal.Attach(native.TryGetPlatformHandle(), wants, OnNativeKeyDown); }
@@ -513,9 +535,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             NavigationStarting?.Invoke();
             var target = e.Request;
+            ActiveNavigation = null;
+            if (e.Cancel) return;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
             // Late redirects from the stopped document must not replace the blank page.
             if (_panicBlank) { e.Cancel = target != PanicBlank; return; }
+            TryBrowserZoomAdapterReady();
             _scrolllerPanicTarget = target;
             if (RefusesScrolller(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
@@ -531,15 +556,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
-            if (gate is null) { NavigationBeginning?.Invoke(); return; }
+            if (gate is null) { RecordAllowedNavigation(target); NavigationBeginning?.Invoke(); return; }
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) { NavigationBeginning?.Invoke(); return; }
+            if (gate(target)) { RecordAllowedNavigation(target); NavigationBeginning?.Invoke(); return; }
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
         }
+
+        internal void RecordAllowedNavigation(Uri? target) => ActiveNavigation = target;
 
         /// <summary>
         /// Loads <paramref name="url"/> even when it is already the <see cref="Source"/>: WPF #867, clicking
@@ -548,6 +575,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool Navigate(Uri url)
         {
+            ActiveNavigation = null;
             _panicBlank = false;
             CancelPendingNavigation();
             NavigationRequests++;
@@ -628,6 +656,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Headless tests supply an engine without loading a native web view.
         internal Func<Uri, bool>? NavigationInvoker { get; set; }
+
+        // A caller sets this before the native adapter is attached. WebView2 installs it on each
+        // recreated core before the held first navigation; other engines retain the load fallback.
+        internal string? WindowsDocumentStartScript { get; set; }
+        internal Func<string, Task>? DocumentStartInstaller { get; set; }
+
+        internal async Task PrepareScrolllerGate(int engine, bool gated)
+        {
+            if (engine != _scrolllerEngine) return;
+            if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
+            {
+                try
+                {
+                    if (DocumentStartInstaller is { } install) await install(script).WaitAsync(TimeSpan.FromSeconds(5));
+                    else if (OperatingSystem.IsWindows()) await InstallWindowsDocumentStart(script).WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
+            }
+            OnScrolllerGate(engine, gated);
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private async Task InstallWindowsDocumentStart(string script)
+        {
+            if (_web?.TryGetPlatformHandle() is not IWindowsWebView2PlatformHandle win || win.CoreWebView2 == IntPtr.Zero)
+                throw new InvalidOperationException("WebView2 core unavailable");
+            var core = Microsoft.Web.WebView2.Core.CoreWebView2.CreateFromComICoreWebView2(win.CoreWebView2);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
+        }
+
         private bool _explicitNavigate;
 
         /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
@@ -646,10 +705,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal Action<bool> NewScrolllerEngine()
         {
             _scrolllerGate = null;
+            ActiveNavigation = null;
             _loadedOnThisEngine = false;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
-            return gated => OnScrolllerGate(engine, gated);
+            return gated => _ = PrepareScrolllerGate(engine, gated);
         }
 
         /// <summary>One engine's gate report (UI thread): the held page loads now. A rebuilt engine already carries
@@ -657,6 +717,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnScrolllerGate(int engine, bool gated)
         {
             if (engine != _scrolllerEngine) return;
+            TryBrowserZoomAdapterReady();
             if (BlockWhenOffline && CoreSettings.Current.OfflineMode && Source is { IsAbsoluteUri: true, Scheme: not "about" })
             {
                 CancelHeldNavigation();
@@ -691,6 +752,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnPropertyChanged(change);
             if (change.Property == SourceProperty)
             {
+                ActiveNavigation = null;
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
                 if (!_explicitNavigate) CancelPendingNavigation();
                 ApplySource();

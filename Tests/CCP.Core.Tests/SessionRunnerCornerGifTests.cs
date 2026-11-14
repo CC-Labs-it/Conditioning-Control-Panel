@@ -244,6 +244,58 @@ public sealed class SessionRunnerCornerGifTests : IDisposable
         Assert.Equal(55, _runner.CurrentSession!.Settings.CornerGifOpacity);
     }
 
+    [Fact]
+    public void OpacityEditChangesShownSessionWithoutRecreatingIt_AndIsIgnoredWhileHidden()
+    {
+        var edits = new List<int>();
+        var previous = CoreCornerGif.SessionOpacityHandler;
+        CoreCornerGif.SessionOpacityHandler = edits.Add;
+        try
+        {
+            var session = Gamer(start: 2);
+            _standalone = true;
+            _runner.Start(session);
+            _runner.UpdateCornerGifOpacity(70);
+            Assert.Equal(40, session.Settings.CornerGifOpacity);
+            Assert.Empty(edits);
+            _standalone = false;
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            _runner.UpdateCornerGifOpacity(70);
+            Assert.Equal(70, session.Settings.CornerGifOpacity);
+            Assert.Equal(new[] { 70 }, edits);
+            Assert.Equal(new[] { "show TopRight 250 40" }, _events);
+            _runner.Pause();
+            _runner.UpdateCornerGifOpacity(20);
+            Assert.Equal(70, session.Settings.CornerGifOpacity);
+            Assert.Single(edits);
+        }
+        finally { CoreCornerGif.SessionOpacityHandler = previous; }
+    }
+
+    [Fact]
+    public void PositionEditRemembersHiddenCornerAndMovesShownSurfaceWithoutRecreate()
+    {
+        var moves = new List<CornerPosition>();
+        var previous = CoreCornerGif.SessionPositionHandler;
+        CoreCornerGif.SessionPositionHandler = moves.Add;
+        try
+        {
+            var session = Gamer(start: 2);
+            _standalone = true;
+            _runner.Start(session);
+            _runner.UpdateCornerGifPosition(CornerPosition.BottomLeft);
+            Assert.Equal(CornerPosition.BottomLeft, session.Settings.CornerGifPosition);
+            Assert.Empty(moves);
+            _standalone = false;
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            _runner.UpdateCornerGifPosition(CornerPosition.BottomRight);
+            Assert.Equal(CornerPosition.BottomRight, session.Settings.CornerGifPosition);
+            Assert.Equal(new[] { CornerPosition.BottomRight }, moves);
+            Assert.Equal(new[] { "show BottomLeft 250 40" }, _events);
+        }
+        finally { CoreCornerGif.SessionPositionHandler = previous; }
+    }
+
     [Theory]
     [InlineData(true, true, false, true, true, false, true)]
     [InlineData(false, true, false, false, true, false, false)]   // the template did not ask

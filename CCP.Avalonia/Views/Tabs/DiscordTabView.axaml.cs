@@ -73,6 +73,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PrivacyPanel = new ProfilePrivacyPanel();
             PrivacyPanel.PrivacyChanged += RefreshPrivacyActions;
             AttachedToVisualTree += (_, _) => RefreshPrivacyActions();
+            ProfileAllAchievementsExpander.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == Expander.IsExpandedProperty && ProfileAllAchievementsExpander.IsExpanded)
+                    PopulateAchievements();
+            };
         }
 
         // ------------------------------------------------------------------
@@ -305,14 +310,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             WhitelistBadge.IsVisible = isWhitelisted;
         }
 
-        /// <summary>WPF LoadProfileAchievementImages. No achievement art on this head, so each tile draws as its plate.</summary>
-        private void ShowAchievements(IEnumerable<string>? ids, string emptyText)
+        // Keep the folded gallery as data. ItemsControl creates containers even while its
+        // ancestor expander is closed; assigning ItemsSource on first show paid for every unlock.
+        private string[]? _achievementIds;
+        private string _achievementEmptyText = "";
+        private bool _achievementsDirty;
+
+        internal void ShowAchievements(IEnumerable<string>? ids, string emptyText)
         {
-            var tiles = ids?.Select(id => Achievement.All.Values.FirstOrDefault(a => a.Id == id)).OfType<Achievement>()
+            _achievementIds = ids?.ToArray();
+            _achievementEmptyText = emptyText;
+            TxtNoAchievements.Text = emptyText;
+            _achievementsDirty = true;
+            if (ProfileAllAchievementsExpander.IsExpanded) PopulateAchievements();
+            else ProfileAchievementGrid.ItemsSource = null; // do not retain a previous user's gallery
+        }
+
+        private void PopulateAchievements()
+        {
+            if (!_achievementsDirty) return;
+            _achievementsDirty = false;
+            var tiles = _achievementIds?.Select(id => id != null && Achievement.All.TryGetValue(id, out var a) ? a : null)
+                .OfType<Achievement>()
                 .Select(a => new ProfileAchievementTile(a.Id, CoreMods.MakeModAware(a.Name))).ToList();
             var any = tiles is { Count: > 0 };
             ProfileAchievementGrid.ItemsSource = any ? tiles : null;
-            TxtNoAchievements.Text = emptyText;
+            TxtNoAchievements.Text = _achievementEmptyText;
             TxtNoAchievements.IsVisible = !any;
         }
 
@@ -447,9 +470,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (e.Key == Key.Enter) _ = SearchAsync(TxtProfileSearch.Text);
         }
 
-        /// <summary>The Trainer Card's spiral plate. Opens the expanded map window — the same door
+        /// <summary>The Trainer Card's spiral plate. Opens the Spiral Room, the same door
         /// the nav rail's miniature uses (MainWindow.ProfileSpiral.cs).</summary>
-        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e) { }
+        private void ProfileSpiralPlate_Click(object? sender, PointerReleasedEventArgs e)
+        {
+            // WPF DiscordTabView.xaml:763 uses MouseLeftButtonUp.
+            if (e.InitialPressMouseButton == MouseButton.Left)
+                (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenSpiralMapFromProfile();
+        }
 
         /// <summary>Left-click on a badge pins or unpins it (own card only). The tile is reached
         /// through the sender's DataContext exactly as the WPF handler reads it.</summary>

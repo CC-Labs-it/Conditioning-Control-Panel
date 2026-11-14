@@ -177,4 +177,37 @@ public class FloatingVideoRevealTests
             finally { overlay.PausePlaybackClocks(); reveal.Close(); }
         });
     }
+
+    // WPF GracePauseOverlayWindow: a floating clip's card is its own 360x200 window, so a small clip never clips Resume.
+    [Fact]
+    public async Task A_floating_grace_card_opens_in_its_own_window_and_closes_with_the_clip()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var (overlay, window, reveal) = FloatingSurface();
+            try
+            {
+                var x = overlay.Surfaces[0];
+                MandatoryVideoOverlay.ShowGraceHost(x);
+                var card = Assert.IsAssignableFrom<Window>(TopLevel.GetTopLevel(x.Grace));
+                Assert.NotSame(window, card);
+                Assert.Same(card, x.GraceHost);
+                Assert.True(card.IsVisible && card.Topmost && !card.ShowActivated);
+                Assert.Equal(new Size(360, 200), card.ClientSize);
+                MandatoryVideoOverlay.ShowGraceHost(x);   // a second press never stacks a card
+                Assert.Same(card, x.GraceHost);
+                MandatoryVideoOverlay.CloseGraceHost(x);
+                Assert.Null(x.GraceHost);
+                Assert.False(card.IsVisible);
+                Assert.Null(x.Grace.Parent);
+                // The clip's close takes a pending card with it (panic reaches the card through CloseAll).
+                MandatoryVideoOverlay.ShowGraceHost(x);
+                card = x.GraceHost!;
+                overlay.CloseAll();
+                Assert.False(card.IsVisible);
+            }
+            finally { reveal.Close(); }
+            return Task.CompletedTask;
+        });
+    }
 }

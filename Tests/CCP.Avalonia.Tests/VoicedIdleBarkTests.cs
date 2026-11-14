@@ -68,6 +68,7 @@ public sealed class VoicedIdleBarkTests
         TimeSpan delay = default;
         tube.SpeechDelayScheduler = (d, _) => { delay = d; return () => { }; };
         BarkHead.Speak(new BarkSpeech("idle voice", clip, false, null, false, true), tube);
+        while (tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
         Assert.Equal("idle voice", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         Assert.Equal(new[] { "bark-voice" }, played);
         Assert.Empty(tube.ChatHistory);
@@ -92,10 +93,12 @@ public sealed class VoicedIdleBarkTests
         TimeSpan delay = default;
         tube.SpeechDelayScheduler = (d, f) => { delay = d; fire = f; return () => { }; };
         tube.Giggle("foreground");
+        while (tube.TypewriterFrame is { } typed) typed();
         if (!bubbleUp) tube.EndSpeechBubble();
         // The fifth preset has a giggle cue, making the queued idle voice gate observable.
         tube.NextPresetGiggleSound(); tube.NextPresetGiggleSound(); tube.NextPresetGiggleSound();
         BarkHead.Speak(new BarkSpeech("queued idle", clip, false, null, false, true), tube);
+        while (tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
         Assert.Equal("foreground", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         Assert.Empty(tube.ChatHistory);
         Assert.Empty(played);
@@ -103,6 +106,7 @@ public sealed class VoicedIdleBarkTests
         Assert.Equal(TimeSpan.FromSeconds(2), delay);
         Assert.NotNull(fire);
         fire!();
+        while (tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
         Assert.Equal("queued idle", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         Assert.Equal(optedIn ? new[] { "giggle" } : Array.Empty<string>(), played);
         Assert.Empty(tube.ChatHistory);

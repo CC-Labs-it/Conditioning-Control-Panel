@@ -22,6 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal interface IVoice : IDisposable { double Volume { set; } }
 
         private readonly Func<string, double, bool, Action, IVoice?> _play;
+        private readonly Func<string, Action, LibVlcAudio.IPreparedVoice?> _prepare;
         private readonly TimeProvider _time;
         private readonly Func<double> _roll;
         private readonly Random _random = new();
@@ -31,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private IVoice? _oneShot, _loop;
         private bool _running, _sessionMode;
         private int _sessionBase;
+        private long _generation;
         private DateTime _sessionStart;
         private double _frequency = 6, _volume = 0.5;
 
@@ -39,9 +41,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <param name="play">Starts a clip (path, 0..1 volume, loop, called once when it ends or errors)
         /// or returns null when it cannot.</param>
-        internal MindWipePlayer(Func<string, double, bool, Action, IVoice?> play, TimeProvider? time = null, Func<double>? roll = null)
+        internal MindWipePlayer(Func<string, double, bool, Action, IVoice?> play, Func<string, Action, LibVlcAudio.IPreparedVoice?> prepare, TimeProvider? time = null, Func<double>? roll = null)
         {
             _play = play;
+            _prepare = prepare;
             _time = time ?? TimeProvider.System;
             _roll = roll ?? _random.NextDouble;
             ReloadClips();
@@ -178,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 wasRunning = _running;
                 _running = false;
+                ++_generation;
                 oneShot = _oneShot; _oneShot = null;
                 tick = _tick; _tick = null;
             }
@@ -200,6 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF Timer_Tick: no random clips over a loop.</summary>
         private void Tick()
         {
+            long generation;
             lock (_lock)
             {
                 if (!_running || _loop != null || _clips.Length == 0) return;
@@ -208,36 +213,56 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     ? MindWipeSchedule.SessionProbability(_sessionBase, _time.GetLocalNow().DateTime - _sessionStart)
                     : MindWipeSchedule.Probability(_frequency);
                 if (_roll() >= probability) return;
+                generation = ++_generation;
             }
-            PlayOnce();
+            PlayOnce(generation);
         }
 
         /// <summary>WPF TriggerOnce: plays at the saved volume, with the service stopped too.</summary>
         internal void TriggerOnce()
         {
-            lock (_lock) _volume = MindWipeSchedule.ClampVolume(CoreSettings.Current.MindWipeVolume / 100.0);
-            PlayOnce();
-        }
-
-        private void PlayOnce()
-        {
-            string clip;
-            double volume;
+            long generation;
             lock (_lock)
             {
-                if (_clips.Length == 0) return;
-                clip = _clips[_random.Next(_clips.Length)];
-                volume = CurrentGain;
+                _volume = MindWipeSchedule.ClampVolume(CoreSettings.Current.MindWipeVolume / 100.0);
+                generation = ++_generation;
             }
-            IVoice? voice = null;
-            voice = _play(clip, volume, false, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
-            IVoice? displaced;
-            lock (_lock) { displaced = _oneShot; _oneShot = voice; }
+            PlayOnce(generation);
+        }
+
+        private void PlayOnce(long generation)
+        {
+            string clip;
+            lock (_lock)
+            {
+                if (generation != _generation || _clips.Length == 0) return;
+                clip = _clips[_random.Next(_clips.Length)];
+            }
+            LibVlcAudio.IPreparedVoice? voice = null;
+            voice = _prepare(clip, () => { lock (_lock) if (ReferenceEquals(_oneShot, voice)) _oneShot = null; });
+            IVoice? displaced = null;
+            bool started = false;
+            double volume = 0;
+            lock (_lock)
+            {
+                // A Stop or a newer one-shot while this one prepared wins; the gain is read now, so a
+                // volume change during preparation is heard from the first sample.
+                if (generation == _generation && voice != null)
+                {
+                    volume = CurrentGain;
+                    voice.Volume = volume;
+                    if (voice.Play() && generation == _generation)
+                    {
+                        displaced = _oneShot; _oneShot = voice; started = true;
+                    }
+                }
+            }
             displaced?.Dispose();
+            if (!started) { voice?.Dispose(); return; }
             // WPF App.xaml.cs:750-752: a played one-shot feeds the memory favourite.
-            if (voice != null) App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
+            App.NoteFeatureUsed(Services.Companion.Brain.MemorySignalWriter.FeatureMindWipe);
             // The bug report's recent sounds (WPF MindWipeService.cs:918, via EngineOffAudioLog).
-            if (voice != null) ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("mindwipe", clip, CoreEngine.IsRunning, false, DateTime.Now);
+            ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("mindwipe", clip, CoreEngine.IsRunning, false, DateTime.Now);
             Log.Debug("MindWipe: Playing {File} at {Heard}% after master", Path.GetFileName(clip), Math.Round(volume * 100));
         }
 

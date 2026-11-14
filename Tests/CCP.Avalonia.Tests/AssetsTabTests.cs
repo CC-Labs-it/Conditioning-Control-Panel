@@ -680,6 +680,10 @@ public sealed class AssetsTabTests
                 AssetsTabView.AppInFront = () => inFront;
                 tile.ContextMenu!.Open(tile);
                 Dispatcher.UIThread.RunJobs();
+                Assert.Same(Application.Current!.FindResource("InputContextMenuTheme"), tile.ContextMenu.Theme);
+                var divider = tile.ContextMenu.Items.OfType<Separator>().Single();
+                Assert.Same(Application.Current.FindResource("InputSeparatorTheme"), divider.Theme);
+                Assert.Equal(new Thickness(6, 4), divider.Margin);
                 var item = tile.ContextMenu.Items.OfType<MenuItem>().First();
                 item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                 tile.ContextMenu.Close();

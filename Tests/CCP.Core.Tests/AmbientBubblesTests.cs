@@ -11,6 +11,47 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class AmbientBubblesTests
 {
+    // WPF BubbleService.cs:3277-3286, ContainsPx :3023-3027 (restack b120, includes #3500).
+    [Theory]
+    [InlineData(false, 1.25, false, 250)]
+    [InlineData(true, 1.25, true, 350)]
+    [InlineData(false, 1.25, true, 250)]
+    [InlineData(true, 4, true, 400)]
+    [InlineData(true, 0.5, false, 200)]
+    public void Chaos_hit_disc_samples_boon_and_live_magnet_without_growing_the_sprite(bool live, double scale, bool magnet, double expected)
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { SizePx = 200, IsLive = live };
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
+        b.ApplyChaosHitbox(scale, magnet);
+        Assert.Equal(200, b.Size);
+        Assert.Equal(expected, b.HitSize);
+        Assert.True(b.Contains(b.CenterX + expected / 2, b.CenterY));
+        Assert.False(b.Contains(b.CenterX + expected / 2 + 0.01, b.CenterY));
+    }
+
+    [Theory]
+    [InlineData("darter")]
+    [InlineData("freeze")]
+    [InlineData("golden")]
+    [InlineData("heart")]
+    [InlineData("droplet")]
+    [InlineData("prism")]
+    [InlineData("escort")]
+    [InlineData("tease")]
+    [InlineData("brittle")]
+    public void Precision_pickups_keep_the_natural_hit_disc(string kind)
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec {
+            SizePx = 200, IsLive = true, IsDarter = kind == "darter", IsFreeze = kind == "freeze",
+            IsGolden = kind == "golden", IsHeart = kind == "heart", IsDroplet = kind == "droplet",
+            IsPrism = kind == "prism", IsEscort = kind == "escort", IsTease = kind == "tease", IsBrittle = kind == "brittle" };
+        Assert.Equal(200, AmbientBubble.ChaosHitSize(spec, 200, 2, true));
+        var b = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, spec);
+        b.ApplyChaosHitbox(2, true);
+        Assert.Equal(200, b.HitSize);
+        Assert.False(b.Contains(b.CenterX + 101, b.CenterY));
+    }
+
     [Theory]
     [InlineData(500, 300, 1.0)]
     [InlineData(-1500, 400, 1.5)]
@@ -31,6 +72,67 @@ public sealed class AmbientBubblesTests
         var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(1);
         var b = AmbientBubble.SpawnChaos(new Random(7), 0, 100, 200, 1920, 1080, 2, spec);
         Assert.Equal(640, b.Y);
+    }
+
+    [Theory]
+    [InlineData(false, false, false, false, 0)]
+    [InlineData(true, false, true, false, 8)]
+    [InlineData(true, false, false, false, 0)]
+    [InlineData(false, true, false, false, 16)]
+    [InlineData(false, true, true, true, 0)]
+    [InlineData(true, true, true, true, 8)]
+    public void Pop_particles_follow_skill_glow_and_paid_lucky_rules(bool boost, bool lucky, bool glow, bool dry, int count)
+    {
+        // WPF BubbleService.cs:1105-1108, :4430-4472.
+        var s = new AppSettings { FlashGlowEnabled = glow };
+        if (boost) s.UnlockedSkills.Add("sparkle_boost_1");
+        if (lucky) s.UnlockedSkills.Add("lucky_bubbles");
+        if (dry) AmbientBubbleXp.Take(s, AmbientBubbleXp.DailyXpCap);
+        var field = new AmbientBubbleField(new LuckyRandom());
+        var b = new AmbientBubble { Size = 100 };
+        field.Pop(b, s);
+        Assert.Equal(count, b.Sparkles.Length);
+        Assert.Equal(lucky && !dry, b.Lucky);
+        var particles = b.Sparkles;
+        field.Pop(b, s);
+        Assert.Same(particles, b.Sparkles); // repeat input must not restart the burst
+        foreach (var sp in particles)
+        {
+            Assert.Equal(50, sp.X);
+            Assert.Equal(50, sp.Y);
+            Assert.Equal(1, sp.Alpha);
+            Assert.Equal(2.04, Math.Sqrt(sp.VelX * sp.VelX + sp.VelY * sp.VelY), 8);
+            Assert.Equal(b.Lucky ? 4.04 : 3.03, sp.Size, 8);
+        }
+        b.Step();
+        for (var i = 0; i < particles.Length; i++)
+        {
+            var sp = particles[i];
+            Assert.Equal(50 + sp.VelX, sp.X, 8);
+            Assert.Equal(50 + sp.VelY - 0.15, sp.Y, 8);
+            Assert.Equal(b.Lucky ? 0.96 : 0.94, sp.Alpha, 8);
+        }
+        field.Bubbles.Add(b);
+        for (var i = 0; i < 24; i++) field.Step();
+        Assert.Empty(field.Bubbles); // particles cannot keep a completed bubble alive
+    }
+
+    [Fact]
+    public void Perk_effects_off_pops_plain_but_still_pays_the_lucky_roll()
+    {
+        // WPF BubbleService.cs:1108-1111 (owner 2026-11-05): no gold glow or sparkle burst.
+        var s = new AppSettings { FlashGlowEnabled = true, PerkEffects = PerkEffectsMode.Off };
+        s.UnlockedSkills.Add("sparkle_boost_1");
+        s.UnlockedSkills.Add("lucky_bubbles");
+        var field = new AmbientBubbleField(new LuckyRandom());
+        var b = new AmbientBubble { Size = 100 };
+        Assert.Equal(100, field.Pop(b, s));
+        Assert.Empty(b.Sparkles);
+    }
+
+    private sealed class LuckyRandom : Random
+    {
+        public override double NextDouble() => 0.01; // force a lucky roll without a probabilistic test
     }
 
     [Fact]

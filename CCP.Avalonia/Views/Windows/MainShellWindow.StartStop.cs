@@ -18,6 +18,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Bumped by every Stop, so a Start still waiting on the portal bind (up to 30 s) is dropped
         // if the user stopped or panicked meanwhile.
         private static int _engineGen;
+        private System.DateTime? _emiEngineStartedUtc;
+        internal System.Action<string, object> EmiMoment = (name, context) => EmiDesk.EmiDeskService.Instance.Fire(name, context);
+        internal System.Func<System.DateTime> EmiNow = () => System.DateTime.UtcNow;
+
+        internal void EmiEngineStarted(bool systemInitiated)
+        {
+            _emiEngineStartedUtc = EmiNow();
+            EmiMoment("engineStarted", new { systemInitiated });
+        }
+
+        internal void EmiEngineStopped()
+        {
+            var start = _emiEngineStartedUtc;
+            _emiEngineStartedUtc = null;
+            int minutes = start == null ? 0 : System.Math.Max(0, (int)(EmiNow() - start.Value).TotalMinutes);
+            EmiMoment("engineStopped", new { minutes });
+        }
 
         private void BtnStartMenu_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
@@ -107,6 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
                 CornerGifOverlay.Refresh(this);
+                EmiEngineStarted(systemInitiated); // WPF StartStop.cs:420-421
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
                 if (!systemInitiated) _ = MaybePromptMandatoryVideoEnhancement(this, () => CoreEngine.IsRunning,   // WPF StartStop.cs:443
@@ -137,8 +155,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            // Direct Core stops (a remote panic) also freeze the session clock. A session's own Stop
+            // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
+            App.Sessions?.Pause();
             Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
             Services.EngineCrashSentinel.Clear();
+            EmiEngineStopped(); // WPF StartStop.cs:570-579
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
             // WPF StartStop.cs:480-482: Stop stops everything (owner, 7.1.8): the audio player with a playlist
             // goes quiet with the engine. The list stays. StartEngine never touches the player.

@@ -81,6 +81,90 @@ internal static class Win32Overlay
             0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    /// <summary>The Windows half of <see cref="X11Overlay.RestackAbove"/>: z-order only, no activation, no
+    /// geometry, no owner moves. Styles, click-through and focus are untouched.</summary>
+    internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling)
+    {
+        if (!OperatingSystem.IsWindows() || !IsWindow(hwnd) || !IsWindow(sibling)) return false;
+        return RestackAbove(hwnd, sibling, h => GetWindow(h, 3 /* GW_HWNDPREV */),
+            h => (GetWindowLong(h, GwlExStyle) & WsExTopmost) != 0,
+            (h, after, flags) => SetWindowPos(h, after, 0, 0, 0, 0, flags));
+    }
+
+    // WPF AvatarTubeWindow.Windowing.cs:283-284 keeps the attached tube directly above main;
+    // Win32 inserts BELOW hWndInsertAfter, so inserting after sibling would reverse RestackAbove.
+    // Use the sibling's predecessor, without moving the sibling or its owner. Keep the sibling's topmost band at its boundary.
+    internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling, Func<IntPtr, IntPtr> previous,
+        Func<IntPtr, bool> topmost, Func<IntPtr, IntPtr, uint, bool> position)
+    {
+        if (hwnd == IntPtr.Zero || sibling == IntPtr.Zero || hwnd == sibling) return false;
+        var above = previous(sibling);
+        var band = topmost(sibling);
+        if (above == hwnd && topmost(hwnd) == band) return true;
+        // WPF attached tubes must also shed stray TOPMOST (AvatarTubeWindow.Windowing.cs:277-284).
+        if (above == IntPtr.Zero || topmost(above) != band)
+            // NOTOPMOST is a no-op for an already non-topmost window. TOP raises it in that band.
+            above = new IntPtr(band ? -1 : topmost(hwnd) ? -2 : 0);
+        return position(hwnd, above, SwpNoMove | SwpNoSize | SwpNoActivate | 0x200 /* SWP_NOOWNERZORDER */);
+    }
+
+    // WPF excludes the layered show windows from the desktop blit. Avalonia's
+    // CS_OWNDC host cannot use layering for that purpose; use display affinity.
+    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+    [DllImport("user32.dll")] internal static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
+    [DllImport("dwmapi.dll")] private static extern int DwmIsCompositionEnabled([MarshalAs(UnmanagedType.Bool)] out bool enabled);
+    internal const uint ExcludeFromCapture = 0x11;
+    private static readonly ConditionalWeakTable<TopLevel, CaptureLayerLease> CaptureLeases = new();
+    private static (bool Ok, uint Value) ReadAffinity(IntPtr hwnd) =>
+        GetWindowDisplayAffinity(hwnd, out var value) ? (true, value) : (false, 0);
+    internal static IDisposable? CaptureLayer(TopLevel window)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ||
+            DwmIsCompositionEnabled(out var composed) != 0 || !composed) return null;
+        var handle = window.TryGetPlatformHandle();
+        return handle?.HandleDescriptor == "HWND" && handle.Handle != IntPtr.Zero
+            ? CaptureLayer(window, handle.Handle, ReadAffinity, SetWindowDisplayAffinity) : null;
+    }
+    internal static IDisposable? CaptureLayer(TopLevel window, IntPtr hwnd,
+        Func<IntPtr, (bool Ok, uint Value)> read, Func<IntPtr, uint, bool> set)
+    {
+        if (CaptureLeases.TryGetValue(window, out _)) return null;
+        // This app owns these three windows and has no other affinity writer. Readback
+        // is unavailable for non-layered hosts; restore WDA_NONE when it is unknown.
+        var before = read(hwnd);
+        if (!set(hwnd, ExcludeFromCapture)) return null;
+        var actual = read(hwnd);
+        if (actual.Ok && actual.Value != ExcludeFromCapture)
+        {
+            set(hwnd, before.Ok ? before.Value : 0);
+            return null;
+        }
+        var lease = new CaptureLayerLease(window, hwnd, before.Ok ? before.Value : 0, read, set);
+        CaptureLeases.Add(window, lease);
+        return lease;
+    }
+    internal static bool CaptureExcluded(TopLevel window, IntPtr hwnd) =>
+        CaptureLeases.TryGetValue(window, out var lease) && lease.Excluded(hwnd);
+    private sealed class CaptureLayerLease(TopLevel window, IntPtr hwnd, uint before,
+        Func<IntPtr, (bool Ok, uint Value)> read, Func<IntPtr, uint, bool> set) : IDisposable
+    {
+        private bool _disposed;
+        internal bool Excluded(IntPtr current)
+        {
+            if (_disposed || current != hwnd) return false;
+            var value = read(hwnd);
+            return !value.Ok || value.Value == ExcludeFromCapture;
+        }
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true; CaptureLeases.Remove(window);
+            var current = read(hwnd);
+            if (window.TryGetPlatformHandle()?.Handle == hwnd && (!current.Ok || current.Value == ExcludeFromCapture))
+                set(hwnd, before);
+        }
+    }
+
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 
@@ -202,7 +286,8 @@ internal static class Win32Overlay
     }
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
-    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] internal static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
     private const int GwlHwndParent = -8;
     private const uint GwHwndPrev = 3;
     private const uint WmWindowPosChanging = 0x0046;

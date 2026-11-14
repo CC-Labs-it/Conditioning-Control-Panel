@@ -55,8 +55,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         private Action? _refreshFloating;
+        internal Action<Window> ApplyFloatingPassive { get; set; } = X11Overlay.SetPassive;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null)
+        {
+            /// <summary>Floating only: the grace card's own screen-centred window while paused (WPF GracePauseOverlayWindow).</summary>
+            internal Window? GraceHost { get; set; }
+            internal global::Avalonia.Platform.Screen? Screen { get; init; }
+            internal EventHandler<KeyEventArgs>? PanicTunnel { get; init; }
+        }
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
@@ -146,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF VideoService.MetadataCache: created on first use on the shared LibVLC; a miss starts
         /// a background parse and the clip is kept this refill.</summary>
         private static VideoMetadataCache? _lengths;
-        private static double? LengthOf(string path)
+        internal static double? LengthOf(string path)
         {
             if (_lengths == null && LibVlcAudio.Shared is { } vlc) _lengths = new VideoMetadataCache(vlc);
             var d = _lengths?.TryGetDuration(path);
@@ -458,10 +465,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { picture, layer, grace, buttons.Row } },
+                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row } },
             };
-            CoverGentleEntrance((Panel)w.Content!);
             var floating = Floating;
+            // A floating window can be smaller than the 360x200 card: its card opens in its own window (WPF VideoService.cs:6440).
+            if (!floating) ((Panel)w.Content).Children.Insert(2, grace);
+            CoverGentleEntrance((Panel)w.Content!);
             if (floating)
             {
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
@@ -471,6 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var frame = DecorateFloating(w);
                 w.Opened += (_, _) =>
                 {
+                    ApplyFloatingPassive(w);
                     var floatingFrame = new FloatingVideoFrame(w, frame: frame, audible: () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0);
                     _refreshFloating += floatingFrame.Refresh;
                     w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;
@@ -501,13 +511,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.KeyDown += (_, e) => OnKey(e);
             // The panic key always wins: tunnel it so a focused Resume button cannot take it as a click
             // when the panic key is Enter/Space (the WPF card was a separate window). Other keys bubble as before.
-            w.AddHandler(InputElement.KeyDownEvent, (_, e) =>
+            void PanicTunnel(object? _, KeyEventArgs e)
             {
                 var s = CoreSettings.Current;
                 if (!s.PanicKeyEnabled || !HotkeyNames.Matches(e.Key, s.PanicKey)) return;
                 OnKey(e);
                 e.Handled = true;
-            }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            }
+            w.AddHandler(InputElement.KeyDownEvent, PanicTunnel, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
             w.Closing += (_, e) => { if (strict && VetoStrictClose(Scheduler.IsPlaying)) e.Cancel = true; };
             var watchdog = _wedge;
@@ -528,7 +539,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal);
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel };
         }
 
         /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:
@@ -542,8 +553,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 void Kick()
                 {
                     if (!video.IsVisible) return;
-                    Chaos.ChaosRunHost.RaiseDvdAboveVideo();
-                    Chaos.ChaosRunHost.KeepChromeTopmost(() =>
+                    // WPF RaiseGameLayerAboveVideo: the whole game layer, chrome included (#4245), E-Stim
+                    // bolts and halo too (WPF ChaosModeService.cs:761, restack b120 #3501).
+                    Chaos.ChaosRunHost.RaiseGameLayerAboveVideo(() =>
                     {
                         if (watch != null && ReferenceEquals(watch, Chaos.ChaosWaveTimerWindow.Active))
                             Chaos.ChaosWaveTimerWindow.RaiseActive();
@@ -678,13 +690,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _playback?.SetPause(true);
             PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
 
-            foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
+            foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; if (Floating) ShowGraceHost(x); }
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _graceTimer.Tick += (_, _) => GraceTick();
             _graceTimer.Start();
             Log.Information("VideoService: grace pause engaged ({Window}s window)", MandatoryVideoScheduler.GraceWindowSeconds);
             return true;
+        }
+
+        /// <summary>WPF ShowGraceOverlays for floating clips: a separate topmost 360x200 card centred on the
+        /// clip's screen, so a small floating window never clips the Resume button.</summary>
+        internal static void ShowGraceHost(Surface x)
+        {
+            if (x.GraceHost != null || x.Grace.Parent != null) return;
+            var host = x.GraceHost = new Window
+            {
+                Title = "CCP Video",
+                WindowDecorations = WindowDecorations.None,
+                Topmost = true,
+                ShowInTaskbar = false,
+                ShowActivated = false,   // never steal focus (WPF GracePauseOverlayWindow.cs:147)
+                CanResize = false,
+                Background = Brushes.Transparent,
+                TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
+                Width = 360,
+                Height = 200,
+                Content = x.Grace,
+            };
+            // The panic key routes as on the video window: a focused Resume never takes Enter/Space as a click.
+            if (x.PanicTunnel != null) host.AddHandler(InputElement.KeyDownEvent, x.PanicTunnel, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            // The screen the clip opened on (WPF FloatingScreens); headless has none, so the platform's primary.
+            if ((x.Screen ?? x.Window.Screens.Primary ?? x.Window.Screens.All.FirstOrDefault()) is { } screen)
+            {
+                var b = screen.Bounds;
+                host.WindowStartupLocation = WindowStartupLocation.Manual;
+                host.Position = new PixelPoint(b.X + (int)((b.Width - 360 * screen.Scaling) / 2), b.Y + (int)((b.Height - 200 * screen.Scaling) / 2));
+            }
+            host.Show();
+        }
+
+        internal static void CloseGraceHost(Surface x)
+        {
+            if (x.GraceHost is not { } host) return;
+            x.GraceHost = null;
+            host.Content = null;
+            host.Close();
         }
 
         /// <summary>WPF StartGraceCountdown's 1 s tick: refresh "Resuming in Ns", resume at 0.</summary>
@@ -720,10 +771,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!_gracePaused) return;
             _gracePaused = false;
             SafetyDeadline.ResumeFromGrace(Now);
+            _stallSince = Now;   // WPF VideoService.cs:6636 (#735): the pause never eats the stall grace
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
-            foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
+            foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; CloseGraceHost(x); }
             PrimaryPaused = false; // WPF ResumeFromGrace -> PlayPrimary releases the paused player
             ResumePlaybackClocks();
             FrameTs = Stopwatch.GetTimestamp();
@@ -745,11 +797,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SafetyDeadline.Arm(Now, _playback.Length / 1000.0);
                 _safetyLengthArmed = true;
             }
+            var enhanced = EnhancementOwnsLength(_playback.Length / 1000.0);
             if (SafetyDeadline.Expired(Now))
             {
-                Log.Warning("VideoService: safety timeout after {Sec:F1}s - ending the clip", Elapsed);
-                Scheduler.End();
-                return;
+                // #536: an enhancement-driven clip past its deadline ends only on a stalled playhead.
+                if (!enhanced)
+                {
+                    Log.Warning("VideoService: safety timeout after {Sec:F1}s - ending the clip", Elapsed);
+                    Scheduler.End();
+                    return;
+                }
+                if (EnhancementStalled(Now))
+                {
+                    Log.Warning("VideoService: enhancement-driven video stalled {Grace}s with no playback progress - ending the clip",
+                        EnhancementStallGraceSeconds);
+                    Scheduler.End();
+                    return;
+                }
             }
             if (PrimaryPaused) return;
             SampleCutPlayback();
@@ -758,8 +822,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (UpdateFloatingReveal(_sinceReady.Elapsed.TotalSeconds, _player?.IsPlaying == true)
                     == ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FirstFrameVerdict.Skip) return;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
+            // The played-time "overran" guard is the same length guillotine: the deadline above owns it then.
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                _playback.HasVideo, _playback.Length / 1000.0,
+                _playback.HasVideo, enhanced ? double.PositiveInfinity : _playback.Length / 1000.0,
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
                 _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew);
             if (why == null) return;
@@ -1215,6 +1280,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private int _escapeGeneration;
         internal int EscapeGeneration => System.Threading.Volatile.Read(ref _escapeGeneration);
 
+        /// <summary>WPF VideoService.cs:1843-1898: lock or suspend force-cleans an active video,
+        /// including pre-roll, without scheduling a replacement. OS callbacks may be off-thread.</summary>
+        internal void SystemUnavailable()
+        {
+            var scheduler = Scheduler;
+            if (!scheduler.IsPlaying && _surfaces.Count == 0) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                try { scheduler.ForceCleanup(); }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: system-away cleanup failed"); }
+            });
+        }
+
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             EndEnhancement();
@@ -1256,6 +1334,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _media = null;
                 foreach (var x in _surfaces)
                 {
+                    CloseGraceHost(x);
                     x.Video.Source = x.Fill.Source = null;
                     x.Reveal?.Cancel();   // a window never presented stays hidden; its audio stays held
                     CloseGentleSurface(x.Window, Scheduler.SoftExit);

@@ -1666,6 +1666,7 @@ in again - tester plan note), <code>pack-stamp-new-root</code> (builtin_mods/*/p
 <li>This lane adds the Avalonia flag, the JSON shape and the report-only Linux job (<code>perf-bench-linux</code>); the WPF flag, the
 Windows job and the comparison script come with <code>perf-bench-wpf-compare</code>. The gate starts report-only and becomes required
 after 3 consecutive stable runs. Table: <code>docs/avalonia-perf.html</code>.</li>
+<li>2026-11-04 (owner): tab rows compare both heads at WPF's stop point, the UI thread handing the frame to the render thread. Avalonia writes it as <code>handoff_median_ms</code>/<code>handoff_p95_ms</code> and <code>perf-compare.py</code> gates on those; its frame-drawn numbers (<code>median_ms</code>/<code>p95_ms</code>) stay in the report as information. Evidence: <code>~/ccp-port/evidence/perf-combined-20261104/floor-investigation.html</code> (root cause 1). Details: <code>docs/avalonia-perf.html</code>, "Two stop points".</li>
 </ul>
 <h2 id="2026-10-23-scrolller-web-gate--a-loopback-relay-the-same-on-windows-and-linux-port72scrolller-2">2026-10-23: Scrolller web gate = a loopback relay, the same on Windows and Linux (port72/scrolller-2)</h2>
 <ul>
@@ -1748,6 +1749,11 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Choice: <code>Program.Win32Options</code> lists the DXGI adapters (<code>Platform/DxgiAdapters.cs</code>, CreateDXGIFactory1/EnumAdapters1) before Avalonia starts. If every adapter is WARP (vendor 0x1414 device 0x8C, or the software flag), rendering is <code>Win32RenderingMode.Software</code>. <code>CCP_WIN32_RENDERING</code> always wins; an empty or failed enumeration keeps the default; any real GPU keeps the default. The pure rule is <code>RenderBudget.ChooseRendering</code> (tests in <code>RenderBudgetTests</code>). Linux and macOS are untouched.</li>
 <li>WPF: Microsoft documents render tier 0 as "no graphics hardware acceleration, all graphics features use software" (learn.microsoft.com, WPF "Graphics Rendering Tiers", <code>RenderCapability.Tier</code>), and WPF picks its tier itself with no app code. Not confirmed: that WPF actually lands on tier 0 on the Basic Render Driver. The runner does not log <code>RenderCapability.Tier</code>, so treat it as parity in intent only.</li>
 <li>Measured gain (software variant, one run): Programs 92 to 35 ms, AvailableSubjects 77 to 38, BlinkTrainer 75 to 35, all-tab median 81 to 57. Settings stays high (75 ms): its own tile draw is heavy (slice 3).</li>
+</ul>
+<h2 id="2026-11-12-ocr-capture-lifecycle-blocked">2026-11-12: OCR capture lifecycle remains blocked on the Avalonia head</h2>
+<ul>
+<li>The Awareness OCR switch only saves the setting (<code>CCP.Avalonia/Views/Tabs/AwarenessTabView.axaml.cs:247-263</code>); the master calls the keyboard head (<code>:215</code>). WPF starts and stops capture from both switches (<code>ConditioningControlPanel/MainWindow/MainWindow.Awareness.cs:419-426,443-468</code>).</li>
+<li>Part B: implement platform screen capture and OCR with real screen coordinates and exclusion of the app's window rectangles, then connect matching, confirmation and dispatch. WPF <code>ConditioningControlPanel/Services/ScreenOcrService.cs:51-70,84-151</code> and <code>ConditioningControlPanel/Services/KeywordTriggerService.cs:712-714,827-862</code> define the lifecycle and consumer. The Avalonia head has neither consumer nor capture service; <code>CCP.Avalonia/Views/Controls/Companion/KeywordTriggersPanel.axaml.cs:192-197</code> also needs live interval updates. A standalone scanner or timer would leave the switch without a working user path. Linux capture permissions, recognition availability and multi-monitor coordinates need a platform implementation and tests.</li>
 </ul>
 </body>
 </html>

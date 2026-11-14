@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     ///
     /// <para>ponytail: <see cref="TryLoad"/> keeps no decode cache, and that is a measured decision.
     /// The one exception is <see cref="FirstOf"/> (program art chains), which caches hits AND
-    /// misses per (active mod, path, width), so a mod switch reads fresh without invalidation.
+    /// misses per (active mod, path, width), cleared on mod switches and pack installs.
     /// All 42 call sites on this head were read: every one sits in a constructor, a one-shot
     /// build (BubbleCountWindow.LoadBubbleImage, AvatarTubeWindow.LoadAvatarPoses), or a
     /// user-driven repaint (SetTubeStyle, a ModChanged handler) that stores the Bitmap it gets.
@@ -233,6 +233,12 @@ namespace ConditioningControlPanel.Avalonia.Helpers
         }
 
         private static readonly System.Collections.Generic.Dictionary<(string, string, int?), Bitmap?> FirstOfCache = new();
+
+        // WPF ModResourceResolver.ClearCache: retain bitmaps already in use by views.
+        internal static void ClearModCache()
+        {
+            lock (FirstOfCache) FirstOfCache.Clear();
+        }
 
         /// <summary>
         /// The first of <paramref name="resourceNames"/> that loads (mod override, then built-in), or

@@ -128,12 +128,21 @@ public sealed class ChaosAnnouncerOverlayTests
     [Fact]
     public async Task A_run_announces_its_last_ten_seconds_once_and_teardown_closes_it()
     {
-        await Run(_ =>
+        await Run(clock =>
         {
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown();
-            for (int i = 0; i < 4 * 49; i++) ChaosRunHost.Tick();   // 49 s
-            Assert.Null(ChaosAnnouncerOverlay.Active);
+            for (int i = 0; i < 4 * 49; i++)   // 49 s
+            {
+                ChaosRunHost.Tick();
+                // The last loop (40 s) has its own banner (WPF ChaosModeService.cs:1460, #3541): let it play out.
+                while (ChaosAnnouncerOverlay.IsShowing)
+                {
+                    Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+                    Step(clock, 10000);
+                }
+            }
+            Assert.False(ChaosAnnouncerOverlay.IsShowing);
             for (int i = 0; i < 8; i++) ChaosRunHost.Tick();         // 51 s: inside T-10 s
             var w = ChaosAnnouncerOverlay.Active!;
             Assert.Equal("the hole is closing…", w.Current!.Text);
@@ -236,6 +245,27 @@ public sealed class ChaosAnnouncerOverlayTests
             Assert.Equal(IconVariant.Filled, icon.Variant);
             var label = Assert.IsType<OutlinedTextBlock>(panel.Children[1]);
             Assert.Equal("THE CHAPERONE: ITS LITTLE ESCORT FIRST", label.Text);
+        });
+    }
+
+    // WPF ChaosModeService.cs:434 prefixes a mantra with a diamond; without art the head draws it as a
+    // Fluent icon beside the outlined name (#3528). Art replaces the whole line, as WPF's image does.
+    [Fact]
+    public async Task Mantra_text_fallback_renders_a_diamond_icon()
+    {
+        await Run(_ =>
+        {
+            var missingArt = "mantra-missing-" + Guid.NewGuid().ToString("N");
+            Assert.Null(ChaosEffectBannerOverlay.ResolveArt(missingArt));
+            ChaosAnnouncerOverlay.Announce("Soft Focus", ChaosAnnounceKind.Mantra, missingArt);
+            var host = Assert.IsType<Grid>(ChaosAnnouncerOverlay.Active!.Content);
+            var anchor = Assert.IsType<Grid>(Assert.Single(host.Children));
+            var panel = Assert.IsType<StackPanel>(Assert.Single(anchor.Children));
+            var icon = Assert.IsType<IconGlyph>(panel.Children[0]);
+            Assert.Equal(IconKind.Diamond, icon.Kind);
+            Assert.Equal(IconVariant.Filled, icon.Variant);
+            Assert.False(icon.IsFallback);
+            Assert.Equal("SOFT FOCUS", Assert.IsType<OutlinedTextBlock>(panel.Children[1]).Text);
         });
     }
 

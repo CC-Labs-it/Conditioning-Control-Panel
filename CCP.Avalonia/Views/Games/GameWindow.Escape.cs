@@ -27,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             "breakoutdemo" or "breakout" => PanicPolicy.KeptEscapePage.Breakout,
             DtrhId => PanicPolicy.KeptEscapePage.Dtrh,
             GlassroadId => PanicPolicy.KeptEscapePage.Glassroad,
+            PrizeCounterId => PanicPolicy.KeptEscapePage.Counter,   // its Esc ladder's back (Core PanicPolicy.cs:139)
             _ => PanicPolicy.KeptEscapePage.None,
         };
 

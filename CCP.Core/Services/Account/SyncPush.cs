@@ -151,6 +151,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
         public Descent.DescentService? DescentReader { get; set; }
+        /// <summary>WPF DescentMigrationService.StageCeremonyDue: one queued stage released after a successful sync,
+        /// at most once per local day (the companion carries the moment). Raised on the UI dispatcher.</summary>
+        public Action<int>? StageCeremonyDue { get; set; }
         public DateTime? LastSyncTime { get; private set; }
         private int _syncSuccesses;
         internal Func<TimeSpan, Task> PurchaseRetryDelay = Task.Delay;
@@ -402,6 +405,7 @@ namespace ConditioningControlPanel.Services
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);
+                int? stageDue = null;
                 try
                 {
                     var reply = JObject.Parse(json);
@@ -414,6 +418,8 @@ namespace ConditioningControlPanel.Services
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
                         Nudge("descent migration");
+                    // WPF ProfileSyncService.cs:1915 -> DescentMigrationService.TickStageDrip (:390-412).
+                    stageDue = Descent.DescentMigration.ReleaseStageCeremony(s, DateTime.Now);
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
@@ -421,6 +427,11 @@ namespace ConditioningControlPanel.Services
                     Countdown.ApplyCeremonyAt(ceremonyAt);
                 if (DescentReader?.HasSeenBlock == true) DescentReader.RequestRefresh("profile synced");
                 CoreSettings.Save();
+                if (stageDue is { } due && StageCeremonyDue is { } speak)
+                {
+                    Log.Information("[Descent] Stage {Stage} ceremony released ({Left} still queued).", due, s.DescentPendingStageCeremonies.Count);
+                    CoreDispatch.Post(() => { try { speak(due); } catch (Exception ex) { Log.Debug("[Descent] StageCeremonyDue handler threw: {Error}", ex.Message); } });
+                }
                 return true;
             }
             catch (Exception ex)
@@ -642,6 +653,9 @@ namespace ConditioningControlPanel.Services
         /// (WPF ProfileSyncService hands the same body to EntitlementTierSync.Offer).</summary>
         public Action<string>? HeartbeatBody;
 
+        /// <summary>The response with the identity used for the request. Never log the token.</summary>
+        public Action<string, string?, string>? HeartbeatIdentityBody;
+
         /// <summary>WPF StartHeartbeat: one now, then every 120 s.</summary>
         public void StartHeartbeat()
         {
@@ -663,7 +677,13 @@ namespace ConditioningControlPanel.Services
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession(), HeartbeatBody);
+            var id = s.UnifiedId!;
+            var token = s.AuthToken;
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(id, true, _inSession(), body =>
+            {
+                HeartbeatBody?.Invoke(body);
+                HeartbeatIdentityBody?.Invoke(id, token, body);
+            });
         }
     }
 }

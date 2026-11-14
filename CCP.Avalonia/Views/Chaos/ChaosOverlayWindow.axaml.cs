@@ -1104,13 +1104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Straight to run setup — recap → Settings tab without hunting through the hub.</summary>
         private void BtnAdjust_Click(object? sender, RoutedEventArgs e) => OpenHubAt("run");
 
-        /// <summary>
-        /// PORTED with two things missing, both because their owners are not on this head:
-        /// <c>App.Chaos.IsRunning</c> (the guard that stops the hub opening mid-run) and
-        /// <c>ChaosHubWindow.Current</c> plus <c>App.MainWindowRef</c> (the single-instance
-        /// registry and the owner). ponytail: needs ChaosService + the window registry, wired when
-        /// they move to Core - until then this opens a fresh hub every time.
-        /// </summary>
+        /// <summary>WPF ChaosOverlayWindow.xaml.cs:866-886: close before opening the
+        /// owned, single-instance hub; a new active run refuses the queued door.</summary>
         private void OpenHubAt(string? tab)
         {
             Close();   // OnDismissed → the service tears the run windows down first
@@ -1118,9 +1113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 try
                 {
-                    var hub = new ChaosHubWindow();
-                    hub.Show();
-                    if (tab != null) hub.NavigateTo(tab);
+                    ChaosHubWindow.OpenAt(tab);
                 }
                 catch (Exception ex) { Log.Warning("Recap dollhouse door failed ({E})", ex.Message); }
             });
@@ -1534,6 +1527,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             public static void PlayWaveClear() => PlayFirstAvailable(new[] { "chaos/wave_clear.mp3", "lvup.mp3" }, 0.8f);
 
             public static void PlayBoonPicked() => PlayFirstAvailable(new[] { "chaos/boon_pick.mp3", "chime2.mp3" }, 0.7f);
+
+            public static void PlayRippleCast() => PlayFirstAvailable(new[] { "chaos/ripple_cast.mp3", "chaos/snap.mp3" }, 0.6f);
 
             /// <summary>First candidate that exists on disk wins; a miss in all of them is
             /// silence, never an exception.</summary>

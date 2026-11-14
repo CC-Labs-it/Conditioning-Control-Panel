@@ -127,6 +127,64 @@ namespace ConditioningControlPanel.Avalonia
         internal static AutoSettingsBackup? CloudAutoBackup { get; private set; }
 
         /// <summary>WPF AchievementService.cs:947-954: flush even when an autosave already cleared IsDirty.</summary>
+        /// <summary>WPF GamificationBridge.cs:114-136,299-358: restore the best available chat
+        /// count once, silently, after both the brain and achievements are ready.</summary>
+        internal static void BackfillCompanionChatCount(AchievementEngine? achievements,
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain? brain)
+        {
+            if (achievements == null || brain == null || achievements.Progress.CompanionChatBackfilled) return;
+            var wasSuppressed = achievements.SuppressPopups;
+            achievements.SuppressPopups = true;
+            try
+            {
+                var readSomething = false;
+                var restoredTurns = 0;
+                try
+                {
+                    restoredTurns = brain.Session.Turns.Count(t => t != null &&
+                        t.Kind == ConditioningControlPanel.Services.Companion.Brain.TurnKind.UserChat);
+                    readSomething = true;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Chat backfill: turn-log read failed: {Error}", ex.Message); }
+
+                var relationshipTurns = 0;
+                try
+                {
+                    if (brain.Memory is ConditioningControlPanel.Services.Companion.Brain.MemoryStore store)
+                        relationshipTurns = store.Relationships.Values.Sum(r => r?.ChatTurnsTotal ?? 0);
+                    readSomething = true;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Chat backfill: relationship read failed: {Error}", ex.Message); }
+
+                if (!readSomething) return;
+                var progress = achievements.Progress;
+                progress.CompanionChatBackfilled = true;
+                progress.CompanionMessages = Math.Max(progress.CompanionMessages, Math.Max(restoredTurns, relationshipTurns));
+                achievements.IsDirty = true;
+                if (progress.CompanionMessages > 0) achievements.TryUnlock("pleased_to_meet_you");
+                if (progress.CompanionMessages >= AchievementRules.PillowTalkMessages) achievements.TryUnlock("pillow_talk");
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Companion chat backfill failed"); }
+            finally { achievements.SuppressPopups = wasSuppressed; }
+        }
+
+        /// <summary>An empty backfill only sets the one-shot latch. Keep it in memory until a real
+        /// achievement change saves it, so the autosave tick does not create or rewrite the file.</summary>
+        internal static void DeferEmptyBackfillSave(AchievementEngine engine, bool dirtyBeforeBackfill)
+        {
+            if (!dirtyBeforeBackfill && engine.Progress.CompanionChatBackfilled && engine.Progress.CompanionMessages == 0)
+                engine.IsDirty = false;
+        }
+
+        /// <summary>WPF AchievementService.cs:98-105 autosaves dirty progress every 30 seconds.
+        /// This head saves a non-empty backfill now; a failed write stays dirty for the autosave and exit retries.</summary>
+        internal static void SaveNonEmptyChatBackfill(AchievementEngine engine, bool wasBackfilled)
+        {
+            if (!wasBackfilled && engine.Progress.CompanionChatBackfilled
+                && engine.Progress.CompanionMessages > 0 && engine.IsDirty)
+                engine.Save();
+        }
+
         internal static void SaveAchievementsOnExit(DispatcherTimer? timer, AchievementEngine? engine)
         {
             try { timer?.Stop(); }
@@ -178,6 +236,17 @@ namespace ConditioningControlPanel.Avalonia
         internal static void WireRecoveredProfileRefresh(SyncPush sync, Func<Views.Windows.MainShellWindow?> shell)
         {
             sync.RecoveredProgressionChanged = () => Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
+        /// <summary>WPF App.xaml.cs:3184-3187: follow the curve before adopting level/XP.
+        /// ProfileSyncService.cs:475-489 saves and repaints only an accepted progression change.</summary>
+        internal static void AdoptServerProgression(int level, double xp, string? season, int? epoch,
+            Func<Views.Windows.MainShellWindow?> shell)
+        {
+            AdoptServerCurveEpoch(epoch, shell);
+            if (!Services.ProfileAdopt.AdoptProfilePoll(CoreSettings.Current, level, xp, season)) return;
+            CoreSettings.Save();
+            Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
@@ -340,7 +409,7 @@ namespace ConditioningControlPanel.Avalonia
         /// that is the write WPF makes at launch (StartModsTests pins it against the Core golden).
         /// The brain is built after the mod service, so its callback reads Brain lazily as WPF does.
         /// The shared prompt prefix is also invalidated when a mod changes its content. BarkHead and
-        /// CompanionHead seed their own hooks later; the remaining head cache/host hooks stay unseeded.
+        /// CompanionHead seed their own hooks later; portrait, voice-index and Arcademy hooks stay unseeded.
         /// ponytail: the remaining startup services and global hotkeys are the follow-up lane.
         /// </summary>
         internal static void StartMods()
@@ -351,7 +420,9 @@ namespace ConditioningControlPanel.Avalonia
             // WPF App.xaml.cs:317/327: discard stale voice context on a switch or content replacement.
             CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
             CoreModsHooks.CloseDtrhHost = Views.Games.GameWindow.CloseDtrhForModSwitch;
-            CoreModsHooks.ClearModResourceCache = Helpers.StartupArt.InvalidateOverrides;
+            // WPF App.xaml.cs:358: drop cached art (the startup prewarm and the program art chains)
+            // before mod or pack change notifications.
+            CoreModsHooks.ClearModResourceCache = () => { Helpers.StartupArt.InvalidateOverrides(); Helpers.ModArt.ClearModCache(); };
             CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
             var mods = Mods;
@@ -378,6 +449,10 @@ namespace ConditioningControlPanel.Avalonia
         /// reaches the user's own server exactly as WPF; the cloud leg is the same AiService as before.</para>
         internal static ConditioningControlPanel.Services.AIService.IAiService? Ai { get; set; } =
             new ConditioningControlPanel.Services.AIService.AiServiceStrategy();
+
+        // The bouncer only enumerates screens from its host: the run overlay, as for the other payloads.
+        internal static Func<global::Avalonia.Visual?> ChaosTextHost = () => (global::Avalonia.Visual?)Views.Chaos.ChaosRunHost.Overlay
+            ?? (Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
         // WPF Services/Chaos/EffectPayloadFiring.cs:225-237. Only the global multiplier
         // applies to rain, including on a prism pop (DurationMult is deliberately ignored).
@@ -423,6 +498,13 @@ namespace ConditioningControlPanel.Avalonia
                     Services.Chaos.GifCascadePayload.START_SCALE);
                 return;
             }
+            // WPF EffectPayloadFiring.cs:177-220: reuse the bouncer for ambient text too.
+            if (payload is Services.Chaos.BouncingTextPayload)
+            {
+                if (ChaosTextHost() is { } textHost)
+                    Views.Chaos.ChaosBouncingTextEffect.Start(textHost);
+                return;
+            }
             Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", payload.DisplayName);
         }
 
@@ -457,13 +539,22 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card, unprompted));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
-            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning
+            static bool BusyProbe() => CoreSession.IsSessionRunning
                 || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
                 || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
                 || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:779-788
+            // The window and startup probes touch Avalonia state, and a chat reply can ask from a worker (#4227):
+            // read them on the UI thread. A UI thread that does not answer in 2 s counts as busy (no offer).
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () =>
+            {
+                var ui = global::Avalonia.Threading.Dispatcher.UIThread;
+                if (ui.CheckAccess()) return BusyProbe();
+                var probe = ui.InvokeAsync(BusyProbe).GetTask();
+                return !probe.Wait(TimeSpan.FromSeconds(2)) || probe.Result;
+            };
             // WPF App.xaml.cs:715 routes this through CompanionLinkLauncher.Open (remote guard, embedded browser, https fallback).
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.OpenLink = url =>
                 _ = Views.Controls.Companion.CompanionLinkLauncher.OpenAsync(url);
@@ -683,6 +774,9 @@ namespace ConditioningControlPanel.Avalonia
                 return;
             }
 #endif
+            Views.Games.GameWindow.RaceEngineFetch = Platform.RaceEngineFetchAdapter.Seed(
+                OperatingSystem.IsLinux(), System.IO.File.Exists(System.IO.Path.Combine(
+                    AppContext.BaseDirectory, "Resources", "web", "glassroad-shell", "main.js")));
             // "[SANDBOX] " on every window title of a CCP_USERDATA_DIR run. Desktop only: offscreen renders/snapshots
             // reach this callback too and must keep the real titles.
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime) Platform.SandboxMarker.Install();
@@ -970,7 +1064,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 Platform.AudioSyncHost.Start(CoreHaptics.Service, Settings.Current.Haptics.AudioSync);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
-                StartRichPresence();
+                // Presence connects only after the shell has rendered; its settings are read then.
                 // WPF ProgressionService.cs:294: the level shown in presence follows a level-up (online only).
                 ProgressionBank.LevelUp += level => { if (!Settings.Current.OfflineMode) DiscordRpc?.UpdateLevel(level); };
                 // WPF SkillTreeService.OnLevelUp:636: a level-up Sparkle counts toward the lifetime earned stat.
@@ -981,8 +1075,8 @@ namespace ConditioningControlPanel.Avalonia
                 StartDescentCountdown();
                 Descent = new Services.Descent.DescentService
                 {
-                    // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
-                    ProgressionReceived = (_, _, _, epoch) => AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
+                    ProgressionReceived = (level, xp, season, epoch) =>
+                        AdoptServerProgression(level, xp, season, epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
                 };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
@@ -1006,8 +1100,8 @@ namespace ConditioningControlPanel.Avalonia
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true);
                     WireRecoveredProfileRefresh(sync, () => desktop.MainWindow as Views.Windows.MainShellWindow);
                     // WPF ProfileSyncService: the heartbeat body is also a server tier reading (#4073).
-                    sync.HeartbeatBody = body => Dispatcher.UIThread.Post(() =>
-                        Platform.AccountSeed.ApplyTierReading(EntitlementTierRule.ParseHeartbeatTier(body), "heartbeat"));
+                    sync.HeartbeatIdentityBody = (id, token, body) => Dispatcher.UIThread.Post(() =>
+                        Platform.AccountSeed.ApplyHeartbeatTier(id, token, body));
                     SkillPurchase.Current = new SkillPurchase
                     {
                         SyncBeforeRetry = sync.SyncBeforeRetryAsync,
@@ -1146,7 +1240,7 @@ namespace ConditioningControlPanel.Avalonia
                     // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
                     vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
-                    new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
+                    new Platform.MindWipePlayer(vlc.PlayVoice, vlc.PrepareVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
                 }
                 catch (Exception ex)
@@ -1228,6 +1322,11 @@ namespace ConditioningControlPanel.Avalonia
                 _achievementSaveTimer?.Stop();
                 _achievementSaveTimer = StartAchievementAutosave(Achievements, CheckSeasonActivity);
                 WireAchievementUnlocks(Achievements);
+                var chatBackfillWasComplete = Achievements.Progress.CompanionChatBackfilled;
+                var dirtyBeforeChatBackfill = Achievements.IsDirty;
+                BackfillCompanionChatCount(Achievements, Brain);   // WPF GamificationBridge.Start:132
+                DeferEmptyBackfillSave(Achievements, dirtyBeforeChatBackfill);
+                SaveNonEmptyChatBackfill(Achievements, chatBackfillWasComplete);
                 SeedCompanionRecall();
                 WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
                 // WPF App.xaml.cs:2662: the Spiral rail day log, once Achievements and Settings are up.
@@ -1346,6 +1445,7 @@ namespace ConditioningControlPanel.Avalonia
                 TierGate.ReconnectIsTheAnswerProvider = Views.Windows.MainShellWindow.ReconnectIsTheAnswerNow;
                 // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
+                Platform.AfterFirstFrame.Schedule(shell, StartRichPresence);
                 CoreEngine.StartedHook = shell.OnEngineStarted;
                 CoreEngine.StoppedHook = shell.OnEngineStopped;
                 Sessions.Ticked += shell.OnSessionTick;
@@ -1443,7 +1543,7 @@ namespace ConditioningControlPanel.Avalonia
                 ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
                 // Linux: one toast naming the distro's install command for any missing runtime library
                 // (docs/avalonia-linux-install.html). dlopen off the UI thread; nothing when all load.
-                Dispatcher.UIThread.Post(async () =>
+                Platform.AfterFirstFrame.Schedule(shell, async () =>
                 {
                     if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(
                         // CCP_LINUX_WEBVIEW=off: web view packages are not missing, they are not wanted.
@@ -1455,7 +1555,7 @@ namespace ConditioningControlPanel.Avalonia
                         command is null ? null : () => _ = shell.Clipboard?.SetTextAsync(command));
                 });
                 // WPF App.xaml.cs:4858: pending-outcome report + background update check.
-                Dispatcher.UIThread.Post(async () => await Platform.AppUpdater.StartupAsync(shell));
+                Platform.AfterFirstFrame.Schedule(shell, async () => await Platform.AppUpdater.StartupAsync(shell));
                 // The startup art list for the next launch: what the shell, the boot surface and their first
                 // repaints loaded. Nothing is recorded without a splash (tests, renders, checks).
                 if (Helpers.StartupArt.Recording)
@@ -1542,6 +1642,24 @@ namespace ConditioningControlPanel.Avalonia
             engine.Unlocked += (_, a) => Dispatcher.UIThread.Post(() => ShowAchievementPopup(a));
             engine.Unlocked += (_, a) => ShowWardrobeRewardToasts(a);
             engine.Unlocked += (_, a) => AnnounceAchievement(a, discord ?? Platform.AccountSeed.Discord);
+            engine.BubbleMilestone += total => Dispatcher.UIThread.Post(() => ShowBubbleMilestonePopup(total));
+        }
+
+        /// <summary>WPF AchievementService.ShowBubbleMilestoneNotification (AchievementService.cs:468-490): the
+        /// same card the race shows for a crossed hundred (GameWindow.Race.cs RaceCreateMilestonePopup).</summary>
+        internal static Func<int, Views.Windows.AchievementPopup> CreateBubbleMilestonePopup = total =>
+        {
+            var popup = new Views.Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", total / 100 * 100),
+                Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                headerText: Loc.Get("achievement_bubble_milestone_header"));
+            global::Avalonia.Controls.ControlExtensions.FindControl<Controls.IconGlyph>(popup, "TxtHeaderIcon")!.Kind = IconKind.Sparkle;
+            return popup;
+        };
+
+        internal static void ShowBubbleMilestonePopup(int total)
+        {
+            try { CreateBubbleMilestonePopup(total).Show(); }
+            catch (Exception ex) { Serilog.Log.Warning("Bubble milestone popup: {E}", ex.Message); }
         }
 
         /// <summary>WPF PlayAchievementSound + the DiscordShareAchievements post (App.xaml.cs:4180-4205).
@@ -1571,6 +1689,8 @@ namespace ConditioningControlPanel.Avalonia
         {
             try { new Views.Windows.AchievementPopup(a.Name, a.FlavorText, a.ImageName).Show(); }
             catch (Exception ex) { Serilog.Log.Error(ex, "Failed to show achievement popup for: {Name}", a.Name); }
+            // WPF App.xaml.cs:3701: file quietly, independently of the toast.
+            Views.Windows.MainShellWindow.Current?.PostPatronGalleryRow(a);
         }
 
         private string ResolveEffectiveAssetsPath()
@@ -1694,6 +1814,7 @@ namespace ConditioningControlPanel.Avalonia
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
+            Views.Games.LinuxRaceHost.Current?.Dispose();
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
             Platform.LoginStreakHead.ClearProfile();
@@ -1765,6 +1886,7 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
+            try { Views.Games.GameWindow.CloseCounterForExit(); } catch { /* WPF App.OnExit:6433 CloseFor(CloseAppExit) */ }
             try { Possession?.Dispose(); } catch { /* WPF App.OnExit:6527: every haunted control back, ember stripped */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).

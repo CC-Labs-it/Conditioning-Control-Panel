@@ -148,6 +148,7 @@ public sealed class CompanionVoiceIdleTests
                 tube.GigglePriority("quiet idle", phraseAudioPath: clip, barkVoice: true, unprompted: true, onSpoken: () => completed++);
                 Assert.Empty(gains);
                 Assert.Equal(1, completed);
+                while (tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
                 Assert.Equal("quiet idle", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
                 Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
                 tube.GigglePriority("prompted", phraseAudioPath: clip, barkVoice: true);
@@ -204,6 +205,7 @@ public sealed class CompanionVoiceIdleTests
             Assert.Equal(0, reads);
             fire!();
             Assert.Equal(1, reads);
+            while (tube.TypewriterFrame is { } twf) twf();   // presets type slowly (WPF Speech.cs:559)
             Assert.Equal("queued idle", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
         }
         finally

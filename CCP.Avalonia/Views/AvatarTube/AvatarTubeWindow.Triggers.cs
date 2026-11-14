@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             if (PanicAftermath.TriggersSilenced()) { _isGiggling = false; ProcessNextSpeech(); return; }
             _ = CoreHaptics.Service?.TriggerSubliminalPatternAsync(trigger);
-            if (IsMuted || !IsTriggerAvatarVisible || Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
+            if (IsMuted || !IsAvatarVisibleOnScreen || Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted)
             {
                 _isGiggling = false;
                 NoteSpeechEnded(SpeechSource.Trigger, trigger.Length);
@@ -138,22 +138,43 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (PanicAftermath.TriggersSilenced()) { PanicSilence(); return; }
                 SubliminalWhisperShow.PlayTriggerAudio(trigger);
                 ShowSpeech(trigger, playSound: false, aiGenerated: false, null, false, preset: true, trigger: true);
-                // WPF strips markdown links for intermediate frames; the final pass uses the full text.
-                var plain = System.Text.RegularExpressions.Regex.Replace(trigger,
-                    @"\[([^\]]+)\]\((https?://[^\)]+)\)", "$1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                _txtSpeech.Text = "";
-                if (plain.Length == 0) { RenderTriggerText(trigger); return; }
-                var index = 0;
-                _cancelTriggerAnimation = TriggerLoopScheduler(TimeSpan.FromMilliseconds(TriggerTypewriterStepMs(plain.Length)), () =>
+                TypeBubble(trigger, () =>
                 {
-                    if (generation != _triggerAnimationGeneration || !_triggersAttached) return;
-                    if (PanicAftermath.TriggersSilenced()) { PanicSilence(); return; }
-                    index = Math.Min(plain.Length, index + Math.Max(1, plain.Length / 100));
-                    if (index == plain.Length) { _cancelTriggerAnimation(); RenderTriggerText(trigger); }
-                    else _txtSpeech.Text = plain[..index];
+                    if (!_triggersAttached) return false;
+                    if (PanicAftermath.TriggersSilenced()) { PanicSilence(); return false; }
+                    return true;
                 });
             });
         }
+
+        // WPF Speech.cs:3095 StartTypewriter(slow: true): the ONE slow typing path, shared by
+        // trigger and preset bubbles. Markdown links are stripped for the frames; the final pass
+        // renders the full text with clickable links. A newer line bumps the generation.
+        private void TypeBubble(string text, Func<bool> alive)
+        {
+            var generation = _triggerAnimationGeneration;
+            var plain = System.Text.RegularExpressions.Regex.Replace(text,
+                @"\[([^\]]+)\]\((https?://[^\)]+)\)", "$1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            _txtSpeech.Text = "";
+            if (plain.Length == 0) { RenderTriggerText(text); return; }
+            var index = 0;
+            var interval = TimeSpan.FromMilliseconds(TriggerTypewriterStepMs(plain.Length));
+            Action tick = () =>
+            {
+                if (generation != _triggerAnimationGeneration || !alive()) return;
+                index = Math.Min(plain.Length, index + Math.Max(1, plain.Length / 100));
+                if (index == plain.Length) { _cancelTriggerAnimation(); RenderTriggerText(text); }
+                else _txtSpeech.Text = plain[..index];
+            };
+            var stop = TriggerLoopScheduler(interval, tick);
+            TypewriterFrame = tick;
+            TypewriterInterval = interval;
+            _cancelTriggerAnimation = () => { stop(); TypewriterFrame = null; TypewriterInterval = null; };
+        }
+
+        /// <summary>Headless tests advance the running typing tick by hand; null once typing is done.</summary>
+        internal Action? TypewriterFrame { get; private set; }
+        internal TimeSpan? TypewriterInterval { get; private set; }
 
         // WPF Speech.cs:1278-1295,1392-1407,1448-1455: final markdown and bare URLs become links.
         private void RenderTriggerText(string text)
@@ -188,7 +209,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
                     _txtSpeech.Inlines.Add(new InlineUIContainer(new global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton
                     {
-                        Content = label, Padding = new(0), FontSize = _txtSpeech.FontSize,
+                        // A TextBlock, not a string: Avalonia reads "_" in string Content as an access key.
+                        Content = new TextBlock { Text = label, FontSize = _txtSpeech.FontSize, FontFamily = _txtSpeech.FontFamily,
+                                                  FontWeight = _txtSpeech.FontWeight },
+                        Padding = new(0), FontSize = _txtSpeech.FontSize, FontFamily = _txtSpeech.FontFamily,
                         Foreground = global::Avalonia.Media.Brush.Parse("#ffb0e0"),
                         Command = Controls.Companion.CompanionLinkLauncher.CommandFor(uri.AbsoluteUri)
                     }));
@@ -198,10 +222,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtSpeech.Inlines!.Add(new Run(text[at..]));
         }
 
-        // WPF Windowing.cs:2210-2233. The head's parent visibility handler also hides the dock.
-        private bool IsTriggerAvatarVisible => CoreSettings.Current.AvatarEnabled && IsVisible
+        // WPF IsAvatarVisibleOnScreen (Windowing.cs:2210-2233), read by every bubble (Speech.cs:481).
+        // The head's parent visibility handler also hides the dock.
+        private bool IsAvatarVisibleOnScreen => CoreSettings.Current.AvatarEnabled && IsVisible
             && WindowState != WindowState.Minimized
-            && (!_isAttached || _parentWindow is { IsVisible: true, WindowState: not WindowState.Minimized });
+            && (!_isAttached || _parentWindow is null || _parentWindow is { IsVisible: true, WindowState: not WindowState.Minimized });
 
         private int _triggerAnimationGeneration;
         private Action _cancelTriggerAnimation = static () => { };
@@ -220,5 +245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal TimeSpan? SpeechHideDelay => _speechTimer?.Interval;
         internal static double TriggerDisplaySeconds(string trigger) =>
             Math.Clamp(5.0 + trigger.Length * 0.05, 5.0, 14.0) + TriggerTypingMs(trigger.Length) / 1000.0;
+        // WPF Speech.cs:565-586: a preset keeps the slider's reading time after its slow typing.
+        internal static double PresetDisplaySeconds(string text) =>
+            Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0) + TriggerTypingMs(text.Length) / 1000.0;
     }
 }

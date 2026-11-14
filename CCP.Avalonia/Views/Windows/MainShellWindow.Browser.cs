@@ -34,9 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
+            ExitBrowserPopoutFullscreen();
             if (BrowserView is not { } host) return;
             // A watch-chip request still waiting for the gate must not load after panic.
             host.CancelPendingNavigation();
+            host.CancelBrowserZoom();
             _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
         }
 
@@ -72,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url)
+        private bool NavigateBrowser(string url, bool linkNavigation = false)
         {
             try
             {
@@ -80,6 +82,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (host == null) return false;
                 var target = new Uri(url);
                 if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
+                // WPF MainWindow.Browser.cs:458,730: later links waiting for init use 50%.
+                host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
                 if (!host.Navigate(target)) return false;   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Url}", url);
                 return true;
@@ -153,19 +157,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
             if (BrowserView is { HasEngine: false })
             {
-                NavigateBrowser(url); // reports false with no engine; the fallback panel still names the URL
+                NavigateBrowser(url, linkNavigation: true); // reports false with no engine; the fallback panel still names the URL
                 if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
                     Platform.ExternalOpener.Open(url);
                 return true;
             }
-            return NavigateBrowser(url);
+            return NavigateBrowser(url, linkNavigation: true);
         }
 
         internal async System.Threading.Tasks.Task<bool?> NavigateCompanionUrlAsync(string url)
         {
             if (!PrepareBrowserNavigation(url, true, true)) return false;
             var host = BrowserView;
-            return host == null ? false : await host.NavigateWhenReadyAsync(new Uri(url));
+            if (host == null) return false;
+            // A companion link is a link (WPF NavigateToUrlInBrowser :729): 50% once the browser exists.
+            host.SetBrowserZoom(host.BrowserZoomReady || host.BrowserZoom is not null ? 0.5 : 0.75);
+            return await host.NavigateWhenReadyAsync(new Uri(url));
         }
 
         private bool PrepareBrowserNavigation(string url, bool autoPlayFullscreen, bool userInitiated)

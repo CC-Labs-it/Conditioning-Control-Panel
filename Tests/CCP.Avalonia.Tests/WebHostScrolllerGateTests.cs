@@ -18,6 +18,76 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class WebHostScrolllerGateTests
 {
+    [Fact]
+    public Task DocumentStartFinishesBeforeGateAndOldEngineCannotReleaseNewEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource();
+        var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = script =>
+        {
+            Assert.Equal("test", script);
+            return pending.Task;
+        }};
+        web.NewScrolllerEngine();
+        var first = web.PrepareScrolllerGate(1, true);
+        Assert.Null(web.ScrolllerGate);
+        web.NewScrolllerEngine();
+        pending.SetResult();
+        await first;
+        Assert.Null(web.ScrolllerGate);
+        await web.PrepareScrolllerGate(2, true);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task FailedDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => Task.FromException(new InvalidOperationException()) };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task StalledDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource();
+        var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => pending.Task };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task OnlyAcceptedNavigationStartsAreTrackedAndTheyExpire() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var local = new Uri("http://127.0.0.1:5555/page");
+        web.NewScrolllerEngine()(true);
+        web.AllowNavigation = _ => true;
+        web.Source = local;
+        var accepted = new WebViewNavigationStartingEventArgs { Request = local };
+        web.OnNavigationStarted(null, accepted);
+        Assert.False(accepted.Cancel);
+        Assert.Equal(local, web.ActiveNavigation);
+        web.Navigate(local); // an equal Source does not raise PropertyChanged
+        Assert.Null(web.ActiveNavigation);
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = local });
+        Assert.Equal(local, web.ActiveNavigation);
+        web.AllowNavigation = _ => false;
+        var refused = new WebViewNavigationStartingEventArgs { Request = local };
+        web.OnNavigationStarted(null, refused);
+        Assert.True(refused.Cancel);
+        Assert.Null(web.ActiveNavigation);
+        web.AllowNavigation = _ => true;
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = local });
+        web.OnNavigationCompleted(local);
+        Assert.Null(web.ActiveNavigation);
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = local });
+        web.NewScrolllerEngine(); // native adapter was destroyed or recreated
+        Assert.Null(web.ActiveNavigation);
+        return Task.CompletedTask;
+    });
+
     private static readonly Uri Page = new("https://scrolller.com/r/x");
     private static readonly Uri Media = new("https://images.scrolller.com/a/b.jpg");
 

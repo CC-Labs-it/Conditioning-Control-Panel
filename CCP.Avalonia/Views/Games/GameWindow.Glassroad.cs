@@ -184,6 +184,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "scrolller-niches":
                         SetGlassroadNiches(o);
                         return true;
+                    case "race-result":
+                        // WPF GlassroadHostService.cs:359 (Sparkles B1): place, medal or duel by mode; nothing for an unfinished race.
+                        DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Glassroad(o), SparklesHead.Service));
+                        return true;
                     case "net":
                         OnGlassroadNet(o);
                         return true;

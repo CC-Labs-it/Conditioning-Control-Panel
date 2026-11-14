@@ -27,6 +27,14 @@ test('standalone over the webview: ready, init, a correlated request, wallet and
   assert.deepEqual(w.posted.slice(-2), [{ type: 'wallet', sp: 12 }, { type: 'close', reason: 'back' }]);
 });
 
+test('the WebKitGTK string carrier: ready goes out through invokeCSharpAction, init comes in through __ccpRnPush', async () => {
+  const sent = [], win = { invokeCSharpAction: (s) => sent.push(JSON.parse(s)), addEventListener() {} };
+  const host = createHost(win), ready = host.ready();
+  win.__ccpRnPush(JSON.stringify({ type: 'init', tab: 'kart' }));
+  assert.deepEqual([host.hosted, sent[0]], [true, { type: 'ready', protocol: 1 }]);
+  assert.equal((await ready).tab, 'kart');
+});
+
 test('standalone with no host answers offline at once; a mounted object never rejects', async () => {
   const lone = createHost({ addEventListener() {} });
   assert.equal(lone.hosted, false);

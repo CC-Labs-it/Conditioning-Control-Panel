@@ -80,9 +80,14 @@ public sealed class MandatoryVideoOverlayTests
     {
         Assert.True(v.Trigger(strict));
         Assert.Empty(o.Windows);                          // the 1.3 s pre-roll
-        await Until(() => o.Windows.Count > 0 && (o.Sink?.FrameCount ?? 0) >= 3 && o.FirstFrameMs >= 0);
+        // The test starts waiting before the pre-roll, while the WPF-aligned watchdog allows eight
+        // seconds after Play for the first frame. Include both periods and a second for dispatch.
+        var frameWait = (int)Math.Ceiling(ConditioningControlPanel.Services.MandatoryVideoScheduler.PreRoll.TotalSeconds
+            + ConditioningControlPanel.Services.MandatoryVideoScheduler.NoFrameSeconds) + 1;
+        await Until(() => o.Windows.Count > 0 && (o.Sink?.FrameCount ?? 0) >= 3 && o.FirstFrameMs >= 0, frameWait);
         Assert.Single(o.Windows);
-        Assert.True(o.Sink!.FrameCount >= 3, "frames decoded");
+        Assert.True(o.Sink!.FrameCount >= 3, $"frames decoded (count={o.Sink.FrameCount}, first={o.FirstFrameMs}ms)");
+        Assert.True(o.FirstFrameMs >= 0, "first frame delivered to the window");
         var w = o.Windows[0];
         Assert.True(w.Topmost && w.WindowState == WindowState.FullScreen && w.IsVisible);
         Assert.Same(o.Sink.Bitmap, o.Surfaces[0].Video.Source);
@@ -437,6 +442,7 @@ public sealed class MandatoryVideoOverlayTests
             {
                 await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
+                    // Use the app's font collection when this test is run by itself.
                     if (Application.Current is null)
                         global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                             .UseSkia()

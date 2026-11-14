@@ -94,6 +94,7 @@ public sealed class PanicSurfacesTests
         "emi-ring",
         "launcher-notes",
         "launcher-friends",
+        "launcher-lobby-claim",
         "event-fx",
         "perfect-week-bonus",
         "brain-drain-audio",
@@ -181,6 +182,7 @@ public sealed class PanicSurfacesTests
         "discord-share-prompt",
         "friend-notices", "knock-cards",
         "gaze-debug-cursor",
+        "gaze-refine",
         "quick-recal",
         "mod-creator-preview",
         "asset-preview",
@@ -339,6 +341,8 @@ public sealed class PanicSurfacesTests
         ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
         ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
+        ["LinuxRaceHost"] = "owned by its GameWindow (GameWindow.FirstRace.cs:119 disposes it on Closed); panic closes it through the 'games' surface (GameWindow.CloseAllForPanic), see GameWindowTests.LinuxShell_PanicAfterWatchdogKillIsAFullPanicNotAPause",
+        ["SpeakPromptRuntime"] = "the Deeper player's speak sessions (cue timer, mic capture): the 'deeper-player' surface (EnhancementPlayerWindow.PanicPauseAll -> StopDeeper) cancels them, see SpeakPlayerTests.PlayerDispatchesSpeakAndStopsOnBandExitOrPanic",
     };
 
     [Fact]

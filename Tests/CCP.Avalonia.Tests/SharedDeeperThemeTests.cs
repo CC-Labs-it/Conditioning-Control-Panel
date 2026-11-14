@@ -169,6 +169,122 @@ public sealed class SharedDeeperThemeTests
         await Task.CompletedTask;
     });
 
+    // WPF Controls.xaml:262-267,298-303; real consumer Features/SpiralFeatureControl.xaml:102-105.
+    [Fact]
+    public Task SpiralToggleUsesDirectionalKnobTimingAndOvershoot() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        CoreSettings.Current.SpiralRandomize = false;
+        var view = new global::ConditioningControlPanel.Avalonia.Views.Features.SpiralFeatureControl();
+        var window = new Window { Content = view, Width = 1000, Height = 800 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var toggle = view.FindControl<CheckBox>("ChkRandomize")!;
+            Assert.Same(Theme("ToggleStyle"), toggle.Theme);
+            var thumb = toggle.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "thumb");
+            var clock = new StepClock();
+            thumb.SetValue(StepClock.Property, clock.Instance);
+            double X() => thumb.RenderTransform!.Value.M31;
+            void CheckTransition(double milliseconds, double amplitude)
+            {
+                var tween = Assert.IsType<TransformOperationsTransition>(Assert.Single(thumb.Transitions!));
+                Assert.Equal(TimeSpan.FromMilliseconds(milliseconds), tween.Duration);
+                Assert.Equal(amplitude, Assert.IsType<global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(tween.Easing).Amplitude);
+            }
+            // Space exercises the same CheckBox event and persisted setting as a pointer click.
+            Assert.True(toggle.Focus());
+            window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+            window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " "); Dispatcher.UIThread.RunJobs();
+            Assert.True(toggle.IsChecked);
+            Assert.True(CoreSettings.Current.SpiralRandomize);
+            CheckTransition(340, 0.6);
+            clock.Step(0); clock.Step(170);
+            Assert.Equal(22 * 1.175, X(), 4);
+            clock.Step(340);
+            Assert.Equal(22, X(), 4);
+            window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+            window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " "); Dispatcher.UIThread.RunJobs();
+            Assert.False(toggle.IsChecked);
+            Assert.False(CoreSettings.Current.SpiralRandomize);
+            CheckTransition(300, 0.35);
+            clock.Step(340); clock.Step(490);
+            Assert.Equal(22 * (1 - 1.05), X(), 4);
+            clock.Step(640);
+            Assert.Equal(0, X(), 4);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
+    // WPF Controls.xaml:257,295 SnapshotAndReplace starts a reversal at the visible position.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ToggleReversesFromItsAnimatedPosition(bool reverseToOn) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var toggle = new CheckBox { Theme = Theme("ToggleStyle"), IsChecked = false };
+        var other = new CheckBox { Theme = Theme("ToggleStyle"), IsChecked = false };
+        var window = new Window { Content = new StackPanel { Children = { toggle, other } }, Width = 200, Height = 100 };
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Border Thumb(CheckBox box) => box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "thumb");
+            var thumb = Thumb(toggle);
+            var transitions = thumb.Transitions;
+            var original = Assert.Single(transitions!);
+            var clock = new StepClock();
+            thumb.SetValue(StepClock.Property, clock.Instance);
+            double X() => thumb.RenderTransform!.Value.M31;
+            toggle.IsChecked = true; Dispatcher.UIThread.RunJobs();
+            clock.Step(0);
+            double now = 85;
+            if (reverseToOn)
+            {
+                clock.Step(340);
+                toggle.IsChecked = false; Dispatcher.UIThread.RunJobs();
+                clock.Step(340);
+                now = 415;
+            }
+            clock.Step(now);
+            var before = X();
+            Assert.InRange(before, 1, 21); // interrupt travel, not a settled endpoint
+            toggle.IsChecked = reverseToOn; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, X(), 6);
+            var tween = Assert.IsType<TransformOperationsTransition>(Assert.Single(thumb.Transitions!));
+            Assert.Equal(TimeSpan.FromMilliseconds(reverseToOn ? 340 : 300), tween.Duration);
+            Assert.Equal(0.35, Assert.IsType<global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude>(
+                Assert.IsType<TransformOperationsTransition>(Assert.Single(Thumb(other).Transitions!)).Easing).Amplitude);
+            clock.Step(now);
+            Assert.Equal(before, X(), 6);
+            clock.Step(now + (reverseToOn ? 170 : 150));
+            var target = reverseToOn ? 22 : 0;
+            Assert.Equal(before + (target - before) * (reverseToOn ? 1.175 : 1.05), X(), 4);
+            clock.Step(now + (reverseToOn ? 340 : 300));
+            Assert.Equal(target, X(), 4);
+            Assert.Same(transitions, thumb.Transitions);
+            Assert.Same(original, tween);
+            Assert.NotSame(thumb.Transitions, Thumb(other).Transitions);
+        }
+        finally { window.Close(); }
+        await Task.CompletedTask;
+    });
+
+    /// <summary>Hand-stepped animation clock, so transitions advance only when the test says so. Avalonia 12 made
+    /// IClock internal, and the headless render clock is real time, so this reaches Avalonia's own ClockBase by
+    /// reflection; a rename there fails loudly here instead of silently passing.</summary>
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property =
+            (AvaloniaProperty)typeof(Animatable).GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
+
     [Fact]
     public Task EditorPlayerAndHubUseTheSharedThemes() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -258,6 +374,18 @@ public sealed class SharedDeeperThemeTests
         Assert.Equal(1.125, spring.Ease(0.8), 5);
         Assert.Equal(1, spring.Ease(1));
     }
+
+    [Fact]
+    public Task HudPlankFullMotionIsIndependentOfPriorGentleSetting() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldGentle = CoreSettings.Current.GentleVisuals;
+        try
+        {
+            CoreSettings.Current.GentleVisuals = true;
+            await HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease();
+        }
+        finally { CoreSettings.Current.GentleVisuals = oldGentle; }
+    });
 
     [Fact]
     public Task HudPlanksRaiseTheStartRowAndTravelOnHoverPressRelease() => AvaloniaTestDispatcher.RunAsync(async () =>

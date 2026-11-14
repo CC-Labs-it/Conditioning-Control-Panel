@@ -14,12 +14,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 internal static partial class ChaosRunHost
 {
     private static double _vibeRemaining, _snapRemaining, _thoughtAccumSec;
+    // WPF ChaosModeService.cs:3009-3011: a maxed Intrusive Thoughts arms the rabbit split (#3555).
     internal static Action<double, double, double, string> LaunchThought = (sec, speed, scale, text) =>
-        ChaosDvdOverlay.Launch(_overlay!, sec, speed, scale, text: text);
+        ChaosDvdOverlay.Launch(_overlay!, sec, speed, scale, text: text,
+            splitOnRabbit: _state?.MaxedBoons.Contains("intrusive_thoughts") == true);
     private static bool _afterglow, _vibeHover;
     private static FrameClock? _sweepTimer;
     // Same desktop pointer seam as the existing cursor/trail surfaces; null off X11.
     internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadToyPointer = X11Pointer.Read;
+
+    /// <summary>The toys <see cref="FireToyEffect"/> can run on this head (#4225). Keep it in step with
+    /// the switch below: an inert toy must not spend its charge or cooldown.</summary>
+    internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim" or "freeze_trigger";
 
     // WPF ChaosModeService.cs:2697-2709,2736-2749,2779-2780.
     private static bool FireToyEffect(ChaosToyState toy)
@@ -54,6 +60,15 @@ internal static partial class ChaosRunHost
                 ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.5f);
                 if (s.Config.ColorFlashesEnabled) _fx?.Pulse(Color.FromRgb(150, 220, 255), 0.35);
                 s.PushEvent(Loc.Get(maxed ? "chaos_toy_snap_all" : "chaos_toy_snap_live"));
+                return true;
+            case "freeze_trigger":
+                // WPF ChaosModeService.cs:2718-2727 (hand-ported from #4244): the same freeze as a
+                // caught pickup; the capstone also snaps every live bubble. ChaosToyRules spent the
+                // charge and set the 3 s anti-doubletap cooldown.
+                ChaosOverlayWindow.ChaosSfx.Play("freeze_trigger", 0.6f);
+                ActivateFreeze();
+                if (maxed) BubbleOverlay.Field.DefuseAllLive(BubbleOverlay.BounceShield);
+                s.PushEvent($"{toy.Glyph} {Loc.Get("chaos_freeze_trigger_feed")}");
                 return true;
             case "porn_dvd":
             {
@@ -94,8 +109,8 @@ internal static partial class ChaosRunHost
                 return true;
             }
             default:
-                // ponytail: freeze and rabbit motion/aim need their BubbleService
-                // mechanics ported; do not award first_play for an inert toy.
+                // ponytail: rabbit motion/aim need their BubbleService mechanics
+                // ported; do not award first_play for an inert toy.
                 return false;
         }
     }
@@ -105,18 +120,13 @@ internal static partial class ChaosRunHost
     {
         if (_vibeRemaining <= 0 || !_spawning || _manualPaused || _lessonCardPaused || _overlay is not { IsVisible: true }) return;
         if (ReadToyPointer() is not { } pointer || (!_vibeHover && !pointer.Pressed)) return;
-        // Bubble coordinates use each target screen's scale, just like hit-testing the field.
+        // WPF BubbleService.cs:4336-4337: the bubble owner's scale (its index is target-filtered, #3505).
         foreach (var b in BubbleOverlay.Field.Bubbles.ToArray())
         {
             if (b.Spec == null || b.Spec.IsFreeze || b.Popping) continue;
-            var screen = _overlay.Screens.All.ElementAtOrDefault(b.Screen);
-            double scale = screen?.Scaling ?? 1;
-            var spec = b.Spec;
-            bool plain = !spec.IsDarter && !spec.IsGolden && !spec.IsHeart && !spec.IsDroplet
-                && !spec.IsPrism && !spec.IsEscort && !spec.IsTease && !spec.IsBrittle;
-            double hitMult = Math.Clamp(_state!.Config.HitboxScale, 1, 2);
-            if (_state.MagnetEnabled && spec.IsLive) hitMult = Math.Clamp(hitMult * 1.4, 1, 2);
-            double radius = plain ? Math.Max(b.Size, Math.Round(b.Size * hitMult)) / 2 : b.Size / 2;
+            double scale = BubbleOverlay.ScaleFor(b);
+            // Same disc rule as spawn (AmbientBubble.ChaosHitSize), read with the live run state.
+            double radius = AmbientBubble.ChaosHitSize(b.Spec, b.Size, _state!.Config.HitboxScale, _state.MagnetEnabled) / 2;
             double dx = pointer.At.X / scale - b.CenterX, dy = pointer.At.Y / scale - b.CenterY;
             if (dx * dx + dy * dy > radius * radius) continue;
             BubbleOverlay.PopChaos(b);
@@ -127,8 +137,8 @@ internal static partial class ChaosRunHost
     private static void TickToyEffects()
     {
         if (_state == null) return;
-        // WPF ChaosModeService.cs:2994-3005. Freeze is not yet exposed by this head.
-        if (_state.IntrusiveThoughtsSec > 0)
+        // WPF ChaosModeService.cs:2994-3005: no new thought while a freeze holds the field.
+        if (_state.IntrusiveThoughtsSec > 0 && _freezeRemainingSec <= 0)
         {
             _thoughtAccumSec += ChaosRunEngine.TICK_SEC;
             if (_thoughtAccumSec >= 5)
@@ -169,6 +179,7 @@ internal static partial class ChaosRunHost
                 "snap_field" => _snapRemaining > 0,
                 "porn_dvd" => dvdLive,
                 "e_stim" => BubbleOverlay.EStimCharges > 0,
+                "freeze_trigger" => _freezeRemainingSec > 0,
                 _ => false,
             };
         if (_dvdBannerOn && !dvdLive)

@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+            new("bank-fx", sh => sh?.StopBankFx()), // WPF BankFx.cs:635 abort contract; P06
             new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
                 Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
@@ -170,12 +171,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("friend-notices", _ => Overlays.FriendNotices.CloseAll(fold: true)), // P06, same fold as knock cards; WPF FriendsLanding.cs:66
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
             new("gaze-debug-cursor", _ => Overlays.GazeDebugCursor.CloseActive()),
+            new("gaze-refine", _ => global::ConditioningControlPanel.Avalonia.Platform.GazeFocus.CloseRefineForPanic()), // stricter than WPF: the camera stop is last and fire-and-forget
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("mod-creator-preview", _ => ModCreatorWindow.StopPreviewsForPanic()), // Creator-owned audio, like close/reset; stricter than WPF.
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
             new("help-tooltips", _ => global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.CloseAll()), // WPF help lifetime :750; stricter panic cleanup
             new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
             new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),
+            new("launcher-lobby-claim", _ => LauncherWindow.CancelLobbyClaimForPanic()),
             // Stricter than WPF MainWindow.xaml.cs:1934-2013: retire calibration before camera teardown.
             new("webcam-calibration", _ => WebcamCalibrationWindow.CloseAllForPanic()),
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame", "webcam-calibration"]),   // decision C: last, fire-and-forget; gaze reads it

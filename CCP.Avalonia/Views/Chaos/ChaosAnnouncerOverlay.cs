@@ -209,12 +209,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Stroke = stroke,
                     StrokeThickness = StrokeDip,
                 };
-                if (a.Text.StartsWith(IconMap.Chaperone, StringComparison.Ordinal))
+                // WPF ChaosModeService.cs:434 prefixes a mantra with a diamond (#3528): the mark sits
+                // in the head as a Fluent icon, outside the outlined text, like the Chaperone heart.
+                var chaperone = a.Text.StartsWith(IconMap.Chaperone, StringComparison.Ordinal);
+                // WPF ChaosModeService.cs:1571 prefixes an accepted sin with a skull: the curse icon here.
+                var sin = a.Kind == ChaosAnnounceKind.Temptation && a.ArtKey != null && ChaosBoonPool.All.Any(b => b.Id == a.ArtKey && b.IsCurse);
+                if (chaperone || sin || a.Kind == ChaosAnnounceKind.Mantra)
                 {
-                    label.Text = IconText.Bare(a.Text).ToUpperInvariant();
+                    if (chaperone) label.Text = IconText.Bare(a.Text).ToUpperInvariant();
                     label.Build();
                     var panel = new StackPanel { Orientation = Orientation.Horizontal };
-                    panel.Children.Add(new IconGlyph { Kind = IconKind.Heart, Variant = IconVariant.Filled,
+                    panel.Children.Add(new IconGlyph { Kind = chaperone ? IconKind.Heart : sin ? ChaosOverlayWindow.CurseIcon : IconKind.Diamond, Variant = IconVariant.Filled,
                         Foreground = fill, Size = FontSizeDip, VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(0, 0, 10, 0) });
                     panel.Children.Add(label);

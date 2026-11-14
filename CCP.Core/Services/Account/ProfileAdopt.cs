@@ -110,6 +110,27 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
+        /// <summary>WPF ProfileSyncService.cs:427-489: a profile read may adopt a positive
+        /// server lead only on a clean, scoped ledger. Does not save or advance the season.</summary>
+        public static bool AdoptProfilePoll(AppSettings settings, int serverLevel, double serverTotalXp, string? serverSeason)
+        {
+            if (settings.OfflineMode || string.IsNullOrEmpty(settings.UnifiedId)) return false;
+            if (serverLevel <= 0 || serverTotalXp <= 0 || double.IsNaN(serverTotalXp)) return false;
+            if (DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return false;
+            if (serverSeason != null && !string.Equals(serverSeason, settings.CurrentSeason ?? string.Empty, StringComparison.Ordinal))
+                return false;
+
+            var localTotalXp = TotalXp(settings);
+            if (serverTotalXp <= localTotalXp + 0.01) return false;
+            var watermark = ActiveXpWatermark(settings);
+            if (watermark <= 0 || localTotalXp > watermark + 0.01) return false;
+
+            settings.PlayerLevel = serverLevel;
+            settings.PlayerXP = XpCurve.GetCurrentLevelXP(serverLevel, serverTotalXp, Epoch(settings));
+            RecordAgreedServerXp(settings, serverTotalXp, TotalXp(settings), "profile poll");
+            return true;
+        }
+
         /// <summary>True if the string is a "yyyy-MM" month key.</summary>
         public static bool LooksLikeMonthKey(string k) =>
             k.Length == 7 && k[4] == '-' && int.TryParse(k.Substring(0, 4), out _) && int.TryParse(k.Substring(5, 2), out _);
@@ -160,8 +181,8 @@ namespace ConditioningControlPanel.Services
         /// The <c>/v2/user/sync</c> response: conditioning minutes take-higher, then user level/xp/season
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
         /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
-        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), recap or
-        /// SeasonResetPending on level_reset - add each with its feature. Does not save.
+        /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe) or
+        /// SeasonResetPending on level_reset. Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
@@ -175,6 +196,7 @@ namespace ConditioningControlPanel.Services
                 Log.Information("V2 Sync: season key advanced {Old} -> {New}", settings.CurrentSeason ?? "(none)", user.CurrentSeason);
                 settings.CurrentSeason = user.CurrentSeason;
                 ClearXpWatermark(settings, "season rollover");
+                SeasonAdvanced?.Invoke(settings);
             }
             if (response["level_reset"]?.Type == JTokenType.Boolean && response.Value<bool>("level_reset"))
             {
@@ -231,6 +253,7 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(keepSeason) ? "(none)" : keepSeason, user.CurrentSeason);
                 settings.CurrentSeason = user.CurrentSeason;
                 ClearXpWatermark(settings, "season rollover (read-before-write)");
+                SeasonAdvanced?.Invoke(settings);
             }
             var scopedSeason = settings.CurrentSeason ?? string.Empty;
             if (string.Equals(user.CurrentSeason ?? string.Empty, scopedSeason, StringComparison.Ordinal))
@@ -241,6 +264,9 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);
             return seasonAdvances;
         }
+        /// <summary>A confirmed server season advanced during profile sync.</summary>
+        public static event Action<AppSettings>? SeasonAdvanced;
+
         /// <summary>Raised after a cloud merge lifted <see cref="AppSettings.TotalConditioningMinutes"/>. The head
         /// re-baselines its FeatureDayLog here, as WPF ProfileSyncService.cs:2187 does, so the gain is not credited
         /// to today (the "1,000-minute day" bug).</summary>

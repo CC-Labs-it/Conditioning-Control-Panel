@@ -52,10 +52,14 @@ public sealed class BubblePayloadHostTests
     public void BothHeadsRetainThePeakAcrossWeakerShorterPops(bool spiral) => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp(); var host = new Window(); var enabled = CoreSettings.Current.SpiralEnabled;
+        // A desktop with no compositor (the headless Linux runner) makes the spiral CloseAll, which drops the hold:
+        // pin the platform check instead of inheriting whatever an earlier test left in the static.
+        var checks = SpiralOverlay.SkipPlatformChecksForTests;
         void Show(int ms, double opacity) { if (spiral) SpiralOverlay.ShowTimed(host, ms, opacity); else PinkFilterOverlay.ShowTimed(host, ms, opacity); }
-        try { CoreSettings.Current.SpiralEnabled = false; Show(10000, 0.385); Show(50, 0.2); Assert.Equal(0.385, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity);
+        try { SpiralOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.SpiralEnabled = false; Show(10000, 0.385); Show(50, 0.2); Assert.Equal(0.385, (spiral ? SpiralOverlay.PayloadHold : PinkFilterOverlay.PayloadHold).Opacity);
             if (spiral) Assert.Equal(0.0385, SpiralOverlay.PaintedOpacity, 6); }
-        finally { CoreSettings.Current.SpiralEnabled = enabled; PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); }
+        finally { CoreSettings.Current.SpiralEnabled = enabled; PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); SpiralOverlay.SkipPlatformChecksForTests = checks; }
     });
 
     [Fact]
@@ -84,14 +88,42 @@ public sealed class BubblePayloadHostTests
         finally { CoreSubliminal.BambiFreezeProvider = previousFreeze; BubbleOverlay.Stop(); }
     });
 
+    private sealed class FeedHost : IMandatoryVideoHost
+    {
+        public bool FeedOwnsTheScreen => true;
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    // Restack b174 (#3942): WPF VideoService.cs:2311 plays a bubble-earned video over a visible feed.
+    [Fact]
+    public void PoppedVideoBubblePlaysOverAVisibleFeed() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var previous = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new FeedHost(), TimeProvider.System, () => new[] { "/v/popped.mp4" });
+        CoreEngine.Video = video;
+        try
+        {
+            BubblePayloadHost.Fire(new VideoPayload());
+            Assert.True(video.IsPlaying); // pre-roll started, not held behind the feed
+            video.ForceCleanup();
+            Assert.True(video.Trigger(silentIfEmpty: true)); // a non-earned request is held
+            Assert.False(video.IsPlaying);
+        }
+        finally { video.Stop(); CoreEngine.Video = previous; }
+    });
+
     [Fact]
     public void TimedEffectsKeepSettingsAndStopCancelsQueuedWork() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
         var before = (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity);
+        var checks = SpiralOverlay.SkipPlatformChecksForTests;   // see BothHeadsRetainThePeakAcrossWeakerShorterPops
         try
         {
+            SpiralOverlay.SkipPlatformChecksForTests = true;
             var host = new Window();
             PinkFilterOverlay.ShowTimed(host, 10000, 0.5);
             SpiralOverlay.ShowTimed(host, 10000, 0.5);
@@ -104,6 +136,6 @@ public sealed class BubblePayloadHostTests
             queued!(); Assert.False(fired);
             Assert.False(PinkFilterOverlay.HasTimedPayload); Assert.False(SpiralOverlay.HasTimedPayload);
         }
-        finally { PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); BubbleOverlay.Stop(); }
+        finally { PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll(); BubbleOverlay.Stop(); SpiralOverlay.SkipPlatformChecksForTests = checks; }
     });
 }

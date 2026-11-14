@@ -172,6 +172,26 @@ public sealed class NavSectionRailTests
         Assert.Equal(0, scroll.Offset.Y);
     }
 
+    [Fact]
+    public void RealRailFitsThe901PixelCanvasWithSettingsUnclipped() => Run(w =>
+    {
+        w.Width = 1585;
+        w.Height = 901;
+        w.UpdateLayout();
+        var sidebar = w.Named<Border>("NavSidebar")!;
+        var rows = w.Named<StackPanel>("NavSectionRows")!;
+        var gear = w.Named<Button>("DoorSettings")!;
+        var inner = Assert.IsType<Grid>(sidebar.Child);
+        inner.Measure(new Size(sidebar.Bounds.Width, double.PositiveInfinity));
+        Assert.True(inner.DesiredSize.Height <= sidebar.Bounds.Height,
+            $"natural {inner.DesiredSize.Height}, available {sidebar.Bounds.Height}");
+        w.UpdateLayout();
+        double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), sidebar)!.Value.Y;
+        Assert.Equal(7, rows.Children.Count);
+        Assert.True(Bottom(gear) <= sidebar.Bounds.Height);
+        Assert.True(Bottom(rows) <= ((Control)gear.Parent!).TranslatePoint(default, sidebar)!.Value.Y);
+    });
+
     private const double play_ZoneTopGap = ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.ZoneTopGap;
 
     [Fact]

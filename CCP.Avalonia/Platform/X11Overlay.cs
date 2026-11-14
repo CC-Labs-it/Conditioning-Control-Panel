@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 ///
 /// <para><b>Windows goes through the same entry points.</b> A window whose platform handle is an
 /// "HWND" is routed to <see cref="Win32Overlay"/> (<see cref="BackendOf"/>), so no call site
-/// branches on the OS. <c>RestackAbove</c> has no Windows half yet and returns false there.</para>
+/// branches on the OS. <c>RestackAbove</c> uses the sibling's Win32 predecessor to insert above it.</para>
 ///
 /// <para><b>Everything in here fails silently if written carelessly</b>, which is why each guard
 /// below is explicit rather than defensive habit:</para>
@@ -95,6 +95,9 @@ internal static class X11Overlay
     [DllImport(LibXfixes)] private static extern void XFixesDestroyRegion(IntPtr display, IntPtr region);
 
     private static readonly object Gate = new();
+
+    // Serialize X grab setup with overlay requests that inspect the shared X error flag.
+    internal static void Synchronize(Action action) { lock (Gate) action(); }
 
     // Held in a static field on purpose: Xlib keeps the raw function pointer, so letting the
     // delegate be collected turns the next X error into a jump into freed memory.
@@ -666,6 +669,9 @@ internal static class X11Overlay
     /// after this call can legitimately still see the old one.</para></summary>
     internal static bool RestackAbove(TopLevel window, TopLevel sibling)
     {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(sibling, OverlayBackend.Win32, out var siblingHwnd)
+                && Win32Overlay.RestackAbove(hwnd, siblingHwnd);
         if (!TryGetXid(window, out var xid)) return false;
         if (!TryGetXid(sibling, out var siblingXid)) return false;
         return RestackXid(xid, siblingXid);

@@ -36,6 +36,41 @@ public sealed class ChaosRunHostTests
 
     private static ChaosRunConfig Cfg() => new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false };
 
+    // WPF ChaosModeService.cs:371, :378: current config and run-state magnet sampled at spawn (includes #3500).
+    [Theory]
+    [InlineData("flash", false)]
+    [InlineData("pink", true)]
+    public async Task Run_spawns_sample_hitbox_settings_and_magnet_state(string variant, bool live)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                var cfg = Cfg();
+                cfg.EnabledVariants = new() { variant };
+                cfg.HitboxScale = 1.25;
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.State!.MagnetEnabled = true;
+                ChaosRunHost.SpawnTick();
+                var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Spec.IsPrism);
+                Assert.Equal(live, b.Spec!.IsLive);
+                Assert.Equal(System.Math.Round(b.Size * (live ? 1.75 : 1.25)), b.HitSize);
+                Assert.Equal(b.Spec.SizePx, b.Size);
+                ChaosRunHost.State!.Config.HitboxScale = 2;
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.SpawnTick();
+                b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Spec.IsPrism);
+                Assert.Equal(System.Math.Round(b.Size * 2), b.HitSize);
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
@@ -257,6 +292,259 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task Ripple_cast_uses_the_selected_effect()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var settings = CoreSettings.Current;
+            var enabled = settings.ChaosSkiaFxEnabled;
+            var composited = ChaosSkiaFxOverlay.Composited;
+            try
+            {
+                ChaosSkiaFxOverlay.Composited = () => true;
+                settings.ChaosSkiaFxEnabled = true;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+                ChaosSkiaFxOverlay.Ripple(new Point(10, 10), 50, 500);
+                Assert.Null(ChaosSkiaFxOverlay.Active);
+                ChaosSkiaFxOverlay.CloseActive();
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                settings.ChaosSkiaFxEnabled = true;
+                // The run creates the field FX window up front (WPF ChaosModeService.cs:411), so the
+                // selected effect is judged by which surface receives the wave, not which window exists.
+                int fieldBefore = ChaosFieldFxOverlay.Active?.Model.TransientCount ?? 0;
+                BubbleOverlay.TriggerPlayerRipple(new Point(10, 10), 50, 500);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.NotNull(ChaosSkiaFxOverlay.Active);
+                Assert.Equal(fieldBefore, ChaosFieldFxOverlay.Active?.Model.TransientCount ?? 0);
+                settings.ChaosSkiaFxEnabled = false;
+                BubbleOverlay.TriggerPlayerRipple(new Point(10, 10), 50, 500);
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.NotNull(ChaosFieldFxOverlay.Active);
+                Assert.True(ChaosFieldFxOverlay.Active!.Model.TransientCount > fieldBefore);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                ChaosSkiaFxOverlay.CloseActive();
+                ChaosFieldFxOverlay.CloseActive();
+                settings.ChaosSkiaFxEnabled = enabled;
+                ChaosSkiaFxOverlay.Composited = composited;
+                ChaosSkiaFxOverlay.SkipPlatformChecksForTests = false;
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public Task Ripple_copy_exists_and_formats_in_every_language() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+            {
+                loc.Initialize(code);
+                foreach (var key in new[] { "Chaos_Ripple_Denied", "Chaos_Ripple_Gathering", "Chaos_Ripple_Teach", "Chaos_Ripple_Skips", "Chaos_Ripple_Cast" })
+                    Assert.NotEqual(key, ConditioningControlPanel.Localization.Loc.GetF(key, "15s"));
+            }
+        }
+        finally { loc.SetLanguage(previous); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public async Task Ripple_gathers_only_during_an_active_unpaused_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var state = ChaosRunHost.State!;
+                state.RippleCooldown = 0.75;
+                Ticks(2);
+                Assert.Equal(0.75, state.RippleCooldown);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(1);
+                Assert.Equal(0.5, state.RippleCooldown);
+                Assert.Equal("1s", state.RippleText);
+                ChaosRunHost.ToggleManualPause();
+                Ticks(4);
+                Assert.Equal(0.5, state.RippleCooldown);
+                ChaosRunHost.ToggleManualPause();
+                Ticks(2);
+                Assert.True(state.RippleReady);
+                Assert.Equal("READY", state.RippleText);
+                Ticks(1);
+                Assert.Equal(0, state.RippleCooldown);
+                ChaosRunHost.ForceShutdown();
+                Ticks(1);
+                Assert.Null(ChaosRunHost.State);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Ripple_hook_consumes_only_near_clicks_and_ignores_queued_work_after_teardown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var oldCue = ChaosRunHost.RippleCue;
+            var oldPop = ChaosRunHost.PopText;
+            var words = new List<string>();
+            try
+            {
+                ChaosRunHost.RippleCue = (_, _) => { };
+                ChaosRunHost.PopText = (_, _, word, _) => words.Add(word);
+                ChaosMeta.State.SeenRippleTeach = true;
+                ChaosRunHost.StartRun(Cfg());
+                Assert.False(ChaosRunHost.OnRippleRightDown(new PixelPoint(100, 100)));
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 80, Y = 80, Size = 40,
+                    Spec = new EffectBubbleSpec(), Clickable = true });
+                ChaosRunHost.RefreshRippleInput();
+                Assert.False(ChaosRunHost.OnRippleRightDown(new PixelPoint(500, 100)));
+                Assert.True(ChaosRunHost.OnRippleRightDown(new PixelPoint(400, 100)));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(state.RippleRechargeSec, state.RippleCooldown);
+                Assert.True(ChaosRunHost.OnRippleRightDown(new PixelPoint(400, 100)));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Contains("gathering... 15s", words);
+                ChaosRunHost.ToggleManualPause();
+                Assert.False(ChaosRunHost.OnRippleRightDown(new PixelPoint(100, 100)));
+                ChaosRunHost.ToggleManualPause();
+                Assert.True(ChaosRunHost.OnRippleRightDown(new PixelPoint(100, 100)));
+                int before = words.Count;
+                ChaosRunHost.ForceShutdown();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Equal(before, words.Count);
+                Assert.False(ChaosRunHost.OnRippleRightDown(new PixelPoint(100, 100)));
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); FreshMeta();
+                ChaosRunHost.RippleCue = oldCue; ChaosRunHost.PopText = oldPop;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Bubble_right_click_casts_then_denies_at_scaled_click_and_stops_on_teardown()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var oldCue = ChaosRunHost.RippleCue;
+            var oldPop = ChaosRunHost.PopText;
+            var cues = new List<(string, float)>();
+            var words = new List<(double, double, string, global::Avalonia.Media.Color)>();
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1) { Width = 1280, Height = 720 };
+            try
+            {
+                ChaosRunHost.RippleCue = (key, volume) => cues.Add((key, volume));
+                ChaosRunHost.PopText = (x, y, word, color) => words.Add((x, y, word, color));
+                ChaosMeta.State.SeenRippleTeach = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                var bubble = new AmbientBubble { Screen = 0, X = 80, Y = 80, Size = 40, Clickable = true,
+                    Spec = new EffectBubbleSpec() };
+                BubbleOverlay.Field.Bubbles.Add(bubble);
+                w.Show();
+                w.MouseDown(new Point(10, 10), global::Avalonia.Input.MouseButton.Right);
+                w.MouseUp(new Point(10, 10), global::Avalonia.Input.MouseButton.Right);
+                Assert.True(state.RippleReady);
+                Assert.Empty(cues);
+                w.MouseDown(new Point(100, 100), global::Avalonia.Input.MouseButton.Right);
+                w.MouseUp(new Point(100, 100), global::Avalonia.Input.MouseButton.Right);
+                Assert.Equal(state.RippleRechargeSec, state.RippleCooldown);
+                Assert.Equal(1, BubbleOverlay.PlayerRippleCount);
+                Assert.Contains(("ripple_cast", 0.6f), cues);
+                Assert.False(bubble.Popping);
+                Assert.True(ChaosRunHost.OnBubbleRightDown(new Point(200, 100), 2));
+                var word = Assert.Single(words);
+                Assert.Equal((100, 20, "gathering... 15s", global::Avalonia.Media.Color.FromRgb(0x7A, 0xE0, 0xFF)), word);
+                Assert.Contains(("toy_denied", 0.45f), cues);
+                Assert.Contains(state.RecentEvents, x => x.Contains("still water"));
+                state.RippleCooldown = 0.25;
+                Ticks(2);
+                Assert.Equal(1, cues.Count(x => x == ("toy_ready", 0.3f)));
+                ChaosRunHost.ToggleManualPause();
+                Assert.False(ChaosRunHost.OnBubbleRightDown(new Point(100, 100), 1));
+                ChaosRunHost.ForceShutdown();
+                Assert.Equal(0, BubbleOverlay.PlayerRippleCount);
+                Assert.False(ChaosRunHost.OnBubbleRightDown(new Point(100, 100), 1));
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); w.Close(); FreshMeta();
+                ChaosRunHost.RippleCue = oldCue; ChaosRunHost.PopText = oldPop;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Ripple_wave_expands_pays_treats_snaps_lives_and_stops_when_held()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var host = new Window();
+            int treats = 0, snaps = 0;
+            try
+            {
+                BubbleOverlay.BeginChaos(host, _ => treats++, _ => snaps++);
+                var treat = new AmbientBubble { X = 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
+                var live = new AmbientBubble { X = 40, Y = -10, Size = 20, FuseTotalMs = 5000, FuseRemainingMs = 5000,
+                    Spec = new EffectBubbleSpec { IsLive = true } };
+                var excluded = new AmbientBubble { X = 5, Y = -10, Size = 20, Spec = new EffectBubbleSpec { IsFreeze = true } };
+                BubbleOverlay.Field.Bubbles.AddRange(new[] { treat, live, excluded });
+                BubbleOverlay.TriggerPlayerRipple(new Point(0, 0), 100, 128);
+                BubbleOverlay.HoldChaos(true);
+                BubbleOverlay.StepPlayerRipples();
+                Assert.Equal((0, 0), (treats, snaps));
+                BubbleOverlay.HoldChaos(false);
+                BubbleOverlay.StepPlayerRipples();
+                Assert.Equal((1, 0), (treats, snaps));
+                BubbleOverlay.StepPlayerRipples();
+                Assert.Equal((1, 1), (treats, snaps));
+                Assert.True(live.Popping && !live.Deflating);   // a swept snap bursts (WPF Pop)
+                Assert.False(excluded.Popping);
+                BubbleOverlay.StepPlayerRipples();
+                BubbleOverlay.StepPlayerRipples();
+                Assert.Equal(0, BubbleOverlay.PlayerRippleCount);
+                Assert.Equal((1, 1), (treats, snaps));
+                BubbleOverlay.TriggerPlayerRipple(new Point(0, 0), 100, 128);
+                BubbleOverlay.EndChaos();
+                Assert.Equal(0, BubbleOverlay.PlayerRippleCount);
+                BubbleOverlay.BeginChaos(host, _ => BubbleOverlay.EndChaos());
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 0, Y = 0, Size = 10, Spec = new EffectBubbleSpec() });
+                BubbleOverlay.TriggerPlayerRipple(new Point(0, 0), 100, 128);
+                BubbleOverlay.StepPlayerRipples(); // the pop tears down during the wave tick
+                Assert.Equal(0, BubbleOverlay.PlayerRippleCount);
+            }
+            finally { BubbleOverlay.EndChaos(); host.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -368,6 +656,30 @@ public sealed class ChaosRunHostTests
         Assert.True(state.ElapsedSec > elapsed);
     });
 
+    // WPF ChaosModeService.UseToy :2690: the draft holds the run, so a toy neither fires nor spends
+    // its cooldown until GO (restack b116, from #3556).
+    [Fact]
+    public Task Toys_wait_for_go_while_a_wave_draft_holds_the_run() => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = false;
+        ChaosRunHost.StartRun(cfg);
+        var overlay = ChaosRunHost.Overlay!; overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!;
+        var toy = new ChaosToyState { Id = "vibe_popping", CooldownSec = 20 };
+        state.ActiveToys.Add(toy);
+        Ticks(80);
+        Assert.Equal(1, state.WaveIndex);
+        ChaosRunHost.UseToyById(toy.Id);
+        Assert.Equal(0, toy.CooldownRemainingSec);
+        typeof(ChaosOverlayWindow).GetMethod("ChooseBoon", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(overlay, new object?[] { null });
+        ChaosRunHost.UseToyById(toy.Id);
+        Assert.Equal(0, toy.CooldownRemainingSec);   // still held for the GO beat
+        overlay.FinishCountdown(); Ticks(1);
+        ChaosRunHost.UseToyById(toy.Id);
+        Assert.Equal(20, toy.CooldownRemainingSec);
+    });
+
     [Fact]
     public Task Wave_draft_skip_and_panic_are_safe() => WithFreshRun(() =>
     {
@@ -414,6 +726,7 @@ public sealed class ChaosRunHostTests
     public Task First_descent_deals_one_scripted_draft_after_the_threat_or_fallback(bool snapped) => WithFreshRun(() =>
     {
         ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        ChaosMeta.Save();   // the boot-error fallback loads the save before routing
         var web = new GameWindow(GameWindow.Games[GameWindow.DtrhId]); web.Show();
         web.HandleMessage("{\"type\":\"boot-error\"}");
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -540,6 +853,72 @@ public sealed class ChaosRunHostTests
         Assert.Contains(loc.Get("chaos_event_sin_shielded"), state.RecentEvents);
         Assert.Contains(loc.Get("chaos_event_sin_resistance"), state.RecentEvents);
         Assert.EndsWith(sin.Name, ChaosAnnouncerOverlay.Active!.Current!.Text);
+        // WPF ChaosModeService.cs:1571 skull, as the curse icon (#3541); with word-art the picture carries it.
+        if (ChaosEffectBannerOverlay.ResolveArt(sin.Id) == null)
+            Assert.Equal(ChaosOverlayWindow.CurseIcon, Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions
+                .GetLogicalDescendants(ChaosAnnouncerOverlay.Active!).OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>()).Kind);
+    });
+
+    // Hand-ported from #3541: WPF AnnounceFinalLoopIfEntering (ChaosModeService.cs:1460,1625,1639-1647).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task The_last_loop_is_announced_once_when_it_begins(bool drafts) => WithFreshRun(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        var cfg = Cfg(); cfg.BoonDraftEnabled = drafts;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        var state = ChaosRunHost.State!;
+        int LastLoops() => state.RecentEvents.Count(e => e == loc.Get("chaos_event_last_loop"));
+        void Wave()
+        {
+            Ticks(80);
+            if (!drafts) return;
+            ChaosRunHost.ChooseBoon(null);
+            ChaosAnnouncerOverlay.CloseActive();
+            Assert.Equal(0, LastLoops());   // never under the draft table: the banner waits for GO
+            overlay.FinishCountdown();
+        }
+        Wave();
+        Assert.Equal(2, state.WaveIndex);
+        Assert.Equal(0, LastLoops());
+        ChaosAnnouncerOverlay.CloseActive();
+        Wave();
+        Assert.Equal(3, state.WaveIndex);
+        Assert.Equal(1, LastLoops());
+        Assert.Equal("final_loop", ChaosAnnouncerOverlay.Active!.Current!.ArtKey);
+        Assert.Equal(ChaosAnnounceKind.Depth, ChaosAnnouncerOverlay.Active.Current.Kind);
+        Ticks(20);
+        Assert.Equal(1, LastLoops());
+    });
+
+    // Hand-ported from #3541: WPF ResumeAfterDraft (ChaosModeService.cs:1614) plays one unlock cue for the deferred cards.
+    [Fact]
+    public Task Deferred_draft_cards_play_one_unlock_cue_at_go() => WithFreshRun(() =>
+    {
+        var cues = new List<string>();
+        var old = CoreAudio.PlayOneShotProvider;
+        CoreAudio.PlayOneShotProvider = (path, _, _, _, _) => cues.Add(System.IO.Path.GetFileNameWithoutExtension(path));
+        try
+        {
+            var meta = ChaosMeta.State; meta.LessonsComplete.Add("silk_touch");
+            meta.LessonsComplete.Remove("draft4");
+            meta.LessonProgress["draft4"] = ChaosLessons.ById("draft4")!.Target - 1;
+            var cfg = Cfg(); cfg.BoonDraftEnabled = true;
+            ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            Ticks(80);
+            ChaosRunHost.ChooseBoon(ChaosBoonPool.All.First(b => !b.IsCurse));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain("ui_unlock", cues);
+            overlay.FinishCountdown();
+            Assert.True(ChaosUnlockCardOverlay.IsShowing);
+            Assert.Single(cues, c => c == "ui_unlock");
+        }
+        finally { CoreAudio.PlayOneShotProvider = old; }
     });
 
     /// <summary>WPF ChaosToyButtonWindow: one hero button per equipped toy; a real click fires the
@@ -656,7 +1035,11 @@ public sealed class ChaosRunHostTests
                 await ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.ShowPath(
                     new[] { new PixelRect(0, 0, 1920, 1080) }, gif, 60000, 0.30);
                 Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+                ChaosFieldFxOverlay.SnapRipple(new Point(10, 10), 50, 60000);
+                Assert.NotNull(ChaosFieldFxOverlay.Active);
                 Ticks(244);   // past the 60 s run
+                Assert.Null(ChaosFieldFxOverlay.Active);
                 Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
                 Assert.False(ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.IsShowing);
             }
@@ -666,6 +1049,8 @@ public sealed class ChaosRunHostTests
                 ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.CloseActive();
                 ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.SkipPlatformChecksForTests = false;
                 ConditioningControlPanel.Avalonia.Views.Overlays.ChaosFlashOverlay.Schedule = schedule;
+                ChaosFieldFxOverlay.CloseActive();
+                ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
                 System.IO.Directory.Delete(dir, true);
             }
         });
@@ -1631,4 +2016,47 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    /// <summary>WPF ChaosModeService.cs:1844/1873/2025 + AchievementService.cs:570-609: prism, treat and defuse
+    /// pops each count toward the lifetime pop total (the 100-pop Sparkle) and credit quests (#3240).</summary>
+    [Fact]
+    public async Task Chaos_treat_prism_and_defuse_pops_count_toward_lifetime_pops_and_quests()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var prop = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+            var (achWas, firerWas) = (prop.GetValue(null), EffectPayload.Firer);
+            var dir = System.IO.Directory.CreateTempSubdirectory("ccp-chaos-pops-").FullName;
+            var questsWas = global::ConditioningControlPanel.Avalonia.App.Quests;
+            using var quests = new QuestService(null, dir);
+            quests.Progress.DailyQuests = new List<ConditioningControlPanel.Models.ActiveQuest> { new("pop_parade_d") };
+            global::ConditioningControlPanel.Avalonia.App.Quests = quests;
+            try
+            {
+                var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(dir, "a.json")));
+                prop.SetValue(null, engine);
+                EffectPayload.Firer = null;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                Assert.Equal(1, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload(), IsPrism = true } });
+                Assert.Equal(2, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                ChaosRunHost.OnDefused(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                Assert.Equal(3, quests.Progress.DailyQuests[0]!.CurrentProgress);
+                Assert.Equal(3, engine.Progress.TotalBubblesPopped);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                global::ConditioningControlPanel.Avalonia.App.Quests = questsWas;
+                prop.SetValue(null, achWas);
+                EffectPayload.Firer = firerWas;
+                FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }
