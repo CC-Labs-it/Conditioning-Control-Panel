@@ -1164,10 +1164,8 @@ public sealed class LauncherWindowTests
         LauncherWindow.BackToLauncher(shell);
         var w = LauncherWindow.Instance!;
         var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "breakoutdemo");
-        var body = Assert.IsType<Grid>(((Border)tile).Child);
-        var plate = Assert.IsType<Panel>(body.Children[0]);
-        var artHost = Assert.IsType<Panel>(plate.Children[0]); // the art sits in the sliding art host
-        var cover = Assert.Single(artHost.Children.OfType<Image>());
+        // The art sits in the tile's sliding art host, under the tilt and sheen layers.
+        var cover = Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Border)tile).OfType<Image>());
         Assert.Same(ConditioningControlPanel.Avalonia.Helpers.BreakoutCardArt.Demo, cover.Source);
         Assert.Equal(global::Avalonia.Media.Stretch.UniformToFill, cover.Stretch);
     });
