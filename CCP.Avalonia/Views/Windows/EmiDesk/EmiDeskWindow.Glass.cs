@@ -14,10 +14,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 // WPF EmiDeskWindow.Glass.cs:77-88, 174-215, 256-283, 294-342, 385-419, 440-477.
 // Off-air and Shop At Home savers; the other channels and effects remain pending.
+// ONE director (WPF EmiChannels.Pick, uniform over the feasible channels): PollGlass owns the idle flip for
+// every channel on this head, the GIF rain channel (EmiDeskWindow.Rain.cs) included.
 public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
     internal static Func<bool> GlassChooseShop = () => GlassRng.Next(2) != 0;
+    // Rain is the third channel when the user has images (WPF EmiChannels.Feasible "rain" => HasImages).
+    internal static Func<bool> GlassChooseRain = () => GlassRng.Next(3) == 0;
     private DispatcherTimer? _glassWatch;
     private BeatLoop? _glassFrames;
     private DateTime _glassActivity = DateTime.UtcNow, _glassPhase;
@@ -33,18 +37,18 @@ public partial class EmiDeskWindow
         ? TimeSpan.FromMilliseconds(ms)
         : TimeSpan.FromSeconds(30 + GlassRng.NextDouble() * 30); // WPF EmiChannels.cs:74-82
 
-    partial void OnReadyCore()
+    // The partial hooks live in EmiDeskWindow.Rain.cs (one implementation each) and call these.
+    private void HookGlassActivity()
     {
         PointerActivity += (_, _) => NoteGlassActivity();
         Moved += (_, _) => NoteGlassActivity();
     }
 
-    partial void OnGlassLiveQuery(ref bool live) { if (_glassLive) live = true; }
-    partial void OnGlassClickedCore(ref bool handled)
+    private bool GlassClicked()
     {
-        if (!_glassLive) return;
-        handled = true;
+        if (!_glassLive) return false;
         CloseGlass(); // WPF EmiChannels.cs:50-56: a saver fires nothing.
+        return true;
     }
 
     private void StartGlassWatch()
@@ -74,11 +78,17 @@ public partial class EmiDeskWindow
 
     internal void PollGlass(DateTime now)
     {
-        if (_glassLive || _closingForGood || !IsVisible || PresentationActive || InputLocked ||
+        if (_glassLive || _rainGlass || RainAskLive || _closingForGood || !IsVisible || PresentationActive || InputLocked ||
             Transiting || ChainLive || RingOpen || !CoreSettings.Current.EmiDeskGlass ||
             EmiLineEngine.BedtimeSet || EmiLineEngine.Instance.HoldActive || CoreEngine.Video?.IsPlaying == true)
             return;
         if (now - _glassActivity < _glassIdle) return;
+        if (GlassChooseRain() && TryShowRainChannel())
+        {
+            _glassActivity = now;
+            _glassIdle = NextGlassIdle();
+            return;
+        }
 
         var rect = GlassRect;
         if (rect.Width <= 4 || rect.Height <= 4) return;
@@ -115,7 +125,15 @@ public partial class EmiDeskWindow
             else _glassShop = new ShopPainter(_glassLayer!, GlassRng.Next(3));
             return;
         }
-        if (elapsed >= 10_000) { CloseGlass(); return; } // WPF EmiChannels.cs:58-59
+        if (elapsed >= 10_000)
+        {
+            // WPF EmiChannels.cs:58-59 and EmiDeskWindow.Glass.cs:472-477: an untouched channel ends in the
+            // wordless effectDeclined hold (a HOLD row: a face, no bubble).
+            var channel = _glassShop != null ? "shop" : "offair";
+            CloseGlass();
+            EmiDeskService.Instance.Fire("effectDeclined", new { channel });
+            return;
+        }
         _glassShop?.Tick(elapsed);
         if (_glassMotion && _glassSignal != null && _glassDim != null)
         {

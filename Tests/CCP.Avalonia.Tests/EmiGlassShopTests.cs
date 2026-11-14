@@ -31,6 +31,7 @@ public class EmiGlassShopTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         EmiDeskWindow.GlassChooseShop = () => true;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -48,7 +49,7 @@ public class EmiGlassShopTests
         finally
         {
             desk.ShutDown(); EmiState.Current.BedtimeUntil = bedtime;
-            EmiDeskWindow.GlassChooseShop = choice; CoreSettings.ServiceProvider = old;
+            EmiDeskWindow.GlassChooseShop = choice; EmiDeskWindow.GlassChooseRain = oldRain; CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;
     });

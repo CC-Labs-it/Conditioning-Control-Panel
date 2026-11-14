@@ -28,6 +28,7 @@ public class EmiDeskGlassTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        EmiLineEngine.Instance.ResetForTests();
         var old = CoreSettings.ServiceProvider;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
@@ -37,6 +38,7 @@ public class EmiDeskGlassTests
         var host = new Window { Content = section };
         var oldChoice = EmiDeskWindow.GlassChooseShop;
         EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -67,6 +69,9 @@ public class EmiDeskGlassTests
             desk.AdvanceGlass(flip.AddMilliseconds(10_220));
             Assert.False(desk.GlassIsLive);
             Assert.Empty(desk.GlassHost.Children);
+            // WPF EmiDeskWindow.Glass.cs:472-477: an untouched channel ends in the wordless effectDeclined hold.
+            Assert.True(EmiLineEngine.Instance.HoldActive);
+            Assert.Empty(desk.BubbleHost.Children);
             toggle.IsChecked = false;
             Assert.False(CoreSettings.Current.EmiDeskGlass);
             desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
@@ -74,13 +79,29 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice;
+            EmiLineEngine.Instance.ResetForTests();
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
             desk.ShutDown(); host.Close(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public async Task ExpiryTestStartsAndEndsWithAClearLineEngine()
+    {
+        var engine = EmiLineEngine.Instance;
+        engine.ResetForTests();
+        try
+        {
+            engine.Draw("effectDeclined");
+            Assert.True(engine.HoldActive);
+            await SettingsControlsTheIdleSaverAndItsTenSecondLife();
+            Assert.False(engine.HoldActive);
+        }
+        finally { engine.ResetForTests(); }
+    }
 
     // WPF Glass.cs:174-185/256-278 and Presentation.cs:23: activity and competing work take precedence.
     [Fact]
@@ -96,6 +117,7 @@ public class EmiDeskGlassTests
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldChoice = EmiDeskWindow.GlassChooseShop;
         EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -122,7 +144,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice;
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -142,6 +164,7 @@ public class EmiDeskGlassTests
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldChoice = EmiDeskWindow.GlassChooseShop;
         EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -163,7 +186,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice;
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             CoreSettings.ServiceProvider = old;
         }
@@ -183,6 +206,7 @@ public class EmiDeskGlassTests
         var savedBedtime = EmiState.Current.BedtimeUntil;
         var oldChoice = EmiDeskWindow.GlassChooseShop;
         EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -211,7 +235,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
-            EmiDeskWindow.GlassChooseShop = oldChoice;
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language);
             CoreSettings.ServiceProvider = old;
@@ -232,6 +256,10 @@ public class EmiDeskGlassTests
         var oldTime = BeatLoop.Time;
         var time = new SteppedTime();
         BeatLoop.Time = time;
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        EmiLineEngine.Instance.ResetForTests();
         var desk = new EmiDeskWindow();
         try
         {
@@ -250,6 +278,8 @@ public class EmiDeskGlassTests
             time.Advance(TimeSpan.FromSeconds(10)); BeatLoop.StepAll();
             Assert.False(desk.GlassIsLive);
             Assert.DoesNotContain(loop, BeatLoop.Running);
+            Assert.True(EmiLineEngine.Instance.HoldActive);   // the expiry hold keeps the next flip back
+            EmiLineEngine.Instance.ResetForTests();
 
             desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
             layer = Assert.IsType<Canvas>(Assert.Single(desk.GlassHost.Children));
@@ -260,8 +290,53 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiLineEngine.Instance.ResetForTests();
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             BeatLoop.Time = oldTime; CoreSettings.ServiceProvider = oldSettings;
+        }
+        return Task.CompletedTask;
+    });
+    // WPF EmiDeskWindow.Bubble.cs:545-555: a hold (panic, intake, an ignored offer) closes a live channel first.
+    [Fact]
+    public Task AHoldFaceClosesALiveSaver() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var savedBedtime = EmiState.Current.BedtimeUntil;
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
+        var engine = EmiLineEngine.Instance;
+        engine.ResetForTests();
+        var desk = new EmiDeskWindow();
+        try
+        {
+            EmiState.Current.BedtimeUntil = DateTime.MinValue;
+            CoreSettings.Current.EmiDeskGlass = true;
+            desk.Show(); Dispatcher.UIThread.RunJobs();
+            desk.PollGlass(DateTime.UtcNow.AddSeconds(61));
+            Assert.True(desk.GlassIsLive);
+            var line = engine.Draw("effectDeclined");
+            Assert.NotNull(line);
+            Assert.True(line!.Hold);
+            desk.SpeakLine(line, engine);
+            Assert.False(desk.GlassIsLive);
+            Assert.Empty(desk.GlassHost.Children);
+            Assert.True(desk.HoldPending);
+            Assert.Empty(desk.BubbleHost.Children);
+        }
+        finally
+        {
+            engine.ResetForTests();
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
+            desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
+            CoreSettings.ServiceProvider = oldSettings;
         }
         return Task.CompletedTask;
     });
@@ -278,6 +353,9 @@ public class EmiDeskGlassTests
         CoreSettings.ServiceProvider = () => settings;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var savedBedtime = EmiState.Current.BedtimeUntil;
+        var oldChoice = EmiDeskWindow.GlassChooseShop;
+        EmiDeskWindow.GlassChooseShop = () => false;
+        var oldRain = EmiDeskWindow.GlassChooseRain; EmiDeskWindow.GlassChooseRain = () => false;
         var desk = new EmiDeskWindow();
         try
         {
@@ -314,6 +392,7 @@ public class EmiDeskGlassTests
         }
         finally
         {
+            EmiDeskWindow.GlassChooseShop = oldChoice; EmiDeskWindow.GlassChooseRain = oldRain;
             desk.ShutDown(); EmiState.Current.BedtimeUntil = savedBedtime;
             LocalizationManager.Instance.SetLanguage(language); CoreSettings.ServiceProvider = oldSettings;
         }

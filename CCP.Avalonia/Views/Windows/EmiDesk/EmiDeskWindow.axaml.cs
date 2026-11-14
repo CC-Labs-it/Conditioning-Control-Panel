@@ -1318,7 +1318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (handled) return;
                 }
 
-                if (glassLive) CloseRainGlass();
+                if (glassLive) { CloseRainGlass(); CloseGlass(); }
 
                 // QA ONLY, and deliberately awkward to hit by accident: Ctrl+Shift+Alt+click replays
                 // the gesture tutorial. Checked BEFORE the pat so the pat cannot eat it.

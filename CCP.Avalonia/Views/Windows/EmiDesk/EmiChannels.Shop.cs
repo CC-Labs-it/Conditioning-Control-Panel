@@ -19,7 +19,8 @@ internal sealed class ShopPainter
     private readonly double _cx, _bodyWidth;
     private readonly int _start, _drop;
     private static readonly double[] Squeeze = { 1, .6, .15, .6 };
-    private static readonly IBrush Gold = Brush.Parse("#F2C14E"), Coral = Brush.Parse("#E8836F");
+    private static readonly IBrush Gold = Brush.Parse("#F2C14E"), Coral = Brush.Parse("#E8836F"),
+        FootDark = Brush.Parse("#3A1420"), CallLit = Brush.Parse("#1A1A2E"), CallDark = Brush.Parse("#7A4050"); // parsed once, not per frame
 
     internal ShopPainter(Canvas host, int item)
     {
@@ -84,8 +85,8 @@ internal sealed class ShopPainter
         int price = Math.Max(9, _start - (int)(ms / 90) * _drop);
         _price.Text = price.ToString(CultureInfo.InvariantCulture) + " SP";
         bool lit = ((int)(ms / (price == 9 ? 250 : 500)) & 1) == 0;
-        _foot.Fill = lit ? Coral : Brush.Parse("#3A1420");
-        _call.Foreground = Brush.Parse(lit ? "#1A1A2E" : "#7A4050");
+        _foot.Fill = lit ? Coral : FootDark;
+        _call.Foreground = lit ? CallLit : CallDark;
         _price.Opacity = price == 9 && !lit ? .45 : 1;
     }
 
