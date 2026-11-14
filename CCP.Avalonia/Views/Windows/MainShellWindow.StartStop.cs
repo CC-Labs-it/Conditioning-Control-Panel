@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 UpdateStartButton();
                 if (!systemInitiated) _ = MaybePromptMandatoryVideoEnhancement(this, () => CoreEngine.IsRunning,   // WPF StartStop.cs:443
                     () => Platform.WebcamTracker.Instance.IsRunning, () => Named<Tabs.SettingsTabView>("SettingsTab")?.BtnWebcamTracking_Click(null, new()));
+                if (resuming) { SetPauseButton(false); OnSessionTick(); }   // the parked run is live again: repaint Pause and the labels
             });
         }
 

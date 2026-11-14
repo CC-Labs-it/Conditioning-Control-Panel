@@ -106,14 +106,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.Presets.cs:2098 and MainWindow.StartStop.cs:85 supply distinct labels.
             // ShowStyledDialog (MainWindow.Presets.cs:695-813) sets no default/cancel
             // and does not assign initial button focus. Enter/Space must not confirm on open.
+            var mainStop = bodyKey == "dialog_stop_session_body";
+            var penalty = runner.XPPenalty;
+            var penaltyText = mainStop
+                ? (penalty > 0 ? Loc.GetF("dialog_stop_session_penalty", penalty, Math.Max(0, potentialXP - penalty)) : "")
+                : (runner.PauseCount > 0 ? Loc.GetF("msg_plus_pause_penalty_0", penalty) : "");
             var dialog = new MessageDialog(Loc.Get(titleKey),
-                Loc.GetF(bodyKey, session.Icon ?? "", session.GetModeAwareName(),
+                Loc.GetF(bodyKey, session.Icon ?? "", mainStop ? session.Name : session.GetModeAwareName(),
                     $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}",
                     $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}",
-                    potentialXP, runner.PauseCount > 0 ? Loc.GetF("msg_plus_pause_penalty_0", runner.XPPenalty) : ""),
+                    potentialXP, penaltyText),
                 showCancel: true, okText: Loc.Get(yesKey), cancelText: Loc.Get(noKey));
             var yes = dialog.FindControl<Button>("BtnOk")!;
             yes.IsDefault = false;
+            // WPF ShowStyledDialog (MainWindow.Presets.cs:772-806) puts Yes before No.
+            var no = dialog.FindControl<Button>("BtnCancel")!;
+            Grid.SetColumn(yes, 1);
+            Grid.SetColumn(no, 3);
+            yes.Margin = new global::Avalonia.Thickness(0, 0, 10, 0);
+            no.Margin = default;
             var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");

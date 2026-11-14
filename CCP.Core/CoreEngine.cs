@@ -53,7 +53,7 @@ namespace ConditioningControlPanel
         public static volatile BubbleCountScheduler? BubbleCount;
 
         /// <summary>WPF StartEngine's arming matrix, minus the services no head here has.
-        /// Not idempotent in TotalSessions, exactly as WPF; callers start only when stopped.</summary>
+        /// A resumed session does not increment TotalSessions (WPF StartStop.cs:341).</summary>
         public static void Start(bool resumingSession = false)
         {
             RemoteCommands.ReleaseOverlayStop();
