@@ -1865,7 +1865,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Games.LinuxRaceHost.Current?.Dispose();
             if (Interlocked.Exchange(ref _exitHandled, 1) != 0) return;
             _exiting = true;
-            Platform.LoginStreakHead.ClearProfile();
+            Platform.LoginStreakHead.Stop();
             ClearEngineCrashOnExit();
 
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no

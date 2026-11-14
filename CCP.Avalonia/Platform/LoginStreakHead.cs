@@ -14,11 +14,21 @@ internal static class LoginStreakHead
     private static string? _loadedId;
     private static JObject? _loadedStats;
     private static AchievementEngine? _questXpEngine;
+    private static DispatcherTimer? _rolloverTimer;
     internal static int ProfileGeneration { get; private set; }
 
     internal static void Start(AchievementEngine engine, AppSettings settings)
     {
         _questXpEngine = null;
+        // WPF AchievementService.cs:168-176: the 1 s tracking timer checks the midnight rollover first.
+        _rolloverTimer?.Stop();
+        _rolloverTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _rolloverTimer.Tick += (_, _) =>
+        {
+            try { TickCurrent(DateTime.Today); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Login streak rollover failed"); }
+        };
+        _rolloverTimer.Start();
         // A real bank (yesterday kept, a shield, a reset) is saved at once so a crash before the
         // autosave cannot bank and pay the same day twice. A first stamp (no launch history) or a
         // same-day launch only changes memory, as WPF AchievementProgress.UpdateLoginStreak does:
@@ -86,6 +96,19 @@ internal static class LoginStreakHead
         return true;
     }
 
+    /// <summary>WPF AchievementService.CheckDayRollover (:332): a calendar day that turns while the app runs
+    /// is banked once, over the persisted last banked day, so startup and rollover never bank the same date.</summary>
+    internal static bool Rollover(AchievementEngine engine, AppSettings settings, DateTime today)
+    {
+        var p = engine.Progress;
+        if (p.PendingStreakBreak || !AchievementProgress.ShouldBankDayRollover(p.LastLaunchDate, today)) return false;
+        var banked = Update(p, settings, today, false);
+        if (p.PendingStreakBreak) _ = Timeout(engine, settings, settings.UnifiedId);
+        SaveAndPay(engine, settings);
+        if (banked && App.Quests is { } quests) App.CreditBankedLoginStreak(quests, p, today);
+        return banked;
+    }
+
     private static async Task SyncInsurance(AppSettings settings, string id, DateTime today, int generation)
     {
         var (ok, _, credits) = await new StreakFix(() => settings).UseAsync(today);
@@ -97,7 +120,26 @@ internal static class LoginStreakHead
         }
     }
 
+    internal static bool TimerRunning => _rolloverTimer?.IsEnabled == true;
+
+    // Logout resets the existing engine but keeps the quest XP listener, so each tick resolves the
+    // current profile instead of capturing the old one.
+    internal static bool TickCurrent(DateTime today)
+    {
+        var engine = App.Achievements;
+        return engine != null && Rollover(engine, CoreSettings.Current, today);
+    }
+
     internal static void ClearProfile() { ProfileGeneration++; _loadedId = null; _loadedStats = null; }
+
+    /// <summary>App exit: the rollover timer and the quest XP hook go with the profile.</summary>
+    internal static void Stop()
+    {
+        _rolloverTimer?.Stop();
+        _rolloverTimer = null;
+        _questXpEngine = null;
+        ClearProfile();
+    }
 
     internal static void ProfileLoaded(string id, JObject? stats)
     {
@@ -184,5 +226,8 @@ internal static class LoginStreakHead
         p.PendingStreakBonus = false;
         var xp = p.ConsecutiveDays switch { <= 0 => 0, <= 3 => 50, <= 6 => 100, <= 13 => 150, <= 29 => 200, _ => 300 };
         if (xp > 0) ProgressionBank.Add(xp, "Other");
+        // The cleared bonus flag is saved with the XP, so a crash cannot pay the same day twice.
+        engine.Save();
+        CoreSettings.SaveImmediate();
     }
 }
