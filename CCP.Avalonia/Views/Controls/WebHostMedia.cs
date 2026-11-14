@@ -15,7 +15,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal const string PanicPauseScript = "window._ccpForcedFs = false; window._ccpTakeoverStopped = true;"
             + "(function(){var pause=function(d){try{"
             + "d.querySelectorAll('video,audio').forEach(function(e){e.pause();});"
-            + "if(d.fullscreenElement)d.exitFullscreen();"
+            // WebKitGTK builds that only expose the prefixed API (the autoplay script enters through either).
+            + "if(d.fullscreenElement&&d.exitFullscreen)d.exitFullscreen();"
+            + "else if(d.webkitFullscreenElement&&d.webkitExitFullscreen)d.webkitExitFullscreen();"
             + "d.querySelectorAll('iframe').forEach(function(f){try{if(f.contentDocument)pause(f.contentDocument);}catch(e){}});"
             + "}catch(e){}};pause(document);})();";
 

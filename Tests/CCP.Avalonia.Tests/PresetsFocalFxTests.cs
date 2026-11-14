@@ -61,10 +61,18 @@ public sealed class PresetsFocalFxTests
         var session = Assert.IsAssignableFrom<Session>(row.Tag);
         Assert.NotEqual($"session_{session.Id}_name", session.LocalizedName);
         Assert.NotEqual($"session_{session.Id}_desc", session.LocalizedDescription);
-        var oldProvider = CoreMods.MakeModAwareProvider;
+        // WPF MainWindow.SessionIO.cs:450,472: rack rows read the Core mode-aware copy (PresetNaming), so a
+        // mod switch is what moves a built-in row (restack b173, #3937). Hidden or not, the row follows on show.
+        var oldMod = CoreMods.ActiveModIdProvider;
+        var oldText = CoreMods.MakeModAwareProvider;
         try
         {
-            CoreMods.MakeModAwareProvider = text => "changed " + text;
+            string modId = BuiltInMods.BambiSleepId;
+            CoreMods.ActiveModIdProvider = () => modId;
+            CoreMods.MakeModAwareProvider = text => text;
+            var beforeName = session.GetModeAwareName();
+            modId = BuiltInMods.DronificationId;
+            Assert.NotEqual(beforeName, session.GetModeAwareName());
             view.IsVisible = !hidden;
             CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle(clock);
             view.IsVisible = true; Settle(clock);
@@ -72,11 +80,12 @@ public sealed class PresetsFocalFxTests
             var grid = Assert.IsType<Grid>(refreshed.Child);
             var name = grid.Children.OfType<TextBlock>().Single(t => Grid.GetColumn(t) == 2);
             var description = grid.Children.OfType<TextBlock>().Single(t => Grid.GetColumn(t) == 3);
-            Assert.Equal("changed " + session.LocalizedName, name.Text);
-            Assert.Equal(("changed " + session.LocalizedDescription).Split('\n')[0].Trim(), description.Text);
-            Assert.Equal("changed " + session.LocalizedDescription, ToolTip.GetTip(description));
+            var blurb = session.GetModeAwareDescription();
+            Assert.Equal(session.GetModeAwareName(), name.Text);
+            Assert.Equal(blurb.Split('\n')[0].Trim(), description.Text);
+            Assert.Equal(blurb, ToolTip.GetTip(description));
         }
-        finally { CoreMods.MakeModAwareProvider = oldProvider; }
+        finally { CoreMods.ActiveModIdProvider = oldMod; CoreMods.MakeModAwareProvider = oldText; }
     });
 
     [Fact]

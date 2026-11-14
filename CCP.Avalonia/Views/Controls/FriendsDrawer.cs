@@ -8,7 +8,7 @@
 // The blocked fallback and once-only presence ask share Core rules with WPF.
 // The rail drawer hosts the leash section (Tabs.LeashTabView asDrawer: offers, own card, held
 // cards, WPF LeashDrawerSection.cs); the Friends page leaves it to the Leash page.
-// ponytail: no shared row juice; a friend card hosts the leash offer chip (FriendLeashOffer.cs). A word WPF throws outside the drawer
+// Rows carry the WPF hover wash and sheen (AttachHover); a friend card hosts the leash offer chip (FriendLeashOffer.cs). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Linq;
@@ -464,6 +464,14 @@ public sealed partial class FriendsDrawer : Border
     private Control Card(Friend f)
     {
         var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Tag = "friends-card" };
+        // WPF FriendsDrawer.cs:668-695 keeps actions, the leash chip and More above the question.
+        card.Children.Add(CardActions(f));
+        if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
+        var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
+        more.HorizontalAlignment = HorizontalAlignment.Stretch;
+        more.HorizontalContentAlignment = HorizontalAlignment.Center;
+        more.Click += (_, _) => { FriendsSfx.Click(); Menu(f).Open(more); };   // WPF FriendsDrawer.cs:686
+        card.Children.Add(more);
         if (_confirm is { } c && c.Id == f.Id)
         {
             bool block = c.What == "block";
@@ -486,16 +494,8 @@ public sealed partial class FriendsDrawer : Border
                     },
                 },
             });
-            return card;
         }
-        card.Children.Add(CardActions(f));
-        if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
-        var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
-        more.HorizontalAlignment = HorizontalAlignment.Stretch;
-        more.HorizontalContentAlignment = HorizontalAlignment.Center;
-        more.Click += (_, _) => { FriendsSfx.Click(); Menu(f).Open(more); };   // WPF FriendsDrawer.cs:686
-        card.Children.Add(more);
-        if (_picker != null)
+        else if (_picker != null)
         {
             var picker = Picker(f);
             picker.Margin = new Thickness(0, 8, 0, 0);
@@ -537,8 +537,8 @@ public sealed partial class FriendsDrawer : Border
     internal async Task RunMenuAsync(Friend f, string what)
     {
         if (_svc == null) return;
-        // WPF AskConfirm (FriendsDrawer.Blocked.cs:75): the question opens with a click.
-        if (what is "remove" or "block") { FriendsSfx.Click(); _confirm = (f.Id, what); _openId = f.Id; Render(); return; }
+        // WPF AskConfirm (FriendsDrawer.Blocked.cs:66-75): the question opens with a click and forgets the send picker.
+        if (what is "remove" or "block") { FriendsSfx.Click(); _confirm = (f.Id, what); _openId = f.Id; _picker = null; Render(); return; }
         ActResult r = ActResult.TryLater;
         try { r = await _svc.SetSquelchAsync(f.Id, what == "squelch"); }
         catch (Exception ex) { Serilog.Log.Debug("[Friends] menu {What} failed: {E}", what, ex.Message); }
@@ -664,12 +664,62 @@ public sealed partial class FriendsDrawer : Border
         return row;
     }
 
-    // WPF FriendsDrawer.Juice.cs:93-102. The animated sweep is deferred.
+    // WPF FriendsDrawer.Juice.cs:93-134: the wash, and one non-interactive lilac sweep per entry (open rows too).
     private static void AttachHover(Border row, bool open)
     {
+        // WPF lays the band over the row's own content grid; wrap a non-grid child so it has one.
+        if (row.Child is not Grid && row.Child is { } content)
+        {
+            row.Child = null;
+            row.Child = new Grid { Children = { content } };
+        }
+        row.ClipToBounds = true;   // the band starts and ends outside the row
         var rest = row.Background;
-        row.PointerEntered += (_, _) => { if (!open) row.Background = Hover; };
+        row.PointerEntered += (_, _) =>
+        {
+            if (!open) row.Background = Hover;
+            SweepRow(row);
+        };
         row.PointerExited += (_, _) => { if (!open) row.Background = rest; };
+    }
+
+    /// <summary>WPF FriendsDrawer.Juice.cs:104-133: a 70 px band from -90 to max(width, 200)+20, quadratic,
+    /// 520 ms at Full, half the opacity at twice the time on Reduced (Gentle Visuals caps to Reduced), none on Off.
+    /// The animation runs on the band (a Visual), never on its transform.</summary>
+    private static async void SweepRow(Border row)
+    {
+        var level = AmbientFxCanvas.Env.Level;
+        if (level == Models.MotionLevel.Off || row.Child is not Grid host) return;
+        double amount = level == Models.MotionLevel.Reduced ? 0.5 : 1;
+        var band = new Rectangle
+        {
+            Width = 70, HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false,
+            Opacity = 0.9 * amount, Tag = "friends-sheen",
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops = new GradientStops
+                {
+                    new(Color.FromArgb(0, 0xB9, 0x9C, 0xFF), 0),
+                    new(Color.FromArgb(0x30, 0xB9, 0x9C, 0xFF), 0.5),
+                    new(Color.FromArgb(0, 0xB9, 0x9C, 0xFF), 1),
+                },
+            },
+            RenderTransform = new TranslateTransform(-90, 0),
+        };
+        Grid.SetRowSpan(band, Math.Max(1, host.RowDefinitions.Count));
+        Grid.SetColumnSpan(band, Math.Max(1, host.ColumnDefinitions.Count));
+        host.Children.Add(band);
+        var sweep = new global::Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromMilliseconds(520 / amount),
+            Easing = new global::Avalonia.Animation.Easings.QuadraticEaseInOut(),
+        };
+        sweep.Children.Add(new global::Avalonia.Animation.KeyFrame { Cue = new global::Avalonia.Animation.Cue(0), Setters = { new Setter(TranslateTransform.XProperty, -90d) } });
+        sweep.Children.Add(new global::Avalonia.Animation.KeyFrame { Cue = new global::Avalonia.Animation.Cue(1), Setters = { new Setter(TranslateTransform.XProperty, Math.Max(row.Bounds.Width, 200) + 20) } });
+        try { await sweep.RunAsync(band); } catch { }
+        finally { host.Children.Remove(band); }
     }
 
     /// <summary>WPF BuildRequestMenu (FriendsDrawer.Honesty.cs:80) + AddRequestMenuExtras (.Blocked.cs:126):
