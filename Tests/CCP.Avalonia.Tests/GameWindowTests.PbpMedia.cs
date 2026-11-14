@@ -28,7 +28,7 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         w.HandleMessage("{\"type\":\"ready\"}");
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "pbp:online-media" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look", "pbp:online-media" }, sent.Select(o => (string?)o["type"]));
         var state = sent.Single(o => (string?)o["type"] == "pbp:media-state");
         Assert.False((bool)state["chosen"]!);
         w.HandleMessage("{\"type\":\"pbp:media-flavour\",\"flavour\":\" PINK \",\"subs\":[\"r/valid\",\"VALID\",\"../bad\",3],\"custom\":{\"pink\":{}},\"online\":false}");
