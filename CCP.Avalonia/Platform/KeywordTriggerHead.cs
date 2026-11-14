@@ -195,6 +195,7 @@ internal sealed class KeywordAudioRuntime
             _cooldowns.Record(t, s, now.ToUniversalTime());
             Fires.Record(t, "Keyboard", now);   // WPF KeywordTriggerService.cs:135,1191-1200 (pulse feed)
             try { TriggerFired?.Invoke(t); } catch (Exception ex) { Log.Warning(ex, "Keyword fired handler failed"); }
+            TrackAchievement();   // WPF GamificationBridge.OnKeywordTriggerFired: on TriggerFired, before the panic hold
         }
         // WPF KeywordTriggerService DispatchMergedAsync (b9368d963): matched and cooled down, but held during a panic's quiet.
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())
@@ -210,6 +211,11 @@ internal sealed class KeywordAudioRuntime
         foreach (var comment in comments) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
     }
     internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
+    internal Action AchievementCredit = () => App.Achievements?.TrackKeywordTrigger();
+    private void TrackAchievement()
+    {
+        try { AchievementCredit(); } catch (Exception ex) { Log.Warning(ex, "Keyword achievement credit failed"); }
+    }
     internal Action<string, double> Haptic = (keyword, intensity) => _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(keyword, intensity);
     internal Action<double> AddXp = amount => CoreProgression.AddXP(amount, "KeywordTrigger");
     /// <summary>Test seam; null runs <see cref="FireVisual"/>.</summary>
@@ -371,6 +377,10 @@ internal sealed class KeywordAudioRuntime
             _cooldowns.Record(demo, CoreSettings.Current, now.ToUniversalTime());
             Fires.Record(demo, source, now);
             TriggerFired?.Invoke(demo);
+            TrackAchievement();
+            // WPF DispatchResponseAsync :1253 credits the quest first; its catch skips the response on a failure.
+            try { QuestCredit(); }
+            catch (Exception ex) { Log.Warning(ex, "Keyword quest credit failed"); return; }
             _ = KeywordAvatarComment.DispatchAsync((AvatarCommentAction)demo.Actions[1], demo);
         }
         catch (Exception ex) { Log.Debug(ex, "FireDemo failed"); }
