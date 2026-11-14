@@ -1,8 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
-// this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), Lobby intents (.Friends.cs),
-// MergedAccountRecovery.
+// this is the window glue. Online pictures live in GameWindow.Pbp.Media.cs. Not here yet (game-pbp-b):
+// Lobby intents (.Friends.cs), MergedAccountRecovery.
 
 using System;
 using System.Collections.Generic;
@@ -138,6 +137,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpEquipLifetime.Cancel();
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
+            _pbpOnline?.Dispose();
+            _pbpOnline = null;
             _pbpFriendsReady = false;
             _pbpFriendIntent = null;
             _pbpChallenge?.TrySetResult(null);
@@ -184,6 +185,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
                         return true;
+                    case "pbp:media-flavour": OnPbpMediaFlavour(o); return true;
+                    case "pbp:media-more": _pbpOnline?.More(); return true;
                     case PbpLookRules.LookType:
                         PickPbpLook(o);
                         return true;
@@ -250,9 +253,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_spectateInit != null) frame["spectateMatchId"] = _spectateInit;
             _spectateInit = null;
             _pbpSettingsPosted = true;
+            _pbpSessionOptIn = PbpMediaRules.SavedOptIn(s.PbpMediaOnline, s.PbpMediaFlavour);
+            frame["mediaAvailable"] = PbpMediaAvailable();
             Post(frame);
             Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                 s.UserDisplayName, CoreReleaseContent.AppVersion));
+            PostPbpMediaState();
+            StartPbpOnline();
             _pbpFriendsReady = true;
             PostPbpFriendIntent();
             _pbpIdentityPosted = true;

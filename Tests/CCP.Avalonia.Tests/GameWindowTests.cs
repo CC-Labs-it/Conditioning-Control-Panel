@@ -447,7 +447,7 @@ public sealed partial class GameWindowTests
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.Web.OnNavigationCompleted(w.PageUrl);
             w.Web.OnWebMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // the string carrier's JSON-quoted frame
-            Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal(15, (int)sent[0]["videoHoldSec"]!);
             Assert.Equal("tok", (string?)sent[1]["net"]!["authToken"]);
 
@@ -696,7 +696,7 @@ public sealed partial class GameWindowTests
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
         Assert.Equal(false, (bool?)sent[0]["prizeCounter"]);
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
@@ -750,6 +750,8 @@ public sealed partial class GameWindowTests
     {
         var answer = new TaskCompletionSource<bool>();
         var w = GameWindow.Launch(GameWindow.PbpId)!;
+        Assert.True(w.PbpLocalProbe.Wait(TimeSpan.FromSeconds(10)));
+        Dispatcher.UIThread.RunJobs();
         int queries = 0;
         w.PbpOsAnimations = () => { queries++; return answer.Task; };
         var sent = new List<JObject>();
@@ -763,7 +765,7 @@ public sealed partial class GameWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.True(w.PbpPending.IsCompletedSuccessfully);
         if (close) Assert.Empty(sent);
-        else Assert.Equal(new[] { "pbp:settings", "pbp:identity", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
+        else Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look", "pbp:online-media" }, sent.Select(o => (string?)o["type"]));
     });
 
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.

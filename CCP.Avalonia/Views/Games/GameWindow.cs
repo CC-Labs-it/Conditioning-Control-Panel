@@ -250,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
+            if (Spec.Id == PbpId) StartPbpLocalProbe();
             if (Spec.Id == "loom") DirectoryForLoom();
             if (Spec.Id == PrizeCounterId) StartCounter(FriendsHead.Identity()?.UnifiedId);
             PageUrl = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
