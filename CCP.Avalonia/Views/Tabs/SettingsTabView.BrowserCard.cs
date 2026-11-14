@@ -116,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void HookBrowserCard()
         {
             BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
+            _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.NavigationBeginning += BeginRemixMediaWatch;
