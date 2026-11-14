@@ -21,9 +21,8 @@
 //     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
 //     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
-//   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
-//     drop, fall, ghost cursor, glitch portrait, melt, misroute, relabel, reorder doors,
-//     retitle, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
+//   possession-head-c: the remaining effects - crack, dissolve, fall, ghost cursor, glitch portrait,
+//     melt, misroute, relabel, reorder doors, room warp, steal card, swap, toast, toggle lie,
 //     xp drain (opacity effects clamp to [0,1], P82).
 
 using System;
@@ -229,6 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal static void UndoAllLive()
         {
             PossessionGhost.UndoAll();
+            DropEffect.UndoAllLive();
             List<PossessionRuntime> alive = new();
             lock (Live)
             {

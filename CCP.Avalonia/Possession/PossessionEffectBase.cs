@@ -26,6 +26,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
     protected PossessionContext? Context { get; private set; }
     protected PossessionTarget? Target { get; private set; }
     protected virtual bool ChargeOnApply => true;
+    protected virtual string? NameOverride => null;
     private CancellationTokenSource? _cts;
     private readonly List<IDisposable> _overrides = new();
     private IDisposable? _outline;
@@ -86,7 +87,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Serilog.Log.Warning("Possession {Id} charge failed: {Error}", Id, ex.Message); }
         ct.ThrowIfCancellationRequested();
-        NameOnce();
+        NameOnce(NameOverride);
         try { _outline = Context?.Attribution.Possess(element); }
         catch (Exception ex) { Serilog.Log.Warning("Possession {Id} outline failed: {Error}", Id, ex.Message); }
     }
@@ -111,7 +112,12 @@ internal abstract class PossessionEffectBase : IPossessionEffect
 
     public async Task UndoAsync(TimeSpan duration)
     {
-        if (!IsLive || _undoing) return;
+        if (!IsLive) return;
+        if (_undoing)
+        {
+            if (duration <= TimeSpan.Zero) await UndoCoreAsync(TimeSpan.Zero).ConfigureAwait(true);
+            return;
+        }
         _undoing = true;
         try { _cts?.Cancel(); } catch { }
         try { await UndoCoreAsync(duration).ConfigureAwait(true); }
