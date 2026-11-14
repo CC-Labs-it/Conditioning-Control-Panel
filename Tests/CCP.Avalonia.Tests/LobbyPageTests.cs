@@ -221,6 +221,83 @@ public sealed class LobbyPageTests
         }
         finally { window.Close(); }
     });
+    // Restack b212 (#4056): WPF MainWindow.Lobby.cs:243-271 and MainWindow.RemoteControl.cs:499-512.
+    [Fact]
+    public void RemoteJoinClaimsOnceOpensTheSessionAndRefreshesTheRoster() => Run(() =>
+    {
+        var timer = new LobbyTimer();
+        int rounds = 0, claims = 0;
+        string? subject = null, opened = null;
+        var pending = new TaskCompletionSource<(RemoteClaimStatus, string?)>();
+        var service = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+            () => { rounds++; return Task.FromResult(PbpLobbyReply.Empty); },
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)new[] { new RemoteSeat("u_subject", "Sub", 3, "light", Array.Empty<string>(), false) }, true)));
+        var page = new AvailableSubjectsTabView { CreateLobby = () => service, IsVisible = false };
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        page.ClaimRemoteSubject = id => { claims++; subject = id; return pending.Task; };
+        page.OpenClaimUrl = url => { opened = url; return true; };
+        var window = new Window { Width = 1000, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            page.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            var card = Assert.Single(Named<ItemsControl>(page, "AvailableSubjectsList").Items.Cast<LobbyCardView>(), c => c.Row.Game == LobbyGame.Remote);
+            Assert.True(card.DoorAvailable);
+            var button = new Button { DataContext = card };
+            var press = page.PressRemoteRow(card, button);
+            Assert.False(button.IsEnabled);
+            Assert.Equal(1, claims); Assert.Equal("u_subject", subject); Assert.Null(opened);
+            var before = rounds;
+            pending.SetResult((RemoteClaimStatus.Success, "https://example.test/#pin"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(press.IsCompleted);
+            Assert.Equal("https://example.test/#pin", opened);
+            Assert.True(button.IsEnabled);
+            Assert.True(rounds > before);
+        }
+        finally { window.Close(); }
+    });
+    [Fact]
+    public void RemoteJoinAsksForSignInFirstAndAConflictRefreshesWithoutOpening() => Run(() =>
+    {
+        var timer = new LobbyTimer();
+        int rounds = 0, claims = 0, opens = 0;
+        var service = new LobbyPoll(timer, () => true, () => Array.Empty<Friend>(),
+            () => { rounds++; return Task.FromResult(PbpLobbyReply.Empty); },
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), true)));
+        bool signedIn = false;
+        var page = new AvailableSubjectsTabView { CreateLobby = () => service };
+        page.ReadGates = () => LobbyGates.From(signedIn, false, false);
+        page.ClaimRemoteSubject = _ => { claims++; return Task.FromResult((RemoteClaimStatus.Conflict, (string?)null)); };
+        page.OpenClaimUrl = _ => { opens++; return true; };
+        var window = new Window { Width = 1000, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var card = new LobbyCardView(new LobbyRow { Game = LobbyGame.Remote, State = LobbyRowState.Open, Key = "u_subject", HostName = "Sub" }, LobbyGates.From(true, false, false));
+            var button = new Button { DataContext = card };
+            Assert.True(page.PressRemoteRow(card, button).IsCompleted);
+            Assert.Equal(0, claims);
+            signedIn = true;
+            var before = rounds;
+            Assert.True(page.PressRemoteRow(card, button).IsCompleted);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, claims); Assert.Equal(0, opens);
+            Assert.True(button.IsEnabled);
+            Assert.True(rounds > before);
+            page.ClaimRemoteSubject = _ => { claims++; return Task.FromResult((RemoteClaimStatus.Error, (string?)null)); };
+            before = rounds;
+            _ = page.PressRemoteRow(card, button);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, claims); Assert.Equal(0, opens); Assert.Equal(before, rounds);
+        }
+        finally { window.Close(); }
+    });
     [Fact]
     public void HostLocksFollowTheirOwnGates() => Run(() =>
     {
