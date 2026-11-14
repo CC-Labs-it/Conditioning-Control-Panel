@@ -240,6 +240,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _bodyWidth = DefaultBodyWidth;
         private string _pose = "idle";
         private readonly Dictionary<string, Bitmap> _bodyCache = new();
+        // #3953: the outfit overlay sheets, keyed "<outfit>/<pose>", and whether an outfit's
+        // overlay set is complete enough to wear this sitting (WPF EmiDeskWindow.xaml.cs:938-1010).
+        private readonly Dictionary<string, Bitmap> _overCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _overArmed = new(StringComparer.Ordinal);
+        private string? _overPose;
         private DateTime _petCooldownUntil = DateTime.MinValue;
         private bool _petArmed;
         // Written by the summon / dismiss FX region below, which is the whole of what ever moved
@@ -834,6 +839,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
+                if (_closingForGood) return;   // the art is released; never reload it on the way out
                 var key = EmiChains.FrameKey(frame) ?? "idle";
                 _pose = key;
                 var path = EmiChains.BodyPath(key, _outfit);
@@ -844,7 +850,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     image = new Bitmap(path);
                     _bodyCache[path] = image;
                 }
-                _bodyImage.Source = image;
+                ReplaceArt(_bodyImage, image, _bodyCache);
                 _bodyPlaceholder.IsVisible = false;
                 PaintOutfitOver();
                 PaintDeskItems();
@@ -864,10 +870,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (string.Equals(want, _outfit, StringComparison.Ordinal)) return;
                 _outfit = want;
                 var old = _bodyCache.Values.ToArray();
+                var oldOver = _overCache.Values.ToArray();
+                var shownBody = _bodyImage.Source;
+                var shownOver = _outfitOverImage.Source;
                 _bodyCache.Clear();
+                _overCache.Clear();
+                _overPose = null;
                 SetPose(_pose);
+                PaintOutfitOver();
+                // The images on screen are released by ReplaceArt once something replaces them
+                // (WPF keeps the displayed fallback when the new sheet is missing); the rest go now.
                 foreach (var image in old)
-                    if (!ReferenceEquals(image, _bodyImage.Source)) image.Dispose();
+                    if (!ReferenceEquals(image, shownBody)) image.Dispose();
+                foreach (var image in oldOver)
+                    if (!ReferenceEquals(image, shownOver)) image.Dispose();
             }
             catch (Exception ex)
             {
@@ -880,17 +896,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// pose logic and no geometry of its own - it is repainted from <see cref="SetPose"/>, which
         /// is the one place the body PNG changes.
         /// </summary>
-        // ponytail: needs EmiChains.OverPath (Services/EmiDesk/EmiChains.cs) for the one-probe-per-
-        // outfit file lookup and its cache. Without it there is no sheet to find, so the layer stays
-        // down - which is exactly its resting state on the WPF head today, where nothing picks an
-        // outfit either.
+        // #3953, WPF EmiDeskWindow.xaml.cs:938-1010: the idle overlay is probed once per outfit, and
+        // an outfit whose overlay set turns out incomplete stands down for the sitting (half a
+        // garment is worse than none). The standard set has no overlay, so its layer stays down.
         private void PaintOutfitOver()
         {
             try
             {
-                _outfitOverImage.IsVisible = _outfitOverImage.Source is not null;
+                var outfit = _outfit;
+                if (outfit == null || !ArmOutfitOver(outfit)) { TakeOutfitOverOff(); return; }
+                var key = outfit + "/" + _pose;
+                if (key == _overPose && _outfitOverImage.Source != null) { _outfitOverImage.IsVisible = true; return; }
+                if (!_overCache.TryGetValue(key, out var image))
+                {
+                    var path = EmiChains.OverPath(outfit, _pose);
+                    if (path == null) { _overArmed[outfit] = false; TakeOutfitOverOff(); return; }
+                    image = new Bitmap(path);
+                    _overCache[key] = image;
+                }
+                _overPose = key;
+                ReplaceArt(_outfitOverImage, image, _overCache);
+                _outfitOverImage.IsVisible = true;
             }
-            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] outfit overlay paint failed"); }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "[EmiDesk] outfit overlay paint failed");
+                TakeOutfitOverOff();
+            }
+        }
+
+        private bool ArmOutfitOver(string outfit)
+        {
+            if (_overArmed.TryGetValue(outfit, out var armed)) return armed;
+            armed = EmiChains.OverPath(outfit, "idle") != null;
+            _overArmed[outfit] = armed;
+            return armed;
+        }
+
+        private void TakeOutfitOverOff()
+        {
+            _outfitOverImage.IsVisible = false;
+            ReplaceArt(_outfitOverImage, null, _overCache);
+            _overPose = null;
+        }
+
+        /// <summary>Show <paramref name="next"/> and release the image it replaces when no cache
+        /// holds it any more (a fallback kept across an outfit change).</summary>
+        private static void ReplaceArt(Image image, Bitmap? next, Dictionary<string, Bitmap> cache)
+        {
+            var old = image.Source as Bitmap;
+            image.Source = next;
+            if (old != null && !ReferenceEquals(old, next) && !cache.ContainsValue(old)) old.Dispose();
+        }
+
+        /// <summary>Drop every body and overlay image, shown or cached. Shutdown and close only.</summary>
+        private void ReleaseArt()
+        {
+            var all = new HashSet<Bitmap>(_bodyCache.Values.Concat(_overCache.Values));
+            if (_bodyImage.Source is Bitmap body) all.Add(body);
+            if (_outfitOverImage.Source is Bitmap over) all.Add(over);
+            _bodyImage.Source = null;
+            _outfitOverImage.Source = null;
+            _outfitOverImage.IsVisible = false;
+            _bodyCache.Clear();
+            _overCache.Clear();
+            _overPose = null;
+            foreach (var image in all) image.Dispose();
         }
 
         // ---------------------------------------------------------------- chains
@@ -961,13 +1032,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             DrawFace(EmiChains.RestFace);
         }
 
-        // ponytail: canonical bounce/thud/nod/droop/shiver moves still need their transform tweens.
-        private void RunBodyMove(string move)
-        {
-            bool handled = false;
-            try { OnBodyMoveCore(move, ref handled); }
-            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] body-move seam threw"); }
-        }
+        // The five canon body moves live in EmiDeskWindow.Move.cs (#3995).
 
         // ---------------------------------------------------------------- idle beats
 
@@ -1658,7 +1723,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 if (_petTimer != null) { _petTimer.Stop(); _petTimer.Tick -= OnPetTick; _petTimer = null; }
-                if (_closingForGood) return;
+                if (_closingForGood || PresentationActive) return;   // the show owns her
                 if (_transiting || InputLocked) return;
                 // LAW 3: a line in flight is never cut for a head-pat. Ignore, do not queue.
                 if (ChainLive) return;
@@ -1670,12 +1735,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // Inside the cooldown she only winks, so spam cannot loop the show (widget.js pet()).
                 if (PatClock.GetUtcNow().UtcDateTime < _petCooldownUntil)
                 {
-                    StartPatFeedback(EmiPatFeedback.Wink);
+                    StartPatFeedback(EmiPatFeedback.Wink, "pet");   // WPF xaml.cs:1838 wink, bodyFrameOverride pet
                 }
                 else
                 {
                     _petCooldownUntil = PatClock.GetUtcNow().UtcDateTime.AddMilliseconds(PetCooldownMs);
-                    StartPatFeedback(EmiPatFeedback.Pet);
+                    StartPatFeedback(EmiPatFeedback.Pet, "pet", "bounce");   // WPF xaml.cs:1843 chain pet
                     CountPat();
                 }
                 FireDeskEvent("petted");
@@ -2672,17 +2737,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
                     EmiSfx.Chime();
-                    StartPatFeedback(EmiPatFeedback.Glee);
+                    StartPatFeedback(EmiPatFeedback.Glee, "pet", "bounce");   // WPF Alive.cs:771 petStreak
                     return;
                 }
                 if (now < _petCooldownUntil)
                 {
-                    StartPatFeedback(step == EmiPokeStep.Rage ? EmiPatFeedback.Rage
-                        : step == EmiPokeStep.Annoyed ? EmiPatFeedback.Annoyed : EmiPatFeedback.Flick);
+                    // WPF Alive.cs:115-131 PokeAnnoy (idle, still), PokeRage (shock, shiver); React.cs PetFlickChain (pet, bounce).
+                    if (step == EmiPokeStep.Rage) StartPatFeedback(EmiPatFeedback.Rage, "shock", "shiver");
+                    else if (step == EmiPokeStep.Annoyed) StartPatFeedback(EmiPatFeedback.Annoyed, "idle");
+                    else StartPatFeedback(EmiPatFeedback.Flick, "pet", "bounce");
                     return;
                 }
                 _petCooldownUntil = now.AddMilliseconds(PetCooldownMs);
-                StartPatFeedback(EmiPatFeedback.Pet);
+                StartPatFeedback(EmiPatFeedback.Pet, "pet", "bounce");   // WPF React.cs:177 chain pet
                 CountPat();
                 FireDeskEvent("petted");
             }
@@ -2739,9 +2806,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 _closingForGood = true;
                 _player.Dispose();
-                _bodyImage.Source = null;
-                foreach (var image in _bodyCache.Values) image.Dispose();
-                _bodyCache.Clear();
+                ReleaseArt();
                 try { OnTearDownCore(); }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] teardown seam threw"); }
                 KillOptionsPanel();
@@ -2776,9 +2841,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopGlassWatch();
                 _player.Dispose();
                 UnhookDeskItems();
-                _bodyImage.Source = null;
-                foreach (var image in _bodyCache.Values) image.Dispose();
-                _bodyCache.Clear();
+                ReleaseArt();
                 KillOptionsPanel();
                 CloseBook();
                 StopIdleBeats();
