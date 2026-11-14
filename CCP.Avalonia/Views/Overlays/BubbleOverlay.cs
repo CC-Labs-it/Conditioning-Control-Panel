@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using SkiaSharp;
 using Avalonia;
@@ -333,6 +334,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF BubbleService.cs:1631-1632, 1669-1677, 1704-1719. Physical-pixel
         // distances, advanced once per logical field tick, never by the render clock.
         private static readonly List<(Point Center, double AgeMs)> ChaosRipples = new();
+        private static readonly ConditionalWeakTable<AmbientBubble, Services.Chaos.ChaosRabbitTrails> RabbitTrails = new();
 
         /// <summary>The bubble owner's scale: its screen index is into the target-filtered list (WPF BubbleService.cs:4336-4337).</summary>
         internal static double ScaleFor(AmbientBubble b) => b.Screen >= 0 && b.Screen < Targets.Count ? Targets[b.Screen].Scaling : 1;
@@ -918,6 +920,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Field.HoldChaos) return;
             foreach (var b in Field.Bubbles)
             {
+                if (b.Spec is { IsDarter: true } spec)
+                {
+                    var trailCenter = CenterPx(b);
+                    bool skia = ChaosSkiaFxOverlay.Enabled;
+                    double seconds = Math.Max(0, ChaosRunHost.State?.RabbitTrailSec ?? 0);
+                    var direction = RabbitTrails.GetOrCreateValue(b).Step(trailCenter.X, trailCenter.Y, ScaleFor(b), seconds,
+                        spec.IsSweeper, telegraphing: false, b.Popping, skia, DateTime.UtcNow);
+                    if (direction is { } dir)
+                    {
+                        double life = spec.IsSweeper ? Math.Max(0.5, seconds) : seconds;
+                        if (skia) ChaosSkiaFxOverlay.TrailDot(trailCenter, life, spec.IsSweeper, dir.X, dir.Y);
+                        else ChaosFieldFxOverlay.TrailDot(trailCenter, life, spec.IsSweeper);
+                    }
+                }
                 if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
                 double t = Field.Random.NextDouble();
                 var a = CenterPx(b);
