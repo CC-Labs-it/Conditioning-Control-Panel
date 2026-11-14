@@ -126,6 +126,8 @@ namespace ConditioningControlPanel.Services
         private double _orbitPhase;
         private double _roamLeft, _roamRight, _roamTop, _roamBottom, _shieldFlashMs;
         private DateTime _bounceCueUtc;
+        /// <summary>The drawn opacity: the Brain Drain bubble breathes on top of its fade (BrainDrainBubble.PulseAt).</summary>
+        public double DisplayFade => Fade * (Spec?.VariantId == Chaos.BrainDrainBubble.VariantId && !Popping ? Chaos.BrainDrainBubble.PulseAt(_timeAlive) : 1);
         public double ShieldOpacity => _shieldFlashMs > 0 && !Safety.GentleVisuals.On ? 0.95 : 0.45 + 0.10 * Math.Sin(_timeAlive * 4);
         public bool BounceShield(DateTime now)
         {
