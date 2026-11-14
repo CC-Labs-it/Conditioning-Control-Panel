@@ -97,6 +97,7 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
+        e.IsWhisperStarting = () => Views.Overlays.FlashOverlay.VoiceStarting;
         // WPF App.xaml.cs:3006: a held idle line is not recorded as spoken (#1468), same policy as the tube.
         ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced = trigger =>
             Views.AvatarTube.AvatarTubeWindow.MayVoice(ConditioningControlPanel.Services.Companion.CompanionVoicePolicy.IsUnprompted(trigger));

@@ -210,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             try { if (Service.IsActive) Service.Skip(); } catch { }
             _shellOverlay = null;
             EmiTourPresence.Detach();
+            Views.Windows.EmiDesk.EmiBookOffer.Stop();
         }
     }
 }

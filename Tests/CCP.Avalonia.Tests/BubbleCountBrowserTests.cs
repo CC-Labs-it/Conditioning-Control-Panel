@@ -67,6 +67,32 @@ public sealed class BubbleCountBrowserTests {
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task Poisoned_native_still_allows_browser_and_skips_failed_browser_fallback() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var saved = BubbleCountWindow.NativeUnavailable;
+        try
+        {
+            BubbleCountWindow.NativeUnavailable = true;
+            Assert.True(BubbleCountHost.Instance.CanPlayPath(game.Clip));
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            Assert.NotNull(Assert.Single(BubbleCountWindow.OpenWindows).Browser);
+            BubbleCountWindow.ForceCloseAll();
+            BrowserVideoSurface.Create = () => null;
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            Assert.Equal(1, game.Skipped);
+            Assert.Equal(0, game.Completed);
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+            Assert.False(BrowserVideoSurface.SessionActive);
+        }
+        finally { BubbleCountWindow.NativeUnavailable = saved; }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("ended")]
     [InlineData("error")]

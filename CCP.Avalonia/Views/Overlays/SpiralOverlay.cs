@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -450,14 +451,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
         /// <param name="flash">Plan with the flash rules instead (<see cref="FlashFrames"/>): <paramref name="fitLongSide"/>
         /// is the display long side, capped at 2048, and <paramref name="maxFrames"/> is ignored.</param>
+        /// <param name="maxMemoryBytes">When positive, cap kept frames by their scaled byte size (minimum ten).</param>
+        /// <param name="maxDecodedFrames">When positive, bound the frames visited, including discarded frames.</param>
+        /// <param name="maxSourcePixels">When positive, reject larger source canvases before allocating them.</param>
+        /// <param name="averageFrameDelay">Use WPF AnimatedWebp timing (average kept frame, times the stride).</param>
+        /// <param name="cancellationToken">Cancel a removed cascade faller's pending decode.</param>
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
-            List<TimeSpan>? frameDurations = null, bool flash = false)
+            List<TimeSpan>? frameDurations = null, bool flash = false, long maxMemoryBytes = 0, int maxDecodedFrames = 0,
+            long maxSourcePixels = 0, bool averageFrameDelay = false, CancellationToken cancellationToken = default) =>
+            RunGatedDecode(() => DecodeCore(path, fitLongSide, maxFrames, frameDurations, flash, maxMemoryBytes,
+                maxDecodedFrames, maxSourcePixels, averageFrameDelay, cancellationToken), cancellationToken);
+
+        // WPF AnimatedWebp.cs:62-84: bound native decode memory across concurrent callers.
+        private static readonly SemaphoreSlim DecodeGate = new(2, 2);
+
+        internal static T RunGatedDecode<T>(Func<T> decode, CancellationToken cancellationToken = default)
+        {
+            DecodeGate.Wait(cancellationToken);
+            try { cancellationToken.ThrowIfCancellationRequested(); return decode(); }
+            finally { DecodeGate.Release(); }
+        }
+
+        private static (List<Bitmap> Frames, TimeSpan Delay) DecodeCore(string path, int fitLongSide, int maxFrames,
+            List<TimeSpan>? frameDurations, bool flash, long maxMemoryBytes, int maxDecodedFrames, long maxSourcePixels,
+            bool averageFrameDelay, CancellationToken cancellationToken)
         {
             var frames = new List<Bitmap>();
             try
             {
                 using var codec = SKCodec.Create(path);
                 if (codec is null) return (frames, TimeSpan.FromMilliseconds(50));
+                // WPF AnimatedWebp.cs:399-401: refuse an oversized canvas before allocating it.
+                if (maxSourcePixels > 0 && (codec.Info.Width <= 0 || codec.Info.Height <= 0 ||
+                    (long)codec.Info.Width * codec.Info.Height > maxSourcePixels))
+                    return (frames, TimeSpan.FromMilliseconds(50));
                 var count = Math.Max(1, codec.FrameCount);
                 var info = codec.FrameInfo;
                 var plan = SpiralFrames.Plan(codec.Info.Width, codec.Info.Height, count,
@@ -474,6 +501,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     plan.Width = Math.Max(1, (int)Math.Round(plan.Width * k));
                     plan.Height = Math.Max(1, (int)Math.Round(plan.Height * k));
                 }
+                if (!flash && maxMemoryBytes > 0)
+                {
+                    // Cascade frames are budgeted at their displayed size, not their source size.
+                    plan = SpiralFrames.Plan(plan.Width, plan.Height, count,
+                        codec.FrameCount > 0 ? codec.FrameInfo[0].Duration : 50);
+                    long bytesPerFrame = (long)plan.Width * plan.Height * 4;
+                    int memoryFrames = (int)Math.Max(10, maxMemoryBytes / Math.Max(1, bytesPerFrame));
+                    maxFrames = maxFrames > 0 ? Math.Min(maxFrames, memoryFrames) : memoryFrames;
+                }
+                if (maxDecodedFrames > 0) decodeCount = Math.Min(decodeCount, maxDecodedFrames);
                 if (!flash && maxFrames > 0 && plan.Frames > maxFrames)
                 {
                     var step = (int)Math.Ceiling(count / (double)maxFrames);
@@ -488,6 +525,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 for (var i = 0; i < decodeCount && (frameDurations != null
                     ? i < (long)plan.Frames * plan.Step : frames.Count < plan.Frames); i++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
                     // (restore-previous disposal) the codec decodes the required frame itself.
                     var required = i < info.Length ? info[i].RequiredFrame : -1;
@@ -507,8 +545,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),
                         new PixelSize(plan.Width, plan.Height), new Vector(96, 96), scaled.RowBytes));
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 Log.Information("Spiral: decoded {Count} frames ({W}x{H}) from {Path}", frames.Count, plan.Width, plan.Height, CornerGifPlanner.LogWhere(path));
-                return (frames, TimeSpan.FromMilliseconds(flash ? FlashFrames.DelayMs(keptMs, keptTimed, plan.Step) : plan.DelayMs));
+                double delay = flash ? FlashFrames.DelayMs(keptMs, keptTimed, plan.Step) : plan.DelayMs;
+                if (!flash && averageFrameDelay)
+                {
+                    // WPF AnimatedWebp.cs:235-244: average the kept frames, then account for the stride.
+                    double average = keptTimed > 0 ? (double)keptMs / keptTimed : 100;
+                    if (average < 20) average = 100;
+                    delay = Math.Clamp(average * plan.Step, 20, 2000);
+                }
+                return (frames, TimeSpan.FromMilliseconds(delay));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                foreach (var frame in frames) frame.Dispose();
+                throw;
             }
             catch (Exception ex)
             {
