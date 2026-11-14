@@ -32,6 +32,8 @@ public sealed class KeywordAudioRuntimeTests
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
             CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider);
+        var savedDraw = ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw;
+        var savedXp = CoreProgression.AddXPProvider;
         var singletonClock = KeywordTriggerHead.Engine.Now;
         _singletonNow = _singletonNow.AddHours(3);
         KeywordTriggerHead.Engine.Now = () => _singletonNow;
@@ -56,6 +58,8 @@ public sealed class KeywordAudioRuntimeTests
         }
         finally
         {
+            ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = savedDraw;
+            CoreProgression.AddXPProvider = savedXp;
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             KeywordTriggerHead.Engine.Now = singletonClock;
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
@@ -339,6 +343,177 @@ public sealed class KeywordAudioRuntimeTests
             Assert.Single(shown);
         }
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); }
+    });
+
+    [Theory] // WPF KeywordTriggerService.cs:1363-1367,1511-1517,1698-1713.
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void ExactAfterAudioRepeatsWaitsAndStopCancelsIt(bool legacy, bool stop) => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var trigger = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)trigger.Actions[0];
+        audio.PlayCount = 2;
+        audio.DelayBetweenMs = 50;
+        if (legacy)
+        {
+            trigger.Actions.Clear();
+            trigger.AudioFilePath = audio.FilePath;
+            trigger.AudioPlayCount = 2;
+            trigger.AudioDelayBetweenMs = 50;
+            trigger.VisualEffect = KeywordVisualEffect.ExactSubliminal;
+        }
+        else trigger.Actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Single(played);
+        Assert.Empty(shown);
+        if (stop) engine.Stop();
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(stop ? 0 : 1, shown.Count);
+        Assert.Equal(stop ? 1 : 2, played.Count(x => x.Path != "stopped"));
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1363-1367: visual can precede audio.
+    public void ExactBeforeAudioRunsBeforeTheRepeatGap() => Run((engine, s, played) =>
+    {
+        var order = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = _ => order.Add("visual");
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { order.Add("audio"); return () => { }; };
+        var actions = s.KeywordTriggers[0].Actions;
+        var audio = (PlayAudioAction)actions[0];
+        audio.PlayCount = 2;
+        audio.DelayBetweenMs = 50;
+        actions.Insert(0, new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Equal(new[] { "visual", "audio" }, order);
+        engine.Stop();
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "visual", "audio" }, order);
+    });
+
+    [Fact]
+    public void HelperRestoresDrawAndXpCallbacksEvenWhenTheTestThrows()
+    {
+        var oldDraw = ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw;
+        var oldXp = CoreProgression.AddXPProvider;
+        Action<string> draw = _ => { };
+        Action<double, string> xp = (_, _) => { };
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = draw;
+            CoreProgression.AddXPProvider = xp;
+            Assert.Throws<InvalidOperationException>(() => Run((_, _, _) =>
+            {
+                ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = _ => { };
+                CoreProgression.AddXPProvider = (_, _) => { };
+                throw new InvalidOperationException();
+            }));
+            Assert.Same(draw, ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw);
+            Assert.Same(xp, CoreProgression.AddXPProvider);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = oldDraw;
+            CoreProgression.AddXPProvider = oldXp;
+        }
+    }
+
+    [Fact] // WPF KeywordTriggerService.cs:1345,1363-1367: enabled actions are snapshotted.
+    public void PendingExactUsesTheActionSnapshot() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var actions = s.KeywordTriggers[0].Actions;
+        var audio = (PlayAudioAction)actions[0];
+        audio.PlayCount = 2;
+        audio.DelayBetweenMs = 50;
+        actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Empty(shown);
+        actions.Clear();
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "SIT" }, shown);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1271-1275,1363-1367,1511-1517.
+    public void SingleTriggerWaitsForBothAudioActionsBeforeExact() => Run((engine, s, played) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var actions = s.KeywordTriggers[0].Actions;
+        var first = (PlayAudioAction)actions[0];
+        actions.Add(new PlayAudioAction { FilePath = first.FilePath, PlayCount = 2, DelayBetweenMs = 50 });
+        actions.Add(new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal });
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Equal(2, played.Count(x => x.Path != "stopped"));
+        Assert.Empty(shown);
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, played.Count(x => x.Path != "stopped"));
+        Assert.Equal(new[] { "SIT" }, shown);
+    });
+
+    [Theory] // WPF KeywordTriggerService.cs:1283-1313: merged actions retain preset-first order.
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MergedTriggersPreservePresetFirstActionOrder(bool visualFirst) => Run((engine, s, _) =>
+    {
+        var order = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = _ => order.Add("visual");
+        CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { order.Add("audio"); return () => { }; };
+        var custom = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)custom.Actions[0];
+        audio.PlayCount = 2;
+        audio.DelayBetweenMs = 50;
+        var visual = new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal };
+        var preset = new KeywordTrigger { Id = "preset:order", Keyword = "sit", CooldownSeconds = 0 };
+        preset.Actions = new List<KeywordAction> { visualFirst ? visual : audio };
+        custom.Actions = new List<KeywordAction> { visualFirst ? audio : visual };
+        s.KeywordTriggers.Add(preset);
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Equal(visualFirst ? new[] { "visual", "audio" } : new[] { "audio" }, order);
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(visualFirst ? new[] { "visual", "audio", "audio" } : new[] { "audio", "audio", "visual" }, order);
+    });
+
+    [Fact] // WPF KeywordTriggerService.cs:1303-1313 captures the first keyword for a merged fire.
+    public void MergedFireKeepsItsKeywordDuringAudioRepeats() => Run((engine, s, _) =>
+    {
+        var shown = new List<string>();
+        ConditioningControlPanel.Avalonia.Views.Overlays.SubliminalWhisperShow.Draw = shown.Add;
+        var custom = s.KeywordTriggers[0];
+        var audio = (PlayAudioAction)custom.Actions[0];
+        audio.PlayCount = 2;
+        audio.DelayBetweenMs = 50;
+        var preset = new KeywordTrigger { Id = "preset:keyword", Keyword = "sit", CooldownSeconds = 0,
+            Actions = new List<KeywordAction> { audio } };
+        custom.Actions = new List<KeywordAction> { new VisualEffectAction { Effect = KeywordVisualEffect.ExactSubliminal } };
+        s.KeywordTriggers.Add(preset);
+        var gap = new TaskCompletionSource();
+        engine.Delay = (_, _) => gap.Task;
+        Type(engine, "sit");
+        Assert.Empty(shown);
+        preset.Keyword = "changed";
+        gap.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "SIT" }, shown);
     });
 
 }
