@@ -189,7 +189,10 @@ public sealed class CompanionEditorsTests
         Setup();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
+        // Freeze entrance motion so the pointer probes a stationary target.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
         var shell = new MainShellWindow();
+        ToolTip.SetServiceEnabled(shell, false);
         try
         {
             shell.Show();
@@ -205,7 +208,7 @@ public sealed class CompanionEditorsTests
             {
                 var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
                 button.BringIntoView();
-                Dispatcher.UIThread.RunJobs();
+                HeadlessRender.LiveTree(shell);
                 var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
                 shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
                 shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);

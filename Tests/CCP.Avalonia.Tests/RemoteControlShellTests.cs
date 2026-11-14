@@ -357,8 +357,7 @@ public sealed class RemoteControlShellTests
             service.Current.OfflineMode = false;
             domReady = false;
             Assert.True(shell.NavigateToUrlInBrowser(video, autoPlayFullscreen: true));
-            var countBeforePanic = Takeovers();
-            var endScripts = scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.EndTakeoverScript);
+            var (countBeforePanic, endScripts) = (Takeovers(), scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.EndTakeoverScript));
             PanicSurfaces.All.Single(s => s.Id == "remote-browser-video").Stop(shell);
             Assert.Equal(endScripts + 1, scripts.Count(js => js == global::ConditioningControlPanel.Avalonia.Views.Controls.WebHostMedia.EndTakeoverScript));
             var probes = scripts.Count(js => js.Contains("performance.timeOrigin"));

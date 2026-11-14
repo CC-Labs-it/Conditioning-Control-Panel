@@ -74,7 +74,9 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(1.02, scale.ScaleX); Assert.Equal(1.02, scale.ScaleY);
         host.MouseMove(new Point(1, 1)); Settle(); Assert.Equal(1, scale.ScaleX);
         var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        HeadlessInput.RenderLiveTree(host);
         host.MouseMove(Center(host, row)); Settle();
+        Assert.True(row.IsPointerOver);
         var group = Assert.IsType<TransformGroup>(row.RenderTransform);
         Assert.Equal(-2, group.Children.OfType<TranslateTransform>().Single().Y);
         Assert.Equal(1, group.Children.OfType<ScaleTransform>().Single().ScaleX);
@@ -86,6 +88,58 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(0.97, press.ScaleX);
         host.MouseMove(new Point(1, 1)); host.MouseUp(new Point(1, 1), MouseButton.Left, RawInputModifiers.None); Settle();
         Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
+    public Task HoverAtMotionOffOverridesAnInFlightRowArrival() => WithPresets((host, view) =>
+    {
+        // A stepped clock keeps the arrival in flight even on a slow machine.
+        var clock = new StepClock();
+        view.SetValue(StepClock.Property, clock.Instance);
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        clock.Step(0); clock.Step(50);
+        var rows = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().ToArray();
+        var row = rows[0];
+        var otherSlide = Assert.IsType<TransformGroup>(rows[1].RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.True(row.Opacity < 1, "The arrival must be running before the motion change.");
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.True(slide.Y > 0, $"The row's rise must be running before hover, but Y was {slide.Y}.");
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        HeadlessInput.RenderLiveTree(host);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.True(row.IsPointerOver);
+        clock.Step(100);
+        Assert.Equal(-2, slide.Y);
+        Assert.True(row.Opacity < 1, "Hover must not cancel the row's fade.");
+        Assert.True(otherSlide.Y > 0, "Hover must not cancel another row's arrival.");
+        host.MouseMove(new Point(1, 1)); Settle();
+        clock.Step(150);
+        Assert.Equal(0, slide.Y);
+    });
+
+    [Fact]
+    public Task HoverDuringArrivalStartsFromTheVisiblePosition() => WithPresets((host, view) =>
+    {
+        var clock = new StepClock();
+        view.SetValue(StepClock.Property, clock.Instance);
+        view.IsVisible = false; Settle();
+        view.IsVisible = true; Settle();
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        slide.SetValue(StepClock.Property, clock.Instance);
+        clock.Step(0); clock.Step(50);
+        var from = slide.Y;
+        Assert.True(from > 0, $"Expected a running arrival, got {from}.");
+        HeadlessInput.RenderLiveTree(host);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.True(row.IsPointerOver);
+        Assert.Equal(from, slide.Y, 5);
+        clock.Step(1000); clock.Step(1075);
+        Assert.Equal(from + (-2 - from) * 0.75, slide.Y, 4);
+        clock.Step(1150);
+        Assert.Equal(-2, slide.Y, 4);
     });
 
     [Fact]
@@ -210,5 +264,16 @@ public sealed class PresetsFocalFxTests
     private static Point Center(Window host, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), host)!.Value;
     private static void Click(Window host, Control c) { var p = Center(host, c); host.MouseDown(p, MouseButton.Left, RawInputModifiers.None); host.MouseUp(p, MouseButton.Left, RawInputModifiers.None); }
     private static void Settle() { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
+    // Avalonia 12's clock is internal. Use the same stepped-clock seam as SharedDeeperThemeTests.
+    private sealed class StepClock
+    {
+        private const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        private static readonly Type Base = typeof(global::Avalonia.Animation.Animatable).Assembly.GetType("Avalonia.Animation.ClockBase", true)!;
+        private static readonly System.Reflection.MethodInfo Pulse = Base.GetMethod("Pulse", Any | System.Reflection.BindingFlags.Instance)!;
+        public static readonly AvaloniaProperty Property = (AvaloniaProperty)typeof(global::Avalonia.Animation.Animatable)
+            .GetField("ClockProperty", Any | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        public readonly object Instance = Activator.CreateInstance(Base, nonPublic: true)!;
+        public void Step(double ms) => Pulse.Invoke(Instance, new object[] { TimeSpan.FromMilliseconds(ms) });
+    }
     private sealed class Clock : TimeProvider { public long Now; public override long TimestampFrequency => TimeSpan.TicksPerSecond; public override long GetTimestamp() => Now; }
 }
