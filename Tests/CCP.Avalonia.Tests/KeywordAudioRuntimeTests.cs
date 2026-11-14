@@ -1330,6 +1330,33 @@ public sealed class KeywordAudioRuntimeTests
         finally { shell.Close(); }
     });
 
+    [Fact]
+    public void LaunchRearmsOnlyWhenRequestedAndWaitsForAccess() => Run((_, s, _) =>
+    {
+        var previous = s.AwarenessStartOnLaunch;
+        MainShellWindow? shell = null;
+        try
+        {
+            KeywordTriggerHead.Stop();
+            CoreEntitlement.HasPremiumProvider = () => false;
+            s.AwarenessStartOnLaunch = false;
+            s.KeywordTriggersEnabled = false;
+            shell = new MainShellWindow();
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            shell.Close(); shell = null;
+
+            s.AwarenessStartOnLaunch = true;
+            shell = new MainShellWindow();
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            shell.RefreshEntitlementVeils();
+            Assert.True(KeywordTriggerHead.Engine.IsActive);
+        }
+        finally { shell?.Close(); s.AwarenessStartOnLaunch = previous; }
+    });
+
     [Fact] // WPF MainWindow.Patreon.cs:452-454
     public void AccessResolutionRearmsASavedMaster() => Run((_, s, _) =>
     {

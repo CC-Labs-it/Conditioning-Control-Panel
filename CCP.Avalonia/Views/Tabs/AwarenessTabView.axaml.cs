@@ -131,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 var masterOn = s.KeywordTriggersEnabled;
                 Set(ChkAwarenessMaster, masterOn);
+                Set(ChkAwarenessStartOnLaunch, s.AwarenessStartOnLaunch);
                 Set(ChkAwarenessOcr, s.ScreenOcrEnabled);
                 // The keyboard sub-toggle mirrors the master, as on WPF: it is one signal source,
                 // and the master is what actually arms it.
@@ -195,6 +196,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         // ------------------------------------------------------------------ live editors
+
+        /// <summary>WPF ChkAwarenessStartOnLaunch: re-arm the master at the next launch (MainShellWindow ctor).</summary>
+        private void ChkAwarenessStartOnLaunch_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.AwarenessStartOnLaunch = ChkAwarenessStartOnLaunch.IsChecked == true;
+            CoreSettings.Save();
+        }
 
         /// <summary>
         /// Master switch. Writes the setting, keeps the keyboard sub-toggle and the status
