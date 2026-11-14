@@ -206,6 +206,32 @@ public sealed class AchievementEngineTests : IDisposable
     }
 
     [Fact]
+    public void KeywordFiresCountAndUnlockOnlyWithPremiumAtWpfThresholds()
+    {
+        var previous = CoreEntitlement.HasPremiumProvider;
+        try
+        {
+            var engine = new AchievementEngine(new AchievementStore(MainPath)) { SuppressPopups = true };
+            CoreEntitlement.HasPremiumProvider = () => false;
+            engine.TrackKeywordTrigger();
+            Assert.Equal(1, engine.Progress.KeywordTriggersFired);
+            Assert.True(engine.IsDirty);
+            Assert.False(engine.Progress.IsUnlocked("magic_word"));
+            CoreEntitlement.HasPremiumProvider = () => true;
+            engine.Progress.KeywordTriggersFired = 498;
+            engine.TrackKeywordTrigger();
+            Assert.Equal(499, engine.Progress.KeywordTriggersFired);
+            Assert.True(OnDisk(MainPath, "magic_word"));
+            Assert.False(engine.Progress.IsUnlocked("pavlov"));
+            engine.TrackKeywordTrigger();
+            Assert.Equal(500, engine.Progress.KeywordTriggersFired);
+            Assert.True(OnDisk(MainPath, "magic_word"));
+            Assert.True(OnDisk(MainPath, "pavlov"));
+        }
+        finally { CoreEntitlement.HasPremiumProvider = previous; }
+    }
+
+    [Fact]
     public void FlashImagesCountAndUnlockRetinalBurnAt5000()
     {
         var engine = new AchievementEngine(new AchievementStore(MainPath));
