@@ -26,6 +26,7 @@ import { createTips, TIPS_KEY, PREVIEW_TIPS_KEY } from './ui/tips.js';
 import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from './ui/prestige-sky.js';
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
+import { sealedFor, showSeal } from './ui/seal.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -74,7 +75,8 @@ try { storage = fresh ? memoryStorage() : window.localStorage; } catch { storage
 let preferenceStorage;
 try { preferenceStorage = window.localStorage; } catch { preferenceStorage = memoryStorage(); }
 
-bridge.boot({ onInit: start });
+/* Prime only until the anniversary (ui/seal.js): no Prime host, no game, just the notice. ?seal=1 shows it on a local preview. */
+bridge.boot({ onInit: (init) => (sealedFor(init, Date.now(), location.hostname, qs.get('seal') === '1') ? showSeal(document) : start(init)) });
 
 function start(init) {
   document.title = BRAND.game;
