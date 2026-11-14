@@ -2009,6 +2009,32 @@ public sealed partial class GameWindowTests
         Assert.False(GameWindow.IsAnyOpen());
     });
 
+    /// <summary>WPF HandlePanicFromStopButton (MainWindow.xaml.cs:1597-1607): the Remote HUD Stop is a click, never
+    /// a game's Escape, so a ready game in front is closed by the panic instead of paused.</summary>
+    [Fact]
+    public void RemoteHudStop_ClosesTheGameInFront_InsteadOfPausingIt() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled) = ("Escape", true);
+            launcher.Hide();
+            var w = GameWindow.Launch("breakoutdemo")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            Assert.Same(w, GameWindow.EscapePauseInFront());
+            shell.StopFromRemoteHud();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.DoesNotContain(sent, m => (string?)m["type"] == "kept-escape");
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
     /// <summary>WPF TryRacePauseOnEscape (owner 2026-10-12: Escape only pauses a game) on every game this head
     /// hosts, and main 251b60807: a page that has not said ready (or is on its way out) cannot pause, so its
     /// Escape is a full panic that closes it. A second Escape inside 2 s is a full panic too.</summary>
