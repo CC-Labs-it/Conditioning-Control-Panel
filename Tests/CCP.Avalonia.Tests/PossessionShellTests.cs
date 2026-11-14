@@ -6,10 +6,12 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
+using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -36,9 +38,12 @@ public sealed class PossessionShellTests
         public DateTime Clock = DateTime.UtcNow;
     }
 
-    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null)
+    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
+        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
+
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null)
     {
-        AvaloniaTestDispatcher.Run(() =>
+        return AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<AvApp>()
@@ -73,7 +78,7 @@ public sealed class PossessionShellTests
             {
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
-                body(rig);
+                await body(rig);
             }
             finally
             {
@@ -303,6 +308,125 @@ public sealed class PossessionShellTests
         Assert.False(nudge.IsLive);
         // Undo is safe twice and when nothing is live.
         Assert.True(nudge.UndoAsync(TimeSpan.Zero).IsCompleted);
+    });
+
+    private sealed class DodgeAttribution : IPossessionAttribution
+    {
+        public int Charges, Releases;
+        public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400) { Charges++; return Task.CompletedTask; }
+        public IDisposable Possess(object target) => new DisposeAction(() => Releases++);
+        public void EdgePulse(double strength) { }
+        public bool AnyPossessed => false;
+        public void ReleaseAll() { }
+        private sealed class DisposeAction(Action action) : IDisposable { public void Dispose() => action(); }
+    }
+
+    [Theory]
+    [InlineData("BtnClose")]
+    [InlineData("BtnMinimize")]
+    public Task CatalogDodgeMovesRealCloseButtonAndUndoRestoresItsLease(string buttonName) => RunAsync(async rig =>
+    {
+        Frame();
+        var host = (IAvaloniaPossessionHost)rig.Shell;
+        var close = rig.Shell.Named<Button>(buttonName)!;
+        var target = ((IPossessionHost)rig.Shell).Targets.Single(t => ReferenceEquals(t.Visual, close));
+        var effect = PossessionAvaloniaHead.CreateEffects().Single(e => e.Id == "dodge");
+        var attribution = new DodgeAttribution();
+        var names = 0;
+        var ctx = new PossessionContext { Host = rig.Shell, Attribution = attribution, Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(3), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(20), Name = (_, _) => names++ };
+        var original = close.RenderTransform;
+        var origin = close.RenderTransformOrigin;
+        var transitions = close.Transitions;
+        Assert.True(effect.CanApply(ctx, target));
+        effect.ApplyAsync(ctx, target, CancellationToken.None).GetAwaiter().GetResult();
+        Assert.True(effect.IsLive);
+        Assert.False(PossessionLease.IsLeased(close));
+        var home = host.BoundsOnGhostLayer(close)!.Value;
+        var pointer = host.PossessionPointer;
+        var now = DateTime.UtcNow;
+        pointer.Move(new Point(home.X - 110, home.Center.Y), null, now);
+        pointer.Move(new Point(home.X - 70, home.Center.Y), null, now.AddMilliseconds(50));
+        Assert.Equal(1, attribution.Charges);
+        Assert.Equal(1, names);
+        Assert.True(PossessionLease.IsLeased(close));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1400));
+        var moved = host.BoundsOnGhostLayer(close)!.Value;
+        Assert.NotEqual(home.X, moved.X);
+        Assert.Equal(home.Y, moved.Y, 2);
+        Assert.True(moved.X >= 0 && moved.Right <= rig.Shell.Bounds.Width);
+        PointerTestFrame.Render(rig.Shell);
+        var hit = rig.Shell.InputHitTest(moved.Center) as Visual;
+        Assert.True(ReferenceEquals(hit, close) || (hit != null && close.IsVisualAncestorOf(hit)));
+        Assert.True(HeadlessInput.PressAt(close, rig.Shell, moved.Center).Pressed);
+        // Two more steps are allowed, then further approaches do nothing.
+        for (int i = 0; i < 2; i++)
+        {
+            var current = host.BoundsOnGhostLayer(close)!.Value;
+            pointer.Move(current.Center, null, now.AddSeconds(i + 2));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1500 + 500 * i));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1900 + 500 * i));
+            Assert.NotEqual(current.X, host.BoundsOnGhostLayer(close)!.Value.X);
+        }
+        var afterThree = host.BoundsOnGhostLayer(close)!.Value;
+        pointer.Move(afterThree.Center, null, now.AddSeconds(5));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(3000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(3500));
+        Assert.Equal(afterThree, host.BoundsOnGhostLayer(close)!.Value);
+        Assert.Equal(1, attribution.Charges);
+        var returning = effect.UndoAsync(TimeSpan.FromMilliseconds(600));
+        Assert.False(returning.IsCompleted);
+        // Pump only the dispatcher, never the fake frame source: the real timer must release it.
+        var wait = System.Diagnostics.Stopwatch.StartNew();
+        await Task.WhenAny(returning, Task.Delay(TimeSpan.FromSeconds(8)));
+        Assert.InRange(wait.Elapsed.TotalMilliseconds, 600, 8000);
+        Assert.True(returning.IsCompleted);
+        Assert.False(effect.IsLive);
+        Assert.False(PossessionLease.IsLeased(close));
+        Assert.Same(original, close.RenderTransform);
+        Assert.Equal(origin, close.RenderTransformOrigin);
+        Assert.Same(transitions, close.Transitions);
+        Assert.Equal(1, attribution.Releases);
+        Assert.False(target.IsLive);
+        pointer.Move(new Point(home.X, home.Center.Y), null, now.AddSeconds(2));
+        Assert.Equal(1, attribution.Charges);
+    });
+
+    [Fact]
+    public Task DirectorBooksAndStartsDodgeThenPanicRestoresIt() => RunAsync(async rig =>
+    {
+        Frame();
+        var host = (IAvaloniaPossessionHost)rig.Shell;
+        var close = rig.Shell.Named<Button>("BtnClose")!;
+        var target = ((IPossessionHost)rig.Shell).Targets.Single(t => ReferenceEquals(t.Visual, close));
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        rig.Clock = rig.Clock.AddMinutes(4);
+        Tick(rig.Lockdown);
+        Assert.True(rig.Director.CurrentRung >= PossessionRung.Drift);
+        rig.Director.RequestReactive("dodge", target);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, rig.Director.LiveEffectCount);
+        Assert.True(target.IsLive);
+        var home = host.BoundsOnGhostLayer(close)!.Value;
+        var now = DateTime.UtcNow;
+        host.PossessionPointer.Move(new Point(home.X - 110, home.Center.Y), null, now);
+        host.PossessionPointer.Move(new Point(home.X - 70, home.Center.Y), null, now.AddMilliseconds(50));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1450));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(PossessionLease.IsLeased(close));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1500));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1900));
+        Assert.NotEqual(home.X, host.BoundsOnGhostLayer(close)!.Value.X);
+        // Panic while the dodge is live gives the button back at once (WPF parity: a ghost the
+        // director already released finishes its eased return; the stricter stop is a policy call).
+        rig.Director.UndoAll();
+        Assert.False(PossessionLease.IsLeased(close));
+        await Task.CompletedTask;
+        Assert.False(target.IsLive);
+        Assert.Equal(0, rig.Director.LiveEffectCount);
     });
 
     [Fact]
