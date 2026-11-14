@@ -477,6 +477,77 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void UserRestartReassertsDeferredEffectsAndDoesNotCountAnotherSession()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        session.Settings.FlashStartMinute = 3;
+        session.Settings.SubliminalStartMinute = 3;
+        session.Settings.LockCardStartMinute = 3;
+        session.Settings.BouncingTextStartMinute = 3;
+        var bouncing = false;
+        CoreBouncingText.StartAction = () => bouncing = true;
+        CoreBouncingText.StopAction = () => bouncing = false;
+        var mindWipe = false;
+        var oldMindWipeEnabled = CoreSettings.Current.MindWipeEnabled;
+        var oldAudioOnly = CoreSettings.Current.AudioOnlySession;
+        CoreMindWipe.StartProvider = (_, _) => mindWipe = true;
+        CoreMindWipe.StopProvider = () => mindWipe = false;
+        try
+        {
+            CoreSettings.Current.MindWipeEnabled = true;
+            CoreSettings.Current.AudioOnlySession = false;
+            _runner.Start(session);
+            var count = CoreSettings.Current.TotalSessions;
+            _runner.Pause();
+            CoreEngine.Stop();
+            CoreEngine.Start(resumingSession: true);
+            Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && bouncing && mindWipe);
+            _runner.ResumeAfterEngineStart();   // the trunk folds Resume and the reassert into one call
+            Assert.Equal(count, CoreSettings.Current.TotalSessions);
+            Assert.False(CoreFlash.IsRunning || CoreSubliminal.IsRunning || LockCardScheduler.Instance.IsRunning || bouncing || mindWipe);
+            _runner.Tick(TimeSpan.FromMinutes(3));
+            Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning && bouncing);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreBouncingText.StartAction = CoreBouncingText.StopAction = null;
+            CoreMindWipe.StartProvider = null;
+            CoreMindWipe.StopProvider = null;
+            CoreSettings.Current.MindWipeEnabled = oldMindWipeEnabled;
+            CoreSettings.Current.AudioOnlySession = oldAudioOnly;
+        }
+    }
+
+    [Fact]
+    public void RestartRearmsActiveLockCardsWithinTheRemainingSession()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        var oldAudioOnly = CoreSettings.Current.AudioOnlySession;
+        try
+        {
+            CoreSettings.Current.AudioOnlySession = false;
+            _runner.Start(session);
+            _runner.Pause();
+            CoreEngine.Stop();
+            CoreEngine.Start(resumingSession: true);
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.Null(LockCardScheduler.Instance.LastWindowMinutes);
+            _runner.ResumeAfterEngineStart();   // the trunk folds Resume and the reassert into one call
+            Assert.True(LockCardScheduler.Instance.IsRunning);
+            Assert.NotNull(LockCardScheduler.Instance.LastWindowMinutes);
+            Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes.Value, 9.9, 10.0);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreSettings.Current.AudioOnlySession = oldAudioOnly;
+        }
+    }
+
+    [Fact]
     public void Ledger_IsPersistedBeforeTheSessionOverrides()
     {
         var old = CoreSettings.ServiceProvider;
