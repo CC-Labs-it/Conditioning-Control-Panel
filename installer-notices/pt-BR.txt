@@ -1,0 +1,7 @@
+﻿Atualização para Avalonia
+
+Ao atualizar do WPF, os logins do navegador integrado são redefinidos. Entre novamente nos sites abertos no CCP.
+
+O novo perfil browser_data_avalonia fica na pasta de dados do usuário do CCP. O perfil antigo browser_data é mantido.
+
+Essa alteração não apaga os tokens da conta CCP, as configurações ou o progresso.

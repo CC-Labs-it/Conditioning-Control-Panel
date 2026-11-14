@@ -183,13 +183,14 @@ internal sealed class ProcessStateSnapshot
         Error = (_, e) => e.ErrorContext.Handled = true,
     };
 
-    internal static ProcessStateSnapshot Take()
+    internal static ProcessStateSnapshot Take(bool repairLateWrites = true)
     {
         var s = new ProcessStateSnapshot();
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
-        PutBackLateWrites();
+        // Nested scopes capture the current test, not the previous test baseline.
+        if (repairLateWrites) PutBackLateWrites();
         foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json"))
             s._files[f] = File.ReadAllBytes(f);
         return s;
@@ -275,11 +276,13 @@ internal sealed class ProcessStateSnapshot
         found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay)
             .GetField("_refused", AnyStatic)!);
 
-        // Whole seam classes: the head's service locator and Core's static Core* seams.
+        // Whole seam classes: the head's service locator, account hooks and Core* seams.
         foreach (var t in types.Where(t => t == typeof(ConditioningControlPanel.Avalonia.App)
                      || t == typeof(ConditioningControlPanel.Services.RemoteCommands)
                      || t == typeof(ConditioningControlPanel.Services.MergedAccountRecovery)
                      || t == typeof(ConditioningControlPanel.Services.V2AuthService)
+                     || t == typeof(ConditioningControlPanel.Avalonia.Platform.AccountSeed)
+                     || t == typeof(ConditioningControlPanel.Services.AuthRecovery)
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 

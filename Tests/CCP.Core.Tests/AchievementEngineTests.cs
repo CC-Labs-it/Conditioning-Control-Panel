@@ -29,6 +29,27 @@ public sealed class AchievementEngineTests : IDisposable
     private static bool OnDisk(string path, string id) =>
         new AchievementStore(path).Load().IsUnlocked(id);
 
+    // Restack b164 (#3712): WPF ProfileSyncService.cs:2099-2118.
+    [Fact]
+    public void CloudRestoreUnionsPersistsUnknownAndExclusiveIdsWithoutAnnouncing()
+    {
+        var engine = new AchievementEngine(new AchievementStore(MainPath));
+        engine.TryUnlock(FreeId);
+        engine.Progress.TotalBubblesPopped = 7;
+        var notices = 0;
+        engine.Unlocked += (_, _) => notices++;
+        engine.RestoreCloudAchievements(new[] { ExclusiveId, "future-cloud-id", FreeId, ExclusiveId });
+        engine.RestoreCloudAchievements(Array.Empty<string>());
+        var saved = new AchievementStore(MainPath).Load();
+        Assert.True(saved.IsUnlocked(FreeId));
+        Assert.True(saved.IsUnlocked(ExclusiveId));
+        Assert.True(saved.IsUnlocked("future-cloud-id"));
+        Assert.Equal(7, saved.TotalBubblesPopped);
+        Assert.Equal(0, notices);
+        Assert.False(engine.SuppressPopups);
+        Assert.False(engine.IsDirty);
+    }
+
     [Fact]
     public void CompanionMessagesUnlockAtWpfThresholdAndKeepCounting()
     {
