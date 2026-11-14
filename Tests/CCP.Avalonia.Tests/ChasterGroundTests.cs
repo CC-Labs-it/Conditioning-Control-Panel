@@ -19,7 +19,9 @@ public class ChasterGroundTests
         var vignette = tab.FindControl<Border>("GroundVignette")!;
         var page = tab.FindControl<ScrollViewer>("PageScroll")!;
         var ground = Assert.IsType<Grid>(page.Parent);
-        Assert.Equal(new Control[] { backdrop, glow, vignette, page }, ground.Children);
+        // The trunk's trailer popup rides last in the same root grid (it draws in its own layer).
+        Assert.Equal(new Control[] { backdrop, glow, vignette, page }, System.Linq.Enumerable.Take(ground.Children, 4));
+        Assert.All(System.Linq.Enumerable.Skip(ground.Children, 4), c => Assert.IsType<global::Avalonia.Controls.Primitives.Popup>(c));
         Assert.False(backdrop.IsHitTestVisible);
         Assert.False(glow.IsHitTestVisible);
         Assert.False(vignette.IsHitTestVisible);

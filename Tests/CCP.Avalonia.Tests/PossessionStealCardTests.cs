@@ -28,6 +28,7 @@ public sealed class PossessionStealCardTests
         public IFrameSource PossessionFrames { get; } = new FakeFrames();
         public PossessionRuntime PossessionEffectRuntime { get; } = new(new FakeFrames());
         public Point PointerPosition => default;
+        public PossessionPointer PossessionPointer { get; } = new();
         public Rect? BoundsOnGhostLayer(Control c) => c.TransformToVisual(layer) is { } t ? new Rect(c.Bounds.Size).TransformToAABB(t) : null;
         public IReadOnlyList<PossessionTarget> Targets { get; set; } = Array.Empty<PossessionTarget>();
         public bool IsUsable => true;

@@ -71,7 +71,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             ReceiptHost.Height = from;
-            _ = BillTween(OpacityProperty, opacity, open ? 1 : 0, open ? 231 : ms, new LinearEasing()).RunAsync(ReceiptHost, token);
+            // Gentle visuals: the print's fade-in never rises faster than the 300 ms floor.
+            _ = BillTween(OpacityProperty, opacity, open ? 1 : 0, open ? ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(231) : ms, new LinearEasing()).RunAsync(ReceiptHost, token);
             if (open)
                 _ = BillTween(TranslateTransform.YProperty, -10, 0, ms, new BackEaseOut()).RunAsync(ReceiptHost, token);
             try

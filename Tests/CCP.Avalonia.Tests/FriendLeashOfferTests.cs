@@ -60,7 +60,7 @@ public sealed class FriendLeashOfferTests
         Setup(); CoreSettings.Current.LeashIntroSeenHolder = true;
         var card = new FriendLeashOffer(Friend(), new LeashService(new Wire { Status = status }, () => "me"), new HashSet<string>());
         var played = new List<LeashCue>(); card.PlayCue = played.Add;
-        Assert.Contains(Button(card, "leash-offer").GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(), x => x.Kind == ConditioningControlPanel.Avalonia.Controls.IconKind.Link);
+        Assert.Contains(Button(card, "leash-offer").GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(), x => x.Kind == FluentIcons.Common.Symbol.Link);
         Click(card, "leash-offer");
         Assert.Equal(expected, Assert.Single(played));
     });
