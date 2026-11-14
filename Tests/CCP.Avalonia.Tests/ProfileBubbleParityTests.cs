@@ -257,13 +257,23 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
                 : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
+            // Drive Avalonia's own animation clock explicitly: render ticks use wall time and a
+            // busy CI runner can jump straight past the short animation between two samples.
+            var assembly = typeof(global::Avalonia.Animation.Animatable).Assembly;
+            var clockType = assembly.GetType("Avalonia.Animation.ClockBase", throwOnError: true)!;
+            var clock = Activator.CreateInstance(clockType, nonPublic: true)!;
+            var pulse = clockType.GetMethod("Pulse", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
+            typeof(global::Avalonia.Animation.Animatable).GetProperty("Clock", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.SetValue(visual, clock);
             double maxTilt = 0, minOpacity = 1;
+            int elapsedMs = 0;
             void Run()
             {
                 for (int i = 0; i < 60; i++)
                 {
                     Dispatcher.UIThread.RunJobs();
-                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    pulse.Invoke(clock, new object[] { TimeSpan.FromMilliseconds(elapsedMs) });
+                    elapsedMs += 16;
+                    Dispatcher.UIThread.RunJobs();
                     maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
                     minOpacity = Math.Min(minOpacity, visual.Opacity);
                 }

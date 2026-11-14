@@ -67,24 +67,31 @@ public class FriendsServerClockTests
         Assert.True(PackUriBootstrap.Failure == null, PackUriBootstrap.Failure);
         try
         {
-            var serverNow = PcFast(TimeSpan.FromMinutes(2));
-            var sent = serverNow.AddSeconds(-5);
-            var invite = new InboxItem(Id1, SendKind.Invite, "u_ann", "Ann", null, null,
-                InviteDestination.BackRoom, null, null, sent, sent.AddSeconds(InviteDestination.LifetimeSeconds));
             string? shown = null;
+            DateTimeOffset before = default, after = default, end = default;
             WpfRenderHarness.OnStaThread(() =>
             {
+                // The shared STA and theme may take many seconds to start on a busy runner.
+                var sent = PcFast(TimeSpan.FromMinutes(2)).AddSeconds(-5);
+                end = sent.AddSeconds(InviteDestination.LifetimeSeconds);
+                var invite = new InboxItem(Id1, SendKind.Invite, "u_ann", "Ann", null, null,
+                    InviteDestination.BackRoom, null, null, sent, end);
                 var ctor = typeof(KnockCard).GetConstructors(BindingFlags.NonPublic | BindingFlags.Instance)[0];
                 Action<InboxItem, KnockOutcome> done = (_, _) => { };
+                before = ServerClock.UtcNow;
                 var card = (Window)ctor.Invoke(new object?[] { new Window(), invite, "invites you", "Join", "Not now", "Answer later", done, null });
                 var countdown = (TextBlock)typeof(KnockCard).GetField("_countdown", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(card)!;
                 shown = countdown.Text;
+                after = ServerClock.UtcNow;
                 card.Content = null;
             });
 
             var parts = shown!.Split(':');
             var left = int.Parse(parts[0]) * 60 + int.Parse(parts[1]);
-            Assert.True(left >= 280, $"countdown shows {shown} for an invite sent 5 s ago (PC clock 2 min fast)");
+            // The displayed value was calculated during construction, between these readings.
+            // Keep the bracket narrower than the two-minute skew so a PC-clock regression fails.
+            Assert.True(after - before < TimeSpan.FromMinutes(1), "card construction took too long to distinguish the clock skew");
+            Assert.InRange(left, LandingRules.SecondsLeft(end, after), LandingRules.SecondsLeft(end, before));
         }
         finally { ServerClock.ResetForTests(); }
     }
