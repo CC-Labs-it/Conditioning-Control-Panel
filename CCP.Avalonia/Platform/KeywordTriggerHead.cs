@@ -15,8 +15,8 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard slice of WPF KeywordTriggerService: audio, haptic, XP, Chaster and avatar comment actions.
-/// OCR and the visual actions remain a follow-up.</summary>
+/// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
+/// comment actions. OCR and the Brain Drain visual remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -212,6 +212,13 @@ internal sealed class KeywordAudioRuntime
     internal Action QuestCredit = () => App.Quests?.TrackKeywordTrigger();
     internal Action<string, double> Haptic = (keyword, intensity) => _ = CoreHaptics.Service?.TriggerKeywordPatternAsync(keyword, intensity);
     internal Action<double> AddXp = amount => CoreProgression.AddXP(amount, "KeywordTrigger");
+    /// <summary>Test seam; null runs <see cref="FireVisual"/>.</summary>
+    internal Action<KeywordVisualEffect, string>? Visual;
+    /// <summary>WPF BubbleService.SpawnOnce through the shell window; test seam.</summary>
+    internal Action BubbleEffect = () =>
+    {
+        if (Views.Windows.MainShellWindow.Current is { } host) Views.Overlays.BubbleOverlay.SpawnOnce(host);
+    };
     internal Func<int, int> ChasterBook = seconds => ChasterHead.Service?.NoteSeconds("watcher", seconds).AppliedSeconds ?? 0;
     internal Func<string> ChasterCapPath = () => Path.Combine(CorePaths.UserData, "chaster_trigger_caps.json");
     private KeywordTriggerChasterCap? _chasterCap;
@@ -232,6 +239,8 @@ internal sealed class KeywordAudioRuntime
             if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
             actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
                 PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
+            // WPF DispatchLegacyFlatFieldsAsync: the flat visual fires after the audio, before haptic and XP.
+            actions.Add(new VisualEffectAction { Effect = first.VisualEffect });
             if (first.HapticEnabled) actions.Add(new HapticAction { Intensity = first.HapticIntensity });
             if (first.XPAward > 0) actions.Add(new AddXpAction { Amount = first.XPAward });
         }
@@ -263,6 +272,7 @@ internal sealed class KeywordAudioRuntime
                         if (result == ClipResult.Stopped) return;
                         played = result == ClipResult.Played;
                         break;
+                    case VisualEffectAction visual: (Visual ?? FireVisual)(visual.Effect, first.Keyword); break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     case AddXpAction xp when xp.Amount > 0:
                         AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
@@ -292,6 +302,41 @@ internal sealed class KeywordAudioRuntime
     }
 
     private enum ClipResult { Skipped, Played, Stopped }
+
+    // WPF KeywordTriggerService FireVisualEffect: reuse the installed head renderers.
+    private void FireVisual(KeywordVisualEffect effect, string keyword)
+    {
+        try
+        {
+            switch (effect)
+            {
+                case KeywordVisualEffect.SubliminalFlash:
+                    if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
+                    break;
+                case KeywordVisualEffect.ExactSubliminal:
+                    // WPF FlashSubliminalCustom: trimmed, capped and tag-free, haptic lead-in, 10 XP.
+                    if (!string.IsNullOrWhiteSpace(keyword)) CoreSubliminal.CustomShowProvider?.Invoke(keyword.ToUpperInvariant());
+                    // The echoed word must never re-fire itself: always mute 3 s, even with loop protection off.
+                    _cooldowns.Mute(keyword, 3000, Now().ToUniversalTime());
+                    break;
+                case KeywordVisualEffect.ImageFlash:
+                    CoreFlash.ShowProvider?.Invoke();
+                    break;
+                case KeywordVisualEffect.OverlayPulse:
+                    Views.Overlays.OverlayPulse.PulseOverlays();
+                    break;
+                case KeywordVisualEffect.MindWipe:
+                    // It is audio: held while idle, and an empty pool stays silent.
+                    if (CoreMindWipe.ClipCount > 0 && (CoreSession.IsEngineRunning || CoreSession.IsSessionRunning))
+                        CoreMindWipe.TriggerOnce();
+                    break;
+                case KeywordVisualEffect.Bubbles:
+                    BubbleEffect();
+                    break;
+            }
+        }
+        catch (Exception ex) { Log.Debug(ex, "Keyword visual {Effect} failed", effect); }
+    }
 
     private void BookChaster(ChasterAddTimeAction chaster, KeywordTrigger trigger)
     {
