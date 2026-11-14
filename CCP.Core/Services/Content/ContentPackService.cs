@@ -481,8 +481,11 @@ namespace ConditioningControlPanel.Services.Packs
             request.Headers.Add("X-Auth-Token", id.Value.Token);
             using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
             var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            // ponytail: Contract D (MergedAccountRecovery) is in Core now but not called here; the Avalonia head seeds none of
-            // its seams yet (WPF calls it in its own ContentPackService), so a merged account reads as 401/refusal.
+            if (await MergedAccountRecovery.TryHandleAsync(response, json).ConfigureAwait(false))
+            {
+                AuthenticationRequired?.Invoke(this, Localization.Loc.Get("account_merged_retry_hint"));
+                return null;
+            }
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 AuthenticationRequired?.Invoke(this, "Your session has expired. Please log in again.");

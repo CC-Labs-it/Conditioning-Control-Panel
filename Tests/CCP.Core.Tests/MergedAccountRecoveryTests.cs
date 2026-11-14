@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using ConditioningControlPanel.Services.Packs;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
@@ -237,6 +240,32 @@ public sealed class MergedSwapRunTests : IDisposable
         MergedAccountRecovery.Reauthenticate = null;
         MergedAccountRecovery.ReloadProfile = null;
         MergedAccountRecovery.Finished = null;
+    }
+
+    private sealed class MergedWire : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+            { Content = new StringContent("{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123\"}") });
+    }
+
+    [Fact]
+    public async Task PackDownloadMergedReplyReachesRecovery()
+    {
+        bool stopped = false;
+        string? stamped = null, notice = null;
+        MergedAccountRecovery.StopSync = () => stopped = true;
+        MergedAccountRecovery.StampQuests = id => stamped = id;
+        var store = new ContentPackStore(() => System.IO.Path.GetTempPath(), () => _settings, () => { });
+        var service = new ContentPackService(store, new HttpClient(new MergedWire()), () => "http://127.0.0.1:9",
+            () => _settings, () => { }, () => null, () => ("u_tombstone1", "tok"));
+        service.AuthenticationRequired += (_, message) => notice = message;
+        Assert.Null(await service.GetExternalPackDownloadUrlAsync("pack"));
+        await MergedAccountRecovery.LastSwap;
+        Assert.Equal("u_canon123", _settings.UnifiedId);
+        Assert.True(stopped);
+        Assert.Equal("u_canon123", stamped);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("account_merged_retry_hint"), notice);
     }
 
     [Fact]
