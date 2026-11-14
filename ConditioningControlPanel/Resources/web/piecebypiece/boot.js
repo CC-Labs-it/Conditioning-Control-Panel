@@ -12,6 +12,7 @@ import { createPieces } from './board/pieces.js';
 import { createAnim } from './board/anim.js';
 import { createJiggle } from './board/jiggle.js';
 import { createDrag } from './board/drag.js';
+import { createAnnotate } from './board/annotate.js';
 import { createGlyphs } from './board/glyphs.js';
 import { createBus } from './game/events.js';
 import { createHotseat } from './game/hotseat.js';
@@ -113,6 +114,11 @@ function main() {
 
   const drag = createDrag({ view, pieces, anim, bus, game, jiggle });
   board.drag = drag;
+  // The player's own arrows and circles (right drag / right click, lichess style). Local only:
+  // never on the bus, the wire or a replay. A new game, a new seat or a take-back wipes them.
+  board.annotate = createAnnotate({ view, isBusy: () => drag.isSuspended() || !!window.PBP?.door?.isUp?.() });
+  for (const name of ['newgame', 'local', 'takeback']) bus.on(name, () => board.annotate.clear());
+  { const dispose = view.dispose; view.dispose = () => { board.annotate.dispose(); dispose(); }; }
 
   // `ramp` is filled in once the effects layer has attached. It is on the
   // object from the start so a reader never has to care whether that has
