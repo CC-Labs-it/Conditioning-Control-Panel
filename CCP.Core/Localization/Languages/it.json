@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 nuova pescata", "chaos_event_skip": "♥ resistito: +1 resistenza", "chaos_event_shower": "pioggia di benvenuto: dolci dall'alto", "chaos_event_sin_bonus": "🕯 peccato accolto (+{0:0.00}x)", "chaos_event_sin_shielded": "🕯 la candela ha eliminato lo svantaggio", "chaos_event_sin_resistance": "🕯 hai detto sì (+1 resistenza)", "chaos_announce_resist": "+1 RESISTENZA",
+  "chaos_event_reroll": "nuova pescata", "chaos_event_skip": "resistito: +1 resistenza", "chaos_event_shower": "pioggia di benvenuto: dolci dall'alto", "chaos_event_sin_bonus": "peccato accolto (+{0:0.00}x)", "chaos_event_sin_shielded": "la candela ha eliminato lo svantaggio", "chaos_event_sin_resistance": "hai detto sì (+1 resistenza)", "chaos_announce_resist": "+1 RESISTENZA",
   "scheduler_started_title": "Pianificazione attiva",
   "scheduler_started_body": "Sessione avviata automaticamente secondo il programma.",
   "scheduler_ended_title": "Pianificazione",

@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 neu gezogen", "chaos_event_skip": "♥ widerstanden: +1 Widerstand", "chaos_event_shower": "Willkommensschauer: Leckereien von oben", "chaos_event_sin_bonus": "🕯 Sünde angenommen (+{0:0.00}x)", "chaos_event_sin_shielded": "🕯 die Kerze nahm den Nachteil", "chaos_event_sin_resistance": "🕯 du sagtest ja (+1 Widerstand)", "chaos_announce_resist": "+1 WIDERSTAND",
+  "chaos_event_reroll": "neu gezogen", "chaos_event_skip": "widerstanden: +1 Widerstand", "chaos_event_shower": "Willkommensschauer: Leckereien von oben", "chaos_event_sin_bonus": "Sünde angenommen (+{0:0.00}x)", "chaos_event_sin_shielded": "die Kerze nahm den Nachteil", "chaos_event_sin_resistance": "du sagtest ja (+1 Widerstand)", "chaos_announce_resist": "+1 WIDERSTAND",
   "scheduler_started_title": "Zeitplan aktiv",
   "scheduler_started_body": "Sitzung automatisch nach Zeitplan gestartet.",
   "scheduler_ended_title": "Zeitplan",

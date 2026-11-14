@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 nova rodada", "chaos_event_skip": "♥ resistiu: +1 resistência", "chaos_event_shower": "chuva de boas-vindas: mimos do alto", "chaos_event_sin_bonus": "🕯 pecado aceito (+{0:0.00}x)", "chaos_event_sin_shielded": "🕯 a vela removeu a desvantagem", "chaos_event_sin_resistance": "🕯 você disse sim (+1 resistência)", "chaos_announce_resist": "+1 RESISTÊNCIA",
+  "chaos_event_reroll": "nova rodada", "chaos_event_skip": "resistiu: +1 resistência", "chaos_event_shower": "chuva de boas-vindas: mimos do alto", "chaos_event_sin_bonus": "pecado aceito (+{0:0.00}x)", "chaos_event_sin_shielded": "a vela removeu a desvantagem", "chaos_event_sin_resistance": "você disse sim (+1 resistência)", "chaos_announce_resist": "+1 RESISTÊNCIA",
   "scheduler_started_title": "Agendamento ativo",
   "scheduler_started_body": "Sessão iniciada automaticamente conforme o agendamento.",
   "scheduler_ended_title": "Agendamento",

@@ -260,7 +260,8 @@ public sealed class ProfileBubbleParityTests : IDisposable
             double maxTilt = 0, minOpacity = 1;
             void Run()
             {
-                for (int i = 0; i < 60; i++)
+                // Headless render ticks use elapsed wall time: observe the full animation.
+                for (var elapsed = System.Diagnostics.Stopwatch.StartNew(); elapsed.ElapsedMilliseconds < 650; System.Threading.Thread.Sleep(10))
                 {
                     Dispatcher.UIThread.RunJobs();
                     AvaloniaHeadlessPlatform.ForceRenderTimerTick();

@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 重新抽取", "chaos_event_skip": "♥ 抵抗：抗性 +1", "chaos_event_shower": "欢迎之雨：奖励从天而降", "chaos_event_sin_bonus": "🕯 接受罪孽 (+{0:0.00}x)", "chaos_event_sin_shielded": "🕯 蜡烛消除了负面效果", "chaos_event_sin_resistance": "🕯 你说了愿意 (+1 抵抗)", "chaos_announce_resist": "抗性 +1",
+  "chaos_event_reroll": "重新抽取", "chaos_event_skip": "抵抗：抗性 +1", "chaos_event_shower": "欢迎之雨：奖励从天而降", "chaos_event_sin_bonus": "接受罪孽 (+{0:0.00}x)", "chaos_event_sin_shielded": "蜡烛消除了负面效果", "chaos_event_sin_resistance": "你说了愿意 (+1 抵抗)", "chaos_announce_resist": "抗性 +1",
   "scheduler_started_title": "计划已启用",
   "scheduler_started_body": "会话已按计划自动开始。",
   "scheduler_ended_title": "计划",

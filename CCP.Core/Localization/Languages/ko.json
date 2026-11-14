@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 다시 뽑기", "chaos_event_skip": "♥ 거부: 저항 +1", "chaos_event_shower": "환영의 소나기: 위에서 내려오는 보상", "chaos_event_sin_bonus": "🕯 죄를 받아들임 (+{0:0.00}x)", "chaos_event_sin_shielded": "🕯 촛불이 불이익을 없앴다", "chaos_event_sin_resistance": "🕯 수락했다 (+1 저항)", "chaos_announce_resist": "저항 +1",
+  "chaos_event_reroll": "다시 뽑기", "chaos_event_skip": "거부: 저항 +1", "chaos_event_shower": "환영의 소나기: 위에서 내려오는 보상", "chaos_event_sin_bonus": "죄를 받아들임 (+{0:0.00}x)", "chaos_event_sin_shielded": "촛불이 불이익을 없앴다", "chaos_event_sin_resistance": "수락했다 (+1 저항)", "chaos_announce_resist": "저항 +1",
   "scheduler_started_title": "일정 활성화",
   "scheduler_started_body": "일정에 따라 세션이 자동으로 시작되었습니다.",
   "scheduler_ended_title": "일정",

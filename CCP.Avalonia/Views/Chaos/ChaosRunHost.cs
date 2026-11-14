@@ -558,7 +558,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
                     Pulse(Color.FromRgb(150, 200, 255), 0.30);
                     ChaosWaveTimerWindow.Clear();
-                    DealDraft();
+                    if (_state != null && _overlay != null)
+                        _overlay.ShowBoonDraft(_state.WaveIndex, DraftOptions(), ResolveDraft,
+                            _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
                 }
                 else
                 {
@@ -580,18 +582,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return options;
         }
 
-        private static void DealDraft()
-        {
-            if (_state == null || _overlay == null) return;
-            _overlay.ShowBoonDraft(_state.WaveIndex, DraftOptions(), ResolveDraft,
-                _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
-        }
-
         private static (List<ChaosBoon> options, int rerollsLeft)? RerollDraft()
         {
             if (!_draftPaused || _state == null || _state.RerollsLeft <= 0) return null;
             _state.RerollsLeft--;
-            _state.PushEvent(Loc.Get("chaos_event_reroll"));
+            _state.PushEvent("🎲 " + Loc.Get("chaos_event_reroll"));
             return (DraftOptions(), _state.RerollsLeft);
         }
 
@@ -601,7 +596,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (boon == null)
             {
                 _state.Shields++;
-                _state.PushEvent(Loc.Get("chaos_event_skip"));
+                _state.PushEvent("♥ " + Loc.Get("chaos_event_skip"));
                 Pulse(Color.FromRgb(120, 220, 160), 0.22);
                 ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_announce_resist"), ChaosAnnounceKind.Willpower, artKey: "resistance");
             }
@@ -622,10 +617,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (boon.IsCurse)
                 {
                     if (_state.SinExtraMult > 0) { _state.BoonMult += _state.SinExtraMult;
-                        _state.PushEvent(Loc.GetF("chaos_event_sin_bonus", _state.SinExtraMult)); }
-                    if (shielded) _state.PushEvent(Loc.Get("chaos_event_sin_shielded"));
+                        _state.PushEvent("🕯 " + Loc.GetF("chaos_event_sin_bonus", _state.SinExtraMult)); }
+                    if (shielded) _state.PushEvent("🕯 " + Loc.Get("chaos_event_sin_shielded"));
                     if (_state.MaxedBoons.Contains("surrender")) { _state.Shields++;
-                        _state.PushEvent(Loc.Get("chaos_event_sin_resistance"));
+                        _state.PushEvent("🕯 " + Loc.Get("chaos_event_sin_resistance"));
                         Pulse(Color.FromRgb(120, 220, 160), 0.22); }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
                 }

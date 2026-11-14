@@ -1,5 +1,5 @@
 {
-  "chaos_event_reroll": "🎲 новая раздача", "chaos_event_skip": "♥ отказ: +1 сопротивление", "chaos_event_shower": "приветственный дождь: угощения сверху", "chaos_event_sin_bonus": "🕯 грех принят (+{0:0.00}x)", "chaos_event_sin_shielded": "🕯 свеча сняла недостаток", "chaos_event_sin_resistance": "🕯 вы сказали да (+1 сопротивление)", "chaos_announce_resist": "+1 СОПРОТИВЛЕНИЕ",
+  "chaos_event_reroll": "новая раздача", "chaos_event_skip": "отказ: +1 сопротивление", "chaos_event_shower": "приветственный дождь: угощения сверху", "chaos_event_sin_bonus": "грех принят (+{0:0.00}x)", "chaos_event_sin_shielded": "свеча сняла недостаток", "chaos_event_sin_resistance": "вы сказали да (+1 сопротивление)", "chaos_announce_resist": "+1 СОПРОТИВЛЕНИЕ",
   "scheduler_started_title": "Расписание активно",
   "scheduler_started_body": "Сеанс автоматически запущен по расписанию.",
   "scheduler_ended_title": "Расписание",

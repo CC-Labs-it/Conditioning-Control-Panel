@@ -43,6 +43,7 @@ public sealed class ChaosPopTextTests
             var prepare = ChaosPopText.Prepare;
             var canShow = ChaosPopText.PlatformCanShow;
             bool announcer = CoreSettings.Current.ChaosAnnouncerEnabled;
+            bool tasteWasAwarded = !ChaosMeta.State.FirstTimesAwarded.Add(ChaosFirstTimes.Taste);
             ChaosPopText.Prepare = (w, r) => { w.Position = r.Position; return true; };
             ChaosPopText.PlatformCanShow = () => true;
             try
@@ -94,6 +95,7 @@ public sealed class ChaosPopTextTests
                 ChaosPopText.Prepare = prepare;
                 ChaosPopText.PlatformCanShow = canShow;
                 CoreSettings.Current.ChaosAnnouncerEnabled = announcer;
+                if (!tasteWasAwarded) ChaosMeta.State.FirstTimesAwarded.Remove(ChaosFirstTimes.Taste);
             }
             return Task.CompletedTask;
         });
@@ -301,7 +303,7 @@ public sealed class ChaosPopTextTests
             {
                 foreach (var panic in new[] { false, true })
                 {
-                    ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+                    ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                     ChaosRunHost.Overlay!.FinishCountdown();
                     var w = new ChaosPopText();
                     Assert.Same(w, ChaosPopText.Pool.Acquire(() => w));

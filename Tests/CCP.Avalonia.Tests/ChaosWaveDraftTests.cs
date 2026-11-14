@@ -59,13 +59,6 @@ public class ChaosWaveDraftTests
         return overlay;
     }
 
-    private sealed class SteppedClock : TimeProvider
-    {
-        public long Ticks;
-        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-        public override long GetTimestamp() => Ticks;
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -218,7 +211,7 @@ public class ChaosWaveDraftTests
     [Fact]
     public Task Boundary_and_pick_lessons_wait_for_go_then_hold_until_last_card() => Run(() =>
     {
-        var clock = new SteppedClock();
+        var clock = new SteppedTime();
         var oldClock = ChaosUnlockCardOverlay.Clock;
         ChaosUnlockCardOverlay.Clock = clock;
         try
@@ -250,7 +243,7 @@ public class ChaosWaveDraftTests
             card.Dismiss();
             Assert.Equal(ChaosUnlockCardRules.ForLesson("surrender")!.Title, card.Current!.Title);
             card.Dismiss();
-            clock.Ticks += TimeSpan.FromMilliseconds(ChaosUnlockCardOverlay.OutMs).Ticks;
+            clock.Advance(TimeSpan.FromMilliseconds(ChaosUnlockCardOverlay.OutMs));
             card.Step();
             Assert.False(ChaosUnlockCardOverlay.IsShowing);
             Assert.False(BubbleOverlay.Field.HoldChaos);
