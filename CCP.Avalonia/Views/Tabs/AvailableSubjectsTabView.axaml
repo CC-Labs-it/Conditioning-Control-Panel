@@ -6,6 +6,7 @@
  xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
  x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView">
  <UserControl.Resources>
+  <!-- WPF AvailableSubjectsTabView.xaml:22: the glass (cards and pills), light at the top -->
   <LinearGradientBrush x:Key="LobbyGlass" StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#24FFFFFF" Offset="0"/><GradientStop Color="#0CFFFFFF" Offset="1"/></LinearGradientBrush>
   <LinearGradientBrush x:Key="LobbyRim" StartPoint="0%,0%" EndPoint="0%,100%"><GradientStop Color="#55FFFFFF" Offset="0"/><GradientStop Color="#14FFFFFF" Offset="0.5"/><GradientStop Color="#0AFFFFFF" Offset="1"/></LinearGradientBrush>
   <ControlTheme x:Key="LobbyPill" TargetType="Button">
@@ -68,10 +69,6 @@
    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Setter Property="FontSize" Value="12.5"/>
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
-  <!-- WPF AvailableSubjectsTabView.xaml:22: the card glass, light at the top -->
-  <LinearGradientBrush x:Key="LobbyGlass" StartPoint="0%,0%" EndPoint="0%,100%">
-   <GradientStop Color="#24FFFFFF" Offset="0"/><GradientStop Color="#0CFFFFFF" Offset="1"/>
-  </LinearGradientBrush>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
    <Grid Margin="0,0,6,8" Tag="lobby-card">
     <!-- WPF AvailableSubjectsTabView.xaml:134: the ring a new table sends out (AvailableSubjectsTabView.Fx.cs) -->
