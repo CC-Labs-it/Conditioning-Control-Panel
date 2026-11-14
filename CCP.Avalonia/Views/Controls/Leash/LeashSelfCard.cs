@@ -192,6 +192,7 @@ public sealed class LeashSelfCard : Border
             // WPF LeashSurfaces.NoteCut ends the task and closes its window before the service cut.
             try { LeashTaskHost.EndTask("cut"); } catch { }
             try { App.Notifications?.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success); } catch { }
+            try { LeashHead.NoteCut(); } catch { }
             try { if (service != null) await service.CutAsync(); } catch { }
         }
     }

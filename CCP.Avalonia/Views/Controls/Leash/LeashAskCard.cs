@@ -1,7 +1,7 @@
 // WPF Controls/Leash/LeashAskCard.cs:70-138 (layout), :141-240 (levels), :244-278 (answer).
 // WPF Controls/Leash/Explain/LeashExplainCard.cs:70-225 (grid), :232-246 (visible read clock).
 // WPF Controls/Leash/Explain/LeashExplainer.cs:278-282 (remember the answered intro).
-// Missing: drawn art, entrance, LeashFx and help. WPF cut copy: Explain/LeashExplainCard.cs:91.
+// Missing: drawn art, entrance, LeashFx motion, help and the avatar photo (the Denied cue is wired). WPF cut copy: Explain/LeashExplainCard.cs:91.
 using System;
 using System.Threading.Tasks;
 using Avalonia;
@@ -25,7 +25,8 @@ public sealed class LeashAskCard : Border
     internal static readonly IBrush Ink = new SolidColorBrush(Color.FromRgb(0x1B, 0x10, 0x26));
     internal static readonly IBrush GoldDeep = new SolidColorBrush(Color.FromRgb(0x6B, 0x53, 0x20));
     internal static readonly IBrush Card = Gradient(0x2A1D12, 0x1F1528);
-    private static readonly IBrush Glass = Gradient(0x241742, 0x1C1233), Chip = Rgb(0x24, 0x18, 0x38);
+    internal static readonly IBrush Glass = Gradient(0x241742, 0x1C1233);
+    private static readonly IBrush Chip = Rgb(0x24, 0x18, 0x38);
     private readonly LeashOffer _offer;
     private readonly Func<ILeashService?> _svc;
     private readonly StackPanel _body = new();
@@ -57,7 +58,7 @@ public sealed class LeashAskCard : Border
         Tag = "leash-ask:" + offer.From.Id;
         Child = _body;
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var av = F.Avatar(offer.From.Name, 60, null);
+        var av = F.Avatar(offer.From.Name, 60, null, offer.From.Look);   // WPF :78 (the photo URL is a gap here)
         av.Margin = new Thickness(0, 0, 14, 0);
         head.Children.Add(av);
         var t = new TextBlock
@@ -193,6 +194,7 @@ public sealed class LeashAskCard : Border
             _gone = result == LeashAnswerResult.Gone;
             _error.Text = Loc.GetF(key, _offer.From.Name);
             _error.IsVisible = true;
+            LeashSound.Denied(DateTime.UtcNow);   // WPF LeashAskCard.cs:265
             return;
         }
         // WPF LeashAskIntro.Answered: the leashed side has now had its look.
