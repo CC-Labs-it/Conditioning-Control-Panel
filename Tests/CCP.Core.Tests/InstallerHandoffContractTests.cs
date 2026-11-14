@@ -241,20 +241,9 @@ public partial class InstallerHandoffContractTests
         Assert.Contains(@"{localappdata}\ConditioningControlPanel\browser-reset.ack.json", installer);
     }
 
-    [Fact]
-    public void WpfInstallerUsesProjectPublishOutputAndIcon()
-    {
-        var project = XDocument.Parse(Read("ConditioningControlPanel/ConditioningControlPanel.csproj"));
-        var framework = project.Descendants("TargetFramework").Single().Value;
-        var icon = project.Descendants("ApplicationIcon").Single().Value;
-        var installer = Read("installer.iss");
-        var batch = Read("build-installer.bat");
-        Assert.Equal($@"ConditioningControlPanel\bin\Release\{framework}\win-x64\publish", Define(installer, "PublishDir"));
-        Assert.Contains($@"set PUBLISH_DIR=%PROJECT_DIR%\bin\Release\{framework}\win-x64\publish", batch);
-        Assert.Equal(@"..\Assets\app.ico", icon);
-        Assert.Equal(@"Assets\app.ico", Directive(installer, "SetupIconFile"));
-        Assert.NotEmpty(Read(Directive(installer, "SetupIconFile").Replace('\\', '/')));
-    }
+    // Restack b161: #3950's WPF installer.iss / build-installer.bat edits (net10 publish dir,
+    // Assets icon) and their test are left out. The default installer and batch stay
+    // byte-identical to origin/main (shell-installer ledger row), so that fix is a re-cut.
 
     [Fact]
     public void InstallerNoticeUsesTheSelectedLanguageAndMatchesCoreTranslations()
