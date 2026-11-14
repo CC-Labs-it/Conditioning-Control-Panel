@@ -32,6 +32,9 @@ public sealed class LapseInboxTests
 
     private static readonly PropertyInfo PatreonProp = typeof(AccountSeed).GetProperty("Patreon", BindingFlags.Static | BindingFlags.NonPublic)!;
     private static readonly PropertyInfo SubstarProp = typeof(AccountSeed).GetProperty("SubscribeStar", BindingFlags.Static | BindingFlags.NonPublic)!;
+    // A shell another test never closed still listens for readings: it would post (and own) the row first.
+    private static readonly FieldInfo[] ShellEvents = new[] { "TierReadingApplied", "ProfileExtrasApplied" }
+        .Select(n => typeof(AccountSeed).GetField(n, BindingFlags.Static | BindingFlags.NonPublic)!).ToArray();
     // Private reading state the assembly snapshot does not cover.
     private static readonly FieldInfo[] PrivateState = new[] { typeof(EntitlementRefresh), typeof(CheckoutWatch) }
         .SelectMany(t => t.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
@@ -53,6 +56,9 @@ public sealed class LapseInboxTests
         var oldUtcNow = AccountSeed.UtcNow;
         var oldPatreon = AccountSeed.Patreon;
         var oldSubstar = AccountSeed.SubscribeStar;
+        // The Reconnect button refuses under Lockdown: a Lockdown another test left running must not answer for this one.
+        var oldLockdown = LockdownService.Current;
+        var oldListeners = ShellEvents.Select(f => f.GetValue(null)).ToArray();
         var oldPrivate = PrivateState.Select(f => f.GetValue(null)).ToArray();
         var oldLifetime = Application.Current!.ApplicationLifetime;
         var lifetimeField = typeof(Application).GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
@@ -61,6 +67,7 @@ public sealed class LapseInboxTests
         var secrets = new Dictionary<string, string?>();
         try
         {
+            LockdownService.Current = null;
             CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
             CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
             var service = new SettingsService();
@@ -88,6 +95,7 @@ public sealed class LapseInboxTests
             s.PatreonLabValidUntil = clock.GetUtcNow().UtcDateTime.AddDays(2);
             var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             lifetimeField.SetValue(Application.Current, lifetime);
+            foreach (var f in ShellEvents) f.SetValue(null, null);   // only this test's shell hears the readings
             shell = new MainShellWindow();
             lifetime.MainWindow = shell;
             shell.Show();
@@ -105,9 +113,11 @@ public sealed class LapseInboxTests
             finally
             {
                 for (var i = 0; i < PrivateState.Length; i++) PrivateState[i].SetValue(null, oldPrivate[i]);
+                for (var i = 0; i < ShellEvents.Length; i++) ShellEvents[i].SetValue(null, oldListeners[i]);
                 PatreonProp.SetValue(null, oldPatreon);
                 SubstarProp.SetValue(null, oldSubstar);
                 AccountSeed.UtcNow = oldUtcNow;
+                LockdownService.Current = oldLockdown;
                 MainShellWindow.PlanOpener = oldOpener;
                 TierGate.ReconnectIsTheAnswerProvider = oldReconnect;
                 CoreAccount.HasPremiumAccessProvider = oldPremium;
