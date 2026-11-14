@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
@@ -30,7 +33,58 @@ public sealed class WindowsDuckerTests : IDisposable
         _vol[pid] = v;
     })).ToList();
 
-    private WindowsDucker Make() => new(body => body(Live()), pid => _name.TryGetValue(pid, out var n) ? n : "", _dir, () => true, Own);
+    private WindowsDucker Make(Task? after = null) => new(body => body(Live()), pid => _name.TryGetValue(pid, out var n) ? n : "", _dir, () => true, Own, after);
+
+    // #3980: the default Drain is a completion barrier for the queued sweep (tests read volumes after it).
+    [Fact]
+    public void DefaultDrainWaitsForTheQueuedSweep()
+    {
+        CoreSettings.Current.MasterVolume = 100;
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var started = new ManualResetEventSlim();
+        using var returned = new ManualResetEventSlim();
+        var d = Make(gate.Task);
+        d.Duck(80);
+        var thread = new Thread(() => { started.Set(); d.Drain(); returned.Set(); }) { IsBackground = true };
+        thread.Start();
+        try
+        {
+            Assert.True(started.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+            Assert.False(returned.Wait(TimeSpan.FromMilliseconds(2500), TestContext.Current.CancellationToken), "Drain returned before the queued sweep ran");
+            gate.TrySetResult(true);
+            Assert.True(returned.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "Drain did not finish after the sweep was released");
+            Assert.Equal(0.16f, _vol[10], 3);
+        }
+        finally
+        {
+            gate.TrySetResult(true);
+            thread.Join(TimeSpan.FromSeconds(10));
+            d.ForceUnduck();
+            d.Drain();
+        }
+    }
+
+    // #3980: shutdown keeps its own bounded wait, so a stalled sweep never hangs the exit.
+    [Fact]
+    public async Task ShutdownKeepsItsBoundedWaitForAStalledSweep()
+    {
+        CoreSettings.Current.MasterVolume = 100;
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var d = Make(gate.Task);
+        d.Duck(80);
+        var shutdown = Task.Factory.StartNew(d.Shutdown, TaskCreationOptions.LongRunning);
+        try
+        {
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.False(d.IsDucked);
+        }
+        finally
+        {
+            gate.TrySetResult(true);
+            await shutdown;
+            d.Drain();
+        }
+    }
 
     [Fact]
     public void DucksOtherAppsByTheStrengthButNeverOurselvesPidZeroOrWebView2_ThenHandsBack()
