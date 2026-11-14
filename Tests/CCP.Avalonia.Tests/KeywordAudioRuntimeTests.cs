@@ -176,6 +176,59 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact] // WPF MainWindow.xaml.cs:1157,1192-1206 (restack b221, #4551)
+    public Task PanicSuspendsOcrAndRecoveryChecksSwitchesAndAccess() => RunAsync(async (_, s, _) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
+        var oldTeardown = PanicWatchdog.Teardown;
+        var oldPost = PanicWatchdog.PostRecovery;
+        Action? recovery = null;
+        var scans = 0;
+        var scansDuringFallback = -1;
+        KeywordTriggerHead.OcrSource = _ => { scans++; return Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]); };
+        try
+        {
+            s.KeywordTriggersEnabled = true; s.ScreenOcrEnabled = true; s.ScreenOcrIntervalMs = 60000;
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            PanicWatchdog.PostRecovery = action => recovery = action;
+            PanicWatchdog.Teardown = () =>
+            {
+                KeywordTriggerHead.SyncOcr(); // a concurrent switch sync cannot restart capture
+                _ = KeywordTriggerHead.TickOcrForTest();
+                scansDuringFallback = scans;
+            };
+            await PanicWatchdog.Arm(new TaskCompletionSource().Task, TimeSpan.FromMilliseconds(10));
+            Assert.Equal(1, scansDuringFallback);
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            Assert.NotNull(recovery);
+            s.KeywordTriggersEnabled = false; recovery!();
+            s.KeywordTriggersEnabled = true; await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            var generation = KeywordTriggerHead.SuspendOcrForPanic();
+            s.ScreenOcrEnabled = false; KeywordTriggerHead.RecoverOcrAfterPanic(generation);
+            s.ScreenOcrEnabled = true; await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            generation = KeywordTriggerHead.SuspendOcrForPanic();
+            CoreEntitlement.HasPremiumProvider = () => false;
+            KeywordTriggerHead.RecoverOcrAfterPanic(generation);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            var older = KeywordTriggerHead.SuspendOcrForPanic();
+            generation = KeywordTriggerHead.SuspendOcrForPanic();
+            KeywordTriggerHead.RecoverOcrAfterPanic(older);
+            KeywordTriggerHead.SyncOcr(); await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(1, scans);
+            KeywordTriggerHead.RecoverOcrAfterPanic(generation);
+            await KeywordTriggerHead.TickOcrForTest(); Assert.Equal(2, scans);
+        }
+        finally
+        {
+            PanicWatchdog.Teardown = oldTeardown; PanicWatchdog.PostRecovery = oldPost;
+            KeywordTriggerHead.RecoverOcrAfterPanic(KeywordTriggerHead.SuspendOcrForPanic());
+            KeywordTriggerHead.OcrSource = null;
+            (s.ScreenOcrEnabled, s.ScreenOcrIntervalMs) = saved;
+        }
+    });
+
+
     [Fact] // WPF BarkService.cs:1972,2008 (SelfEchoMuteMs 8000); KeywordTriggerService.cs:128-146
     public void SpokenBarkMutesItsExactLineForEightSeconds() => Run((engine, s, played) =>
     {
@@ -194,8 +247,8 @@ public sealed class KeywordAudioRuntimeTests
             BarkHead.AttachEcho(bark); bark.Start();
             Assert.True(bark.Raise("T"));
             Type(engine, "sit"); Assert.Empty(played);
-            clock = clock.AddSeconds(7.9); Type(engine, "sit"); Assert.Empty(played);
-            clock = new DateTime(2026, 10, 14, 12, 0, 8); Type(engine, "sit"); Assert.Single(played);
+            engine.ClearInput(); clock = clock.AddSeconds(7.9); Type(engine, "sit"); Assert.Empty(played);
+            engine.ClearInput(); clock = new DateTime(2026, 10, 14, 12, 0, 8); Type(engine, "sit"); Assert.Single(played);
         }
         finally
         {
