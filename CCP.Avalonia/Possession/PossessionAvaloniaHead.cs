@@ -161,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new CrackEffect());
             list.Add(new RelabelEffect());
             list.Add(new MisrouteEffect());
+            list.Add(new RoomWarpEffect());
             return list;
         }
 
