@@ -129,14 +129,23 @@ namespace ConditioningControlPanel.Services.Deeper
             }
         }
 
-        private static async Task<double?> ProbeLibVlcAsync(string path)
+        private static Task<double?> ProbeLibVlcAsync(string path)
+        {
+            var vlc = VideoService.SharedLibVLC;
+            return vlc == null ? Task.FromResult<double?>(null) : ProbeLibVlcAsync(vlc, path);
+        }
+
+        /// <summary>
+        /// The parse goes through <see cref="LibVlcParse.ParseOffCallbackAsync"/>: awaiting
+        /// <c>media.Parse</c> directly resumed on libvlc's ParsedChanged thread, and the
+        /// <c>using</c> then freed the media under libvlc (native heap corruption, restack fixw4c).
+        /// </summary>
+        internal static async Task<double?> ProbeLibVlcAsync(LibVLC vlc, string path)
         {
             try
             {
-                var vlc = VideoService.SharedLibVLC;
-                if (vlc == null) return null;
                 using var media = new Media(vlc, path, FromType.FromPath);
-                var status = await media.Parse(MediaParseOptions.ParseLocal, VlcParseTimeoutMs).ConfigureAwait(false);
+                var status = await LibVlcParse.ParseOffCallbackAsync(media, MediaParseOptions.ParseLocal, VlcParseTimeoutMs).ConfigureAwait(false);
                 if (status != MediaParsedStatus.Done) return null;
                 var ms = media.Duration;
                 return ms > 0 ? ms / 1000.0 : null;
