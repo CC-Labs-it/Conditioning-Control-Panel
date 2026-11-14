@@ -204,7 +204,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 var name = set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png";
 
                 // The preview exhibit keeps WPF's mock Portrait = null: the gradient placeholder disc.
-                if (ViewModel is { IsPreview: false } vm) vm.Portrait = ModArt.TryLoad(name);
+                // WPF CompanionHeroRuntimeVm.cs:207-209 keeps the last art when the next pose cannot load (#4010).
+                if (ViewModel is { IsPreview: false } vm && ModArt.TryLoad(name) is { } portrait) vm.Portrait = portrait;
                 CentrePortrait();
             }
             catch (Exception ex)
