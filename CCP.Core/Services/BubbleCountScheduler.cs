@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Services
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
-        private int _retryCount;
+        private int _retryCount, _generation;
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -290,7 +290,13 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
-            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete, OnSkipped); }
+            var generation = ++_generation;
+            try
+            {
+                _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
+                    success => { if (generation == _generation) OnComplete(success); },
+                    () => { if (generation == _generation) OnSkipped(); });
+            }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
         }
@@ -306,6 +312,7 @@ namespace ConditioningControlPanel.Services
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            var generation = ++_generation; // retire the clip callback before showing a message
             if (success)
             {
                 _retryCount = 0;
@@ -333,13 +340,13 @@ namespace ConditioningControlPanel.Services
             if (_retryCount >= s.MercyAfterFails && s.MercySystemEnabled)   // #1145: 2..10, default 3
             {
                 Log.Information("Bubble count mercy after {Retries} retries", _retryCount);
-                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { _retryCount = 0; Idle(); });
+                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation) return; _retryCount = 0; Idle(); });
                 return;
             }
             Log.Information("Bubble count retry {Count} (mercy at {Mercy})", _retryCount, s.MercyAfterFails);
             _host.ShowMessage(CoreMods.BubbleCountRetryMessage ?? "WRONG!\nWATCH AGAIN", 2000, () =>
             {
-                if (!IsBusy) return;   // panic during the message
+                if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
                 if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
             });
         }
@@ -352,6 +359,7 @@ namespace ConditioningControlPanel.Services
 
         private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
+            _generation++; // invalidate callbacks from a closed round
             IsBusy = false;
             if (HoldsEffects)
             {

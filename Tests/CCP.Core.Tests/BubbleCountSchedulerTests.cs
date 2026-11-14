@@ -334,6 +334,45 @@ public sealed class BubbleCountSchedulerTests
         Assert.Equal(3, host.Shown.Count);
     });
 
+    [Theory]
+    [InlineData("clip")]
+    [InlineData("retry")]
+    [InlineData("mercy")]
+    public void Old_callbacks_cannot_change_a_new_round_after_cleanup(string phase) => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var oldThreshold = CoreSettings.Current.MercyAfterFails;
+        CoreSettings.Current.MercyAfterFails = 2;
+        try
+        {
+            b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            Action stale;
+            if (phase == "clip") stale = () => host.Shown[0].Done(false);
+            else
+            {
+                host.Shown[0].Done(false);
+                if (phase == "mercy")
+                {
+                    host.Messages[0].Then();
+                    host.Shown[1].Done(false);
+                }
+                stale = host.Messages[^1].Then;
+            }
+            b.ForceCleanup();
+            b.Trigger(forceTest: true);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            var shown = host.Shown.Count;
+            var messages = host.Messages.Count;
+            stale();
+            Assert.True(b.IsBusy);
+            Assert.Equal(shown, host.Shown.Count);
+            Assert.Equal(messages, host.Messages.Count);
+        }
+        finally { b.ForceCleanup(); CoreSettings.Current.MercyAfterFails = oldThreshold; }
+    });
+
     /// <summary>#1145: the Mercy picker moves the threshold (here 2 wrong tries).</summary>
     [Fact]
     public void Mercy_comes_after_the_picked_number_of_fails() => With(true, true, true, () =>
