@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -78,12 +79,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The one relay client (WPF App.RemoteControl). Commands run through Core's gate and table.
         /// Tests swap in a fake-relay client before opening the shell.</summary>
-        internal static Lazy<RemoteRelay> Relay = new(() => Platform.ChasterHead.WireRemoteNotes(App.WireRemoteQuestProgress(new RemoteRelay(
+        internal static Lazy<RemoteRelay> Relay = NewRelay();
+
+        internal static Lazy<RemoteRelay> NewRelay() => new(() => Platform.ChasterHead.WireRemoteNotes(App.WireRemoteQuestProgress(new RemoteRelay(
             () => CoreSettings.Current.AuthToken, () => CoreAccount.UnifiedUserId, CoreReleaseContent.AppVersion,
             ExecuteRemoteCommand, RemoteCommands.StopEffects))));
 
+        /// <summary>WPF RemoteControlService.cs:1586/:1597: pause and stop run on the shell.
+        /// Other commands retain the Core table and its explicit refusals.</summary>
         internal static string? ExecuteRemoteCommand(string action, Newtonsoft.Json.Linq.JObject? parameters)
         {
+            if (action == "stop_session") { Windows.MainShellWindow.StopSessionFromRemote(); return null; }
             if (action == "pause_session")
             {
                 // WPF RemoteControlService.cs:1586 -> MainWindow.RemoteControl.cs:1341, no XP dialog.

@@ -24,15 +24,18 @@ public sealed class RemoteWearerWiringTests
     public void The_relay_runs_cores_executor_and_stop_so_every_end_path_hands_back()
     {
         var tab = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Tabs", "RemoteControlTabView.axaml.cs"));
-        // The head intercepts only pause_session (it needs the shell); every other verb falls through to Core.
+        // The head intercepts pause_session and stop_session (they need the shell); every other verb falls through to Core.
+        Assert.Contains("Relay = NewRelay();", tab);
         Assert.Contains("ExecuteRemoteCommand, RemoteCommands.StopEffects", tab);
         var exec = tab.Substring(tab.IndexOf("internal static string? ExecuteRemoteCommand(", StringComparison.Ordinal));
-        exec = exec.Substring(0, exec.IndexOf("\n        }", StringComparison.Ordinal));
+        exec = exec.Substring(0, exec.IndexOf("
+        }", StringComparison.Ordinal));
         // The Chaster head books an overlapping video attempt, then always runs Core's executor and returns its reason.
         Assert.EndsWith("return Platform.ChasterHead.ExecuteRemote(action, parameters);", exec.TrimEnd());
         var head = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "ChasterHead.cs"));
         var run = head.Substring(head.IndexOf("internal static string? ExecuteRemote(", StringComparison.Ordinal));
-        run = run.Substring(0, run.IndexOf("\n    }", StringComparison.Ordinal));
+        run = run.Substring(0, run.IndexOf("
+    }", StringComparison.Ordinal));
         Assert.Contains("var reason = RemoteCommands.Execute(action, parameters);", run);
         Assert.EndsWith("return reason;", run.TrimEnd());
         Assert.DoesNotContain("return null", run);

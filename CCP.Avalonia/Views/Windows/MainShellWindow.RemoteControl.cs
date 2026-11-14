@@ -4,7 +4,7 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session start and stop, the directory opt-in chain, tray minimise
+// ponytail: still missing here - remote-driven session start, the directory opt-in chain, tray minimise
 // for remote, the RemoteHud pill and remote
 // browser video playback and reveal.
 
@@ -24,6 +24,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        /// <summary>WPF MainWindow.RemoteControl.cs:1407-1425: end the run, then stop the engine.
+        /// Invalidate a start waiting on the Linux portal too, so it cannot undo the stop.</summary>
+        internal static void StopSessionFromRemote()
+        {
+            _engineGen++;
+            // WPF SessionEngine.cs:384 and MainWindow.StartStop.cs:547 force all ducks off on stop.
+            if (App.Sessions?.IsRunning == true || CoreEngine.IsRunning)
+            {
+                try { Platform.LibVlcAudio.Instance?.ForceUnduck(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote stop: force unduck failed"); }
+            }
+            if (App.Sessions is { IsRunning: true } runner) runner.Stop(completed: false);
+            if (CoreEngine.IsRunning) StopEngine();
+        }
+
         /// <summary>The Play door's Available Subjects entry. One ShowTab, as in WPF. The roster
         /// on that page is still filled by App.AvailableSubjects, so this opens an empty tab.</summary>
         private void BtnAvailableSubjects_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
