@@ -801,6 +801,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 ProgressionClear.Apply(CoreSettings.Current, clearMigration: true);
                 App.Achievements?.Reset();
                 AccountSeed.Sync?.Reset();
+                // WPF MainWindow.Login.cs:139-141 (restack b164, #3916): the quest file belongs to the previous
+                // account, so the new account's profile load wipes it and generates fresh ones afterwards
+                // (AccountSeed.ClaimLocalQuests), one path for every sign-in route.
+                App.Quests?.StampOwner(previousId);
             }
         }
 
