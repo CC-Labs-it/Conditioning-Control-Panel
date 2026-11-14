@@ -44,6 +44,23 @@ public sealed class CoreEngineTests
         finally { s.AudioOnlySession = false; CoreEngine.Stop(); CoreEngine.StoppedHook = null; CoreBouncingText.StartAction = CoreBouncingText.StopAction = null; }
     }
 
+    [Theory]
+    [InlineData(false, false, 1)]
+    [InlineData(false, true, 0)]
+    [InlineData(true, false, 0)]
+    [InlineData(true, true, 0)]
+    public void Start_counts_only_new_user_sessions(bool systemInitiated, bool resumingSession, int increment)
+    {
+        var s = CoreSettings.Current;
+        var before = s.TotalSessions;
+        try
+        {
+            CoreEngine.Start(resumingSession: resumingSession, systemInitiated: systemInitiated);
+            Assert.Equal(before + increment, s.TotalSessions);
+        }
+        finally { CoreEngine.Stop(); s.TotalSessions = before; }
+    }
+
     [Fact]
     public void Toggles_do_nothing_while_stopped_and_apply_live_while_running()
     {

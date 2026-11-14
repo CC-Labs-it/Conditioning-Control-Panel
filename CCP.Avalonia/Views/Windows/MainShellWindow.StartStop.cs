@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!systemInitiated) App.Achievements?.CheckRelapse();
                 // WPF StartEngineFromUser: a resume is not a new run; the parked session comes back after the start.
                 var resuming = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true };
-                CoreEngine.Start(resumingSession: resuming);
+                CoreEngine.Start(resumingSession: resuming, systemInitiated: systemInitiated);   // WPF StartStop.cs:341
                 StartEngineRamp();
                 if (resuming) App.Sessions?.ResumeAfterEngineStart();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
