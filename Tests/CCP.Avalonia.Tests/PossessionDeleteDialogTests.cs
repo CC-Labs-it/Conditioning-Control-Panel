@@ -28,6 +28,7 @@ public class PossessionDeleteDialogTests
         public IFrameSource PossessionFrames { get; } = new FakeFrames();
         public PossessionRuntime PossessionEffectRuntime => throw new NotSupportedException();
         public Point PointerPosition => default;
+        public PossessionPointer PossessionPointer { get; } = new();
         public Rect? BoundsOnGhostLayer(Control element) => null;
         public IReadOnlyList<PossessionTarget> Targets => Array.Empty<PossessionTarget>();
         public bool IsUsable => true;
