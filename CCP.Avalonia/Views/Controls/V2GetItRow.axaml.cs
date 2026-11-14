@@ -23,12 +23,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     {
         private string _prizeId = string.Empty;
         private string _nameKey = string.Empty;
+        private bool _available = true;
         private V2PurchaseService? _wired;
 
         /// <summary>Raised after the row repaints, so the panel can re-measure its box.</summary>
         public event EventHandler? RowChanged;
 
-        /// <summary>True while the account owns the prize: the box should ignore this row entirely.</summary>
+        /// <summary>True when the prize is owned or its offer is unavailable on this head.</summary>
         public bool IsRowHidden { get; private set; } = true;
 
         /// <summary>The row the last <see cref="Apply"/> drew (tests read it).</summary>
@@ -51,17 +52,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         private IDisposable? _shown;
+        // An event repaint queued before detach must not run after it (the host rebuilds on reattach).
+        private bool _listening;
 
         /// <summary>WPF IsVisibleChanged -> EnsureState: the counter is read the first time the row is
         /// genuinely on screen (the whole ancestor chain), never at startup.</summary>
-        private void EnsureStateIfShown()
+        private async void EnsureStateIfShown()
         {
-            if (IsEffectivelyVisible) _wired?.EnsureState();
+            if (!IsEffectivelyVisible || _wired is not { } svc) return;
+            var pending = svc.LastBackgroundRead;
+            svc.EnsureState();
+            // A prior account's read can still be in flight when the identity changes. Once it
+            // finishes, try for the current account, but only if this row is still on screen.
+            if (!ReferenceEquals(pending, svc.LastBackgroundRead)) return;
+            try { await pending; } catch { return; }
+            if (ReferenceEquals(_wired, svc) && IsEffectivelyVisible) svc.EnsureState();
         }
 
         /// <summary>Name the prize this row sells (WPF Configure; nameKey names it in the confirm and toast).</summary>
-        public void Configure(string prizeId, string blurbKey, string nameKey)
+        public void Configure(string prizeId, string blurbKey, string nameKey, bool available = true)
         {
+            _available = available;
             _prizeId = prizeId;
             _nameKey = nameKey;
             TxtBlurb.Text = Loc.Get(blurbKey);
@@ -71,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            _listening = true;
             // WPF repaints on V2PurchaseService.Changed and PrizeGrants.GrantsChanged; a sign-in or
             // sign-out moves the row too (P41: subscribed on attach, dropped on detach).
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
@@ -87,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            _listening = false;
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnServiceChanged;
             if (_wired is { } svc)
@@ -100,10 +113,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             base.OnDetachedFromVisualTree(e);
         }
 
-        private void OnIdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(Apply);
+        private void OnIdentityChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_listening) return;
+            Apply();
+            EnsureStateIfShown();
+        });
 
         // The service finishes its work off the UI thread, so every repaint is marshalled.
-        private void OnServiceChanged() => Dispatcher.UIThread.Post(Apply);
+        private void OnServiceChanged() => Dispatcher.UIThread.Post(() => { if (_listening) Apply(); });
 
         private void OnBought(string prizeId) => Dispatcher.UIThread.Post(() =>
         {
@@ -121,6 +139,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public void Apply()
         {
             if (string.IsNullOrEmpty(_prizeId)) return;
+            if (!_available)
+            {
+                IsRowHidden = true;
+                IsVisible = false;
+                RowChanged?.Invoke(this, EventArgs.Empty);
+                return;
+            }
             var row = Row = V2PurchaseHead.Service?.RowFor(_prizeId)
                 ?? Decide(_prizeId, FriendsHead.Identity() != null, PrizeOwnership.IsGranted);
 
@@ -153,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// confirm the spend and buys at the price it showed.</summary>
         private async void BtnGet_Click(object? sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_prizeId)) return;
+            if (!_available || string.IsNullOrEmpty(_prizeId)) return;
             var svc = V2PurchaseHead.Service;
             var row = svc?.RowFor(_prizeId) ?? Row;
 
@@ -161,6 +186,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 var open = OpenLogin ?? (() => (TopLevel.GetTopLevel(this) as MainShellWindow)?.OpenUnifiedLoginDialog() ?? Task.CompletedTask);
                 await open();
+                // Signing back in to the same account raises no identity event, so repaint and read here.
+                Apply();
+                EnsureStateIfShown();
                 return;
             }
             // No price on the row means no press: a confirm reading "Spend 0 Sparkle Points" must never
@@ -174,7 +202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     ?? (Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow) is { } owner
                 ? MessageDialog.ConfirmAsync(owner, t, b, okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"))
                 : Task.FromResult(false));
-            if (!await confirm(title, body)) return;
+            if (!await confirm(title, body) || !_available) return;
 
             // The price that was confirmed travels with the request: if the counter has repriced in
             // between, the service refuses rather than charging a number the player never saw.

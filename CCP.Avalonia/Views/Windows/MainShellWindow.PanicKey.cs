@@ -386,6 +386,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             finally { PanicBindingSync.Release(); }
         }
 
+        // The head posts to the UI after the portal answers; tests can hold that posted callback.
+        internal static Action<Action> PostPortalStart = start => Dispatcher.UIThread.Post(start);
+
         internal static void StartEffect(Action start)
         {
             if (PortalStartQueue.Count == 0 && ((!_portalAllowed && PortalPanicShortcut.BindForTests == null)
@@ -401,7 +404,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _portalBind ??= BindPortalAsync();
             // Post as soon as binding completes, including an already-completed bind. Leaving the
             // continuation on the thread pool can keep the portal alive after the last effect stops.
-            _portalBind.ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            _portalBind.ContinueWith(_ => PostPortalStart(() =>
             {
                 while (PortalStartQueue.Count > 0)
                 {
