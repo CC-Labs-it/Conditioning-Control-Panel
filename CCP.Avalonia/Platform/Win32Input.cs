@@ -45,9 +45,10 @@ internal static class Win32Input
             OnPauseKeyDown(vk);
             if (vk != VirtualKeys.Escape || _escDown) return;   // a held Esc is one press here too
             _escDown = true;
-            // WPF checks WantsGlobalEscape in the hook: post only while a non-strict clip is up (a racy
-            // pre-filter; EscapeDoor re-checks on the UI thread), never every Escape in every app.
-            if (MandatoryVideoOverlay.Instance.WantsGlobalEscape) Dispatcher.UIThread.Post(EscapeDoor);
+            // WPF MainWindow.xaml.cs:858-874 decides at the press: a lock card or the palette open NOW owns
+            // this Esc, even if its own handler closes it before EscapeDoor runs. One path with X11
+            // (X11PanicKey.QueueVideoEscape posts EscapeDoor, which re-checks on the UI thread).
+            X11PanicKey.QueueVideoEscape();
         };
         Win32PanicKey.KeyUp += (vk, _) =>
         {

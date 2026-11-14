@@ -41,6 +41,7 @@ public sealed class AwarenessSeenAppsTests
             s.KeywordTriggerAppScope = AwarenessAppScope.Everywhere;
             s.KeywordTriggerIgnoreOwnFocus = true;
             Assert.True(engine.NeedsForeground(now.AddMilliseconds(2002)));
+            Assert.Equal((null, false), KeywordTriggerHead.Foreground(0));
         }
         finally
         {

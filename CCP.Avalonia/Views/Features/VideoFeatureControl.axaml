@@ -158,6 +158,10 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <!-- WPF VideoFeatureControl.xaml:230: floating windows skip the attention checks. -->
+                            <TextBlock x:Name="TxtFloatingNoChecks" Text="{loc:Str video_appearance_no_checks_note}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="14,0,0,2"
+                                       IsVisible="False"/>
                             <TextBlock x:Name="TxtAppearanceNote" Text="{loc:Str video_appearance_strict_note}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
                                        IsVisible="False"/>

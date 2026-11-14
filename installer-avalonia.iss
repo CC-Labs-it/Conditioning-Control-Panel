@@ -42,21 +42,22 @@ InfoBeforeFile=INSTALL_AVALONIA.txt
 ; Compression
 #include "installer-avalonia-code-6.iss"
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
+Name: "english"; MessagesFile: "compiler:Default.isl,installer-notices\en.isl"; InfoBeforeFile: "INSTALL_AVALONIA.txt"
 Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl,installer-notices\zh-CN.isl"; InfoBeforeFile: "installer-notices\zh-CN.txt"
-Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"; InfoBeforeFile: "installer-notices\ja.txt"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl,installer-notices\ja.isl"; InfoBeforeFile: "installer-notices\ja.txt"
 Name: "korean"; MessagesFile: "compiler:Default.isl,installer-notices\ko.isl"; InfoBeforeFile: "installer-notices\ko.txt"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"; InfoBeforeFile: "installer-notices\es.txt"
-Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"; InfoBeforeFile: "installer-notices\fr.txt"
-Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"; InfoBeforeFile: "installer-notices\it.txt"
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"; InfoBeforeFile: "installer-notices\de.txt"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"; InfoBeforeFile: "installer-notices\ru.txt"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl,installer-notices\es.isl"; InfoBeforeFile: "installer-notices\es.txt"
+Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl,installer-notices\pt-BR.isl"; InfoBeforeFile: "installer-notices\pt-BR.txt"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl,installer-notices\fr.isl"; InfoBeforeFile: "installer-notices\fr.txt"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl,installer-notices\it.isl"; InfoBeforeFile: "installer-notices\it.txt"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl,installer-notices\de.isl"; InfoBeforeFile: "installer-notices\de.txt"
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl,installer-notices\ru.isl"; InfoBeforeFile: "installer-notices\ru.txt"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
-Name: "fileassoc"; Description: "Add 'Open with CCP' to right-click menu for media files (.mp4, .mp3, etc.)"; GroupDescription: "File associations:"; Flags: unchecked
+; FileAssocTask / FileAssocGroup: installer-notices\<code>.isl (WPF installer.iss:113 text, translated).
+Name: "fileassoc"; Description: "{cm:FileAssocTask}"; GroupDescription: "{cm:FileAssocGroup}"; Flags: unchecked
 
 [Files]
 ; Microsoft Visual C++ 2015-2022 x64 runtime bootstrapper. OpenCvSharpExtern.dll

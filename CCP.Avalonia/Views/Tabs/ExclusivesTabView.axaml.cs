@@ -604,13 +604,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// ponytail: "fyp" opens the feed and "justdrop" opens its GameWindow; Breakout and Down the Rabbit Hole open the
-        /// Play wall's doors (OpenExclusiveFeature). "backroom" (WPF BtnStartBackRoom_Click), Goon hosting and Arcademy
-        /// have no host on this head, and
-        /// Focus Gaze's Play-wall switch is still inert (PlayTabView.ChkFocusGaze_Changed); add it back when that works.
+        /// Play wall's doors and Focus Gaze shows its Play-wall switch (OpenExclusiveFeature). "backroom" (WPF
+        /// BtnStartBackRoom_Click), Goon hosting and Arcademy have no host on this head.
         /// Their cards stay visible but inert (no hand, honest tooltip) and never reach ShowTab or a bark.
         /// </summary>
         internal static bool IsOnThisBuild(string key) =>
-            key is not ("backroom" or "goon" or "arcademy" or "focusgaze");
+            key is not ("backroom" or "goon" or "arcademy");
 
         /// <summary>WPF Views/Tabs/ExclusivesTabView.xaml.cs:175: Account &amp; Plans links to the full page.</summary>
         private void SeePremium_Click(object? sender, RoutedEventArgs e)

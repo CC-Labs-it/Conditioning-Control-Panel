@@ -253,6 +253,31 @@ public sealed class PresetsFocalFxTests
         Assert.Equal(-2, slide.Y); // A later arrival frame must not override the hover.
     });
 
+    [Fact] // WPF replaces only the hovered row's rise, from where it is; its fade and the other rows keep arriving.
+    public Task HoverDuringArrivalStartsFromTheVisiblePosition() => WithPresets((host, view, animation) =>
+    {
+        view.IsVisible = false; Settle(animation);
+        view.IsVisible = true; Settle(animation);
+        var rows = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().ToArray();
+        var row = rows[0];
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        animation.Attach(slide); // a transform is not in the tree: give its hover transition the stepped clock
+        animation.Step(50); Settle(animation);
+        var from = slide.Y;
+        Assert.True(from > 0, $"Expected a running arrival, got {from}.");
+        host.MouseMove(Center(host, row)); Settle(animation);
+        Assert.True(row.IsPointerOver);
+        Assert.Equal(from, slide.Y, 5);
+        Assert.True(row.Opacity < 1, "Hover must not cancel the row's fade.");
+        if (rows.Length > 1)
+            Assert.True(Assert.IsType<TransformGroup>(rows[1].RenderTransform).Children.OfType<TranslateTransform>().Single().Y > 0,
+                "Hover must not cancel another row's arrival.");
+        animation.Step(125); Settle(animation);
+        Assert.Equal(from + (-2 - from) * 0.75, slide.Y, 4);
+        animation.Step(200); Settle(animation);
+        Assert.Equal(-2, slide.Y, 4);
+    });
+
     [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view, animation) =>
     {
