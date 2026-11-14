@@ -96,7 +96,6 @@ internal sealed partial class EmiDeskService
     private global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow? _speakingTube;
     private bool TubeVoiceLive() =>
         (_speakingTube ?? global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live)?.VoiceHoldLive == true;
-    internal bool AvatarHoldPolling => _avatarHoldTimer != null;
     /// <summary>The tube's speech chokepoints call this the instant before a bubble goes up, muted or not.</summary>
     internal void NoteAvatarSpeaking(global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow? tube = null)
     {
