@@ -107,13 +107,16 @@ public sealed class FriendNoticesTests
     public Task GentleVisualsSlowTheArrivalAndLengthenTheDismissFade() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Platform();
-        var settings = CoreSettings.Current;
-        var (oldLevel, oldGentle, oldProbe, oldTime) = (settings.MotionLevel, settings.GentleVisuals, UiMotionPreference.OsProbe, BeatLoop.Time);
+        var (oldProvider, oldProbe, oldTime) = (CoreSettings.ServiceProvider, UiMotionPreference.OsProbe, BeatLoop.Time);
+        var service = new ConditioningControlPanel.Services.SettingsService();
         try
         {
+            CoreSettings.ServiceProvider = () => service;
+            var settings = CoreSettings.Current;
             BeatLoop.Time = new SteppedTime();
             UiMotionPreference.OsProbe = () => true; UiMotionPreference.CacheStamp = long.MinValue;
             settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full; settings.GentleVisuals = true;
+            settings.GentleFadeSeconds = 0.75;
             FriendNotices.Present(null, new FriendNotice(NoticeKind.Poke, "a", "A", DateTimeOffset.UtcNow, 6000), new NoticeLook());
             var w = FriendNotices.Current!;
             var card = ((StackPanel)w.Content!).Children.OfType<Border>().Single();
@@ -132,7 +135,7 @@ public sealed class FriendNoticesTests
         finally
         {
             FriendNotices.CloseAll(); BeatLoop.Time = oldTime;
-            settings.MotionLevel = oldLevel; settings.GentleVisuals = oldGentle;
+            CoreSettings.ServiceProvider = oldProvider;
             UiMotionPreference.OsProbe = oldProbe; UiMotionPreference.CacheStamp = long.MinValue;
         }
         return Task.CompletedTask;
@@ -599,7 +602,8 @@ public sealed class FriendNoticesTests
             for (int i = 0; i < 2; i++) FriendNotices.Present(anchor,
                 new FriendNotice(NoticeKind.Request, i.ToString(), "Friend", DateTimeOffset.UtcNow, 8000), new NoticeLook());
             var notice = FriendNotices.Current!; notice.Stack.Paused = true; Dispatcher.UIThread.RunJobs(); var height = notice.Bounds.Height;
-            anchor.Close(); notice.Dismiss(notice.Stack.All[0], false); notice.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            anchor.Close(); notice.Dismiss(notice.Stack.All[0], false); notice.Advance(FriendNotices.DismissFadeMs);
+            notice.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             Assert.Single(notice.Stack.All); Assert.True(notice.Bounds.Height < height);
             var screen = notice.Screens.Primary!; var area = screen.WorkingArea; var scale = screen.Scaling;
             var (x, y) = FriendNoticeRules.Place(area.X / scale, area.Y / scale, area.Width / scale, area.Height / scale, notice.Bounds.Width, notice.Bounds.Height);
