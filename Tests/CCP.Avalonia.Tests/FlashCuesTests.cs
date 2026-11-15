@@ -21,6 +21,49 @@ namespace CCP.Avalonia.Tests;
 
 public class FlashCuesTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task FlashTestsPreserveFullLuminanceCache(int scenario)
+    {
+        var cache = (Dictionary<string, double>)typeof(FlashOverlay).GetField("LuminanceCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        var original = cache.ToArray();
+        var oldService = CoreHaptics.Service;
+        using var service = new HapticService(new HapticSettings { LuminanceSyncEnabled = true, LuminanceSyncIntensity = 0.6 });
+        try
+        {
+            cache.Clear();
+            for (int i = 0; i < 500; i++) cache.Add($"sentinel-{i}", i / 500.0);
+            var expected = cache.ToArray();
+            CoreHaptics.Service = service;
+            switch (scenario)
+            {
+                case 0: await ShownPicturesDriveLuminanceOnlyWhenEnabled(); break;
+                case 1: await BurstSuppressionReachesScheduledFlashes(false); break;
+                case 2: await new JackpotRemixFlowTests().OwnedToggleAndCachedRemixReachAnimatedFlashAndCleanUp(); break;
+                case 3: await new JackpotRemixFlowTests().RemixLuminanceFollowsSuccessfulSpawns(false, true, false, 2); break;
+                case 4:
+                    Assert.Throws<InvalidOperationException>((Action)(() =>
+                    {
+                        using var isolation = new FlashLuminanceCacheIsolation();
+                        cache["temporary"] = 1;
+                        throw new InvalidOperationException();
+                    }));
+                    break;
+            }
+            Assert.Equal(expected.OrderBy(x => x.Key), cache.OrderBy(x => x.Key));
+        }
+        finally
+        {
+            CoreHaptics.Service = oldService;
+            cache.Clear();
+            foreach (var pair in original) cache.Add(pair.Key, pair.Value);
+        }
+    }
+
     private static Bitmap Picture(byte value)
     {
         var pixels = new byte[8 * 8 * 4];
@@ -34,6 +77,7 @@ public class FlashCuesTests
     [Fact]
     public Task ShownPicturesDriveLuminanceOnlyWhenEnabled() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        using var cache = new FlashLuminanceCacheIsolation();
         var settings = new HapticSettings { LuminanceSyncEnabled = true, LuminanceSyncIntensity = 0.6 };
         using var service = new HapticService(settings);
         var oldService = CoreHaptics.Service;
@@ -76,6 +120,7 @@ public class FlashCuesTests
     [InlineData(false)]
     public Task BurstSuppressionReachesScheduledFlashes(bool suppress) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var cache = new FlashLuminanceCacheIsolation();
         var root = Directory.CreateTempSubdirectory("ccp-flash-suppression-").FullName;
         var images = Directory.CreateDirectory(Path.Combine(root, "images")).FullName;
         using (var picture = Picture(255)) picture.Save(Path.Combine(images, "white.png"));
@@ -124,4 +169,24 @@ public class FlashCuesTests
         }
     });
 
+}
+
+// These tests run serially, and the overlay cache is process-wide.
+internal sealed class FlashLuminanceCacheIsolation : IDisposable
+{
+    private readonly Dictionary<string, double> cache = (Dictionary<string, double>)typeof(FlashOverlay)
+        .GetField("LuminanceCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+    private readonly KeyValuePair<string, double>[] saved;
+
+    public FlashLuminanceCacheIsolation()
+    {
+        saved = cache.ToArray();
+        cache.Clear();
+    }
+
+    public void Dispose()
+    {
+        cache.Clear();
+        foreach (var pair in saved) cache.Add(pair.Key, pair.Value);
+    }
 }

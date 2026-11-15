@@ -23,6 +23,7 @@ public class JackpotRemixFlowTests
     [Fact]
     public Task OwnedToggleAndCachedRemixReachAnimatedFlashAndCleanUp() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        using var cache = new FlashLuminanceCacheIsolation();
         var s = CoreSettings.Current;
         var old = (s.JackpotRemixEnabled, s.MotionLevel, s.FlashClickable, s.CorruptionMode, s.HydraLimit, s.FlashStayUntilPopped, s.GlobalTargetMonitor);
         var own = PrizeOwnership.IsGranted;
@@ -110,6 +111,7 @@ public class JackpotRemixFlowTests
     public Task RemixLuminanceFollowsSuccessfulSpawns(bool suppress, bool enabled, bool refuseSecond, int expectedCount) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
+            using var cache = new FlashLuminanceCacheIsolation();
             var s = CoreSettings.Current;
             var old = (s.GlobalTargetMonitor, s.FlashClickable, s.FlashStayUntilPopped, s.HydraLimit);
             var saved = (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present, CoreProgression.AddXPProvider);
