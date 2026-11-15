@@ -107,6 +107,7 @@ namespace ConditioningControlPanel.Services
         public bool Adopted => _adopted;
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
         public Action? LifetimeLifted { get; set; }
+        public Action<JObject?>? ApplyLoginStreak { get; set; }
         public Action? ResetDailyQuest { get; set; }
         public Action? ResetWeeklyQuest { get; set; }
 
@@ -509,11 +510,14 @@ namespace ConditioningControlPanel.Services
         {
             bool daily = reply["reset_daily_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_daily_quest");
             bool weekly = reply["reset_weekly_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_weekly_quest");
-            if (!daily && !weekly) return;
+            // WPF ProfileSyncService.cs:2035-2057 settles a deferred break even without stats.
+            var stats = (reply["user"] as JObject)?["stats"] as JObject;
+            if (!daily && !weekly && ApplyLoginStreak == null) return;
             CoreDispatch.Post(() =>
             {
                 if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
                     || !SignedIn(s) || s.UnifiedId != account) return;
+                ApplyLoginStreak?.Invoke(stats);
                 if (daily) ResetDailyQuest?.Invoke();
                 if (weekly) ResetWeeklyQuest?.Invoke();
             });
