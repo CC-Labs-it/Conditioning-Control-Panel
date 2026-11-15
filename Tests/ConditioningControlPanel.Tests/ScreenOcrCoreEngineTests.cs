@@ -112,14 +112,15 @@ public class ScreenOcrCoreEngineTests
     }
 
     [Theory]
+    [InlineData("en-US")]
     [InlineData("ja-JP")]
     [InlineData("ru-RU")]
     [InlineData("zh-Hans-CN")]
-    public async Task NonLatinWindowsProfileUsesProfileEngine(string profile)
+    public async Task InstalledWindowsProfileUsesProfileEngine(string profile)
     {
         var profileEngine = new FakeEngine { Text = "こんにちは" };
         var coreEngine = new FakeEngine();
-        using var service = new ScreenOcrService(ScreenOcrService.SelectEngine(profile, () => profileEngine, () => coreEngine));
+        using var service = new ScreenOcrService(ScreenOcrEngineSelection.Select(profile, () => profileEngine, () => coreEngine));
         var (text, words) = await service.DecodeAndRecognizeAsync(new Bitmap(20, 10, PixelFormat.Format32bppArgb),
             new Rectangle(-100, 200, 20, 10), null);
         Assert.Equal("こんにちは", text);
@@ -129,13 +130,12 @@ public class ScreenOcrCoreEngineTests
     }
 
     [Theory]
-    [InlineData("en-US")]
     [InlineData(null)]
-    public void EnglishOrMissingProfileUsesCore(string? profile)
+    public void MissingProfileUsesCore(string? profile)
     {
         var profileEngine = new FakeEngine();
         var coreEngine = new FakeEngine();
-        using var selected = ScreenOcrService.SelectEngine(profile, () => profileEngine, () => coreEngine);
+        using var selected = ScreenOcrEngineSelection.Select(profile, () => profileEngine, () => coreEngine);
         Assert.Same(coreEngine, selected);
     }
 
@@ -145,6 +145,7 @@ public class ScreenOcrCoreEngineTests
         var language = new Windows.Globalization.Language("ja-JP");
         if (!Windows.Media.Ocr.OcrEngine.IsLanguageSupported(language))
         {
+            Assert.NotEqual("1", Environment.GetEnvironmentVariable("CCP_REQUIRE_JAPANESE_OCR"));
             Assert.Skip("Japanese Windows OCR language is not installed.");
             return;
         }

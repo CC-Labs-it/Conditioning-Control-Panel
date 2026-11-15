@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var windows = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
-                return SelectEngine(windows?.RecognizerLanguage.LanguageTag,
+                return ScreenOcrEngineSelection.Select(windows?.RecognizerLanguage.LanguageTag,
                     () => new WindowsProfileOcrEngine(windows!), () => new RapidScreenOcrEngine());
             }
             catch (Exception ex)
@@ -50,18 +50,6 @@ namespace ConditioningControlPanel.Services
                 App.Logger?.Debug("ScreenOcrService: Windows OCR unavailable: {Error}", ex.Message);
                 return new RapidScreenOcrEngine();
             }
-        }
-
-        internal static IScreenOcrEngine SelectEngine(string? languageTag,
-            Func<IScreenOcrEngine> windows, Func<IScreenOcrEngine> core)
-        {
-            // The bundled Core model supports Latin text. Preserve Windows profile language
-            // coverage for all other profiles rather than guessing their writing system.
-            if (!string.IsNullOrEmpty(languageTag) &&
-                !languageTag.Equals("en", StringComparison.OrdinalIgnoreCase) &&
-                !languageTag.StartsWith("en-", StringComparison.OrdinalIgnoreCase))
-                return windows();
-            return core();
         }
 
         internal ScreenOcrService(IScreenOcrEngine engine)

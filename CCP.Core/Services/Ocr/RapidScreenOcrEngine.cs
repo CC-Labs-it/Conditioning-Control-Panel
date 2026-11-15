@@ -23,6 +23,12 @@ public interface IScreenOcrEngine : IDisposable
     IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default);
 }
 
+internal static class ScreenOcrEngineSelection
+{
+    internal static IScreenOcrEngine Select(string? languageTag, Func<IScreenOcrEngine> windows, Func<IScreenOcrEngine> core) =>
+        string.IsNullOrEmpty(languageTag) ? core() : windows();
+}
+
 /// <summary>PP-OCRv5 latin through RapidOcrNet (https://github.com/BobLd/RapidOcrNet), CPU only.
 /// Models load on the first <see cref="Recognize"/>, from &lt;app dir&gt;/models/v5 (shipped by CCP.Core.csproj).</summary>
 public sealed class RapidScreenOcrEngine : IScreenOcrEngine

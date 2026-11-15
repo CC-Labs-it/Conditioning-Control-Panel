@@ -11,7 +11,7 @@ using OcrEngine = Windows.Media.Ocr.OcrEngine;
 
 namespace ConditioningControlPanel.Services
 {
-    /// <summary>Preserves the installed Windows profile language when the Core Latin model cannot cover it.</summary>
+    /// <summary>Uses the installed Windows profile language for WPF screen recognition.</summary>
     internal sealed class WindowsProfileOcrEngine : IScreenOcrEngine
     {
         private readonly OcrEngine _engine;
