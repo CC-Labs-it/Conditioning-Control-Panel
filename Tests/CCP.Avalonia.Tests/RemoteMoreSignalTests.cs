@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -22,6 +23,8 @@ public sealed class RemoteMoreSignalTests
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<JObject> Signals = new();
+        public readonly TaskCompletionSource<bool> FirstSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource<bool> SecondSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<bool>? NextSignalGate;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
@@ -31,7 +34,10 @@ public sealed class RemoteMoreSignalTests
                 Signals.Add(JObject.Parse(await request.Content!.ReadAsStringAsync(ct)));
                 var gate = NextSignalGate;
                 NextSignalGate = null;
-                if (gate != null) await gate.Task;
+                if (Signals.Count == 1) FirstSignal.TrySetResult(true);
+                if (Signals.Count == 2) SecondSignal.TrySetResult(true);
+                // Model a slow response even after the server has accepted the request.
+                if (gate != null) { await gate.Task; await Task.Delay(5000, ct); }
             }
             var body = path == "/v2/remote/start" ? "{\"code\":\"ABC123\"}"
                 : path == "/v2/remote/poll" ? "{\"controller_connected\":true}" : "{}";
@@ -47,11 +53,15 @@ public sealed class RemoteMoreSignalTests
         var oldAttention = MainShellWindow.RemoteJoinAttention;
         var oldSink = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
         var pending = new List<(TimeSpan Duration, CancellationToken Token, TaskCompletionSource<bool> Completion)>();
+        var confirmationReady = new TaskCompletionSource<bool>[6];
+        for (var i = 0; i < confirmationReady.Length; i++)
+            confirmationReady[i] = new(TaskCreationOptions.RunContinuationsAsynchronously);
         RemoteControlTabView.MoreConfirmationDelay = (duration, token) =>
         {
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             token.Register(() => completion.TrySetCanceled(token));
             pending.Add((duration, token, completion));
+            if (pending.Count <= confirmationReady.Length) confirmationReady[pending.Count - 1].TrySetResult(true);
             return completion.Task;
         };
         var fake = new FakeRelay();
@@ -83,27 +93,37 @@ public sealed class RemoteMoreSignalTests
             async Task Click(Button button, int count)
             {
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                for (var i = 0; i < 200 && pending.Count < count; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+                await confirmationReady[count - 1].Task.WaitAsync(TimeSpan.FromSeconds(30));
                 Assert.Equal(count, pending.Count);
                 Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[count - 1].Duration);
             }
             async Task Clear(TextBlock status, int index)
             {
-                pending[index].Completion.TrySetResult(true);
-                for (var i = 0; i < 200 && status.Text != ""; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
-                Assert.Equal("", status.Text);
+                var cleared = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                void OnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+                {
+                    if (e.Property == TextBlock.TextProperty && status.Text == "") cleared.TrySetResult(true);
+                }
+                status.PropertyChanged += OnChanged;
+                try
+                {
+                    pending[index].Completion.TrySetResult(true);
+                    await cleared.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                    Assert.Equal("", status.Text);
+                }
+                finally { status.PropertyChanged -= OnChanged; }
             }
 
             await Click(tabButton, 1);
             Assert.Equal(expected, tabStatus.Text);
             var gate = fake.NextSignalGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             tabButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            for (var i = 0; i < 200 && fake.Signals.Count < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            await fake.SecondSignal.Task.WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Equal(2, fake.Signals.Count);
             Assert.Equal(expected, tabStatus.Text); // the first confirmation stays until the next response
             Assert.False(pending[0].Token.IsCancellationRequested);
             gate.SetResult(true);
-            for (var i = 0; i < 200 && pending.Count < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            await confirmationReady[1].Task.WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Equal(2, pending.Count);
             Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[1].Duration);
             Assert.True(pending[0].Token.IsCancellationRequested);
@@ -159,7 +179,7 @@ public sealed class RemoteMoreSignalTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(button.IsVisible);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            for (int i = 0; i < 50 && fake.Signals.Count == 0; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            await fake.FirstSignal.Task.WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Single(fake.Signals);
             Assert.Equal("more", (string?)fake.Signals[0]["text"]);
             Assert.Equal("signal", (string?)fake.Signals[0]["kind"]);
