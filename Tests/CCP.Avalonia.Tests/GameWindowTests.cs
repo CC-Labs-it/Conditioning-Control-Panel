@@ -1367,9 +1367,10 @@ public sealed partial class GameWindowTests
     [InlineData(1)]
     public void Dtrh_BootError_reaches_the_classic_Hud(int completed) => RunDtrh(lab: true, (_, _, _, _) =>
     {
-        var oldIntro = ChaosMeta.State.SeenIntroGuide;
+        var originalMeta = ChaosMeta.State;
+        var oldIntro = originalMeta.SeenIntroGuide;
         ChaosMeta.State.RunsCompleted = completed;
-        ChaosMeta.State.SeenIntroGuide = true;
+        originalMeta.SeenIntroGuide = true;
         ChaosMeta.Save();   // the fallback routes from the loaded save, as WPF App.xaml.cs:2827 does
         ConditioningControlPanel.Avalonia.Views.Chaos.ChaosHubWindow? hub = null;
         void Opened(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
@@ -1403,7 +1404,7 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            ChaosMeta.State.SeenIntroGuide = oldIntro;
+            originalMeta.SeenIntroGuide = oldIntro;
             hub?.Close();
             ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
         }
