@@ -390,8 +390,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public bool TryFloatingTrigger(bool userInitiated)
         {
             if (!userInitiated || !Floating) return false;
-            // WPF VideoService.FloatingInstances.cs:131: a paused run cannot add or replace a window.
-            if (_gracePaused) return true;
             Scheduler.ForceCleanup();
             return Scheduler.Trigger(userInitiated: true);
         }
