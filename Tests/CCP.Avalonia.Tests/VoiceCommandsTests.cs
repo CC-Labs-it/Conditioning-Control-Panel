@@ -174,7 +174,9 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    // A silent room: with the WAV, the shell's own wake loop woke on it and its command listen matched a
+    // command Lockdown refuses, a second Stop escape from ListenForCommandAsync (Linux shard 4, PR 5230).
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(new byte[32000], async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
