@@ -25,7 +25,8 @@ internal sealed class MeltEffect : PossessionEffectBase
     private Task? _charge;
     private TimeSpan? _start;
     private double _amount, _from, _to, _duration, _amplitude;
-    private bool _hover;
+    private bool _hover, _returning;
+    private TaskCompletionSource? _returned;
     private int _generation;
 
     public override string Id => "melt";
@@ -100,16 +101,32 @@ internal sealed class MeltEffect : PossessionEffectBase
         _lease.Scale.ScaleY = 1 - 0.08 * amount;
         _lease.Translate.Y = 6 * amount;
         if (_blur != null) _blur.Radius = 2 * amount;
+        if (_returning && t >= 1) _returned?.TrySetResult();
     }
 
-    protected override Task UndoCoreAsync(TimeSpan duration)
+    protected override async Task UndoCoreAsync(TimeSpan duration)
     {
         ++_generation;
         if (_element != null) { _element.PointerEntered -= Enter; _element.PointerExited -= Leave; }
+        if (duration > TimeSpan.Zero && _lease != null && _frames != null)
+        {
+            double ms = Math.Clamp(duration.TotalMilliseconds, 300, 900);
+            _returning = true;
+            AnimateTo(0, ms);
+            var returned = _returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            // A stopped frame source must not leave the target leased indefinitely.
+            await Task.WhenAny(returned.Task, Task.Delay(TimeSpan.FromMilliseconds(ms + 100))).ConfigureAwait(true);
+        }
+        Finish();
+    }
+
+    private void Finish()
+    {
         _frames?.Unsubscribe(Frame);
         _effectValue?.Dispose(); _effectValue = null; _blur = null;
         _lease?.ReleaseImmediate(); _lease = null;
         _element = null; _frames = null; _charge = null; _hover = false; _amount = 0; _start = null;
-        return Task.CompletedTask;
+        _returning = false;
+        _returned?.TrySetResult(); _returned = null;
     }
 }
