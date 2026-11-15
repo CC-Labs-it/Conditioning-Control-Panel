@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// Serves Resources/web to this head's web views, standing in for WPF's WebView2
 /// SetVirtualHostNameToFolderMapping("ccp.game", Resources\web). Avalonia.Controls.WebView 12.1 cannot
 /// answer a custom scheme on WebKitGTK and file:// breaks module/fetch loads, so: plain HTTP on 127.0.0.1
-/// only, a random port, and a per-run token. The first URL carries ?ccp_t=token; the answer sets an
+/// only, a remembered port when available, and a per-run token. The first URL carries ?ccp_t=token; the answer sets an
 /// HttpOnly SameSite=Strict cookie so the page's own relative and root-relative loads keep working.
 /// Anything without the token, with a foreign Host header (DNS rebinding), or resolving outside the
 /// root is refused.
@@ -42,7 +42,8 @@ public sealed class WebAssetServer : IDisposable
             lock (_sharedLock)
             {
                 if (_shared != null) return _shared;
-                _shared = new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"))
+                _shared = new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"),
+                    Path.Combine(CorePaths.UserData, "web-asset-port.txt"))
                     { AssetsRoot = () => CorePaths.EffectiveAssets, ContentRoot = () => ContentLocator.ContentWebRoot };
                 // Every host's frames point Scrolller media at this server's relay origin (Core ScrolllerRelay.RewriteJson).
                 ScrolllerRelay.Relay = (_shared.RelayOrigin, _shared.Token);
@@ -65,7 +66,7 @@ public sealed class WebAssetServer : IDisposable
         [".woff2"] = "font/woff2", [".ttf"] = "font/ttf", [".wasm"] = "application/wasm",
     };
 
-    readonly HttpListener _listener = new(), _relayListener = new();
+    HttpListener _listener = new(), _relayListener = new();
     readonly string _root;
 
     public int Port { get; }
@@ -84,17 +85,41 @@ public sealed class WebAssetServer : IDisposable
 
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
-    public WebAssetServer(string root)
+    public WebAssetServer(string root, string? portFile = null)
     {
         _root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        Port = Bind(_listener);
-        RelayPort = Bind(_relayListener);
+        int preferred = 0;
+        if (portFile != null)
+        {
+            try { int.TryParse(File.ReadAllText(portFile), out preferred); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        Port = Bind(ref _listener, preferred);
+        if (portFile != null)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(portFile))!);
+                File.WriteAllText(portFile, Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        RelayPort = Bind(ref _relayListener);
         _ = Task.Run(() => Loop(_listener, relay: false));
         _ = Task.Run(() => Loop(_relayListener, relay: true));
     }
 
-    static int Bind(HttpListener listener)
+    static int Bind(ref HttpListener listener, int preferred = 0)
     {
+        if (preferred is > 0 and <= 65535)
+        {
+            var prefix = $"http://127.0.0.1:{preferred}/";
+            listener.Prefixes.Add(prefix);
+            try { listener.Start(); return preferred; }
+            catch (HttpListenerException) { listener.Close(); listener = new HttpListener(); }
+        }
         // ponytail: probe-then-bind can lose the port to another process in between; retry if that ever shows up.
         var probe = new TcpListener(IPAddress.Loopback, 0);
         probe.Start();
