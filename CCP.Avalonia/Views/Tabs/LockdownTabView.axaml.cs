@@ -366,6 +366,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            warn.Append("\n- The Emergency Exit button is a gamble: win its little game and you may leave early,\n")
+                .Append("  lose it and the timer restarts at its FULL length");
             AppendPossessionConsent(warn, cfg, Possession.PossessionAvaloniaHead.HasFullDokiEffects());
             return warn.ToString();
         }
