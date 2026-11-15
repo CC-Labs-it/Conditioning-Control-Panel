@@ -75,6 +75,7 @@ Controls/Icons/ :: * :: path: IconGlyph's spiral extension glyph (decisions 2026
 Controls/PremiumSpark.cs :: * :: path: D6 art - animated sparkle/particle effect, not an icon slot
 
 # --- art, D6 "keep as art" inside files that also hold icon Paths ---
+Possession/Effects/GhostCursorEffect.cs :: _arrow = new Path { Data = Geometry.Parse( :: path: animated ghost cursor silhouette, not a control icon (WPF GhostCursorEffect.cs:36,122)
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Check = Geometry.Parse( :: path: D6 art - completed-slip ink mark painted inside the WPF quest clipboard illustration, not a control icon
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Gem = Geometry.Parse( :: path: D6 art - reward gem painted on the WPF quest paper slips, not a control icon
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry SparkShape = Geometry.Parse( :: path: D6 art - twinkle and ink-burst particle geometry in the WPF clipboard scene, not a control icon
