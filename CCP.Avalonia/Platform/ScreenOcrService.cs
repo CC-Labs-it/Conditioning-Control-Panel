@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Ocr;
+using ConditioningControlPanel.Services.ScreenCapture;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -20,6 +23,26 @@ internal sealed class ScreenOcrService : IDisposable
     private CancellationTokenSource? _run;
     private int _scanning;
     internal int IntervalMs { get; private set; }
+
+    /// <summary>The live <see cref="KeywordTriggerHead.OcrSource"/>: null when this desktop cannot be captured
+    /// (native Wayland, sandbox) or the OCR models are missing, so the scanner never starts there.</summary>
+    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>>? CreateSource()
+    {
+        var frames = ScreenFrameSourceFactory.Create();
+        if (frames is UnavailableScreenFrames) return null;
+        var engine = new RapidScreenOcrEngine(); // one per process; its ORT sessions live until exit
+        return engine.IsAvailable ? Scan(frames, engine) : null;
+    }
+
+    // Every monitor's frame through the engine, mapped to desktop pixels. Recognition is CPU-bound: off the UI thread.
+    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>> Scan(IScreenFrameSource frames, IScreenOcrEngine engine) =>
+        async token =>
+        {
+            var result = await frames.CaptureAsync(token).ConfigureAwait(false);
+            if (result.Status != ScreenFrameStatus.Available) return [];
+            return await Task.Run<IReadOnlyList<Word>>(() => result.Frames.SelectMany(f => engine.Recognize(f, token)
+                .Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen))).ToArray(), token).ConfigureAwait(false);
+        };
 
     internal ScreenOcrService(Func<CancellationToken, Task<IReadOnlyList<Word>>> scan,
         Func<bool> hasAccess, Func<IReadOnlyList<Word>, CancellationToken, Task<bool>> deliver,

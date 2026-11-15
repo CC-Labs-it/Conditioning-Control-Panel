@@ -18,8 +18,7 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
-/// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The OCR engine itself
-/// (<see cref="OcrSource"/>) and the Brain Drain visual remain a follow-up.</summary>
+/// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The Brain Drain visual remains a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -91,9 +90,9 @@ internal static class KeywordTriggerHead
         return changed;
     }
 
-    /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
-    /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland
-    /// capture is interactive only. While null the scanner never starts; everything after the source is live.</summary>
+    /// <summary>Screen capture plus recognition: MainShellWindow assigns <see cref="ScreenOcrService.CreateSource"/>
+    /// (X11/GDI capture + the Core RapidOcrNet engine). Null where that is unavailable (native Wayland, sandbox,
+    /// models missing); while null the scanner never starts.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
     private static readonly object _ocrGate = new();
