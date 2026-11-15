@@ -40,6 +40,17 @@ public class ChaosBodyBuzzTests
         }
     }
 
+    [Fact]
+    public async Task ShockwaveStartsWithAFieldLeftByAnEarlierTest()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true });
+            return Task.CompletedTask;
+        });
+        await ShockwaveSelectsRendererAndCancelsHops(false);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -66,6 +77,9 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
+            // BeginChaos preserves ambient bubbles and their spawn timer; this test needs its own field.
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });

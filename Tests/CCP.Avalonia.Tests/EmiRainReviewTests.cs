@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -84,6 +85,7 @@ public sealed class EmiRainReviewTests
             {
                 Setup(); var oldPath = CorePaths.EffectiveAssetsProvider; bool oldOffers = CoreSettings.Current.EmiDeskOffers; bool oldGlass = CoreSettings.Current.EmiDeskGlass;
                 var oldBedtime = EmiState.Current.BedtimeUntil; EmiDeskWindow? w = null;
+                ChaosGifCascadeOverlay? rain = null;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => root; CoreSettings.Current.EmiDeskOffers = true; CoreSettings.Current.EmiDeskGlass = true;
@@ -106,7 +108,8 @@ public sealed class EmiRainReviewTests
                     Assert.NotNull(EmiGifRain.LastPick);
                     await EmiGifRain.LastPick!; Dispatcher.UIThread.RunJobs();
                     Assert.True(ChaosGifCascadeOverlay.IsRaining);
-                    EmiGifRain.Stop();
+                    rain = ChaosGifCascadeOverlay.Active;
+                    await StopRainAndDrainAsync(rain);
                     w.FireRainOffer(EmiLineEngine.FromJson(Lines), "m");
                     Assert.True(w.RainAskLive);
                     var lastPick = EmiGifRain.LastPick;
@@ -132,9 +135,91 @@ public sealed class EmiRainReviewTests
                 finally
                 {
                     ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-                    w?.ShutDown(); EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
-                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false; ChaosGifCascadeOverlay.ManualFramesForTests = false;
-                    CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.Current.EmiDeskOffers = oldOffers; CoreSettings.Current.EmiDeskGlass = oldGlass; EmiState.Current.BedtimeUntil = oldBedtime;
+                    rain ??= ChaosGifCascadeOverlay.Active;
+                    try
+                    {
+                        w?.ShutDown(); EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
+                        if (rain != null) await rain.PendingDecodes.WaitAsync(TimeSpan.FromSeconds(10));
+                        Dispatcher.UIThread.RunJobs();
+                    }
+                    finally
+                    {
+                        ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false; ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                        CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.Current.EmiDeskOffers = oldOffers; CoreSettings.Current.EmiDeskGlass = oldGlass; EmiState.Current.BedtimeUntil = oldBedtime;
+                    }
+                }
+            });
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private static async Task StopRainAndDrainAsync(ChaosGifCascadeOverlay? rain)
+    {
+        EmiGifRain.Stop();
+        if (rain != null) await rain.PendingDecodes.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task RainStopWaitsForInFlightDecodeBeforeDeletingImages()
+    {
+        var root = Directory.CreateTempSubdirectory("emi-drain-").FullName;
+        var path = Path.Combine(Directory.CreateDirectory(Path.Combine(root, "images")).FullName, "a.gif");
+        File.WriteAllBytes(path, Convert.FromBase64String(Gif));
+        using var release = new ManualResetEventSlim();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                Setup();
+                var oldPath = CorePaths.EffectiveAssetsProvider;
+                var oldHook = ChaosGifCascadeOverlay.BeforeDecodeForTests;
+                var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+                var oldPacks = ConditioningControlPanel.Services.ContentPackStore.Current;
+                ChaosGifCascadeOverlay? rain = null;
+                try
+                {
+                    EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
+                    CorePaths.EffectiveAssetsProvider = () => root;
+                    ConditioningControlPanel.Services.ContentPackStore.Current = null;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = file =>
+                    {
+                        using var held = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.None);
+                        started.TrySetResult();
+                        if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("decode was not released");
+                    };
+                    Assert.True(EmiGifRain.Start(null));
+                    await EmiGifRain.LastPick!;
+                    Dispatcher.UIThread.RunJobs();
+                    rain = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    var drained = StopRainAndDrainAsync(rain);
+                    Assert.False(drained.IsCompleted);
+                    release.Set();
+                    await drained.WaitAsync(TimeSpan.FromSeconds(10));
+                    File.Delete(path);
+                    Assert.False(File.Exists(path));
+                }
+                finally
+                {
+                    release.Set();
+                    try
+                    {
+                        EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
+                        if (rain != null) await rain.PendingDecodes.WaitAsync(TimeSpan.FromSeconds(10));
+                        Dispatcher.UIThread.RunJobs();
+                    }
+                    finally
+                    {
+                        ChaosGifCascadeOverlay.BeforeDecodeForTests = oldHook;
+                        ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+                        ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                        ConditioningControlPanel.Services.ContentPackStore.Current = oldPacks;
+                        CorePaths.EffectiveAssetsProvider = oldPath;
+                    }
                 }
             });
         }
