@@ -40,14 +40,24 @@ internal sealed class StealCardEffect : PossessionEffectBase
             _stolen.Clear();
         }
         if (ctx.Host is not IAvaloniaPossessionHost host || host.GhostLayer is not { } layer ||
-            target?.Visual is not Control card || card is Window || _stolen.Contains(target.Key) ||
+            target?.Visual is not Control card || card is Window || IsWindowChrome(card) || _stolen.Contains(target.Key) ||
             CoreEngine.Video?.IsPlaying == true || PossessionTree.IsOffLimits(card)) return false;
         if (host.BoundsOnGhostLayer(card) is not { } bounds || bounds.Width < 40 || bounds.Height < 24 ||
             (layer.Bounds.Width > 0 && bounds.Width > layer.Bounds.Width * .8) ||
             (layer.Bounds.Height > 0 && bounds.Height > layer.Bounds.Height * .7)) return false;
         return card.GetVisualDescendants().OfType<Control>().Any(c =>
-            c.IsEffectivelyVisible && c.IsEffectivelyEnabled && c.Bounds.Width > 0 && c.Bounds.Height > 0 &&
+            !IsWindowChrome(c) && c.IsEffectivelyVisible && c.IsEffectivelyEnabled && c.Bounds.Width > 0 && c.Bounds.Height > 0 &&
             c is Button or ToggleButton or Slider or ComboBox or TextBox or ListBoxItem);
+    }
+
+    // WPF PossessionEffectBase.cs:328 and StealCardEffect.cs:68,212.
+    private static bool IsWindowChrome(Control control)
+    {
+        var name = control.Name ?? string.Empty;
+        return name.Contains("close", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("minimi", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("maximi", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("titlebar", StringComparison.OrdinalIgnoreCase);
     }
 
     private void Reset() => _stolen.Clear();
