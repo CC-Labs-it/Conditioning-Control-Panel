@@ -16,10 +16,10 @@ namespace ConditioningControlPanel.Services
     {
         private readonly OcrEngine _engine;
         private readonly object _gate = new();
-        private bool _disposed;
+        private volatile bool _disposed;
 
         internal WindowsProfileOcrEngine(OcrEngine engine) => _engine = engine;
-        public bool IsAvailable { get { lock (_gate) return !_disposed; } }
+        public bool IsAvailable => !_disposed;
 
         public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
         {
@@ -56,6 +56,6 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        public void Dispose() { lock (_gate) _disposed = true; }
+        public void Dispose() { _disposed = true; }
     }
 }

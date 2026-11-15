@@ -17,7 +17,7 @@ public readonly record struct OcrWord(string Text, Rectangle Bounds);
 
 public interface IScreenOcrEngine : IDisposable
 {
-    /// <summary>False once the models are missing or failed to load; <see cref="Recognize"/> then returns no words.</summary>
+    /// <summary>Nonblocking; false once models are missing or failed to load, or the engine is disposed.</summary>
     bool IsAvailable { get; }
     /// <summary>CPU-bound: call off the UI thread. Never throws except for cancellation.</summary>
     IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default);
@@ -35,15 +35,21 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
     private readonly string _modelDir;
     private readonly object _gate = new();
     private RapidOcr? _ocr;
-    private bool _failed, _disposed;
+    private readonly bool _modelsPresent;
+    private volatile bool _failed, _disposed;
 
-    public RapidScreenOcrEngine(string? modelDir = null) =>
+    public RapidScreenOcrEngine(string? modelDir = null)
+    {
         _modelDir = Path.GetFullPath(modelDir ?? Path.Combine(AppContext.BaseDirectory, RapidOcr.ModelsFolderName, RapidOcr.ModelsVersion));
+        // Availability must never touch disk or wait for an active recognition.
+        // Model installation changes take effect when a new engine is created.
+        _modelsPresent = ModelPaths.All(File.Exists);
+    }
 
     private string[] ModelPaths => new[] { RapidOcr.DefaultDetModelPath, RapidOcr.DefaultClsModelPath,
         RapidOcr.DefaultRecModelPath, RapidOcr.DefaultKeysFilePath }.Select(f => Path.Combine(_modelDir, f)).ToArray();
 
-    public bool IsAvailable { get { lock (_gate) return !_failed && !_disposed && ModelPaths.All(File.Exists); } }
+    public bool IsAvailable => _modelsPresent && !_failed && !_disposed;
 
     public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
     {
@@ -85,8 +91,8 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
 
     private bool EnsureLoaded()
     {
+        if (!_modelsPresent || _failed || _disposed) return false;
         if (_ocr != null) return true;
-        if (_failed || _disposed) return false;
         var paths = ModelPaths;
         if (!paths.All(File.Exists))
         {
@@ -114,6 +120,7 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
 
     public void Dispose()
     {
-        lock (_gate) { _disposed = true; _ocr?.Dispose(); _ocr = null; }
+        _disposed = true;
+        lock (_gate) { _ocr?.Dispose(); _ocr = null; }
     }
 }

@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Ocr;
 using ConditioningControlPanel.Services.ScreenCapture;
 using SkiaSharp;
@@ -68,6 +71,24 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         Assert.False(engine.IsAvailable);
         Assert.Empty(engine.Recognize(Frame("Good girl").Frame));
         Assert.False(engine.IsAvailable);
+    }
+
+    [Fact]
+    public void AvailabilityDoesNotWaitForRecognitionGate()
+    {
+        using var engine = new RapidScreenOcrEngine();
+        var gate = typeof(RapidScreenOcrEngine).GetField("_gate", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(engine)!;
+        using var entered = new ManualResetEventSlim();
+        Task<bool> availability;
+        bool returned;
+        lock (gate)
+        {
+            availability = Task.Run(() => { entered.Set(); return engine.IsAvailable; });
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            returned = availability.Wait(TimeSpan.FromSeconds(2));
+        }
+        Assert.True(returned, "Availability waited for recognition to finish");
+        Assert.True(availability.GetAwaiter().GetResult());
     }
 
     [Fact]

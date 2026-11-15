@@ -25,9 +25,10 @@ namespace ConditioningControlPanel.Services
         private const int MaxQuickConfirmScans = 3;
 
         private Timer? _timer;
-        private bool _disposed;
+        private volatile bool _disposed;
         private bool _isRunning;
         private bool _scanInProgress;
+        private long _stopVersion;
         private readonly IScreenOcrEngine _ocrEngine;
         private readonly object _lock = new();
 
@@ -72,10 +73,17 @@ namespace ConditioningControlPanel.Services
 
         public void Start()
         {
+            long version;
             lock (_lock)
             {
-                if (_isRunning || !_ocrEngine.IsAvailable) return;
-
+                if (_disposed || _isRunning) return;
+                version = _stopVersion;
+            }
+            // Never hold the service lock while asking an engine about its state.
+            if (!_ocrEngine.IsAvailable) return;
+            lock (_lock)
+            {
+                if (_disposed || _isRunning || version != _stopVersion) return;
                 var intervalMs = App.Settings?.Current?.ScreenOcrIntervalMs ?? 3000;
                 _timer = new Timer(OnTimerTick, null, intervalMs, intervalMs);
                 _isRunning = true;
@@ -87,6 +95,8 @@ namespace ConditioningControlPanel.Services
         {
             lock (_lock)
             {
+                // Cancel a Start that is still checking engine availability.
+                _stopVersion++;
                 if (!_isRunning) return;
                 _timer?.Dispose();
                 _timer = null;

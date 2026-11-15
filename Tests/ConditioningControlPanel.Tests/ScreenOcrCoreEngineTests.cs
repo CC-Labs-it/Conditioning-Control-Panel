@@ -27,6 +27,75 @@ public class ScreenOcrCoreEngineTests
         public void Dispose() { }
     }
 
+    private sealed class BlockingEngine : IScreenOcrEngine
+    {
+        private readonly object _gate = new();
+        public readonly ManualResetEventSlim Recognizing = new();
+        public readonly ManualResetEventSlim Release = new();
+        public readonly ManualResetEventSlim CheckingAvailability = new();
+        public bool IsAvailable { get { CheckingAvailability.Set(); lock (_gate) return true; } }
+        public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                Recognizing.Set();
+                Release.Wait();
+                return Array.Empty<OcrWord>();
+            }
+        }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public async Task PanicStopDoesNotWaitForRestartDuringRecognition()
+    {
+        var engine = new BlockingEngine();
+        using var service = new ScreenOcrService(engine);
+        service.Start();
+        var scan = Task.Run(() => service.DecodeAndRecognizeAsync(
+            new Bitmap(20, 10, PixelFormat.Format32bppArgb), new Rectangle(0, 0, 20, 10), null));
+        Task? restart = null;
+        Task? panicStop = null;
+        bool stoppedPromptly = false;
+        try
+        {
+            Assert.True(engine.Recognizing.Wait(TimeSpan.FromSeconds(5)));
+            service.Stop();
+            engine.CheckingAvailability.Reset();
+            restart = Task.Run(service.Start);
+            Assert.True(engine.CheckingAvailability.Wait(TimeSpan.FromSeconds(5)));
+            panicStop = Task.Run(service.Stop);
+            stoppedPromptly = await Task.WhenAny(panicStop, Task.Delay(TimeSpan.FromSeconds(2))) == panicStop;
+        }
+        finally
+        {
+            engine.Release.Set();
+            await scan;
+            if (restart != null) await restart;
+            if (panicStop != null) await panicStop;
+        }
+        Assert.True(stoppedPromptly, "Panic stop waited for OCR recognition");
+        Assert.Null(typeof(ScreenOcrService).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service));
+    }
+
+    [Fact]
+    public void WindowsAvailabilityDoesNotWaitForRecognitionGate()
+    {
+        using var engine = new WindowsProfileOcrEngine(null!);
+        var gate = typeof(WindowsProfileOcrEngine).GetField("_gate", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(engine)!;
+        using var entered = new ManualResetEventSlim();
+        Task<bool> availability;
+        bool returned;
+        lock (gate)
+        {
+            availability = Task.Run(() => { entered.Set(); return engine.IsAvailable; });
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            returned = availability.Wait(TimeSpan.FromSeconds(2));
+        }
+        Assert.True(returned, "Availability waited for Windows OCR recognition");
+        Assert.True(availability.GetAwaiter().GetResult());
+    }
+
     [Theory]
     [InlineData(-100, 200)]
     [InlineData(1920, -300)]
