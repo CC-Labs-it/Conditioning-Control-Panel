@@ -28,7 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>Whisper audio, ducking, XP and the Bambi Freeze/Reset pair: <see cref="SubliminalWhisperShow"/>.
     /// SubliminalStealsFocus opts into activation after a passive show, still click-through.
-    /// Solid mode uses the shared passive host; focus requests stay on classic cards.</para>
+    /// Solid mode, or any card with UnifiedOverlayHost on, uses the shared passive host; focus requests
+    /// and a live video stay on classic cards.</para>
     /// </summary>
     internal static class SubliminalOverlay
     {
@@ -46,6 +47,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
         private static readonly List<Grid> HostedCards = new();
+        // Test seams for the native checks Show makes.
+        internal static Func<bool> IsAvailable = () => X11Overlay.IsAvailable;
+        internal static Func<int> VideoWindowCount = () => MandatoryVideoOverlay.Instance.Windows.Count;
+        internal static Func<Window, PixelRect, bool> ConfigureClassic = (w, bounds) =>
+            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOpacity(w, 0) && X11Overlay.SetOverrideRedirect(w, bounds);
 
         /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
         internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
@@ -63,7 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
             card.Opacity = 0;
-            card.ZIndex = 1200; // WPF: above hosted image flashes
+            card.ZIndex = global::ConditioningControlPanel.Services.Compositor.CompositorLayers.Subliminal;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
             lease.Raise();
@@ -76,25 +82,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HostedCards.Remove(card);
             };
             RetireHosted.Add(retire);
-            void Step(double value, TimeSpan at) => schedule(() =>
+            void Finish()
             {
-                if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
-            }, at);
-            // Gentle Visuals scales the fade here as on the classic path (FadeDuration/Ramp) and WPF
-            // SubliminalService.cs:636-637, which scales it before choosing host or classic.
-            var fade = SubliminalOverlayWindow.FadeDuration;
-            var steps = Math.Max(3, (int)Math.Ceiling(fade.TotalMilliseconds / 17));
-            for (var i = 1; i <= steps; i++)
-            {
-                Step(alpha * i / steps, fade * i / steps);
-                Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
-            }
-            schedule(() =>
-            {
+                if (retired) return;
                 retire();
                 RetireHosted.Remove(retire);
                 if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
-            }, fade + hold + fade);
+            }
+            // Gentle Visuals scales the fade here as on the classic path (FadeDuration/Ramp) and WPF
+            // SubliminalService.cs:636-637, which scales it before choosing host or classic.
+            var fade = SubliminalOverlayWindow.FadeDuration;
+            var started = false;
+            // As on the classic card, the envelope starts at the stage's first frame; one that never comes retires the card.
+            schedule(() => { if (!started) Finish(); }, TimeSpan.FromSeconds(3));
+            try
+            {
+                SubliminalOverlayWindow.RequestFrame(TopLevel.GetTopLevel(lease.Canvas)!, _ =>
+                {
+                    if (retired || started) return;
+                    started = true;
+                    void Step(double value, TimeSpan at) => schedule(() =>
+                    {
+                        if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
+                    }, at);
+                    var steps = Math.Max(3, (int)Math.Ceiling(fade.TotalMilliseconds / 17));
+                    for (var i = 1; i <= steps; i++)
+                    {
+                        Step(alpha * i / steps, fade * i / steps);
+                        Step(alpha * (1 - (double)i / steps), fade + hold + fade * i / steps);
+                    }
+                    schedule(Finish, fade + hold + fade);
+                });
+            }
+            catch { Finish(); return false; }
             return true;
         }
 
@@ -144,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// (percent) overrides the setting, as WPF FlashSubliminalCustom's does.</summary>
         public static void Show(Visual host, string text, int? opacity = null, int? durationMs = null)
         {
-            if (!X11Overlay.IsAvailable)
+            if (!IsAvailable())
             {
                 if (!_warnedUnavailable) Log.Warning("Subliminal: this platform cannot show click-through overlays, so subliminals are skipped");
                 _warnedUnavailable = true;
@@ -162,7 +182,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                // WPF SubliminalService.cs:651-659 (SubliminalOverVideo.cs:29): the unified host takes ordinary cards too.
+                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, VideoWindowCount()) &&
                     ShowHosted(screens[i].Bounds, text, alpha, hold))
                 {
                     // WPF raises the bark and Displayed on every path; Present (which does it) is skipped here.
@@ -175,17 +196,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     continue;
                 }
                 var w = new SubliminalOverlayWindow(text);
-                if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
+                if (!ConfigureClassic(w, screens[i].Bounds))
                 {
                     if (!_warnedUnavailable) Log.Warning("Subliminal: the platform refused a click-through topmost overlay window; skipped");
                     _warnedUnavailable = true;
                     w.Close();
-                    return;
+                    break;
                 }
                 Present(w, raiseBark: !barkRaised);
                 barkRaised = true;
                 w.Run(alpha, hold);
             }
+            // WPF SubliminalService.cs:865-871: a one-shot never strands an idle stage after a classic fallback or refusal.
+            if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
         }
 
         internal static TimeSpan Hold(int frames, int? durationMs) => TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(frames, durationMs));
