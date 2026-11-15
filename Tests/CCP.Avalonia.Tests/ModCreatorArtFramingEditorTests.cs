@@ -133,10 +133,11 @@ public class ModCreatorArtFramingEditorTests
         finally { w.Close(); File.Delete(path); }
     });
     [Theory]
-    [InlineData(1800, 1200, 900, 600)]
-    [InlineData(1200, 1800, 600, 900)]
-    [InlineData(120, 80, 120, 80)]
-    public void PreviewDecodeCapsTheLongerEdge(int width, int height, int expectedWidth, int expectedHeight) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(1800, 1200, 900, 600, false)]
+    [InlineData(1800, 1200, 900, 600, true)]
+    [InlineData(1200, 1800, 600, 900, false)]
+    [InlineData(120, 80, 120, 80, false)]
+    public void PreviewDecodeCapsTheLongerEdge(int width, int height, int expectedWidth, int expectedHeight, bool large) => AvaloniaTestDispatcher.Run(() =>
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".png");
         try
@@ -147,6 +148,15 @@ public class ModCreatorArtFramingEditorTests
                 using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
                 using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
                 File.WriteAllBytes(path, data.ToArray());
+            }
+            if (large)
+            {
+                var png = File.ReadAllBytes(path);
+                using var file = File.Create(path);
+                file.Write(png, 0, png.Length - 12);
+                file.Write(new byte[] { 2, 16, 0, 0, 110, 112, 65, 68 }); // 33 MiB ancillary chunk
+                var block = new byte[1024 * 1024]; for (int i = 0; i < 33; i++) file.Write(block);
+                file.Write(new byte[] { 0x4c, 0xc7, 0x29, 0x5a }); file.Write(png, png.Length - 12, 12);
             }
             using var preview = ModCreatorWindow.DecodeFramingPreview(path);
             Assert.Equal(new PixelSize(expectedWidth, expectedHeight), preview.PixelSize);

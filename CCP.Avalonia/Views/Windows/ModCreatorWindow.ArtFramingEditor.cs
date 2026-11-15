@@ -127,24 +127,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // compressed poster never allocates its full pixel buffer. Interlaced PNG is rejected.
         private static Bitmap DecodeFramingPng(string path, int width, int height, int tw, int th)
         {
-            if (new FileInfo(path).Length > 32 * 1024 * 1024) throw new InvalidDataException("Image is too large");
-            var data = File.ReadAllBytes(path);
-            if (data.Length < 33 || !data.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) throw new InvalidDataException("Unsupported image");
+            using var input = File.OpenRead(path);
+            var data = new byte[33]; input.ReadExactly(data);
+            if (!data.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) throw new InvalidDataException("Unsupported image");
             int depth = data[24], color = data[25], channels = color switch { 0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4, _ => 0 };
             if (channels == 0 || data[28] != 0 || !(depth == 8 || depth == 16 || ((color == 0 || color == 3) && (depth == 1 || depth == 2 || depth == 4))) || (color == 3 && depth == 16))
                 throw new InvalidDataException("Unsupported PNG");
             byte[]? palette = null, transparency = null;
-            using var compressed = new MemoryStream();
-            for (int offset = 8; offset + 12 <= data.Length;)
+            using var compressed = new FileStream(System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName()), FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
+            var header = new byte[8]; var buffer = new byte[65536];
+            while (input.Position < input.Length)
             {
-                uint length = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
-                if (length > data.Length - offset - 12) throw new InvalidDataException("Invalid PNG chunk");
-                var type = System.Text.Encoding.ASCII.GetString(data, offset + 4, 4);
-                int size = (int)length, start = offset + 8;
-                if (type == "IDAT") compressed.Write(data, start, size);
-                else if (type == "PLTE") palette = data.AsSpan(start, size).ToArray();
-                else if (type == "tRNS") transparency = data.AsSpan(start, size).ToArray();
-                offset += size + 12;
+                input.ReadExactly(header); uint size = BinaryPrimitives.ReadUInt32BigEndian(header);
+                if (size > input.Length - input.Position - 4) throw new InvalidDataException("Invalid PNG chunk");
+                var type = System.Text.Encoding.ASCII.GetString(header, 4, 4);
+                if (type == "PLTE" || type == "tRNS")
+                {
+                    if (size > 768) throw new InvalidDataException("Invalid PNG palette");
+                    var chunk = new byte[size]; input.ReadExactly(chunk);
+                    if (type == "PLTE") palette = chunk; else transparency = chunk;
+                }
+                else if (type == "IDAT")
+                {
+                    for (uint left = size; left > 0;) { int count = (int)Math.Min(left, (uint)buffer.Length); input.ReadExactly(buffer.AsSpan(0, count)); compressed.Write(buffer, 0, count); left -= (uint)count; }
+                }
+                else input.Seek(size, SeekOrigin.Current);
+                input.Seek(4, SeekOrigin.Current);
                 if (type == "IEND") break;
             }
             if (color == 3 && (palette == null || palette.Length % 3 != 0)) throw new InvalidDataException("Invalid PNG palette");
