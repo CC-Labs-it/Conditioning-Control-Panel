@@ -39,6 +39,8 @@ public sealed class SessionRunWireTests
         var oldEnabled = settings.AudioDuckingEnabled;
         var oldRamp = settings.IntensityRampEnabled;
         var oldRunner = AvApp.Sessions;
+        var oldRunning = CoreSession.IsSessionRunningProvider;
+        var oldPaused = CoreSession.IsSessionPausedProvider;
         var oldHook = CoreEngine.StoppedHook;
         var oldTask = CoreProgram.TaskAvailableProvider;
         var dir = System.IO.Directory.CreateTempSubdirectory("ccp-audio-program-").FullName;
@@ -89,6 +91,8 @@ public sealed class SessionRunWireTests
             CoreEngine.StoppedHook = oldHook;
             CoreProgram.TaskAvailableProvider = oldTask;
             AvApp.Sessions = oldRunner;
+            CoreSession.IsSessionRunningProvider = oldRunning;
+            CoreSession.IsSessionPausedProvider = oldPaused;
             settings.DuckingLevel = oldDuck;
             settings.AudioDuckingEnabled = oldEnabled;
             settings.IntensityRampEnabled = oldRamp;
@@ -96,6 +100,31 @@ public sealed class SessionRunWireTests
             System.IO.Directory.Delete(dir, true);
         }
         return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task SessionAudioTestRestoresCallerProviders(int stopKind) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldRunning = CoreSession.IsSessionRunningProvider;
+        var oldPaused = CoreSession.IsSessionPausedProvider;
+        Func<bool> running = () => true;
+        Func<bool> paused = () => true;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = running;
+            CoreSession.IsSessionPausedProvider = paused;
+            await SessionAudioRepaintsBothSurfacesOnStartAndStop(stopKind);
+            Assert.Same(running, CoreSession.IsSessionRunningProvider);
+            Assert.Same(paused, CoreSession.IsSessionPausedProvider);
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = oldRunning;
+            CoreSession.IsSessionPausedProvider = oldPaused;
+        }
     });
 
     [Fact]
