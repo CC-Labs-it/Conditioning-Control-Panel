@@ -202,6 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             timing?.Mark("tooltip");
             OnTabShown(tab, timing);
             timing?.Mark("tab-hooks");
+            // Declutter wave 1: the header banner is Home's alone (Core HeaderBannerRule.ShowsOnTab).
+            ApplyHeaderBannerForTab(tab);
         }
 
         /// <summary>

@@ -2057,15 +2057,67 @@
             <!-- One flat grid so the Start controls and Save/Exit can't collide. Auto
                  columns (Remember / caret / Pause) take their size first, START flexes,
                  and Save/Exit share the rest — nothing clips at any window width. -->
+            <!-- Declutter wave 1 (2026-11-15): START is the one filled button on the bar and takes
+                 the width Save and Exit used to share. Save and Exit are the same quiet outline
+                 plank (text and border carry the colour, the face fills only on hover) and size
+                 to their label, so a long translation widens the button instead of clipping. -->
+            <Border.Resources>
+                <ControlTheme x:Key="BarOutlineButton" TargetType="Button">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource TextMutedBrush}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="Height" Value="50"/>
+                    <Setter Property="MinWidth" Value="84"/>
+                    <Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Template">
+                            <ControlTemplate TargetType="Button">
+                                <Grid>
+                                    <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
+                                            CornerRadius="0,0,5,5" Background="{DynamicResource DepthDropBand}"
+                                            IsHitTestVisible="False"/>
+                                    <Grid x:Name="DepthFace">
+                                        <Border x:Name="b" Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                                CornerRadius="6" Padding="16,10">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                             Content="{TemplateBinding Content}"
+                                                             ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                                        </Border>
+                                        <Border Margin="1" CornerRadius="5" Background="{DynamicResource DepthRaisedSheen}"
+                                                IsHitTestVisible="False"/>
+                                        <Border Margin="1" CornerRadius="5" BorderThickness="1"
+                                                BorderBrush="{DynamicResource DepthRaisedBevel}" IsHitTestVisible="False"/>
+                                    </Grid>
+                                </Grid>
+                            </ControlTemplate>
+                    </Setter>
+                    <Style Selector="^:pointerover /template/ Border#b">
+                        <Setter Property="Background" Value="{Binding $parent[Button].BorderBrush}"/>
+                    </Style>
+                    <Style Selector="^:pointerover">
+                        <Setter Property="Foreground" Value="{DynamicResource PanelBgBrush}"/>
+                    </Style>
+                    <!-- Keyboard focus: the outline turns bright and thick (twin of WPF's
+                         IsKeyboardFocused trigger); the padding gives the extra pixel back. The
+                         template part only, so the hover fill keeps the button's own colour. -->
+                    <Style Selector="^:focus-visible /template/ Border#b">
+                        <Setter Property="BorderBrush" Value="{DynamicResource TextLightBrush}"/>
+                        <Setter Property="BorderThickness" Value="2"/>
+                        <Setter Property="Padding" Value="15,9"/>
+                    </Style>
+                </ControlTheme>
+            </Border.Resources>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>   <!-- Remember -->
-                    <ColumnDefinition Width="1.5*"/>   <!-- START -->
+                    <ColumnDefinition Width="*"/>      <!-- START (takes all the free width) -->
                     <ColumnDefinition Width="Auto"/>   <!-- Start-options caret -->
                     <ColumnDefinition Width="Auto"/>   <!-- Pause (session only) -->
                     <ColumnDefinition Width="18"/>     <!-- gap between the two groups -->
-                    <ColumnDefinition Width="*"/>      <!-- Save -->
-                    <ColumnDefinition Width="*"/>      <!-- Exit -->
+                    <ColumnDefinition Width="Auto"/>   <!-- Save (outline, sized to its label) -->
+                    <ColumnDefinition Width="Auto"/>   <!-- Exit (outline, sized to its label) -->
                 </Grid.ColumnDefinitions>
 
                 <!-- Status Text (overlaid on top of buttons, shown when running) -->
@@ -2218,10 +2270,11 @@
                 <!-- Save (col 5) / Exit (col 6); col 4 is the gap.
                      2026-08-11: Save was PinkButton, i.e. the same saturated mass as START sitting
                      right next to it, so the action bar had two primaries and no hierarchy. It is
-                     the house SecondaryButton now; START is the only filled pink on the bar. -->
-                <Button x:Name="BtnSaveAll" Grid.Column="5" Content="{loc:Str btn_save_2}" Theme="{StaticResource SecondaryButton}"
+                     the house SecondaryButton now; START is the only filled pink on the bar.
+                     2026-11-15: still a filled slab; it is the bar's neutral outline plank now. -->
+                <Button x:Name="BtnSaveAll" Grid.Column="5" Content="{loc:Str btn_save_2}" Theme="{StaticResource BarOutlineButton}"
                         fx:HudPlank.Kind="Plank"
-                        Height="50" FontSize="16" Margin="0,0,10,0" Click="BtnSave_Click"
+                        Margin="0,0,10,0" Click="BtnSave_Click"
                         ToolTip.Tip="{loc:Str tooltip_save_all_settings_to_disk}"/>
                 <!-- Save "absorb" (Velvet Kit 2, FX lane B): one ripple ring off the button's edge and
                      a tick that draws itself, both purely decorative and hit-test invisible. The save
@@ -2248,40 +2301,15 @@
                      competing with the primary action for the eye. -->
                 <!-- Depth (wave 10, lane B): Exit is a raised plank too. The red outline stays the
                      signal; the lamp's bevel sits just inside it, the sheen over the face. -->
-                <Button x:Name="BtnExit" Grid.Column="6" Content="{loc:Str btn_exit}" Height="50" FontSize="16" Click="BtnExit_Click"
+                <Button x:Name="BtnExit" Grid.Column="6" Content="{loc:Str btn_exit}" Click="BtnExit_Click"
                         fx:HudPlank.Kind="Plank"
                         ToolTip.Tip="{loc:Str tooltip_exit_the_application_completely}">
+                    <!-- The bar's outline plank with the danger colour on text and border only;
+                         the hover fill is the border colour, so the label turns white over it. -->
                     <Button.Theme>
-                        <ControlTheme TargetType="Button">
-                            <Setter Property="Background" Value="Transparent"/>
+                        <ControlTheme TargetType="Button" BasedOn="{StaticResource BarOutlineButton}">
                             <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
-                            <Setter Property="FontWeight" Value="Bold"/>
-                            <Setter Property="Cursor" Value="Hand"/>
-                            <Setter Property="Template">
-                                    <ControlTemplate TargetType="Button">
-                                        <Grid>
-                                            <Border x:Name="DepthDrop" VerticalAlignment="Bottom" Height="5" Margin="6,0,6,-5"
-                                                    CornerRadius="0,0,5,5" Background="{DynamicResource DepthDropBand}"
-                                                    IsHitTestVisible="False"/>
-                                            <Grid x:Name="DepthFace">
-                                                <Border x:Name="b" Background="{TemplateBinding Background}"
-                                                        BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
-                                                        CornerRadius="6" Padding="20,10">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                     Content="{TemplateBinding Content}"
-                                                                     ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                                                </Border>
-                                                <Border Margin="1" CornerRadius="5" Background="{DynamicResource DepthRaisedSheen}"
-                                                        IsHitTestVisible="False"/>
-                                                <Border Margin="1" CornerRadius="5" BorderThickness="1"
-                                                        BorderBrush="{DynamicResource DepthRaisedBevel}" IsHitTestVisible="False"/>
-                                            </Grid>
-                                        </Grid>
-                                    </ControlTemplate>
-                            </Setter>
-                            <Style Selector="^:pointerover /template/ Border#b">
-                                <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
-                            </Style>
+                            <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
                             <Style Selector="^:pointerover">
                                 <Setter Property="Foreground" Value="White"/>
                             </Style>
