@@ -137,6 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private Action? _audioEnded, _audioFailed;
         private int _videoLoad;
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
+        internal static bool IsAnyPlaying => OpenPlayers.Any(p => p._isPlaying);
         private string? _audioPath;
         private int _audioLoad;
         private bool _audioDurationRemembered;

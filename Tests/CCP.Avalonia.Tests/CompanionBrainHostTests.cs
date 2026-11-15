@@ -249,4 +249,40 @@ public sealed class CompanionBrainHostTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task CompanionAskBusyDeeperPlayer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var busy = CompanionAskService.BusyProvider;
+        var sessions = CompanionAskService.SessionOptions;
+        var start = CompanionAskService.StartSession;
+        var player = new ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
+        var playing = player.GetType().GetField("_isPlaying", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        try
+        {
+            AvApp.Mantra.EndSession();
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            player.Show();
+            AvApp.SeedCompanionTubeSeams();
+            Assert.False(CompanionAskService.BusyProvider!());
+            playing.SetValue(player, true);
+            Assert.True(CompanionAskService.BusyProvider!());
+            Assert.False(CompanionAskService.Instance.CanOfferFor("what can I do"));
+            playing.SetValue(player, false);
+            Assert.False(CompanionAskService.BusyProvider!());
+        }
+        finally
+        {
+            player.Close();
+            CompanionAskService.Instance.Stop();
+            CompanionAskService.BusyProvider = busy;
+            CompanionAskService.SessionOptions = sessions;
+            CompanionAskService.StartSession = start;
+        }
+        return Task.CompletedTask;
+    });
+
 }
