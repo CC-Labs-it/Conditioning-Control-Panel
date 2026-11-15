@@ -1,4 +1,5 @@
 using System;
+using ConditioningControlPanel.SuperCore;
 
 namespace ConditioningControlPanel.Services.Super
 {
@@ -65,8 +66,8 @@ namespace ConditioningControlPanel.Services.Super
     public sealed class LightsDownState
     {
         public const double DepthMax = 0.92;
-        public const double RiseRate = 0.55;      // exponential approach per second
-        public const double FallRate = 1.3;       // linear per second
+        public const double RiseRate = LightsDownOptions.StockRiseRate;   // exponential approach per second
+        public const double FallRate = LightsDownOptions.StockFallRate;   // linear per second
         public const double StutterSeconds = 0.65;
         // Three dips in 0.65 s (the mockup's sin(fa*36) gave three and a bit): lights on for the
         // first half of each third, off for the second, so the last dip ends as the stutter does.
@@ -80,7 +81,7 @@ namespace ConditioningControlPanel.Services.Super
         public const double BeatFrom = 0.5;
         public const double BeatFreq = 1.7;
         public const double BeatAmp = 0.05;
-        public const double DimPerDepth = 0.5;
+        public const double DimPerDepth = LightsDownOptions.StockDimPerDepth;
         public const double ApertureLayerAlpha = 0.4;
         public const double ApertureSpin = 0.04;  // rad/s per unit depth
         public const double SwellPerDepth = 0.07;
@@ -98,6 +99,10 @@ namespace ConditioningControlPanel.Services.Super
         private double _rayAngle;
         private double _huePhase;
         private double _beatPhase;
+
+        /// <summary>The player's options (CCP.Core LightsDownOptions), set by the service each
+        /// frame. Stock = the effect as shipped. Photosafe keeps the stock fall whatever is set.</summary>
+        public LightsDownTuning Tuning { get; set; } = LightsDownTuning.Stock;
 
         /// <summary>Raw depth (before the stutter).</summary>
         public double Depth { get; private set; }
@@ -131,12 +136,14 @@ namespace ConditioningControlPanel.Services.Super
             }
             _lastAttended = attended;
 
+            var tune = Tuning;
+            double fall = LightsDownOptions.FallRateFor(tune, photosafe);
             if (attended)
-                Depth += (DepthMax - Depth) * (1 - Math.Exp(-dt * RiseRate));
+                Depth += (DepthMax - Depth) * (1 - Math.Exp(-dt * tune.RiseRate));
             else if (calm)
-                Depth = Math.Max(0, Depth - dt * Math.Max(FallRate, _fadeFrom / PhotosafeFadeSeconds));
+                Depth = Math.Max(0, Depth - dt * Math.Max(fall, _fadeFrom / PhotosafeFadeSeconds));
             else
-                Depth = Math.Max(0, Depth - dt * FallRate);
+                Depth = Math.Max(0, Depth - dt * fall);
 
             double fa = _t - _lostAt;
             double d = Depth;
@@ -155,7 +162,7 @@ namespace ConditioningControlPanel.Services.Super
             // The drawn alphas ease out of zero and into it (soft knee under 0.15), so the room
             // never starts to dim or finishes brightening on a hard edge. Depth itself is untouched.
             double soft = LightsDownMath.SoftStart(d);
-            f.DimAlpha = DimPerDepth * soft + f.Beat;
+            f.DimAlpha = tune.DimPerDepth * soft + f.Beat;
             f.ApertureAlpha = ApertureLayerAlpha * soft;
             f.ApertureBreath = LightsDownMath.Breath(_t, motion);
             f.GlowPulse = LightsDownMath.GlowPulse(_t, motion);

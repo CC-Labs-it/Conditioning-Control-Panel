@@ -2833,6 +2833,74 @@ namespace ConditioningControlPanel.Models
             set { _superCreepCap = value; OnPropertyChanged(); }
         }
 
+        // ---- Lane B: Undertow, Lights Down and Deck options (owner, 2026-11-15). Clamps and
+        // defaults live in CCP.Core/Super (UndertowOptions, LightsDownOptions, DeckOptions);
+        // every default is the effect as it shipped before it had options.
+
+        private int _undertowLensSize = SuperCore.UndertowOptions.SizeDefault;
+        /// <summary>Undertow: the whole lens (widest, smallest, still) in percent of the stock lens.</summary>
+        public int UndertowLensSize
+        {
+            get => _undertowLensSize;
+            set { _undertowLensSize = SuperCore.UndertowOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        private int _undertowShrinkSpeed = SuperCore.UndertowOptions.ShrinkDefault;
+        /// <summary>Undertow: how fast the lens shrinks on its own, percent of stock (0 = holds open).</summary>
+        public int UndertowShrinkSpeed
+        {
+            get => _undertowShrinkSpeed;
+            set { _undertowShrinkSpeed = SuperCore.UndertowOptions.ClampShrink(value); OnPropertyChanged(); }
+        }
+
+        private int _undertowClickWiden = SuperCore.UndertowOptions.WidenDefault;
+        /// <summary>Undertow: how much a click widens the lens, percent of stock (0 = a click only ripples).</summary>
+        public int UndertowClickWiden
+        {
+            get => _undertowClickWiden;
+            set { _undertowClickWiden = SuperCore.UndertowOptions.ClampWiden(value); OnPropertyChanged(); }
+        }
+
+        private int _lightsDownDarkness = SuperCore.LightsDownOptions.DarknessDefault;
+        /// <summary>Lights Down: how dark the room gets, 0..100 (50 = stock).</summary>
+        public int LightsDownDarkness
+        {
+            get => _lightsDownDarkness;
+            set { _lightsDownDarkness = SuperCore.LightsDownOptions.ClampDarkness(value); OnPropertyChanged(); }
+        }
+
+        private int _lightsDownDimSpeed = SuperCore.LightsDownOptions.DimSpeedDefault;
+        /// <summary>Lights Down: how fast the room dims while the video is watched, percent of stock.</summary>
+        public int LightsDownDimSpeed
+        {
+            get => _lightsDownDimSpeed;
+            set { _lightsDownDimSpeed = SuperCore.LightsDownOptions.ClampDimSpeed(value); OnPropertyChanged(); }
+        }
+
+        private int _lightsDownReturnSpeed = SuperCore.LightsDownOptions.ReturnSpeedDefault;
+        /// <summary>Lights Down: how fast the lights come back when the eyes leave, percent of stock.</summary>
+        public int LightsDownReturnSpeed
+        {
+            get => _lightsDownReturnSpeed;
+            set { _lightsDownReturnSpeed = SuperCore.LightsDownOptions.ClampReturnSpeed(value); OnPropertyChanged(); }
+        }
+
+        private int _deckFlips = SuperCore.DeckOptions.FlipsDefault;
+        /// <summary>Deck: about how many flips a card takes before it breaks (each card rolls one either side).</summary>
+        public int DeckFlips
+        {
+            get => _deckFlips;
+            set { _deckFlips = SuperCore.DeckOptions.ClampFlips(value); OnPropertyChanged(); }
+        }
+
+        private int _deckBreakReach = SuperCore.DeckOptions.ReachDefault;
+        /// <summary>Deck: how far a break knocks the cards and bubbles around it, percent of stock.</summary>
+        public int DeckBreakReach
+        {
+            get => _deckBreakReach;
+            set { _deckBreakReach = SuperCore.DeckOptions.ClampReach(value); OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC

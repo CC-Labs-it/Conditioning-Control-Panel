@@ -435,6 +435,10 @@ public sealed class BrainDrainLayer : BaseLayer
         if (!GetCursorPos(out var pt)) return;
         _undertowScreenWidth = ScreenWidthAt(pt.X, pt.Y);
         var motion = UndertowMotionNow();
+        // The player's options, read live so a slider moves the lens at once.
+        var opt = App.Settings?.Current;
+        _undertow.Tuning = opt == null ? SuperCore.UndertowTuning.Stock
+            : SuperCore.UndertowOptions.Tuning(opt.UndertowLensSize, opt.UndertowShrinkSpeed, opt.UndertowClickWiden);
 
         // Repaint only when the lens or a ripple visibly moved: a still lens under a still cursor
         // (MotionFx Off, or a parked mouse) must not force a full-screen redraw every tick.

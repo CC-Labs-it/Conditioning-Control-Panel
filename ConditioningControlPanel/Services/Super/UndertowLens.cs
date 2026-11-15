@@ -1,4 +1,5 @@
 using System;
+using ConditioningControlPanel.SuperCore;
 
 namespace ConditioningControlPanel.Services.Super
 {
@@ -37,6 +38,8 @@ namespace ConditioningControlPanel.Services.Super
         public double Radius;        // current lens radius, 0 = the whole screen is blur
         public double Kick;          // widening still owed from clicks
         public bool Placed;          // false until the first step snaps the lens to the cursor
+        /// <summary>The player's options (CCP.Core UndertowOptions), set by the layer each tick. Stock = the lens as shipped.</summary>
+        public UndertowTuning Tuning = UndertowTuning.Stock;
         public readonly UndertowRipple[] Ripples = new UndertowRipple[MaxRipples];
 
         // ---- juice (cosmetic only: never moves the logical Radius or the clear-area guarantee) ----
@@ -85,11 +88,11 @@ namespace ConditioningControlPanel.Services.Super
         public const double FollowRate = 6.0;             // smoothing 1 - exp(-6 dt)
         public const double ShrinkLinear = 0.016;         // x screen width per second (owner: slower to retract)
         public const double ShrinkProportional = 0.1;     // x radius per second
-        public const double KickPerClick = 0.2;           // x screen width
+        public const double KickPerClick = UndertowOptions.StockKickPerClick;   // x screen width; the stock lens, see UndertowTuning
         public const double KickApplyRate = 0.75;         // x screen width per second
-        public const double MaxRadius = 0.5;              // x screen width (owner: wider in general)
-        public const double StillRadius = 0.25;           // x screen width, MotionFx Off
-        public const double MinRadius = 0.09;             // x screen width; the lens never closes below this, so a few cm around the cursor stay sharp
+        public const double MaxRadius = UndertowOptions.StockMaxRadius;        // x screen width (owner: wider in general)
+        public const double StillRadius = UndertowOptions.StockStillRadius;    // x screen width, MotionFx Off
+        public const double MinRadius = UndertowOptions.StockMinRadius;        // x screen width; the lens never closes below this, so a few cm around the cursor stay sharp
         public const double StartRadius = MaxRadius;      // neutral default: the lens opens wide, then sinks
         public const double MaxKick = MaxRadius;          // x screen width; owed widening never queues past one full lens
         public const double ChangeEpsilon = 0.25;         // px; movement below this is not worth a repaint
@@ -112,22 +115,33 @@ namespace ConditioningControlPanel.Services.Super
 
         /// <summary>Radius after one step of the constant shrink. Reduced runs at half speed. Never below 0.</summary>
         public static double Shrink(double radius, double dt, double screenWidth, UndertowMotion motion)
+            => Shrink(radius, dt, screenWidth, motion, UndertowTuning.Stock);
+
+        /// <summary>As above with the player's options: the shrink speed scales both terms.</summary>
+        public static double Shrink(double radius, double dt, double screenWidth, UndertowMotion motion, UndertowTuning t)
         {
-            if (motion == UndertowMotion.Off) return StillRadius * screenWidth;
-            double speed = motion == UndertowMotion.Reduced ? 0.5 : 1.0;
+            if (motion == UndertowMotion.Off) return t.StillRadius * screenWidth;
+            double speed = (motion == UndertowMotion.Reduced ? 0.5 : 1.0) * t.ShrinkScale;
             double r = radius - Math.Max(0, dt) * speed * (ShrinkLinear * screenWidth + ShrinkProportional * radius);
-            return Math.Max(MinRadius * screenWidth, r);
+            return Math.Max(t.MinRadius * screenWidth, r);
         }
 
         /// <summary>Opening radius for a fresh run. Off sits at the still lens at once; otherwise
         /// the lens starts closed and <see cref="InitialKick"/> opens it, so it never pops in.</summary>
         public static double InitialRadius(double screenWidth, UndertowMotion motion) =>
-            motion == UndertowMotion.Off ? StillRadius * screenWidth : MinRadius * screenWidth;
+            InitialRadius(screenWidth, motion, UndertowTuning.Stock);
+
+        public static double InitialRadius(double screenWidth, UndertowMotion motion, UndertowTuning t) =>
+            motion == UndertowMotion.Off ? t.StillRadius * screenWidth : t.MinRadius * screenWidth;
 
         /// <summary>Widening owed at the start of a run: the lens opens at the click rate (about half
         /// a second), then sinks. Off: none, the still lens is already there.</summary>
         public static double InitialKick(double screenWidth, UndertowMotion motion) =>
-            motion == UndertowMotion.Off ? 0 : StartRadius * screenWidth;
+            InitialKick(screenWidth, motion, UndertowTuning.Stock);
+
+        /// <summary>The lens opens to its widest (<see cref="StartRadius"/> on the stock lens).</summary>
+        public static double InitialKick(double screenWidth, UndertowMotion motion, UndertowTuning t) =>
+            motion == UndertowMotion.Off ? 0 : t.MaxRadius * screenWidth;
 
         /// <summary>One engine tick: follow the cursor, shrink, pay out kick, age ripples. Returns
         /// true when anything drawn changed (lens moved or resized while open, a ripple alive or just
@@ -139,11 +153,12 @@ namespace ConditioningControlPanel.Services.Super
             double ox = s.X, oy = s.Y, oldR = s.Radius;
             bool wasPlaced = s.Placed;
             bool changed = false;
+            var t = s.Tuning;
             if (!s.Placed)
             {
                 s.X = cursorX; s.Y = cursorY; s.Placed = true;
-                s.Radius = InitialRadius(screenWidth, motion);
-                s.Kick = InitialKick(screenWidth, motion);
+                s.Radius = InitialRadius(screenWidth, motion, t);
+                s.Kick = InitialKick(screenWidth, motion, t);
                 s.DrawRadius = s.Radius; s.DrawVel = 0; s.Age = 0;
             }
             else if (motion == UndertowMotion.Off)
@@ -159,15 +174,16 @@ namespace ConditioningControlPanel.Services.Super
 
             if (motion == UndertowMotion.Off)
             {
-                s.Radius = StillRadius * screenWidth;
+                s.Radius = t.StillRadius * screenWidth;
                 s.Kick = 0;
             }
             else
             {
-                s.Radius = Shrink(s.Radius, dt, screenWidth, motion);
+                s.Radius = Shrink(s.Radius, dt, screenWidth, motion, t);
                 double rate = KickApplyRate * screenWidth * (motion == UndertowMotion.Reduced ? 0.5 : 1.0);
                 double add = Math.Min(s.Kick, dt * rate);
-                s.Radius = Math.Min(MaxRadius * screenWidth, s.Radius + add);
+                // A smaller lens size takes effect at once; the drawn radius springs after it.
+                s.Radius = Math.Min(t.MaxRadius * screenWidth, s.Radius + add);
                 s.Kick = Math.Max(0, s.Kick - add);
             }
 
@@ -193,8 +209,9 @@ namespace ConditioningControlPanel.Services.Super
         /// Reduced: widen, no ripple. Off: no widen, one 120 ms fade ring instead of the ripple.</summary>
         public static void Click(UndertowState s, double x, double y, double screenWidth, UndertowMotion motion)
         {
+            // Owed widening never queues past one full lens (MaxKick on the stock lens).
             if (motion != UndertowMotion.Off)
-                s.Kick = Math.Min(MaxKick * screenWidth, s.Kick + KickPerClick * screenWidth);
+                s.Kick = Math.Min(s.Tuning.MaxRadius * screenWidth, s.Kick + s.Tuning.KickPerClick * screenWidth);
             if (motion == UndertowMotion.Off) return;   // still: no wave
 
             // Hit-knock and droplet sparks. The crest is photosafe: a click sooner than a third of a
@@ -305,7 +322,7 @@ namespace ConditioningControlPanel.Services.Super
         {
             if (s.Radius <= 0) return 0;
             double r = motion == UndertowMotion.Off ? s.Radius : s.DrawRadius + KnockPulse(s.KnockAge, screenWidth, motion);
-            return Math.Max(Math.Min(s.Radius, MinRadius * screenWidth), r);
+            return Math.Max(Math.Min(s.Radius, s.Tuning.MinRadius * screenWidth), r);
         }
 
         /// <summary>How far the rim stretches along motion (0 = round). Off: never. Reduced: half.</summary>
@@ -420,7 +437,7 @@ namespace ConditioningControlPanel.Services.Super
                     s.DrawRadius += s.DrawVel * h;
                     left -= h;
                 }
-                double floor = Math.Min(s.Radius, MinRadius * screenWidth);
+                double floor = Math.Min(s.Radius, s.Tuning.MinRadius * screenWidth);
                 if (s.DrawRadius < floor) { s.DrawRadius = floor; if (s.DrawVel < 0) s.DrawVel = 0; }
                 if (Math.Abs(s.Radius - s.DrawRadius) < 0.05 && Math.Abs(s.DrawVel) < 0.5)
                 { s.DrawRadius = s.Radius; s.DrawVel = 0; }

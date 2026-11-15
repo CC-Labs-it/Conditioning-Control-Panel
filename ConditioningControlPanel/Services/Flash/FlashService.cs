@@ -2727,7 +2727,9 @@ namespace ConditioningControlPanel.Services
                     dragOwnedOn: s?.FlashDraggable == true && owned,
                     shatterOwnedOn: s?.FlashShatterEnabled == true && owned))
                 return;
-            item.Deck = FlickerDeck.Create(_deckIndex++ % 8, _random);
+            // Flips to break (DeckOptions): the stock 4 rolls 3..5, exactly as before it had options.
+            var (breakMin, breakMax) = SuperCore.DeckOptions.BreakRange(s?.DeckFlips ?? SuperCore.DeckOptions.FlipsDefault);
+            item.Deck = FlickerDeck.Create(_deckIndex++ % 8, _random, breakMin, breakMax);
             item.OnDeckRaise = _ => RaiseDeckWindow(window);
             item.OnDeckSwap = _ => ApplyDeckSwap(window);
             item.OnDeckGaveUp = _ => window.DeckPending = null;
@@ -5449,10 +5451,13 @@ namespace ConditioningControlPanel.Services
                             window.DeckPending = null;
                             // The break goes off on the shared stage: its ring knocks the cards and
                             // pops the bubbles in reach, and it leaves a hole in the fog. A card the
-                            // pool shrank reaches less far.
+                            // pool shrank reaches less far. Break reach (DeckOptions) scales the
+                            // ring only, never the hole.
                             double side = Math.Max(item.W, item.H), small = Math.Clamp(item.PoolScale, 0.35, 1);
+                            double reachSides = SuperCore.DeckOptions.ReachSides(
+                                App.Settings?.Current?.DeckBreakReach ?? SuperCore.DeckOptions.ReachDefault);
                             Services.Super.SuperStageHost.Stage.Blast(new SuperCore.Blast(
-                                item.X + item.W / 2, item.Y + item.H / 2, side * 1.6 * small, side * 0.8 * small,
+                                item.X + item.W / 2, item.Y + item.H / 2, side * reachSides * small, side * 0.8 * small,
                                 SuperCore.BlastKind.CardBreak));
                             _flashLayer?.BeginDeckShatter(item, MotionFx.Level);
                             window.MotionState = null;

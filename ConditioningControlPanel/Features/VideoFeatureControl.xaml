@@ -423,7 +423,58 @@
                         Click="BtnTestVideo_Click"/>
 
                 <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <ctl:SuperBox x:Name="SuperBoxMain" Effect="LightsDown"/>
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="LightsDown">
+                    <!-- Lights Down's options, shown while Lights Down is the pick (VideoFeatureControl.LightsDown.cs). Every default is the stock effect (CCP.Core/Super/LightsDownOptions). -->
+                    <StackPanel x:Name="LightsDownRows" Visibility="Collapsed"
+                                Loaded="LightsDownRows_Loaded" Unloaded="LightsDownRows_Unloaded">
+                        <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_lights_darkness}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_lights_darkness}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderLightsDarkness" Minimum="0" Maximum="100" Value="50"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderLightsDarkness_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtLightsDarkness" Text="50%" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_lights_dim_speed}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_lights_dim_speed}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderLightsDimSpeed" Minimum="50" Maximum="150" Value="100"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderLightsDimSpeed_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtLightsDimSpeed" Text="100%" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_lights_return_speed}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_lights_return_speed}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderLightsReturnSpeed" Minimum="50" Maximum="150" Value="100"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderLightsReturnSpeed_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtLightsReturnSpeed" Text="100%" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                    </StackPanel>
+                </ctl:SuperBox>
             </StackPanel>
 
             <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its

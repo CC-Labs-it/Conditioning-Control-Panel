@@ -143,7 +143,11 @@ namespace ConditioningControlPanel.Services.Super
             }
 
             bool attended = IsAttended(v, now);
-            bool photosafe = App.Settings?.Current?.LockdownPhotosafe == true;
+            var opt = App.Settings?.Current;
+            bool photosafe = opt?.LockdownPhotosafe == true;
+            // The player's options, read live so a slider moves the room at once.
+            s.Tuning = opt == null ? SuperCore.LightsDownTuning.Stock
+                : SuperCore.LightsDownOptions.Tuning(opt.LightsDownDarkness, opt.LightsDownDimSpeed, opt.LightsDownReturnSpeed);
             var f = s.Step(dt, attended, motion, photosafe);
 
             if (now >= _nextCut)

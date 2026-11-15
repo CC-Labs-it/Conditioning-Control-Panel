@@ -143,10 +143,13 @@ public static class FlickerDeck
            && !shatterOwnedOn;
 
     /// <summary>A fresh card with its BreakAt rolled and its cracks laid out.</summary>
-    public static FlickerDeckState Create(int index, Random rng) => new()
+    public static FlickerDeckState Create(int index, Random rng) => Create(index, rng, BreakAtMin, BreakAtMax);
+
+    /// <summary>As above with the player's roll (CCP.Core DeckOptions.BreakRange), inclusive both ends.</summary>
+    public static FlickerDeckState Create(int index, Random rng, int breakAtMin, int breakAtMax) => new()
     {
         Index = index,
-        BreakAt = rng.Next(BreakAtMin, BreakAtMax + 1),
+        BreakAt = rng.Next(Math.Max(1, breakAtMin), Math.Max(Math.Max(1, breakAtMin), breakAtMax) + 1),
         Clock = rng.NextDouble() * 10.0,
         Cracks = CrackLines(rng),
     };
