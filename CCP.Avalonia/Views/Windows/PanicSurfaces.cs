@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("super-stage", _ => Platform.Super.SuperStageHost.Stop(), After: ["engine"]),
             new("bank-fx", sh => sh?.StopBankFx()), // WPF BankFx.cs:635 abort contract; P06
-            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
+            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.EndChaos(); Overlays.BubbleOverlay.Stop();
                 Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.SpiralOverlay.CloseAll(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),
