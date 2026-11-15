@@ -169,6 +169,8 @@ jobs:
             10.0.x
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libvlc-dev vlc-plugin-base
       - run: dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release
+      - name: Check race shell output path
+        run: test -f CCP.Avalonia/bin/Release/net10.0/Resources/web/glassroad-shell/main.js
       - name: perf-bench (report-only)
         continue-on-error: true
         run: |
@@ -316,6 +318,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Test Racing Thoughts shell and packaging
+        run: node --test .github/scripts/glassroad-shell-packaging.test.cjs Assets/web/glassroad-shell/tests/shell.test.cjs
 
       - run: node --test Tests/CCP.Avalonia.Tests/BrowserVideoScript.test.mjs Tests/CCP.Avalonia.Tests/CompanionVideoAutoPlay.test.mjs
       - name: Check shared Loom renderer exports
