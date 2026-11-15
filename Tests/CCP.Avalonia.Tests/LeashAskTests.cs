@@ -211,6 +211,53 @@ public sealed class LeashAskTests
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
     [Fact]
+    public void ManualAskIsNotRequeuedWhenServiceRebindsWhileItIsOpen() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            var at = DateTimeOffset.UtcNow.AddMinutes(-5);
+            svc.ApplyBlock(new JObject
+            {
+                ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray { new JObject
+                {
+                    ["id"] = OfferId, ["from"] = new JObject { ["id"] = "u_juno", ["name"] = "Juno" },
+                    ["at"] = at.ToString("o"), ["expires_at"] = at.AddDays(7).ToString("o"),
+                } },
+            });
+            LeashHead.Service = svc;
+            shell.Show();
+            var offer = Assert.Single(svc.Snapshot.Offers);
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => svc, shell));
+            shell.RebindLeashAsks(); // The periodic rebind lands after Look opened the offer.
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void SnapshotArrivingAfterManualAskDoesNotRequeueIt() =>
+        LeashGateCardTests.Run(false, (shell, _, svc) =>
+        {
+            var at = DateTimeOffset.UtcNow.AddMinutes(-5);
+            var offer = new LeashOffer(new LeashPerson("u_juno", "Juno", null), at, at.AddDays(7));
+            shell.Show();
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => svc, shell));
+            svc.ApplyBlock(new JObject
+            {
+                ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray { new JObject
+                {
+                    ["id"] = OfferId, ["from"] = new JObject { ["id"] = "u_juno", ["name"] = "Juno" },
+                    ["at"] = at.ToString("o"), ["expires_at"] = at.AddDays(7).ToString("o"),
+                } },
+            });
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((_, page, wire, _) =>
         {
