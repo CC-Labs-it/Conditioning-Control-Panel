@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Avalonia.Platform;
 using CCP.Avalonia.Testing;
@@ -35,6 +36,25 @@ public sealed class WebHostProbeTests
             Assert.False(new WebHost().HasEngine);
             return Task.CompletedTask;
         });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AvailabilityCacheFollowsTheCurrentLifetime(bool desktopFirst)
+    {
+        var desktopCalls = 0;
+        var headlessCalls = 0;
+        var desktop = new Lazy<string?>(() => { desktopCalls++; return null; }); // installed WebView2
+        var headless = new Lazy<string?>(() => { headlessCalls++; return WebHost.NoEngineReason; });
+        string? Read(bool isHeadless) => WebHost.ReasonForLifetime(isHeadless, headless, desktop);
+
+        Assert.Equal(desktopFirst ? null : WebHost.NoEngineReason, Read(!desktopFirst));
+        Assert.Equal(desktopFirst ? WebHost.NoEngineReason : null, Read(desktopFirst));
+        Assert.Null(Read(false));
+        Assert.Equal(WebHost.NoEngineReason, Read(true));
+        Assert.Equal(1, desktopCalls);
+        Assert.Equal(1, headlessCalls);
+    }
 
     [Fact]
     public void LinuxWithBothEnginesAsReportedBy12_1IsAvailable() => Assert.Null(WebHost.DecideUnavailableReason(new[]
