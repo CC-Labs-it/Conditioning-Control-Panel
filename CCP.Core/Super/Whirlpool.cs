@@ -44,6 +44,8 @@ public sealed class Whirlpool
     public double Eased => Ease(Size);
     /// <summary>Reach in pixels: nothing outside it feels the pool.</summary>
     public double Radius => (MinReach + (MaxReach - MinReach) * Eased) * ShortSide;
+    /// <summary>Turns of each arm from the eye to the rim. Few on purpose: a tight spiral reads as rings.</summary>
+    public double Turns => 0.9 + 1.2 * Eased;
     /// <summary>Radians per second the drawn spiral (and the fog under it) turns.</summary>
     public double Spin => 0.9 + 1.9 * Eased;
 

@@ -138,7 +138,7 @@ public class SuperStageCoreTests
         {
             angle += 2.8 / 30;
             f.Step(1 / 30.0, 1.5, 1);
-            f.Swirl(960, 540, 420, 1, angle, 2.8, 1 / 30.0, 1);
+            f.Swirl(960, 540, 420, 1, angle, 2.8, 2.1, 1 / 30.0, 1);
         }
         double wound = Spread();
         Assert.True(wound > 0.15, $"arms spread {wound}");

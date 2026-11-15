@@ -98,7 +98,7 @@ public sealed class SuperStage
         {
             m.Field.Step(dt, level, cap);
             if (PoolLive)
-                m.Field.Swirl(Pool.X - m.X, Pool.Y - m.Y, Pool.Radius, Pool.Eased, Pool.Angle, Pool.Spin, dt, cap);
+                m.Field.Swirl(Pool.X - m.X, Pool.Y - m.Y, Pool.Radius, Pool.Eased, Pool.Angle, Pool.Spin, Pool.Turns, dt, cap);
         }
     }
 

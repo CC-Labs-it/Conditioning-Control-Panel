@@ -41,11 +41,13 @@ public sealed class SteamDraw : IDisposable
         bool anyMem = false;
         for (int gy = 0, i = 0, j = 0; gy < f.H; gy++)
         {
-            double sy = Math.Sin(gy * 0.33 - t * 0.31);
             for (int gx = 0; gx < f.W; gx++, i++, j += 4)
             {
                 double fog = f.Fog[i];
-                double cloud = 0.84 + 0.16 * Math.Sin(gx * 0.27 + t * 0.43) * sy;
+                // Slow uneven drift. Two crossed waves bent by a third, so no grid shows.
+                double bend = Math.Sin(gx * 0.045 - gy * 0.06 + t * 0.17) * 2.2;
+                double cloud = 0.86 + 0.09 * Math.Sin(gx * 0.085 + gy * 0.05 + bend + t * 0.23)
+                                    + 0.05 * Math.Sin(gx * 0.031 - gy * 0.12 - bend * 0.7 - t * 0.19);
                 double a = Math.Clamp(fog * cloud * maxAlpha, 0, 1);
                 _fogPx[j] = (byte)(colour.Red * a); _fogPx[j + 1] = (byte)(colour.Green * a);
                 _fogPx[j + 2] = (byte)(colour.Blue * a); _fogPx[j + 3] = (byte)(a * 255);

@@ -126,7 +126,7 @@ public sealed class SteamField
     /// <paramref name="arms"/> spiral bands and thinned between them. Nothing here undoes itself:
     /// when the pool leaves, the arms it wound stay and <see cref="Step"/> heals them slowly.
     /// </summary>
-    public void Swirl(double xPx, double yPx, double radiusPx, double eased, double angle, double spin, double dt, double cap, int arms = 3)
+    public void Swirl(double xPx, double yPx, double radiusPx, double eased, double angle, double spin, double turns, double dt, double cap, int arms = 3)
     {
         if (dt <= 0 || eased <= 0.01 || radiusPx <= 1) return;
         double cx = Cx(xPx), cy = Cy(yPx), r = Cells(radiusPx);
@@ -136,7 +136,7 @@ public sealed class SteamField
         int y0 = Math.Max(0, (int)(cy - r)), y1 = Math.Min(H - 1, (int)(cy + r) + 1);
         if (x0 > x1 || y0 > y1) return;
         Array.Copy(Fog, _scratch, Fog.Length);
-        double eye = r * EyeShare, turns = 1.6 + eased * 3.4, pitch = r / (turns * 2 * Math.PI);
+        double eye = r * EyeShare, pitch = r / (Math.Max(0.2, turns) * 2 * Math.PI);
         for (int gy = y0; gy <= y1; gy++)
             for (int gx = x0; gx <= x1; gx++)
             {

@@ -12,7 +12,9 @@ namespace ConditioningControlPanel.Services.Super.Draw;
 public sealed class WhirlpoolDraw : IDisposable
 {
     private const int Arms = 3;
-    private readonly SKPaint _arm = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+    private readonly SKPaint _arm = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
+    private readonly SKPath _path = new();
+    private SKShader? _armShader;
     private readonly SKPaint _glow = new() { IsAntialias = false };
     private SKShader? _glowShader;
     private float _glowR; private int _glowKey;
@@ -28,7 +30,8 @@ public sealed class WhirlpoolDraw : IDisposable
         float master = (float)Math.Clamp(0.35 + 0.65 * strength, 0, 1) * (float)Math.Min(1, p.Size / 0.08);
 
         int key = (int)(hue * 4) ^ ((int)(e * 64) << 12);
-        if (_glowShader == null || Math.Abs(_glowR - r) > 1.5f || key != _glowKey)
+        bool rebuilt = _glowShader == null || Math.Abs(_glowR - r) > 1.5f || key != _glowKey;
+        if (rebuilt)
         {
             _glowShader?.Dispose();
             var core = SKColor.FromHsl(hue, 100, 80).WithAlpha((byte)(255 * (0.22 + 0.4 * e)));
@@ -43,37 +46,41 @@ public sealed class WhirlpoolDraw : IDisposable
         _glow.Color = SKColors.White.WithAlpha((byte)(255 * master));
         canvas.DrawCircle(0, 0, r, _glow);
 
-        double turns = 1.6 + e * 3.4, pitch = r / (turns * 2 * Math.PI), end = turns * 2 * Math.PI;
-        const double step = 0.16;
-        var colour = SKColor.FromHsl(hue, 92, 68);
+        // Each arm is ONE stroked path (no joints to show), and one radial shader fades all three
+        // from full strength at 45% of the reach to nothing at the rim: a soft edge, no circle.
+        double turns = p.Turns, pitch = r / (turns * 2 * Math.PI), end = turns * 2 * Math.PI;
+        const double step = 0.12;
+        _path.Rewind();
         for (int arm = 0; arm < Arms; arm++)
         {
             double off = arm * 2 * Math.PI / Arms - p.Angle;
-            double th = 0.35;
-            float px = (float)(Math.Cos(th + off) * pitch * th), py = (float)(Math.Sin(th + off) * pitch * th);
-            for (th += step; th < end; th += step)
+            bool first = true;
+            for (double th = 0.3; th < end; th += step)
             {
-                double rr = pitch * th, u = rr / r;             // 0 at the eye, 1 at the rim
+                double rr = pitch * th;
                 float qx = (float)(Math.Cos(th + off) * rr), qy = (float)(Math.Sin(th + off) * rr);
-                // Faded edge: full strength to 55% of the reach, then gone by the rim.
-                double fade = u < 0.55 ? 1 : Math.Max(0, 1 - (u - 0.55) / 0.45);
-                fade *= fade;
-                double a = (0.3 + 0.5 * e) * fade * master;
-                if (a > 0.012)
-                {
-                    _arm.Color = colour.WithAlpha((byte)(255 * a));
-                    _arm.StrokeWidth = (float)((2.5 + 6.5 * e) * (0.45 + 0.55 * fade)) * dip;
-                    canvas.DrawLine(px, py, qx, qy, _arm);
-                }
-                px = qx; py = qy;
+                if (first) { _path.MoveTo(qx, qy); first = false; } else _path.LineTo(qx, qy);
             }
         }
+        if (_armShader == null || rebuilt)
+        {
+            _armShader?.Dispose();
+            var full = SKColor.FromHsl(hue, 92, 70).WithAlpha((byte)(255 * (0.4 + 0.5 * e)));
+            _armShader = SKShader.CreateRadialGradient(new SKPoint(0, 0), r,
+                new[] { full, full, full.WithAlpha((byte)(full.Alpha * 0.45f)), SKColors.Transparent },
+                new[] { 0f, 0.45f, 0.72f, 1f }, SKShaderTileMode.Clamp);
+        }
+        _arm.Shader = _armShader;
+        _arm.Color = SKColors.White.WithAlpha((byte)(255 * master));
+        _arm.StrokeWidth = (float)(5 + 13 * e) * dip;
+        canvas.DrawPath(_path, _arm);
         canvas.Restore();
     }
 
     public void Dispose()
     {
         _glowShader?.Dispose(); _glowShader = null;
-        _arm.Dispose(); _glow.Dispose();
+        _armShader?.Dispose(); _armShader = null;
+        _arm.Dispose(); _glow.Dispose(); _path.Dispose();
     }
 }
