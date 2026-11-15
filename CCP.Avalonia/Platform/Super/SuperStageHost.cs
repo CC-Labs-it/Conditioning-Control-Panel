@@ -12,6 +12,28 @@ internal static class SuperStageHost
     internal static Func<bool> EngineRunning = () => CoreEngine.IsVisualRun;
     internal static Func<SuperEffect, bool> EffectOn = SuperAccess.IsOn;
     private static bool _subscribed;
+    private static bool _haveCursor;
+    private static double _cursorX, _cursorY, _speed;
+
+    // WPF SuperStageHost.cs:109-155: the drawing host supplies physical pixels and elapsed time.
+    // No timer is owned here: a future stage surface must stop calling this when it closes.
+    internal static void StepPool(double dt, double x, double y, double dip, double shortSide, int size, bool gentle)
+    {
+        if (!Stage.PoolOn || dt <= 0) return;
+        dt = Math.Min(dt, 0.1);
+        if (_haveCursor)
+        {
+            double dx = x - _cursorX, dy = y - _cursorY;
+            double speed = Math.Sqrt(dx * dx + dy * dy) / dt;
+            _speed += (speed - _speed) * 0.3;
+        }
+        _cursorX = x; _cursorY = y; _haveCursor = true;
+        Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(size);
+        Stage.Pool.Step(dt, x, y, _speed, dip, shortSide, gentle);
+    }
+
+    private static void ResetCursor() { _haveCursor = false; _speed = 0; }
+
 
     internal static void Sync()
     {
@@ -33,6 +55,7 @@ internal static class SuperStageHost
         {
             Stage.PoolOn = pool;
             Stage.Pool.Reset();
+            ResetCursor();
         }
     }
 
@@ -46,5 +69,6 @@ internal static class SuperStageHost
         Stage.SteamOn = false;
         Stage.PoolOn = false;
         Stage.Reset();
+        ResetCursor();
     }
 }
