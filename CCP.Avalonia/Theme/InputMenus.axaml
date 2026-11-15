@@ -17,4 +17,19 @@
     <Setter Property="Opacity" Value="0.45"/>
     <Setter Property="Cursor" Value="Arrow"/>
   </Style>
+  <!-- Inputs.xaml:501: a checked row replaces its icon with a pink check. -->
+  <Style Selector="ContextMenu MenuItem:checked /template/ ContentControl#PART_IconPresenter">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector="ContextMenu MenuItem:checked /template/ ContentControl#PART_ToggleIconPresenter">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="Height" Value="10"/>
+    <Setter Property="Margin" Value="0,0,8,0"/>
+    <Setter Property="Content">
+      <Template>
+        <Path Width="10" Height="10" Stretch="Uniform" Fill="{DynamicResource PinkBrush}"
+              Data="M9.86 3.14a.5.5 0 0 1 0 .72L4.5 9.22 1.64 6.36a.5.5 0 1 1 .72-.72L4.5 7.78l4.64-4.64a.5.5 0 0 1 .72 0z"/>
+      </Template>
+    </Setter>
+  </Style>
 </Styles>
