@@ -1,10 +1,12 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -34,7 +36,9 @@ public partial class ChaosHubWindow
             panel.Children.Add(new TextBlock { Text = "DEBUG", Foreground = Brushes.Goldenrod, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
             _dbgRuns = Box(ChaosMeta.State.RunsCompleted.ToString(), 42); panel.Children.Add(_dbgRuns);
             panel.Children.Add(DebugButton("set runs", () => { if (int.TryParse(_dbgRuns.Text?.Trim(), out var n) && n >= 0) { ChaosMeta.State.RunsCompleted = n; ChaosMeta.Save(); DebugRefresh(); } }));
-            panel.Children.Add(DebugButton("+500 sparks", () => { ChaosMeta.State.Sparks += 500; ChaosMeta.Save(); DebugRefresh(); }));
+            var sparks = DebugButton("", () => { ChaosMeta.State.Sparks += 500; ChaosMeta.Save(); DebugRefresh(); });
+            sparks.Bind(ContentControl.ContentProperty, new Binding("[chaos_debug_add_sparks]") { Source = LocalizationManager.Instance });
+            panel.Children.Add(sparks);
             panel.Children.Add(DebugButton("+500 gold", () => { ChaosMeta.AddGold(500); DebugRefresh(); }));
             _dbgLesson = Box("slow_fuses", 110); panel.Children.Add(_dbgLesson);
             panel.Children.Add(DebugButton("complete lesson", () => {
