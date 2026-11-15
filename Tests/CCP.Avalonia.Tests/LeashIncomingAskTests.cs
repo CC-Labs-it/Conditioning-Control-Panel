@@ -78,6 +78,7 @@ public sealed class LeashIncomingAskTests
         LeashGateCardTests.Run(false, (shell, launcher, _) =>
         {
             var seen = new List<string>();
+            var stale = new MainShellWindow(); // Still bound to the gate's service until its two-second tick.
             var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me", reportSeen: seen.Add);
             LeashHead.Service = svc;
             shell.RebindLeashAsks();
@@ -98,10 +99,14 @@ public sealed class LeashIncomingAskTests
                 second.Card.Dismiss();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Null(LeashAskWindow.Current);
+                stale.RebindLeashAsks(); // A later-binding shell must not ask the same offers again.
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
                 Assert.Equal(new[] { First, Second }, seen);
             }
             finally
             {
+                stale.Close();
                 other.Close();
                 LeashHead.Service = null;
                 shell.RebindLeashAsks();

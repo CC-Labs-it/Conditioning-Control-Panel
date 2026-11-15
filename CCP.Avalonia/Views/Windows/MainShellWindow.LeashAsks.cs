@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -22,7 +23,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     private ILeashService? _askService;
-    private readonly HashSet<string> _seenLeashOffers = new();
+    // WPF LeashSurfaces.cs:26 keeps one process-wide SeenOffers per bound service; every shell shares it so a
+    // shell that rebinds later (its two-second tick) never re-queues an offer another shell already asked.
+    private static readonly ConditionalWeakTable<ILeashService, HashSet<string>> SeenLeashOffers = new();
+    private HashSet<string> _seenLeashOffers = new();
     private readonly List<LeashOffer> _waitingLeashAsks = new();
     private readonly List<LeashEvent> _heldLeashNotices = new();
 
@@ -34,9 +38,9 @@ public partial class MainShellWindow
         {
             LeashAskWindow.CurrentClosed -= OnLeashAskClosed;
             LeashAskWindow.OfferShown -= OnLeashOfferShown;
+            ReleaseWaitingLeashAsks();
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = null;
-            _waitingLeashAsks.Clear();
             _heldLeashNotices.Clear();
             StopLeashTug();
         };
@@ -51,7 +55,8 @@ public partial class MainShellWindow
         {
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = next;
-            _seenLeashOffers.Clear();
+            ReleaseWaitingLeashAsks();
+            _seenLeashOffers = next == null ? new() : SeenLeashOffers.GetValue(next, _ => new());
             _heldLeashNotices.Clear();
             if (next != null)
             {
@@ -74,7 +79,7 @@ public partial class MainShellWindow
         }
         foreach (var offer in snap.Offers)
         {
-            if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
+            if (!_seenLeashOffers.Add(OfferKey(offer))) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
             _waitingLeashAsks.Add(offer);
         }
@@ -87,9 +92,18 @@ public partial class MainShellWindow
     private void OnLeashOfferShown(LeashOffer offer)
     {
         // Another shell may show the offer before this shell receives the same snapshot.
-        _seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds());
+        _seenLeashOffers.Add(OfferKey(offer));
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
     }
+
+    // Asks this shell still held go back to the shared set, so another shell's next snapshot asks them.
+    private void ReleaseWaitingLeashAsks()
+    {
+        foreach (var w in _waitingLeashAsks) _seenLeashOffers.Remove(OfferKey(w));
+        _waitingLeashAsks.Clear();
+    }
+
+    private static string OfferKey(LeashOffer offer) => offer.From.Id + "@" + offer.At.ToUnixTimeSeconds();
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 
