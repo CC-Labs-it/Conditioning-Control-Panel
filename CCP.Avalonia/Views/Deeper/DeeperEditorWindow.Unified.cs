@@ -85,6 +85,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // navigation, as in EnhancementPlayerWindow.Fullscreen.cs. It cannot see cross-origin frames.
         internal const string PreviewZoomScript = @"(function(){
     if(window.__ccpEditorZoomBound)return;window.__ccpEditorZoomBound=true;
+    window.addEventListener('wheel',function(e){
+        if(!e.ctrlKey)return;
+        var w=window.chrome&&window.chrome.webview;
+        var msg=e.deltaY>0?'ccp_zoom_out':'ccp_zoom_in';
+        if(w&&w.postMessage)w.postMessage(msg);
+        else if(window.invokeCSharpAction)window.invokeCSharpAction(msg);
+        else return;
+        e.preventDefault();
+    },{passive:false,capture:true});
     window.addEventListener('keydown',function(e){
         if(!e.ctrlKey||(e.code!=='Digit0'&&e.code!=='Numpad0'))return;
         var w=window.chrome&&window.chrome.webview;
@@ -100,7 +109,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void PreviewZoom_WebMessage(string message)
         {
-            if (message.Trim().Trim('"') == "ccp_editor_zoom_fit") SetZoom(1.0);
+            switch (message.Trim().Trim('"'))
+            {
+                case "ccp_editor_zoom_fit": SetZoom(1.0); break;
+                case "ccp_zoom_in": AdjustPreviewZoom(0.10); break;
+                case "ccp_zoom_out": AdjustPreviewZoom(-0.10); break;
+            }
         }
 
         // -- Right-click context menu --------------------------------------------

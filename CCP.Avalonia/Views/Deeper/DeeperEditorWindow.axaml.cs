@@ -1419,17 +1419,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void BtnPreviewZoomIn_Click(object? sender, RoutedEventArgs e) => AdjustPreviewZoom(+0.10);
         private void BtnPreviewZoomOut_Click(object? sender, RoutedEventArgs e) => AdjustPreviewZoom(-0.10);
 
-        /// <summary>
-        /// ponytail: NativeWebView genuinely has no zoom factor - one of the three CoreWebView2
-        /// members with no counterpart at all, and NOT a missing script channel, since
-        /// InvokeScriptAsync works and everything else in this region uses it. CSS <c>zoom</c>
-        /// through that channel is the obvious substitute and is not one: it is per-document, so it
-        /// is lost on the next navigation, and it does not scale a fullscreened video. So WPF's
-        /// +/-10% clamped to [0.25, 5.0] stays lost, and these two buttons only log.
-        /// </summary>
         private void AdjustPreviewZoom(double delta)
         {
-            Log.Debug("DeeperEditor: preview zoom {Delta:+0.00;-0.00} ignored; NativeWebView has no zoom", delta);
+            BrowserPreview.SetBrowserZoom(Math.Clamp((BrowserPreview.BrowserZoom ?? 1.0) + delta, 0.25, 5.0));
         }
 
         private void TimelineScroll_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
