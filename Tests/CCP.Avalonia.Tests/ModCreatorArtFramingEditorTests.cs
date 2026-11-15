@@ -28,7 +28,7 @@ public class ModCreatorArtFramingEditorTests
     private const string Play = ModArtFramingRegistry.SurfacePlayCard;
 
     [Fact]
-    public void WorkingCopiesArePerSurfaceAndCancelLeavesStoredValuesAlone()
+    public void WorkingCopiesPanZoomAndCommitStayIsolated()
     {
         var stored = new Dictionary<string, ModArtFraming> { [Rail] = new() { Zoom = 2 } };
         var working = ModCreatorWindow.BeginFramingEdit(Slot, stored);
@@ -40,11 +40,7 @@ public class ModCreatorArtFramingEditorTests
         Assert.Equal(.5, stored[Rail].CenterX);
         Assert.True(working[Play].IsDefault);
         Assert.Empty(ModCreatorWindow.BeginFramingEdit("features/goon_game.png", null));
-    }
 
-    [Fact]
-    public void PanAndZoomStayWithinTheVisibleWindow()
-    {
         var f = new ModArtFraming { Zoom = 2 };
         ModCreatorWindow.PanFraming(f, 1, 2, .5, .5, 100, -100);
         var box = ModArtFramingRegistry.ToViewbox(f, 1, 2);
@@ -55,13 +51,9 @@ public class ModCreatorArtFramingEditorTests
         for (int i = 0; i < 100; i++) ModCreatorWindow.ZoomFraming(f, 1, 2, false);
         Assert.Equal(1, f.Zoom);
         Assert.Equal(.5, f.CenterX, 8);
-    }
 
-    [Fact]
-    public void CommitCopiesNonDefaultFramingAndRemovesDefaults()
-    {
         var destination = new Dictionary<string, Dictionary<string, ModArtFraming>>();
-        var working = ModCreatorWindow.BeginFramingEdit(Slot, null);
+        working = ModCreatorWindow.BeginFramingEdit(Slot, null);
         working[Rail].Zoom = 2;
         ModCreatorWindow.CommitFramingEdit(destination, Slot, working);
         Assert.Single(destination[Slot]);
@@ -75,8 +67,7 @@ public class ModCreatorArtFramingEditorTests
     public Task FrameButtonOpensIndependentPreviewsAndCancelOrOkControlsExport() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var w = new ModCreatorWindow();
-        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".png");
-        using (var bmp = new WriteableBitmap(new PixelSize(120, 120), new Vector(96, 96))) bmp.Save(path);
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", "framing-adam7.png");
         object? Call(string method, params object?[] args) => typeof(ModCreatorWindow)
             .GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, args);
         void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -130,7 +121,7 @@ public class ModCreatorArtFramingEditorTests
             Assert.False(buttons[Slot].IsVisible);
             Assert.Null(w.BuildManifestFromForm().ArtFraming);
         }
-        finally { w.Close(); File.Delete(path); }
+        finally { w.Close(); }
     });
     [Theory]
     [InlineData(1800, 1200, 900, 600, false)]
@@ -172,7 +163,7 @@ public class ModCreatorArtFramingEditorTests
     });
 
     [Fact]
-    public void InterlacedPngOpensAndFrames() => AvaloniaTestDispatcher.Run(() =>
+    public void InterlacedPngSamplesAdam7Passes() => AvaloniaTestDispatcher.Run(() =>
     {
         using var preview = ModCreatorWindow.DecodeFramingPreview(Path.Combine(AppContext.BaseDirectory, "Assets", "framing-adam7.png"));
         Assert.Equal(new PixelSize(900, 600), preview.PixelSize);
@@ -188,20 +179,10 @@ public class ModCreatorArtFramingEditorTests
             Assert.InRange(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 0), 110, 145);
         }
         finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pixel); }
-        var w = new ModCreatorWindow();
-        try
-        {
-            var working = ModCreatorWindow.BeginFramingEdit(Slot, null);
-            var dialog = w.CreateFramingDialog(Slot, preview, working);
-            Assert.NotEmpty(dialog.GetLogicalDescendants().OfType<Grid>());
-            ModCreatorWindow.ZoomFraming(working[Rail], 1.5, 2, true);
-            Assert.True(working[Rail].Zoom > 1);
-        }
-        finally { w.Close(); }
     });
 
     [Fact]
-    public void SurfaceTitlesUseLocalizedRegistryIds() => AvaloniaTestDispatcher.Run(() =>
+    public void SurfaceTitlesAndScrimsMatchTheirRegistry() => AvaloniaTestDispatcher.Run(() =>
     {
         var loc = LocalizationManager.Instance;
         var previous = loc.CurrentLanguage;
@@ -218,19 +199,6 @@ public class ModCreatorArtFramingEditorTests
                 Assert.Equal(Loc.Get("mod_art_frame_surface_" + card.Tag), card.Children.OfType<TextBlock>().First().Text);
             Assert.Equal("Vignette latérale", cards.Single(c => Equals(c.Tag, Rail)).Children.OfType<TextBlock>().First().Text);
             Assert.Equal("En-tête de carte", cards.Single(c => Equals(c.Tag, Play)).Children.OfType<TextBlock>().First().Text);
-        }
-        finally { loc.SetLanguage(previous); w.Close(); }
-    });
-
-    [Fact]
-    public void ScrimsMatchWpfStopsAcrossTheFullPreview() => AvaloniaTestDispatcher.Run(() =>
-    {
-        var w = new ModCreatorWindow();
-        try
-        {
-            using var bitmap = new WriteableBitmap(new PixelSize(20, 20), new Vector(96, 96));
-            var working = new Dictionary<string, ModArtFraming> { [Rail] = new(), [ModArtFramingRegistry.SurfaceRailCard] = new(), [ModArtFramingRegistry.SurfaceLoomStrip] = new() };
-            var dialog = w.CreateFramingDialog(Slot, bitmap, working);
             Grid Preview(string id) => dialog.GetLogicalDescendants().OfType<StackPanel>().Single(c => Equals(c.Tag, id)).Children.OfType<Grid>().Single();
             void Check(string id, double[] offsets, byte[] alphas)
             {
@@ -247,6 +215,6 @@ public class ModCreatorArtFramingEditorTests
             Check(ModArtFramingRegistry.SurfaceRailCard, new[] { 0d, .42, 1d }, new byte[] { 0x59, 0xB8, 0xE6 });
             Assert.Equal(2, Preview(ModArtFramingRegistry.SurfaceLoomStrip).Children.OfType<Border>().Count());
         }
-        finally { w.Close(); }
+        finally { loc.SetLanguage(previous); w.Close(); }
     });
 }
