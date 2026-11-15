@@ -471,7 +471,7 @@ namespace ConditioningControlPanel.Services
                         try { CosmeticsReady?.Invoke(); } catch (Exception ex) { Log.Debug("V2 Sync: CosmeticsReady handler threw: {Error}", ex.Message); }
                     }
                     ClaimWebXp(s, reply, allowUnread, session, id);
-                    ApplyQuestResets(s, id, session, reply);
+                    ApplyQuestResets(s, id, session, reply, unread);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
@@ -506,7 +506,7 @@ namespace ConditioningControlPanel.Services
 
         // WPF ProfileSyncService.cs:1791-1800. The queued action belongs to the request's
         // account and session, even if logout or another login happens before UI dispatch.
-        private void ApplyQuestResets(AppSettings s, string account, int session, JObject reply)
+        private void ApplyQuestResets(AppSettings s, string account, int session, JObject reply, bool unread)
         {
             bool daily = reply["reset_daily_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_daily_quest");
             bool weekly = reply["reset_weekly_quest"]?.Type == JTokenType.Boolean && reply.Value<bool>("reset_weekly_quest");
@@ -515,11 +515,11 @@ namespace ConditioningControlPanel.Services
             if (!daily && !weekly && ApplyLoginStreak == null) return;
             CoreDispatch.Post(() =>
             {
-                if (!Loaded || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                if ((!Loaded && !unread) || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
                     || !SignedIn(s) || s.UnifiedId != account) return;
                 ApplyLoginStreak?.Invoke(stats);
-                if (daily) ResetDailyQuest?.Invoke();
-                if (weekly) ResetWeeklyQuest?.Invoke();
+                if (!unread && Loaded && daily) ResetDailyQuest?.Invoke();
+                if (!unread && Loaded && weekly) ResetWeeklyQuest?.Invoke();
             });
         }
 
