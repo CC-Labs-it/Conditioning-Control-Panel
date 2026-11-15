@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Transfer;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
@@ -87,7 +88,9 @@ internal sealed partial class GameWindow
 
     private void StopGoonWatch()
     {
-        GoonCacheBridge.Detach();
+        // WPF GoonHostService.cs:2113-2118: a closed match must not strand the queue.
+        try { GoonCacheBridge.Detach(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        try { TransferCompressionService.Instance.ResumeAfterMatch(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _goonWatch?.Stop();
         _goonWatch = null;
     }

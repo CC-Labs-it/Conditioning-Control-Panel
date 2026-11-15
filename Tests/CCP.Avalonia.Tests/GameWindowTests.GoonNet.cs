@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Transfer;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -36,4 +37,33 @@ public sealed partial class GameWindowTests
         w.Close();
         Assert.Null(host.GetValue(null));
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GoonCache_CloseClearsMatchPauseButPreservesUserPause(bool userPaused) => Run((_, _) =>
+    {
+        var service = TransferCompressionService.Instance;
+        service.ResumeUser();
+        service.ResumeAfterMatch();
+        var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
+        try
+        {
+            w.Load(GameWindow.Server()); w.Show();
+            w.HandleMessage("{\"type\":\"cache-req\",\"op\":\"pause\",\"reason\":\"match\"}");
+            Assert.Equal("match", service.PausedBy);
+            if (userPaused) w.HandleMessage("{\"type\":\"cache-req\",\"op\":\"pause\"}");
+            w.Close();
+            Assert.Equal(userPaused ? "user" : null, service.PausedBy);
+            service.ResumeUser();
+            Assert.False(service.IsPaused);
+        }
+        finally
+        {
+            w.Close();
+            service.ResumeUser();
+            service.ResumeAfterMatch();
+        }
+    });
+
 }
