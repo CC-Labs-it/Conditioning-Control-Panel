@@ -43,6 +43,12 @@ public class LockdownDoseEngineTests
             try
             {
                 Assert.Contains("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
+                // Isolate the real kickoff: countdown ticks can otherwise restart the engine after
+                // four ticks and mask a broken kickoff while this test waits on a busy dispatcher.
+                var countdown = typeof(LockdownService).GetField("CountdownTick",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.NotNull(countdown);
+                countdown.SetValue(ld, null);
                 ld.Activate(TimeSpan.FromMinutes(20));
                 Assert.False(CoreEngine.IsRunning);
                 var timer = Assert.IsType<DispatcherTimer>(typeof(MainShellWindow).GetField("_doseEngineKickoff",
