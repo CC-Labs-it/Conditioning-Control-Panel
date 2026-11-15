@@ -3,6 +3,8 @@ using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 
@@ -17,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private AppSettings? _sparkleWalletSettings;
         private bool _sparkleWalletActive;
+        private static readonly PrizeWalletRead _prizeWalletRead = new();
 
         private SparkleWallet? HeaderWallet => Named<SparkleWallet>("HeaderSparkleWallet");
 
@@ -27,6 +30,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += ReplaceSparkleWalletSettings;
             SparklePointRewards.Awarded += OnSparklePointAwarded;
             wallet.VisitRequested += VisitFromSparkleWallet;
+            wallet.CounterRequested += CounterFromSparkleWallet;
+            AccountSeed.ProfileLoaded += ReadPrizeWallet;
+            ReadPrizeWallet();
             Closed += (_, _) => ShutdownSparkleWallet();
             Deactivated += (_, _) => HeaderWallet?.ClosePopup();
             ReplaceSparkleWalletSettings();
@@ -72,14 +78,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// billboard's Back Room door (sign-in first, else Play, where its door will live).</summary>
         private void VisitFromSparkleWallet(object? sender, EventArgs e) => OpenBillboardBackRoom();
 
+        private void CounterFromSparkleWallet(object? sender, EventArgs e) => GameWindow.LaunchPrizeCounter("wallet");
+
+        private void ReadPrizeWallet() => _ = _prizeWalletRead.Refresh();
+
         private void ShutdownSparkleWallet()
         {
             _sparkleWalletActive = false;
+            AccountSeed.ProfileLoaded -= ReadPrizeWallet;
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= ReplaceSparkleWalletSettings;
             SparklePointRewards.Awarded -= OnSparklePointAwarded;
             if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
             _sparkleWalletSettings = null;
-            if (HeaderWallet is { } wallet) { wallet.VisitRequested -= VisitFromSparkleWallet; wallet.ClosePopup(); }
+            if (HeaderWallet is { } wallet) { wallet.VisitRequested -= VisitFromSparkleWallet; wallet.CounterRequested -= CounterFromSparkleWallet; wallet.ClosePopup(); }
         }
     }
 }
