@@ -36,9 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                               panel => panel.ShowTab("gradedintake")),
                 // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
-                // Declutter 2026-11-15: ONE Breakout card. This head has no full Breakout host yet, so the
-                // card always plays the demo (LaunchIdFor); never locked, never an account ask.
-                ["breakout"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // Declutter 2026-11-15: ONE Breakout card, the full game for whoever holds it and the demo for
+                // everyone else (LaunchIdFor); never locked, never an account ask.
+                ["breakout"] = (() => false, _ => Games.GameWindow.Launch(LaunchIdFor("breakout"))),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
@@ -54,11 +54,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["loom"] = (() => false, _ => Games.GameWindow.Launch("loom")),
             };
 
-        /// <summary>The window a card opens: the one Breakout card plays the demo until this head hosts
-        /// the full game (WPF: <c>FullAllowed ? LaunchFull() : LaunchDemo()</c>).</summary>
+        /// <summary>The window a card opens: the one Breakout card plays the full game when the account holds
+        /// it, else the free demo (WPF: <c>FullAllowed ? LaunchFull() : LaunchDemo()</c>), so it never refuses.</summary>
         internal static string LaunchIdFor(string id) =>
-            string.Equals(id, "breakout", StringComparison.OrdinalIgnoreCase) && !Games.GameWindow.Games.ContainsKey("breakout")
-                ? "breakoutdemo" : id;
+            string.Equals(id, "breakout", StringComparison.OrdinalIgnoreCase) && !BreakoutFull() ? "breakoutdemo" : id;
+
+        /// <summary>A gate that cannot be read (no account, no tier) plays the demo, never a refusal.</summary>
+        private static bool BreakoutFull()
+        {
+            try
+            {
+                return Games.GameWindow.Games.ContainsKey("breakout") && CoreAccount.IsLoggedIn
+                    && ConditioningControlPanel.Services.TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+            }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] breakout gate probe failed"); return false; }
+        }
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>

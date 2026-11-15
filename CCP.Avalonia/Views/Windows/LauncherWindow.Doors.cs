@@ -213,6 +213,17 @@ public partial class LauncherWindow
     /// <summary>Back to the two doors (the page's Back link).</summary>
     internal void CloseDoorPage() => SwapDoorView(null);
 
+    /// <summary>Puts the column on <paramref name="door"/>'s page (null = the doors) at once, with no
+    /// beat: a pending swap lands first. Tests use it to reach a page's tiles without a clock.</summary>
+    internal void SeatDoorPage(LauncherDoor? door)
+    {
+        if (_doorThen != null) RunDoorThen();
+        _doorSwapping = false;
+        GamesScroller.Opacity = 1;
+        _door = door;
+        BuildTiles();
+    }
+
     /// <summary>OUT: a door pushes forward while the other falls away (or the page fades). Then the
     /// column is rebuilt for <paramref name="to"/> and comes IN: the tiles on their usual stagger,
     /// the doors on their own settle.</summary>
