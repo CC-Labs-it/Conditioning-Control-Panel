@@ -39,6 +39,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "pong":
                     _arcademyLastBeat = ArcademyUtcNow();
                     break;
+                case "annex-stats":
+                    HandleAnnexStats();
+                    handled = true;
+                    break;
                 case "class-started":
                     _arcademyClassActive = true;
                     handled = true;
