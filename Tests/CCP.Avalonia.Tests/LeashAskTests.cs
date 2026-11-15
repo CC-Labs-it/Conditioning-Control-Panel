@@ -25,6 +25,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF LeashDrawerSection offer row -> LeashSurfaces.ShowAsk -> LeashAskCard, from the Leash page.</summary>
+[Collection(RunsAloneCollection.Name)] // Current and the service are process-wide while the dispatcher is pumped.
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
@@ -182,8 +183,8 @@ public sealed class LeashAskTests
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
-                Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
+                Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
                 ask.AdvanceThud(340);
@@ -200,11 +201,14 @@ public sealed class LeashAskTests
         {
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var previous = LeashAskWindow.Current!;
-            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var service = LeashHead.Service;
+            LeashHead.Service = null; shell.RebindLeashAsks(); LeashHead.Service = service;
+            Tagged<Button>(page, "leash-offer-look").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             var ask = LeashAskWindow.Current!;
             Assert.False(previous.IsVisible);
             Assert.NotSame(previous, ask);
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            shell.RebindLeashAsks(); // The periodic service rebind can follow the manual Look.
             Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");

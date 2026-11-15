@@ -9,9 +9,7 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
-
 namespace CCP.Avalonia.Tests;
-
 public class ChaosVideoGuardTests
 {
     private sealed class Host : IMandatoryVideoHost
@@ -35,7 +33,6 @@ public class ChaosVideoGuardTests
             public ValueTask DisposeAsync() { Dispose(); return default; }
         }
     }
-
     [Fact]
     public void CapCancelsPendingWithoutCrediting() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -177,7 +174,6 @@ public class ChaosVideoGuardTests
         }
         finally { video.ForceCleanup(); CoreEngine.Video = old; }
     });
-
     [Fact]
     public void AServiceAppearingMidRunDoesNotStartAnUnownedChaosTape() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -197,7 +193,6 @@ public class ChaosVideoGuardTests
             EffectPayload.Firer = oldFirer; BubbleOverlay.Field.Clock = oldClock; heavy.SetValue(null, oldHeavy);
         }
     });
-
     [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
     public void RunExitCancelsDeferredRequestAndKeepsUserVideo(bool panic, bool retry) => AvaloniaTestDispatcher.Run(() =>
     {

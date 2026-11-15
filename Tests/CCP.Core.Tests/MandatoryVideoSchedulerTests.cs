@@ -418,13 +418,8 @@ public sealed class MandatoryVideoSchedulerTests
         int nextToken = empty.ClaimChaosVideoToken(); Assert.True(empty.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: nextToken));
         host.BubbleCountActive = false; clock.Advance(BubbleCountScheduler.QueuePoll); Assert.Equal(0, notices); empty.ForceCleanup();
     });
-
     [Theory]
-    [InlineData("preroll")]
-    [InlineData("cascade")]
-    [InlineData("cascade-preroll")]
-    [InlineData("bubble")]
-    [InlineData("lock")]
+    [InlineData("preroll")] [InlineData("cascade")] [InlineData("cascade-preroll")] [InlineData("bubble")] [InlineData("lock")]
     public void CancelledChaosRequestCannotPlayAfterADefer(string stage) => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { BubbleCountActive = stage == "bubble" };
@@ -451,10 +446,8 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Empty(host.Shown);
         v.ForceCleanup();
     });
-
     [Theory]
-    [InlineData("cascade")]
-    [InlineData("bubble")]
+    [InlineData("cascade")] [InlineData("bubble")]
     public void CancelledChaosReleasesTheDeferredSlot(string stage) => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host { BubbleCountActive = stage == "bubble" };
@@ -469,7 +462,6 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(Clips[1], Assert.Single(host.Shown).Path);
         v.ForceCleanup();
     });
-
     [Fact]
     public void CancellingOwnedTapeStopsItOnlyOnce() => With(6, false, () =>
     {
@@ -489,7 +481,6 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(1, host.Closes);
         v.ForceCleanup();
     });
-
     [Fact]
     public void CancellingChaosDoesNotCloseAnUnrelatedVideo() => With(6, false, () =>
     {
@@ -508,7 +499,6 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(0, host.Closes);
         v.ForceCleanup();
     });
-
     [Fact]
     public void ForceCleanupInvalidatesChaosRequestHeldByAnotherSurface() => With(6, false, () =>
     {
