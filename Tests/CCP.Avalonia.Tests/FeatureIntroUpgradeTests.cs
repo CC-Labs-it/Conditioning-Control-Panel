@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Tours;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Localization;
 using Xunit;
 namespace CCP.Avalonia.Tests;
@@ -98,6 +99,62 @@ public sealed class FeatureIntroUpgradeTests
         await Step();
         Assert.Equal(new[] { "wizard", "update" }, order);
         Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
+    });
+
+    [Fact]
+    public Task OnlineLicenceWaitsForQueuedUpgrade() => Run("old-version", async shell =>
+    {
+        // WPF Marquee.cs:342 and OnlineMeter.cs:468 queue notes at 30, licence at 40.
+        var official = ScrolllerPolicy.Official;
+        var enabled = ScrolllerPolicy.Enabled;
+        var cap = ScrolllerPolicy.MaxClipShortSide;
+        TaskCompletionSource? poll = null;
+        try
+        {
+            ScrolllerPolicy.Official = true;
+            ScrolllerPolicy.Apply(true, cap);
+            CoreSettings.Current.MediaSource = "online";
+            CoreSettings.Current.RemoteMediaConsented = true;
+            CoreSettings.Current.ScrolllerOfficialNoteSeen = false;
+            shell.OnlineLicenceDelay = delay => delay == TimeSpan.FromMilliseconds(750)
+                ? Task.CompletedTask : (poll = new TaskCompletionSource()).Task;
+            var upgrade = shell.ShowWhatsNewIfNeeded();
+            var state = OnlineMeterHead.Now();
+            Assert.True(state.ShowOfficialNote);
+            shell.OfferOnlineLicenceCard(state);
+            Assert.Empty(shell.OwnedWindows.OfType<OnlineLicenceCard>());
+            Assert.NotNull(poll); // the licence is waiting during the upgrade's settle
+            for (var i = 0; i < 610; i++)
+            {
+                var previousPoll = poll!;
+                previousPoll.SetResult();
+                for (var j = 0; j < 5; j++) await Task.Yield();
+                Assert.False(shell.OnlineLicenceTask!.IsCompleted); // its own deadline is not spent
+                Assert.NotSame(previousPoll, poll);
+            }
+            await Step();
+            var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
+            poll!.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            Assert.Empty(shell.OwnedWindows.OfType<OnlineLicenceCard>());
+            news.Close();
+            await upgrade;
+            await Step();
+            poll!.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            var licence = Assert.Single(shell.OwnedWindows.OfType<OnlineLicenceCard>());
+            Assert.False(CoreSettings.Current.ScrolllerOfficialNoteSeen);
+            licence.Close();
+            await shell.OnlineLicenceTask!;
+            Assert.True(CoreSettings.Current.ScrolllerOfficialNoteSeen);
+        }
+        finally
+        {
+            MainShellWindow.CloseOnlineLicenceCardForPanic(shell);
+            poll?.TrySetResult();
+            ScrolllerPolicy.Official = official;
+            ScrolllerPolicy.Apply(enabled, cap);
+        }
     });
 
     [Fact]
