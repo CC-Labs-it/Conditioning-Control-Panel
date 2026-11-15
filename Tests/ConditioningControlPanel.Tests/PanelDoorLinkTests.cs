@@ -130,4 +130,17 @@ public class PanelDoorLinkTests
             "the door check runs after the recents note");
         Assert.Contains("if (tab == \"lab\") tab = \"playeyes\";", nav, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void TheGamesZoneAndTheDeeperTileAreCollapsedNotDeleted()
+    {
+        var play = AppFile("Views", "Tabs", "PlayTabView.xaml");
+        Assert.Contains("x:Name=\"ZoneGamesHead\" x:FieldModifier=\"internal\" Margin=\"2,4,2,8\" Visibility=\"Collapsed\"", play, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"ZoneGamesWall\" x:FieldModifier=\"internal\" Columns=\"3\" Visibility=\"Collapsed\"", play, StringComparison.Ordinal);
+
+        var home = AppFile("Views", "Tabs", "SettingsTabView.xaml");
+        Assert.Contains("x:Name=\"CardDeeperEditor\" x:FieldModifier=\"internal\" Visibility=\"Collapsed\"", home, StringComparison.Ordinal);
+        // The daily box grew into the freed cell: no hole on the wall.
+        Assert.Contains("Grid.Row=\"1\" Grid.RowSpan=\"2\" Grid.Column=\"0\" x:Name=\"MysteryFlipHost\"", home, StringComparison.Ordinal);
+    }
 }
