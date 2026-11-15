@@ -1,4 +1,5 @@
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
@@ -6,15 +7,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     {
         private static ChaosHudWindow? _preHud;
         private static ChaosRunState? _preState;
+        private static ChaosHubWindow? _preHub;
         internal static ChaosHudWindow? PreHud => _preHud;
         internal static ChaosRunState? PreState => _preState;
 
         // WPF ChaosModeService.cs:586-720: the Warren owns a separate preview until a run starts.
-        internal static void ShowLoadoutSidebar()
+        internal static void ShowLoadoutSidebar(ChaosHubWindow hub)
         {
             if (_active || _preHud != null) return;
+            _preHub = hub;
             _preState = new ChaosRunState(ChaosRunConfig.FromSettings());
             _preHud = new ChaosHudWindow(_preState);
+            var hud = _preHud;
+            hud.Closed += (_, _) => { if (ReferenceEquals(_preHud, hud)) { _preHud = null; CloseLoadoutSidebar(); } };
             ChaosMeta.LoadoutChanged += RefreshSidebarLoadout;
             RefreshSidebarLoadout();
             _preHud.SetHeroMode(true);
@@ -28,7 +33,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var hud = _preHud;
             _preHud = null;
             _preState = null;
+            _preHub = null;
             hud?.Close();
+        }
+
+        // WPF ChaosModeService.cs:619-659: these commands belong to the Warren preview.
+        internal static void SidebarPocketClicked(ChaosHudWindow hud, string? id)
+        {
+            if (!ReferenceEquals(_preHud, hud)) return;
+            if (string.IsNullOrEmpty(id)) { _preHub?.NavigateTo("enhance"); return; }
+            if (!ChaosMeta.IsBoonActive(id)) return;
+            ChaosMeta.SetBoonActive(id, false);
+            _preState?.PushEvent(Loc.GetF("chaos_sidebar_left_behind", ChaosLifetimeBoons.ById(id)?.Name ?? id));
+            _preHub?.RefreshAfterExternalLoadoutChange();
+        }
+
+        internal static void SidebarFallIn(ChaosHudWindow hud)
+        {
+            if (!ReferenceEquals(_preHud, hud)) return;
+            if (_preHub != null) _preHub.FallIn();
+            else StartRun();
+        }
+
+        internal static void SidebarClose(ChaosHudWindow hud)
+        {
+            if (!ReferenceEquals(_preHud, hud)) return;
+            if (_preHub != null) _preHub.Close();
+            else CloseLoadoutSidebar();
         }
 
         private static void RefreshSidebarLoadout()
@@ -51,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 }
                 if (cat != ChaosBoonCategory.Utility)
                     for (int i = group.Count; i < ChaosMeta.SlotsFor(cat); i++)
-                        group.Add(new ChaosSidebarBoon { IsEmptySlot = true, Glyph = "+", Name = cat == ChaosBoonCategory.Skill ? "empty toy pocket" : "empty accessory pocket", Desc = "click to go shopping in the dollhouse." });
+                        group.Add(new ChaosSidebarBoon { IsEmptySlot = true, Glyph = "+", Name = Loc.Get(cat == ChaosBoonCategory.Skill ? "chaos_sidebar_empty_toy" : "chaos_sidebar_empty_accessory"), Desc = Loc.Get("chaos_sidebar_empty_desc") });
             }
             foreach (var id in ChaosMeta.State.PurchasedUpgrades)
             {

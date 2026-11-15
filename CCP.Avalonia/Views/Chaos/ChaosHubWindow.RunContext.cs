@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_runContext) return;
             _runContext = true;
             SetCompanionActive(true);
-            ChaosRunHost.ShowLoadoutSidebar();
+            ChaosRunHost.ShowLoadoutSidebar(this);
         }
 
         private void LeaveRunContext()
