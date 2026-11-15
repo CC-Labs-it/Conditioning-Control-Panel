@@ -124,14 +124,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // Skia does not offer scanline decoding for PNG. Inflate one row at a time so a
-        // compressed poster never allocates its full pixel buffer. Interlaced PNG is rejected.
+        // compressed poster never allocates its full pixel buffer, including for Adam7 passes.
         private static Bitmap DecodeFramingPng(string path, int width, int height, int tw, int th)
         {
             using var input = File.OpenRead(path);
             var data = new byte[33]; input.ReadExactly(data);
             if (!data.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) throw new InvalidDataException("Unsupported image");
             int depth = data[24], color = data[25], channels = color switch { 0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4, _ => 0 };
-            if (channels == 0 || data[28] != 0 || !(depth == 8 || depth == 16 || ((color == 0 || color == 3) && (depth == 1 || depth == 2 || depth == 4))) || (color == 3 && depth == 16))
+            if (channels == 0 || data[28] > 1 || !(depth == 8 || depth == 16 || ((color == 0 || color == 3) && (depth == 1 || depth == 2 || depth == 4))) || (color == 3 && depth == 16))
                 throw new InvalidDataException("Unsupported PNG");
             byte[]? palette = null, transparency = null;
             using var compressed = new FileStream(System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName()), FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
@@ -158,13 +158,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (color == 3 && (palette == null || palette.Length % 3 != 0)) throw new InvalidDataException("Invalid PNG palette");
             compressed.Position = 0;
             using var zlib = new ZLibStream(compressed, CompressionMode.Decompress);
-            int rowBytes = checked((width * channels * depth + 7) / 8), bpp = Math.Max(1, (channels * depth + 7) / 8);
-            var current = new byte[rowBytes]; var previous = new byte[rowBytes]; var pixels = new byte[tw * th * 4];
+            int bpp = Math.Max(1, (channels * depth + 7) / 8);
+            var pixels = new byte[tw * th * 4];
             int Sample(byte[] row, int index) => depth == 16 ? BinaryPrimitives.ReadUInt16BigEndian(row.AsSpan(index * 2, 2)) : depth == 8 ? row[index] : (row[index * depth / 8] >> (8 - depth - index * depth % 8)) & ((1 << depth) - 1);
             int ToByte(int value) => depth == 16 ? value >> 8 : depth == 8 ? value : value * 255 / ((1 << depth) - 1);
-            int ty = 0;
-            for (int y = 0; y < height; y++)
+            var passes = data[28] == 0 ? new[] { (0, 0, 1, 1) } : new[]
             {
+                (0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4),
+                (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2)
+            };
+            foreach (var (x0, y0, dx, dy) in passes)
+            {
+                int pw = Math.Max(0, (width - x0 + dx - 1) / dx), ph = Math.Max(0, (height - y0 + dy - 1) / dy);
+                if (pw == 0 || ph == 0) continue;
+                int rowBytes = checked((pw * channels * depth + 7) / 8);
+                var current = new byte[rowBytes]; var previous = new byte[rowBytes];
+                for (int py = 0; py < ph; py++)
+                {
+                int y = y0 + py * dy;
+                int ty = (int)(((long)y * th + height - 1) / height);
                 int filter = zlib.ReadByte(); if (filter < 0 || filter > 4) throw new InvalidDataException("Invalid PNG filter");
                 zlib.ReadExactly(current);
                 for (int i = 0; i < rowBytes; i++)
@@ -178,7 +190,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     for (int x = 0; x < tw; x++)
                     {
-                        int src = (int)((long)x * width / tw) * channels, r, g, b, alpha = 255, first = Sample(current, src);
+                        int sourceX = (int)((long)x * width / tw);
+                        if (sourceX < x0 || (sourceX - x0) % dx != 0) continue;
+                        int src = (sourceX - x0) / dx * channels, r, g, b, alpha = 255, first = Sample(current, src);
                         if (color == 3)
                         {
                             if (first * 3 + 2 >= palette!.Length) throw new InvalidDataException("Invalid PNG palette index");
@@ -189,9 +203,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         else { int green = Sample(current, src + 1), blue = Sample(current, src + 2); r = ToByte(first); g = ToByte(green); b = ToByte(blue); if (color == 6) alpha = ToByte(Sample(current, src + 3)); else if (transparency?.Length >= 6 && first == BinaryPrimitives.ReadUInt16BigEndian(transparency) && green == BinaryPrimitives.ReadUInt16BigEndian(transparency.AsSpan(2)) && blue == BinaryPrimitives.ReadUInt16BigEndian(transparency.AsSpan(4))) alpha = 0; }
                         int dst = (ty * tw + x) * 4; pixels[dst] = (byte)((b * alpha + 127) / 255); pixels[dst + 1] = (byte)((g * alpha + 127) / 255); pixels[dst + 2] = (byte)((r * alpha + 127) / 255); pixels[dst + 3] = (byte)alpha;
                     }
-                    ty++;
                 }
                 (current, previous) = (previous, current);
+                }
             }
             using var bitmap = new SKBitmap(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul);
             Marshal.Copy(pixels, 0, bitmap.GetPixels(), pixels.Length);

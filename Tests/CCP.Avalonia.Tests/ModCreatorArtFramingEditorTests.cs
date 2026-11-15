@@ -172,6 +172,35 @@ public class ModCreatorArtFramingEditorTests
     });
 
     [Fact]
+    public void InterlacedPngOpensAndFrames() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var preview = ModCreatorWindow.DecodeFramingPreview(Path.Combine(AppContext.BaseDirectory, "Assets", "framing-adam7.png"));
+        Assert.Equal(new PixelSize(900, 600), preview.PixelSize);
+        var pixel = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try
+        {
+            preview.CopyPixels(new PixelRect(400, 0, 1, 1), pixel, 4, 4);
+            Assert.True(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 2) > 240);
+            preview.CopyPixels(new PixelRect(401, 599, 1, 1), pixel, 4, 4);
+            Assert.True(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 0) > 240);
+            preview.CopyPixels(new PixelRect(400, 300, 1, 1), pixel, 4, 4);
+            Assert.InRange(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 2), 110, 145);
+            Assert.InRange(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 0), 110, 145);
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pixel); }
+        var w = new ModCreatorWindow();
+        try
+        {
+            var working = ModCreatorWindow.BeginFramingEdit(Slot, null);
+            var dialog = w.CreateFramingDialog(Slot, preview, working);
+            Assert.NotEmpty(dialog.GetLogicalDescendants().OfType<Grid>());
+            ModCreatorWindow.ZoomFraming(working[Rail], 1.5, 2, true);
+            Assert.True(working[Rail].Zoom > 1);
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
     public void SurfaceTitlesUseLocalizedRegistryIds() => AvaloniaTestDispatcher.Run(() =>
     {
         var loc = LocalizationManager.Instance;
