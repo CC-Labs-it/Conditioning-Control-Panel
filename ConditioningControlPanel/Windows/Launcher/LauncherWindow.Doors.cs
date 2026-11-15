@@ -195,7 +195,7 @@ public partial class LauncherWindow
             try
             {
                 ImageSource? art = null;
-                if (entry.Revealed && entry.ArtPath != null) art = ModResourceResolver.ResolveImageDecoded(entry.ArtPath, 720);
+                if (entry.Revealed && entry.ArtPath != null) art = ModResourceResolver.ResolveImageDecoded(entry.ArtPath, TileArtDecodeWidth);
                 else if (entry.Id == "breakout") art = BreakoutCardArt.Full;
                 if (art != null) arts.Add(art);
             }
