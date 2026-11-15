@@ -525,7 +525,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 for (int i = 0; i < 3; i++)
                     BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(_state.RunIntensity, false,
                         center.X + Rng.Next(-40, 41), center.Y + Rng.Next(-40, 41), sweeper: true));
+                RippleCue("rabbit_spawn", 0.5f);
+                _state.PushEvent(Loc.Get("chaos_gg_rabbits"));
             }
+            CheckComboMilestone();
+        }
+
+        // WPF ChaosModeService.cs:2351-2375: the rabbit is a pickup, not a treat payload.
+        internal static void OnDarterCaught(AmbientBubble b)
+        {
+            if (_state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
+            bool quick = b.QuickCatch, extended = _slowMoRemainingSec > 0;
+            _state.Score += (ChaosBubbleVariants.DARTER_BASE_POINTS + (quick ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * _state.TotalMult;
+            _state.Focus += ChaosTuning.FOCUS_PER_RABBIT;
+            _state.Combo++; _state.Heat = Math.Min(1, _state.Heat + 0.05);
+            App.Achievements?.TrackBubblePopped();
+            ChaosLessons.Tick("rabbit_caller");
+            RippleCue("rabbit_catch", 0.6f);
+            Label(b, Loc.Get("chaos_rabbit_banner"), Color.FromUInt32(b.Spec!.Tint));
+            if (extended) { _slowMoRemainingSec += 0.8; _pendulumSlowActive = false; }
+            else ActivateSlowMo(6 + _state.SlowMoBonusSec, pendulum: false);
+            Pulse(Color.FromRgb(120, 200, 255), quick ? 0.32 : 0.24);
+            _state.PushEvent(Loc.Get(extended ? "chaos_rabbit_extend" : quick ? "chaos_rabbit_quick" : "chaos_rabbit_caught"));
             CheckComboMilestone();
         }
 
@@ -1471,7 +1492,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _slowMoRemainingSec = durationSec;
             _pendulumSlowActive = pendulum;
             BubbleOverlay.Field.ChaosTimeScale = SlowMoFactor;
-            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("chaos_pendulum_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
+            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get(pendulum ? "chaos_pendulum_banner" : "chaos_rabbit_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
                 artKey: pendulum ? "pendulum" : "slowmo");
             EffectPayload.GlobalDurationMult = 1.0 / SlowMoFactor;
             if (!_slowMoCueOn) ChaosOverlayWindow.ChaosSfx.Play("time_slow_in", 0.5f);

@@ -517,8 +517,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static void Press(AmbientBubble b, double x, double y)
         {
-            // Darter catch and sweeper redirection belong to the remaining host slice.
-            if (b.Spec?.IsDarter == true) return;
+            if (b.Spec is { IsDarter: true } spec)
+            {
+                if (_chaosPopped == null || Field.HoldChaos || b.Popping) return;
+                if (spec.IsSweeper || ChaosRunHost.State?.SpankerActive == true)
+                {
+                    bool first = !b.Spanked;
+                    b.Spank(Field.Random, ChaosRunHost.State?.SpankGrowFactor ?? 1);
+                    if (first && b.Spanked) Services.Chaos.ChaosLessons.Tick("rabbit_caller");
+                }
+                else
+                {
+                    b.Popping = true;
+                    AnchorPop(b);
+                    ChaosRunHost.OnDarterCaught(b);
+                }
+                RequestFrame();
+                return;
+            }
             if (b.Spec?.IsTease == true)
             {
                 if (Field.HoldChaos || b.Popping) return;
@@ -775,6 +791,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            if (b.Spec.IsDarter) { Press(b, b.CenterX, b.CenterY); return; }
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
             if (IsShielded(b)) { BounceShield(b); return; }
@@ -923,6 +940,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Step();
             if (Field.HoldChaos) return;
             TickChaosTrails();
+            TickDarterSweeps();
             foreach (var b in Field.Bubbles)
             {
                 if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
@@ -1250,6 +1268,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             {
                                 using (dc.PushOpacity(b.ShieldOpacity))
                                     dc.DrawEllipse(null, ShieldPen, new Point(cx, cy), size / 2 + 6 * k, size / 2 + 6 * k);
+                            }
+                            if (b.Spec is { IsDarter: true } rabbit && !b.Popping && b.TelegraphFraction > 0)
+                            {
+                                double frac = b.TelegraphFraction, r = size / 2 * (1 + 0.30 * frac);
+                                using (dc.PushOpacity(0.85 * frac)) dc.DrawEllipse(null, FusePen(rabbit.Tint), new Point(cx, cy), r, r);
                             }
                             if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                             {

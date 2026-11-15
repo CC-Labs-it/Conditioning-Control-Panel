@@ -116,7 +116,23 @@ namespace ConditioningControlPanel.Services
         // Ambient trigger bubbles fly their spec's chaos motion row; plain ambient bubbles use Motion (Bubbles v2).
         public Chaos.ChaosMotion TriggerMotion { get; private set; }
         private double _vx, _vy, _startY, _left, _right;
-        private double _darterTelegraphMs, _darterLifeMs;
+        private double _darterTelegraphMs, _darterLifeMs, _darterActiveMs, _darterPhase, _darterPunch, _spankCooldown;
+        public bool Spanked { get; private set; }
+        public double SpankGrowth { get; private set; } = 1;
+        public bool QuickCatch => !DarterTelegraphing && _darterActiveMs <= (Spec?.QuickWindowMs ?? 0);
+        public double TelegraphFraction => DarterTelegraphing ? Math.Clamp(_darterTelegraphMs / Math.Max(1, Spec?.TelegraphMs ?? 1), 0, 1) : 0;
+        public void Spank(Random random, double growth)
+        {
+            if (Popping || _spankCooldown > 0 || Spec?.IsDarter != true) return;
+            _spankCooldown = 250;
+            double speed = Math.Sqrt(_vx * _vx + _vy * _vy);
+            if (speed < 0.01) speed = Spec.DarterSpeed;
+            speed = Math.Min(speed * 1.18, Spec.DarterSpeed * 2.2);
+            double angle = random.NextDouble() * Math.PI * 2;
+            _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed;
+            _darterEscaping = false; _darterBounces = 0; _darterPunch = 0.35;
+            if (!Spanked) { Spanked = true; SpankGrowth = Math.Max(1, growth); }
+        }
         public bool DarterTelegraphing => _darterTelegraphMs > 0;
         private int _darterBounces;
         private bool _darterEscaping;
@@ -319,6 +335,7 @@ namespace ConditioningControlPanel.Services
             }
             if (spec.IsDarter && motion == Chaos.ChaosMotion.RoamBounce)
             {
+                b.Spanked = spec.IsSweeper;
                 b._darterTelegraphMs = Math.Max(0, spec.TelegraphMs);
                 b._darterLifeMs = Math.Max(1, spec.LifetimeMs);
                 double mag = Math.Sqrt(b._vx * b._vx + b._vy * b._vy);
@@ -358,6 +375,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Spec?.IsDarter == true) return Scale;
                 if (Spec?.IsTease == true) return Scale + 0.10 * Math.Sin(_timeAlive * 5.2);
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
@@ -454,9 +472,14 @@ namespace ConditioningControlPanel.Services
             // telegraph, reflects three times, then escapes or expires harmlessly.
             if (Spec is { IsDarter: true } && TriggerMotion == Chaos.ChaosMotion.RoamBounce)
             {
+                _darterPhase += 0.5 * Math.Max(ts, 0.4);
+                _darterPunch = Math.Max(0, _darterPunch - 0.05);
+                Scale = SpankGrowth + 0.10 * Math.Sin(_darterPhase) + _darterPunch;
+                _spankCooldown = Math.Max(0, _spankCooldown - FuseStepMs);
                 if (_darterTelegraphMs > 0) _darterTelegraphMs -= FuseStepMs;
                 else
                 {
+                    _darterActiveMs += FuseStepMs * Math.Max(ts, 0.15);
                     X += _vx * ts; Y += _vy * ts;
                     double top = _top + Size + 50, bottom = _bottom - Size - 50;
                     if (!_darterEscaping)
@@ -466,7 +489,7 @@ namespace ConditioningControlPanel.Services
                         else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); hit = true; }
                         if (Y < top) { Y = top; _vy = Math.Abs(_vy); hit = true; }
                         else if (Y > bottom) { Y = bottom; _vy = -Math.Abs(_vy); hit = true; }
-                        if (hit && ++_darterBounces >= Chaos.ChaosBubbleVariants.DARTER_MAX_BOUNCES) _darterEscaping = true;
+                        if (hit) { _darterPunch = 0.22; if (++_darterBounces >= Chaos.ChaosBubbleVariants.DARTER_MAX_BOUNCES) _darterEscaping = true; }
                     }
                     else
                     {

@@ -108,6 +108,37 @@ public sealed class AmbientBubblesTests
         Assert.Equal(AmbientBubble.Result.Done, b.Step());
     }
 
+    [Fact]
+    public void Darter_telegraph_throbs_bounces_and_sweeper_smack_redirects_with_cooldown()
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec {
+            IsDarter = true, IsSweeper = true, SizePx = 72, TelegraphMs = 64, LifetimeMs = 8000, DarterSpeed = 9 };
+        var a = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, spec,
+            ConditioningControlPanel.Services.Chaos.ChaosMotion.RoamBounce);
+        var b = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, spec,
+            ConditioningControlPanel.Services.Chaos.ChaosMotion.RoamBounce);
+        var c = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, spec,
+            ConditioningControlPanel.Services.Chaos.ChaosMotion.RoamBounce);
+        Assert.Equal(1, a.TelegraphFraction); Assert.True(a.Spanked);
+        a.Step(); Assert.Equal(.5, a.TelegraphFraction); Assert.NotEqual(1, a.DrawScale);
+        b.Step(); c.Step(); a.Step(); b.Step(); c.Step(); Assert.Equal(0, a.TelegraphFraction);
+        a.X = b.X = c.X = 2000; a.Step(); b.Step(); c.Step(); a.Step(); b.Step(); c.Step();
+        Assert.True(a.DrawScale > 1.1); // wall punch survives into the next frame
+        a.Spank(new Random(2), 3); c.Spank(new Random(2), 3);
+        Assert.Equal(1, a.SpankGrowth); // born spanked, no growth
+        a.Spank(new Random(3), 3); // guarded for 250 ms
+        a.X = b.X = c.X = 900; a.Y = b.Y = c.Y = 500;
+        a.Step(); b.Step(); c.Step();
+        Assert.True(Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y) > .01);
+        Assert.Equal(c.X, a.X, 8); Assert.Equal(c.Y, a.Y, 8);
+        var plain = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1,
+            new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { IsDarter = true, SizePx = 72, LifetimeMs = 8000, DarterSpeed = 9 },
+            ConditioningControlPanel.Services.Chaos.ChaosMotion.RoamBounce);
+        plain.Spank(new Random(2), 1.5); Assert.True(plain.Spanked); Assert.Equal(1.5, plain.SpankGrowth);
+        for (int i = 0; i < 8; i++) plain.Step();
+        plain.Spank(new Random(3), 3); Assert.Equal(1.5, plain.SpankGrowth);
+    }
+
     [Theory]
     [InlineData(false, false, false, false, 0)]
     [InlineData(true, false, true, false, 8)]

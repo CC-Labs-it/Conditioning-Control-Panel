@@ -97,8 +97,11 @@ public class ChaosRabbitTrailFeedTests
     [Fact]
     public void Spawned_darter_moves_and_feeds_the_recorder() => AvaloniaTestDispatcher.Run(() =>
     {
+        var cues = new List<string>();
+        var cue = ChaosRunHost.RippleCue;
         try
         {
+            ChaosRunHost.RippleCue = (key, _) => cues.Add(key);
             var cfg = new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false, DartersEnabled = false };
             ChaosRunHost.StartRun(cfg);
             ChaosRunHost.Overlay!.FinishCountdown();
@@ -110,7 +113,30 @@ public class ChaosRabbitTrailFeedTests
             try { EffectPayload.Firer = null; ChaosRunHost.OnBubblePopped(treat); }
             finally { EffectPayload.Firer = firer; }
             Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsSweeper == true));
+            Assert.Contains("rabbit_spawn", cues);
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_gg_rabbits"), state.RecentEvents);
             state.GgRabbitChance = 0;
+            var sweeper = BubbleOverlay.Field.Bubbles.First(b => b.Spec?.IsSweeper == true);
+            sweeper.X = 1000; sweeper.Y = 500;
+            var target = new AmbientBubble { X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec() };
+            var live = new AmbientBubble { X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec { IsLive = true }, FuseTotalMs = 5000, FuseRemainingMs = 5000 };
+            var frozen = new AmbientBubble { X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec { IsFreeze = true } };
+            var otherRabbit = new AmbientBubble { X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec { IsDarter = true } };
+            var otherScreen = new AmbientBubble { Screen = 1, X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec() };
+            var ambient = new AmbientBubble { AmbientTrigger = true, X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec { Payload = null! } };
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { target, live, frozen, otherRabbit, otherScreen, ambient });
+            BubbleOverlay.HoldChaos(true); BubbleOverlay.TickDarterSweeps();
+            Assert.False(target.Popping || live.Popping);
+            BubbleOverlay.HoldChaos(false);
+            try { EffectPayload.Firer = null; BubbleOverlay.TickDarterSweeps(); }
+            finally { EffectPayload.Firer = firer; }
+            Assert.True(target.Popping && live.Popping && otherScreen.Popping && ambient.Popping);
+            Assert.False(frozen.Popping || otherRabbit.Popping);
+            BubbleOverlay.Press(sweeper, sweeper.CenterX, sweeper.CenterY);
+            try { EffectPayload.Firer = null; BubbleOverlay.PopChaos(sweeper); } // indirect pops also smack
+            finally { EffectPayload.Firer = firer; }
+            Assert.False(sweeper.Popping); Assert.True(sweeper.Spanked);
+            sweeper.Step(); Assert.True(sweeper.DrawScale > 1.25); // click delivered the smack
             state.RabbitRateMult = 1000;
             state.RabbitTrailSec = 2;
             BubbleOverlay.Field.Bubbles.Clear();
@@ -120,13 +146,81 @@ public class ChaosRabbitTrailFeedTests
             ChaosRunHost.SpawnTick();
             var rabbit = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true));
             Assert.Equal(ChaosMotion.RoamBounce, rabbit.TriggerMotion);
-            BubbleOverlay.Press(rabbit, rabbit.CenterX, rabbit.CenterY);
-            Assert.False(rabbit.Popping);
             rabbit.X = 500; rabbit.Y = 500;
             for (int i = 0; i < 25; i++) BubbleOverlay.StepChaosField();
             Assert.True(BubbleOverlay.ChaosTrails[rabbit].Points.Count >= 2);
+            state.Focus = 0; state.SlowMoBonusSec = 2;
+            double score = state.Score, multiplier = state.TotalMult, heat = state.Heat; int combo = state.Combo;
+            BubbleOverlay.Press(rabbit, rabbit.CenterX, rabbit.CenterY);
+            Assert.True(rabbit.Popping);
+            Assert.Equal(score + 210 * multiplier, state.Score, 6);
+            Assert.Equal(15, state.Focus); Assert.Equal(combo + 1, state.Combo);
+            Assert.Equal(Math.Min(1, heat + 0.05), state.Heat, 6);
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_quick"), state.RecentEvents);
+            Assert.Equal(6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
+            Assert.Equal(ChaosRunHost.SlowMoFactor, BubbleOverlay.Field.ChaosTimeScale);
+            Assert.Contains("rabbit_catch", cues);
+            var another = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(9));
+            BubbleOverlay.HoldChaos(true); BubbleOverlay.Press(another, another.CenterX, another.CenterY);
+            Assert.False(another.Popping); BubbleOverlay.HoldChaos(false);
+            score = state.Score; multiplier = state.TotalMult;
+            BubbleOverlay.Field.FreezeChaos = true;
+            BubbleOverlay.Press(another, another.CenterX, another.CenterY);
+            BubbleOverlay.Field.FreezeChaos = false;
+            Assert.Equal(score + 120 * multiplier, state.Score, 6); // telegraph catches are not quick
+            Assert.Equal(6.8 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
+            Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_extend"), state.RecentEvents);
+            var indirect = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(4));
+            BubbleOverlay.PopChaos(indirect);
+            Assert.True(indirect.Popping); Assert.Equal(7.6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
+            state.SpankerActive = true; state.SpankGrowFactor = 1.5;
+            var ally = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5));
+            BubbleOverlay.Press(ally, ally.CenterX, ally.CenterY);
+            Assert.False(ally.Popping); Assert.True(ally.Spanked); Assert.Equal(1.5, ally.SpankGrowth);
         }
-        finally { ChaosRunHost.ForceShutdown(); }
+        finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.RippleCue = cue; }
     });
+
+    [Fact]
+    public void Telegraph_ring_is_rendered_then_disappears() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 240, 240), 1) { Width = 240, Height = 240 };
+        try
+        {
+            var spec = new EffectBubbleSpec { IsDarter = true, SizePx = 100, TelegraphMs = 64, LifetimeMs = 8000, DarterSpeed = 9, Tint = 0xFFFF4DC4 };
+            var b = BubbleOverlay.SpawnChaos(spec, new Random(7));
+            b.X = b.Y = 70;
+            w.Show(); w.UpdateLayout();
+            byte[] Frame()
+            {
+                using var bitmap = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(240, 240));
+                bitmap.Render((Control)w.Content!);
+                var bytes = new byte[240 * 240 * 4];
+                var ptr = System.Runtime.InteropServices.Marshal.AllocHGlobal(bytes.Length);
+                try { bitmap.CopyPixels(new PixelRect(0, 0, 240, 240), ptr, bytes.Length, 240 * 4); System.Runtime.InteropServices.Marshal.Copy(ptr, bytes, 0, bytes.Length); }
+                finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr); }
+                return bytes;
+            }
+            var flare = Frame();
+            b.Step(); b.Step(); b.Scale = 1;
+            Assert.False(flare.SequenceEqual(Frame()));
+        }
+        finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+    });
+
+    [Fact]
+    public void Rabbit_feedback_is_present_in_all_ten_languages()
+    {
+        var dir = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages");
+        if (!System.IO.Directory.Exists(dir)) dir = System.IO.Path.Combine(AppContext.BaseDirectory, "Languages");
+        var files = System.IO.Directory.GetFiles(dir, "*.json");
+        Assert.Equal(10, files.Length);
+        foreach (var f in files)
+        {
+            var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(f));
+            foreach (var key in new[] { "chaos_gg_rabbits", "chaos_rabbit_caught", "chaos_rabbit_quick", "chaos_rabbit_extend", "chaos_rabbit_banner" })
+                Assert.False(string.IsNullOrWhiteSpace((string?)json[key]), $"{f}: {key}");
+        }
+    }
 
 }

@@ -14,6 +14,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal const double TrailPopRadiusPx = 46;
         internal static readonly Dictionary<AmbientBubble, ChaosRabbitTrails> ChaosTrails = new();
 
+        // WPF BubbleService.cs:1901-1915: the grown body mows while the field moves.
+        internal static void TickDarterSweeps()
+        {
+            if (_chaosPopped == null || Field.HoldChaos || Field.FreezeChaos) return;
+            var snapshot = Field.Bubbles.ToArray();
+            foreach (var rabbit in snapshot)
+            {
+                if (!rabbit.Spanked || rabbit.Popping || rabbit.Spec?.IsDarter != true) continue;
+                double grow = rabbit.Size * (rabbit.SpankGrowth - 1);
+                var reach = new Rect(rabbit.X - grow / 2, rabbit.Y - grow / 2, rabbit.Size + grow, rabbit.Size + grow);
+                foreach (var b in snapshot)
+                {
+                    if (b.Popping || b.Spec is not { IsDarter: false, IsFreeze: false }
+                        || !Field.Bubbles.Contains(b)) continue;
+                    if (!reach.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                    if (b.AmbientTrigger) Pop(b); else PopChaos(b);
+                    if (_chaosPopped == null) return;
+                }
+            }
+        }
+
         internal static void TickChaosTrails()
         {
             if (_chaosPopped == null || Field.HoldChaos || Field.FreezeChaos) return;
