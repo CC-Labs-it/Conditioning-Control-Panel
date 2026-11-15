@@ -62,6 +62,7 @@ public sealed class LeashAskTests
                     } },
                 });
                 LeashHead.Service = svc;
+                shell.RebindLeashAsks(); // Bind while the owner is hidden, before a manual Look can race the timer.
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
                 var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
                 var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
@@ -142,6 +143,7 @@ public sealed class LeashAskTests
             CoreSettings.Current.LeashIntroSeenLeashed = true;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
+            shell.RebindLeashAsks(); // The gate timer may tick while the ask is open.
             Assert.True(card.PutItOnButton.IsEnabled); // Seen before: no read clock.
 
             wire.Reply = new JObject { ["ok"] = false };
@@ -221,11 +223,12 @@ public sealed class LeashAskTests
         });
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
-        Run((_, page, wire, _) =>
+        Run((shell, page, wire, _) =>
         {
             wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
+            shell.RebindLeashAsks(); // The gate timer may tick while the ask is open.
             Assert.False(card.PutItOnButton.IsEnabled);
             LeashGateCardTests.Click(Tagged<Button>(card, "leash-ask-no"));
             Assert.False((bool?)wire.Calls.Last().Body["accept"]);
