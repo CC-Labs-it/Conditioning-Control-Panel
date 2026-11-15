@@ -87,6 +87,14 @@ public sealed class FlashLayer : BaseLayer
         internal FlickerSpark[]? DeckSparks;
         internal float DeckShadowSigma = -1f;
 
+        // Super, the Whirlpool: its hold on this flash. The pool moves the rect itself (X, Y), so
+        // clicks and gaze keep landing where the picture is; PoolScale is draw-only.
+        internal double PoolVx, PoolVy;
+        public double PoolScale = 1.0;
+        internal bool PoolEaten;
+        /// <summary>The flash reached the eye. Raised once; FlashService takes it off the screen (no pay).</summary>
+        internal Action<FlashItem>? OnPoolEaten;
+
         // Glow (lucky / sparkle-boost tiers). Sigma is the WPF DropShadow blur radius / 3
         // (same conversion as the brain-drain layer). LuckyPulse replicates the 400ms
         // auto-reverse radius x1.6 / opacity 0.7->1.0 forever-animation.
@@ -398,6 +406,7 @@ public sealed class FlashLayer : BaseLayer
                 continue;
             }
 
+            if (item.Exit == null && item.BubbleOriginPx == null) StepPool(item, delta.TotalSeconds);
             if (item.Deck is { } deck && item.Exit == null) StepDeck(item, deck, delta.TotalSeconds);
             else if (item.DeckSparks is { } leftover)
             {
@@ -495,10 +504,11 @@ public sealed class FlashLayer : BaseLayer
                 var hh = (float)(pend.MediaH / 2.0);
                 rect = new SKRect(cx - hw, cy - hh, cx + hw, cy + hh);
             }
-            // Gaze-dwell inflate about the rect center (RenderTransform ScaleTransform parity).
-            if (item.DwellScale > 1.001)
+            // Gaze-dwell inflate about the rect center (RenderTransform ScaleTransform parity),
+            // times how small the Whirlpool has drawn it in.
+            if (item.DwellScale > 1.001 || item.PoolScale < 0.999)
             {
-                var s = (float)item.DwellScale;
+                var s = (float)(item.DwellScale * item.PoolScale);
                 canvas.Translate(rect.MidX, rect.MidY);
                 canvas.Scale(s, s);
                 canvas.Translate(-rect.MidX, -rect.MidY);
@@ -884,6 +894,38 @@ public sealed class FlashLayer : BaseLayer
         => a.X < b.X + b.W && b.X < a.X + a.W && a.Y < b.Y + b.H && b.Y < a.Y + a.H;
 
     /// <summary>Step one card and act on what the step says: raise it, swap its picture, or give up.</summary>
+    /// <summary>
+    /// Super, the Whirlpool: every plain flash inside its reach is dragged in and around, drawn
+    /// smaller the closer it gets, and handed to FlashService once it reaches the eye. A flash on
+    /// a v2 motion path keeps that path. Costs two compares while the pool is off.
+    /// </summary>
+    private void StepPool(FlashItem item, double dt)
+    {
+        var stage = Super.SuperStageHost.Stage;
+        bool moving = item.Motion is { Style: not FlashMotionStyle.Still };
+        var pull = stage.PoolLive && !moving && !item.PoolEaten
+            ? stage.Pull(item.X + item.W / 2, item.Y + item.H / 2, 1.4)
+            : default;
+        double want = pull.Inside ? pull.Scale : 1;
+        if (!pull.Inside && item.PoolVx == 0 && item.PoolVy == 0 && item.PoolScale >= 0.999)
+        {
+            item.PoolScale = 1;
+            return;
+        }
+        item.PoolVx += pull.Ax * dt; item.PoolVy += pull.Ay * dt;
+        double damp = Math.Max(0, 1 - 2.4 * dt);
+        item.PoolVx *= damp; item.PoolVy *= damp;
+        if (Math.Abs(item.PoolVx) < 0.5 && Math.Abs(item.PoolVy) < 0.5 && !pull.Inside) { item.PoolVx = 0; item.PoolVy = 0; }
+        item.X += (float)(item.PoolVx * dt); item.Y += (float)(item.PoolVy * dt);
+        item.PoolScale += (want - item.PoolScale) * (1 - Math.Exp(-8 * dt));
+        _dirty = true;
+        if (pull.Eaten)
+        {
+            item.PoolEaten = true;
+            item.OnPoolEaten?.Invoke(item);
+        }
+    }
+
     private void StepDeck(FlashItem item, FlickerDeckState deck, double dt)
     {
         var ev = FlickerDeck.Step(deck, dt, item.DeckPendingFrames != null, MotionFx.Level);

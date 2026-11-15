@@ -2604,6 +2604,8 @@ namespace ConditioningControlPanel.Services
                         }
                         frames = null;   // ownership transferred — FlashLayer.Remove disposes them
                         AttachDeck(window, window.LayerItem);
+                        HookStage();
+                        if (window.LayerItem is { } poolItem) poolItem.OnPoolEaten = _ => PoolAte(window);
 
                         if (window.IsClickable)
                             EnsureLayerHook();
@@ -2729,6 +2731,90 @@ namespace ConditioningControlPanel.Services
             item.OnDeckRaise = _ => RaiseDeckWindow(window);
             item.OnDeckSwap = _ => ApplyDeckSwap(window);
             item.OnDeckGaveUp = _ => window.DeckPending = null;
+        }
+
+        // ---- Super on the shared stage (CCP.Core/Super): blasts, the bouncing word, the Whirlpool ----
+
+        private bool _stageHooked;
+
+        /// <summary>Listen to the shared stage once. UI thread.</summary>
+        private void HookStage()
+        {
+            if (_stageHooked) return;
+            _stageHooked = true;
+            var stage = Services.Super.SuperStageHost.Stage;
+            stage.Blasted += OnStageBlast;
+            stage.Swept += OnStageSwept;
+        }
+
+        /// <summary>The cards on screen right now, with their rects (device px).</summary>
+        private List<(FlashWindow Window, float X, float Y, float W, float H)> DeckCards()
+        {
+            var cards = new List<(FlashWindow, float, float, float, float)>();
+            lock (_lockObj)
+            {
+                foreach (var w in _activeWindows)
+                    if (w.LayerItem is { Deck: not null, PoolEaten: false } it) cards.Add((w, it.X, it.Y, it.W, it.H));
+            }
+            return cards;
+        }
+
+        /// <summary>UI THREAD: something went off. Every card inside its ring is knocked (one flip,
+        /// as a click would) when the ring gets there. The card that broke is already gone.</summary>
+        private void OnStageBlast(SuperCore.Blast b)
+        {
+            if (b.ReachPx <= 0) return;
+            foreach (var c in DeckCards())
+            {
+                double dx = c.X + c.W / 2 - b.X, dy = c.Y + c.H / 2 - b.Y, d = Math.Sqrt(dx * dx + dy * dy);
+                if (d > b.ReachPx + Math.Max(c.W, c.H) * 0.3) continue;
+                _ = KnockLater(c.Window, (int)Math.Clamp(d / 1.4, 40, 900));
+            }
+        }
+
+        /// <summary>UI THREAD: the bouncing word crossed this box. A card it crosses is knocked, at
+        /// most once every 1.6 s per card.</summary>
+        private void OnStageSwept(double left, double top, double right, double bottom)
+        {
+            long now = Environment.TickCount64;
+            foreach (var c in DeckCards())
+            {
+                double cx = c.X + c.W / 2, cy = c.Y + c.H / 2;
+                if (cx < left - c.W * 0.25 || cx > right + c.W * 0.25 || cy < top - c.H * 0.25 || cy > bottom + c.H * 0.25) continue;
+                if (now - c.Window.LastKnockTick < 1600) continue;
+                c.Window.LastKnockTick = now;
+                DeckPress(c.Window);
+            }
+        }
+
+        private async Task KnockLater(FlashWindow window, int delayMs)
+        {
+            try
+            {
+                await Task.Delay(delayMs);
+                bool live;
+                lock (_lockObj) live = _activeWindows.Contains(window);
+                if (!live || window.LayerItem is not { Deck: not null, PoolEaten: false }) return;
+                window.LastKnockTick = Environment.TickCount64;
+                DeckPress(window);
+            }
+            catch (Exception ex) { App.Logger?.Debug("Deck knock: {E}", ex.Message); }
+        }
+
+        /// <summary>
+        /// UI THREAD: the Whirlpool pulled this flash into its eye. It leaves the way a broken card
+        /// does when it is one, and it pays NOTHING (owner, 2026-11-15): no click event, no XP, no
+        /// hydra, no haptics. Resting the mouse must never be a way to farm.
+        /// </summary>
+        private void PoolAte(FlashWindow window)
+        {
+            bool live;
+            lock (_lockObj) live = _activeWindows.Remove(window);
+            if (!live) return;
+            try { window.LifetimeCts?.Cancel(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            window.ShatterOnDismiss = true;
+            if (window.LayerItem?.Deck != null) window.DeckBreak = true;
+            SafeCloseFlashWindow(window);
         }
 
         /// <summary>UI THREAD: a left click on a card. Flip, shatter, or nothing while it is busy.</summary>
@@ -5359,6 +5445,13 @@ namespace ConditioningControlPanel.Services
                         {
                             window.DeckBreak = false;
                             window.DeckPending = null;
+                            // The break goes off on the shared stage: its ring knocks the cards and
+                            // pops the bubbles in reach, and it leaves a hole in the fog. A card the
+                            // pool shrank reaches less far.
+                            double side = Math.Max(item.W, item.H), small = Math.Clamp(item.PoolScale, 0.35, 1);
+                            Services.Super.SuperStageHost.Stage.Blast(new SuperCore.Blast(
+                                item.X + item.W / 2, item.Y + item.H / 2, side * 1.6 * small, side * 0.8 * small,
+                                SuperCore.BlastKind.CardBreak));
                             _flashLayer?.BeginDeckShatter(item, MotionFx.Level);
                             window.MotionState = null;
                             window.IsFadingOut = false;
@@ -5668,6 +5761,9 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Super Flicker Deck: this dismiss is the click that reached BreakAt.</summary>
         public bool DeckBreak { get; set; }
+
+        /// <summary>Super Deck: when a blast or the bouncing word last knocked this card (TickCount64).</summary>
+        public long LastKnockTick { get; set; }
 
         /// <summary>Super Flicker Deck: the next picture's decode, waiting for the flip's edge.</summary>
         internal LoadedImageData? DeckPending { get; set; }
