@@ -25,6 +25,7 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
+        if (HandleGoonMedia(message)) { handled = true; return; }
         switch ((string?)message["type"])
         {
             case "ready":
@@ -77,5 +78,6 @@ internal sealed partial class GameWindow
     {
         _goonWatch?.Stop();
         _goonWatch = null;
+        DisposeGoonMedia();
     }
 }
