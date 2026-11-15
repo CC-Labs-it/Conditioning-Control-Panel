@@ -155,6 +155,23 @@ public class PossessionDeleteDialogTests
     });
 
     [Fact]
+    public void LongSessionNameWrapsInStatus() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var name = string.Join(" ", Enumerable.Repeat("Long session name", 20));
+        var dialog = new DeleteDialogWindow(new[] { name });
+        dialog.Show();
+        try
+        {
+            dialog.UpdateLayout();
+            var status = dialog.FindControl<TextBlock>("Status")!;
+            Assert.Contains(name, status.Text);
+            Assert.Equal(TextWrapping.Wrap, status.TextWrapping);
+            Assert.True(status.Bounds.Height > status.FontSize * 2);
+        }
+        finally { dialog.Close(); }
+    });
+
+    [Fact]
     public void CancelClosesTheDialog() => AvaloniaTestDispatcher.Run(() =>
     {
         var dialog = new DeleteDialogWindow();
