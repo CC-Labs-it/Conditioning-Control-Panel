@@ -42,7 +42,7 @@ internal sealed class FallEffect : PossessionEffectBase
         lease.SetOrigin(0, 1);
         _layer = layer;
         _chalk = new Rectangle { Width = bounds.Width, Height = bounds.Height, RadiusX = 6, RadiusY = 6,
-            Stroke = new SolidColorBrush(Color.Parse("#FFFF7733")), StrokeThickness = 1.2,
+            Stroke = new SolidColorBrush(Color.Parse("#FFFF8A5C")), StrokeThickness = 1.2,
             StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { 4, 4 }, Opacity = 0, IsHitTestVisible = false };
         Canvas.SetLeft(_chalk, bounds.X); Canvas.SetTop(_chalk, bounds.Y); layer.Children.Add(_chalk);
         var amp = ctx.Photosafe ? .5 : 1;
