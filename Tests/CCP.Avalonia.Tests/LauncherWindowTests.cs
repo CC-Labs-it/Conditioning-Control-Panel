@@ -730,8 +730,16 @@ public sealed class LauncherWindowTests
     public void OverflowingTiles_GrowTheWindowOnce_WithinTheWorkArea() => Run(shell =>
     {
         CoreAccount.IsLoggedInProvider = () => true;
-        LauncherWindow.BackToLauncher(shell);
-        Dispatcher.UIThread.RunJobs();
+        // Start with a fitting grid so this test can trigger the first growth itself.
+        var destinations = (IDictionary<string, (Func<bool> Locked, Action<MainShellWindow> Open)>)LauncherWindow.Destinations;
+        var breakout = destinations["breakout"];
+        try
+        {
+            destinations.Remove("breakout");
+            LauncherWindow.BackToLauncher(shell);
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally { destinations["breakout"] = breakout; }
         var w = LauncherWindow.Instance!;
         var grid = w.FindControl<UniformGrid>("GamesGrid")!;
         // One tile fits: the block sits centred (WPF FitTiles).
