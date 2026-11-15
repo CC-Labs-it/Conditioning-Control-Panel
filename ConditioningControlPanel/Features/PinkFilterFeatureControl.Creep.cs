@@ -36,8 +36,11 @@ namespace ConditioningControlPanel.Features
             _creepLoading = true;
             try
             {
-                // Take two: no options of its own. Steam reads the pink filter's colour and strength.
+                // Take two: Steam reads the pink filter's colour and strength. Its one option is
+                // the words switch, shown while Steam is the pick.
                 CreepCard.Visibility = Visibility.Collapsed;
+                SteamWordsRow.Visibility = SuperAccess.IsSelected(SuperEffect.Creep) ? Visibility.Visible : Visibility.Collapsed;
+                ChkSteamWords.IsChecked = s.SteamWordsInFog;
                 if (CmbCreepSpeed.Items.Count == 0)
                 {
                     // DarkComboBoxStyle has a dark popup, so the items take the light brush.
@@ -61,6 +64,16 @@ namespace ConditioningControlPanel.Features
                 App.Logger?.Debug("PinkFilter Creep card: {E}", ex.Message);
             }
             finally { _creepLoading = false; }
+        }
+
+        // The fog keeps going; the words leave the soft way (SteamLayer reads the setting each frame).
+        private void ChkSteamWords_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_creepLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.SteamWordsInFog = ChkSteamWords.IsChecked ?? true;
+            App.Settings?.Save();
         }
 
         private void CmbCreepSpeed_Changed(object sender, SelectionChangedEventArgs e)

@@ -5470,6 +5470,14 @@ namespace ConditioningControlPanel.Models
             set { _pinkFilterUnderEffects = value; OnPropertyChanged(); }
         }
 
+        // Steam (the pink filter's V2): words show in fog that was wiped and came back. Off = fog only.
+        private bool _steamWordsInFog = true;
+        public bool SteamWordsInFog
+        {
+            get => _steamWordsInFog;
+            set { _steamWordsInFog = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Attention Game

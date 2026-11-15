@@ -5822,6 +5822,8 @@
   "super_twist_lightsdown": "Je länger du hinsiehst, desto mehr verschwindet der Raum. Sieh weg, und das Licht flackert wieder an.",
   "super_twist_scrawl": "Wörter stempeln die Wände, wo sie auftreffen, bis die Ränder voller Mantra sind. Klick eins, und es knallt quer über den Bildschirm.",
   "super_twist_undertow": "Eine weiche Linse im Blur schrumpft von selbst, bis alles verschwimmt. Klick, um sie zu weiten.",
+  "super_steam_words": "Wörter im Nebel",
+  "tooltip_super_steam_words": "Wörter erscheinen dort, wo der Nebel weggewischt wurde und zurückkam, und verblassen dann. Aus: nur Nebel.",
   "super_corner_title": "V2: {0}",
   "super_for_supporters": "Für Unterstützer",
   "dash_card_tip": "Klick öffnet die Einstellungen. Rechtsklick schaltet ein oder aus.",

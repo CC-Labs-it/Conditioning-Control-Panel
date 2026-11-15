@@ -140,6 +140,21 @@
 
                 <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
                 <ctl:SuperBox x:Name="SuperBoxMain" Effect="Creep">
+                  <StackPanel>
+                    <!-- Steam's one switch: the words in the fog. Shown while Steam is picked
+                         (Features/PinkFilterFeatureControl.Creep.cs). -->
+                    <Grid x:Name="SteamWordsRow" Height="36" Background="Transparent" Visibility="Collapsed"
+                          ToolTip="{loc:Str tooltip_super_steam_words}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_steam_words}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <CheckBox Grid.Column="1" x:Name="ChkSteamWords"
+                                  Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                  Checked="ChkSteamWords_Changed" Unchecked="ChkSteamWords_Changed"/>
+                    </Grid>
                     <!-- Creep's own options. Shown while the Creep switch is on and unlocked
                          (Features/PinkFilterFeatureControl.Creep.cs). -->
                     <Border x:Name="CreepCard" Visibility="Collapsed"
@@ -172,6 +187,7 @@
                             </Grid>
                         </StackPanel>
                     </Border>
+                  </StackPanel>
                 </ctl:SuperBox>
             </StackPanel>
 

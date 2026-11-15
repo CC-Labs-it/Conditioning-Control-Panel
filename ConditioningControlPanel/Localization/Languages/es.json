@@ -5822,6 +5822,8 @@
   "super_twist_lightsdown": "Cuanto más miras, más desaparece la habitación. Aparta la vista y las luces vuelven a parpadear.",
   "super_twist_scrawl": "Las palabras se estampan donde chocan y los bordes se llenan del mantra. Haz clic en una y cruza la pantalla de golpe.",
   "super_twist_undertow": "Una lente suave en el desenfoque se encoge sola hasta que todo es borroso. Haz clic para abrirla.",
+  "super_steam_words": "Palabras en la niebla",
+  "tooltip_super_steam_words": "Aparecen palabras donde la niebla se limpió y volvió, y luego se desvanecen. Apagado: solo niebla.",
   "super_corner_title": "V2: {0}",
   "super_for_supporters": "Para quienes nos apoyan",
   "dash_card_tip": "Clic abre los ajustes. Clic derecho lo enciende o lo apaga.",

@@ -5822,6 +5822,8 @@
   "super_twist_lightsdown": "見つめるほど部屋が消えていく。目をそらすと明かりがちらつきながら戻る。",
   "super_twist_scrawl": "言葉が当たった壁に跡を残し、端がマントラで埋まっていく。クリックすると画面を横切る。",
   "super_twist_undertow": "ぼかしの中のやわらかいレンズが勝手に縮み、全部がぼやける。クリックで広げる。",
+  "super_steam_words": "霧の中の言葉",
+  "tooltip_super_steam_words": "霧をぬぐって戻ったところに言葉が浮かび、やがて消える。オフ：霧だけ。",
   "super_corner_title": "V2: {0}",
   "super_for_supporters": "サポーター向け",
   "dash_card_tip": "クリックで設定を開く。右クリックでオン・オフ。",
