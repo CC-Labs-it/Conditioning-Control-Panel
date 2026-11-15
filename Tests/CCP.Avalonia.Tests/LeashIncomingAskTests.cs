@@ -10,6 +10,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel.Services.UI;
@@ -68,6 +69,78 @@ public sealed class LeashIncomingAskTests
                 LeashHead.Service = null;
                 shell.RebindLeashAsks();
                 LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void ReentrantRetryDuringOpeningKeepsOffersInOrder() =>
+        LeashGateCardTests.Run(false, (shell, launcher, service) =>
+        {
+            var opened = new List<string>();
+            bool retried = false;
+            using var hook = Window.WindowOpenedEvent.AddClassHandler<LeashAskWindow>((w, _) =>
+            {
+                opened.Add((string)w.Card.Tag!);
+                if (retried) return;
+                retried = true;
+                shell.RebindLeashAsks(); // A gate timer or snapshot can arrive while Show is opening.
+            });
+            try
+            {
+                service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                launcher.Show();
+                shell.RebindLeashAsks();
+                Assert.True(retried);
+                Assert.Equal(new[] { "leash-ask:juno" }, opened);
+                Assert.Equal("leash-ask:juno", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(new[] { "leash-ask:juno", "leash-ask:vex" }, opened);
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void NeverShownShellCannotReplayOffersFromTheActiveLauncher() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var dormant = new MainShellWindow(); // A render-only shell was constructed, but never opened.
+            var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            try
+            {
+                LeashHead.Service = service;
+                shell.RebindLeashAsks();
+                service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                launcher.Show();
+                shell.RebindLeashAsks();
+                Assert.Equal("leash-ask:juno", LeashAskWindow.Current!.Card.Tag);
+                dormant.RebindLeashAsks(); // Simulate the dormant shell's two-second timer.
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                shell.RebindLeashAsks();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                dormant.Show(); // Ensure even the pre-fix window runs its Closed cleanup.
+                dormant.Close();
                 Dispatcher.UIThread.RunJobs();
             }
         });
