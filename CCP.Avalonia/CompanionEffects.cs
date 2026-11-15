@@ -119,7 +119,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreSettings.Save();
                 return true;
             });
-            MediaCommand.VideoSurface = path => Start(() =>
+            // WPF App.AiEffects.cs:69-74: a video already playing refuses (a floating run would otherwise add a random window).
+            MediaCommand.VideoSurface = path => CoreEngine.Video?.IsPlaying != true && Start(() =>
                 CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
             CoreAudio.StopSoundProvider = StopAudio;
