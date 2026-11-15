@@ -120,8 +120,9 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             });
             // WPF App.AiEffects.cs:69-74: a video already playing refuses (a floating run would otherwise add a random window).
-            MediaCommand.VideoSurface = path => CoreEngine.Video?.IsPlaying != true && Start(() =>
-                CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+            // Checked when the start runs, so a start held behind the Wayland portal bind is covered too.
+            MediaCommand.VideoSurface = path => Start(() => CoreEngine.Video?.IsPlaying != true
+                && CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
             CoreAudio.StopSoundProvider = StopAudio;
             MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()
