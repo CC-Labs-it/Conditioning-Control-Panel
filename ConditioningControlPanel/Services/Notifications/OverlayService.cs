@@ -310,7 +310,8 @@ public class OverlayService : IDisposable
     private void SyncVortex()
     {
         if (_isDisposed) { _vortexLayer?.Stop(); return; }
-        bool want = UseCompositor && SpiralShowing && Super.SuperAccess.IsOn(Super.SuperEffect.Vortex);
+        // Take two (2026-11-15): the Whirlpool on the shared stage replaces the Vortex add-on.
+        bool want = false;
         if (want)
         {
             if (_vortexLayer == null)
@@ -592,7 +593,7 @@ public class OverlayService : IDisposable
             _updateTimer.Start();
         });
 
-        Super.CreepController.Sync();   // Super Creep rides the engine; it asks its own switch
+        Super.SuperStageHost.Sync();   // Steam and the Whirlpool ride the engine; they ask their own stars
 
         App.Logger?.Information("OverlayService started");
     }
@@ -609,7 +610,7 @@ public class OverlayService : IDisposable
             StopPinkFilter();
             StopSpiral();
             StopBrainDrainBlur();
-            DispatcherHelper.RunOnUISync(Super.CreepController.Stop);
+            DispatcherHelper.RunOnUISync(Super.SuperStageHost.Stop);
         }
         catch (Exception ex)
         {
@@ -657,7 +658,7 @@ public class OverlayService : IDisposable
             RefreshBrainDrainState();
         });
 
-        Super.CreepController.Sync();
+        Super.SuperStageHost.Sync();
 
         App.Logger?.Debug("Overlays refreshed - Pink: {Pink}, Spiral: {Spiral}, BrainDrain: {BrainDrain}",
             PinkShowing, SpiralShowing, BrainDrainShowing);

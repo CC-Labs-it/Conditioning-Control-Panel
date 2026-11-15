@@ -190,6 +190,6 @@ namespace ConditioningControlPanel.Services.Super
 
         /// <summary>Compatibility: on = Both (keeps Super only if already picked), off = Classic.</summary>
         public static void Set(SuperEffect effect, bool on)
-            => SetMode(effect, !on ? SuperMode.Classic : GetMode(effect) == SuperMode.SuperOnly ? SuperMode.SuperOnly : SuperMode.Both);
+            => SetMode(effect, on ? SuperModeRule.StarOn(effect) : SuperMode.Classic);
     }
 }

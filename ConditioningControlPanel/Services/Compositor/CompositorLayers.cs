@@ -35,5 +35,7 @@ public static class CompositorLayers
     // DIFFERENT edge-vignette effect). The WPF ChaosFxLayer still merges bursts/trails/bolts/
     // ripples/cursor glow into ONE layer, so it takes a single free slot inside the band;
     // split into the granular siblings when converging further.
+    // The Whirlpool (Super spiral): over the pink slot so its arms read through the fog.
+    public const int Whirlpool = 72;
     public const int Fx = 120;
 }

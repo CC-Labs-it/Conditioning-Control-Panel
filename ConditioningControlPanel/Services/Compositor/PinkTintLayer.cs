@@ -13,6 +13,8 @@ public class PinkTintLayer : BaseLayer
     private double _opacity;
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
+    /// <summary>The colour and strength the pink filter was last told to show. Steam (its Super look) wears them.</summary>
+    internal static (byte R, byte G, byte B, double Opacity) LastLook { get; private set; } = (255, 105, 180, 0.2);
 
     private readonly CompositorEngine _engine;
     private int _sortedZ;
@@ -69,6 +71,7 @@ public class PinkTintLayer : BaseLayer
         var o = Math.Clamp(opacity, 0.0, 1.0);
         if (r == _r && g == _g && b == _b && o == _opacity) return;  // no visible change
         _r = r; _g = g; _b = b; _opacity = o;
+        LastLook = (r, g, b, o);
         _dirty = true;
     }
 

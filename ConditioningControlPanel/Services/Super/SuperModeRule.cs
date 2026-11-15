@@ -29,7 +29,15 @@ namespace ConditioningControlPanel.Services.Super
         /// have no base look (Lights Down, Inner Bloom), so they only offer Classic and Both.
         /// </summary>
         public static bool CanReplace(SuperEffect effect)
-            => effect is SuperEffect.Afterglow or SuperEffect.Vortex or SuperEffect.Creep;
+            => effect is SuperEffect.Vortex or SuperEffect.Creep;
+
+        /// <summary>
+        /// Take two (owner, 2026-11-15): ONE star per effect, no picker. A star that is on means
+        /// this mode: the Whirlpool and Steam take the place of the spiral and the flat tint
+        /// (two spirals, or a tint under a fog, is a mess); the other six ride on top of the base.
+        /// </summary>
+        public static SuperMode StarOn(SuperEffect effect)
+            => CanReplace(effect) ? SuperMode.SuperOnly : SuperMode.Both;
 
         /// <summary>The modes the box offers for an effect, in display order.</summary>
         public static SuperMode[] Offered(SuperEffect effect)
@@ -47,7 +55,9 @@ namespace ConditioningControlPanel.Services.Super
 
         /// <summary>The mode for an effect from the stored map; absent or malformed = <see cref="Default"/>.</summary>
         public static SuperMode Resolve(SuperEffect effect, IReadOnlyDictionary<string, int>? stored)
-            => stored != null && stored.TryGetValue(effect.ToString(), out var v) ? Clamp(effect, v) : Default;
+            => stored != null && stored.TryGetValue(effect.ToString(), out var v)
+                ? (Clamp(effect, v) == SuperMode.Classic ? SuperMode.Classic : StarOn(effect))
+                : StarOn(effect);
 
         /// <summary>Does Super run at all in this mode.</summary>
         public static bool RunsSuper(SuperMode mode) => mode != SuperMode.Classic;
