@@ -1112,7 +1112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < bubbles.Count; i++)
             {
                 var b = bubbles[i];
-                if (b.Screen != Index || !b.Clickable || b.Popping || b.Size <= 0) continue;
+                if (b.Screen != Index || !b.Clickable || b.Popping || b.ClaimedByAvatar || b.Size <= 0) continue;
                 // WPF BubbleService.cs:661/:3023-3027: the shared-host hook tests a physical-pixel disc;
                 // :581 and :3013 exclude non-clickable and popping bubbles.
                 // Both native backends already accept unions of rectangles: rasterise each
