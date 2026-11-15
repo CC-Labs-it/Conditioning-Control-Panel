@@ -19,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -136,21 +137,45 @@ public sealed class NavRehomeShellTests
                 Assert.Equal(1, Glows(assets.FindControl<Control>("ZoneFolders")!));
                 Assert.Equal(1, Glows(assets.FindControl<Control>("CmbAssetPresets")!));
 
-                // Every pill has a "?" badge, a sibling of the pill (never inside it), saying what the page does.
+                // Declutter wave 1 (2026-11-15): no pill carries a "?" badge of its own (its host
+                // holds the pill and nothing else); every pill still says its line in its tooltip.
+                var helpButton = strip.HelpButtonForTests;
                 foreach (var key in strip.PillKeys)
                 {
                     var pill = strip.PillFor(key)!;
-                    var badge = strip.HelpBadgeFor(key);
-                    Assert.NotNull(badge);
-                    Assert.Same(pill.Parent, badge!.Parent);
-                    Assert.DoesNotContain(badge, pill.GetVisualDescendants());
-                    var help = Loc.Get("nav_help_" + key);
-                    var card = Assert.IsAssignableFrom<Panel>(ToolTip.GetTip(badge));
-                    Assert.Contains(card.Children.OfType<TextBlock>(), t => t.Text == help);
-                    Assert.Contains(help, (string)ToolTip.GetTip(pill)!);
+                    Assert.Single(((Panel)pill.Parent!).Children);
+                    Assert.DoesNotContain(helpButton, pill.GetVisualDescendants());
+                    Assert.Contains(Loc.Get("nav_help_" + key), (string)ToolTip.GetTip(pill)!);
                 }
 
-                // The host stays the pill's size: the badge pokes out with negative margins.
+                // ONE help button at the strip's right end shows the lit pill's help card.
+                w.UpdateLayout();
+                var lit = strip.ActivePillKey!;
+                Assert.Equal(lit, strip.HelpShownFor);
+                Assert.Equal(Loc.Get("nav_help_" + lit), strip.HelpLineShown);
+                Assert.Equal(1, helpButton.Opacity);
+                Assert.True(helpButton.IsHitTestVisible && helpButton.Focusable);
+                var card = Assert.IsAssignableFrom<Panel>(ToolTip.GetTip(helpButton));
+                Assert.Contains(card.Children.OfType<TextBlock>(), t => t.Text == strip.HelpLineShown);
+                var last = (Control)strip.PillFor(strip.PillKeys[^1])!.Parent!;
+                double lastRight = last.TranslatePoint(new Point(last.Bounds.Width, 0), strip)!.Value.X;
+                double at = helpButton.TranslatePoint(default, strip)!.Value.X;
+                Assert.True(at >= lastRight, "the help button overlaps the pills");
+                Assert.True(at + helpButton.Bounds.Width <= strip.Bounds.Width + 0.5, "the help button is clipped");
+
+                // It follows the lit pill.
+                var other = strip.PillKeys.FirstOrDefault(k => k != lit && NavStripTable.ActivePill(k) == k
+                    && NavSections.Find(strip.Section)!.Tabs.First(t => t.Key == k).Kind is NavTabKind.Tab or NavTabKind.Zone);
+                if (other != null)
+                {
+                    strip.PillFor(other)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(other, strip.ActivePillKey);
+                }
+                Assert.Equal(strip.ActivePillKey, strip.HelpShownFor);
+                Assert.Equal(Loc.Get("nav_help_" + strip.ActivePillKey), strip.HelpLineShown);
+
+                // The host stays the pill's size.
                 w.UpdateLayout();
                 var host = (Control)strip.PillFor("assets")!.Parent!;
                 Assert.Equal(strip.PillFor("assets")!.Bounds.Size, host.Bounds.Size);

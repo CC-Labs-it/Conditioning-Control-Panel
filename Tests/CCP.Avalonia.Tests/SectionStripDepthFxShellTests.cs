@@ -79,9 +79,14 @@ public sealed class SectionStripDepthFxShellTests
                 Assert.Equal(DepthLaw.WellPx, top.EndPoint.Point.Y);
                 Assert.Equal(Color.Parse("#A6000000"), top.GradientStops[0].Color);
 
-                // A rest pill stands RaisedPx off the sheet on a hue-tinted drop (0x9E = ShadowAlpha).
+                // Declutter wave 1: a rest pill has no face, so no drop band either; the pointer
+                // raises it on a hue-tinted drop (0x9E = ShadowAlpha).
                 Assert.Equal(0, strip.PillFaceTravel("studio"));
-                Assert.Equal(DepthLaw.RaisedPx, strip.PillDropLength("studio"));
+                Assert.Equal(0, strip.PillDropLength("studio"));
+                strip.FxHoverForTests("studio", true);
+                Assert.Equal(DepthLaw.RaisedPx + DepthLaw.HoverLiftPx, strip.PillDropLength("studio"));
+                strip.FxHoverForTests("studio", false);
+                Assert.Equal(0, strip.PillDropLength("studio"));
                 var drop = Assert.IsType<LinearGradientBrush>(strip.PillDropBrush("studio"));
                 Assert.Equal(0x9E, drop.GradientStops[0].Color.A);
                 Assert.Equal(NavStripPaint.Mix(DepthLaw.NeutralShadowInk, hue.ToUInt32(), DepthLaw.ShadowHuePull) & 0xFFFFFF,
@@ -105,7 +110,7 @@ public sealed class SectionStripDepthFxShellTests
                 Assert.Equal(NavStripRules.ActiveGlyphOn(hue, studio.Tint), Solid(studio.Glyph!.Foreground));
                 Assert.Equal(NavStripRules.RestGlyphOn(hue, presets.Tint), Solid(presets.Glyph!.Foreground));
                 Assert.Equal(DepthLaw.ActiveSinkPx, strip.PillFaceTravel("studio"));
-                Assert.Equal(DepthLaw.RaisedPx, strip.PillDropLength("presets"));
+                Assert.Equal(0, strip.PillDropLength("presets"));   // dark again: no face, no drop
             }
             finally { w?.Close(); }
             return Task.CompletedTask;

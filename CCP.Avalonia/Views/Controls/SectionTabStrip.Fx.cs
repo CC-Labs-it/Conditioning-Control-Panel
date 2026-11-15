@@ -129,7 +129,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             bool active = IsActive(p.Tab.Key);
             double y = DepthLaw.TravelFor(true, p.Pressed, active, hovered: false);
-            double drop = DepthLaw.ShadowFor(true, p.Pressed, active, p.Hovered);
+            // Declutter wave 1: a resting pill has no face, so it casts no drop either; the
+            // pointer brings both back.
+            PaintFace(p);
+            bool hovered = p.Hovered || p.Pill.IsPointerOver;
+            double drop = NavStripRules.ShowsFace(active, hovered, p.Pressed)
+                ? DepthLaw.ShadowFor(true, p.Pressed, active, hovered) : 0;
             p.Drop.Background = _pillDrop;
             p.Drop.IsVisible = drop > 0;
             p.Drop.Height = drop + 2;

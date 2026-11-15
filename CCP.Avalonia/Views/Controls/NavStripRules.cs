@@ -34,6 +34,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public const double PillHeight = 38, PillFontSize = 14.5, PillPadding = 16;
         public const double BadgeMaxWidth = 50, BadgePlateWidth = 52, BadgePlateHeight = 24, BadgeGap = 8, BadgePadExtra = 4;
 
+        // ---- declutter wave 1 (WPF f04bd6a52e): the rules are Core's NavStripTable ----
+        public const double CrumbTitleSize = NavStripTable.CrumbTitleSize, CrumbPageSize = NavStripTable.CrumbPageSize;
+        public const double CountBadgeFontSize = NavStripTable.CountBadgeFontSize;
+        public const int BadgeTextMax = NavStripTable.BadgeTextMax;
+        public static readonly Color TextLight = C(P.TextLight);
+        public static bool ShowsFace(bool active, bool hovered, bool pressed) => NavStripTable.ShowsFace(active, hovered, pressed);
+        public static Func<string, string?>? BadgeProvider
+        {
+            get => NavStripTable.BadgeProvider;
+            set => NavStripTable.BadgeProvider = value;
+        }
+        public static string? BadgeText(string? tabKey) => NavStripTable.BadgeText(tabKey);
+        public static void NotifyBadgesChanged() => NavStripTable.NotifyBadgesChanged();
+
         public static Color WithAlpha(Color c, double alpha) => C(P.WithAlpha(U(c), alpha));
         public static double Luminance(Color c) => P.Luminance(U(c));
         public static double Contrast(Color a, Color b) => P.Contrast(U(a), U(b));
