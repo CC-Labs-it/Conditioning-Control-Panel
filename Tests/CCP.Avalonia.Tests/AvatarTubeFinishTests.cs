@@ -436,6 +436,27 @@ public sealed class AvatarTubeFinishTests
     }
 
     [Fact]
+    public Task TriggerDoesNotChangePortraitExpression() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitReviewFixture();
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"alluring":{"portraits":[{"file":"happy.png"}]},"entrancing":{"portraits":[{"file":"happy.png"}]},"dreamy":{"portraits":[{"file":"happy.png"}]},"teasing":{"portraits":[{"file":"happy.png"}]}}}
+            """);
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            change(mod);
+            var idle = tube.PortraitPath; var steps = new List<Action>(); Action? show = null;
+            tube.PortraitStepScheduler = (_, fire) => { steps.Add(fire); return () => { }; };
+            tube.SpeechDelayScheduler = (delay, fire) => { if (delay == TimeSpan.FromSeconds(0.6)) show = fire; return () => { }; };
+            CoreSettings.Current.SubAudioEnabled = false; CoreSettings.Current.CustomTriggers = new() { "freeze" }; CoreSettings.Current.TriggerModeEnabled = true;
+            tube.OnTriggerTick(); Assert.NotNull(show); show!();
+            Assert.True(tube.IsSpeaking); Assert.Equal(idle, tube.PortraitPath); Assert.Empty(steps);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
     public Task PortraitChromeShowsMistAndRestoresEffects() => Run((_, tube, change) =>
     {
         var (root, unusedAudio, mod) = PortraitReviewFixture();

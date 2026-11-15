@@ -1364,7 +1364,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
                     // thread pool, and a voice waiter woken by it must already see this line in the air.
                     bool heldIdle = !MayVoice(unprompted);
-                    PlayPortraitLine(emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)), phraseAudioPath, text, mood, heldIdle);
+                    if (!trigger) PlayPortraitLine(emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)), phraseAudioPath, text, mood, heldIdle);
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
