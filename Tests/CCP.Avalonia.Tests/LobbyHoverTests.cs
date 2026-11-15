@@ -55,14 +55,26 @@ public class LobbyHoverTests
             if (motion == MotionLevel.Full)
             {
                 page.LobbyEntrance(new System.Collections.Generic.HashSet<string> { ((LobbyCardView)list.Items[0]!).Id });
+                Assert.True(card.IsPointerOver);
                 Assert.Same(scale, card.RenderTransform);
-                clock.Now += TimeSpan.FromMilliseconds(600).Ticks; page.StepSubjectsFx();
-                Assert.Equal(1.02, scale.ScaleX);
+                clock.Now += TimeSpan.FromMilliseconds(320).Ticks; page.StepSubjectsFx();
+                Assert.Equal(1, scale.ScaleX);
+                clock.Now += TimeSpan.FromMilliseconds(280).Ticks; page.StepSubjectsFx();
+                Assert.Equal(1, scale.ScaleX);
             }
             window.MouseMove(new Point(1, 1)); Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, sheen.Opacity); Assert.Same(paint, rim.BorderBrush);
             if (motion != MotionLevel.Off) { clock.Now += TimeSpan.FromMilliseconds(150).Ticks; page.StepSubjectsFx(); }
             Assert.Equal(1, scale.ScaleX); Assert.False(page.SubjectsFxRunning);
+            if (motion == MotionLevel.Full)
+            {
+                window.MouseMove(at); Dispatcher.UIThread.RunJobs();
+                clock.Now += TimeSpan.FromMilliseconds(150).Ticks; page.StepSubjectsFx();
+                Assert.Equal(1.02, scale.ScaleX);
+                window.MouseMove(new Point(1, 1)); Dispatcher.UIThread.RunJobs();
+                clock.Now += TimeSpan.FromMilliseconds(150).Ticks; page.StepSubjectsFx();
+                Assert.Equal(1, scale.ScaleX); Assert.False(page.SubjectsFxRunning);
+            }
         }
         finally { window.Close(); CoreSettings.Current.MotionLevel = old; AvailableSubjectsTabView.FxTime = TimeProvider.System; }
     });

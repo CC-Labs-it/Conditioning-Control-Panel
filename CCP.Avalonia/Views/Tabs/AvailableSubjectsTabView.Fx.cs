@@ -25,7 +25,7 @@ public partial class AvailableSubjectsTabView
     internal bool SubjectsFxRunning => _subjectsFxBeat?.IsRunning == true;
 
     private sealed record Entrance(Control Container, TranslateTransform Slide, long Start, int Delay);
-    private sealed record Pop(Control Owner, ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start, bool AnimateCard = true);
+    private sealed record Pop(ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start, bool AnimateCard = true);
     private readonly List<Pop> _pops = new();
     private sealed record Lift(ScaleTransform Scale, double From, double To, long Start);
     private readonly List<Lift> _lifts = new();
@@ -95,7 +95,7 @@ public partial class AvailableSubjectsTabView
         ScaleTransform? spread = null;
         if (ring != null) { ring.RenderTransform = spread = new ScaleTransform(); ring.Opacity = 0.9; }
         _pops.RemoveAll(p => p.Card == scale);
-        _pops.Add(new Pop(card, scale, ring, spread, start));
+        _pops.Add(new Pop(scale, ring, spread, start));
     }
 
     // WPF BackEase { Amplitude = 0.5, EaseOut }.
@@ -185,7 +185,7 @@ public partial class AvailableSubjectsTabView
             double ms = FxTime.GetElapsedTime(p.Start).TotalMilliseconds;
             double grow = Math.Clamp(ms / 320, 0, 1), spread = Math.Clamp(ms / 520, 0, 1);
             if (p.AnimateCard)
-                p.Card.ScaleX = p.Card.ScaleY = 0.9 + ((p.Owner.IsPointerOver ? 1.02 : 1) - 0.9) * BackOut(grow);
+                p.Card.ScaleX = p.Card.ScaleY = 0.9 + 0.1 * BackOut(grow);
             if (p.Ring != null)
             {
                 p.RingScale!.ScaleX = p.RingScale.ScaleY = 1 + 0.08 * (1 - (1 - spread) * (1 - spread));
