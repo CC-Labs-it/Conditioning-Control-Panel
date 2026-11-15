@@ -103,6 +103,31 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void RebindAfterManualAskClosesDoesNotReopenIt()
+        => LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno")));
+            shell.Show();
+            try
+            {
+                LeashHead.Service = replacement;
+                var manual = LeashAskWindow.Open(replacement.Snapshot.Offers[0], () => replacement, shell)!;
+                manual.Card.Dismiss();
+                shell.RebindLeashAsks(); // The timer picks up the service after Look has closed.
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
