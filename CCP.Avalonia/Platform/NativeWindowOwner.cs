@@ -84,6 +84,24 @@ internal static class NativeWindowOwner
     [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
     private class TaskbarListCoClass { }
 
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int SetControllerVisible(IntPtr controller, int visible);
+
+    // WPF KickRenderVisibility: restore the WebView2 controller after a vetoed hide.
+    internal static void ResyncRenderVisibility(Window window, IPlatformHandle? webHandle)
+    {
+        if (!OperatingSystem.IsWindows() || !window.IsVisible || window.WindowState == WindowState.Minimized ||
+            window.TryGetPlatformHandle() is not { } hwnd || !IsWindowVisible(hwnd.Handle) ||
+            webHandle is not IWindowsWebView2PlatformHandle web || web.CoreWebView2Controller == IntPtr.Zero) return;
+        try
+        {
+            var controller = web.CoreWebView2Controller;
+            var slot = Marshal.ReadIntPtr(Marshal.ReadIntPtr(controller), 4 * IntPtr.Size);
+            Marshal.ThrowExceptionForHR(Marshal.GetDelegateForFunctionPointer<SetControllerVisible>(slot)(controller, 1));
+        }
+        catch (Exception ex) { Log.Debug("WebView visibility resync unavailable: {Kind}", ex.GetType().Name); }
+    }
+
     internal static void RepairVisibility(Window window)
     {
         // WPF ChaosWebViewHost.cs:1106-1110: deliberate hide/minimize is not a cascade to heal.
