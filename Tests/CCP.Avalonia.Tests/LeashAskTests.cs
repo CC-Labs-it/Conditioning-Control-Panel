@@ -69,6 +69,8 @@ public sealed class LeashAskTests
                 {
                     Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", null);
                     Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", null);
+                    // Bind while both owners are hidden, before Look can race the gate timer.
+                    shell.RebindLeashAsks();
                     shell.Show(); shell.ShowTab("leash"); Dispatcher.UIThread.RunJobs();
                     body(shell, shell.Named<LeashTabView>("LeashTab")!, wire, seen);
                 }

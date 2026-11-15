@@ -73,7 +73,7 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
-    public void ManualLookBeforeServiceRebindDoesNotQueueTheOpenOfferAgain() =>
+    public void ManualLookBeforeServiceRebindQueuesTheOpenOfferAgain() =>
         LeashGateCardTests.Run(false, (shell, _, _) =>
         {
             var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
@@ -87,6 +87,11 @@ public sealed class LeashIncomingAskTests
                 shell.RebindLeashAsks(); // Simulate the gate timer firing after Look.
                 Assert.Same(first, LeashAskWindow.Current);
                 first.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                var repeated = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.NotSame(first, repeated);
+                Assert.Equal("leash-ask:juno", repeated.Card.Tag); // WPF queues the snapshot even while Look is open.
+                repeated.Card.Dismiss();
                 Dispatcher.UIThread.RunJobs();
                 var second = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
                 Assert.Equal("leash-ask:vex", second.Card.Tag);
