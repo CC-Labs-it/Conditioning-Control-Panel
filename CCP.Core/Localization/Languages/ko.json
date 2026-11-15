@@ -1,4 +1,8 @@
 {
+  "chaos_sidebar_empty_toy": "빈 장난감 주머니",
+  "chaos_sidebar_empty_accessory": "빈 액세서리 주머니",
+  "chaos_sidebar_empty_desc": "클릭하여 인형의 집에서 쇼핑하세요.",
+  "chaos_sidebar_left_behind": "두고 온 것: {0}",
   "chaos_bonus_first_taste": "첫 맛",
   "chaos_bonus_first_snap": "첫 스냅",
   "chaos_bonus_first_whisper": "첫 속삭임",

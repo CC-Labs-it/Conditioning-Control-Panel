@@ -1,4 +1,8 @@
 {
+  "chaos_sidebar_empty_toy": "bolsillo de juguete vacío",
+  "chaos_sidebar_empty_accessory": "bolsillo de accesorio vacío",
+  "chaos_sidebar_empty_desc": "pulsa para comprar en la casa de muñecas.",
+  "chaos_sidebar_left_behind": "dejado atrás: {0}",
   "chaos_bonus_first_taste": "primer sabor",
   "chaos_bonus_first_snap": "primer chasquido",
   "chaos_bonus_first_whisper": "primer susurro",
