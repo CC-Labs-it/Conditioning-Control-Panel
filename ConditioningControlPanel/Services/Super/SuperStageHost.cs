@@ -121,6 +121,8 @@ public static class SuperStageHost
         dt = Math.Min(dt, 0.1);
         LastDt = dt;
 
+        int fromX = _lastX, fromY = _lastY;
+        bool hadCursor = _haveCursor;
         if (GetCursorPos(out var cur))
         {
             if (_haveCursor)
@@ -145,7 +147,13 @@ public static class SuperStageHost
             // The cursor wipes the fog while it moves. At rest under a live pool the pool owns the
             // spot (it keeps its own eye clear), so the two never fight.
             bool resting = _speedPx / dip < Whirlpool.RestSpeed;
-            if (!(resting && Stage.PoolLive)) Stage.Wipe(_lastX, _lastY, 58 * dip, dt, mark: true);
+            // A moving cursor does not rub the fog out, it shoves it: the stage gets the stroke
+            // (where it was, where it is) and works out the speed.
+            if (!(resting && Stage.PoolLive))
+            {
+                if (hadCursor) Stage.Push(fromX, fromY, _lastX, _lastY, 58 * dip, dt, mark: true);
+                else Stage.Wipe(_lastX, _lastY, 58 * dip, dt, mark: true);
+            }
         }
     }
 

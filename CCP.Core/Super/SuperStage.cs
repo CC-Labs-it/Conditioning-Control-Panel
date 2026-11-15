@@ -83,6 +83,19 @@ public sealed class SuperStage
                 m.Field.Wipe(x - m.X, y - m.Y, radiusPx, dt, mark);
     }
 
+    /// <summary>
+    /// The cursor travelled from one world point to the next in <paramref name="dt"/> seconds: the
+    /// fog in its way is shoved ahead and aside and set moving (see <see cref="SteamField.Push"/>).
+    /// </summary>
+    public void Push(double x0, double y0, double x1, double y1, double radiusPx, double dt, bool mark)
+    {
+        if (!SteamOn) return;
+        double reach = radiusPx * 6;
+        foreach (var m in _mons.Values)
+            if (x1 > m.X - reach && x1 < m.X + m.W + reach && y1 > m.Y - reach && y1 < m.Y + m.H + reach)
+                m.Field.Push(x0 - m.X, y0 - m.Y, x1 - m.X, y1 - m.Y, radiusPx, dt, mark);
+    }
+
     /// <summary>A band of the screen the fog should write words into when it next covers it.</summary>
     public void Remember(double x0, double y0, double x1, double y1)
     {
