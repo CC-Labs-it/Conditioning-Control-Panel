@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -19,9 +20,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 // WPF KeywordHighlightService.cs:34-57, 194-269: per-monitor boxes and lifetime.
 internal static class KeywordHighlightOverlay
 {
-    internal sealed record Target(PixelRect Bounds, double Scaling);
+    internal sealed record Target(PixelRect Bounds, double Scaling, string? Id = null);
     internal static Func<IReadOnlyList<Target>> Screens = () => MainShellWindow.Current is { } host
-        ? ScreenList.Enumerate(host).Select(s => new Target(s.Bounds, s.Scaling)).ToArray() : [];
+        ? ScreenList.Enumerate(host).Select(s => new Target(s.Bounds, s.Scaling, ScreenId(s))).ToArray() : [];
+    // WinForms OCR uses MONITORINFOEX.szDevice; Avalonia's DisplayName may be a friendly name.
+    [DllImport("user32.dll", ExactSpelling = true)] private static extern bool GetMonitorInfoW(IntPtr monitor, IntPtr info);
+    private static string? ScreenId(Screen screen)
+    {
+        if (!OperatingSystem.IsWindows() || screen.TryGetPlatformHandle() is not { } handle) return screen.DisplayName;
+        var info = Marshal.AllocHGlobal(104); // MONITORINFOEXW: 40-byte header, 32 UTF-16 chars.
+        try { Marshal.WriteInt32(info, 104); return GetMonitorInfoW(handle.Handle, info) ? Marshal.PtrToStringUni(info + 40) : screen.DisplayName; }
+        finally { Marshal.FreeHGlobal(info); }
+    }
     internal static Func<Window, PixelRect, bool> Configure = (w, b) => X11Overlay.IsCompositing &&
         X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, b);
     private sealed class Entry(Window window, Canvas canvas)
@@ -46,9 +56,12 @@ internal static class KeywordHighlightOverlay
     internal static void Show(IReadOnlyList<ScreenOcrService.Word>? words)
     {
         if (words == null || words.Count == 0 || !CoreSettings.Current.KeywordHighlightEnabled) return;
-        foreach (var screen in Screens())
+        var screens = Screens();
+        foreach (var screen in screens)
         {
-            var hits = words.Where(w => screen.Bounds.Intersects(new PixelRect(w.Bounds.X, w.Bounds.Y, w.Bounds.Width, w.Bounds.Height))).ToArray();
+            var hits = words.Where(w => !string.IsNullOrEmpty(w.Screen)
+                ? string.Equals(w.Screen, screen.Id, StringComparison.OrdinalIgnoreCase)
+                : ReferenceEquals(screen, screens.FirstOrDefault(s => s.Bounds.Intersects(new PixelRect(w.Bounds.X, w.Bounds.Y, w.Bounds.Width, w.Bounds.Height))))).ToArray();
             if (hits.Length == 0) continue;
             if (!Windows.TryGetValue(screen.Bounds, out var entry))
             {

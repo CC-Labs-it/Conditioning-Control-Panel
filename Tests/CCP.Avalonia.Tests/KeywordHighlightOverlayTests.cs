@@ -108,6 +108,35 @@ public class KeywordHighlightOverlayTests
         finally { guards.Remove(marker); seen.Remove(marker); for (var i = 0; i < fields.Length; i++) fields[i].SetValue(null, before[i]); }
     });
 
+    [Fact] // WPF KeywordTriggerService.cs:1061-1081: a phrase belongs to its first word's screen.
+    public Task CrossMonitorPhraseUsesOnlyFirstWordsScreen() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var screens = KeywordHighlightOverlay.Screens; var configure = KeywordHighlightOverlay.Configure;
+        var settings = CoreSettings.Current; var enabled = settings.KeywordHighlightEnabled;
+        try
+        {
+            KeywordHighlightOverlay.Screens = () => [new(new PixelRect(0, 0, 1000, 800), 1, "LEFT"), new(new PixelRect(1000, 0, 1000, 800), 1, "RIGHT")];
+            KeywordHighlightOverlay.Configure = (_, _) => true; settings.KeywordHighlightEnabled = true;
+            var hits = KeywordAudioRuntime.FindOcrMatches(new KeywordTrigger { Keyword = "good boy" },
+                [new("good", new(1200, 100, 40, 20), "RIGHT"), new("boy", new(20, 100, 30, 20), "LEFT")]);
+            Assert.Equal("RIGHT", Assert.Single(hits).Screen);
+            KeywordHighlightOverlay.Show(hits);
+            var box = Assert.Single(Assert.Single(KeywordHighlightOverlay.Canvases).Children);
+            Assert.Equal(1, KeywordHighlightOverlay.WindowCount); Assert.Equal(-990, Canvas.GetLeft(box));
+            Assert.Equal(1240, box.Width);
+            KeywordHighlightOverlay.Show([new("unknown", new(30, 100, 10, 10), "MISSING")]);
+            Assert.Single(Assert.Single(KeywordHighlightOverlay.Canvases).Children);
+        }
+        finally
+        {
+            KeywordHighlightOverlay.CloseAll(); KeywordHighlightOverlay.Screens = screens;
+            KeywordHighlightOverlay.Configure = configure; settings.KeywordHighlightEnabled = enabled;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact] // WPF KeywordTriggerService.cs:1117-1146: a regex match unions only the words on its first word's screen.
     public async Task HelperKeepsMonitorIdentityForRegexUnions()
     {
