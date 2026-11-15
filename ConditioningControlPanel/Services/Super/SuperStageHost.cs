@@ -138,31 +138,38 @@ public static class SuperStageHost
             if (s.Bounds.Contains(_lastX, _lastY)) { dip = s.Dip; shortSide = Math.Min(s.Bounds.Width, s.Bounds.Height); break; }
 
         bool gentle = Safety.GentleVisuals.On;
+        // The gold-box options, read live so a slider moves the effect at once.
+        var set = App.Settings?.Current;
+        Stage.DragsFog = set?.WhirlpoolDragsFog != false;
+        Stage.DragsPictures = set?.WhirlpoolDragsPictures != false;
+        Stage.DragsBubbles = set?.WhirlpoolDragsBubbles != false;
+        Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(set?.WhirlpoolSize ?? WhirlpoolOptions.SizeDefault);
         if (Stage.PoolOn) Stage.Pool.Step(dt, _lastX, _lastY, _speedPx, dip, shortSide, gentle);
 
         if (Stage.SteamOn)
         {
             _steamAge += dt;
-            Stage.StepSteam(dt, SteamLevel(_steamAge), 1.0);
+            Stage.StepSteam(dt, SteamOptions.Level(_steamAge, SteamOptions.CreepSeconds((int)(set?.SuperCreepSpeed ?? CreepSpeed.Normal))), 1.0);
             // The cursor wipes the fog while it moves. At rest under a live pool the pool owns the
-            // spot (it keeps its own eye clear), so the two never fight.
+            // spot (it keeps its own eye clear), so the two never fight. A pool that leaves the fog
+            // alone does not clear its eye either, so then the cursor keeps wiping.
             bool resting = _speedPx / dip < Whirlpool.RestSpeed;
             // A moving cursor does not rub the fog out, it shoves it: the stage gets the stroke
             // (where it was, where it is) and works out the speed.
-            if (!(resting && Stage.PoolLive))
+            if (!(resting && Stage.PoolLive && Stage.DragsFog))
             {
                 // 68 at 100%: the ragged rim sits inside the radius, so this reads like the old 58.
-                double reach = 68 * dip * Models.AppSettings.ClampSteamWipeSize(App.Settings?.Current?.SteamWipeSize ?? 100) / 100.0;
+                double reach = 68 * dip * Models.AppSettings.ClampSteamWipeSize(set?.SteamWipeSize ?? 100) / 100.0;
                 if (hadCursor) Stage.Push(fromX, fromY, _lastX, _lastY, reach, dt, mark: true);
                 else Stage.Wipe(_lastX, _lastY, reach, dt, mark: true);
             }
         }
     }
 
-    /// <summary>How far in the fog has crept: thin at the edges at first, the whole screen later.
-    /// The base feature has no setting for this and Super adds none: about four minutes.</summary>
+    /// <summary>How far in the fog has crept at the stock creep speed (about four minutes): thin at
+    /// the edges at first, the whole screen later. The live step reads the player's Creep speed.</summary>
     internal static double SteamLevel(double ageSeconds)
-        => 0.45 + 1.05 * Math.Clamp(ageSeconds / 240.0, 0, 1);
+        => SteamOptions.Level(ageSeconds, SteamOptions.CreepSeconds(SteamOptions.Normal));
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X, Y; }

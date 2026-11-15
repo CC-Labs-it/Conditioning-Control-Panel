@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using ConditioningControlPanel.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Super;
@@ -8,9 +9,11 @@ using ConditioningControlPanel.Services.Super;
 namespace ConditioningControlPanel.Features
 {
     /// <summary>
-    /// The Whirlpool's one option in the gold box (owner, 2026-11-15): "Always new" (Loom spirals
-    /// that melt into each other) or one saved Loom spiral to hold. Kept in its own partial so the
-    /// spiral page's own code-behind stays untouched.
+    /// The Whirlpool's options in the gold box (owner, 2026-11-15): the spiral ("Always new" Loom
+    /// spirals that melt into each other, or one saved Loom spiral to hold), how often a new one
+    /// rolls in, the pool's largest size, and what it drags in. They show while the Whirlpool is
+    /// picked. Numbers and clamps live in CCP.Core/Super/WhirlpoolOptions. Kept in its own partial
+    /// so the spiral page's own code-behind stays untouched.
     /// </summary>
     public partial class SpiralFeatureControl
     {
@@ -43,7 +46,7 @@ namespace ConditioningControlPanel.Features
             _poolLoading = true;
             try
             {
-                PoolSpiralRow.Visibility = SuperAccess.IsSelected(SuperEffect.Vortex) ? Visibility.Visible : Visibility.Collapsed;
+                PoolRows.Visibility = SuperAccess.IsSelected(SuperEffect.Vortex) ? Visibility.Visible : Visibility.Collapsed;
                 // DarkComboBoxStyle has a dark popup, so the items take the light brush.
                 var fg = (System.Windows.Media.Brush)FindResource("TextLightBrush");
                 CmbPoolSpiral.Items.Clear();
@@ -57,12 +60,29 @@ namespace ConditioningControlPanel.Features
                     CmbPoolSpiral.Items.Add(item);
                     if (slug == s.WhirlpoolSpiral) CmbPoolSpiral.SelectedItem = item;
                 }
+                SliderPoolEvery.Value = s.WhirlpoolNewEvery;
+                TxtPoolEvery.Text = Loc.GetF("super_pool_every_value", s.WhirlpoolNewEvery);
+                SliderPoolSize.Value = s.WhirlpoolSize;
+                TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
+                ChkPoolDragsFog.IsChecked = s.WhirlpoolDragsFog;
+                ChkPoolDragsPictures.IsChecked = s.WhirlpoolDragsPictures;
+                ChkPoolDragsBubbles.IsChecked = s.WhirlpoolDragsBubbles;
+                DimPoolEvery();
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("Spiral page, Whirlpool pick: {E}", ex.Message);
+                App.Logger?.Debug("Spiral page, Whirlpool options: {E}", ex.Message);
             }
             finally { _poolLoading = false; }
+        }
+
+        /// <summary>"New spiral every" only means something on "Always new": dimmed and locked while
+        /// one spiral is held, the same look as SuperDim. The value is kept.</summary>
+        private void DimPoolEvery()
+        {
+            bool held = (App.Settings?.Current?.WhirlpoolSpiral ?? "").Length > 0;
+            PoolEveryRow.Opacity = held ? SuperDim.DimOpacity : 1;
+            PoolEveryRow.IsHitTestVisible = !held;
         }
 
         // WhirlpoolLayer reads the setting each frame.
@@ -72,6 +92,41 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             s.WhirlpoolSpiral = slug;
+            App.Settings?.Save();
+            DimPoolEvery();
+        }
+
+        // WhirlpoolLayer hands the morph the hold each frame.
+        private void SliderPoolEvery_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_poolLoading || TxtPoolEvery == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolNewEvery = (int)Math.Round(e.NewValue);
+            TxtPoolEvery.Text = Loc.GetF("super_pool_every_value", s.WhirlpoolNewEvery);
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost hands the pool its reach each step.
+        private void SliderPoolSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_poolLoading || TxtPoolSize == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolSize = (int)(Math.Round(e.NewValue / 5) * 5);
+            TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost hands the stage the three switches each step.
+        private void ChkPoolDrags_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_poolLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolDragsFog = ChkPoolDragsFog.IsChecked ?? true;
+            s.WhirlpoolDragsPictures = ChkPoolDragsPictures.IsChecked ?? true;
+            s.WhirlpoolDragsBubbles = ChkPoolDragsBubbles.IsChecked ?? true;
             App.Settings?.Save();
         }
     }

@@ -102,6 +102,10 @@ public sealed class SteamLayer : BaseLayer
         var stage = SuperStageHost.Stage;
         if (!stage.SteamOn) return;
         var field = stage.Field(rect.ToString(), rect.X, rect.Y, rect.Width, rect.Height);
+        // The gold-box options, read live: the next stage step heals and billows with them.
+        var set = App.Settings?.Current;
+        field.Heal = SteamOptions.HealRate(set?.SteamFogReturn ?? SteamOptions.ReturnDefault);
+        field.Drift = SteamOptions.Drift(set?.SteamDrift ?? SteamOptions.DriftDefault);
         if (!_screens.TryGetValue(rect, out var screen))
         {
             screen = new Screen();

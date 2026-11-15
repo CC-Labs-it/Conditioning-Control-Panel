@@ -75,6 +75,10 @@ public sealed class LoomMorph
     private bool _morphing;
     private LoomSpec? _pinned;
 
+    /// <summary>Seconds a spiral holds before the next one rolls in, set from the player's
+    /// "New spiral every" (<see cref="WhirlpoolOptions.ClampHold"/>). Unused while one is pinned.</summary>
+    public double Hold { get; set; } = HoldSec;
+
     public LoomSpec From { get; private set; }
     public LoomSpec? To { get; private set; }
     /// <summary>0 = all <see cref="From"/>, 1 = all <see cref="To"/> (eased).</summary>
@@ -88,7 +92,7 @@ public sealed class LoomMorph
         if (ReferenceEquals(spec, _pinned)) return;
         _pinned = spec;
         if (spec != null) Begin(spec, PinSec);
-        else _age = HoldSec;                      // roll a new one on the next step
+        else _age = double.PositiveInfinity;   // roll a new one on the next step
     }
 
     private void Begin(LoomSpec to, double span)
@@ -108,7 +112,7 @@ public sealed class LoomMorph
             Mix = k * k * (3 - 2 * k);
             if (k >= 1) { From = To!; To = null; Mix = 0; _morphing = false; _age = 0; }
         }
-        else if (_pinned == null && _age >= HoldSec) Begin(LoomSpec.Random(_rng), MorphSec);
+        else if (_pinned == null && _age >= Hold) Begin(LoomSpec.Random(_rng), MorphSec);
     }
 }
 

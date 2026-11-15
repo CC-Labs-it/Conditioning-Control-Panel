@@ -43,9 +43,23 @@ public sealed class SuperStage
     /// <summary>True when the pool is on and big enough to act.</summary>
     public bool PoolLive => PoolOn && Pool.Live;
 
-    /// <summary>What the pool does to a thing at a world point. Nothing while it is off.</summary>
+    /// <summary>The player's "Drags" switches (Whirlpool box): what the pool winds and pulls in. All on as shipped.</summary>
+    public bool DragsFog { get; set; } = true;
+    public bool DragsPictures { get; set; } = true;
+    public bool DragsBubbles { get; set; } = true;
+
+    /// <summary>What the pool does to a thing at a world point. Nothing while it is off. The kind is
+    /// read from the mass (<see cref="WhirlpoolOptions.KindOf"/>) so a switched-off kind feels nothing.</summary>
     public PoolPull Pull(double x, double y, double mass = 1)
-        => PoolLive ? Pool.Pull(x, y, mass) : new PoolPull(0, 0, 1, false, false);
+        => Pull(x, y, mass, WhirlpoolOptions.KindOf(mass));
+
+    /// <summary>What the pool does to a thing of this kind at a world point. Nothing while it is
+    /// off or while the player switched that kind off.</summary>
+    public PoolPull Pull(double x, double y, double mass, PullKind kind)
+        => PoolLive && Drags(kind) ? Pool.Pull(x, y, mass) : new PoolPull(0, 0, 1, false, false);
+
+    /// <summary>True when the pool drags things of this kind.</summary>
+    public bool Drags(PullKind kind) => kind == PullKind.Picture ? DragsPictures : DragsBubbles;
 
     /// <summary>
     /// The fog field of one monitor, made (or remade after a resolution change) on first ask.
@@ -110,7 +124,7 @@ public sealed class SuperStage
         foreach (var m in _mons.Values)
         {
             m.Field.Step(dt, level, cap);
-            if (PoolLive)
+            if (PoolLive && DragsFog)
                 m.Field.Swirl(Pool.X - m.X, Pool.Y - m.Y, Pool.Radius, Pool.Eased, Pool.Angle, Pool.Spin, Pool.Turns, dt, cap);
         }
     }
