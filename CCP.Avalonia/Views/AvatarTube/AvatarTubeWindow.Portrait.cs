@@ -15,8 +15,6 @@ public partial class AvatarTubeWindow
     private AvatarPortraitLoader? _portrait, _paintedPortrait;
     private Bitmap? _portraitImage, _portraitOld;
     private Image? _portraitActive;
-    private IEffect? _portraitEffectA, _portraitEffectB;
-    private bool _portraitEffectsSaved;
     private Action _cancelPortraitStep = static () => { }, _cancelPortraitFade = static () => { };
     private int _portraitStepVersion, _portraitFadeVersion, _portraitStep, _portraitPose;
     private int[] _portraitOrder = Array.Empty<int>(); private string? _portraitEmotion;
@@ -61,8 +59,7 @@ public partial class AvatarTubeWindow
         PortraitPath = path;
         var second = this.FindControl<Image>("ImgAvatarB")!;
         second.IsVisible = true;
-        _portraitEffectA = _imgAvatar.Effect; _portraitEffectB = second.Effect; _portraitEffectsSaved = true;
-        _imgAvatar.Effect = second.Effect = null;
+        _imgAvatar.Classes.Set("portrait-mode", true); second.Classes.Set("portrait-mode", true);
         this.FindControl<Control>("MistOverlay")!.IsVisible = true;
         (_imgAvatar.MaxHeight, second.MaxHeight, _imgAvatar.MaxWidth, second.MaxWidth) = (306 * 0.88, 306 * 0.88, 198 * 0.88, 198 * 0.88);
         _avatarBorder.RenderTransform = new TranslateTransform(10, -30);
@@ -211,11 +208,7 @@ public partial class AvatarTubeWindow
         FinishPortraitFade();
         var second = this.FindControl<Image>("ImgAvatarB")!;
         this.FindControl<Control>("MistOverlay")!.IsVisible = false;
-        if (_portraitEffectsSaved)
-        {
-            _imgAvatar.Effect = _portraitEffectA; second.Effect = _portraitEffectB;
-            _portraitEffectsSaved = false;
-        }
+        _imgAvatar.Classes.Set("portrait-mode", false); second.Classes.Set("portrait-mode", false);
         _imgAvatar.Source = null; _imgAvatar.Opacity = 1;
         second.Source = null; second.Opacity = 0; second.IsVisible = false;
         _portraitActive = null; _paintedPortrait = null; _portraitEmotion = null; _portraitPose = 0;
