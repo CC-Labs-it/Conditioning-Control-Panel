@@ -126,4 +126,49 @@ public sealed class DeclutterBarTests
         Assert.Equal("studio", shell.CurrentTab);
         Assert.False(host.IsVisible);
     });
+
+    // Owner call 2026-11-15: welcome lines and tips stay Home only, a live announcement shows everywhere.
+    [Fact]
+    public void ALiveAnnouncementShowsTheBannerOnEveryPageUntilItEnds() => Run(shell =>
+    {
+        var host = shell.Named<Border>("HeaderBannerHost")!;
+        var glow = shell.Named<Border>("HeaderBannerGlowHost")!;
+
+        // It arrives while another page is on screen: the banner appears there.
+        shell.ShowTab("studio");
+        Assert.False(host.IsVisible);
+        shell.SetBannerAnnouncement("Servers restart at nine");
+        Assert.True(shell.BannerAnnouncementLive);
+        Assert.True(host.IsVisible);
+        Assert.True(glow.IsVisible);
+
+        // It stays through every tab change while it is live.
+        foreach (var tab in new[] { "appsettings", "companion", "settings", "studio" })
+        {
+            shell.ShowTab(tab);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(host.IsVisible, tab);
+            Assert.True(glow.IsVisible, tab);
+        }
+
+        // It ends off Home: the welcome line is back and the banner collapses again.
+        shell.ClearBannerAnnouncement();
+        Assert.False(shell.BannerAnnouncementLive);
+        Assert.NotEqual("Servers restart at nine", shell.Named<TextBlock>("TxtBannerSecondary")!.Text);
+        Assert.False(host.IsVisible);
+        Assert.False(glow.IsVisible);
+        Assert.False(shell.BannerBreathing);
+
+        // It ends on Home: the banner stays, as Home's own. An account refresh ends it the same way.
+        shell.ShowTab("settings");
+        shell.SetBannerAnnouncement("Another one");
+        shell.ClearBannerAnnouncement();
+        Assert.True(host.IsVisible);
+        shell.SetBannerAnnouncement("A third");
+        shell.ShowTab("studio");
+        Assert.True(host.IsVisible);
+        shell.UpdateQuickLoginUI();
+        Assert.False(shell.BannerAnnouncementLive);
+        Assert.False(host.IsVisible);
+    });
 }

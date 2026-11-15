@@ -14,4 +14,11 @@ public static class HeaderBannerRule
         string.IsNullOrEmpty(tabKey)
         || string.Equals(tabKey, "settings", StringComparison.OrdinalIgnoreCase)
         || string.Equals(tabKey, "progression", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Owner call 2026-11-15 (WPF BannerFxRules.Shows): welcome lines and tips stay Home only, but
+    /// a live server announcement shows on every page until it ends.
+    /// </summary>
+    public static bool Shows(string? tabKey, bool announcementLive) =>
+        announcementLive || ShowsOnTab(tabKey);
 }

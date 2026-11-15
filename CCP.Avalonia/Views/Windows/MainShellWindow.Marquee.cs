@@ -177,6 +177,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void UpdateBannerWelcomeMessage()
         {
+            // The welcome line takes its slot back, so an announcement that held it has ended.
+            SetBannerAnnouncementLive(false);
+
             var secondary = BannerSecondary;
             if (secondary is null) return;
 
@@ -243,9 +246,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var secondary = BannerSecondary;
             if (secondary is not null) secondary.Text = message;
 
+            // Live until it ends: the banner shows on every page, not just Home.
+            SetBannerAnnouncementLive(true);
+
             if (_bannerRotationTimer is { IsEnabled: false }) _bannerRotationTimer.Start();
             SweepBannerSheen(force: true);
         }
+
+        /// <summary>
+        /// Ends the announcement: the welcome line takes its slot back and the banner is Home's
+        /// alone again (it collapses if another page is on screen).
+        /// </summary>
+        public void ClearBannerAnnouncement() => UpdateBannerWelcomeMessage();
 
         /// <summary>WPF BannerWebLink_Click (MainWindow.Marquee.cs:464): the beat's own link opens the
         /// web app (SafeHyperlinkButton -> ExternalOpener) and, having worked, retires the beat.</summary>

@@ -19,6 +19,21 @@ public class HeaderBannerRuleTests
     [InlineData("quests", false)]
     [InlineData("chaster", false)]
     [InlineData("friends", false)]
-    public void TheBannerShowsOnHomeOnly(string? tab, bool shows) =>
+    public void TheBannerShowsOnHomeOnly(string? tab, bool shows)
+    {
         Assert.Equal(shows, HeaderBannerRule.ShowsOnTab(tab));
+        Assert.Equal(shows, HeaderBannerRule.Shows(tab, announcementLive: false));
+    }
+
+    // Owner call 2026-11-15: a live server announcement shows on every page until it ends.
+    [Theory]
+    [InlineData("settings")]
+    [InlineData(null)]
+    [InlineData("appsettings")]
+    [InlineData("studio")]
+    [InlineData("play")]
+    [InlineData("companion")]
+    [InlineData("friends")]
+    public void ALiveAnnouncementShowsTheBannerOnEveryPage(string? tab) =>
+        Assert.True(HeaderBannerRule.Shows(tab, announcementLive: true));
 }

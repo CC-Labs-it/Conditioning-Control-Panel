@@ -175,22 +175,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// Declutter wave 1 (WPF ApplyHeaderBannerForTab): paints Core HeaderBannerRule.ShowsOnTab. The pill
+        /// Declutter wave 1 (WPF ApplyHeaderBannerForTab): paints Core HeaderBannerRule.Shows. The pill
         /// and its halo sibling show or collapse together, and the ambient loops re-evaluate so nothing
-        /// breathes off screen. Last step of ShowTab; the dashboard's own MarqueeBanner is not involved.
+        /// breathes off screen. Last step of ShowTab, and again whenever an announcement starts or ends
+        /// (SetBannerAnnouncementLive); the dashboard's own MarqueeBanner is not involved.
         /// </summary>
         private void ApplyHeaderBannerForTab(string? tabKey)
         {
             try
             {
+                _headerBannerTabKey = tabKey;
                 if (Named<Border>("HeaderBannerHost") is not { } host) return;
-                bool shows = Services.UI.HeaderBannerRule.ShowsOnTab(tabKey);
+                bool shows = Services.UI.HeaderBannerRule.Shows(tabKey, _bannerAnnouncementLive);
                 if (host.IsVisible == shows) return;
                 host.IsVisible = shows;
                 if (Named<Border>("HeaderBannerGlowHost") is { } glow) glow.IsVisible = shows;
                 ApplyBannerFxLoops();
             }
             catch (Exception ex) { Serilog.Log.Debug("ApplyHeaderBannerForTab: {E}", ex.Message); }
+        }
+
+        /// <summary>The tab the banner rule was last painted for; null until the first ShowTab (= Home).</summary>
+        private string? _headerBannerTabKey;
+
+        /// <summary>
+        /// True while an announcement holds the welcome beat's slot: from SetBannerAnnouncement
+        /// until ClearBannerAnnouncement, or until a welcome refresh takes the slot back.
+        /// </summary>
+        private bool _bannerAnnouncementLive;
+
+        /// <summary>Whether an announcement currently holds the banner (test seam).</summary>
+        internal bool BannerAnnouncementLive => _bannerAnnouncementLive;
+
+        /// <summary>An announcement started or ended: repaint the rule for the tab on screen.</summary>
+        private void SetBannerAnnouncementLive(bool live)
+        {
+            if (_bannerAnnouncementLive == live) return;
+            _bannerAnnouncementLive = live;
+            ApplyHeaderBannerForTab(_headerBannerTabKey);
         }
 
         private void StopBannerLoops()
