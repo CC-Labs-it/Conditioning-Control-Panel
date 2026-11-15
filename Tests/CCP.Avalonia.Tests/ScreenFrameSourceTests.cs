@@ -119,7 +119,7 @@ public class ScreenFrameSourceTests
     [Fact]
     public void WaylandGetsThePortalSourceAndOnlyMissingCaptureOrModelsLeaveItNull()
     {
-        var saved = (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"), KeywordTriggerHead.OcrSource);
+        var saved = (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"), KeywordTriggerHead.OcrSource, ScreenOcrService._reasonKey);
         try
         {
             Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-0");
@@ -135,8 +135,7 @@ public class ScreenFrameSourceTests
         finally
         {
             Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", saved.Item1);
-            KeywordTriggerHead.OcrSource = saved.OcrSource;
-            ScreenOcrService.CreateSource(new PortalScreenFrames(), new FakeEngine()); // clears the static reason
+            (KeywordTriggerHead.OcrSource, ScreenOcrService._reasonKey) = (saved.OcrSource, saved._reasonKey);
         }
     }
 

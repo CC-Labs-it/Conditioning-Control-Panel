@@ -43,7 +43,7 @@ internal sealed class ScreenOcrService : IDisposable
     private static string[]? WindowsLanguages() => OperatingSystem.IsWindows() ? Microsoft.Win32.Registry.GetValue(
         @"HKEY_CURRENT_USER\Control Panel\International\User Profile", "Languages", null) as string[] : null;
 
-    private static volatile string? _reasonKey;
+    internal static volatile string? _reasonKey; // internal: tests save and restore it
     /// <summary>Raised off the UI thread when a scan finds capture refused (the portal answer ends it for the session).</summary>
     internal static event Action? UnavailableChanged;
 

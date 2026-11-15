@@ -15,13 +15,15 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
 {
     private static readonly RapidScreenOcrEngine Engine = new();
 
-    // White 1920x1080 BGRA frame; text drawn black at (x, baseline) with SKFont(SKTypeface.Default, 48) (SkiaSharp 4: explicit face).
-    private static (ScreenFrame Frame, SKRect Drawn) Frame(string? text, float x = 300, float y = 400, SKTypeface? face = null)
+    private static readonly SKTypeface Face = SKTypeface.FromFile(Fixture()) ?? throw new FileNotFoundException("OCR test font");
+    private static string Fixture([System.Runtime.CompilerServices.CallerFilePath] string here = "") => Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "ocr-test-noto-sans-sc.otf");
+    // White 1920x1080 BGRA frame, text drawn black at (x, baseline) in the fixture font (Noto Sans CJK subset to this class's strings, never a runner font).
+    private static (ScreenFrame Frame, SKRect Drawn) Frame(string? text, float x = 300, float y = 400)
     {
         var info = new SKImageInfo(1920, 1080, SKColorType.Bgra8888, SKAlphaType.Premul);
         using var bitmap = new SKBitmap(info);
         using var canvas = new SKCanvas(bitmap);
-        using var font = new SKFont(face ?? SKTypeface.Default, 48);
+        using var font = new SKFont(Face, 48);
         using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
         canvas.Clear(SKColors.White);
         var drawn = SKRect.Empty;
@@ -60,10 +62,8 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
     [InlineData("ja", "Good girl obey")] // two recognizers read the line once
     public void EachLanguageReadsItsScriptBesideAnEnglishUi(string language, string text)
     {
-        using var face = SKFontManager.Default.MatchCharacter(char.ConvertToUtf32(text, 0));
-        if (face == null) Assert.Skip($"No font with '{text[0]}' on this runner (fc-list :lang={language} is empty)");
         _language = language;
-        var words = ScriptEngine.Recognize(Frame(text, face: face).Frame)!;
+        var words = ScriptEngine.Recognize(Frame(text).Frame)!;
         output.WriteLine(string.Join(" | ", words.Select(w => $"{w.Text} {w.Bounds}")));
         Assert.Equal(text.Replace(" ", ""), string.Concat(words.Select(w => w.Text)).Replace(" ", ""));
     }
