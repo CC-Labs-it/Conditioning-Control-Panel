@@ -123,6 +123,8 @@ public class LockdownDoseEngineTests
             try
             {
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "test");
+                PortalPanicShortcut.SetSessionForTests(null, null);
+                MainShellWindow.PortalLinuxForTests = true;
                 allowed.SetValue(null, true); failed.SetValue(null, false); bind.SetValue(null, pending.Task);
                 ld.Activate(TimeSpan.FromMinutes(20));
                 shell.EnforceLockdownDoseEngine(true);
@@ -139,6 +141,7 @@ public class LockdownDoseEngineTests
             finally
             {
                 PortalPanicShortcut.SetSessionForTests(null, null);
+                MainShellWindow.PortalLinuxForTests = null;
                 allowed.SetValue(null, oldAllowed); failed.SetValue(null, oldFailed); bind.SetValue(null, oldBind);
                 Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldWayland);
                 ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit();
