@@ -140,13 +140,16 @@ public class SuperBoxRenderTests
     }
 
     [Fact]
-    public void No_dashboard_tile_carries_a_super_switch()
+    public void Dashboard_tiles_carry_the_cut_corner_and_no_other_super_switch()
     {
+        // Owner, 2026-11-15: the V2 switch is the cut corner on the tile (Controls/SuperCorner).
+        // The October tile badge stays gone.
         var root = SourceRoot();
         var dash = File.ReadAllText(Path.Combine(root, "Views", "Tabs", "SettingsTabView.xaml"));
-        Assert.DoesNotContain(" Super=\"", dash);
-        Assert.DoesNotContain(" SuperA=\"", dash);
-        Assert.DoesNotContain(" SuperB=\"", dash);
+        Assert.Contains(" Super=\"", dash);
+        Assert.Contains(" SuperA=\"", dash);
+        Assert.Contains(" SuperB=\"", dash);
+        Assert.True(File.Exists(Path.Combine(root, "Controls", "SuperCorner.cs")));
         Assert.False(File.Exists(Path.Combine(root, "Controls", "SuperTileBadge.cs")));
     }
 

@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Controls
         private readonly TextBlock _baseOff = new() { FontSize = 11, FontStyle = FontStyles.Italic, Opacity = 0.6, Foreground = Brushes.White, Margin = new Thickness(0, 3, 0, 0) };
         private readonly StackPanel _superPart = new();
         private readonly Grid _head;
+        private readonly Button _help = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) };
+        private SuperEffect? _helpFor;
         // Take two (owner, 2026-11-15): ONE star, no picker. On = Super, off = the classic effect.
         private readonly Button _star;
         private readonly TextBlock _starGlyph = new()
@@ -174,8 +176,13 @@ namespace ConditioningControlPanel.Controls
             _ring.Children.Add(_ringArc);
             _ring.Children.Add(_ringText);
 
+            // Name and its "?" on one line: the "?" opens the V2's own help card, loop included.
+            _help.SetResourceReference(StyleProperty, "HelpButtonStyle");
+            var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
+            titleRow.Children.Add(_title);
+            titleRow.Children.Add(_help);
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            text.Children.Add(_title);
+            text.Children.Add(titleRow);
             text.Children.Add(_twist);
 
             var row = new Grid();
@@ -363,6 +370,11 @@ namespace ConditioningControlPanel.Controls
             var effect = Effect;
             string name = SuperNames.Name(effect);
             _title.Text = name;
+            if (IsLoaded && _helpFor != effect)
+            {
+                _helpFor = effect;
+                HelpPopover.Attach(_help, SuperDoor.Help(effect));
+            }
             _twist.Text = Loc.Get("super_twist_" + effect.ToString().ToLowerInvariant());
 
             bool paid = TierGate.HasPremium;
