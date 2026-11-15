@@ -171,7 +171,7 @@ public sealed class PlayWallTests
                 prompt.Close();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
-                Assert.Equal("play", shell.CurrentTab);
+                Assert.Equal("playeyes", shell.CurrentTab);
 
                 // The browser opens: no prompt, and the beat retires.
                 seen.Remove(MainShellWindow.WebBannerSeenKey);
@@ -181,7 +181,7 @@ public sealed class PlayWallTests
                 Assert.Equal(2, opened.Count);
                 Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
                 Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
-                Assert.Equal("play", shell.CurrentTab);
+                Assert.Equal("playeyes", shell.CurrentTab);
             }
             finally
             {
@@ -547,8 +547,8 @@ public sealed class PlayWallTests
                 var play = shell.Named<PlayTabView>("PlayTab")!;
                 Assert.False(play.IsVisible); // hidden startup attach starts no Play-local animation
                 var targets = MainShellWindow.FindStaggerTargets(play).ToArray();
-                Assert.Equal(8, targets.Length);
-                Assert.Equal("GamesGrid", targets[2].Name);
+                Assert.Equal(8, targets.Length);   // capped at 8; the collapsed games zone takes no slot (declutter wave 2)
+                Assert.DoesNotContain(targets, t => t.Name is "GamesGrid" or "ZoneGames");
                 void AtRest(Control target)
                 {
                     Assert.Equal(1, target.Opacity);
