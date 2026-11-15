@@ -28,6 +28,11 @@ namespace CCP.Avalonia.Tests;
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
+    private sealed class FrozenTime : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
 
     private sealed class Wire : ILeashApi
     {
@@ -174,8 +179,10 @@ public sealed class LeashAskTests
         {
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+            var oldTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
             try
             {
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new FrozenTime();
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
                 settings.PerformanceMode = false;
                 LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
@@ -191,7 +198,11 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+            finally
+            {
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldTime;
+                (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old;
+            }
         });
 
     [Fact]
@@ -212,12 +223,15 @@ public sealed class LeashAskTests
         });
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
-        Run((_, page, wire, _) =>
+        Run((shell, page, wire, _) =>
         {
             wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
             Assert.False(card.PutItOnButton.IsEnabled);
+            var service = LeashHead.Service;
+            LeashHead.Service = null; shell.RebindLeashAsks();
+            LeashHead.Service = service; shell.RebindLeashAsks();
             LeashGateCardTests.Click(Tagged<Button>(card, "leash-ask-no"));
             Assert.False((bool?)wire.Calls.Last().Body["accept"]);
             Assert.Null(LeashAskWindow.Current);

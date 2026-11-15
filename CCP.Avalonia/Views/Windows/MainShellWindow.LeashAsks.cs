@@ -51,6 +51,7 @@ public partial class MainShellWindow
         {
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = next;
+            _waitingLeashAsks.Clear();
             _seenLeashOffers.Clear();
             _heldLeashNotices.Clear();
             if (next != null)
@@ -76,6 +77,8 @@ public partial class MainShellWindow
         {
             if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
+            if (LeashAskWindow.Current?.Body is LeashAskCard card && card.Offer.From.Id == offer.From.Id &&
+                card.Offer.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds()) continue;
             _waitingLeashAsks.Add(offer);
         }
         _waitingLeashAsks.RemoveAll(w => !snap.Offers.Any(o => o.From.Id == w.From.Id));
@@ -84,8 +87,12 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
-    private void OnLeashOfferShown(LeashOffer offer) =>
+    private void OnLeashOfferShown(LeashOffer offer)
+    {
+        if (!ReferenceEquals(_askService, LeashHead.Service)) RebindLeashAsks();
+        _seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds());
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
+    }
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 
