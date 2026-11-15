@@ -28,6 +28,9 @@ public sealed class CompanionBrainHostTests
         var previous = property.GetValue(null);
         var entitlement = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
         var recall = ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled;
+        var recalledEvent = typeof(ConditioningControlPanel.Services.AIService.LocalAiService)
+            .GetField("PersistentMemoryRecalled", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var previousHandlers = recalledEvent.GetValue(null);
         var dir = Directory.CreateTempSubdirectory("ccp-brain-recall-");
         var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
         try
@@ -35,12 +38,16 @@ public sealed class CompanionBrainHostTests
             property.SetValue(null, engine);
             AvApp.SeedCompanionRecall();
             AvApp.SeedCompanionRecall(); // repeated composition must not add listeners
-            var entitlementChecks = 0;
-            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => { entitlementChecks++; return false; };
+            var handlers = ((Delegate)recalledEvent.GetValue(null)!).GetInvocationList();
+            Assert.Single(handlers, h => h.Method.DeclaringType == typeof(AvApp) && h.Method.Name == "OnCompanionMemoryRecalled");
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
+            // Other dispatcher work may read the same entitlement while RunJobs drains the queue.
+            var unrelatedRan = false;
+            Dispatcher.UIThread.Post(() => { Assert.False(ConditioningControlPanel.CoreEntitlement.HasPremium); unrelatedRan = true; });
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
             Assert.False(engine.Progress.IsUnlocked("she_remembers"));
-            Assert.Equal(1, entitlementChecks); // each subscribed handler attempts the denied unlock
+            Assert.True(unrelatedRan);
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
@@ -51,6 +58,7 @@ public sealed class CompanionBrainHostTests
             property.SetValue(null, previous);
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = entitlement;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled = recall;
+            recalledEvent.SetValue(null, previousHandlers);
             dir.Delete(true);
         }
         return Task.CompletedTask;
