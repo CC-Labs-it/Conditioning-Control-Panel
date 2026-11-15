@@ -146,8 +146,23 @@ public class HeaderBannerFxTests
     [InlineData("quests", false)]
     [InlineData("chaster", false)]
     [InlineData("friends", false)]
-    public void TheBannerShowsOnHomeOnly(string? tab, bool shows) =>
+    public void TheBannerShowsOnHomeOnly(string? tab, bool shows)
+    {
         Assert.Equal(shows, BannerFxRules.ShowsOnTab(tab));
+        Assert.Equal(shows, BannerFxRules.Shows(tab, announcementLive: false));
+    }
+
+    // Owner call 2026-11-15: a live server announcement shows on every page until it ends.
+    [Theory]
+    [InlineData("settings")]
+    [InlineData(null)]
+    [InlineData("appsettings")]
+    [InlineData("studio")]
+    [InlineData("play")]
+    [InlineData("companion")]
+    [InlineData("friends")]
+    public void ALiveAnnouncementShowsTheBannerOnEveryPage(string? tab) =>
+        Assert.True(BannerFxRules.Shows(tab, announcementLive: true));
 
     [Fact]
     public void ShowTabPaintsTheBannerRuleAndAHiddenBannerRunsNoLoop()
@@ -155,7 +170,14 @@ public class HeaderBannerFxTests
         var nav = Source("MainWindow", "MainWindow.TabNavigation.cs");
         Assert.Contains("ApplyHeaderBannerForTab(tab);", nav);
         var fx = Source("MainWindow", "MainWindow.BannerFx.cs");
-        Assert.Contains("BannerFxRules.ShowsOnTab(tabKey) ? Visibility.Visible : Visibility.Collapsed", fx);
+        Assert.Contains("BannerFxRules.Shows(tabKey, _bannerAnnouncementLive) ? Visibility.Visible : Visibility.Collapsed", fx);
+        // An announcement starting or ending repaints the rule for the tab on screen.
+        Assert.Contains("_headerBannerTabKey = tabKey;", fx);
+        Assert.Contains("ApplyHeaderBannerForTab(_headerBannerTabKey);", fx);
+        var marquee = Source("MainWindow", "MainWindow.Marquee.cs");
+        Assert.Contains("SetBannerAnnouncementLive(true);", marquee);    // SetBannerAnnouncement
+        Assert.Contains("SetBannerAnnouncementLive(false);", marquee);   // the welcome line takes the slot back
+        Assert.Contains("public void ClearBannerAnnouncement() => UpdateBannerWelcomeMessage();", marquee);
         Assert.Contains("HeaderBannerGlowHost.Visibility = vis;", fx);   // the halo never outlives the pill
         Assert.Contains("ChromeAmbientAllowed && HeaderBannerHost?.Visibility == Visibility.Visible", fx);
     }
