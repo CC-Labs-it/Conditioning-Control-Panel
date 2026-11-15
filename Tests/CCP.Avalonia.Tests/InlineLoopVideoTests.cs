@@ -198,6 +198,66 @@ public sealed class InlineLoopVideoTests
         });
     }
 
+    [Fact]
+    public async Task GazeCloseWaitsForEarlierRoundCleanupWithoutBlockingDispatcher()
+    {
+        await WithClip(async clip =>
+        {
+            var baseline = InlineLoopVideo.LivePlayers;
+            var win = new GazeMinigameWindow();
+            var closed = false;
+            win.Closed += (_, _) => closed = true;
+            win.Show();
+            var left = win.FindControl<Grid>("LeftPane")!;
+            var right = win.FindControl<Grid>("RightPane")!;
+            var a = GazeMinigameWindow.CreateRoundVideo(clip);
+            var b = GazeMinigameWindow.CreateRoundVideo(clip);
+            left.Children.Add(a); right.Children.Add(b);
+            Assert.True(await OnFrames(a, () => a.FrameCount > 0, 5000));
+            Assert.True(await OnFrames(b, () => b.FrameCount > 0, 5000));
+            var sinkA = a.SinkForTest!;
+            var sinkB = b.SinkForTest!;
+            var oldStop = InlineLoopVideo.StopPlayer;
+            using var release = new ManualResetEventSlim();
+            using var entered = new CountdownEvent(2);
+            try
+            {
+                InlineLoopVideo.StopPlayer = player => { entered.Signal(); release.Wait(); oldStop(player); };
+                win.DisposeCurrentRoundPlayers();
+                Assert.True(await Task.Run(() => entered.Wait(3000)), "stops did not overlap");
+                win.Close();
+                var turn = false;
+                Dispatcher.UIThread.Post(() => turn = true);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(turn);
+                Assert.False(win.IsVisible);
+                Assert.False(closed);
+                Assert.Equal(baseline + 2, InlineLoopVideo.LivePlayers);
+                Assert.False(sinkA.Freed);
+                Assert.False(sinkB.Freed);
+                // A repeated close request cannot bypass the pending cleanup.
+                win.Close();
+                Assert.False(closed);
+                release.Set();
+                var deadline = Stopwatch.StartNew();
+                while (!closed && deadline.ElapsedMilliseconds < 5000)
+                { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+                Assert.True(closed);
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+                Assert.True(sinkA.Freed && sinkB.Freed);
+            }
+            finally
+            {
+                release.Set();
+                var deadline = Stopwatch.StartNew();
+                while (InlineLoopVideo.LivePlayers != baseline && deadline.ElapsedMilliseconds < 5000)
+                { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+                InlineLoopVideo.StopPlayer = oldStop;
+                if (!closed) win.Close();
+            }
+        });
+    }
+
     private static async Task WithClip(Func<string, Task> body)
     {
         var dir = Directory.CreateTempSubdirectory("ccp-inline-video-").FullName;

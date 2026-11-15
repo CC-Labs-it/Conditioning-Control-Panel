@@ -1040,6 +1040,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             new(path, randomStart: true, loop: false) { Stretch = Stretch.Uniform };
 
         private readonly List<GazeRoundImage> _roundImages = new();
+        private readonly List<Task> _pendingRoundTeardowns = new();
+        private bool _waitingForRoundTeardowns;
 
         private Image BuildImageView(string path)
         {
@@ -1053,8 +1055,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         internal void DisposeCurrentRoundPlayers(bool synchronous = false)
         {
             // Start both stops before removing the panes. Detach remains synchronous for other hosts.
+            _pendingRoundTeardowns.RemoveAll(task => task.IsCompleted);
             foreach (var video in _leftPane.Children.OfType<InlineLoopVideo>().Concat(_rightPane.Children.OfType<InlineLoopVideo>()))
-                video.Teardown(synchronous);
+            {
+                var teardown = video.Teardown(synchronous);
+                if (!teardown.IsCompleted) _pendingRoundTeardowns.Add(teardown);
+            }
             _leftPane.Children.Clear();
             _rightPane.Children.Clear();
             foreach (var image in _roundImages) image.Dispose();
@@ -1580,8 +1586,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             catch (Exception ex) { Log.Warning(ex, "GazeMinigame: quit confirmation failed"); }
         }
 
-        private void Window_Closing(object? sender, WindowClosingEventArgs e)
+        private async void Window_Closing(object? sender, WindowClosingEventArgs e)
         {
+            if (_waitingForRoundTeardowns) { e.Cancel = true; return; }
             _closed = true;
             _gameRunning = false;
             StopRoundTicker();
@@ -1600,6 +1607,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                     Log.Information("GazeMinigame: resumed main FlashService after game ended");
                 }
                 else Log.Information("GazeMinigame: skipped FlashService resume — engine is no longer running");
+            }
+
+            if (_pendingRoundTeardowns.Count != 0)
+            {
+                // Keep the window alive until earlier rounds have finished native cleanup. Hiding
+                // it immediately also keeps panic responsive while the dispatcher remains free.
+                e.Cancel = true;
+                _waitingForRoundTeardowns = true;
+                Hide();
+                try { await Task.WhenAll(_pendingRoundTeardowns); }
+                catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+                _pendingRoundTeardowns.Clear();
+                _waitingForRoundTeardowns = false;
+                Close();
             }
         }
 

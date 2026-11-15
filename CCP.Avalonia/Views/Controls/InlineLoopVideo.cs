@@ -152,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // Gaze rounds release their players off the dispatcher. The sink stays alive until Stop
         // has returned, even if the native stop exceeds WPF's 500 ms wait limit.
-        internal void Teardown(bool synchronous)
+        internal Task Teardown(bool synchronous)
         {
             var player = _player;
             var media = _media;
@@ -182,14 +182,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 StopAndDispose();
                 sink?.Free();
+                return Task.CompletedTask;
             }
-            else if (player != null || media != null || sink != null)
+            if (player == null && media == null && sink == null) return Task.CompletedTask;
+            return FinishAsync();
+
+            async Task FinishAsync()
             {
-                _ = Task.Run(() =>
-                {
-                    StopAndDispose();
-                    Dispatcher.UIThread.Post(() => sink?.Free());
-                });
+                await Task.Run(StopAndDispose).ConfigureAwait(false);
+                await Dispatcher.UIThread.InvokeAsync(() => sink?.Free());
             }
         }
     }
