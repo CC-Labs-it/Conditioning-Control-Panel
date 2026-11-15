@@ -1040,36 +1040,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private bool Busy()
         {
             // A full chain or wordless pat owns the face until its last hold ends.
-            if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
+            if (PresentationActive || _transiting || ChainLive || InputLocked || HoldPending) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] glass-live seam threw"); }
             return glass;
-        }
-
-        /// <summary>Start (or restart) the idle blink cycle and the idle sway.</summary>
-        // ponytail: needs EmiAlive.BlinkDelayMs and EmiChains.SwayCycle / SwayStepMs /
-        // SwayCentreMinMs / SwayCentreMaxMs (Services/EmiDesk/), neither in Core. The two timers
-        // themselves port straight across once those numbers do - the blink clock re-rolls its
-        // jitter every tick so the cadence is 5200 +/- 600 ms and never a metronome.
-        //
-        // AUDITED 2026-09-04 rather than repeated, because "neither in Core" said nothing about how
-        // far away either one is, and they are close. EmiAlive.cs is 428 lines whose ONLY using is
-        // System, and its whole head coupling is two signatures - GazeTarget and WithinApproach
-        // take System.Windows.Point / Rect - so it is one Core geometry type away, the same single
-        // blocker EmiRingLayout has. EmiChains.cs is 654 lines whose only head type is the
-        // DispatcherTimer inside Player (its file probing is AppContext.BaseDirectory, which Core
-        // already uses in EmiProps), so it is ONE seam swap: a System.Threading.Timer ticking
-        // through CoreDispatch.Post. Neither is a re-derivation candidate - inlining these numbers
-        // here would be a second copy of a table EmiAlive's own header forbids retuning outside the
-        // plan, and it would still leave SetPose with no art to swap.
-        public void RestartIdleBeats()
-        {
-        }
-
-        /// <summary>Stop the idle blink cycle and the sway.</summary>
-        public void StopIdleBeats()
-        {
         }
 
         // ---------------------------------------------------------------- pointer
