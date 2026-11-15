@@ -21,8 +21,8 @@
 // Beat text and {loc:Str}: TxtBannerSecondary carries {loc:Str} in the XAML, and writing .Text
 // over a binding is undone on the next language change (the porting rule). The welcome line is
 // a FORMATTED string (Loc.GetF with a name), so there is no key to bind instead - so
-// UpdateBannerWelcomeMessage re-runs on LocalizationManager.LanguageChanged, which is what
-// actually keeps it honest.
+// RelocaliseBannerSlot re-runs UpdateBannerWelcomeMessage on LocalizationManager.LanguageChanged,
+// which is what actually keeps it honest; a live announcement keeps the slot and its text instead.
 //
 // STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
 //   ShowOgWelcomePopup: needs the achievements host. Upgrade notes are wired in
@@ -101,8 +101,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // MainShellWindow.Login.cs.
                 EventHandler onLanguage = (_, _) =>
                 {
-                    UpdateBannerWelcomeMessage();
-                    UpdateQuickLoginUI();
+                    RelocaliseBannerSlot();
+                    UpdateQuickLoginUI(keepAnnouncement: true);   // its own banner write must not end one either
                 };
                 LocalizationManager.Instance.LanguageChanged += onLanguage;
                 // A closed shell must not keep answering language changes (it also pinned the window,
@@ -175,10 +175,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
+        /// <summary>
+        /// The language-change hook for the welcome beat's slot. WPF has no such hook (its welcome
+        /// line is not undone by a language change), so this must never END an announcement: a
+        /// live one keeps its slot and its text is written back over the {loc:Str} binding; only a
+        /// slot that holds the welcome line is re-localised.
+        /// </summary>
+        internal void RelocaliseBannerSlot()
+        {
+            if (_bannerAnnouncementLive)
+            {
+                if (BannerSecondary is { } secondary && _bannerAnnouncementText is { } text)
+                    secondary.Text = text;
+                return;
+            }
+            UpdateBannerWelcomeMessage();
+        }
+
+        /// <summary>The live announcement's text, so a language change can write it back.</summary>
+        private string? _bannerAnnouncementText;
+
         private void UpdateBannerWelcomeMessage()
         {
             // The welcome line takes its slot back, so an announcement that held it has ended.
             SetBannerAnnouncementLive(false);
+            _bannerAnnouncementText = null;
 
             var secondary = BannerSecondary;
             if (secondary is null) return;
@@ -245,6 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var secondary = BannerSecondary;
             if (secondary is not null) secondary.Text = message;
+            _bannerAnnouncementText = message;
 
             // Live until it ends: the banner shows on every page, not just Home.
             SetBannerAnnouncementLive(true);

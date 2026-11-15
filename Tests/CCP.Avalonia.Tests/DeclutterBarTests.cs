@@ -9,6 +9,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -106,15 +107,19 @@ public sealed class DeclutterBarTests
         Assert.True(host.IsVisible);   // the shell lands on the dashboard
         Assert.True(glow.IsVisible);
 
-        foreach (var (tab, shows) in new[]
+        // Each key names the tab it lands on: "Settings" is the door's case fold, "progression" is the
+        // dashboard's permanent alias (a real key on this head, the rule shows the banner there).
+        // Every entry is checked; none is skipped.
+        foreach (var (tab, lands, shows) in new[]
         {
-            ("studio", false), ("appsettings", false), ("settings", true), ("companion", false),
-            ("Settings", true), ("progression", true),
+            ("studio", "studio", false), ("appsettings", "appsettings", false), ("settings", "settings", true),
+            ("companion", "companion", false), ("Settings", "settings", true), ("studio", "studio", false),
+            ("progression", "progression", true),
         })
         {
             shell.ShowTab(tab);
             Dispatcher.UIThread.RunJobs();
-            if (!string.Equals(shell.CurrentTab, tab, StringComparison.OrdinalIgnoreCase)) continue; // not a tab on this head
+            Assert.Equal(lands, shell.CurrentTab);
             Assert.True(shows == host.IsVisible, tab);
             Assert.True(shows == glow.IsVisible, tab);   // the halo never outlives the pill
             if (!shows) Assert.False(shell.BannerBreathing, tab);   // a collapsed banner runs no ambient loop
@@ -170,5 +175,74 @@ public sealed class DeclutterBarTests
         shell.UpdateQuickLoginUI();
         Assert.False(shell.BannerAnnouncementLive);
         Assert.False(host.IsVisible);
+    });
+
+    // The header banner is Home only, so the restart notice (raised on Settings) is an announcement;
+    // a language change re-localises the slot without ending a live one (WPF has no such hook).
+    [Fact]
+    public void TheRestartNoticeShowsOffHomeAndALanguageChangeKeepsALiveAnnouncement() => Run(shell =>
+    {
+        var host = shell.Named<Border>("HeaderBannerHost")!;
+        var line = shell.Named<TextBlock>("TxtBannerSecondary")!;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            shell.ShowTab("appsettings");
+            Assert.False(host.IsVisible);
+            var target = oldLanguage == "fr" ? "de" : "fr";
+            shell.ApplyLanguageSelection(target);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(target, LocalizationManager.Instance.CurrentLanguage);
+            Assert.True(shell.BannerAnnouncementLive);
+            Assert.True(host.IsVisible);
+            Assert.Equal(Loc.Get("msg_restart_to_apply"), line.Text);
+
+            // A server announcement survives a later language change, text and all.
+            shell.SetBannerAnnouncement("Servers restart at nine");
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.BannerAnnouncementLive);
+            Assert.True(host.IsVisible);
+            Assert.Equal("Servers restart at nine", line.Text);
+
+            // With no announcement live, the language hook re-localises the welcome line as before.
+            shell.ClearBannerAnnouncement();
+            var welcome = line.Text;
+            shell.RelocaliseBannerSlot();
+            Assert.False(shell.BannerAnnouncementLive);
+            Assert.Equal(welcome, line.Text);
+        }
+        finally
+        {
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+        }
+    });
+
+    // Save lost its focus ring with the slab; the outline plank carries its own :focus-visible, and the
+    // Exit variant's hover (danger fill, white text) wins over the base theme's hover.
+    [Fact]
+    public void TheOutlinePlanksShowKeyboardFocusAndExitHoversDanger() => Run(shell =>
+    {
+        var save = shell.Named<Button>("BtnSaveAll")!;
+        var exit = shell.Named<Button>("BtnExit")!;
+        var light = shell.FindResource("TextLightBrush");
+        var danger = shell.FindResource("DangerBrush");
+        foreach (var b in new[] { save, exit })
+        {
+            var plate = b.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "b");
+            ((IPseudoClasses)b.Classes).Set(":focus-visible", true);
+            Assert.Same(light, plate.BorderBrush);
+            Assert.Equal(new Thickness(2), plate.BorderThickness);
+            ((IPseudoClasses)b.Classes).Set(":focus-visible", false);
+            Assert.Same(b.BorderBrush, plate.BorderBrush);
+            Assert.Equal(new Thickness(1), plate.BorderThickness);
+        }
+
+        ((IPseudoClasses)exit.Classes).Set(":pointerover", true);
+        var exitPlate = exit.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "b");
+        Assert.Same(danger, exitPlate.Background);
+        Assert.Equal(Colors.White, ((ISolidColorBrush)exit.Foreground!).Color);
+        ((IPseudoClasses)exit.Classes).Set(":pointerover", false);
+        Assert.Same(danger, exit.Foreground);
     });
 }

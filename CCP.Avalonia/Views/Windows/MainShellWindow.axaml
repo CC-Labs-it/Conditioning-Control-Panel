@@ -2099,6 +2099,14 @@
                     <Style Selector="^:pointerover">
                         <Setter Property="Foreground" Value="{DynamicResource PanelBgBrush}"/>
                     </Style>
+                    <!-- Keyboard focus: the outline turns bright and thick (twin of WPF's
+                         IsKeyboardFocused trigger); the padding gives the extra pixel back. The
+                         template part only, so the hover fill keeps the button's own colour. -->
+                    <Style Selector="^:focus-visible /template/ Border#b">
+                        <Setter Property="BorderBrush" Value="{DynamicResource TextLightBrush}"/>
+                        <Setter Property="BorderThickness" Value="2"/>
+                        <Setter Property="Padding" Value="15,9"/>
+                    </Style>
                 </ControlTheme>
             </Border.Resources>
             <Grid>
