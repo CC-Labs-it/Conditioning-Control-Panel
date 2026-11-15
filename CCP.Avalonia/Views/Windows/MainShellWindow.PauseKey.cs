@@ -21,7 +21,10 @@ public partial class MainShellWindow
     private (bool Wanted, string Key)? _pauseKeyBinding;
     private CancellationTokenSource? _pauseKeyPending;
     private int _pauseKeyGeneration;
-    internal TimeSpan PauseKeyBindTimeout = TimeSpan.FromSeconds(30);
+    internal TimeSpan PauseKeyBindTimeout = MandatoryVideoScheduler.PreRoll + TimeSpan.FromMilliseconds(100);
+    internal Func<TimeSpan, Task> PauseKeyDelay = Task.Delay;
+    private int _pauseDeadlineGeneration = -1;
+    private Task? _pauseDeadline;
     private Task? _pauseKeyBind;
     private MandatoryVideoScheduler? _pauseKeyScheduler;
 
@@ -57,27 +60,38 @@ public partial class MainShellWindow
             _pauseKeyScheduler = null;
         }
         _pauseKeyBinding = null;
+        _pauseDeadline = null;
+        _pauseDeadlineGeneration = -1;
         CancelPauseKeyRegistration();
     }
 
     private void PauseVideoEnded() => ApplyPauseKeyPortal();
 
-    // The portal can show a permission dialog. Do not display the clip until it answers, but
-    // never hold video forever if the compositor is absent or the request is abandoned.
+    // Start at clip acceptance and spend the existing pre-roll on the portal. A slow or
+    // unavailable portal may delay the clip by at most 100 ms beyond the normal pre-roll.
     private async Task PreparePauseKeyPortalAsync()
     {
-        Task? timeout = null;
-        while (_pauseKeyScheduler != null && PauseKeyVideoPlaying())
+        var scheduler = _pauseKeyScheduler;
+        if (scheduler == null) return;
+        var video = scheduler.PlaybackGeneration;
+        if (_pauseDeadlineGeneration != video)
+        {
+            _pauseDeadlineGeneration = video;
+            _pauseDeadline = PauseKeyDelay(PauseKeyBindTimeout);
+        }
+        var timeout = _pauseDeadline!;
+        while (ReferenceEquals(scheduler, _pauseKeyScheduler) && scheduler.PlaybackGeneration == video && PauseKeyVideoPlaying())
         {
             ApplyPauseKeyPortal();
             var pending = _pauseKeyBind;
             if (pending == null || pending.IsCompleted) return;
-            timeout ??= Task.Delay(PauseKeyBindTimeout);
             var cancelled = Task.Delay(Timeout.InfiniteTimeSpan, _pauseKeyPending!.Token);
             var completed = await Task.WhenAny(pending, timeout, cancelled);
+            // A previous video's waiter must never follow or cancel a replacement video's bind.
+            if (!ReferenceEquals(scheduler, _pauseKeyScheduler) || scheduler.PlaybackGeneration != video || !PauseKeyVideoPlaying()) return;
             if (completed == timeout)
             {
-                if (ReferenceEquals(_pauseKeyBind, pending))
+                if (_pauseKeyBind is { IsCompleted: false })
                 {
                     Log.Warning("Pause key: portal binding timed out before video");
                     CancelPauseKeyRegistration();

@@ -140,6 +140,8 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
+        /// <summary>Identifies the current clip, including its pre-roll.</summary>
+        internal int PlaybackGeneration => _retryGeneration;
         public bool IsStrict { get; private set; }
 
         /// <summary>WPF ScheduleNext: 3600/perHour jittered 0.8-1.2x, never under 60 s.</summary>
