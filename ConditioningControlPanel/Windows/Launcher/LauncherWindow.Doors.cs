@@ -69,6 +69,7 @@ public partial class LauncherWindow
                 GamesEyebrow.FontSize = 22;
                 GamesEyebrow.Foreground = new SolidColorBrush(Lighten(DoorHue(door), 0.55));
                 DropDoorCards();
+                MarkDoorSeen(door);
                 _doorsEnter = false;
             }
             else
@@ -95,6 +96,22 @@ public partial class LauncherWindow
             }
         }
         catch (Exception ex) { Log.Warning(ex, "[Launcher] door view failed"); }
+    }
+
+    /// <summary>Opening a page is what "seen" means: the door's stamp leaves, the cards keep theirs.</summary>
+    private static void MarkDoorSeen(LauncherDoor door)
+    {
+        try
+        {
+            var settings = App.Settings;
+            var current = settings?.Current;
+            if (current == null) return;
+            var cards = LauncherCatalogue.All.Select(e => e.Card).ToList();
+            if (LauncherDoorRules.NewCount(cards, door, current.LauncherSeenNewIds) == 0) return;
+            current.LauncherSeenNewIds = LauncherDoorRules.MarkSeen(cards, door, current.LauncherSeenNewIds);
+            settings!.Save();
+        }
+        catch (Exception ex) { Log.Debug(ex, "[Launcher] seen-set save failed"); }
     }
 
     private void DoorBack_Click(object sender, RoutedEventArgs e)
@@ -233,10 +250,24 @@ public partial class LauncherWindow
     private LauncherDoorCard BuildDoorCard(LauncherDoor door)
     {
         var hue = DoorHue(door);
+        var cards = LauncherCatalogue.All.Select(e => e.Card).ToList();
         var page = LauncherCatalogue.Page(door);
 
         Border? stamp = null;
+        int fresh = LauncherDoorRules.NewCount(cards, door, App.Settings?.Current?.LauncherSeenNewIds);
+        if (fresh > 0)
+        {
+            stamp = BuildPill("exclusives_badge_new", null, (Brush)FindResource("AccentGradientBrush"), Brushes.White);
+            var stampText = (TextBlock)((StackPanel)stamp.Child).Children[^1];
+            stampText.Text = Loc.GetF("launcher_door_new", fresh);
+            stampText.FontFamily = LauncherDoorCard.DisplayFont;
+            stampText.FontSize = 14;
+            stamp.Padding = new Thickness(11, 4, 12, 5);
+        }
+
         Button? go = null;
+        var last = LauncherCatalogue.Find(LauncherDoorRules.ContinuePick(cards, App.Settings?.Current?.LauncherLastPlayedId));
+        if (door == LauncherDoor.Games && last != null) go = BuildContinueButton(last, hue);
 
         var view = new LauncherDoorCard(new DoorCardSpec(
             DoorTitle(door),
@@ -278,6 +309,51 @@ public partial class LauncherWindow
         card.GotKeyboardFocus += (_, _) => DoorHover(view, true);
         card.LostKeyboardFocus += (_, _) => { if (!card.IsMouseOver) DoorHover(view, false); };
         return view;
+    }
+
+    /// <summary>Continue: a filled hue button (the depth law's raised face) that presses in.</summary>
+    private Button BuildContinueButton(LauncherEntry last, Color hue)
+    {
+        var label = new StackPanel { Orientation = Orientation.Horizontal };
+        label.Children.Add(new TextBlock
+        {
+            Text = "", FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
+            FontSize = 13, Margin = new Thickness(0, 1, 9, 0), VerticalAlignment = VerticalAlignment.Center,
+        });
+        var text = Loc.GetF("launcher_door_continue", last.Title);
+        label.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontFamily = LauncherDoorCard.DisplayFont, FontSize = 16, FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+        });
+        var go = new Button
+        {
+            Content = label,
+            Style = (Style)FindResource("LauncherPlay"),
+            Height = LauncherGridLayout.PlayHeight + 6, Padding = new Thickness(18, 0, 20, 0),
+            MinWidth = 220, MaxWidth = 380, HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 22, 0, 0),
+            Background = new LinearGradientBrush(Lighten(hue, 0.15), Darken(hue, 0.7), 90),
+            BorderBrush = new SolidColorBrush(Lighten(hue, 0.3)),
+            Foreground = new SolidColorBrush(Lighten(hue, 0.6)),
+            RenderTransformOrigin = new Point(0.5, 0.5),
+        };
+        // The content is a glyph plus a trimmed label: name it with the whole line.
+        System.Windows.Automation.AutomationProperties.SetName(go, text);
+        go.PreviewMouseLeftButtonDown += Press_Down;
+        go.PreviewMouseLeftButtonUp += Press_Up;
+        go.MouseLeave += (_, _) => MotionFx.PressSquish(go, false);
+        go.Click += (_, _) =>
+        {
+            if (last.NeedsAccount) { LauncherSfx.Denied(); OpenSignIn(); return; }
+            // Access can drop while the doors are up (ContinuePick hides the button on the next
+            // paint): no happy click before the host's refusal.
+            if (last.Locked || !last.Available) LauncherSfx.Denied();
+            else LauncherSfx.Click();
+            LauncherHost.LaunchGame(last.Id);
+        };
+        return go;
     }
 
     /// <summary>IN: this door lifts and lights, the other steps back, the backdrop takes the hue,
