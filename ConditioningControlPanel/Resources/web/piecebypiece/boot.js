@@ -1,3 +1,4 @@
+import { frameTime } from './board/frame-time.js';
 /* ============================================================================
  * boot.js - entry point for Piece by Piece.
  *
@@ -87,6 +88,7 @@ function main() {
     view,
     pieces,
     anim,
+    settleMove() { anim.skip(); view.render(); },
     jiggle: pieces.jiggle,
     buzzCheck(square) { anim.buzz(pieces.pieceAt(square)); },
     setWobble(v) { pieces.setWobble(v); },
@@ -462,11 +464,12 @@ function main() {
 
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const { elapsed, dt } = frameTime(now, last);
+    view.measureFrame(elapsed, presentation().reducedMotion);
     last = now;
     view.update(dt);
     pieces.update(dt);
-    anim.update(dt);
+    anim.update(elapsed);
     if (!pausedGame) board.turnHandoff.update(dt);   // no turn card comes in under the pause card (CHESS-3)
     drag.update(dt);
     jiggle.update(dt);   // last: it reads what everything else just decided
