@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Tests;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -48,6 +49,40 @@ public sealed class ModCreatorBarksTests
         typeof(ModCreatorWindow).GetMethod("WriteSideFilesTo", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new object[] { root });
         return JArray.Parse(File.ReadAllText(FileAt(root)));
     }
+
+    [Fact]
+    public void BaseManifestPickersSelectValuesAndMissingManifestLeavesTextFields() => Run((w, root) =>
+    {
+        var manifest = Path.Combine(SourceRoots.RepoRoot, "Assets", "sounds", "companion_audio", "bark_rules.json");
+        var rules = JArray.Parse(File.ReadAllText(manifest)).OfType<JObject>().ToArray();
+        var trigger = rules.Select(r => r.Value<string>("trigger")).First(v => !string.IsNullOrWhiteSpace(v))!;
+        var id = rules.Select(r => r.Value<string>("id")).First(v => !string.IsNullOrWhiteSpace(v))!;
+        w.BarkBaseManifestPath = manifest;
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
+        var pickers = card.GetLogicalDescendants().OfType<ComboBox>().ToList();
+        var triggerPicker = pickers.Single(c => Equals(c.Tag, "bark_trigger_picker"));
+        var idPicker = pickers.Single(c => Equals(c.Tag, "bark_id_picker"));
+        Assert.True(triggerPicker.IsVisible); Assert.False(idPicker.IsVisible);
+        triggerPicker.SelectedItem = trigger; Assert.Equal(trigger, boxes[1].Text);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        Assert.False(triggerPicker.IsVisible); Assert.True(idPicker.IsVisible);
+        idPicker.SelectedItem = id; Assert.Equal(id, boxes[0].Text);
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Equal(id, Export(w, root)[0].Value<string>("id"));
+        w.ClearBarksSection();
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
+        Click(w, "mod_barks_add"); card = Card(w);
+        Assert.False(card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_trigger_picker")).IsVisible);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        Assert.False(card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker")).IsVisible);
+        card.GetLogicalDescendants().OfType<TextBox>().First().Text = "custom";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Equal("custom", Export(w, Path.Combine(root, "fallback"))[0].Value<string>("id"));
+        File.WriteAllText(w.BarkBaseManifestPath, "broken");
+        Assert.Empty(ModCreatorWindow.ReadBarkPickerItems(w.BarkBaseManifestPath).Ids);
+    });
 
     [Fact]
     public void IncompleteRulesAreReportedAndReportSurvivesExportStatus() => Run((w, root) =>
