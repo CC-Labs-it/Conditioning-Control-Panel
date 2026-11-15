@@ -188,4 +188,61 @@ public sealed partial class GameWindowTests
             store.PurgeCommittedSafe("test cleanup");
         }
     });
+
+    [Fact]
+    public void GoonInbox_StaleAbortDeletesItsPartialAndExitDrainsPurge() => Run((_, _) =>
+    {
+        Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
+        var store = TransferInboxStore.Instance;
+        var data = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a3sAAAAASUVORK5CYII=");
+        var sha = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
+        var file = Path.Combine(store.RecvDir, sha + ".png");
+        var partSha = new string('1', 64);
+        var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
+        w.Load(GameWindow.Server()); w.Show();
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        GameWindow.GoonInboxBeforeCommit = () => { entered.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
+        void Send(object frame) => w.HandleMessage(Newtonsoft.Json.JsonConvert.SerializeObject(frame));
+        try
+        {
+            // A page abort queued behind a slow commit, then a reload: the abort must still run.
+            Assert.Null(store.Begin("slow", sha, "image/png", data.Length));
+            Assert.Null(store.AppendChunk("slow", 0, Convert.ToBase64String(data)));
+            Send(new { type = "goon-recv-commit", id = "slow" });
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Null(store.Begin("part", partSha, "image/png", data.Length));
+            Assert.Null(store.AppendChunk("part", 0, Convert.ToBase64String(data[..20])));
+            Send(new { type = "goon-recv-abort", id = "part" });
+            Send(new { type = "ready" });
+            release.Set();
+            Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Equal("unknown-job", store.AppendChunk("part", 1, Convert.ToBase64String(data[20..])));
+            Assert.Empty(Directory.EnumerateFiles(store.TmpDir, "*" + partSha + "*"));
+
+            // App exit with the window still open: queued work is cancelled, media purged, exit waits.
+            entered.Reset(); release.Reset();
+            Assert.Null(store.Begin("slow2", sha, "image/png", data.Length));
+            Assert.Null(store.AppendChunk("slow2", 0, Convert.ToBase64String(data)));
+            Send(new { type = "goon-recv-commit", id = "slow2" });
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Null(store.Begin("queued", sha, "image/png", data.Length)); // resumes slow2's partial
+            Send(new { type = "goon-recv-commit", id = "queued" });
+            var unblock = Task.Run(() => { Thread.Sleep(300); release.Set(); });
+            Assert.True(GameWindow.DrainGoonInboxForExit(TimeSpan.FromSeconds(10)));
+            unblock.GetAwaiter().GetResult();
+            Assert.False(File.Exists(file));
+            Assert.Empty(store.ListForManifest());
+            Assert.Equal("unknown-job", store.AppendChunk("queued", 1, "AA=="));
+        }
+        finally
+        {
+            release.Set();
+            GameWindow.GoonInboxBeforeCommit = null;
+            w.Close();
+            GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10));
+            store.Abort("part"); store.Abort("queued");
+            store.PurgeCommittedSafe("test cleanup");
+        }
+    });
 }

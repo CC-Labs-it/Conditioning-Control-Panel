@@ -37,6 +37,17 @@ internal sealed partial class GameWindow
         QueueGoonInbox(() => TransferInboxStore.Instance.PurgeCommittedSafe("window closed"));
     }
 
+    // WPF purges synchronously on close (GoonHostService.cs:2122); the pool dies with the process,
+    // so exit cancels every live page's queued work, purges once more and waits for the queue.
+    internal static bool DrainGoonInboxForExit(TimeSpan max)
+    {
+        GameWindow[] all;
+        lock (Open) all = Open.ToArray();
+        foreach (var w in all) if (w.Spec.Id == "goon") Interlocked.Increment(ref w._goonInboxGeneration);
+        QueueGoonInbox(() => TransferInboxStore.Instance.PurgeCommittedSafe("app exit"));
+        try { return GoonInboxIdle.Wait(max); } catch { return false; }
+    }
+
     // WPF GoonHostService.cs:868-963: the page's disk-backed received-artifact protocol.
     private bool HandleGoonInbox(JObject o)
     {
@@ -48,8 +59,9 @@ internal sealed partial class GameWindow
         {
             if (generation != Volatile.Read(ref _goonInboxGeneration))
             {
-                // A cancelled commit may already own a partial; dispose it before a new session starts.
-                if (type == "goon-recv-commit")
+                // A cancelled chunk, commit or abort may own a partial; dispose it before a new
+                // session can resume it from the wrong offset (WPF always runs abort, :918-921).
+                if (type is "goon-recv-chunk" or "goon-recv-commit" or "goon-recv-abort")
                     try { TransferInboxStore.Instance.Abort((string?)o["id"]); } catch { }
                 return;
             }
