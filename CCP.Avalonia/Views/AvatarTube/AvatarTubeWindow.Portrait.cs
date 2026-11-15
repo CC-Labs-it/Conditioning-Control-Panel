@@ -47,10 +47,13 @@ public partial class AvatarTubeWindow
             if ((image = _portrait.Open(candidate)) != null) { path = candidate; break; }
         StopRainPlayback();
         _poseTimer.Stop();
+        var previous = image == null ? _portraitActive?.Source ?? _imgAvatar.Source : null;
+        var retained = ReferenceEquals(previous, _portraitImage) ? _portraitImage : null;
+        if (retained != null) _portraitImage = null;
         ClearPortraitImage();
-        _portraitImage = image;
+        _portraitImage = image ?? retained;
         _portraitActive = _imgAvatar;
-        _imgAvatar.Source = image;
+        _imgAvatar.Source = image ?? previous;
         PortraitPath = path;
         var second = this.FindControl<Image>("ImgAvatarB")!;
         second.IsVisible = true;

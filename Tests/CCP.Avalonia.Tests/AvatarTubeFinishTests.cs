@@ -436,10 +436,14 @@ public sealed class AvatarTubeFinishTests
             Assert.False(tube.IsPortraitMode);
             Assert.Null(tube.FindControl<Image>("ImgAvatarB")!.Source);
             File.Delete(Path.Combine(skin, "idle.png"));
+            var previous = tube.FindControl<Image>("ImgAvatar")!.Source; Assert.NotNull(previous); Assert.True(tube.IsPoseRotating);
             change(new ModPackage(new ModManifest { Id = "portrait-no-idle" }, root, false));
             Assert.True(tube.IsPortraitMode); Assert.Null(tube.PortraitPath); Assert.False(tube.IsPoseRotating);
+            Assert.Same(previous, tube.FindControl<Image>("ImgAvatar")!.Source);
+            Assert.True(tube.RefreshRainPlayback().IsCompletedSuccessfully); Assert.False(tube.IsPoseRotating);
             tube.GigglePriority("mood", playSound: false, aiGenerated: false, mood: "soft");
             Assert.Equal("tender.png", Path.GetFileName(tube.PortraitPath));
+            var emotionSource = tube.FindControl<Image>("ImgAvatarB")!.Source; Assert.NotNull(emotionSource); change(new ModPackage(new ModManifest { Id = "portrait-no-idle" }, root, false)); Assert.Same(emotionSource, tube.FindControl<Image>("ImgAvatar")!.Source);
         }
         finally { Directory.Delete(root, true); }
     });
