@@ -120,6 +120,7 @@ public sealed class LeashHolderCard : Border
             var tools = new StackPanel { Orientation = Orientation.Horizontal };
             var help = F.Pill("?", F.Raised, F.Lilac, "leash-holder-help");
             help.Width = 26; help.Padding = new Thickness(0);
+            ToolTip.SetTip(help, Loc.Get("leash_help")); // WPF LeashLook.cs:122
             help.Click += (_, _) => ShowIntro();
             tools.Children.Add(help); tools.Children.Add(MoreButton(h));
             Grid.SetColumn(tools, 1); header.Children.Add(tools);

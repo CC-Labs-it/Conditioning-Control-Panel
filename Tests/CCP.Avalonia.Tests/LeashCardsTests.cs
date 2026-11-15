@@ -79,6 +79,7 @@ public sealed class LeashCardsTests
     public void HolderHelp_OpensExplainerWithGotIt() => Run(() =>
     {
         var card = new LeashHolderCard(Held(), () => new Service());
+        Assert.Equal(Loc.Get("leash_help"), ToolTip.GetTip(Find<Button>(card, "leash-holder-help")));
         Click(card, "leash-holder-help");
         var intro = Assert.IsType<LeashHolderIntro>(card.Intro);
         try
