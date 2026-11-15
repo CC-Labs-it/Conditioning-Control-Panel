@@ -160,6 +160,37 @@ public sealed class LeashIncomingAskTests
             }
         });
 
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+            shell.Show();
+            shell.RebindLeashAsks(); // Bind the old service before publishing its replacement.
+            LeashHead.Service = replacement;
+            try
+            {
+                var offer = replacement.Snapshot.Offers.Single(o => o.From.Id == "vex");
+                LeashAskWindow.Open(offer, () => replacement, shell); // The Look button opens this same path.
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                shell.RebindLeashAsks(); // Simulate the timer arriving while the manual ask is open.
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("leash-ask:juno", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
     [Theory]
     [InlineData("wayland-test", null)]
     [InlineData(null, "wayland")]
