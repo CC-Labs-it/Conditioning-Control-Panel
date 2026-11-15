@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
@@ -34,6 +35,28 @@ public sealed partial class GameWindowTests
             w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"keybinds\",\"value\":{\"jump\":\"J\"}}");
             Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
             w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"keybinds\",\"value\":\"bad\"}");
+            Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
+        }
+        finally { w.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Arcademy_Keybinds_RefusalEchoesStoredValue(bool oversized) => Run((_, _) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("arcademy", "title", "arcademy/index.html"));
+        try
+        {
+            CoreSettings.Current.ArcademyKeybindsJson = "{\"jump\":\"J\"}";
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            JToken value = oversized ? new JObject { ["jump"] = new string('x', 7001) } : new JValue("bad");
+            w.HandleMessage(new JObject { ["type"] = "set-setting", ["key"] = "keybinds", ["value"] = value }.ToString());
+            var reply = Assert.Single(frames);
+            Assert.Equal("setting", (string?)reply["type"]);
+            Assert.Equal("keybinds", (string?)reply["key"]);
+            Assert.Equal("J", (string?)reply["value"]?["jump"]);
             Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
         }
         finally { w.Close(); }

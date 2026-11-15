@@ -43,9 +43,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     object? echo;
                     switch (key)
                     {
-                        case "keybinds" when value is JObject binds && binds.ToString(Formatting.None).Length <= 7000:
-                            settings.ArcademyKeybindsJson = binds.ToString(Formatting.None);
-                            echo = binds;
+                        case "keybinds":
+                            if (value is JObject binds && binds.ToString(Formatting.None).Length <= 7000)
+                            {
+                                settings.ArcademyKeybindsJson = binds.ToString(Formatting.None);
+                                echo = binds;
+                            }
+                            else
+                            {
+                                // WPF ArcademyHostService.cs:3492-3509 echoes the stored object on refusal.
+                                try { echo = JObject.Parse(settings.ArcademyKeybindsJson); }
+                                catch { echo = null; }
+                            }
                             break;
                         case "audioMute" when value?.Type == JTokenType.Boolean:
                             settings.ArcademyAudioMute = (bool)value;
