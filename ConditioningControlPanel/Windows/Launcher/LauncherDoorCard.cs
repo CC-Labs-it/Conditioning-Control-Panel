@@ -140,17 +140,20 @@ internal sealed class LauncherDoorCard
             // The picture is shown WHOLE (owner, 2026-11-15: "the image is clipped"): the reel is
             // a 16:9 box as tall as the card, seated at the right, and its left edge melts away.
             HorizontalAlignment = HorizontalAlignment.Right,
-            OpacityMask = new LinearGradientBrush
+        };
+        // Each picture hugs the card's right edge whatever its shape (square art included) and
+        // its own left edge melts away, so no picture ever shows a hard side.
+        var melt = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
+            GradientStops =
             {
-                StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
-                GradientStops =
-                {
-                    new GradientStop(Color.FromArgb(0x00, 0, 0, 0), 0),
-                    new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 0.28),
-                    new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 1),
-                },
+                new GradientStop(Color.FromArgb(0x00, 0, 0, 0), 0),
+                new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 0.38),
+                new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 1),
             },
         };
+        melt.Freeze();
         body.SizeChanged += (_, _) =>
         {
             if (body.ActualHeight > 0)
@@ -161,8 +164,10 @@ internal sealed class LauncherDoorCard
             var img = new Image
             {
                 Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                OpacityMask = melt,
                 Opacity = 0,
-                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransformOrigin = new Point(1, 0.5),   // grows away from the card's right edge
                 RenderTransform = new TransformGroup { Children = { new ScaleTransform(1.0, 1.0), new TranslateTransform() } },
             };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
@@ -581,7 +586,8 @@ internal sealed class LauncherDoorCard
         // A gentle push only: the picture starts whole and never loses more than its outer edge.
         var zoom = new DoubleAnimation(1.0, 1.05, span);
         Timeline.SetDesiredFrameRate(zoom, ReelFps);
-        var slide = new DoubleAnimation(_driftLeft ? 6 : -6, _driftLeft ? -6 : 6, span);
+        // Only ever toward the card's right edge (clipped there), so no gap opens beside the picture.
+        var slide = new DoubleAnimation(_driftLeft ? 5 : 0, _driftLeft ? 0 : 5, span);
         Timeline.SetDesiredFrameRate(slide, ReelFps);
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
