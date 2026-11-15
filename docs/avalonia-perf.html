@@ -134,6 +134,7 @@ No new Windows parity result is claimed by this review fix.</p>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-11-15, perf(subjects): the AvailableSubjects p95 tail (and BlinkTrainer, Programs, Settings) was not tab work. In the Windows diagnostic rgate 43666596784, 82 of 400 cheap-tab switches waited 53-130 ms for their frame callback while ShowTab took 1.5-3 ms with no GC. Avalonia 12 holds animation-frame callbacks while a committed batch is unprocessed, and the tab entrance (a 60 fps UI-thread FrameClock) committed one every frame, about 110 ms each on the CPU renderer. The entrance now runs as compositor animations with WPF timings, as WPF storyboards do (MainShellWindow.TabTransitions.cs). Linux GPU desktop, 5 runs, handoff p95 before → after: Subjects 3.25-3.43 → 3.05-3.37, Settings 18.5-20.0 → 6.1-18.7 ms. Windows windows-latest (rgate 43682284111, 5 pairs, handoff p95 medians, before from 20261114 run 43595478555): AvailableSubjects 58.0 → 16.4 (WPF 20.0, limit 42.0), BlinkTrainer 55.9 → 21.1 (limit 55.5), Programs 7.9 → 27.5 (limit 75.0), Settings 24.5 → 12.1 (limit 53.2); drawn medians about 115 → 45 ms. No row FAILs.</li>
 <li>2026-11-11, cloud Linux, test syntax correction on parent <code>217dae076</code>, base
 <code>e62cb9ecd005</code>: Core, Avalonia and Avalonia test projects built in Release;
 Core tests 4650 passed / 5 skipped; 21 focused headless tests passed. Fail-proof: disabling the mod-revision check made the same-ID

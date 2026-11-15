@@ -214,26 +214,72 @@ public sealed class TabTransitionsTests
     // A stepped entrance lets pointer tests sample resting geometry without sleeping.
     private static void Step(MainShellWindow shell, double milliseconds) => shell.StepTabTransition(milliseconds);
 
+    // The compositor draws the entrance; these are the animations it was handed for one control.
+    private static MainShellWindow.EntranceTrack[] Tracks(MainShellWindow shell, Control target, string property) =>
+        shell.EntranceTracks.Where(t => t.Target == target && t.Property == property).ToArray();
+
     [Fact]
     public Task FullEntranceUsesRailDirectionAndSettlesBeforePointerInput() => Run(shell =>
     {
         shell.ShowTab("quests");
         var quests = shell.Named<Control>("QuestsTab")!;
-        var slide = Assert.IsType<TranslateTransform>(quests.RenderTransform);
-        Assert.Equal(12, slide.X);
-        Step(shell, 100);
-        Assert.Equal(3, slide.X, 5); // QuadraticEaseOut at half time
+        var slide = Assert.Single(Tracks(shell, quests, "Translation"));
+        Assert.Equal(12, slide.At(0));
+        Assert.Equal(3, slide.At(100), 5); // QuadraticEaseOut at half time
+        Assert.Equal(0, slide.At(200));
+        Assert.Equal((0, 200), (slide.DelayMs, slide.DurationMs));
         Step(shell, 620);
-        Assert.Equal(0, slide.X);
+        Assert.Empty(shell.EntranceTracks);
         Assert.Equal(1, quests.Opacity);
         shell.ShowTab("achievements");
         shell.ShowTab("quests");
-        Assert.Equal(-12, slide.X);
+        Assert.Equal(-12, Assert.Single(Tracks(shell, quests, "Translation")).FromX);
         shell.ShowTab("quests"); // same key has no direction: WPF rises
-        Assert.Equal(0, slide.X);
-        Assert.Equal(12, slide.Y);
+        slide = Assert.Single(Tracks(shell, quests, "Translation"));
+        Assert.Equal((0, 12), (slide.FromX, slide.FromY));
         shell.ShowTab("settings"); // browser airspace never slides
-        Assert.False(shell.SettingsPage!.RenderTransform is TranslateTransform { X: not 0 } or TranslateTransform { Y: not 0 });
+        Assert.Empty(Tracks(shell, shell.SettingsPage!, "Translation"));
+        Assert.Empty(Tracks(shell, shell.Named<Control>("SettingsTab")!, "Translation"));
+    });
+
+    [Fact]
+    public Task EntranceRunsOnTheCompositorAndLeavesTheUiThreadIdle() => Run(shell =>
+    {
+        shell.ShowTab("settings");
+        shell.CompleteTabTransition();
+        shell.ShowTab("quests");
+        var quests = shell.Named<Control>("QuestsTab")!;
+        // A UI-thread clock committed a batch every frame; on a CPU renderer the next click waited behind it.
+        Assert.DoesNotContain("MainShellWindow@", ConditioningControlPanel.Avalonia.Controls.Fx.TopLevelFrameSource.For(shell).DescribeSubscribers());
+        Assert.Equal(1, quests.Opacity); // the client value stays at rest; the compositor animates its copy
+        var fade = Assert.Single(Tracks(shell, quests, "Opacity"));
+        Assert.Equal((0, 0, 200), (fade.FromX, fade.DelayMs, fade.DurationMs));
+
+        // Landing the entrance early (a new switch, Close, a render proof) ends the compositor's animations at
+        // rest; the client value alone would not, because it never left rest. Headless frames run on wall time,
+        // so the fade's mid-frames are not sampled here.
+        var host = shell.Named<ContentControl>("QuestsTab")!;
+        var content = host.Content;
+        host.Content = new Border { Background = Brushes.Magenta };
+        try
+        {
+            shell.CompleteTabTransition();
+            using var rest = shell.CaptureRenderedFrame();
+            var point = quests.TranslatePoint(new Point(quests.Bounds.Width / 2, quests.Bounds.Height / 2), shell)!.Value;
+            Assert.Equal(0xFF00FFu, Rgb(rest!, point));
+            shell.ShowTab("achievements");
+            shell.CompleteTabTransition();
+            shell.ShowTab("quests");
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); // the switch's commit starts the animations
+            shell.CompleteTabTransition();
+            // One compositor frame, not CaptureRenderedFrame: that drains frames until the fade has ended anyway.
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            using var after = shell.GetLastRenderedFrame();
+            Assert.Equal(0xFF00FFu, Rgb(after!, point));
+        }
+        finally { shell.CompleteTabTransition(); host.Content = content; }
     });
 
     [Fact]
@@ -348,10 +394,14 @@ public sealed class TabTransitionsTests
         shell.ShowTab("quests");
         shell.ShowTab("achievements");
         var tab = shell.Named<Control>("AchievementsTab")!;
-        Assert.Equal(0, tab.Opacity);
+        Assert.Equal(0.75, Assert.Single(Tracks(shell, tab, "Opacity")).At(100), 5); // QuadraticEaseOut at half of 200 ms
+        time.Now = TimeSpan.FromMilliseconds(99).Ticks;
+        shell.TickTabTransition();
+        Assert.NotNull(shell.LeavingTab);
         time.Now = TimeSpan.FromMilliseconds(100).Ticks;
         shell.TickTabTransition();
-        Assert.Equal(0.75, tab.Opacity, 5); // QuadraticEaseOut at half of 200 ms
+        Assert.Null(shell.LeavingTab);
+        Assert.Same(tab, shell.EnteringTab);
         time.Now = TimeSpan.FromMilliseconds(620).Ticks;
         shell.TickTabTransition();
         Assert.Equal(1, tab.Opacity);
@@ -365,15 +415,16 @@ public sealed class TabTransitionsTests
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
         shell.ShowTab("achievements");
         var tab = shell.Named<Control>("AchievementsTab")!;
-        Assert.Equal(0, tab.Opacity);
-        Assert.False(tab.RenderTransform is TranslateTransform { X: not 0 } or TranslateTransform { Y: not 0 });
-        Step(shell, 100);
-        Assert.Equal(0.75, tab.Opacity, 5);
+        var fade = Assert.Single(shell.EntranceTracks); // the crossfade only: no slide, no card stagger
+        Assert.Equal((tab, "Opacity"), (fade.Target, fade.Property));
+        Assert.Equal(0, fade.At(0));
+        Assert.Equal(0.75, fade.At(100), 5);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         shell.ShowTab("quests");
         Assert.Equal(1, tab.Opacity);
         Assert.Empty(((Panel)tab.Parent!).Children.OfType<Image>());
         Assert.Null(shell.EnteringTab);
+        Assert.Empty(shell.EntranceTracks);
     });
 
     [Fact]
@@ -436,15 +487,17 @@ public sealed class TabTransitionsTests
         try
         {
             shell.ShowTab("quests");
-            // First card is animated to 0 already; test the original logical selection separately.
-            Assert.Equal(0, cards.Children[0].Opacity);
+            double Fade(Control card, double ms) => Assert.Single(Tracks(shell, card, "Opacity")).At(ms);
+            Assert.Equal(0, Fade(cards.Children[0], 0));
             Assert.Same(authored, cards.Children[0].RenderTransform);
-            Step(shell, 40);
-            Assert.InRange(cards.Children[0].Opacity, 0.01, 1);
-            Assert.Equal(0, cards.Children[3].Opacity); // second eligible card starts at 40 ms
-            Step(shell, 250);
-            Assert.Equal(cards.Children[8].Opacity, cards.Children[9].Opacity); // slots 6 and 7 share the cap
-            Assert.Equal(1, cards.Children[10].Opacity); // ninth card is outside Take(8)
+            Assert.Empty(Tracks(shell, cards.Children[0], "Translation")); // an authored transform is left alone
+            Assert.Equal(10, Assert.Single(Tracks(shell, cards.Children[3], "Translation")).At(40, y: true));
+            Assert.InRange(Fade(cards.Children[0], 40), 0.01, 1);
+            Assert.Equal(0, Fade(cards.Children[3], 40)); // second eligible card starts at 40 ms
+            Assert.Equal(Fade(cards.Children[8], 250), Fade(cards.Children[9], 250)); // slots 6 and 7 share the cap
+            Assert.Empty(Tracks(shell, cards.Children[10], "Opacity")); // ninth card is outside Take(8)
+            Assert.Empty(Tracks(shell, dim, "Opacity"));
+            Assert.Empty(Tracks(shell, hidden, "Opacity"));
             Assert.Equal(0.6, dim.Opacity);
             Assert.False(hidden.IsVisible);
             shell.CompleteTabTransition();
