@@ -413,6 +413,9 @@ public sealed class VaultGateTests
         var oldSend = FunnelBeacon.SendOverride;
         var oldLaunch = VaultGateDialog.Launch;
         var opened = new System.Collections.Generic.List<string>();
+        var offerPosted = false;
+        var cryptoPosted = false;
+        var endingPosted = false;
         FunnelBeacon.BaseUrlOverride = "https://proxy.test";
         FunnelBeacon.SendOverride = (_, body) => { lines.Enqueue(body); return Task.CompletedTask; };
         VaultGateDialog.Launch = url => { opened.Add(url); return true; };
@@ -429,23 +432,41 @@ public sealed class VaultGateTests
                 if (stacked) Assert.All(coins, coin => Assert.Equal(new Thickness(0, 4, 0, 0), coin.Margin));
             }
             var dialog = VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            offerPosted = true;
             Check(dialog, 1, false);
             Click(dialog, Loc.Get("vaultgate_compare"));
             Check(dialog, 2, true);
             Click(dialog, Loc.Get("vaultgate_or_crypto"));
+            cryptoPosted = true;
             Assert.Null(VaultGateDialog.Open);
             Assert.Equal(PlanCatalog.CryptoPassUrl, Assert.Single(opened));
             for (var i = 0; i < 100 && !lines.Contains("cta_clicked|panel|vault|crypto"); i++) await Task.Delay(10);
             Assert.Contains("cta_clicked|panel|vault|crypto", lines);
             dialog = VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddDays(2), () => { });
+            endingPosted = true;
             Check(dialog, 1, false);
         }
         finally
         {
             VaultGateDialog.Open?.Close();
-            FunnelBeacon.BaseUrlOverride = oldRoot;
-            FunnelBeacon.SendOverride = oldSend;
-            VaultGateDialog.Launch = oldLaunch;
+            try
+            {
+                // Post reads the override on a worker, so drain every event before restoring it.
+                for (var i = 0; i < 500 &&
+                    ((offerPosted && !lines.Contains("gate_shown|panel|vault|basic")) ||
+                     (cryptoPosted && !lines.Contains("cta_clicked|panel|vault|crypto")) ||
+                     (endingPosted && !lines.Contains("gate_shown|panel|invite_ending|basic"))); i++)
+                    await Task.Delay(10);
+                if (offerPosted) Assert.Contains("gate_shown|panel|vault|basic", lines);
+                if (cryptoPosted) Assert.Contains("cta_clicked|panel|vault|crypto", lines);
+                if (endingPosted) Assert.Contains("gate_shown|panel|invite_ending|basic", lines);
+            }
+            finally
+            {
+                FunnelBeacon.BaseUrlOverride = oldRoot;
+                FunnelBeacon.SendOverride = oldSend;
+                VaultGateDialog.Launch = oldLaunch;
+            }
         }
     });
 
