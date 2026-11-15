@@ -63,6 +63,45 @@ public sealed class BrowserInitialHomeTests
         });
 
     [Fact]
+    public Task AppAutoplayCutUsesOneMetadataAndInvalidatesOldRequests() => Run((shell, page, host, mod) =>
+    {
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        host.NavigationInvoker = _ => true;
+        shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
+        CoreSettings.Current.VideoMaxDurationSeconds = 30;
+        CoreSettings.Current.VideoCutRandomStart = true;
+        string Start(bool user)
+        {
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/video", true, user));
+            host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
+            var script = scripts.FindLast(x => x.Contains("const cutRequest ="))!;
+            return script.Split("const cutRequest = '")[1].Split("'")[0];
+        }
+        void Report(string token) => host.OnWebMessage("{\"type\":\"ccpCutMetadata\",\"request\":\"" + token + "\",\"dur\":120}");
+        int Seeks() => scripts.FindAll(x => x.Contains("if(window.__ccpCutRequest===")).Count;
+        var first = Start(false);
+        Report(first); Report(first);
+        Assert.Equal(1, Seeks());
+        var user = Start(true);
+        Report(user);
+        Assert.Equal(1, Seeks());
+        CoreSettings.Current.VideoCutRandomStart = false;
+        var disabled = Start(false);
+        Report(disabled);
+        Assert.Equal(1, Seeks());
+        CoreSettings.Current.VideoCutRandomStart = true;
+        var stale = Start(false);
+        Start(false);
+        Report(stale);
+        Assert.Equal(1, Seeks());
+        var panic = Start(false);
+        shell.PanicPauseBrowserMedia();
+        Report(panic);
+        Assert.Equal(1, Seeks());
+    });
+
+    [Fact]
     public Task AdapterReadyBeforeFirstPageCompletesMakesNextLinkHalf() => Run((shell, page, host, mod) =>
     {
         double applied = 0;

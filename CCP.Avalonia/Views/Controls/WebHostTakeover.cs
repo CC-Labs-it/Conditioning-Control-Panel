@@ -4,7 +4,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     {
         // WPF MainWindow.Browser.cs:843-955: poll for the player, play, request fullscreen,
         // retry fullscreen after a blocked play, and leave fullscreen on end or double-click.
-        // Media reporting and metadata wait for the browser media service.
+        // The host owns the cut decision; the page reports metadata and exposes only a seek hook.
         internal const string VideoAutoPlayScript = """
             (async function() {
                 window._ccpTakeoverStopped = false;
@@ -15,6 +15,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     video = document.querySelector('video');
                 }
                 if (!video || window._ccpTakeoverStopped) return;
+                const cutRequest = '__CCP_CUT_REQUEST__';
+                window.__ccpCutRequest = cutRequest;
+                window.__ccpSetCutStart = seconds => {
+                    try { if (seconds > 0) video.currentTime = seconds; } catch (_) {}
+                };
+                const reportMetadata = () => {
+                    if (Number.isFinite(video.duration) && video.duration > 0)
+                        window.chrome?.webview?.postMessage(JSON.stringify({ type: 'ccpCutMetadata', request: cutRequest, dur: video.duration }));
+                };
+                video.addEventListener('loadedmetadata', reportMetadata, { once: true });
+                if (video.readyState >= 1) reportMetadata();
                 const exitFullscreen = () => {
                     if (document.exitFullscreen) document.exitFullscreen();
                     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
