@@ -29,6 +29,8 @@ namespace CCP.Avalonia.Tests;
 public sealed class FlashClipPlayerTests
 {
     private sealed class Fake : IDisposable { public void Dispose() { } }
+    private sealed class OnDispose(Action action) : IDisposable { public void Dispose() => action(); }
+    private sealed class FrozenClock : TimeProvider { public override long GetTimestamp() => 1; }
     private sealed class Blocked(ManualResetEventSlim gate) : IDisposable { public void Dispose() => gate.Wait(); }
     private static Bitmap Picture() => new(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png")));
 
@@ -317,6 +319,60 @@ public sealed class FlashClipPlayerTests
         finally { w.Close(); }
         Assert.Throws<ObjectDisposedException>(() => { _ = snapshot!.PixelSize; });
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task GlitchKeepsFrameWhenItsPlayerIsEvicted() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldFactory = FlashClipPlayer.Create;
+        var oldClock = FlashOverlay.Clock;
+        var file = Path.GetTempFileName();
+        var windows = new List<FlashOverlayWindow>();
+        using var frame = new WriteableBitmap(new PixelSize(32, 32), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+        using (var pixels = frame.Lock()) Marshal.WriteInt32(pixels.Address, unchecked((int)0xff123456));
+        var freed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        WriteableBitmap? snapshot = null;
+        var starts = 0;
+        try
+        {
+            FlashOverlay.Clock = new FrozenClock();
+            FlashClipPlayer.Create = (_, _, _, show) =>
+            {
+                if (++starts != 1) return new Fake();
+                show(frame);
+                return new OnDispose(() => Dispatcher.UIThread.Post(() => { frame.Dispose(); freed.TrySetResult(); }));
+            };
+            for (var i = 0; i < 8; i++)
+            {
+                var poster = Picture();
+                var w = new FlashOverlayWindow(poster) { Width = 160, Height = 160 };
+                windows.Add(w); w.Show(); FlashOverlay.StartClip(w, poster, file, 100, 1);
+            }
+            var first = windows[0];
+            first.BeginExit(FlashExit.Begin(FlashExitStyle.Glitch, MotionLevel.Full, 3));
+            var slices = first.Slices!.Children.Cast<Image>().Select(i => (WriteableBitmap)i.Source!).ToArray();
+            Assert.Equal(7, slices.Length);
+            snapshot = slices[0];
+            Assert.All(slices, slice => { Assert.NotSame(frame, slice); Assert.Same(snapshot, slice); });
+            using (var pixels = frame.Lock()) Marshal.WriteInt32(pixels.Address, unchecked((int)0xffabcdef));
+            var waitingPoster = Picture();
+            var waiting = new FlashOverlayWindow(waitingPoster) { Width = 160, Height = 160 };
+            windows.Add(waiting); waiting.Show(); FlashOverlay.StartClip(waiting, waitingPoster, file, 100, 1);
+            Assert.Equal(9, starts);
+            await freed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Throws<ObjectDisposedException>(() => { _ = frame.PixelSize; });
+            using (var frozen = snapshot.Lock()) Assert.Equal(unchecked((int)0xff123456), Marshal.ReadInt32(frozen.Address));
+            first.Close();
+            Assert.Throws<ObjectDisposedException>(() => { _ = snapshot.PixelSize; });
+        }
+        finally
+        {
+            foreach (var w in windows) w.Close();
+            FlashClipPlayer.Create = oldFactory; FlashOverlay.Clock = oldClock;
+            File.Delete(file);
+            for (var i = 0; i < 500 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
+        }
+        Assert.Equal(0, FlashClipPlayer.Budget.Live);
     });
 
 }

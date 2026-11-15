@@ -357,6 +357,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (exit.Style == FlashExitStyle.Glitch && _image.Source is { } src)
             {
+                // WPF FlashLayer.cs:204-212 retains the exit frame after its window closes.
+                if (src is WriteableBitmap videoFrame)
+                {
+                    var snapshot = new WriteableBitmap(videoFrame.PixelSize, videoFrame.Dpi,
+                        videoFrame.Format!.Value, videoFrame.AlphaFormat ?? AlphaFormat.Premul);
+                    try { using var target = snapshot.Lock(); videoFrame.CopyPixels(target); }
+                    catch { snapshot.Dispose(); return; }
+                    src = snapshot;
+                    Closed += (_, _) => snapshot.Dispose();
+                }
                 const int n = 7;
                 double w = _card.Bounds.Width, h = _card.Bounds.Height;
                 _slices = new Panel();
