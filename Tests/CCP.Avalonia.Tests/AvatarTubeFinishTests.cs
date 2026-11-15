@@ -359,8 +359,8 @@ public sealed class AvatarTubeFinishTests
     public Task PortraitSpeechUsesLineAndMoodCrossfadesAndReturnsToIdle() => Run((_, tube, change) =>
     {
         var (root, audio, mod) = PortraitFixture("portrait-speech", """
-            {"idleEmotion":"neutral","director":{"crossfadeFrames":4},"skins":[{"id":"a","dir":"a"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy1.png"},{"file":"happy2.png"}]},"tender":{"portraits":[{"file":"tender.png"}]},"other":{"portraits":[{"file":"happy3.png"}]}},"lines":{"mapped":{"emotion":"happy"}}}
-            """, new[] { "a" }, "idle.png", "happy1.png", "happy2.png", "happy3.png", "tender.png");
+            {"idleEmotion":"neutral","director":{"crossfadeFrames":4},"skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy1.png"},{"file":"happy2.png"}]},"tender":{"portraits":[{"file":"tender.png"}]},"other":{"portraits":[{"file":"happy3.png"}]}},"lines":{"mapped":{"emotion":"happy"}}}
+            """, new[] { "a", "b" }, "idle.png", "happy1.png", "happy2.png", "happy3.png", "tender.png");
         try
         {
             using (var wave = new NAudio.Wave.WaveFileWriter(Path.Combine(audio, "mapped.wav"), new NAudio.Wave.WaveFormat(8000, 16, 1)))
@@ -376,11 +376,12 @@ public sealed class AvatarTubeFinishTests
             Assert.NotNull(tube.FindControl<Image>("ImgAvatar")!.Source); Assert.NotNull(tube.FindControl<Image>("ImgAvatarB")!.Source);
             var first = tube.PortraitPath;
             Assert.Equal(TimeSpan.FromSeconds(1), Assert.Single(steps).Delay);
-            steps[0].Fire();
-            Assert.NotEqual(first, tube.PortraitPath);
+            SelectNow(tube, 2); Assert.Equal(Path.Combine(audio, "b", Path.GetFileName(first)), tube.PortraitPath);
+            steps[0].Fire(); Assert.Equal(Path.Combine(audio, "b"), Path.GetDirectoryName(tube.PortraitPath));
+            Assert.NotEqual(Path.GetFileName(first), Path.GetFileName(tube.PortraitPath));
             Assert.Equal(TimeSpan.FromSeconds(1), steps[1].Delay);
             steps[1].Fire();
-            Assert.Equal(first, tube.PortraitPath);
+            Assert.Equal(Path.Combine(audio, "b", Path.GetFileName(first)), tube.PortraitPath);
             Assert.Equal(TimeSpan.FromSeconds(2), steps[2].Delay);
             steps[2].Fire();
             Assert.Equal("idle.png", Path.GetFileName(tube.PortraitPath));
@@ -396,7 +397,7 @@ public sealed class AvatarTubeFinishTests
             change(new ModPackage(new ModManifest { Id = "other" }, null, false));
             staleStep(); staleFade();
             Assert.False(tube.IsPortraitMode); Assert.Null(tube.FindControl<Image>("ImgAvatarB")!.Source);
-            File.Delete(Path.Combine(audio, "a", "idle.png"));
+            File.Delete(Path.Combine(audio, "a", "idle.png")); File.Delete(Path.Combine(audio, "b", "idle.png"));
             var previous = tube.FindControl<Image>("ImgAvatar")!.Source; Assert.NotNull(previous); Assert.True(tube.IsPoseRotating);
             change(new ModPackage(new ModManifest { Id = "portrait-no-idle" }, root, false));
             Assert.True(tube.IsPortraitMode); Assert.Null(tube.PortraitPath); Assert.False(tube.IsPoseRotating);

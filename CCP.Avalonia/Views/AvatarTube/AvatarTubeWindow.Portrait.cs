@@ -12,14 +12,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
 
 public partial class AvatarTubeWindow
 {
-    private AvatarPortraitLoader? _portrait;
+    private AvatarPortraitLoader? _portrait, _paintedPortrait;
     private Bitmap? _portraitImage, _portraitOld;
     private Image? _portraitActive;
     private IEffect? _portraitEffectA, _portraitEffectB;
     private bool _portraitEffectsSaved;
     private Action _cancelPortraitStep = static () => { }, _cancelPortraitFade = static () => { };
-    private int _portraitStepVersion, _portraitFadeVersion, _portraitStep;
-    private string[] _portraitOrder = Array.Empty<string>();
+    private int _portraitStepVersion, _portraitFadeVersion, _portraitStep, _portraitPose;
+    private int[] _portraitOrder = Array.Empty<int>(); private string? _portraitEmotion;
     private double _portraitStepMs, _portraitLastMs;
     private readonly System.Collections.Generic.Dictionary<string, double> _portraitDurations = new();
     internal string? PortraitPath { get; private set; }
@@ -41,6 +41,11 @@ public partial class AvatarTubeWindow
     private bool PaintPortrait()
     {
         if (_portrait == null || ResolveV1EmoteFolder() != null) return false;
+        if (ReferenceEquals(_paintedPortrait, _portrait)) {
+            var bucket = _portrait.Bucket(_currentAvatarSet - 1, _portraitEmotion ?? _portrait.Manifest.IdleEmotion);
+            if (bucket.Length > 0) { if (_portraitPose >= bucket.Length) _portraitPose = 0; FadePortrait(bucket[_portraitPose]); }
+            UpdatePortraitTitle(); return true;
+        }
         string? path = null;
         Bitmap? image = null;
         foreach (var candidate in _portrait.Bucket(_currentAvatarSet - 1, _portrait.Manifest.IdleEmotion))
@@ -51,9 +56,8 @@ public partial class AvatarTubeWindow
         var retained = ReferenceEquals(previous, _portraitImage) ? _portraitImage : null;
         if (retained != null) _portraitImage = null;
         ClearPortraitImage();
-        _portraitImage = image ?? retained;
-        _portraitActive = _imgAvatar;
-        _imgAvatar.Source = image ?? previous;
+        _paintedPortrait = _portrait; _portraitImage = image ?? retained;
+        _portraitActive = _imgAvatar; _imgAvatar.Source = image ?? previous;
         PortraitPath = path;
         var second = this.FindControl<Image>("ImgAvatarB")!;
         second.IsVisible = true;
@@ -88,20 +92,17 @@ public partial class AvatarTubeWindow
         double seconds = heldIdle ? 0 : audioPath != null ? PortraitAudioDuration(audioPath) : string.IsNullOrWhiteSpace(text) ? 2.5
             : Math.Clamp(0.45 * text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length + 0.8, 2.0, 7.0);
         int count = seconds <= 0 ? 2 : Math.Clamp((int)Math.Round(seconds) - 1, 2, 5);
-        var order = new string[count];
-        var pool = new System.Collections.Generic.List<string>();
-        string? last = null;
+        var order = new int[count];
+        var pool = new System.Collections.Generic.List<int>(); int last = -1;
         for (int i = 0; i < count; i++)
         {
-            if (pool.Count == 0) { pool.AddRange(bucket.OrderBy(_ => _random.Next())); if (pool.Count > 1 && pool[0] == last) (pool[0], pool[1]) = (pool[1], pool[0]); }
+            if (pool.Count == 0) { pool.AddRange(Enumerable.Range(0, bucket.Length).OrderBy(_ => _random.Next())); if (pool.Count > 1 && pool[0] == last) (pool[0], pool[1]) = (pool[1], pool[0]); }
             order[i] = last = pool[0]; pool.RemoveAt(0);
         }
         CancelPortraitStep();
-        _portraitOrder = order;
-        _portraitStep = 0;
-        _portraitStepMs = seconds > 0 && seconds < 3.5 ? 500 : 1000;
-        _portraitLastMs = seconds > 0 && seconds < 3.5 ? 1000 : 2000;
-        FadePortrait(order[0]);
+        _portraitEmotion = emotion; _portraitOrder = order; _portraitStep = 0;
+        (_portraitStepMs, _portraitLastMs) = seconds > 0 && seconds < 3.5 ? (500, 1000) : (1000, 2000);
+        FadePortrait(bucket[_portraitPose = order[0]]);
         SchedulePortraitStep(_portraitStepMs);
     }
 
@@ -112,14 +113,10 @@ public partial class AvatarTubeWindow
         try
         {
             if (Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase))
-            {
-                using var wave = new NAudio.Wave.WaveFileReader(path);
-                duration = wave.TotalTime.TotalSeconds;
-            }
+            { using var wave = new NAudio.Wave.WaveFileReader(path); duration = wave.TotalTime.TotalSeconds; }
             else if (Path.GetExtension(path).Equals(".mp3", StringComparison.OrdinalIgnoreCase))
             {
-                using var stream = File.OpenRead(path);
-                NAudio.Wave.Mp3Frame? frame;
+                using var stream = File.OpenRead(path); NAudio.Wave.Mp3Frame? frame;
                 while ((frame = NAudio.Wave.Mp3Frame.LoadFromStream(stream)) != null)
                     if (frame.SampleRate > 0) duration += (double)frame.SampleCount / frame.SampleRate;
             }
@@ -136,11 +133,13 @@ public partial class AvatarTubeWindow
             if (version != _portraitStepVersion || _portrait == null || !IsPortraitMode) return;
             if (++_portraitStep >= _portraitOrder.Length)
             {
-                var idle = _portrait.Bucket(_currentAvatarSet - 1, _portrait.Manifest.IdleEmotion);
-                if (idle.Length > 0) FadePortrait(idle[_random.Next(idle.Length)]);
+                _portraitEmotion = null; var idle = _portrait.Bucket(_currentAvatarSet - 1, _portrait.Manifest.IdleEmotion);
+                if (idle.Length > 0) FadePortrait(idle[_portraitPose = _random.Next(idle.Length)]);
                 return;
             }
-            FadePortrait(_portraitOrder[_portraitStep]);
+            var bucket = _portrait.Bucket(_currentAvatarSet - 1, _portraitEmotion!);
+            if (bucket.Length == 0) { _portraitEmotion = null; return; }
+            FadePortrait(bucket[_portraitPose = _portraitOrder[_portraitStep] % bucket.Length]);
             SchedulePortraitStep(_portraitStep == _portraitOrder.Length - 1 ? _portraitLastMs : _portraitStepMs);
         });
     }
@@ -219,7 +218,7 @@ public partial class AvatarTubeWindow
         }
         _imgAvatar.Source = null; _imgAvatar.Opacity = 1;
         second.Source = null; second.Opacity = 0; second.IsVisible = false;
-        _portraitActive = null;
+        _portraitActive = null; _paintedPortrait = null; _portraitEmotion = null; _portraitPose = 0;
         _portraitImage?.Dispose(); _portraitImage = null; PortraitPath = null;
         (_imgAvatar.MaxHeight, second.MaxHeight, _imgAvatar.MaxWidth, second.MaxWidth) = (306, 306, 198, 198);
     }
