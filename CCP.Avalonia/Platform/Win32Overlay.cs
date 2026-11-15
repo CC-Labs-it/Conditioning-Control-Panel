@@ -327,6 +327,30 @@ internal static class Win32Overlay
         public uint Flags;
     }
 
+    // WPF ChaosTunnelService.cs:476-502: intercept ordinary raises before they paint.
+    internal static void RewriteTunnelRaise(uint msg, IntPtr data, IntPtr tunnel)
+    {
+        if (msg != WmWindowPosChanging || data == IntPtr.Zero || tunnel == IntPtr.Zero) return;
+        var pos = Marshal.PtrToStructure<WindowPos>(data);
+        if ((pos.Flags & SwpNoZOrder) != 0 || pos.InsertAfter != IntPtr.Zero) return;
+        pos.InsertAfter = tunnel;
+        Marshal.StructureToPtr(pos, data, false);
+    }
+
+    internal static Action HookTunnelRaises(TopLevel main, TopLevel tunnel)
+    {
+        if (!OperatingSystem.IsWindows()) return () => { };
+        IntPtr Hook(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            var handle = tunnel.TryGetPlatformHandle();
+            if (handle?.HandleDescriptor == "HWND" && IsWindow(handle.Handle))
+                RewriteTunnelRaise(msg, lParam, handle.Handle);
+            return IntPtr.Zero;
+        }
+        Win32Properties.AddWndProcHookCallback(main, Hook);
+        return () => Win32Properties.RemoveWndProcHookCallback(main, Hook);
+    }
+
     /// <summary>WPF BubbleWndProc (Speech.cs:1122-1137): a plain show puts the window on top of the
     /// z-order and its whole owner chain with it, so the app jumps over whatever the player is in
     /// (owner, 2026-10-02). Every show of <paramref name="window"/> is slotted directly above its

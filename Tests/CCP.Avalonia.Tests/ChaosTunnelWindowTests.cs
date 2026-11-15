@@ -10,22 +10,38 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
-
 namespace CCP.Avalonia.Tests;
-
 public class ChaosTunnelWindowTests
 {
     [Fact]
-    public async Task Opt_in_opens_below_pinned_chrome_tracks_streak_and_panic_closes()
-    {
+    public void Windows_raise_hook_rewrites_only_plain_top_requests() {
+        var data = System.Runtime.InteropServices.Marshal.AllocHGlobal(2 * IntPtr.Size + 24);
+        try {
+            var flags = 2 * IntPtr.Size + 16;
+            void Check(uint msg, IntPtr after, int bits, IntPtr tunnel, IntPtr expected) {
+                System.Runtime.InteropServices.Marshal.WriteIntPtr(data, IntPtr.Size, after);
+                System.Runtime.InteropServices.Marshal.WriteInt32(data, flags, bits);
+                Win32Overlay.RewriteTunnelRaise(msg, data, tunnel);
+                Assert.Equal(expected, System.Runtime.InteropServices.Marshal.ReadIntPtr(data, IntPtr.Size));
+            }
+            var tunnel = new IntPtr(42);
+            Check(0x46, IntPtr.Zero, 0, tunnel, tunnel);
+            Check(0x46, new IntPtr(-1), 0, tunnel, new IntPtr(-1));
+            Check(0x46, IntPtr.Zero, 4, tunnel, IntPtr.Zero);
+            Check(0x47, IntPtr.Zero, 0, tunnel, IntPtr.Zero);
+            Check(0x46, IntPtr.Zero, 0, IntPtr.Zero, IntPtr.Zero);
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(data); }
+    }
+    [Fact]
+    public async Task Opt_in_opens_below_pinned_chrome_tracks_streak_and_panic_closes() {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var settings = CoreSettings.Current;
             var enabled = settings.ChaosTunnelEnabled;
             var pinned = settings.ChaosPinOnTop;
             var canOpen = ChaosTunnelWindow.CanOpen;
-            try
-            {
+            try {
                 ChaosTunnelWindow.CanOpen = () => true;
                 settings.ChaosPinOnTop = true;
                 settings.ChaosTunnelEnabled = false;
@@ -33,7 +49,6 @@ public class ChaosTunnelWindowTests
                 ChaosRunHost.BeginRun();
                 Assert.Null(ChaosTunnelWindow.Active);
                 ChaosRunHost.ForceShutdown();
-
                 settings.ChaosTunnelEnabled = true;
                 settings.ChaosPinOnTop = false;
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
@@ -58,7 +73,6 @@ public class ChaosTunnelWindowTests
                 Assert.Contains(scripts, s => s.Contains("\"type\":\"zone-hint\"") && s.Contains("\"depth\":3"));
                 ChaosRunHost.ForceShutdown();
                 Assert.Null(ChaosTunnelWindow.Active);
-
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.BeginRun();
                 Assert.NotNull(ChaosTunnelWindow.Active);
@@ -67,15 +81,13 @@ public class ChaosTunnelWindowTests
                 ChaosRunHost.Overlay!.Close();
                 Assert.Null(ChaosTunnelWindow.Active);
                 ChaosRunHost.ForceShutdown();
-
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.BeginRun();
                 var stalled = Assert.IsType<ChaosTunnelWindow>(ChaosTunnelWindow.Active);
                 stalled.OnTimeout();
                 Assert.Null(ChaosTunnelWindow.Active);
             }
-            finally
-            {
+            finally {
                 ChaosRunHost.ForceShutdown();
                 ChaosTunnelWindow.CanOpen = canOpen;
                 settings.ChaosTunnelEnabled = enabled;
@@ -92,10 +104,8 @@ public class ChaosTunnelWindowTests
         public void SetPaused(bool paused) => Pauses.Add(paused);
         public void Dispose() => Disposed = true;
     }
-
     [Fact]
-    public async Task Unpinned_run_bridges_audio_video_and_exit_with_restart_protection()
-    {
+    public async Task Unpinned_run_bridges_audio_video_and_exit_with_restart_protection() {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var settings = CoreSettings.Current;
@@ -109,8 +119,7 @@ public class ChaosTunnelWindowTests
             var sounds = new List<(string, float)>();
             var scripts = new List<string>();
             int sinks = 0;
-            try
-            {
+            try {
                 settings.ChaosTunnelEnabled = true;
                 settings.ChaosPinOnTop = false;
                 ChaosTunnelWindow.CanOpen = () => true;
@@ -180,8 +189,7 @@ public class ChaosTunnelWindowTests
                 ChaosRunHost.Overlay!.OnRunAgain!.Invoke(); ChaosRunHost.ForceShutdown();
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.False(ChaosRunHost.IsActive); Assert.Null(ChaosTunnelWindow.Active);
             }
-            finally
-            {
+            finally {
                 ChaosRunHost.ForceShutdown();
                 ChaosTunnelWindow.CanOpen = canOpen;
                 ChaosTunnelWindow.Sink = sink;
@@ -196,10 +204,8 @@ public class ChaosTunnelWindowTests
             return Task.CompletedTask;
         });
     }
-
     [Fact]
-    public void Win32_sink_uses_bottom_without_activation()
-    {
+    public void Win32_sink_uses_bottom_without_activation() {
         IntPtr target = IntPtr.Zero, after = IntPtr.Zero;
         uint flags = 0;
         Assert.True(Win32Overlay.Sink(new IntPtr(42), (h, a, x, y, w, hgt, f) =>
@@ -214,10 +220,8 @@ public class ChaosTunnelWindowTests
         Assert.True(Win32Overlay.RestackBelow(new IntPtr(42), new IntPtr(10), _ => IntPtr.Zero, (h, a, f) => moved = true));
         Assert.False(moved);
     }
-
     [Fact]
-    public async Task Run_video_events_pause_the_tunnel_and_are_unhooked_at_panic()
-    {
+    public async Task Run_video_events_pause_the_tunnel_and_are_unhooked_at_panic() {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var settings = CoreSettings.Current;
@@ -226,8 +230,7 @@ public class ChaosTunnelWindowTests
             var video = new MandatoryVideoScheduler(null!);
             var started = typeof(MandatoryVideoScheduler).GetField("VideoStarted", BindingFlags.Instance | BindingFlags.NonPublic)!;
             var ended = typeof(MandatoryVideoScheduler).GetField("VideoEnded", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            try
-            {
+            try {
                 settings.ChaosTunnelEnabled = true; settings.ChaosPinOnTop = true;
                 ChaosTunnelWindow.CanOpen = () => true; CoreEngine.Video = video;
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
@@ -244,8 +247,7 @@ public class ChaosTunnelWindowTests
                 Assert.Null(started.GetValue(video));
                 Assert.Null(ended.GetValue(video));
             }
-            finally
-            {
+            finally {
                 ChaosRunHost.ForceShutdown(); CoreEngine.Video = previous;
                 ChaosTunnelWindow.CanOpen = canOpen;
                 settings.ChaosTunnelEnabled = enabled; settings.ChaosPinOnTop = pinned;
@@ -253,5 +255,4 @@ public class ChaosTunnelWindowTests
             return Task.CompletedTask;
         });
     }
-
 }

@@ -11,9 +11,7 @@ using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
-
 namespace ConditioningControlPanel.Avalonia.Views.Chaos;
-
 // WPF ChaosTunnelService.cs:19-137: the opaque, non-topmost run background.
 internal sealed class ChaosTunnelWindow : Window
 {
@@ -36,9 +34,8 @@ internal sealed class ChaosTunnelWindow : Window
     private readonly DispatcherTimer _exitWatchdog = new() { Interval = TimeSpan.FromMilliseconds(1200) };
     private bool _ready, _runActive, _videoPlaying;
     private LibVlcAudio.IPausableVoice? _ambient;
-
-    private ChaosTunnelWindow()
-    {
+    private Action? _unhookMain;
+    private ChaosTunnelWindow() {
         SystemDecorations = WindowDecorations.None;
         Background = Brushes.Black;
         Topmost = false;
@@ -49,8 +46,7 @@ internal sealed class ChaosTunnelWindow : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
         Content = Web;
         var screen = Screens?.Primary ?? Screens?.All?.FirstOrDefault();
-        if (screen != null)
-        {
+        if (screen != null) {
             Position = screen.Bounds.Position;
             var scale = screen.Scaling > 0 ? screen.Scaling : 1.0;
             Width = screen.Bounds.Width / scale;
@@ -65,17 +61,13 @@ internal sealed class ChaosTunnelWindow : Window
         _timeout.Tick += (_, _) => OnTimeout();
         _zGuard.Tick += (_, _) => GuardMain();
         _exitWatchdog.Tick += (_, _) => OnExitTimeout();
-        Closed += (_, _) => { _timeout.Stop(); _bridgeProbe.Stop(); _zGuard.Stop(); _exitWatchdog.Stop(); StopAmbient(); _pending.Clear(); if (Active == this) Active = null; };
+        Closed += (_, _) => { _timeout.Stop(); _bridgeProbe.Stop(); _zGuard.Stop(); _exitWatchdog.Stop(); _unhookMain?.Invoke(); _unhookMain = null; StopAmbient(); _pending.Clear(); if (Active == this) Active = null; };
     }
-
-    internal static void Open(bool preload = false)
-    {
+    internal static void Open(bool preload = false) {
         if (!CoreSettings.Current.ChaosTunnelEnabled || !CanOpen()) { CloseActive(); return; }
-        try
-        {
+        try {
             var w = Active;
-            if (w == null)
-            {
+            if (w == null) {
                 w = new ChaosTunnelWindow();
                 Active = w;
                 var url = new Uri(WebAssetServer.Shared.Url("tunnel/index.html"));
@@ -90,8 +82,9 @@ internal sealed class ChaosTunnelWindow : Window
             w._runActive = true;
             w._videoPlaying = false;
             if (w._ready) w.StartAmbient();
-            if (!preload)
-            {
+            if (!preload) {
+                var main = MainWindow();
+                if (w._unhookMain == null && main != null && main != w) w._unhookMain = Win32Overlay.HookTunnelRaises(main, w);
                 w.GuardMain();
                 w._zGuard.Start();
                 w.Post(new { type = "run-start" });
@@ -99,60 +92,47 @@ internal sealed class ChaosTunnelWindow : Window
         }
         catch (Exception ex) { Log.Warning("Chaos tunnel: {E}", ex.Message); CloseActive(); }
     }
-
     // WPF closes on exit-done or after 1.2 seconds; a new run claims the window.
-    internal static void EndActive()
-    {
+    internal static void EndActive() {
         var w = Active;
         if (w == null) return;
         w._runActive = false;
         w._zGuard.Stop();
+        w._unhookMain?.Invoke(); w._unhookMain = null;
         w.StopAmbient();
         if (!w._ready) { CloseActive(); return; }
         w.Post(new { type = "run-end" });
         w._exitWatchdog.Stop();
         w._exitWatchdog.Start();
     }
-
-    internal static void CloseActive()
-    {
+    internal static void CloseActive() {
         var w = Active;
         Active = null;
         if (w != null) { try { w.Close(); } catch (Exception ex) { Log.Debug("Chaos tunnel close: {E}", ex.Message); } }
     }
-
     internal void ProbeBridge() => _ = Web.InvokeScriptAsync(WebHost.CarrierShim + ";window.dispatchEvent(new Event('ccp-tunnel-connect'));");
-    internal void GuardMain()
-    {
+    internal void GuardMain() {
         try { var main = MainWindow(); if (Active == this && _runActive && main is { IsVisible: true, WindowState: not WindowState.Minimized } && main != this) Guard(main, this); }
         catch (Exception ex) { Log.Debug("Chaos tunnel stacking: {E}", ex.Message); }
     }
     internal bool GuardRunning => _zGuard.IsEnabled;
     internal void OnTimeout() { if (!_ready && Active == this) CloseActive(); }
     internal void OnExitTimeout() { if (!_runActive && Active == this) CloseActive(); }
-
     private void Send(string json) => _ = Web.InvokeScriptAsync(
         "window.dispatchEvent(new MessageEvent('ccp-tunnel-message',{data:" + json + "}));");
-
-    internal void Post(object message)
-    {
+    internal void Post(object message) {
         var json = JsonConvert.SerializeObject(message);
         if (_ready) Send(json);
         else _pending.Add(json);
     }
-
-    internal void SetVideoPlaying(bool on)
-    {
+    internal void SetVideoPlaying(bool on) {
         _videoPlaying = on;
         Post(new { type = "video-playing", on });
         try { _ambient?.SetPaused(on); } catch (Exception ex) { Log.Debug("Chaos tunnel ambient pause: {E}", ex.Message); }
     }
-
-    private void StartAmbient()
-    {
+    private void StartAmbient() {
         if (_ambient != null) return;
-        try
-        {
+        try {
             var path = AmbientPath();
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
             _ambient = PlayAmbient(path, Math.Clamp(CoreSettings.Current.MasterVolume / 100.0 * 0.26, 0, 1));
@@ -160,17 +140,12 @@ internal sealed class ChaosTunnelWindow : Window
         }
         catch (Exception ex) { Log.Debug("Chaos tunnel ambient: {E}", ex.Message); }
     }
-
-    private void StopAmbient()
-    {
+    private void StopAmbient() {
         try { _ambient?.Dispose(); } catch (Exception ex) { Log.Debug("Chaos tunnel ambient stop: {E}", ex.Message); }
         _ambient = null;
     }
-
-    internal void OnMessage(string json)
-    {
-        try
-        {
+    internal void OnMessage(string json) {
+        try {
             var message = JObject.Parse(json);
             switch ((string?)message["type"])
             {
