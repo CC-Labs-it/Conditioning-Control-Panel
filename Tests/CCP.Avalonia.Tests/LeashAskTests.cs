@@ -211,6 +211,10 @@ public sealed class LeashAskTests
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
             Assert.False(ask.IsVisible);
+            var repeated = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+            Assert.Equal("leash-ask:u_juno", repeated.Card.Tag);
+            repeated.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
             Tagged<Border>(page, "leash-offer-row:u_juno");
