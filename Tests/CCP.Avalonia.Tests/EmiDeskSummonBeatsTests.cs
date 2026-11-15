@@ -39,24 +39,52 @@ public class EmiDeskSummonBeatsTests
     });
 
     [Fact]
+    public void EmptyLibraryTestRestoresSpeechProbes() => AvaloniaTestDispatcher.Run(() =>
+    {
+        _ = EmiDeskService.Instance; // Its initialization installs the production probes.
+        var oldAsk = EmiLineEngine.AskSituationProbe;
+        var oldEffect = EmiLineEngine.EffectFeasibleProbe;
+        Func<bool> ask = () => true;
+        Func<string?, bool> effect = _ => true;
+        try
+        {
+            EmiLineEngine.AskSituationProbe = ask;
+            EmiLineEngine.EffectFeasibleProbe = effect;
+            EmptyLibraryIsRecheckedAndDismissCancels();
+            Assert.Multiple(
+                () => Assert.Same(ask, EmiLineEngine.AskSituationProbe),
+                () => Assert.Same(effect, EmiLineEngine.EffectFeasibleProbe));
+        }
+        finally
+        {
+            EmiLineEngine.AskSituationProbe = oldAsk;
+            EmiLineEngine.EffectFeasibleProbe = oldEffect;
+        }
+    });
+
+    [Fact]
     public void EmptyLibraryIsRecheckedAndDismissCancels() => AvaloniaTestDispatcher.Run(() =>
     {
         var root = Directory.CreateTempSubdirectory("ccp-emi-empty-").FullName;
         var previous = CorePaths.EffectiveAssetsProvider;
         var source = CoreSettings.Current.MediaSource;
-        var desk = new EmiDeskService();
-        var engine = EmiLineEngine.FromJson("""
-            {"version":1,"moments":{
-              "firstContact":{"priority":3,"limit":{"per":"ever","max":1},"pools":["g"]},
-              "desktopFirstBoot":{"priority":3,"limit":{"per":"ever","max":1},"pools":["g"]}
-            },"pools":{"g":[{"id":"g","t":"Hello","spice":0}]}}
-            """);
-        desk.LineEngine = engine;
-        var seen = new List<string>();
-        desk.EmptyLibraryMoment = seen.Add;
-        typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
+        _ = EmiDeskService.Instance;
+        var oldAsk = EmiLineEngine.AskSituationProbe;
+        var oldEffect = EmiLineEngine.EffectFeasibleProbe;
+        EmiDeskService? desk = null;
         try
         {
+            desk = new EmiDeskService();
+            var engine = EmiLineEngine.FromJson("""
+                {"version":1,"moments":{
+                  "firstContact":{"priority":3,"limit":{"per":"ever","max":1},"pools":["g"]},
+                  "desktopFirstBoot":{"priority":3,"limit":{"per":"ever","max":1},"pools":["g"]}
+                },"pools":{"g":[{"id":"g","t":"Hello","spice":0}]}}
+                """);
+            desk.LineEngine = engine;
+            var seen = new List<string>();
+            desk.EmptyLibraryMoment = seen.Add;
+            typeof(EmiDeskService).GetProperty(nameof(EmiDeskService.IsOut))!.SetValue(desk, true);
             CorePaths.EffectiveAssetsProvider = () => root;
             CoreSettings.Current.MediaSource = "local";
             desk.GreetNow();
@@ -85,7 +113,9 @@ public class EmiDeskSummonBeatsTests
         }
         finally
         {
-            desk.Dismiss();
+            desk?.Dismiss();
+            EmiLineEngine.AskSituationProbe = oldAsk;
+            EmiLineEngine.EffectFeasibleProbe = oldEffect;
             CorePaths.EffectiveAssetsProvider = previous;
             CoreSettings.Current.MediaSource = source;
             Directory.Delete(root, true);
