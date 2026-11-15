@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -270,8 +272,7 @@ internal static class X11Overlay
     /// configured the real one - measured on XWayland: 537x358 overlays on the non-primary
     /// screens in 14 of 25 runs, 0 of 25 with this order. So override-redirect goes on before
     /// any geometry, and geometry is set here so no caller can get the order wrong. Width/Height
-    /// use the window's own scaling after the move, i.e. the exact factor Avalonia multiplies back
-    /// by in Show().</para></summary>
+    /// use the target screen scaling, including when it differs from the initial window monitor.</para></summary>
     /// <param name="bounds">Where the overlay goes, in screen pixels (e.g. <c>Screen.Bounds</c>).
     /// Applied on every platform; only the override-redirect part is X11-only.</param>
     /// <returns>False when the platform cannot do this (no XID, no display, not 64-bit) or the server refused it.</returns>
@@ -283,8 +284,11 @@ internal static class X11Overlay
         var ok = SetOverrideRedirect(window, passive, topmost);
         window.WindowStartupLocation = WindowStartupLocation.Manual;
         window.Position = bounds.Position;
-        window.Width = bounds.Width / window.DesktopScaling;
-        window.Height = bounds.Height / window.DesktopScaling;
+        var center = new PixelPoint(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+        var screen = ScreenList.Enumerate(window).FirstOrDefault(s => s.Bounds.Contains(center));
+        var scale = screen is { Scaling: > 0 } ? screen.Scaling : window.DesktopScaling;
+        window.Width = bounds.Width / scale;
+        window.Height = bounds.Height / scale;
         return ok;
     }
 
