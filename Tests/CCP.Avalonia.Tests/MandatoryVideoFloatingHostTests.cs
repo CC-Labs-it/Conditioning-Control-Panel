@@ -421,11 +421,7 @@ public sealed class MandatoryVideoFloatingHostTests
         o.Scheduler.Trigger(userInitiated: true);
         var f = o.Floaters;
         Assert.Equal(3, f.Count);
-        // Screen has no public constructor (ChaosDvdOverlayTests.MakeScreen).
-        var other = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
-            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(5000), "headless-test") })!;
-        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(other, new PixelRect(5000, 0, 1920, 1080));
-        typeof(MandatoryVideoOverlay.Surface).GetField("<Screen>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(f[2].Surface, other);
+        OnOtherScreen(f[2].Surface);
         Assert.True(o.TryGracePause(fromPanicKey: false));
         Assert.Equal(new[] { true, false, true }, f.Select(x => x.Surface.GraceHost != null));   // one card per screen
 
@@ -435,4 +431,48 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.True(o.GracePaused);
         Assert.True(f[0].Surface.GraceHost?.IsVisible, "its screen keeps a Resume card");
     });
+
+    private static void OnOtherScreen(MandatoryVideoOverlay.Surface x)
+    {
+        // Screen has no public constructor (ChaosDvdOverlayTests.MakeScreen).
+        var other = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(5000), "headless-test") })!;
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(other, new PixelRect(5000, 0, 1920, 1080));
+        typeof(MandatoryVideoOverlay.Surface).GetField("<Screen>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(x, other);
+    }
+
+    // WPF VideoService.cs:6325-6335: the resume that ends a grace pause closes every screen's card.
+    [Fact]
+    public Task Closing_the_first_window_mid_grace_closes_the_card_on_every_screen() => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger(userInitiated: true);
+        OnOtherScreen(o.Floaters[0].Surface);
+        Assert.True(o.TryGracePause(fromPanicKey: false));
+        var card = o.Floaters[0].Surface.GraceHost;
+        Assert.True(card?.IsVisible, "the other screen has its own card");
+        Assert.NotNull(o.Surfaces[0].GraceHost);
+
+        o.Surfaces[0].Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(o.GracePaused);
+        Assert.False(card!.IsVisible, "no Resume card is left behind");
+        Assert.Null(o.Floaters[0].Surface.GraceHost);
+        Assert.False(o.Floaters[0].Surface.Grace.IsVisible);
+        Assert.False(decoders[1].Paused, "the joined window plays on");
+    });
+
+    // WPF FloatingInstances.cs:534-535: a veiled player stays silent; LibVLC chooses its audio track only after Play.
+    [Fact]
+    public void A_silenced_player_drops_an_audio_track_chosen_after_the_mute()
+    {
+        var track = -1;
+        var focus = new AudioTrackFocus(() => track, id => { track = id; return true; }, () => new[] { -1, 2 });
+        focus.Set(true);   // before Play: no track yet
+        track = 2;         // LibVLC selects the clip's track
+        focus.Selected();
+        Assert.Equal(-1, track);
+        focus.Set(false);  // it takes the sound
+        Assert.Equal(2, track);
+        focus.Selected();
+        Assert.Equal(2, track);
+    }
 }
