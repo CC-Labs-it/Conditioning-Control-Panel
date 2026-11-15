@@ -36,6 +36,7 @@ public partial class ModCreatorWindow
         public CheckBox Override = new(), Repeatable = new();
         public TextBox Priority = new(), Cooldown = new(), Chance = new(), Mood = new(), Conditions = new();
         public ComboBox Scope = new(), Class = new();
+        public ComboBox? OverrideId;
         public readonly List<(TextBox Text, JToken Original, StackPanel Row)> Lines = new();
     }
 
@@ -81,7 +82,7 @@ public partial class ModCreatorWindow
         var triggerPicker = new ComboBox { ItemsSource = triggers, Width = 240, HorizontalAlignment = HorizontalAlignment.Left, Tag = "bark_trigger_picker" };
         var idPicker = new ComboBox { ItemsSource = ids, Width = 260, HorizontalAlignment = HorizontalAlignment.Left, Tag = "bark_id_picker" };
         triggerPicker.SelectionChanged += (_, _) => { if (triggerPicker.SelectedItem is string value) card.Trigger.Text = value; };
-        idPicker.SelectionChanged += (_, _) => { if (idPicker.SelectedItem is string value) card.Id.Text = value; };
+        card.OverrideId = ids.Length > 0 ? idPicker : null;
         var triggerLabel = CreateFieldLabel(Loc.Get("mod_barks_trigger"));
         var settings = new Border();
         void ShowTrigger()
@@ -89,7 +90,8 @@ public partial class ModCreatorWindow
             var isNew = card.Override.IsChecked != true;
             triggerLabel.IsVisible = card.Trigger.IsVisible = settings.IsVisible = isNew;
             triggerPicker.IsVisible = isNew && triggers.Length > 0;
-            idPicker.IsVisible = !isNew && ids.Length > 0;
+            idPicker.IsVisible = !isNew && card.OverrideId != null;
+            card.Id.IsVisible = isNew || card.OverrideId == null;
         }
         ShowTrigger();
         card.Override.IsCheckedChanged += (_, _) => ShowTrigger();
@@ -158,6 +160,14 @@ public partial class ModCreatorWindow
         _barkCards.Add(card);
         _barkCardsPanel?.Children.Add(card.Frame);
         card.Id.Text = loaded?.Value<string>("id") ?? "";
+        // WPF Barks.cs:296-309 keeps unknown loaded IDs available for overrides.
+        if (loaded != null && card.Override.IsChecked == true && card.OverrideId != null)
+        {
+            var loadedId = card.Id.Text ?? "";
+            var match = ids.FirstOrDefault(id => string.Equals(id, loadedId, StringComparison.OrdinalIgnoreCase));
+            if (match == null) { idPicker.ItemsSource = ids.Append(loadedId).ToArray(); match = loadedId; }
+            idPicker.SelectedItem = match;
+        }
         card.Trigger.Text = loaded?.Value<string>("trigger") ?? "";
         card.Priority.Text = loaded?.Value<int?>("priority")?.ToString(CultureInfo.InvariantCulture) ?? "";
         card.Cooldown.Text = loaded?.Value<int?>("cooldown_ms")?.ToString(CultureInfo.InvariantCulture) ?? "";
@@ -241,7 +251,8 @@ public partial class ModCreatorWindow
         foreach (var card in _barkCards)
         {
             var isOverride = card.Override.IsChecked == true;
-            var id = card.Id.Text?.Trim() ?? "";
+            var id = isOverride && card.OverrideId != null
+                ? card.OverrideId.SelectedItem as string ?? "" : card.Id.Text?.Trim() ?? "";
             if (!isOverride) id = Regex.Replace(id.ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
             if (id.Length == 0) { skipped.Add(Loc.Get("mod_barks_no_id")); continue; }
             var pool = new JArray();

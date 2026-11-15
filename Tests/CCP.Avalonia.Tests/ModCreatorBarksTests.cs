@@ -68,7 +68,7 @@ public sealed class ModCreatorBarksTests
         triggerPicker.SelectedItem = trigger; Assert.Equal(trigger, boxes[1].Text);
         card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
         Assert.False(triggerPicker.IsVisible); Assert.True(idPicker.IsVisible);
-        idPicker.SelectedItem = id; Assert.Equal(id, boxes[0].Text);
+        idPicker.SelectedItem = id; Assert.False(boxes[0].IsVisible);
         Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
         Assert.Equal(id, Export(w, root)[0].Value<string>("id"));
         w.ClearBarksSection();
@@ -82,6 +82,62 @@ public sealed class ModCreatorBarksTests
         Assert.Equal("custom", Export(w, Path.Combine(root, "fallback"))[0].Value<string>("id"));
         File.WriteAllText(w.BarkBaseManifestPath, "broken");
         Assert.Empty(ModCreatorWindow.ReadBarkPickerItems(w.BarkBaseManifestPath).Ids);
+    });
+
+    [Theory]
+    [InlineData("BASE.ONE", "base.one")]
+    [InlineData("unknown.rule", "unknown.rule")]
+    public void LoadedOverrideSelectsItsIdAndExportUsesSelection(string loadedId, string selectedId) => Run((w, root) =>
+    {
+        var manifest = Path.Combine(root, "base.json");
+        File.WriteAllText(manifest, "[{id:'base.one',trigger:'Event'},{id:'base.two',trigger:'Other'}]");
+        w.BarkBaseManifestPath = manifest;
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), $"[{{id:'{loadedId}',variant_pool:['line']}}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        var idBox = card.GetLogicalDescendants().OfType<TextBox>().First();
+        var picker = card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker"));
+        Assert.False(idBox.IsVisible);
+        Assert.True(picker.IsVisible);
+        Assert.Equal(selectedId, picker.SelectedItem);
+        Assert.Equal(selectedId, Export(w, Path.Combine(root, "loaded"))[0].Value<string>("id"));
+        picker.SelectedItem = "base.two";
+        idBox.Text = "different";
+        Assert.Equal("base.two", Export(w, Path.Combine(root, "selected"))[0].Value<string>("id"));
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = false;
+        Assert.True(idBox.IsVisible);
+        Assert.False(picker.IsVisible);
+    });
+
+    [Fact]
+    public void OverrideExportUsesSelectedIdInsteadOfEditableNewRuleId() => Run((w, root) =>
+    {
+        w.BarkBaseManifestPath = Path.Combine(root, "base.json");
+        File.WriteAllText(w.BarkBaseManifestPath, "[{id:'base.one',trigger:'Event'}]");
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        var picker = card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker"));
+        picker.SelectedItem = "base.one";
+        card.GetLogicalDescendants().OfType<TextBox>().First().Text = "different";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Equal("base.one", Export(w, root)[0].Value<string>("id"));
+    });
+
+    [Fact]
+    public void LoadedOverrideUsesFreeTextWhenManifestIsAbsent() => Run((w, root) =>
+    {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'custom',variant_pool:['line']}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        var idBox = card.GetLogicalDescendants().OfType<TextBox>().First();
+        Assert.True(idBox.IsVisible);
+        Assert.Equal("custom", idBox.Text);
+        idBox.Text = "changed";
+        Assert.Equal("changed", Export(w, Path.Combine(root, "out"))[0].Value<string>("id"));
     });
 
     [Fact]
@@ -121,6 +177,7 @@ public sealed class ModCreatorBarksTests
     [Fact]
     public void OverrideEmitsOnlyIdAndPoolAndRemoveAndResetClearState() => Run((w, root) =>
     {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
         Click(w, "mod_barks_add");
         var card = Card(w);
         card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
@@ -276,6 +333,7 @@ public sealed class ModCreatorBarksTests
     [Fact]
     public void FreshRuleExportedThenChangedToOverrideExportsOnlyOverlayFields() => Run((w, root) =>
     {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
         Click(w, "mod_barks_add");
         var card = Card(w);
         var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
@@ -299,6 +357,7 @@ public sealed class ModCreatorBarksTests
     [Fact]
     public void LoadedRuleChangedToOverrideKeepsBackingFields() => Run((w, root) =>
     {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
         Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
         File.WriteAllText(FileAt(root), "[{id:'loaded',trigger:'Event',conditions:{level_gte:10},future:42,variant_pool:['line']}]");
         w.LoadBarksFrom(root);
