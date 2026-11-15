@@ -337,8 +337,8 @@
                 <TextBlock Text="{loc:Str pl6_play_subtitle}" Foreground="{DynamicResource TextDimBrush}"
                            FontSize="12" Margin="0,0,0,16"/>
 
-                <!-- Breakout and Goon are also available here beside the panel features. -->
-                <Grid Margin="2,4,2,8">
+                <!-- Declutter wave 2 (2026-11-15): the games zone is collapsed, not deleted. The games live in the launcher (Games door); the names below stay for the code-behind. -->
+                <Grid x:Name="ZoneGamesHead" x:FieldModifier="internal" Margin="2,4,2,8" Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
@@ -346,7 +346,7 @@
                     <TextBlock x:Name="ZoneGames" x:FieldModifier="internal" Grid.Column="0" Text="{loc:Str rf_play_zone_games}" Style="{StaticResource PlayZoneTag}"/>
                     <Border Grid.Column="1" Style="{StaticResource PlayZoneRule}"/>
                 </Grid>
-                <UniformGrid Columns="3">
+                <UniformGrid x:Name="ZoneGamesWall" x:FieldModifier="internal" Columns="3" Visibility="Collapsed">
                     <Grid x:Name="SlotBreakoutDemo" x:FieldModifier="internal">
                         <Border Style="{StaticResource PlayCard}">
                             <Grid>

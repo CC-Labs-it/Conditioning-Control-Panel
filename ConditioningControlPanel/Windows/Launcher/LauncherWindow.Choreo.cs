@@ -97,6 +97,7 @@ public partial class LauncherWindow
         try
         {
             StopWanderingSheen();
+            StopDoorReels();
             _trailTint = null;
             RestoreGlow(false);
             RefreshVeilBreath();
@@ -109,6 +110,7 @@ public partial class LauncherWindow
         try
         {
             StartWanderingSheen();
+            StartDoorReels();
             RefreshVeilBreath();
         }
         catch (Exception ex) { Log.Debug(ex, "[Launcher] ChoreoUnpark failed"); }
@@ -119,6 +121,7 @@ public partial class LauncherWindow
         try
         {
             StopWanderingSheen();
+            DropDoorCards();
             PerimeterCometAdorner.Detach(_panelComet);
             _panelComet = null;
             _panelRimLive?.BeginAnimation(Brush.OpacityProperty, null);
@@ -462,9 +465,13 @@ public partial class LauncherWindow
             if (_wanderTimer != null) _wanderTimer.Interval = NextWanderGap();
             if (_fxParked || !MotionFx.AllowAmbientLoops) return;
             DetachSheen(ref _wanderSheen);
-            var candidates = _tiles.Where(TileInView).ToList();
+            // The doors view has no tiles: the sheen wanders the two doors instead (never the
+            // one under the cursor, which already had its own pass).
+            var candidates = _door == null
+                ? _doorCards.Where(d => !ReferenceEquals(d, _doorHover)).Select(d => d.Card).Where(TileInView).ToList()
+                : _tiles.Where(TileInView).ToList();
             if (candidates.Count == 0) return;
-            _wanderSheen = AttachSheen(candidates[_fxRng.Next(candidates.Count)], TileRadius);
+            _wanderSheen = AttachSheen(candidates[_fxRng.Next(candidates.Count)], _door == null ? LauncherDoorCard.Radius : TileRadius);
             if (_wanderSheen == null) return;
             _wanderEndTimer ??= new DispatcherTimer(DispatcherPriority.Background)
             {

@@ -4366,6 +4366,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),
             nameof(AppSettings.ServerPaidUntil),
+            nameof(AppSettings.PassEndsUtc),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
             // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
@@ -4379,6 +4380,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
+            // The weekly free Super try is machine-wide: a restore must not hand back a spent week.
+            nameof(AppSettings.SuperPreviewUsedWeek),
         };
 
         /// <summary>
@@ -4439,6 +4442,7 @@ namespace ConditioningControlPanel.Services
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
+            restored.PassEndsUtc = current.PassEndsUtc;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
@@ -4448,6 +4452,7 @@ namespace ConditioningControlPanel.Services
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             restored.WalletNetSeen = current.WalletNetSeen;
+            restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

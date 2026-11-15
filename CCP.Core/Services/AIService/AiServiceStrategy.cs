@@ -39,14 +39,7 @@ namespace ConditioningControlPanel.Services.AIService
                 switch (Provider)
                 {
                     case AiProviderType.Local:
-                        if (_local == null)
-                        {
-                            lock (_lock)
-                            {
-                                _local ??= new LocalAiService();
-                            }
-                        }
-                        return _local;
+                        return _local ?? TryBuildLocal() ?? (IAiService)UnavailableAiService.Instance;
 
                     case AiProviderType.OpenAiCompatible:
                         if (_openAi == null)
@@ -70,6 +63,76 @@ namespace ConditioningControlPanel.Services.AIService
                         return _cloud;
                 }
             }
+        }
+
+        // #5197: a LocalAiService constructor that throws (it did on a host saved without http://)
+        // used to escape from Active into whatever read App.Ai first - including the MainWindow
+        // constructor, so the panel never opened. Now a failed build is logged once, Active reads
+        // as "not available" and the build is retried at most every RetryLocalAfter.
+        internal static readonly TimeSpan RetryLocalAfter = TimeSpan.FromSeconds(30);
+        private DateTime _localFailedAtUtc = DateTime.MinValue;
+        private bool _localFailureLogged;
+
+        /// <summary>Test seam: builds the local provider. Defaults to the real constructor.</summary>
+        internal Func<LocalAiService> LocalFactory { get; set; } = () => new LocalAiService();
+
+        internal LocalAiService? TryBuildLocal()
+        {
+            lock (_lock)
+            {
+                if (_local != null) return _local;
+                if (DateTime.UtcNow - _localFailedAtUtc < RetryLocalAfter) return null;
+                try
+                {
+                    _local = LocalFactory();
+                    _localFailureLogged = false;
+                    return _local;
+                }
+                catch (Exception ex)
+                {
+                    _localFailedAtUtc = DateTime.UtcNow;
+                    if (!_localFailureLogged)
+                    {
+                        _localFailureLogged = true;
+                        App.Logger?.Warning(ex, "AiServiceStrategy: local AI provider failed to start; reading as not available");
+                    }
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// What <see cref="Active"/> answers while the local provider cannot be built: not available,
+        /// every call a quiet failure. Never throws.
+        /// </summary>
+        internal sealed class UnavailableAiService : IAiService
+        {
+            public static readonly UnavailableAiService Instance = new();
+            private UnavailableAiService() { }
+
+            public bool IsAvailable => false;
+            public int DailyRequestsRemaining => -1;
+
+            public Task<AiReplyResult> SendAsync(System.Collections.Generic.IReadOnlyList<ChatMessage> messages,
+                AiCallOptions options, System.Threading.CancellationToken cancellationToken = default)
+                => Task.FromResult(AiReplyResult.Failed(AiFailureKind.Unavailable));
+
+            public Task<string> GetBambiReplyAsync(string userInput, bool isUserMessage = false)
+                => Task.FromResult(string.Empty);
+            public Task<AiReplyResult> GetBambiReplyExAsync(string userInput, bool isUserMessage = false)
+                => Task.FromResult(AiReplyResult.Failed(AiFailureKind.Unavailable));
+            public Task<string?> GetAwarenessReactionAsync(string detectedName, string category,
+                string serviceName = "", string pageTitle = "", TimeSpan? duration = null)
+                => Task.FromResult<string?>(null);
+            public Task<string?> GetStillOnReactionAsync(string displayName, string category, TimeSpan duration)
+                => Task.FromResult<string?>(null);
+            public Task<string?> GetKeywordCommentAsync(string keyword, string? promptTemplate = null)
+                => Task.FromResult<string?>(null);
+            public Task<string?> GetLockScreenReaction(string sentance, int mistakes, int amount, string? promptTemplate = null)
+                => Task.FromResult<string?>(null);
+            public Task<string?> GetVideoDoneReaction(string title, string? promptTemplate = null)
+                => Task.FromResult<string?>(null);
+            public void Dispose() { }
         }
 
         public bool IsAvailable => Active.IsAvailable;
@@ -187,11 +250,7 @@ namespace ConditioningControlPanel.Services.AIService
         {
             // Construct the local instance if needed only to reach the clear method —
             // alternative is to duplicate the file path here. Cheaper to instantiate.
-            lock (_lock)
-            {
-                _local ??= new LocalAiService();
-            }
-            _local.ClearHistory();
+            TryBuildLocal()?.ClearHistory();
         }
 
         /// <summary>
@@ -203,11 +262,7 @@ namespace ConditioningControlPanel.Services.AIService
         {
             if (Provider != Models.AiProviderType.Local) return Task.CompletedTask;
 
-            lock (_lock)
-            {
-                _local ??= new LocalAiService();
-            }
-            return _local.WarmUpAsync();
+            return TryBuildLocal()?.WarmUpAsync() ?? Task.CompletedTask;
         }
     }
 }

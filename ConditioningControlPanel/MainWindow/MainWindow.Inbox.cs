@@ -162,11 +162,40 @@ namespace ConditioningControlPanel
                 var dirty = NoteDailyGiftUse(settings);
                 dirty |= MaybePostLapseRow(settings);
                 dirty |= MaybePostRelockRow(settings);
+                dirty |= MaybePostPassEndsRow(settings);
                 dirty |= MaybePostMemberHello(settings);
                 if (dirty) App.Settings?.Save();
                 MaybeCheckPostCode(settings);
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "[Inbox] conversion rows failed"); }
+        }
+
+        /// <summary>A prepaid pass (a redeemed code) never renews, so its holder gets one row a day for
+        /// its last three days (owner, 2026-11-11). Not a lapse row: nothing has closed yet. True when
+        /// a stamp changed.</summary>
+        private bool MaybePostPassEndsRow(Models.AppSettings settings)
+        {
+            // Never from memory alone: the server must have answered this run.
+            if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return false;
+            var days = Services.Startup.Conversion.ProfileExtras.PassEndingDays(settings.PassEndsUtc, settings.ServerPaidUntil, DateTime.UtcNow);
+            if (days == 0) return false;
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyPassEnds;
+            var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
+            if (!Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps, rowKey, today)) return false;
+            Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey, today);
+
+            var title = days <= 1 ? Loc.Get("pass_ends_one") : Loc.GetF("pass_ends_days", days);
+            var body = Loc.Get("pass_ends_body");
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "\u23F3",
+                Title = title,
+                Summary = body,
+                Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("pass_ends_action"),
+                    () => { Helpers.BrowserLauncher.OpenUrlOrPrompt("https://app.cclabs.app/crypto"); }),
+            });
+            return true;
         }
 
         /// <summary>The lapse rows (proposals 4a, 4b): 7 / 3 / 1 days before the grace end once the

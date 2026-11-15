@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createLoomKit } from '../../backroom/shared/hypno/loom.js';
 import { makeRng } from '../../arcademy/core/rng.js';
 import { TURN_LOOM, readTurn, turnRecipe } from '../game/turn-loom.js';
-import { presentation } from '../game/preferences.js';
+import { presentation, boardMotionScale } from '../game/preferences.js';
 
 export function createTurnSpiral({ view, game, bus, menuOpen = () => false }) {
   const canvas = document.createElement('canvas');
@@ -20,6 +20,10 @@ export function createTurnSpiral({ view, game, bus, menuOpen = () => false }) {
     shader.fragmentShader = 'uniform float uErase;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
       #include <map_fragment>
+      // the squares stay readable under it: the dark ones are shaded in the Loom too (TURN_LOOM.checker)
+      vec2 cell8 = floor(vMapUv * 8.0);
+      float darkSquare = 1.0 - mod(cell8.x + cell8.y, 2.0);
+      diffuseColor.rgb *= 1.0 - darkSquare * ${TURN_LOOM.checker.toFixed(3)};
       vec2 edge = abs(fract(vMapUv * 8.0 + .5) - .5);
       float grid = 1.0 - smoothstep(.008, .022, min(edge.x, edge.y));
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.42, .28, .40), grid);
@@ -28,7 +32,7 @@ export function createTurnSpiral({ view, game, bus, menuOpen = () => false }) {
       diffuseColor.a *= 1.0 - smoothstep(grain * .72, grain * .72 + .28, uErase);
     `);
   };
-  material.customProgramCacheKey = () => 'pbp-turn-loom-v1';
+  material.customProgramCacheKey = () => 'pbp-turn-loom-v2';
   const surface = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), material);
   surface.name = 'pbp-turn-loom';
   surface.rotation.x = -Math.PI / 2;
@@ -112,8 +116,10 @@ export function createTurnSpiral({ view, game, bus, menuOpen = () => false }) {
     material.opacity = alpha;
     surface.visible = alpha > .001;
     if (!surface.visible) return;
-    // 25 Hz texture refresh, only while visible. Static under reduced motion.
-    const paintMs = still ? 0 : Math.floor(phaseMs / 40) * 40;
+    // 25 Hz texture refresh, only while visible. Static under reduced motion. Board motion
+    // (Options > Effects) slows the turning: Calm turns it slower, Still holds one picture.
+    const turning = still ? 0 : boardMotionScale(pref);
+    const paintMs = Math.floor(phaseMs * turning / 40) * 40;
     if (paintMs !== paintedMs || still !== wasStill) {
       kit.setStill(still);
       kit.paint(canvas, 'chess-turn', { now: paintMs });
@@ -122,7 +128,7 @@ export function createTurnSpiral({ view, game, bus, menuOpen = () => false }) {
   }
   return {
     update,
-    debug: () => ({ key, alpha, fade, phaseMs, visible: surface.visible, particles: dust.visible, loom: kit.debug() }),
+    debug: () => ({ key, alpha, fade, phaseMs, paintedMs, visible: surface.visible, particles: dust.visible, loom: kit.debug() }),
     dispose() {
       if (disposed) return; disposed = true; off();
       surface.removeFromParent(); dust.removeFromParent();

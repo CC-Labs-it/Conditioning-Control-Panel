@@ -108,8 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             h.HapticTriggered += OnHapticActivity;
         }
 
-        /// <summary>WPF: HapticMixer.IsGateOpen ORs the "haptics" free day in, so the page asks the same.</summary>
-        private static bool HasHapticsAccess => CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("haptics");
+        /// <summary>Toys are free for every account since 2026-11-11: the page asks HapticsAccess, like the mixer.</summary>
+        private static bool HasHapticsAccess => ConditioningControlPanel.Services.Haptics.HapticsAccess.IsOpen;
 
         private async System.Threading.Tasks.Task ShowAsync(string titleKey, string message)
         {

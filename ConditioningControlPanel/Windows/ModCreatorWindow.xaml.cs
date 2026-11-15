@@ -1693,6 +1693,7 @@ namespace ConditioningControlPanel
 
             stack.Children.Add(CreateSectionHeader("Text Replacements"));
             stack.Children.Add(CreateSectionDescription("Find-and-replace pairs applied across most of the UI - dashboard feature tiles and their popup titles, section headers, button labels, achievement and skill names, quest descriptions, companion speech, tab headers, and more. Matching runs against the app's original English wording and is case-sensitive, so \"Flash Images\" matches but \"flash images\" does not. Longer match strings are applied first to prevent partial replacements. Coverage is broad but not total - a few screens still show the stock wording. This is the most powerful theming tool for re-skinning the app's vocabulary."));
+            AddOriginalTextBrowser(stack);
 
             _replacementsPanel = new StackPanel();
             stack.Children.Add(_replacementsPanel);

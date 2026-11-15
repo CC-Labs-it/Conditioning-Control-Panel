@@ -1,6 +1,7 @@
 ﻿<UserControl x:Class="ConditioningControlPanel.Features.SpiralFeatureControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
@@ -227,6 +228,87 @@
                            TextWrapping="Wrap"
                            Opacity="0.8"
                            Margin="0,2,0,0"/>
+
+                <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try.
+                     The Whirlpool's options sit in it, shown while the Whirlpool is picked
+                     (Features/SpiralFeatureControl.Pool.cs). Opacity and monitor above still drive
+                     the pool, so neither is repeated. -->
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="Vortex">
+                  <StackPanel x:Name="PoolRows" Visibility="Collapsed">
+                    <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                    <!-- Always new Loom spirals, or one saved Loom spiral to hold. -->
+                    <Grid x:Name="PoolSpiralRow" Height="36" Background="Transparent"
+                          Loaded="PoolSpiralRow_Loaded" Unloaded="PoolSpiralRow_Unloaded"
+                          ToolTip="{loc:Str tooltip_super_pool_spiral}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_spiral}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" Width="180" VerticalAlignment="Center"
+                                  Style="{DynamicResource DarkComboBoxStyle}"
+                                  SelectionChanged="CmbPoolSpiral_Changed"/>
+                    </Grid>
+                    <!-- How long each spiral holds before it melts into the next. Dims while one is held. -->
+                    <Grid x:Name="PoolEveryRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_every}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_every}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="SliderPoolEvery" Minimum="8" Maximum="60" Value="18"
+                                VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolEvery_Changed"/>
+                        <TextBlock Grid.Column="2" x:Name="TxtPoolEvery" Text="18 s" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                   FontSize="13" FontWeight="Bold"/>
+                    </Grid>
+                    <!-- The pool's largest size, percent of the stock reach. -->
+                    <Grid x:Name="PoolSizeRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_size}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_size}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="SliderPoolSize" Minimum="50" Maximum="150" Value="100"
+                                VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolSize_Changed"/>
+                        <TextBlock Grid.Column="2" x:Name="TxtPoolSize" Text="100%" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                   FontSize="13" FontWeight="Bold"/>
+                    </Grid>
+                    <!-- What the pool drags in: three switches on one row, all on by default. -->
+                    <Grid x:Name="PoolDragsRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_drags}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_drags}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{loc:Str super_pool_drags_fog}" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <CheckBox x:Name="ChkPoolDragsFog" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                            <TextBlock Text="{loc:Str super_pool_drags_pictures}" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                            <CheckBox x:Name="ChkPoolDragsPictures" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                            <TextBlock Text="{loc:Str super_pool_drags_bubbles}" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                            <CheckBox x:Name="ChkPoolDragsBubbles" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                        </StackPanel>
+                    </Grid>
+                  </StackPanel>
+                </ctl:SuperBox>
             </StackPanel>
 
             <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its

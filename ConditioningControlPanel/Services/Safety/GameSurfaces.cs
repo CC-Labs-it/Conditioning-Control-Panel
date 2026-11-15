@@ -55,6 +55,8 @@ internal static class GameSurfaces
         new("breakout", () => BackRoom.BackRoomHostService.IsBreakoutFullActive, () => BackRoom.BackRoomHostService.CloseActive("panic")),
         new("fyp", () => Fyp.FypHostService.IsActive, Fyp.FypHostService.Close),
         new("justdrop", () => JustDrop.JustDropHostService.IsActive, JustDrop.JustDropHostService.CloseActive),
+        // The Loom (declutter wave 2): a Tools door that opens its own WebView2 window.
+        new("loom", () => Chaos.LoomHostService.IsActive, Chaos.LoomHostService.Close),
         // The four the two copies had missed. Racing Thoughts is the reported one; the other three
         // are the same shape (a WebView2 game window the player is sitting in).
         new("race", () => Chaos.CaucusHostService.IsActive, Chaos.CaucusHostService.CloseActive),

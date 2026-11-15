@@ -63,6 +63,10 @@ namespace ConditioningControlPanel.Controls
         private HelpLoopView? _loopView;         // drawn loop (topics with a registered scene)
         private bool _pinned;
         private bool _contentBuilt;
+        // The feature's V2 (its Super effect), when it has one: the title row gets a "See V2"
+        // button that swaps the card to the V2's own loop and words, and back.
+        private readonly Services.Super.SuperEffect? _v2;
+        private bool _showV2;
 
         /// <summary>
         /// Attaches (or re-attaches) an interactive help popover to <paramref name="button"/>.
@@ -96,6 +100,7 @@ namespace ConditioningControlPanel.Controls
         {
             _button = button;
             _content = content;
+            _v2 = Services.Super.SuperDoor.ForHelp(content.SectionId);
 
             _popup = new Popup
             {
@@ -135,9 +140,10 @@ namespace ConditioningControlPanel.Controls
 
             // Card body: optional video poster on top, then the rich text panel.
             var body = new StackPanel();
-            if (HelpLoopRegistry.TryGet(_content.SectionId, out var scene)) body.Children.Add(BuildLoop(scene, pink));
-            else if (_content.HasClip) body.Children.Add(BuildVideoPoster(pink));
-            body.Children.Add(HelpTooltipBuilder.BuildPanel(_content, _button));
+            var shown = _showV2 && _v2 is { } fx ? Services.Super.SuperDoor.Help(fx) : _content;
+            if (HelpLoopRegistry.TryGet(shown.SectionId, out var scene)) body.Children.Add(BuildLoop(scene, pink));
+            else if (shown.HasClip) body.Children.Add(BuildVideoPoster(pink));
+            body.Children.Add(HelpTooltipBuilder.BuildPanel(shown, _button, BuildV2Switch()));
 
             var card = new Border
             {
@@ -169,6 +175,58 @@ namespace ConditioningControlPanel.Controls
 
             _childRoot = shadowHost;
             _popup.Child = shadowHost;
+        }
+
+        private static readonly Brush V2Gold = FrozenBrush(Color.FromRgb(0xFF, 0xCF, 0x6B));
+        private static Brush FrozenBrush(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+
+        /// <summary>
+        /// The gold button at the right of the title row (owner, 2026-11-15): "See V2", with the
+        /// supporters line under it for a free account. Pressing it swaps the card to the V2 and
+        /// back. Null when the topic has no V2.
+        /// </summary>
+        private FrameworkElement? BuildV2Switch()
+        {
+            if (_v2 is not { } effect) return null;
+            var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+            line.Children.Add(new TextBlock
+            {
+                Text = "\u2605", FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
+                Foreground = V2Gold, FontSize = 11, Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center,
+            });
+            line.Children.Add(new TextBlock
+            {
+                Text = Loc.Get(_showV2 ? "help_see_classic" : "help_see_v2"), Foreground = V2Gold, FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center,
+            });
+            var stack = new StackPanel();
+            stack.Children.Add(line);
+            if (!_showV2 && !Services.Super.SuperAccess.IsUnlocked(effect))
+                stack.Children.Add(new TextBlock
+                {
+                    Text = Loc.Get("super_for_supporters"), Foreground = V2Gold, Opacity = 0.75, FontSize = 9.5,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+            var pill = new Border
+            {
+                Child = stack, Cursor = Cursors.Hand, CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4),
+                Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                BorderBrush = V2Gold, BorderThickness = new Thickness(1),
+                Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xCF, 0x6B)),
+            };
+            pill.MouseEnter += (_, _) => pill.Background = new SolidColorBrush(Color.FromArgb(0x4D, 0xFF, 0xCF, 0x6B));
+            pill.MouseLeave += (_, _) => pill.Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xCF, 0x6B));
+            pill.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                _showV2 = !_showV2;
+                _loopView = null;
+                _contentBuilt = false;
+                _pinned = true;     // a card being read stays up until it is clicked away
+                _closeTimer.Stop();
+                EnsureContent();
+            };
+            return pill;
         }
 
         /// <summary>

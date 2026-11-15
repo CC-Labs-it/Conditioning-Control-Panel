@@ -154,13 +154,11 @@ namespace ConditioningControlPanel.Services
             try
             {
                 media = new Media(_libVlc, path, FromType.FromPath);
-                var result = await media.Parse(MediaParseOptions.ParseLocal, timeout: ParseTimeoutMs)
-                    .ConfigureAwait(false);
-
                 // LibVLCSharp completes the parse task from the LibVLC event thread and can
-                // resume us inline on it. Get off that thread before touching the media
-                // again — see DisposeGraceMs.
-                await Task.Yield();
+                // resume us inline on it; the helper gets off that thread before we touch the
+                // media again - see DisposeGraceMs.
+                var result = await LibVlcParse.ParseOffCallbackAsync(media, MediaParseOptions.ParseLocal, ParseTimeoutMs)
+                    .ConfigureAwait(false);
 
                 if (result == MediaParsedStatus.Done && media.Duration > 0)
                 {

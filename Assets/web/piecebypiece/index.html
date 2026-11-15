@@ -100,6 +100,13 @@
               <button type="button" class="hud-btn" data-ramp="normal" aria-pressed="true">Normal</button>
               <button type="button" class="hud-btn" data-ramp="fast" aria-pressed="false">Fast</button>
             </div>
+            <!-- How much the camera sways and the board's spiral turns (game/preferences.js BOARD_MOTION). -->
+            <div class="turncard-pick" role="group" aria-label="Board motion">
+              <span>Board motion</span>
+              <button type="button" class="hud-btn" data-boardmotion="full" aria-pressed="true">Full</button>
+              <button type="button" class="hud-btn" data-boardmotion="calm" aria-pressed="false">Calm</button>
+              <button type="button" class="hud-btn" data-boardmotion="still" aria-pressed="false">Still</button>
+            </div>
           </div>
           <strong>Camera</strong>
           <label><input type="checkbox" id="game-follow" checked> Follow the move</label>

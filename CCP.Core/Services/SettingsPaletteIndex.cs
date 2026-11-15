@@ -440,7 +440,7 @@ namespace ConditioningControlPanel.Services
             Door("companion", "nav_door_companion", "🤖", "companion", "companion ai avatar");
             // Phase 6: the Play door's default destination is the card wall's own key. "lab" is
             // still a working alias but is no longer the name of anything that exists.
-            Door("play", "nav_door_play", "🎮", "play", "play games lab");
+            Door("play", "nav_door_play", "🎮", "playeyes", "play lab experiments gaze focus blink trainer intake lockdown remote control loom gaze minigame eyes sessions");
             Door("you", "nav_door_you", "👤", "discord", "you profile progress");
             Door("social", "nav_section_social", "🫂", "availablesubjects", "social lobby friends leash remote leaderboard together");
             Door("library", "nav_door_library", "📚", "assets", "library assets media");
@@ -507,16 +507,17 @@ namespace ConditioningControlPanel.Services
             // Nav rework polish (2026-10-06): this row is the Games pill ("Go to > Play", caption
             // Games) and lands on the Games zone, so it is the navigation twin of the game.* rows
             // below, which LAUNCH. The Play door row above keeps the "Play" caption.
+            // Declutter wave 2: "play" opens the launcher's Games door now, so the row names no
+            // Play zone (it would scroll and glow a collapsed header behind the launcher).
             list.Add(new SettingsPaletteEntry
             {
                 Id = "tab.play",
                 LabelKey = "nav_tab_games",
                 Glyph = "🕹️",
                 TabKey = "play",
-                PlayZone = "games",
                 ContextKeys = new[] { GroupNav, "nav_door_play" },
-                Aliases = "play games lab experiments gaze focus blink trainer intake lockdown remote control loom tier 2 " +
-                          "gaze minigame haptics vibration",
+                Aliases = "play games launcher " +
+                          "arcade",
             });
 
             // DECLARED AFTER Play on purpose, and the order is the whole point. Score() gives every

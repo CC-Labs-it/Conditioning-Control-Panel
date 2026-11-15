@@ -588,11 +588,18 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock x:Name="GamesEyebrow" Text="{loc:Str launcher_section_games}" Style="{StaticResource LauncherEyebrow}" Margin="9,0,0,4"/>
+                    <!-- A door's page wears Back and the door's name; the doors themselves wear nothing. -->
+                    <StackPanel x:Name="DoorPageHeader" Orientation="Horizontal" Visibility="Collapsed">
+                        <Button x:Name="DoorBack" Style="{StaticResource LauncherLink}" Margin="5,-3,6,0"
+                                VerticalAlignment="Center" Click="DoorBack_Click"/>
+                        <TextBlock x:Name="GamesEyebrow" Text="{loc:Str launcher_section_games}" Style="{StaticResource LauncherEyebrow}" Margin="9,0,0,4"/>
+                    </StackPanel>
                     <ScrollViewer x:Name="GamesScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                                  PanningMode="VerticalOnly">
+                                  PanningMode="VerticalOnly" Visibility="Collapsed">
                         <UniformGrid x:Name="GamesGrid" Columns="2" VerticalAlignment="Top"/>
                     </ScrollViewer>
+                    <!-- The doors: GAMES over TOOLS, built in LauncherWindow.Doors.cs. No tiles here. -->
+                    <UniformGrid x:Name="DoorsHost" Grid.Row="1" Columns="1"/>
                 </Grid>
             </Grid>
 

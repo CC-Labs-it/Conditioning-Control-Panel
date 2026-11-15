@@ -17,8 +17,10 @@
  *            says whether he can be picked up at all. Only the side to move
  *            answers. The raycast runs at most once a frame, and only when the
  *            pointer or the camera has actually moved.
- *   a click  a press and a release on the same man, quick and still, is a click
- *            and not a drag: he stays lifted, his legal squares stay lit, and
+ *   a click  a press and a release on the same man with the pointer still, is a
+ *            click and not a drag, however long the press lasted (a slow click
+ *            used to play him one square back, ccp-bugs #1621): he stays
+ *            lifted, his legal squares stay lit, and
  *            the next click on one of them plays the move. A click elsewhere
  *            lets him go, a click on another of your men moves the selection
  *            over, and Esc drops it. A man waiting like that still counts as a
@@ -30,6 +32,8 @@
 import * as THREE from 'three';
 import { worldToSquare, squareToWorld } from './scene.js';
 import { createMarkers } from './markers.js';
+import { readCastles, castleAlias } from '../game/castle-hint.js';
+import { isClick, holdOffset, clickTarget } from './hand.js';
 
 /** Every number the hand is made of. One place, on purpose. */
 export const TUNING = Object.freeze({
@@ -43,7 +47,8 @@ export const TUNING = Object.freeze({
   hoverFall: 0.12,   // ... and back down when the cursor leaves
   selectLift: 0.11,  // where a clicked man waits for his square
   tapMs: 250,        // a press shorter than this ...
-  tapPx: 6,          // ... and stiller than this is a click, not a drag
+  tapPx: 6,          // ... and stiller than this stays on his square while lifting
+  stillPx: 12,       // a press that never travelled farther is a click, however long
 });
 
 const T = TUNING;
@@ -73,7 +78,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   const holdPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const hit = new THREE.Vector3();
   const target = new THREE.Vector3();
-  const grab = new THREE.Vector2();   // piece origin minus the grabbed point, in x/z
+  const grab = new THREE.Vector2();   // his square minus the press ray's hold-plane hit, in x/z
 
   const markers = createMarkers({ group: view.boardGroup });
   if (view.setHighlightSink) view.setHighlightSink(markers.show);
@@ -82,6 +87,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   let from = null;        // the square it was picked up from
   let legal = [];         // every square it may land on
   let takes = new Set();  // the ones holding a man it may take
+  let castles = readCastles();   // a king's castles: his square and the rook's (game/castle-hint.js)
   let hover = null;
   let holdY = T.lift;     // world height of the plane the cursor drags along
   const at = { x: 0, y: 0 };   // last pointer position, in client pixels
@@ -103,7 +109,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   const lifts = new Map();     // piece -> { cur, want } height off his own square
 
   // --- a click instead of a drag ---------------------------------------------
-  let press = null;            // { x, y, t } of the pointer that is down
+  let press = null;            // { x, y, t, far } of the pointer that is down
   let pending = false;         // this press could still turn out to be a click
   let toggledOff = null;       // the square this press let go of, so it cannot re-take it
   let moveHook = null;         // something that may take a move over (see play)
@@ -112,6 +118,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   let selSquare = null;
   let selLegal = [];
   let selTakes = new Set();
+  let selCastles = readCastles();
   let selHover = null;
 
   function toNdc(ev) {
@@ -142,10 +149,14 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
 
   /**
    * Aim the held man at the cursor. The ray is cut with a horizontal plane at
-   * the height of the spot that was grabbed, not with the board, so that spot
-   * stays under the cursor whatever angle the camera sits at. The man hangs off
-   * it by the offset the grab recorded, which leaves his base over the square
-   * the markers say he is going to. Called with no event it re-uses the last
+   * the height the grabbed spot rides at, not with the board, so the man moves
+   * with the cursor the same way whatever angle the camera sits at. He hangs
+   * off that hit by the offset onDown measured on the same plane (hand.js
+   * holdOffset), so a cursor that has not moved leaves his base over his own
+   * square, and his base always marks the square the markers say he is going
+   * to. (The offset used to be taken at the grabbed spot itself, which put a
+   * lifted man 0.5 to 1.1 squares nearer the camera under a still cursor,
+   * ccp-bugs #1621.) Called with no event it re-uses the last
    * pointer position, which is how the camera can sway under a still cursor
    * without the man sliding out of your hand.
    *
@@ -181,12 +192,13 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
    * view.setHighlights, so a lane holding only the view sees the same list.
    */
   function paint() {
-    const src = held ? { at: from, list: legal, take: takes, hot: hover }
-      : (selected ? { at: selSquare, list: selLegal, take: selTakes, hot: selHover } : null);
+    const src = held ? { at: from, list: legal, take: takes, castle: castles, hot: hover }
+      : (selected ? { at: selSquare, list: selLegal, take: selTakes, castle: selCastles, hot: selHover } : null);
     if (!src) { view.setHighlights([]); return; }
     const out = src.list.map((sq) => ({
       square: sq,
-      kind: src.take.has(sq) ? 'capture' : 'move',
+      kind: src.take.has(sq) ? 'capture'
+        : (src.castle.targets.has(sq) ? 'castle' : (src.castle.rooks.has(sq) ? 'castle-rook' : 'move')),
       hover: sq === src.hot,
     }));
     if (src.at) out.push({ square: src.at, kind: 'origin' });
@@ -196,18 +208,20 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   /**
    * chess.js hands back a flag string per move: 'c' is a capture and 'e' is en
    * passant, which takes a man standing on a square the pawn does not land on.
-   * Castling ('k' and 'q') takes nothing, so it stays a plain dot.
+   * Castling ('k' and 'q') takes nothing; it gets its own marker instead, and
+   * the king's own rook joins the legal squares, since putting him on it castles.
    */
   function readMoves(sq) {
     const rules = game.rules;
     const verbose = rules && rules.movesFrom ? rules.movesFrom(sq) : [];
-    if (!verbose.length) return { squares: game.legalTargets(sq), captures: new Set() };
+    if (!verbose.length) return { squares: game.legalTargets(sq), captures: new Set(), castles: readCastles() };
     const captures = new Set();
     for (const m of verbose) {
       const flags = String(m.flags || '');
       if (m.captured || flags.includes('c') || flags.includes('e')) captures.add(m.to);
     }
-    return { squares: verbose.map((m) => m.to), captures };
+    const castling = readCastles(verbose);
+    return { squares: [...verbose.map((m) => m.to), ...castling.rooks.keys()], captures, castles: castling };
   }
 
   // --- lift -------------------------------------------------------------------
@@ -250,11 +264,12 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   function look() {
     let piece = null;
     let inspect = null;
+    let manSq = null;
     if (pointerIn) {
       const found = pieceUnder(null);
       inspect = found?.piece;
-      const sq = found && found.piece.userData.square;
-      if (sq && game.canPick(sq)) piece = found.piece;
+      manSq = (found && found.piece.userData.square) || null;
+      if (manSq && game.canPick(manSq)) piece = found.piece;
     }
     describe(selected || inspect, !!selected);
     if (piece !== hoverPiece) {
@@ -268,10 +283,11 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
         if (piece !== selected && !reducedMotion()) wantLift(piece, T.hoverLift);
       }
     }
-    // With a man waiting, the square he could land on answers too.
+    // With a man waiting, the square he could land on answers too: the same
+    // square a click here would play (targetFor, shared with onDown).
     let want = piece ? 'grab' : 'default';
     if (selected) {
-      const sq = piece ? piece.userData.square : (pointerIn ? squareUnder(null) : null);
+      const sq = pointerIn ? targetFor(manSq, squareUnder(null)) : null;
       const hot = sq && sq !== selSquare && selLegal.includes(sq) ? sq : null;
       if (hot) want = 'pointer';
       if (hot !== selHover) { selHover = hot; paint(); }
@@ -280,6 +296,11 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   }
 
   // --- the man who waits -------------------------------------------------------
+  /** The square a click means while a man waits: the lit one (hand.js). */
+  function targetFor(manSq, boardSq) {
+    return clickTarget(manSq, boardSq, selLegal, (sq) => game.canPick(sq));
+  }
+
   function select(piece, square) {
     if (selected && selected !== piece) clearSelection(false);
     selected = piece;
@@ -288,6 +309,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     const moves = readMoves(square);
     selLegal = moves.squares;
     selTakes = moves.captures;
+    selCastles = moves.castles;
     selHover = null;
     const home = piece.userData.home;
     if (home) { piece.position.x = home.x; piece.position.z = home.z; }
@@ -301,7 +323,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     if (!selected) return;
     const piece = selected;
     describe(null);
-    selected = null; selSquare = null; selLegal = []; selTakes = new Set(); selHover = null;
+    selected = null; selSquare = null; selLegal = []; selTakes = new Set(); selCastles = readCastles(); selHover = null;
     wantLift(piece, piece === hoverPiece && !reducedMotion() ? T.hoverLift : 0);
     if (repaint) paint();
   }
@@ -319,22 +341,25 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   /** A click on a legal square: the man waiting on his own flies over. */
   function playSelected(to) {
     const start = selSquare;
+    const dest = castleAlias(selCastles, to);   // the king on his own rook castles
     clearSelection();
-    return play(start, to);
+    return play(start, dest);
   }
 
   function onDown(ev) {
     if (held || suspended || ev.button > 0 || window.PBP?.door?.isUp?.()) return;
     pointerIn = true;
-    const found = pieceUnder(ev);
-    const square = found ? null : squareUnder(ev);
-    const under = found ? found.piece.userData.square : square;
+    const square = squareUnder(ev);
+    const found = pieceUnder(ev);    // last, so the ray is the press ray below
     const piece = found ? found.piece : (square ? pieces.pieceAt(square) : null);
 
     // A man is already waiting: this click either sends him somewhere or lets
     // him go. Sending him is the whole gesture, so nothing is picked up after.
+    // The square is the one look() lit, from the same rule, so a man standing
+    // in front of a lit square cannot take the click (ccp-bugs #1621).
     toggledOff = null;
     if (selected) {
+      const under = targetFor((found && found.piece.userData.square) || null, square);
       if (under && under !== selSquare && selLegal.includes(under)) {
         playSelected(under);
         ev.preventDefault();
@@ -356,25 +381,28 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     const moves = readMoves(sq);
     legal = moves.squares;
     takes = moves.captures;
+    castles = moves.castles;
     hover = null;
     held.userData.held = true;
     held.userData.busy = true;
     if (jiggle) jiggle.grab(held);   // lifted off the board, so the tip sags
-    press = { x: ev.clientX, y: ev.clientY, t: performance.now() };
+    press = { x: ev.clientX, y: ev.clientY, t: performance.now(), far: 0 };
     pending = true;                  // ... until he travels, or outstays a click
 
-    // Hold him where he was actually grabbed. A hit on the body gives the exact
-    // spot; the square fallback (a click that slipped past the mesh) takes him
-    // around the middle. The height is capped, so grabbing a king by his crown
-    // does not swing his base half a board away from the cursor.
+    // The cursor drags along a plane at the height the grabbed spot rides at.
+    // A hit on the body gives that spot; the square fallback (a click that
+    // slipped past the mesh) takes him around the middle. The height is
+    // capped, so grabbing a king by his crown does not swing him about. The
+    // offset is measured on that plane from the press ray itself, so until the
+    // cursor moves he stays over his own square (hand.js, ccp-bugs #1621).
     const base = squareToWorld(sq, 0);
     if (found) {
-      grab.set(base.x - found.point.x, base.z - found.point.z);
       holdY = T.lift + THREE.MathUtils.clamp(found.point.y - piece.position.y, 0.04, T.grabMax);
     } else {
-      grab.set(0, 0);
       holdY = T.lift + Math.min(T.grabMax, T.grabMid * (piece.userData.scaleBase || 1));
     }
+    const off = holdOffset(base, ray.ray.origin, ray.ray.direction, holdY);
+    grab.set(off.x, off.z);
     target.copy(held.position);
     aim(ev);                     // so he lifts on the click, not on the first move
     const on = overSquare();
@@ -394,7 +422,9 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     pointerIn = true;
     pointerMoved = true;
     if (!held) return;
-    if (pending && press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > T.tapPx) pending = false;
+    const away = press ? Math.hypot(ev.clientX - press.x, ev.clientY - press.y) : 0;
+    if (press && away > press.far) press.far = away;
+    if (pending && away > T.tapPx) pending = false;
     if (!aim(ev)) return;
     const next = overSquare();
     const want = legal.includes(next) ? next : null;
@@ -407,14 +437,15 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     const start = from;
     aim(ev);
     const to = overSquare();
-    const tap = pending && press
-      && performance.now() - press.t <= T.tapMs
-      && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) <= T.tapPx;
+    const dest = castleAlias(castles, to);   // the king dropped on his own rook castles
+    // A press that never travelled is a click, however long it lasted.
+    const tap = isClick(press, ev.clientX, ev.clientY, T.stillPx);
     held = null;
     from = null;
     hover = null;
     legal = [];
     takes = new Set();
+    castles = readCastles();
     pending = false;
     press = null;
     markers.clear();
@@ -425,9 +456,10 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     setCursor('grab');
     try { canvas.releasePointerCapture(ev.pointerId); } catch { /* never taken */ }
 
-    // He never left his square and the press was quick: that was a click, not a
-    // drag. He waits where he is with his squares lit, instead of being told no.
-    if (tap && (!to || to === start)) {
+    // The pointer never went anywhere: that was a click, not a drag, whatever
+    // square his base drifted over (the camera sways). He waits where he is
+    // with his squares lit, instead of being told no or played anywhere.
+    if (tap) {
       const again = toggledOff === start;
       toggledOff = null;
       if (again) wantLift(piece, 0);      // the same click that let him go
@@ -439,7 +471,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
 
     // A legal drop is played by the game, which moves the man and lets anim.js
     // fly it down from where it was being held.
-    const played = to && to !== start ? play(start, to) : null;
+    const played = to && to !== start ? play(start, dest) : null;
     if (played) {
       describe(null);
       bus.emit('drop', { ok: true });
@@ -452,7 +484,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
   function onCancel() {
     if (!held) return;
     const piece = held;
-    held = null; from = null; hover = null; legal = []; takes = new Set();
+    held = null; from = null; hover = null; legal = []; takes = new Set(); castles = readCastles();
     pending = false; press = null;
     markers.clear();
     piece.userData.held = false;
@@ -583,6 +615,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
         hoverLift: hoverPiece ? Number(hoverPiece.position.y.toFixed(4)) : 0,
         selectLift: selected ? Number(selected.position.y.toFixed(4)) : 0,
         markers: markers.count(),
+        kinds: markers.kinds(),  // square -> marker kind ('castle', 'castle-rook', ...)
       };
     },
     dispose() {

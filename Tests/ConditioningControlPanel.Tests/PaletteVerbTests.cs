@@ -41,11 +41,13 @@ public class PaletteVerbTests
     }
 
     [Fact]
-    public void The_games_row_navigates_to_the_games_zone()
+    public void The_games_row_opens_the_games_door_and_names_no_play_zone()
     {
+        // Declutter wave 2: "play" opens the launcher's Games door; the Play wall's games zone is
+        // collapsed, so a zone here would scroll and glow a hidden header.
         var row = SettingsPaletteIndex.All.Single(e => e.Id == "tab.play");
         Assert.Equal("play", row.TabKey);
-        Assert.Equal("games", row.PlayZone);
+        Assert.Null(row.PlayZone);
         Assert.Equal("nav_tab_games", row.LabelKey);
         Assert.Null(row.GameId);
     }

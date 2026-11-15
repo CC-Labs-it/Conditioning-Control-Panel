@@ -256,15 +256,11 @@ namespace ConditioningControlPanel
                         App.Logger?.Debug("Launcher pill {Key} has no handler", tab.Key);
                     break;
                 default:
-                    // Pages, zones and the Just Drop window all go through ShowTab.
-                    var before = _navCurrentTab;
-                    ShowTab(tab.Key);
-                    // Games is Play's first zone: ShowTab only scrolls it when coming from another
-                    // zone, so a click on Games from anywhere else (the active Games pill while
-                    // scrolled down included) scrolls and glows here.
-                    if (tab.Key == "play" && before is not ("playsessions" or "playeyes"))
-                        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
-                            new Action(() => ScrollPlayZone("games")));
+                    // Pages, zones and the Just Drop window all go through ShowTab. A zone pill
+                    // click scrolls to its zone (Eyes included, though it is Play's landing).
+                    _playZoneFromPill = true;
+                    try { ShowTab(tab.Key); }
+                    finally { _playZoneFromPill = false; }
                     break;
             }
         }
