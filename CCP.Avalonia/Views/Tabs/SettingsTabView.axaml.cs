@@ -225,6 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ToggleEnhanceIfPossible.IsCheckedChanged += ToggleEnhanceIfPossible_Changed;
             ChkForceShowBambiCloud.IsCheckedChanged += ChkForceShowBambiCloud_Changed;
             HookBrowserCard();   // SettingsTabView.BrowserCard.cs
+            HookBrowserAudioSync();
 
             // Home audio card: the same binder as Settings · Audio, so both surfaces write through
             // one path and repaint each other (WPF MainWindow.HomeAudio.cs mirrors instead).

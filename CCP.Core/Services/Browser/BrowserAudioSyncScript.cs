@@ -167,13 +167,13 @@ namespace ConditioningControlPanel.Services.Browser
                     console.log('[HapticSync] Intercepting play, starting processing for: ' + url);
                     showOverlay();
 
-                    // Report video URL to C#
-                    window.invokeCSharpAction(JSON.stringify({
-                        type: 'audioSyncVideoDetected',
-                        url: url,
-                        duration: video.duration || 0
-                    }));
                 }
+                // Even without a URL the host must release the intercepted play.
+                window.invokeCSharpAction(JSON.stringify({
+                    type: 'audioSyncVideoDetected',
+                    url: url,
+                    duration: video.duration || 0
+                }));
             }
 
             // Return a promise that resolves when ready
@@ -244,12 +244,12 @@ namespace ConditioningControlPanel.Services.Browser
         if (url) {
             console.log('[HapticSync] Re-arm: reporting current video ' + url);
             showOverlay();
-            window.invokeCSharpAction(JSON.stringify({
-                type: 'audioSyncVideoDetected',
-                url: url,
-                duration: v.duration || 0
-            }));
         }
+        window.invokeCSharpAction(JSON.stringify({
+            type: 'audioSyncVideoDetected',
+            url: url,
+            duration: v.duration || 0
+        }));
     };
 
     // Setup on existing video
