@@ -1356,6 +1356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Every window of the run, joined floating windows first (WPF CloseFloatingInstances), then the run's clip.</summary>
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            LightsDownOverlay.CloseAll(); // WPF LightsDownService.cs:106, before decoder teardown
             CloseFloatingInstances("close all");
             return ClosePrimary(retire: false);
         });

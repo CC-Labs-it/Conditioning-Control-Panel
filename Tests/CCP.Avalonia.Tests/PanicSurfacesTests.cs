@@ -166,6 +166,7 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
+        "lights-down",
         "emergency-exit",
         "companion-audio",
         "audio-playlist",
