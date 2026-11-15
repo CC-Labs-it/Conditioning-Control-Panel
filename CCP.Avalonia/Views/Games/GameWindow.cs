@@ -222,6 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
+            if (spec.Id == "goon") { Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => StopGoonWatch(); }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {
@@ -482,6 +483,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
+            _goonPanicEpoch++;
             _dtrhPanicEpoch++; // also cancels a recovery whose Closed callback re-enters panic
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
