@@ -558,7 +558,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         internal bool IsRemix { get; set; }
-        internal void SetPicture(Bitmap picture) => _image.Source = picture;
+        internal void SetPicture(Bitmap picture)
+        {
+            _image.Source = picture;
+            _image.InvalidateVisual(); // video frames reuse the same bitmap
+        }
         internal object? Picture => _image.Source;
 
         public FlashOverlayWindow(Bitmap picture, string? path = null, bool ownsPicture = true)

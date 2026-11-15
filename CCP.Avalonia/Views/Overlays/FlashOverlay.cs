@@ -349,6 +349,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Animate(gif.Frames, GifFrameDelay(gif.Delay, s.FlashGifSpeedMultiplier));
             }
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, MouseClickable(s, clickable))) return false;
+            StartClip(w, bmp, ClipPaths.TryGetValue(bmp, out var clip) ? clip.Path : null, rect.Width, s.FlashGifSpeedMultiplier);
             timing?.Track(w.SetVoiceLifetime);
             _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
             if (notify) Displayed?.Invoke();
@@ -379,6 +380,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// carries), until <see cref="Show"/> hands them to the window.</summary>
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Bitmap, GifAnimation> GifFrames = new();
         private sealed record GifAnimation(List<Bitmap> Frames, TimeSpan Delay);
+        private sealed record ClipPathRecord(string Path);
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Bitmap, ClipPathRecord> ClipPaths = new();
 
         /// <summary>A picture that will not be shown, with any animation frames it carries.</summary>
         private static void Drop(Bitmap bmp)
@@ -617,6 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// until popped (FlashService.cs:1567). A full screen of staying flashes skips the tick.</summary>
         internal static void SeedCore(Func<Visual?> host, Action noteUsed)
         {
+            RemoteFlashSource.ClipConsumer = true;
             void Show(bool ambient)
             {
                 if (host() is not { } h) return;
@@ -808,6 +812,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         using var stream = File.OpenRead(path);
                         result.Add((Bitmap.DecodeToWidth(stream, rect.Width), rect, remote?.Url ?? path, screen));
                     }
+                    if (remote is { } item && !string.IsNullOrEmpty(item.ClipPath))
+                        ClipPaths.Add(result[^1].Item1, new ClipPathRecord(item.ClipPath));
                     occupied.Add(rect);
                 }
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
