@@ -8,7 +8,7 @@
 // The mic opens through MainShellWindow.VoiceCommands.cs (the wake loop / push-to-talk feeding
 // Core VoiceCommands) exactly under WPF's conditions; every repaint here reconciles it, so arm,
 // Stop, revoke and an entitlement lapse all open or close it. The title-bar mic pill (WPF
-// MainWindow.LabTab.cs UpdateMicPill) lives here too. Calibration is not yet ported.
+// MainWindow.LabTab.cs UpdateMicPill) lives here too.
 //
 // _slLoading, not _isLoading: a partial-class field is declared once, and Avalonia's CheckBox
 // raises IsCheckedChanged on a programmatic set, so seeding needs its own guard.
@@ -331,9 +331,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (tab.TxtSL_WakeEngineStatus.Parent?.Parent is Control row) ToolTip.SetTip(row, text);
         }
 
-        /// <summary>Calibration remains unavailable until the capture sweep is ported.</summary>
-        internal void SL_Calibrate_Click()
-            => _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word",
-                Loc.Get("she_wake_calibration_unavailable"));
+        internal bool CalibratingWake;
+
+        /// <summary>WPF SL_Calibrate_Click (MainWindow.SheListening.cs:84-140): free the mic, record a few
+        /// "Hey Bambi"s, store the chosen sensitivity, then re-arm. Progress and the result use the status line.</summary>
+        internal async void SL_Calibrate_Click()
+        {
+            var (tab, wake, mic, s) = (SheListeningPage, WakeSpotterOverride ?? Platform.PulseMicSource.Wake, WakeMicOverride ?? Platform.PulseMicSource.Mic, CoreSettings.Current);
+            if (CalibratingWake || tab == null) return;
+            if (wake?.IsConfigured != true || mic == null)
+            {
+                await Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word", "The offline wake-word model isn't installed yet, so there's nothing to calibrate.");
+                return;
+            }
+            if (!s.MicConsentGiven)
+            {
+                var dlg = new Dialogs.MicConsentDialog();
+                await dlg.ShowDialogSafe(this);
+                if (!dlg.ConsentGiven) return;
+            }
+            CalibratingWake = true; // RefreshVoiceInputModes keeps the mic closed while this owns it
+            tab.BtnSL_Calibrate.IsEnabled = false;
+            var lbl = tab.TxtSL_WakeEngineStatus;
+            try
+            {
+                StopVoiceInput();
+                for (int i = 0; i < 20 && (wake.IsListening || VoiceSpeech?.IsListening == true); i++) await System.Threading.Tasks.Task.Delay(25);
+                lbl.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA0, 0xFF));
+                lbl.Text = "Listening… say “Hey Bambi” 5 times, pausing between each.";
+                var progress = new Progress<(bool Analyze, int Captured)>(p => lbl.Text = p.Analyze
+                    ? "Got it — finding your best sensitivity…" : $"Listening… say “Hey Bambi” clearly  ({p.Captured}/5)");
+                (double? Threshold, string Message) r;
+                try { r = await wake.CalibrateAsync(mic, s.SpeechWakeBoost, s.SpeechNoiseSuppression, progress, default); }
+                catch (Exception ex) { Log.Warning(ex, "Wake calibration failed"); r = (null, "Calibration failed — see logs."); }
+                if (r.Threshold is { } t) { s.SpeechWakeThreshold = t; CoreSettings.Save(); }
+                lbl.Foreground = new SolidColorBrush(r.Threshold != null ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0xFF, 0xB0, 0xB0));
+                lbl.Text = r.Message;
+            }
+            finally
+            {
+                CalibratingWake = false;
+                tab.BtnSL_Calibrate.IsEnabled = true;
+                RefreshVoiceInputModes(); // re-arm; the spotter rebuilds at the new sensitivity
+                UpdateMicPill();
+            }
+        }
     }
 }

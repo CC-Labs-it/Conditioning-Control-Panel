@@ -190,6 +190,28 @@ public sealed class SherpaWakeCaptureTests
         finally { Directory.Delete(root, true); }
     }
 
+    private sealed record Th(float T) : IDisposable { public void Dispose() { } }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CalibrationPicksStrictestThresholdThatCatchesSaysAndClosesMic()
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, t, _) => new Th(t), _ => new Handle(),
+            (spk, _, samples) => ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f));
+        void Chunks(int n, byte hi) { for (int i = 0; i < n; i++) { var b = new byte[1600]; for (int j = 1; j < b.Length; j += 2) b[j] = hi; mic.Feed!(b, b.Length); } }
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, default);
+            Chunks(8, 0); // room tone seeds the floor
+            for (int say = 0; say < 5; say++) { Chunks(10, 0x40); Chunks(12, 0); }
+            var (threshold, message) = await run;
+            Assert.Equal(.20, threshold!.Value, 3);
+            Assert.Contains("caught 5/5", message);
+            Assert.Equal(1, mic.Stops);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public void StatusAndTooltipFollowModelStateAndLanguage() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {

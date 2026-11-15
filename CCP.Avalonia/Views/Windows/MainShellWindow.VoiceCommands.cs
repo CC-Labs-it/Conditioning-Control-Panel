@@ -216,7 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var entitled = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("voice");
-                var (wake, ptt) = _windowClosed ? (false, false)
+                var (wake, ptt) = _windowClosed || CalibratingWake ? (false, false)
                     : VoiceInputRules.ModesToRun(CoreSettings.Current, entitled, CoreSpeech.IsAvailable);
                 // A lapse / disarm mid-command ends a wake/PTT turn; Takeover's own mantra is not that
                 // session and keeps running unless consent itself is gone.
