@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     {
         internal static readonly string[] FakeNames = { "Velvet Reverie", "Crimson Daydream", "Ember Waltz", "Midnight Bloom" };
         private readonly DispatcherTimer _timer = new();
+        private readonly DispatcherTimer _failsafe = new();
         private readonly TaskCompletionSource _walk = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TextBlock[] _rows;
         private int _index;
@@ -28,20 +29,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         internal DeleteDialogWindow(string[] names, TimeSpan? hold = null)
         {
             _names = names;
-            _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(280, ((hold ?? TimeSpan.FromSeconds(8)).TotalMilliseconds - 900) / names.Length));
+            var holdFor = hold ?? TimeSpan.FromSeconds(8);
+            _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(280, (holdFor.TotalMilliseconds - 900) / names.Length));
+            _failsafe.Interval = holdFor + TimeSpan.FromSeconds(3);
             InitializeComponent();
             var list = this.FindControl<StackPanel>("Names")!;
             _rows = new TextBlock[_names.Length];
             for (int i = 0; i < _names.Length; i++)
             {
-                _rows[i] = new TextBlock { Text = "  " + _names[i], Foreground = Brush.Parse("#C09A92"), FontSize = 12 };
+                _rows[i] = new TextBlock { Text = "  " + _names[i], Foreground = Brush.Parse("#C09A92"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis };
                 list.Children.Add(_rows[i]);
             }
             this.FindControl<TextBlock>("Status")!.Text = Loc.GetF("possession_delete_removing", _names[0]);
             this.FindControl<Button>("Cancel")!.Click += (_, _) => Close();
             _timer.Tick += (_, _) => Step();
-            Opened += (_, _) => _timer.Start();
-            Closed += (_, _) => { _timer.Stop(); _walk.TrySetResult(); };
+            _failsafe.Tick += (_, _) => Close();
+            Opened += (_, _) => { _timer.Start(); _failsafe.Start(); };
+            Closed += (_, _) => { _timer.Stop(); _failsafe.Stop(); _walk.TrySetResult(); };
         }
 
         internal Task Walk => _walk.Task;
@@ -58,7 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 : Loc.GetF("possession_delete_removing", _names[_index]);
             if (_index == _rows.Length)
             {
-                _timer.Interval = TimeSpan.FromSeconds(3);
+                _timer.Stop();
                 _walk.TrySetResult();
             }
         }

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
@@ -115,6 +116,42 @@ public class PossessionDeleteDialogTests
             Assert.False(dialog.IsVisible);
         }
         finally { if (dialog.IsVisible) dialog.Close(); }
+    });
+
+    [Fact]
+    public Task FailsafeRunsFromOpeningAndLeavesClosingLineVisible() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var dialog = new DeleteDialogWindow(Enumerable.Range(1, 6).Select(i => "Session " + i).ToArray(), TimeSpan.FromSeconds(4));
+        dialog.Show();
+        try
+        {
+            await dialog.Walk.WaitAsync(TimeSpan.FromSeconds(6));
+            Assert.True(dialog.IsVisible);
+            Assert.Equal("nothing was deleted. i just wanted to watch you read it.", dialog.FindControl<TextBlock>("Status")!.Text);
+            await Task.Delay(3300);
+            Assert.True(dialog.IsVisible);
+            await Task.Delay(1100);
+            Assert.False(dialog.IsVisible);
+        }
+        finally { if (dialog.IsVisible) dialog.Close(); }
+    });
+
+    [Fact]
+    public void LongSessionNamesAreTrimmedWithinTheList() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var name = new string('W', 500);
+        var dialog = new DeleteDialogWindow(new[] { name });
+        dialog.Show();
+        try
+        {
+            dialog.UpdateLayout();
+            var list = dialog.FindControl<StackPanel>("Names")!;
+            var row = Assert.IsType<TextBlock>(Assert.Single(list.Children));
+            Assert.Equal("  " + name, row.Text);
+            Assert.Equal(TextTrimming.CharacterEllipsis, row.TextTrimming);
+            Assert.True(row.Bounds.Width > 0 && row.Bounds.Width <= list.Bounds.Width);
+        }
+        finally { dialog.Close(); }
     });
 
     [Fact]
