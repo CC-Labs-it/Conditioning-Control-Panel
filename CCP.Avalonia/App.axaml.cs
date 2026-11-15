@@ -566,7 +566,7 @@ namespace ConditioningControlPanel.Avalonia
                 || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
                 || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
-                || CoreEngine.Video?.IsPlaying == true || Views.Deeper.EnhancementPlayerWindow.IsAnyPlaying
+                || CoreEngine.Video?.IsPlaying == true || Views.Deeper.EnhancementPlayerWindow.IsAnyEnhancementRunning
                 || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:779-788

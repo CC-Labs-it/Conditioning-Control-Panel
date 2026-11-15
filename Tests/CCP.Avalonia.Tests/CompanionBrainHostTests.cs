@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Services;
@@ -249,6 +250,20 @@ public sealed class CompanionBrainHostTests
         }
         return Task.CompletedTask;
     });
+    private sealed class AskBusyAudio : ConditioningControlPanel.Avalonia.Views.Deeper.IDeeperLocalAudio
+    {
+        public double DurationSeconds => 95;
+        public double? PlaybackDurationSeconds => null;
+        public double PositionSeconds { get; set; }
+        public int Volume { get; set; }
+        public bool Playing { get; private set; }
+        public event Action? Ended { add { } remove { } }
+        public event Action? Failed { add { } remove { } }
+        public void Play() => Playing = true;
+        public void Pause() => Playing = false;
+        public void Dispose() => Playing = false;
+    }
+
     [Fact]
     public Task CompanionAskBusyDeeperPlayer() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -259,24 +274,40 @@ public sealed class CompanionBrainHostTests
         var busy = CompanionAskService.BusyProvider;
         var sessions = CompanionAskService.SessionOptions;
         var start = CompanionAskService.StartSession;
+        var open = ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open;
+        var audio = new AskBusyAudio();
+        ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open = _ => Task.FromResult<ConditioningControlPanel.Avalonia.Views.Deeper.IDeeperLocalAudio?>(audio);
         var player = new ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
-        var playing = player.GetType().GetField("_isPlaying", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        player.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
+        void Click(string name) => player.FindControl<global::Avalonia.Controls.Button>(name)!.RaiseEvent(
+            new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+        void Tick() => player.GetType().GetMethod("UiTimer_Tick", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(player, new object?[] { null, EventArgs.Empty });
         try
         {
             AvApp.Mantra.EndSession();
             ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             player.Show();
             AvApp.SeedCompanionTubeSeams();
+            player.OpenLocalMediaFile("plain.mp3");
+            Tick();
+            Assert.True(audio.Playing);
             Assert.False(CompanionAskService.BusyProvider!());
-            playing.SetValue(player, true);
+            player.LoadEnhancementFromMemory(new ConditioningControlPanel.Models.Deeper.Enhancement
+                { MediaType = ConditioningControlPanel.Models.Deeper.MediaTypes.Audio, MediaSource = "*" }, "test");
+            Tick();
+            Assert.True(CompanionAskService.BusyProvider!());
+            Click("BtnPlayPause");
+            Assert.False(audio.Playing);
             Assert.True(CompanionAskService.BusyProvider!());
             Assert.False(CompanionAskService.Instance.CanOfferFor("what can I do"));
-            playing.SetValue(player, false);
+            Click("BtnStop");
             Assert.False(CompanionAskService.BusyProvider!());
         }
         finally
         {
             player.Close();
+            ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open = open;
             CompanionAskService.Instance.Stop();
             CompanionAskService.BusyProvider = busy;
             CompanionAskService.SessionOptions = sessions;
@@ -284,5 +315,4 @@ public sealed class CompanionBrainHostTests
         }
         return Task.CompletedTask;
     });
-
 }
