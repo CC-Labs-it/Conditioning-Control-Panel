@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Ocr;
 using ConditioningControlPanel.Services.ScreenCapture;
 using SkiaSharp;
@@ -68,6 +71,69 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         Assert.False(engine.IsAvailable);
         Assert.Empty(engine.Recognize(Frame("Good girl").Frame));
         Assert.False(engine.IsAvailable);
+    }
+
+    [Fact]
+    public void AvailabilityDoesNotWaitForRecognitionGate()
+    {
+        using var engine = new RapidScreenOcrEngine();
+        var gate = typeof(RapidScreenOcrEngine).GetField("_gate", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(engine)!;
+        using var entered = new ManualResetEventSlim();
+        Task<bool> availability;
+        bool returned;
+        lock (gate)
+        {
+            availability = Task.Run(() => { entered.Set(); return engine.IsAvailable; });
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            returned = availability.Wait(TimeSpan.FromSeconds(2));
+        }
+        Assert.True(returned, "Availability waited for recognition to finish");
+        Assert.True(availability.GetAwaiter().GetResult());
+    }
+
+    [Fact]
+    public void DisposeDuringRecognitionDoesNotWaitAndReleasesSessionsAfterIt()
+    {
+        var engine = new RapidScreenOcrEngine();
+        var ocr = typeof(RapidScreenOcrEngine).GetField("_ocr", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        engine.Recognize(Frame(null).Frame); // loads the sessions
+        Assert.NotNull(ocr.GetValue(engine));
+        using var inDetect = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        engine.BeforeDetect = () => { inDetect.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
+        var scan = Task.Run(() => engine.Recognize(Frame(null).Frame));
+        Assert.True(inDetect.Wait(TimeSpan.FromSeconds(5)));
+
+        var sw = Stopwatch.StartNew();
+        engine.Dispose();
+        sw.Stop();
+        Assert.True(sw.ElapsedMilliseconds < 50, $"Dispose blocked {sw.ElapsedMilliseconds} ms on the active recognition");
+        Assert.False(engine.IsAvailable);
+        Assert.NotNull(ocr.GetValue(engine)); // still in use by the active scan
+
+        release.Set();
+        Assert.True(scan.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Null(ocr.GetValue(engine));
+        engine.BeforeDetect = null;
+        Assert.Empty(engine.Recognize(Frame("Good girl obey").Frame));
+        Assert.Null(ocr.GetValue(engine));
+    }
+
+    [Theory, InlineData("en"), InlineData("en-US"), InlineData("ja-JP")]
+    public void InstalledProfileWinsWithoutCoreModels(string language)
+    {
+        using var native = new RapidScreenOcrEngine();
+        using var missing = new RapidScreenOcrEngine(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
+        Assert.True(native.IsAvailable);
+        Assert.False(missing.IsAvailable);
+        Assert.Same(native, ScreenOcrEngineSelection.Create(() => string.IsNullOrEmpty(language) ? null : native));
+    }
+
+    [Theory, InlineData(false), InlineData(true)]
+    public void MissingOrFailedWindowsProfileDoesNotCreateCoreEngine(bool throws)
+    {
+        using var engine = ScreenOcrEngineSelection.Create(() => throws ? throw new InvalidOperationException() : null);
+        Assert.Null(engine);
     }
 
     [Fact]

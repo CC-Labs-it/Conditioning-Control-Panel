@@ -327,7 +327,19 @@ jobs:
       # render tests included. Promoted on that one green run, deliberately - an advisory job
       # that is always green trains everyone to ignore it. If it turns out flaky, demote it with
       # evidence (link the failing runs) rather than pre-emptively.
+      - name: Install Japanese OCR and fonts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('Language.Basic~~~ja-JP~0.0.1.0', 'Language.OCR~~~ja-JP~0.0.1.0', 'Language.Fonts.Jpan~~~und-JPAN~0.0.1.0')) {
+            $capability = Get-WindowsCapability -Online -Name $name
+            if (!$capability) { throw "Missing Windows capability $name" }
+            if ($capability.State -ne 'Installed') { Add-WindowsCapability -Online -Name $name | Out-Null }
+            if ((Get-WindowsCapability -Online -Name $name).State -ne 'Installed') { throw "Could not install $name" }
+          }
       - name: Test app suite
+        env:
+          CCP_REQUIRE_JAPANESE_OCR: '1'
         run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
       - name: Test Core suite
         run: dotnet test Tests/CCP.Core.Tests/CCP.Core.Tests.csproj -c Release --filter 'FullyQualifiedName!=ConditioningControlPanel.Tests.BoardTilesTests.A_frame_fits_the_budget'
