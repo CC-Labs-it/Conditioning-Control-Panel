@@ -56,6 +56,11 @@ namespace ConditioningControlPanel.Avalonia
             return shown ?? true;
         });
 
+        /// <summary>The AI's video surface. WPF App.AiEffects.cs:69-74: refused while a video plays, checked when the
+        /// start runs, so a start held behind the Wayland portal bind is covered too.</summary>
+        internal static bool PlayVideo(string? path) => Start(() => CoreEngine.Video?.IsPlaying != true
+            && CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+
         /// <summary>An overlay surface: refused without a host or click-through support.</summary>
         private static bool Overlay(Action<Window> show) => OnUi(() =>
             X11Overlay.IsAvailable && Host is not null && Start(() =>
@@ -120,9 +125,7 @@ namespace ConditioningControlPanel.Avalonia
                 return true;
             });
             // WPF App.AiEffects.cs:69-74: a video already playing refuses (a floating run would otherwise add a random window).
-            // Checked when the start runs, so a start held behind the Wayland portal bind is covered too.
-            MediaCommand.VideoSurface = path => Start(() => CoreEngine.Video?.IsPlaying != true
-                && CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+            MediaCommand.VideoSurface = PlayVideo;
             MediaCommand.AudioSurface = PlayAudio;
             CoreAudio.StopSoundProvider = StopAudio;
             MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()

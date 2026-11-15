@@ -707,9 +707,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
             SetFloatingPaused(true);   // WPF FloatingInstances.cs:368: the grace pause holds every window
 
-            // shortcut: one card for a run of joined windows (WPF shows one per screen), upgrade with a multi-screen run.
-            foreach (var x in _surfaces.Count > 0 ? _surfaces : _floaters.Take(1).Select(f => f.Surface))
-            { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; if (Floating) ShowGraceHost(x); }
+            if (Floating) ShowGraceCards();
+            else foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; }
             SetCountdown(MandatoryVideoScheduler.GraceWindowSeconds);
             _graceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _graceTimer.Tick += (_, _) => GraceTick();

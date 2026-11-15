@@ -41,7 +41,8 @@ public sealed class MandatoryVideoFloatingHostTests
         public void SetPause(bool paused) => Paused = paused;
         public void Stop() => Stopped = true;
         public void Dispose() { }
-        public void SetAudioOff(bool off) => AudioOff = off;
+        public readonly List<bool> AudioCalls = new();
+        public void SetAudioOff(bool off) { AudioOff = off; AudioCalls.Add(off); }
     }
 
     /// <summary>Always the same spot: only the "taken" rule keeps windows apart.</summary>
@@ -249,27 +250,63 @@ public sealed class MandatoryVideoFloatingHostTests
     {
         var s = CoreSettings.Current;
         var saved = (CoreEngine.Video, CoreAccount.HasLabAccessProvider, s.CompanionPrompt.AllowAiToControlEffects);
+        var seeded = ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface;
         (CoreEngine.Video, CoreAccount.HasLabAccessProvider, s.CompanionPrompt.AllowAiToControlEffects) = (o.Scheduler, () => true, true);
         global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = start => start();
         try
         {
-            global::ConditioningControlPanel.Avalonia.CompanionEffects.Seed();
-            Assert.False(ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface!("x"));   // WPF App.AiEffects.cs:69-74
+            // The surface itself, never Seed(): Seed swaps process-wide command delegates other tests rely on.
+            Assert.False(global::ConditioningControlPanel.Avalonia.CompanionEffects.PlayVideo("x"));   // WPF App.AiEffects.cs:69-74
             Assert.Equal(1, o.FloatingUp);
             // Held behind the portal bind while the video starts: the released start still refuses.
             System.Action? held = null;
             global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = start => held = start;
             o.Scheduler.ForceCleanup();
-            ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface!("x");
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.PlayVideo("x");
             Assert.True(o.Scheduler.Trigger(userInitiated: false));
             o.Show("/v/first.mp4", strict: false);
             held!();
             Assert.Equal(1, o.FloatingUp);
+            Assert.Same(seeded, ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface);   // no process-wide seeding left behind
         }
         finally
         {
             global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StartEffect;
             (CoreEngine.Video, CoreAccount.HasLabAccessProvider, s.CompanionPrompt.AllowAiToControlEffects) = saved;
         }
+    });
+
+    // WPF VideoService.FloatingInstances.cs:534-535: a veiled window is muted before it can play; focus comes at the reveal.
+    [Fact]
+    public Task A_joined_player_is_silent_before_its_reveal() => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger();
+        Assert.True(decoders[1].AudioCalls[0], "muted before the reveal's focus pass");
+        Assert.False(decoders[1].AudioOff, "then the newest takes the sound");
+    });
+
+    // WPF VideoService.cs:6444-6456: a Resume card on every screen holding a floating window, kept when its host closes.
+    [Fact]
+    public Task Grace_shows_a_card_per_screen_and_keeps_one_when_a_window_closes() => Run((o, _) =>
+    {
+        o.Scheduler.Trigger(userInitiated: true);
+        o.Scheduler.Trigger(userInitiated: true);
+        o.OnNaturalVideoEnd();   // the first window goes: the joined ones carry the run
+        o.Scheduler.Trigger(userInitiated: true);
+        var f = o.Floaters;
+        Assert.Equal(3, f.Count);
+        // Screen has no public constructor (ChaosDvdOverlayTests.MakeScreen).
+        var other = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(5000), "headless-test") })!;
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(other, new PixelRect(5000, 0, 1920, 1080));
+        typeof(MandatoryVideoOverlay.Surface).GetField("<Screen>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(f[2].Surface, other);
+        Assert.True(o.TryGracePause(fromPanicKey: false));
+        Assert.Equal(new[] { true, false, true }, f.Select(x => x.Surface.GraceHost != null));   // one card per screen
+
+        var host = f[0].Window;
+        f[0].Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // the card's host closes mid-pause
+        Assert.False(host.IsVisible);
+        Assert.True(o.GracePaused);
+        Assert.True(f[0].Surface.GraceHost?.IsVisible, "its screen keeps a Resume card");
     });
 }
