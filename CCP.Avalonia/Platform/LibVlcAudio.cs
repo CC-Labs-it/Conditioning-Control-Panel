@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal sealed class LibVlcAudio
     {
-        private LibVLC _vlc => Shared ?? throw new InvalidOperationException("LibVLC is unavailable");
+        private LibVLC _vlc => AcquireShared();
         private readonly Func<string, string> _pactl = Pactl;
         private readonly TimeProvider _duckClock = TimeProvider.System;
 
@@ -64,34 +64,48 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>The process's one LibVLC, shared with video (MiniPlayerWindow), as WPF shares
         /// VideoService.SharedLibVLC. Null when libvlc did not load.</summary>
         private static LibVLC? _shared;
-        internal static LibVLC? Shared { get { lock (_engineGate) return _shared; } set { lock (_engineGate) _shared = value; } }
-        private static readonly object _engineGate = new();
+        // A retired shared engine owes a replacement until one is built; a failed build stays owed.
+        private static bool _rebuildPending;
+        private static int _rebuilding;
+        internal static LibVLC? Shared
+        {
+            get { LibVLC? s; bool kick; lock (_engineGate) { s = _shared; kick = s == null && _rebuildPending; } if (kick) RebuildInBackground(); return s; }
+            set { lock (_engineGate) { _shared = value; _rebuildPending = false; } }
+        }
+        private static readonly object _engineGate = new(), _rebuildGate = new();
         private static readonly List<LibVLC> _retired = new();
         internal static bool IsRetired(LibVLC? engine) { lock (_engineGate) return engine != null && _retired.Any(item => ReferenceEquals(item, engine)); }
-        // WPF VideoService.cs:1139-1163, 7769-7779: never dispose a retired instance.
+        // WPF VideoService.cs:1139-1163, 7769-7779: never dispose a retired instance; rebuild off-thread.
         internal static void Retire(LibVLC? engine)
         {
             if (engine == null) return;
             lock (_engineGate)
             {
-                if (_retired.Any(item => ReferenceEquals(item, engine))) return;
+                if (IsRetired(engine)) return;
                 _retired.Add(engine);
-                if (!ReferenceEquals(Shared, engine)) return;
-                Shared = null;
+                if (!ReferenceEquals(_shared, engine)) return;
+                (_shared, _rebuildPending) = (null, true);
             }
-            _ = Task.Run(() =>
+            RebuildInBackground();
+        }
+        private static void RebuildInBackground()
+        {
+            if (Interlocked.Exchange(ref _rebuilding, 1) == 0) _ = Task.Run(() =>
             {
-                try
-                {
-                    var fresh = CreateIsolatedVideo();
-                    lock (_engineGate)
-                    {
-                        if (_retired.Any(item => ReferenceEquals(item, fresh))) throw new InvalidOperationException("Retired LibVLC returned by factory");
-                        if (Shared == null) Shared = fresh;
-                    }
-                }
-                catch (Exception ex) { Log.Warning(ex, "LibVLC shared engine replacement failed"); }
+                try { AcquireShared(); } catch (Exception ex) { Log.Warning(ex, "LibVLC shared engine replacement failed"); }
+                finally { Volatile.Write(ref _rebuilding, 0); }
             });
+        }
+        /// <summary>The shared engine; waits for, or retries, the replacement of a retired one.</summary>
+        internal static LibVLC AcquireShared()
+        {
+            lock (_rebuildGate)
+            {
+                lock (_engineGate) if (_shared != null || !_rebuildPending) return _shared ?? throw new InvalidOperationException("LibVLC is unavailable");
+                var fresh = CreateIsolatedVideo();
+                if (IsRetired(fresh)) throw new InvalidOperationException("Retired LibVLC returned by factory");
+                lock (_engineGate) { if (_shared == null) (_shared, _rebuildPending) = (fresh, false); return _shared; }
+            }
         }
         private static string[] _sharedOptions = Array.Empty<string>();
         // WPF VideoService.cs:1139-1163 retires a poisoned engine. Bubble Count instead
@@ -198,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public void Seed()
         {
             Instance = this;
-            LayeredAudio.Instance = new LayeredAudio((path, volume) => new LayeredAudio.VlcLayerPlayer(_vlc, path, initialVolume: volume));
+            LayeredAudio.Instance = new LayeredAudio((path, volume) => new LayeredAudio.VlcLayerPlayer(AcquireShared, path, initialVolume: volume));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
             // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
@@ -434,7 +448,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (_paused) { _restartPending = true; return true; }
                     _restartPending = false;
                     v = null!;
-                    v = audio.NewVoice(path, () => Retire(v), loop: true);
+                    // The shared engine can be mid-rebuild or fail it; the next copy's start retries.
+                    try { v = audio.NewVoice(path, () => Retire(v), loop: true); }
+                    catch (Exception ex) { Log.Debug(ex, "[Audio] loop copy"); return false; }
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);

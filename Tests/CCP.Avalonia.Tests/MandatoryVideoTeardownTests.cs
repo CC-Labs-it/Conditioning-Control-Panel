@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
@@ -35,12 +36,9 @@ public class MandatoryVideoTeardownTests
             var overlay = new MandatoryVideoOverlay(() => decoder);
             try
             {
-                overlay.Show("fake.mp4", false);
-                var clock = Stopwatch.StartNew();
-                overlay.CloseAll();
+                overlay.Show("fake.mp4", false); var clock = Stopwatch.StartNew(); overlay.CloseAll();
                 Assert.True(clock.ElapsedMilliseconds < 100, $"CloseAll took {clock.ElapsedMilliseconds} ms");
-                Assert.True(decoder.Started.Wait(TimeSpan.FromSeconds(1)));
-                Assert.False(decoder.Disposed.IsSet);
+                Assert.True(decoder.Started.Wait(TimeSpan.FromSeconds(1))); Assert.False(decoder.Disposed.IsSet);
                 decoder.Release.Set();
                 Assert.True(decoder.Disposed.Wait(TimeSpan.FromSeconds(2)));
             }
@@ -51,8 +49,7 @@ public class MandatoryVideoTeardownTests
     [Fact]
     public void OverdueStopIsQuarantinedAndBlocksBubbleCountForOneMinute()
     {
-        var decoder = new Decoder();
-        var oldClock = BubbleCountWindow.NativeClock;
+        var decoder = new Decoder(); var oldClock = BubbleCountWindow.NativeClock;
         long now = 1000;
         BubbleCountWindow.NativeClock = () => Interlocked.Read(ref now);
         BubbleCountWindow.ClearMandatoryNativePoisoningForTests();
@@ -61,9 +58,7 @@ public class MandatoryVideoTeardownTests
             AvaloniaTestDispatcher.Run(() =>
             {
                 var overlay = new MandatoryVideoOverlay(() => decoder) { StopGraceMs = 50 };
-                overlay.Show("fake.mp4", false);
-                overlay.CloseAll();
-                Assert.True(decoder.Started.Wait(TimeSpan.FromSeconds(1)));
+                overlay.Show("fake.mp4", false); overlay.CloseAll(); Assert.True(decoder.Started.Wait(TimeSpan.FromSeconds(1)));
                 Assert.True(SpinWait.SpinUntil(() => BubbleCountWindow.NativeBlocked, TimeSpan.FromSeconds(2)));
                 decoder.Release.Set();
                 Assert.False(decoder.Disposed.Wait(TimeSpan.FromMilliseconds(150)));
@@ -90,17 +85,12 @@ public class MandatoryVideoTeardownTests
     [Fact]
     public Task NextClipWaitsForStopWithoutBlockingDispatcher() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var first = new Decoder();
-        var second = new Decoder();
-        var count = 0;
-        var replaced = 0;
+        var first = new Decoder(); var second = new Decoder(); var count = 0; var replaced = 0;
         var overlay = new MandatoryVideoOverlay(() => ++count == 1 ? first : second)
         { PendingStopWaitMs = 1500, ReplaceEngineForTests = () => { replaced++; return true; } };
         try
         {
-            overlay.Show("one.mp4", false);
-            overlay.CloseAll();
-            Assert.True(first.Started.Wait(TimeSpan.FromSeconds(1)));
+            overlay.Show("one.mp4", false); overlay.CloseAll(); Assert.True(first.Started.Wait(TimeSpan.FromSeconds(1)));
             overlay.Show("two.mp4", false);
             await Task.Delay(100); // dispatcher remains responsive while the stop is blocked
             Assert.Equal(1, count);
@@ -114,11 +104,7 @@ public class MandatoryVideoTeardownTests
     [Fact]
     public Task TimedOutStopReplacesEngineBeforeConstructingPlayer() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var first = new Decoder();
-        var second = new Decoder();
-        var count = 0;
-        var replacements = 0;
-        var replacedWhenBuilt = -1;
+        var first = new Decoder(); var second = new Decoder(); var count = 0; var replacements = 0; var replacedWhenBuilt = -1;
         var overlay = new MandatoryVideoOverlay(() =>
         {
             count++;
@@ -127,15 +113,10 @@ public class MandatoryVideoTeardownTests
         }) { PendingStopWaitMs = 100, ReplaceEngineForTests = () => { replacements++; return true; } };
         try
         {
-            overlay.Show("one.mp4", false);
-            overlay.CloseAll();
-            Assert.True(first.Started.Wait(TimeSpan.FromSeconds(1)));
-            overlay.Show("two.mp4", false);
-            Assert.Equal(1, count);
+            overlay.Show("one.mp4", false); overlay.CloseAll(); Assert.True(first.Started.Wait(TimeSpan.FromSeconds(1)));
+            overlay.Show("two.mp4", false); Assert.Equal(1, count);
             await WaitUntil(() => count == 2);
-            Assert.Equal(1, replacements);
-            Assert.Equal(1, replacedWhenBuilt);
-            Assert.False(first.Release.IsSet);
+            Assert.Equal(1, replacements); Assert.Equal(1, replacedWhenBuilt); Assert.False(first.Release.IsSet);
         }
         finally { first.Release.Set(); second.Release.Set(); overlay.CloseAll(); }
     });
@@ -143,21 +124,14 @@ public class MandatoryVideoTeardownTests
     [Fact]
     public Task PendingPlaybackIsCancelledByCloseAndCannotStartOnFailedReplacement() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var first = new Decoder();
-        var count = 0;
-        var attempts = 0;
+        var first = new Decoder(); var count = 0; var attempts = 0;
         var overlay = new MandatoryVideoOverlay(() => { count++; return first; })
         { PendingStopWaitMs = 80, ReplaceEngineForTests = () => { attempts++; return false; } };
         try
         {
-            overlay.Show("one.mp4", false);
-            overlay.CloseAll();
-            overlay.Show("cancelled.mp4", false);
-            overlay.CloseAll();
+            overlay.Show("one.mp4", false); overlay.CloseAll(); overlay.Show("cancelled.mp4", false); overlay.CloseAll();
             await Task.Delay(150);
-            Assert.Equal(1, count);
-            Assert.Equal(0, attempts);
-            overlay.Show("blocked.mp4", false);
+            Assert.Equal(1, count); Assert.Equal(0, attempts); overlay.Show("blocked.mp4", false);
             await WaitUntil(() => attempts == 1);
             Assert.Equal(1, count);
             first.Release.Set();
@@ -177,21 +151,13 @@ public class MandatoryVideoTeardownTests
         var overlay = new MandatoryVideoOverlay(() => decoder);
         try
         {
-            overlay.Show("one.mp4", false);
-            var frames = 0;
-            var bitmaps = 0;
-            var oldFrame = overlay.GuardPresentation(() => frames++);
+            overlay.Show("one.mp4", false); var frames = 0; var bitmaps = 0; var oldFrame = overlay.GuardPresentation(() => frames++);
             var oldBitmap = overlay.GuardPresentation<int>(value => bitmaps += value);
             oldFrame(); oldBitmap(1);
-            Assert.Equal(1, frames);
-            Assert.Equal(1, bitmaps);
-            overlay.CloseAll();
-            overlay.Show("two.mp4", false);
+            Assert.Equal(1, frames); Assert.Equal(1, bitmaps); overlay.CloseAll(); overlay.Show("two.mp4", false);
             oldFrame(); oldBitmap(1);
-            Assert.Equal(1, frames);
-            Assert.Equal(1, bitmaps);
-            overlay.GuardPresentation(() => frames++)();
-            Assert.Equal(2, frames);
+            Assert.Equal(1, frames); Assert.Equal(1, bitmaps);
+            overlay.GuardPresentation(() => frames++)(); Assert.Equal(2, frames);
         }
         finally { overlay.CloseAll(); }
     });
@@ -207,24 +173,16 @@ public class MandatoryVideoTeardownTests
     [Fact]
     public Task QuarantineRetiresSharedEngineEvenIfStopLaterReturns() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var oldShared = ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared;
-        var oldFactory = ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.VideoFactory;
+        var oldShared = LibVlcAudio.Shared; var oldFactory = LibVlcAudio.VideoFactory;
         var suspect = Token(); var fresh = Token(); var first = new Decoder(); var second = new Decoder();
         var count = 0; LibVLCSharp.Shared.LibVLC? nextOwner = null;
-        var audio = new ConditioningControlPanel.Avalonia.Platform.LibVlcAudio(_ => "");
-        ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared = suspect;
-        ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.VideoFactory = _ => fresh;
-        var overlay = new MandatoryVideoOverlay(() => ++count == 1 ? first : second)
-        {
-            StopGraceMs = 50,
-            PlaybackEngineForTests = () => nextOwner = ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared
-        };
+        var audio = new LibVlcAudio(_ => ""); LibVlcAudio.Shared = suspect; LibVlcAudio.VideoFactory = _ => fresh;
+        var overlay = new MandatoryVideoOverlay(() => ++count == 1 ? first : second) { StopGraceMs = 50, PlaybackEngineForTests = () => nextOwner = LibVlcAudio.Shared };
         try
         {
             overlay.Show("one.mp4", false); overlay.CloseAll();
-            await WaitUntil(() => ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.IsRetired(suspect));
-            Assert.NotSame(suspect, ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared);
-            await WaitUntil(() => ReferenceEquals(fresh, ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared));
+            await WaitUntil(() => LibVlcAudio.IsRetired(suspect)); Assert.NotSame(suspect, LibVlcAudio.Shared);
+            await WaitUntil(() => ReferenceEquals(fresh, LibVlcAudio.Shared));
             first.Release.Set(); await Task.Delay(100);
             overlay.Show("two.mp4", false); await WaitUntil(() => count == 2);
             Assert.Same(fresh, nextOwner); Assert.Same(fresh, audio.Vlc); Assert.False(first.Disposed.IsSet);
@@ -232,9 +190,7 @@ public class MandatoryVideoTeardownTests
         finally
         {
             first.Release.Set(); second.Release.Set(); overlay.CloseAll();
-            ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared = oldShared;
-            ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.VideoFactory = oldFactory;
-            BubbleCountWindow.ClearMandatoryNativePoisoningForTests();
+            LibVlcAudio.Shared = oldShared; LibVlcAudio.VideoFactory = oldFactory; BubbleCountWindow.ClearMandatoryNativePoisoningForTests();
         }
     });
 
@@ -245,12 +201,27 @@ public class MandatoryVideoTeardownTests
         var overlay = new MandatoryVideoOverlay(() => ++attempts == 1 ? first : throw new InvalidOperationException("startup"));
         try
         {
-            overlay.Show("one.mp4", false); overlay.CloseAll();
-            overlay.Show("two.mp4", false, () => announced++);
+            overlay.Show("one.mp4", false); overlay.CloseAll(); overlay.Show("two.mp4", false, () => announced++);
             first.Release.Set(); await WaitUntil(() => attempts == 2);
             Assert.Equal(0, announced); Assert.False(overlay.PlaybackActive); Assert.Null(overlay._wedge);
         }
         finally { first.Release.Set(); overlay.CloseAll(); }
     });
 
+    [Fact]
+    public void RetiredSharedEngineRebuildIsAwaitedAndRetriedByTheNextAcquisition()
+    {
+        var oldShared = LibVlcAudio.Shared; var oldFactory = LibVlcAudio.VideoFactory; var suspect = Token(); var fresh = Token(); var later = Token();
+        var audio = new LibVlcAudio(_ => ""); var file = System.IO.Path.GetTempFileName(); using var gate = new ManualResetEventSlim();
+        try
+        {
+            LibVlcAudio.Shared = suspect; LibVlcAudio.VideoFactory = _ => throw new InvalidOperationException("rebuild"); LibVlcAudio.Retire(suspect);
+            Assert.Null(audio.PlayVoice(file, 1, loop: true, () => { }));   // Mind Wipe's overlap timer path must not throw
+            LibVlcAudio.VideoFactory = _ => fresh; Assert.Same(fresh, audio.Vlc);   // the failed rebuild stays owed
+            LibVlcAudio.VideoFactory = _ => { gate.Wait(); return later; }; LibVlcAudio.Retire(fresh);
+            var waiting = Task.Run(() => audio.Vlc); Assert.False(waiting.Wait(200));   // mid-rebuild acquisition waits
+            gate.Set(); Assert.Same(later, waiting.Result);
+        }
+        finally { gate.Set(); LibVlcAudio.Shared = oldShared; LibVlcAudio.VideoFactory = oldFactory; System.IO.File.Delete(file); }
+    }
 }
