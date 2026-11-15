@@ -16,6 +16,54 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public class KeywordHighlightOverlayTests
 {
+    private sealed class Lease(Action release) : IDisposable
+    {
+        public void Dispose() => release();
+    }
+
+    [Fact]
+    public Task CaptureVisibilityChangesExistingWindowsImmediately() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var screens = KeywordHighlightOverlay.Screens;
+        var configure = KeywordHighlightOverlay.Configure;
+        var exclude = KeywordHighlightOverlay.ExcludeFromCapture;
+        var settings = CoreSettings.Current;
+        var enabled = settings.KeywordHighlightEnabled;
+        var visible = settings.OcrHighlightVisibleInCapture;
+        var acquired = 0; var released = 0;
+        try
+        {
+            KeywordHighlightOverlay.Screens = () => [new(new PixelRect(0, 0, 500, 500), 1), new(new PixelRect(500, 0, 500, 500), 1)];
+            KeywordHighlightOverlay.Configure = (_, _) => true;
+            KeywordHighlightOverlay.ExcludeFromCapture = _ => { acquired++; return new Lease(() => released++); };
+            settings.KeywordHighlightEnabled = true; settings.OcrHighlightVisibleInCapture = true;
+            KeywordHighlightOverlay.Show([new("a", new(10, 10, 10, 10)), new("b", new(510, 10, 10, 10))]);
+            Assert.Equal(2, KeywordHighlightOverlay.WindowCount);
+            Assert.Equal(0, acquired);
+            settings.OcrHighlightVisibleInCapture = false;
+            Assert.Equal(2, acquired); Assert.Equal(0, released);
+            settings.OcrHighlightVisibleInCapture = true;
+            Assert.Equal(2, released);
+            settings.OcrHighlightVisibleInCapture = false;
+            Assert.Equal(4, acquired);
+            Assert.Equal(2, KeywordHighlightOverlay.WindowCount);
+            KeywordHighlightOverlay.CloseAll();
+            Assert.Equal(4, released);
+            settings.OcrHighlightVisibleInCapture = true;
+            Assert.Equal(4, released);
+        }
+        finally
+        {
+            KeywordHighlightOverlay.CloseAll(); KeywordHighlightOverlay.Screens = screens;
+            KeywordHighlightOverlay.Configure = configure; KeywordHighlightOverlay.ExcludeFromCapture = exclude;
+            settings.KeywordHighlightEnabled = enabled; settings.OcrHighlightVisibleInCapture = visible;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task BoxesUseEachScreenScaleAndPanicClosesThem() => AvaloniaTestDispatcher.RunAsync(() =>
     {

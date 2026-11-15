@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -11,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
@@ -22,7 +24,16 @@ internal static class KeywordHighlightOverlay
         ? ScreenList.Enumerate(host).Select(s => new Target(s.Bounds, s.Scaling)).ToArray() : [];
     internal static Func<Window, PixelRect, bool> Configure = (w, b) => X11Overlay.IsCompositing &&
         X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, b);
-    private static readonly Dictionary<PixelRect, (Window Window, Canvas Canvas, IDisposable? Capture)> Windows = new();
+    private sealed class Entry(Window window, Canvas canvas)
+    {
+        internal Window Window { get; } = window;
+        internal Canvas Canvas { get; } = canvas;
+        internal IDisposable? Capture;
+    }
+    private static readonly Dictionary<PixelRect, Entry> Windows = new();
+    internal static Func<Window, IDisposable?> ExcludeFromCapture = Win32Overlay.CaptureLayer;
+    private static AppSettings? _settings;
+    private static SettingsService? _settingsService;
     internal static int WindowCount => Windows.Count;
     internal static IReadOnlyList<Canvas> Canvases => Windows.Values.Select(x => x.Canvas).ToArray();
     internal static bool IsHighlightWindow(Window window) => Windows.Values.Any(x => x.Window == window);
@@ -49,8 +60,9 @@ internal static class KeywordHighlightOverlay
                 {
                     if (!Configure(window, screen.Bounds)) { window.Close(); continue; }
                     window.Show();
-                    var capture = CoreSettings.Current.OcrHighlightVisibleInCapture ? null : Win32Overlay.CaptureLayer(window);
-                    entry = (window, canvas, capture); Windows.Add(screen.Bounds, entry);
+                    entry = new Entry(window, canvas); Windows.Add(screen.Bounds, entry);
+                    WatchSettings();
+                    RefreshCaptureVisibility();
                 }
                 catch { window.Close(); continue; }
             }
@@ -82,8 +94,50 @@ internal static class KeywordHighlightOverlay
             canvas.Children.Remove(box);
         }
     }
+    // WPF MainWindow.Awareness.cs:749-755 and KeywordHighlightService.cs:290-308.
+    // Follow all writers, including a cloud restore which replaces the settings object.
+    private static void WatchSettings()
+    {
+        if (_settings != null) return;
+        _settingsService = CoreSettings.Service;
+        if (_settingsService != null) _settingsService.CurrentReplaced += SettingsReplaced;
+        BindSettings();
+    }
+    private static void BindSettings()
+    {
+        if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
+        _settings = CoreSettings.Current;
+        _settings.PropertyChanged += SettingsChanged;
+    }
+    private static void SettingsReplaced() => OnUi(() => { if (_settings == null) return; BindSettings(); RefreshCaptureVisibility(); });
+    private static void SettingsChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(AppSettings.OcrHighlightVisibleInCapture))
+            OnUi(RefreshCaptureVisibility);
+    }
+    private static void OnUi(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) action();
+        else Dispatcher.UIThread.Post(action);
+    }
+    internal static void RefreshCaptureVisibility()
+    {
+        var visible = CoreSettings.Current.OcrHighlightVisibleInCapture;
+        foreach (var entry in Windows.Values)
+        {
+            try
+            {
+                if (visible) { entry.Capture?.Dispose(); entry.Capture = null; }
+                else if (entry.Capture == null) entry.Capture = ExcludeFromCapture(entry.Window);
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Keyword highlight capture affinity failed"); }
+        }
+    }
     internal static void CloseAll()
     {
+        if (_settings != null) _settings.PropertyChanged -= SettingsChanged;
+        if (_settingsService != null) _settingsService.CurrentReplaced -= SettingsReplaced;
+        _settings = null; _settingsService = null;
         foreach (var entry in Windows.Values) { entry.Canvas.Children.Clear(); entry.Capture?.Dispose(); entry.Window.Close(); }
         Windows.Clear();
     }
