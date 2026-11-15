@@ -290,8 +290,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning("OpenNavSection: no section {Section}", section);
                 return;
             }
-            ShowTab(section == NavSections.Settings ? "appsettings" : NavLastTabFor(section));
+            // Declutter wave 2 (WPF :584): Play's remembered tab still naming the old Games pill =
+            // this user came for the games, and the landing says where they went.
+            _playCameForGames = section == NavSections.Play
+                && NavSections.CameForGames(RememberedTab(CoreSettings.Current.NavLastTabBySection, section));
+            try { ShowTab(section == NavSections.Settings ? "appsettings" : NavLastTabFor(section)); }
+            finally { _playCameForGames = false; }
         }
+
+        /// <summary>The raw remembered tab of a section (NavLastTabFor drops old keys; this does not).</summary>
+        private static string? RememberedTab(string? json, string section) =>
+            NavStripTable.ParseLastTabs(json).TryGetValue(section, out var tab) ? tab : null;
 
         /// <summary>WPF RegisterSectionShortcuts (:589): Ctrl+1..7 jump to the rail's sections.
         /// Window KeyBindings, so they fire only while this window has focus.</summary>

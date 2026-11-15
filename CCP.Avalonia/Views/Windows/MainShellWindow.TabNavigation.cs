@@ -146,6 +146,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Array.IndexOf(SilentRedirectKeys, tab) >= 0
                 && Services.UI.NavSections.Redirects.TryGetValue(tab, out var moved)) { ShowTab(moved.Tab); return; }
             if (TryRedirectMovedTab(tab)) return;   // WPF :229, "together" -> Social > Lobby with the note
+            // Declutter wave 2 (WPF TabNavigation.cs:257): a key whose page moved to the launcher
+            // ("play", the old Games pill) opens that launcher door through the one seam and
+            // leaves the tab on screen alone, like the window keys below.
+            if (Services.UI.NavSections.LauncherDoorFor(tab) is { } launcherDoor)
+            {
+                // Refused during Lockdown: the panel stays, so the strip says where the games went.
+                if (!Services.UI.PanelDoorLink.Open(launcherDoor) && launcherDoor == Services.UI.PanelDoorLink.Games)
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(ShowGamesMovedNote);
+                return;
+            }
+            // "lab" (bark rules, tutorial steps, deep links) was the Lab page: gaze, blink,
+            // lockdown. Those live on Play > Eyes and Sessions, so it lands on Play's first pill.
+            if (tab == "lab") tab = "playeyes";
             // The dashboard's RECENT rail, at the door before the intercepts (WPF :121), so a
             // window key counts as an open like any tab (MainShellWindow.FavoritesRail.cs).
             NoteDestinationOpened(tab, deferRail: TabPanels.ContainsKey(tab));
@@ -255,15 +268,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // WPF MainWindow.TabNavigation.cs:420/457/527/534 - the door tour cards (studio-rack: :505, case "studio").
                     case "play": case "lab": case "playeyes": case "playsessions":
                         MaybeShowFeatureIntro("play-wall", "play");
-                        // WPF :550: Sessions and Eyes are places on the wall; Games scrolls back up
-                        // only when the previous pill was another zone (a plain return keeps its scroll).
-                        var zone = tab switch
-                        {
-                            "playsessions" => "sessions",
-                            "playeyes" => "eyes",
-                            _ => _tabBefore is "playsessions" or "playeyes" ? "games" : null,
-                        };
-                        if (zone != null) Named<Tabs.PlayTabView>("PlayTab")?.ScrollToZone(zone);
+                        // Declutter wave 2 (WPF :589): Eyes is the landing, so only its pill scrolls
+                        // to it; a rail door or default landing shows the page from the top.
+                        var zone = Services.UI.NavSections.PlayLandingScroll(tab, _playZoneFromPill);
+                        if (zone == "top") Named<Tabs.PlayTabView>("PlayTab")?.ScrollToTop();
+                        else if (zone != null) Named<Tabs.PlayTabView>("PlayTab")?.ScrollToZone(zone);
+                        // Someone who came for the games (Play's remembered tab was the old Games
+                        // pill) is told where it went, on the shared three-hit budget.
+                        if (_playCameForGames) global::Avalonia.Threading.Dispatcher.UIThread.Post(ShowGamesMovedNote);
                         break;
                     // WPF AwarenessTabView.Companion.cs HostCompanionPrivacy: the collapsed room's privacy card.
                     case "awareness": Named<Tabs.AwarenessTabView>("AwarenessTab")?.HostCompanionPrivacy(RoomView()); MaybeShowFeatureIntro("awareness"); break;
