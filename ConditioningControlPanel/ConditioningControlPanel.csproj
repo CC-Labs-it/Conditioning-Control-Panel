@@ -87,7 +87,7 @@
     <!-- GPU-friendly 2D renderer for the new Chaos FX particle/glow layer (ChaosSkiaFxOverlay).
          CPU SKElement path is used for now (reliable on AllowsTransparency layered windows);
          native libSkiaSharp extracts via IncludeNativeLibrariesForSelfExtract for single-file. -->
-    <PackageReference Include="SkiaSharp.Views.WPF" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.Views.WPF" Version="4.156.1" />
 
     <!-- Dynamic wallpaper (DynamicWallpaperService): Direct3D11 + Direct2D + DirectComposition bindings.
          Managed-only (no native DLLs), bundled inside the signed single-file exe like the other libs. -->
@@ -166,7 +166,7 @@
          See Services/WebcamTrackingService.cs. -->
     <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.9.0.20240103" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.32.0" />
 
     <!-- SVG rendering for color emoji (Twemoji) — WPF can't render Segoe UI Emoji
          in color, so we ship the Twemoji SVG set and render via SharpVectors.
