@@ -33,6 +33,9 @@ public sealed class MandatoryVideoSchedulerTests
         public bool ThrowOnClose;
         public readonly List<bool> FlashesAtShow = new();
         public Action<string>? OnShow;
+        public Action? PendingStart;
+        public bool DeferStart;
+        public void Show(string path, bool strict, Action started) { Show(path, strict); if (DeferStart) PendingStart = started; else started(); }
         public void Show(string path, bool strict)
         {
             FlashesAtShow.Add(CoreFlash.IsRunning);
@@ -711,6 +714,40 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.True(v.IsPlaying); Assert.Null(v.LastVideoPath); Assert.Empty(started);
         clock.Advance(MandatoryVideoScheduler.PreRoll);
         Assert.Equal(new[] { "/new.mp4" }, started); v.ForceCleanup();
+    });
+
+    [Fact]
+    public void DeferredStartDoesNotAnnounceBeforeSuccessOrAfterCleanup() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { DeferStart = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips); var starts = 0;
+        video.VideoStarted += () => starts++;
+        Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Null(video.LastVideoPath); Assert.Equal(0, starts);
+        host.PendingStart!(); Assert.Equal("/first.mp4", video.LastVideoPath); Assert.Equal(1, starts);
+        video.End(); Assert.True(video.Trigger(path: "/second.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        var stale = host.PendingStart!; video.ForceCleanup(); stale();
+        Assert.Equal("/first.mp4", video.LastVideoPath); Assert.Equal(1, starts);
+    });
+
+    [Fact]
+    public void DeferredStartKeepsVideoHapticsAndScriptStoppedUntilReady() => With(20, false, () =>
+    {
+        using var h = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
+        var old = CoreHaptics.Service; CoreHaptics.Service = h;
+        try
+        {
+            var seq = typeof(ConditioningControlPanel.Services.Haptics.FunScriptService).GetField("_loadSeq", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var before = (long)seq.GetValue(h.FunScript)!;
+            var clock = new FakeClock(); var host = new Host { DeferStart = true };
+            var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+            Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(0, h.GetLayer(HapticLayer.Video)); Assert.Equal(before, (long)seq.GetValue(h.FunScript)!);
+            host.PendingStart!();
+            Assert.True(h.GetLayer(HapticLayer.Video) > 0); Assert.True((long)seq.GetValue(h.FunScript)! > before);
+            video.ForceCleanup();
+        }
+        finally { CoreHaptics.Service = old; }
     });
 
     [Theory]

@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal sealed class LibVlcAudio
     {
-        private readonly LibVLC _vlc;
+        private LibVLC _vlc => Shared ?? throw new InvalidOperationException("LibVLC is unavailable");
         private readonly Func<string, string> _pactl = Pactl;
         private readonly TimeProvider _duckClock = TimeProvider.System;
 
@@ -63,7 +63,36 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>The process's one LibVLC, shared with video (MiniPlayerWindow), as WPF shares
         /// VideoService.SharedLibVLC. Null when libvlc did not load.</summary>
-        internal static LibVLC? Shared { get; private set; }
+        private static LibVLC? _shared;
+        internal static LibVLC? Shared { get { lock (_engineGate) return _shared; } set { lock (_engineGate) _shared = value; } }
+        private static readonly object _engineGate = new();
+        private static readonly List<LibVLC> _retired = new();
+        internal static bool IsRetired(LibVLC? engine) { lock (_engineGate) return engine != null && _retired.Any(item => ReferenceEquals(item, engine)); }
+        // WPF VideoService.cs:1139-1163, 7769-7779: never dispose a retired instance.
+        internal static void Retire(LibVLC? engine)
+        {
+            if (engine == null) return;
+            lock (_engineGate)
+            {
+                if (_retired.Any(item => ReferenceEquals(item, engine))) return;
+                _retired.Add(engine);
+                if (!ReferenceEquals(Shared, engine)) return;
+                Shared = null;
+            }
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var fresh = CreateIsolatedVideo();
+                    lock (_engineGate)
+                    {
+                        if (_retired.Any(item => ReferenceEquals(item, fresh))) throw new InvalidOperationException("Retired LibVLC returned by factory");
+                        if (Shared == null) Shared = fresh;
+                    }
+                }
+                catch (Exception ex) { Log.Warning(ex, "LibVLC shared engine replacement failed"); }
+            });
+        }
         private static string[] _sharedOptions = Array.Empty<string>();
         // WPF VideoService.cs:1139-1163 retires a poisoned engine. Bubble Count instead
         // owns an isolated engine, so a wedged game cannot poison shared audio or video.
@@ -78,9 +107,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             InitializeNative();
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             var effectiveOptions = WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray();
-            _vlc = new LibVLC(effectiveOptions);
-            if (Shared == null) { _sharedOptions = effectiveOptions; Shared = _vlc; }
-            _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
+            var vlc = new LibVLC(effectiveOptions);
+            if (Shared == null) { _sharedOptions = effectiveOptions; Shared = vlc; }
+            vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
 
         internal static void InitializeNative()
@@ -129,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
-        internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
+        internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _pactl = pactl; _journal = duckJournal; }
 
         /// <summary>Ducking only, pactl stubbed and the rescan timer on <paramref name="clock"/> (AudioDuckRescanTests).</summary>
         internal LibVlcAudio(Func<string, string> pactl, TimeProvider clock, string? duckJournal = null)

@@ -196,4 +196,61 @@ public class MandatoryVideoTeardownTests
         finally { overlay.CloseAll(); }
     });
 
+    // Uninitialized LibVLC wrappers are identity tokens only; no native method is called.
+    private static readonly System.Collections.Generic.List<LibVLCSharp.Shared.LibVLC> Tokens = new();
+    private static LibVLCSharp.Shared.LibVLC Token()
+    {
+        var token = (LibVLCSharp.Shared.LibVLC)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(LibVLCSharp.Shared.LibVLC));
+        Tokens.Add(token); return token;
+    }
+
+    [Fact]
+    public Task QuarantineRetiresSharedEngineEvenIfStopLaterReturns() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldShared = ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared;
+        var oldFactory = ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.VideoFactory;
+        var suspect = Token(); var fresh = Token(); var first = new Decoder(); var second = new Decoder();
+        var count = 0; LibVLCSharp.Shared.LibVLC? nextOwner = null;
+        var audio = new ConditioningControlPanel.Avalonia.Platform.LibVlcAudio(_ => "");
+        ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared = suspect;
+        ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.VideoFactory = _ => fresh;
+        var overlay = new MandatoryVideoOverlay(() => ++count == 1 ? first : second)
+        {
+            StopGraceMs = 50,
+            PlaybackEngineForTests = () => nextOwner = ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared
+        };
+        try
+        {
+            overlay.Show("one.mp4", false); overlay.CloseAll();
+            await WaitUntil(() => ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.IsRetired(suspect));
+            Assert.NotSame(suspect, ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared);
+            await WaitUntil(() => ReferenceEquals(fresh, ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared));
+            first.Release.Set(); await Task.Delay(100);
+            overlay.Show("two.mp4", false); await WaitUntil(() => count == 2);
+            Assert.Same(fresh, nextOwner); Assert.Same(fresh, audio.Vlc); Assert.False(first.Disposed.IsSet);
+        }
+        finally
+        {
+            first.Release.Set(); second.Release.Set(); overlay.CloseAll();
+            ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.Shared = oldShared;
+            ConditioningControlPanel.Avalonia.Platform.LibVlcAudio.VideoFactory = oldFactory;
+            BubbleCountWindow.ClearMandatoryNativePoisoningForTests();
+        }
+    });
+
+    [Fact]
+    public Task DeferredStartupExceptionCleansUpWithoutAnnouncing() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var first = new Decoder(); var attempts = 0; var announced = 0;
+        var overlay = new MandatoryVideoOverlay(() => ++attempts == 1 ? first : throw new InvalidOperationException("startup"));
+        try
+        {
+            overlay.Show("one.mp4", false); overlay.CloseAll();
+            overlay.Show("two.mp4", false, () => announced++);
+            first.Release.Set(); await WaitUntil(() => attempts == 2);
+            Assert.Equal(0, announced); Assert.False(overlay.PlaybackActive); Assert.Null(overlay._wedge);
+        }
+        finally { first.Release.Set(); overlay.CloseAll(); }
+    });
+
 }
