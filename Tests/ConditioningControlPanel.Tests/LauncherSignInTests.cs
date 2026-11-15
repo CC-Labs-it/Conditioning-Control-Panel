@@ -27,10 +27,11 @@ public class LauncherSignInTests : IDisposable
     public void Signed_out_only_the_Breakout_demo_and_chess_skip_the_account_gate()
     {
         // Chess solo is free with no account (owner, 2026-09-27); its lobby asks for a sign-in.
+        // 2026-11-15: the one Breakout card plays the demo signed out, so it skips the gate too.
         LauncherCatalogue.SignedIn = () => false;
         Assert.True(LauncherCatalogue.NeedsAccount);
         Assert.All(LauncherCatalogue.Games, g =>
-            Assert.Equal(g.Id is not ("breakoutdemo" or "piecebypiece"), g.NeedsAccount));
+            Assert.Equal(g.Id is not ("breakoutdemo" or "breakout" or "piecebypiece"), g.NeedsAccount));
     }
 
     [Fact]
