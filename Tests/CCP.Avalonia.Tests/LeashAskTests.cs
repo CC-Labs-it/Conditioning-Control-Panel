@@ -178,7 +178,10 @@ public sealed class LeashAskTests
             {
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
                 settings.PerformanceMode = false;
-                LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+                var look = Tagged<Button>(page, "leash-offer-look");
+                Assert.True(look.IsEffectivelyEnabled);
+                // Open synchronously: pumping the live beat can advance past the initial scale.
+                look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
@@ -192,6 +195,25 @@ public sealed class LeashAskTests
                 Assert.False(ask.ThudActive);
             }
             finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        Run((shell, page, _, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashAskWindow.CloseCurrent();
+            Dispatcher.UIThread.RunJobs();
+            LeashHead.Service = service;
+
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
         });
 
     [Fact]
