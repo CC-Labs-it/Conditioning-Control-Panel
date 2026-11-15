@@ -1890,7 +1890,10 @@ namespace ConditioningControlPanel.Services
                         retry.Start();
                         return;
                     }
-                    avatar.GigglePriority(line, playSound: true, aiGenerated: aiGenerated);
+                    // ccp-bugs #1620: a keyword comment is a sensing line (the screen said a word, the
+                    // player did nothing in the app), so it follows CompanionIdleVoice: the bubble
+                    // always shows, the giggle stays quiet while neither the engine nor a session runs.
+                    avatar.GigglePriority(line, playSound: true, aiGenerated: aiGenerated, unprompted: true);
 
                     // One mouth (doc 02 §5.3): a keyword comment is a third source on the arbiter's
                     // shared cooldown ledger, so an awareness quip cannot stack on top of it seconds
