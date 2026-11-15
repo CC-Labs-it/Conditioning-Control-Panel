@@ -29,8 +29,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     if (b.Popping || b.Spec is not { IsDarter: false, IsFreeze: false }
                         || !Field.Bubbles.Contains(b)) continue;
                     if (!reach.Intersects(new Rect(b.X, b.Y, b.Size, b.Size))) continue;
+                    var victimPx = CenterPx(b);
                     if (b.AmbientTrigger) Pop(b); else PopChaos(b);
                     if (_chaosPopped == null) return;
+                    if (ChaosRunHost.State?.ElectrifiedRabbits == true) EStimClick(b, free: true, origin: victimPx);
                 }
             }
         }
@@ -53,14 +55,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (trailSec <= 0) continue;
                 foreach (var b in snapshot)
                 {
-                    if (b.Popping || b.AmbientTrigger || b.Spec is not { } victim || victim.IsDarter || victim.IsFreeze
+                    if (b.Popping || b.Spec is not { } victim || victim.IsDarter || victim.IsFreeze
                         || !Field.Bubbles.Contains(b)) continue;
                     var p = CenterPx(b);
                     foreach (var dot in trail.Points)
                     {
                         double dx = p.X - dot.X, dy = p.Y - dot.Y;
                         if (dx * dx + dy * dy > TrailPopRadiusPx * TrailPopRadiusPx) continue;
-                        PopChaos(b);
+                        if (b.AmbientTrigger) Pop(b); else PopChaos(b);
                         if (_chaosPopped == null) return;
                         break;
                     }

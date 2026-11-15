@@ -693,17 +693,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static bool EscortShielded(AmbientBubble b) => IsShielded(b);
 
-        private static void EStimClick(AmbientBubble source)
+        private static DateTime _lastFreeZap;
+        private static void EStimClick(AmbientBubble source, bool free = false, Point? origin = null)
         {
-            if (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false }) return;
-            static double Dist2(AmbientBubble a, AmbientBubble b) =>
-                (a.CenterX - b.CenterX) * (a.CenterX - b.CenterX) + (a.CenterY - b.CenterY) * (a.CenterY - b.CenterY);
-            const double Reach2 = 600 * 600;
+            if (!free && (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false })) return;
+            double Dist2(AmbientBubble a, AmbientBubble b)
+            {
+                var x = free ? origin ?? CenterPx(a) : new Point(a.CenterX, a.CenterY);
+                var y = free ? CenterPx(b) : new Point(b.CenterX, b.CenterY);
+                return (x.X - y.X) * (x.X - y.X) + (x.Y - y.Y) * (x.Y - y.Y);
+            }
+            double Reach2 = free ? 620 * 620 : 600 * 600;
             const int MaxChain = 40;
-            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping && !b.AmbientTrigger &&
+            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping && (free || !b.AmbientTrigger) &&
                 b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false } && !EscortShielded(b)).ToList();
             var hits = new List<(AmbientBubble From, AmbientBubble To, int DelayMs)>();
-            if (!_estimFork)
+            if (free || !_estimFork)
             {
                 foreach (var target in pool.Where(b => Dist2(source, b) <= Reach2).OrderBy(b => Dist2(source, b)).Take(3))
                     hits.Add((source, target, 70 * (hits.Count + 1)));
@@ -728,8 +733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             }
             if (hits.Count == 0) return;
-            _estimCharges--;
-            if (_estimCharges == 0) { _estimFork = false; ChaosEStimOverlay.Disarm(); }
+            if (!free && --_estimCharges == 0) { _estimFork = false; ChaosEStimOverlay.Disarm(); }
             foreach (var hit in hits)
             {
                 var to = hit.To;
@@ -738,21 +742,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     EStimHops.Remove(hop!);
                     // WPF BubbleService.cs:4661: a held (paused) field swallows the hop.
-                    if (Field.HoldChaos || _chaosPopped == null || !Field.Bubbles.Contains(to) || to.Popping || EscortShielded(to)) return;
-                    if (to.IsLiveThreat) { if (to.Snap()) Field.ChaosDefused?.Invoke(to); }
+                    if (Field.HoldChaos || _chaosPopped == null || !Field.Bubbles.Contains(to) || to.Popping || (!free && EscortShielded(to))) return;
+                    if (to.AmbientTrigger) Pop(to); else if (free) PopChaos(to);
+                    else if (to.IsLiveThreat) { if (to.Snap()) Field.ChaosDefused?.Invoke(to); }
                     else PopChaos(to);
                     RequestFrame();
                 }, TimeSpan.FromMilliseconds(hit.DelayMs));
                 EStimHops.Add(hop);
             }
-            var bolts = hits.Select(h => (CenterPx(h.From), CenterPx(h.To))).ToList();
+            var bolts = hits.Select(h => (free ? origin ?? CenterPx(h.From) : CenterPx(h.From), CenterPx(h.To))).ToList();
             // Gentle Visuals: the Skia bolt re-jitters every frame (flicker), the overlay path fades.
             if (ChaosSkiaFxOverlay.Enabled && ConditioningControlPanel.Services.Safety.GentleVisuals.AllowFlicker)
                 ChaosSkiaFxOverlay.Strike(bolts);
             else
                 ChaosEStimOverlay.Strike(bolts.Select(b => (new PixelPoint((int)b.Item1.X, (int)b.Item1.Y),
                     new PixelPoint((int)b.Item2.X, (int)b.Item2.Y))).ToList());
-            EStimArc?.Invoke(_estimCharges);
+            if (!free) EStimArc?.Invoke(_estimCharges);
+            else if ((DateTime.UtcNow - _lastFreeZap).TotalMilliseconds >= 140)
+            { _lastFreeZap = DateTime.UtcNow; PlayChaosCue("estim_zap", 0.45f); }
         }
 
         /// <summary>WPF SpawnChaosBubble (FloatUp, RainDown, Chaperone roaming). Without an overlay window (headless, or a

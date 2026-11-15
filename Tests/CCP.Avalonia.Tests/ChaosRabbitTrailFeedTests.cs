@@ -65,6 +65,18 @@ public class ChaosRabbitTrailFeedTests
             Assert.True(treat.Popping); Assert.True(live.Popping); Assert.False(far.Popping);
             Assert.False(otherRabbit.Popping); Assert.False(freeze.Popping);
             Assert.Equal(1, treats); Assert.Equal(1, snaps);
+            var flags = new[] { "_running", "_chaosOpenedWindows", "_oneShotWindows" }.Select(n => typeof(BubbleOverlay).GetField(n, BindingFlags.NonPublic | BindingFlags.Static)!).ToArray();
+            var flagValues = flags.Select(f => f.GetValue(null)).ToArray(); var settings = ConditioningControlPanel.CoreSettings.Current;
+            var xp = (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday); var oldFreeze = ConditioningControlPanel.CoreSubliminal.BambiFreezeProvider; int payloads = 0;
+            try {
+                flags[0].SetValue(null, true); flags[1].SetValue(null, false); flags[2].SetValue(null, false);
+                settings.AmbientBubbleXpPaidToday = 0; ConditioningControlPanel.CoreSubliminal.BambiFreezeProvider = () => payloads++;
+                var ambient = Add(80, new EffectBubbleSpec { Payload = new BambiFreezePayload() }); ambient.AmbientTrigger = true;
+                BubbleOverlay.TickChaosTrails(); Assert.True(ambient.Popping); Assert.Equal(1, payloads); Assert.True(settings.AmbientBubbleXpPaidToday > 0);
+            } finally {
+                ConditioningControlPanel.CoreSubliminal.BambiFreezeProvider = oldFreeze; (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday) = xp;
+                for (int i = 0; i < flags.Length; i++) flags[i].SetValue(null, flagValues[i]);
+            }
             t = t.AddSeconds(2.01);
             BubbleOverlay.TickChaosTrails();
             Assert.Empty(BubbleOverlay.ChaosTrails[rabbit].Points);
