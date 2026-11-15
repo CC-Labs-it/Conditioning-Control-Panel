@@ -37,6 +37,7 @@ public sealed class BrowserInitialHomeTests
             var oldSettings = CoreSettings.ServiceProvider;
             var settings = new SettingsService();
             CoreSettings.ServiceProvider = () => settings;
+            var oldOfflineMode = settings.Current.OfflineMode;
             settings.Current.OfflineMode = false;
             settings.Current.ActiveModId = BuiltInMods.CCPDefaultId;
             AvApp.StartMods();
@@ -58,12 +59,37 @@ public sealed class BrowserInitialHomeTests
                 shell?.Close();
                 Dispatcher.UIThread.RunJobs();
                 manifest.Browser = oldBrowser;
+                settings.Current.OfflineMode = oldOfflineMode;
                 settings.SaveImmediate();
                 settings.SealForReset();
                 CoreSettings.ServiceProvider = oldSettings;
                 AvApp.ResetReleaseContent();
             }
         });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CleanupRestoresPersistedOfflineMode(bool callbackFails)
+    {
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            var settings = new SettingsService();
+            settings.Current.OfflineMode = false;
+            settings.SaveImmediate();
+            async Task Exercise() => await RunAsync((shell, page, host, mod) =>
+            {
+                CoreSettings.Current.OfflineMode = true;
+                if (callbackFails) throw new InvalidOperationException("expected");
+                return Task.CompletedTask;
+            });
+            if (callbackFails) await Assert.ThrowsAsync<InvalidOperationException>(Exercise);
+            else await Exercise();
+            Assert.False(new SettingsService().Current.OfflineMode);
+        }
+        finally { snapshot.Restore(); }
+    }
 
     [Fact]
     public Task AdapterReadyBeforeFirstPageCompletesMakesNextLinkHalf() => Run((shell, page, host, mod) =>
