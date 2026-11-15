@@ -111,22 +111,28 @@ public class ScreenOcrCoreEngineTests
         Assert.Equal(bounds, engine.Frame.ScreenBounds);
     }
 
-    [Theory, InlineData("en-US"), InlineData("ja-JP"), InlineData("ru-RU"), InlineData("zh-Hans-CN")]
-    public async Task InstalledWindowsProfileUsesProfileEngine(string profile)
+    [Theory, InlineData("en-US"), InlineData("ja-JP")]
+    public void InstalledWindowsProfileSelectsWindowsEngine(string tag)
     {
-        var profileEngine = new FakeEngine { Text = "こんにちは" };
-        using var service = new ScreenOcrService(ScreenOcrEngineSelection.Create(() => string.IsNullOrEmpty(profile) ? null : profileEngine));
-        var (text, words) = await service.DecodeAndRecognizeAsync(new Bitmap(20, 10, PixelFormat.Format32bppArgb),
-            new Rectangle(-100, 200, 20, 10), null);
-        Assert.Equal("こんにちは", text);
-        Assert.Equal(new Rectangle(-97, 204, 5, 6), Assert.Single(words!).ScreenRect);
-        Assert.NotNull(profileEngine.Frame);
+        var language = new Windows.Globalization.Language(tag);
+        if (!Windows.Media.Ocr.OcrEngine.IsLanguageSupported(language))
+        {
+            if (tag == "ja-JP") Assert.NotEqual("1", Environment.GetEnvironmentVariable("CCP_REQUIRE_JAPANESE_OCR"));
+            Assert.Skip($"{tag} Windows OCR language is not installed.");
+            return;
+        }
+        var native = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(language);
+        Assert.NotNull(native);
+        using var engine = ScreenOcrService.CreateEngine(() => native);
+        var windows = Assert.IsType<WindowsProfileOcrEngine>(engine);
+        Assert.Same(native, typeof(WindowsProfileOcrEngine).GetField("_engine", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(windows));
+        Assert.True(windows.IsAvailable);
     }
 
     [Theory, InlineData(false), InlineData(true)]
     public void MissingOrFailedWindowsProfileLeavesScanningUnavailable(bool throws)
     {
-        using var service = new ScreenOcrService(ScreenOcrEngineSelection.Create(() => throws ? throw new InvalidOperationException() : null));
+        using var service = new ScreenOcrService(ScreenOcrService.CreateEngine(() => throws ? throw new InvalidOperationException() : null));
         Assert.False(service.IsOcrAvailable);
         service.Start();
         Assert.Null(typeof(ScreenOcrService).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service));
@@ -144,7 +150,7 @@ public class ScreenOcrCoreEngineTests
         }
         var native = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(language);
         Assert.NotNull(native);
-        using var service = new ScreenOcrService(new WindowsProfileOcrEngine(native!));
+        using var service = new ScreenOcrService(ScreenOcrService.CreateEngine(() => native));
         var bitmap = new Bitmap(500, 160, PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap))
         using (var font = new Font("Yu Gothic", 64, FontStyle.Bold))

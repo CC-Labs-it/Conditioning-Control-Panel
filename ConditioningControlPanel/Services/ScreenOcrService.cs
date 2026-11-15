@@ -35,13 +35,14 @@ namespace ConditioningControlPanel.Services
         /// <summary>True when the Windows OCR engine is usable.</summary>
         internal bool IsOcrAvailable => _ocrEngine?.IsAvailable == true;
 
-        public ScreenOcrService() : this(CreateEngine()) { }
+        public ScreenOcrService() : this(CreateEngine(Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages)) { }
 
-        private static IScreenOcrEngine? CreateEngine() => ScreenOcrEngineSelection.Create(() =>
-        {
-            var windows = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
-            return windows == null ? null : new WindowsProfileOcrEngine(windows);
-        });
+        internal static IScreenOcrEngine? CreateEngine(Func<Windows.Media.Ocr.OcrEngine?> tryCreateProfile) =>
+            ScreenOcrEngineSelection.Create(() =>
+            {
+                var windows = tryCreateProfile();
+                return windows == null ? null : new WindowsProfileOcrEngine(windows);
+            });
 
         internal ScreenOcrService(IScreenOcrEngine? engine)
         {
