@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// must stay clean, and a live attention target must never sit under the dark.
 /// Set CCP_LIGHTSDOWN_SHOT to a folder to also save the frame as a PNG for a look by eye.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class LightsDownOverlayRenderTests
 {
     private const int W = 1920, H = 1080;
