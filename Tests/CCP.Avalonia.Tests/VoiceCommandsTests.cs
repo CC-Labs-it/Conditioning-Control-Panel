@@ -177,9 +177,10 @@ public sealed class VoiceCommandsTests
     public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
         var s = CoreSettings.Current;
+        var savedPanicKeyEnabled = s.PanicKeyEnabled;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
-        using var ld = LockdownService.Current = new LockdownService();
+        var ld = LockdownService.Current = new LockdownService();
         try
         {
             Assert.True(shell.SetAutonomyEnabled(true));
@@ -208,12 +209,35 @@ public sealed class VoiceCommandsTests
         }
         finally
         {
-            shell.Autonomy.Stop();
-            LockdownService.Current = null;
-            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+            try { ld.Dispose(); }
+            finally
+            {
+                s.PanicKeyEnabled = savedPanicKeyEnabled;
+                LockdownService.Current = null;
+                (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+                shell.Autonomy.Stop();
+            }
         }
         await Task.CompletedTask;
     }, withoutVoiceCapture: true);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SpokenSafeWordTestRestoresPanicKeySetting(bool initial) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            AmbientBeatLoopsTests.Setup();
+            var settings = CoreSettings.Current;
+            var saved = settings.PanicKeyEnabled;
+            try
+            {
+                settings.PanicKeyEnabled = initial;
+                await TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown();
+                Assert.Equal(initial, settings.PanicKeyEnabled);
+            }
+            finally { settings.PanicKeyEnabled = saved; }
+        });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
     /// ships mantras; the WAV says the phrase, so it matches, credits 30 XP and paints the verdict.</summary>
