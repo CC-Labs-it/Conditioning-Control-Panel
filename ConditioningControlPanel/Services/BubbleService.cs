@@ -510,6 +510,7 @@ public partial class BubbleService : IDisposable
             _spawnQueue.Dequeue()();
 
         StepBlooms();   // Super Inner Bloom: release kids whose bloom has finished squeezing
+        StepFroth();    // Super Froth: merge, pool, nudge, chained pops (one bool when the star is off)
 
         // NOTE: a freeze does NOT skip this loop — bubbles must keep rendering so the freeze aura
         // pulses, the shudder plays, and any in-flight pop finishes. Each bubble holds its own
@@ -1069,6 +1070,7 @@ public partial class BubbleService : IDisposable
         if (bubble.IsBloomKid) PopBloomKidQuietly(bubble);
         else AwardAmbientPop(bubble);
         OnBloomPopped(bubble);
+        OnFrothPopped(bubble);   // Super Froth: the parts it took in, then its ring
     }
 
     /// <summary>Natasha's favourite: about one ambient bubble in ten wears red, and only while
@@ -1299,9 +1301,10 @@ public partial class BubbleService : IDisposable
         if (spec != null
             && _bubbles.Count(b => b.IsAmbientTriggerBubble || b.IsAmbientEffectBubble) >= MAX_TRIGGER_WINDOWS)
             spec = null;
+        // Super Froth took the bubbles' star from Inner Bloom (owner, 2026-11-15): no bloom is
+        // started here any more. The bloom code is parked in BubbleService.InnerBloom.cs.
         if (spec == null)
-            return TryCreateBloom(screen, isClickable)
-                ?? new Bubble(screen, _bubbleImage, _random, OnPop, OnMiss, OnDestroy, isClickable,
+            return new Bubble(screen, _bubbleImage, _random, OnPop, OnMiss, OnDestroy, isClickable,
                               ambientMotion: AmbientBubbleMotion.RollForSpawn(_random));
         // Trigger bubbles ride the shared ambient host like plain bubbles (hook-based pops via the
         // UsesHost/HostHitClickable snapshots). forceWindowMode was a relic of the host being
@@ -1318,6 +1321,7 @@ public partial class BubbleService : IDisposable
                           {
                               AwardAmbientPop(b);
                               FireAmbientPayload(b);
+                              OnFrothPopped(b);   // Super Froth: the parts it took in, then its ring
                           },
                           forceWindowMode: !hostUp, ambientTrigger: true);
     }
@@ -1338,9 +1342,10 @@ public partial class BubbleService : IDisposable
     /// keeps the avatar egg away from exactly these two kinds (#628) - but the user's own click
     /// reached the same Fire() unguarded.
     /// </summary>
-    private void FireAmbientPayload(Bubble b)
+    private void FireAmbientPayload(Bubble b) => FireAmbientPayload(b.Spec?.Payload);
+
+    private void FireAmbientPayload(EffectPayload? payload)
     {
-        var payload = b.Spec?.Payload;
         if (payload == null) return;
 
         var heavy = payload.Kind is EffectBubblePayloadKind.Video or EffectBubblePayloadKind.HtLink;
@@ -2362,6 +2367,7 @@ public partial class BubbleService : IDisposable
     {
         Stop();
         UnhookBlooms();
+        UnhookFroth();
 
         // Close pooled bubble window shells (static pool holds hidden HWNDs for the process life).
         try { DispatcherHelper.RunOnUI(Bubble.DrainWindowPool); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -2374,7 +2380,7 @@ public partial class BubbleService : IDisposable
 /// <summary>
 /// Individual bubble that floats upward and can be popped
 /// </summary>
-internal class Bubble
+internal partial class Bubble
 {
     // Bubble windows are POOLED, not created/closed per bubble. Each bubble used to be its own
     // AllowsTransparency layered Window that was Close()d on death; chaos spawns several per
@@ -3164,10 +3170,10 @@ internal class Bubble
 
     /// <summary>Hit disc in PHYSICAL px (centre + radius) for the immutable hook-thread snapshot.</summary>
     internal (double X, double Y, double R) HitDiscPx =>
-        ((_posX + _size / 2.0) * _dpiScale, (_posY + _size / 2.0) * _dpiScale, _hitSize / 2.0 * _dpiScale);
+        ((_posX + _size / 2.0) * _dpiScale, (_posY + _size / 2.0) * _dpiScale, _hitSize / 2.0 * _dpiScale * _frothShown);
 
     /// <summary>True if a PHYSICAL-px point lands inside this bubble's hitbox.</summary>
-    internal bool ContainsPx(Point px) => DistDipSqToPx(px.X, px.Y) <= (_hitSize / 2.0) * (_hitSize / 2.0);
+    internal bool ContainsPx(Point px) => DistDipSqToPx(px.X, px.Y) <= (_hitSize / 2.0 * _frothShown) * (_hitSize / 2.0 * _frothShown);
 
     /// <summary>Pop this bubble from a shared-host hook click (UI thread) — routes exactly like a
     /// real press (tease/brittle/channel/benign all handled by OnPlayerPress).</summary>
@@ -3267,6 +3273,7 @@ internal class Bubble
         it.HoldRing = _isResisting && !_isPopping ? (float)_resistProgress : 0f;
         it.Bloom = _bloom;
         it.HideBody = _bloomHidden;
+        if (_frothTouched) SyncFrothItem(it);   // Super Froth: size, wobble, rim, picture clock
 
         if (_fuseRing != null)
         {
@@ -4243,13 +4250,13 @@ internal class Bubble
             else switch (motion)
             {
                 case ChaosMotion.RainDown:
-                    _posY += _speed * ts;
+                    _posY += _speed * ts * _frothDrift;
                     _posX = _startX + offset;
                     if (_posY > _screenBottom) exited = true;
                     break;
                 case ChaosMotion.RoamBounce:
-                    _posX += _vx * ts;
-                    _posY += _vy * ts;
+                    _posX += _vx * ts * _frothDrift;
+                    _posY += _vy * ts * _frothDrift;
                     if (_posX < _screenLeft) { _posX = _screenLeft; _vx = Math.Abs(_vx); }
                     else if (_posX > _screenRight) { _posX = _screenRight; _vx = -Math.Abs(_vx); }
                     double topB = _screenTop + _size + 50, botB = _screenBottom - _size - 50;
@@ -4257,12 +4264,12 @@ internal class Bubble
                     else if (_posY > botB) { _posY = botB; _vy = -Math.Abs(_vy); }
                     break;
                 case ChaosMotion.SideDrift:
-                    _posX += _vx * ts;
+                    _posX += _vx * ts * _frothDrift;
                     _posY = _startY + offset;   // the Float/Rain wobble reads vertical here
                     if (_vx > 0 ? _posX > _screenRight + _size : _posX < _screenLeft - _size) exited = true;
                     break;
                 default: // FloatUp
-                    _posY -= _speed * ts;
+                    _posY -= _speed * ts * _frothDrift;
                     _posX = _startX + offset;
                     if (_posY < _screenTop) exited = true;
                     break;
@@ -5364,7 +5371,7 @@ internal class Bubble
         if (_spec?.Payload is not FlashPayload flash || _bubbleFaceImg?.Source == null) return;
         flash.ImagePath = _flashFacePath;
         flash.OriginPx = CenterPx;
-        flash.FaceDiameterPx = FaceDiameter * _dpiScale;
+        flash.FaceDiameterPx = FaceDiameter * _dpiScale * _frothShown;
     }
 
     private void BuildBubbleFace(string? path)
