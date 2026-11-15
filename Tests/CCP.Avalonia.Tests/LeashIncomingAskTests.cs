@@ -10,6 +10,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel.Services.UI;
@@ -70,6 +71,44 @@ public sealed class LeashIncomingAskTests
                 LeashAskWindow.CloseCurrent();
                 Dispatcher.UIThread.RunJobs();
             }
+        });
+
+    [Fact]
+    public void TwoShellsDoNotRequeueAnOfferAlreadyShownByAnotherShell() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var seen = new List<string>();
+            var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me", reportSeen: seen.Add);
+            LeashHead.Service = svc;
+            shell.RebindLeashAsks();
+            var other = new MainShellWindow();
+            bool otherClosed = false;
+            other.Closed += (_, _) => otherClosed = true;
+            other.RebindLeashAsks();
+            try
+            {
+                launcher.Show();
+                svc.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                var first = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", first.Card.Tag);
+                first.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                var second = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:vex", second.Card.Tag);
+                second.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+                Assert.Equal(new[] { First, Second }, seen);
+            }
+            finally
+            {
+                other.Close();
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(otherClosed);
         });
 
     [Fact]
