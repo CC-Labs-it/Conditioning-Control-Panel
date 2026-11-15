@@ -39,8 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static readonly List<InboxItem> _held = new();
         private static ITimer? _passiveTimer;
         private static readonly StartupQueueCore _modalQueue = new();
-        private static readonly Dictionary<string, (Func<Task> Show, Action? Abandoned)> _modalShows = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, (Func<Task> Show, Action? Abandoned, int Generation)> _modalShows = new(StringComparer.OrdinalIgnoreCase);
         private static bool _modalPumpRunning, _modalUp;
+        private static int _modalGeneration;
         private static CancellationTokenSource _modalCancellation = new();
         internal static Func<bool> ModalWindowReady = () => Views.Windows.MainShellWindow.Current?.IsVisible == true;
         internal static readonly TimeSpan ModalSettle = TimeSpan.FromMilliseconds(750);
@@ -57,11 +58,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return;
             }
             if (!_modalQueue.Enqueue(key, priority)) return;
-            _modalShows[key] = (show, onAbandoned);
+            _modalShows[key] = (show, onAbandoned, ++_modalGeneration);
             if (_modalPumpRunning) return;
             _modalPumpRunning = true;
             var token = _modalCancellation.Token;
             Dispatcher.UIThread.Post(() => _ = PumpModalsAsync(token), DispatcherPriority.Normal);
+        }
+
+        /// <summary>Drop an owed modal without showing it or running its abandonment callback.</summary>
+        internal static void CancelModal(string key)
+        {
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                Dispatcher.UIThread.Post(() => CancelModal(key));
+                return;
+            }
+            _modalQueue.Remove(key);
+            _modalShows.Remove(key);
         }
 
         private static bool CanStartModal() => StartupQueueCore.CanStartModal(
@@ -77,14 +90,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     var next = _modalQueue.Next();
                     if (next == null) break;
                     var key = next.Value.Key;
+                    if (!_modalShows.TryGetValue(key, out var selected)) continue;
+                    bool StillSelected() => _modalShows.TryGetValue(key, out var current) && current.Generation == selected.Generation;
                     await Task.Delay(ModalSettle, Time, token);
                     var waited = TimeSpan.Zero;
-                    while (!CanStartModal() && waited < ModalMaxWait)
+                    while (StillSelected() && !CanStartModal() && waited < ModalMaxWait)
                     {
                         await Task.Delay(ModalPoll, Time, token);
                         if (!StartupQueueCore.IsParked(World(UtcNow))) waited += ModalPoll;
                     }
-                    _modalQueue.Remove(key);
+                    if (!StillSelected() || !_modalQueue.Remove(key)) continue;
                     if (!_modalShows.Remove(key, out var surface)) continue;
                     if (!CanStartModal())
                     {
