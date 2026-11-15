@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -61,5 +63,15 @@ public sealed class AmbientBubbleEggTests
         var b = Bubble(variant); var roll = new Roll(0);
         for (int i = 0; i < 126; i++) b.Step();
         Assert.False(b.TryClaimForAvatar(roll, DateTime.UtcNow.AddSeconds(5))); Assert.Equal(0, roll.Calls);
+    }
+
+    [Fact]
+    public void AvatarPopFallbackHasAnEntryInEachLanguage()
+    {
+        var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages"), "*.json");
+        Assert.Equal(10, files.Length);
+        foreach (var file in files)
+            Assert.False(string.IsNullOrWhiteSpace(JObject.Parse(File.ReadAllText(file))["bubble_avatar_pop_fallback"]?.Value<string>()),
+                Path.GetFileName(file));
     }
 }

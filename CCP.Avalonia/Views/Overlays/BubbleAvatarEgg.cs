@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -75,7 +76,7 @@ internal sealed class BubbleAvatarEgg
                 _ => "egg_avatar_pop_generic"
             };
             var line = _pick(rule) ?? (rule == "egg_avatar_pop_generic" ? null : _pick("egg_avatar_pop_generic"))
-                ?? ("Ooh, let me pop this one for you~", (string?)null);
+                ?? (Loc.Get("bubble_avatar_pop_fallback"), (string?)null);
             double? seconds = line.Item2 != null ? await _duration(line.Item2).WaitAsync(ct) : null;
             ct.ThrowIfCancellationRequested();
             if (!_bubbles.Contains(b) || b.Popping) return;
