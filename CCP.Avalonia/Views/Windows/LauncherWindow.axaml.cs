@@ -36,6 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                               panel => panel.ShowTab("gradedintake")),
                 // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // Declutter 2026-11-15: ONE Breakout card, the full game for whoever holds it and the demo for
+                // everyone else (LaunchIdFor); never locked, never an account ask.
+                ["breakout"] = (() => false, _ => Games.GameWindow.Launch(LaunchIdFor("breakout"))),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
@@ -43,13 +46,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ["raceclassic"] = (() => !ConditioningControlPanel.Services.Race.RacingAccess.CanLaunch, _ => Games.GameWindow.Launch("raceclassic")),
                 // WPF LauncherCatalogue :241: Basic (or the daily-free drop); GameWindow.Launch runs DemandPremium.
                 [Games.GameWindow.DtrhId] = (Games.GameWindow.DtrhLocked, _ => Games.GameWindow.Launch(Games.GameWindow.DtrhId)),
+                // The Tools door (WPF LauncherCatalogue.BuildTools): two panel tabs, the Mod Manager, two windows.
+                ["deepereditor"] = (() => false, panel => panel.ShowTab("deeper")),
+                ["sessioneditor"] = (() => false, panel => panel.ShowTab("presets")),
+                ["modcreator"] = (() => false, panel => panel.OpenModManagerFromLauncher()),
+                [Games.GameWindow.JustDropId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.JustDropId)),
+                ["loom"] = (() => false, _ => Games.GameWindow.Launch("loom")),
             };
+
+        /// <summary>The window a card opens: the one Breakout card plays the full game when the account holds
+        /// it, else the free demo (WPF: <c>FullAllowed ? LaunchFull() : LaunchDemo()</c>), so it never refuses.</summary>
+        internal static string LaunchIdFor(string id) =>
+            string.Equals(id, "breakout", StringComparison.OrdinalIgnoreCase) && !BreakoutFull() ? "breakoutdemo" : id;
+
+        /// <summary>A gate that cannot be read (no account, no tier) plays the demo, never a refusal.</summary>
+        private static bool BreakoutFull()
+        {
+            try
+            {
+                return Games.GameWindow.Games.ContainsKey("breakout") && CoreAccount.IsLoggedIn
+                    && ConditioningControlPanel.Services.TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+            }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] breakout gate probe failed"); return false; }
+        }
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>
         internal static bool CanStartGame(string id) => Destinations.ContainsKey(id);
 
         internal static IEnumerable<LauncherCard> VisibleCards => LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id));
+
+        /// <summary>Every card this head can open, behind either door (WPF LauncherCatalogue.All.Where(Available)).</summary>
+        internal static IEnumerable<LauncherCard> OpenableCards => LauncherCards.Every.Where(Available);
 
         /// <summary>WPF LauncherEntry.IsRevealed: no card on this head has a reveal probe (null = always revealed).
         /// Since 7.2 the race tile wears the Prime padlock instead of a mystery face (LauncherCatalogue.cs:238).</summary>
@@ -74,6 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public LauncherWindow()
         {
             InitializeComponent();
+            // A page swap shows the scroller with no layout yet: seat the tiles once it has a height.
+            GamesScroller.SizeChanged += (_, _) => SeatGrid();
             AddHandler(DragDrop.DragOverEvent, Launcher_DragOver);
             AddHandler(DragDrop.DropEvent, Launcher_Drop);
             GamesColumn.SizeChanged += (_, _) => SeatGrid();
@@ -114,6 +144,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                // The panel asked for a door (ShowDoor): open on its page; the doors play their entrance.
+                if (TakePendingDoor() is { } asked) _door = asked;
+                _doorsEnter = true;
                 BuildTiles();
                 StartEntrance();
                 RefreshAccount();
@@ -132,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static LauncherWindow Open()
         {
             var w = _window ??= new LauncherWindow();
+            if (!w.IsVisible && PeekPendingDoor() is { } asked) w._door = asked;
             w.BuildTiles();
             w.SkipToPanel.IsChecked = CoreSettings.Current.LauncherSkipToPanel;
             if (!w.IsVisible) w.Show();
@@ -544,8 +578,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var now = LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id))
-                    .Select(c => new KeyValuePair<string, bool>(c.Id, Revealed(c.Id)));
+                var now = OpenableCards.Select(c => new KeyValuePair<string, bool>(c.Id, Revealed(c.Id)));
                 if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
                 Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
                 BuildTiles();
@@ -606,7 +639,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool Play(LauncherCard card)
         {
             if (!Destinations.TryGetValue(card.Id, out var dest)) return false;
-            bool game = Games.GameWindow.Games.ContainsKey(card.Id);
+            var launchId = LaunchIdFor(card.Id);
+            bool game = Games.GameWindow.Games.ContainsKey(launchId);
             bool needsAccount = card.RequiresAccount && !CoreAccount.IsLoggedIn;
             // A panel tab that is locked still opens (its own gate paints the refusal), as WPF's does; a
             // game's gate runs in GameWindow.Launch. A pending leash punishment sends the tile to the gate
@@ -625,8 +659,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 OpenPanel(p => p.PresentLeashGateFromLauncher());
                 return true;
             }
-            if (game) return LaunchGameWindow(card.Id);
+            if (game)
+            {
+                if (!LaunchGameWindow(launchId)) return false;
+                NoteLaunched(card);
+                return true;
+            }
             OpenPanel(dest.Open);
+            NoteLaunched(card);
             return true;
         }
 
@@ -689,9 +729,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             GamesGrid.Children.Clear();
             _artDrifts.Clear();
             _revealedAtBuild.Clear();
-            foreach (var card in LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id)))
+            // The reveal record covers every card, shown or not, so a change behind a closed door still
+            // repaints the page when it next opens.
+            foreach (var card in OpenableCards)
                 _revealedAtBuild[card.Id] = Revealed(card.Id);
-            foreach (var card in VisibleCards) GamesGrid.Children.Add(CreateTile(card));
+            // Only the open door's page is tiled; the doors themselves leave the grid empty.
+            foreach (var card in PageCards()) GamesGrid.Children.Add(CreateTile(card));
+            ApplyDoorView();
             SeatGrid();   // the wander timer keeps running and picks from the new tiles; the CTA sheen is untouched
         }
 
@@ -775,7 +819,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             IImage? art = ModArt.TryLoad(card.ArtPath, 640);
             art ??= card.Id switch
             {
-                "breakoutdemo" => BreakoutCardArt.Demo,
+                "breakoutdemo" or "breakout" => BreakoutCardArt.Demo,
                 _ => null,
             };
             if (art != null)
@@ -809,7 +853,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 new SolidColorBrush(Color.FromRgb(0x2A, 0x1C, 0x08)), 10));
             if (card.IsNew) plate.Children.Add(Pill("exclusives_badge_new", null, Res("AccentGradientBrush"), Brushes.White,
                 needsAccount || locked ? 40 : 10));
-            plate.Children.Add(ShortcutButton(tile, card.Id));
+            if (LauncherDoorRules.OffersShortcut(card.Door)) plate.Children.Add(ShortcutButton(tile, card.Id));
             body.Children.Add(plate);
 
             // --- title, blurb, play: fixed heights so every title sits on the same line ---

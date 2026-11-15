@@ -160,6 +160,8 @@ public sealed class PerimeterCometHostTests
         try
         {
             w.Show(); Settle(w);
+            // Declutter: the launcher opens on its doors; the tiles live behind the Games door.
+            w.SeatDoorPage(global::ConditioningControlPanel.Services.Launcher.LauncherDoor.Games); Settle(w);
             var tiles = w.FindControl<UniformGrid>("GamesGrid")!.Children.OfType<Border>().ToArray();
             Assert.True(tiles.Length >= 2);
             Point At(Border b) => b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
