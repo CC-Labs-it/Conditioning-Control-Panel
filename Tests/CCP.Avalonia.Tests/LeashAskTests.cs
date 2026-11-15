@@ -62,6 +62,7 @@ public sealed class LeashAskTests
                     } },
                 });
                 LeashHead.Service = svc;
+                shell.RebindLeashAsks(); // Bind the replacement before the page can open its offer.
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
                 var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
                 var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
@@ -182,10 +183,14 @@ public sealed class LeashAskTests
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
-                Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
+                Assert.Equal(scale?.ScaleX ?? 1, scale?.ScaleY ?? 1, 6);
+                ask.AdvanceThud(340); // Stop the real beat before stepping the curve.
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
+                ask.AdvanceThud(170);
+                var midpoint = 1 + (start - 1) * (1 - ConditioningControlPanel.Services.Billboard.BillboardTiming.Thud(0.5));
+                Assert.Equal(midpoint, scale?.ScaleX ?? 1, 3);
                 ask.AdvanceThud(340);
                 Assert.Equal(1, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
@@ -212,12 +217,13 @@ public sealed class LeashAskTests
         });
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
-        Run((_, page, wire, _) =>
+        Run((shell, page, wire, _) =>
         {
             wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
             Assert.False(card.PutItOnButton.IsEnabled);
+            shell.RebindLeashAsks();
             LeashGateCardTests.Click(Tagged<Button>(card, "leash-ask-no"));
             Assert.False((bool?)wire.Calls.Last().Body["accept"]);
             Assert.Null(LeashAskWindow.Current);
