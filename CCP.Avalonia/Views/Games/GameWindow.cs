@@ -212,10 +212,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
                 PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnDtrhWindowStateChanged(); };
             }
-            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
+            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); if (Spec.Id == "arcademy") StartArcademyWatch(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); StopArcademyWatch(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
