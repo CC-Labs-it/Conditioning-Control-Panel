@@ -59,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (rabbit.Spec is not { IsDarter: true } spec || rabbit.AmbientTrigger) continue;
                 if (!ChaosTrails.TryGetValue(rabbit, out var trail)) ChaosTrails[rabbit] = trail = new();
                 var center = CenterPx(rabbit);
-                var direction = trail.Step(center.X, center.Y, ScaleFor(rabbit), trailSec,
+                var direction = rabbit.Popping ? null : trail.Step(center.X, center.Y, ScaleFor(rabbit), trailSec,
                     spec.IsSweeper, rabbit.DarterTelegraphing, rabbit.Popping, ChaosSkiaFxOverlay.Enabled, Field.Clock());
                 double life = spec.IsSweeper ? Math.Max(0.5, trailSec) : trailSec;
                 if (direction is { } d && ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(center, life, spec.IsSweeper, d.X, d.Y);

@@ -122,20 +122,20 @@ public class ChaosRabbitTrailFeedTests
             Assert.False(sweeper.Popping); Assert.True(sweeper.Spanked); Assert.Null(ChaosSkiaFxOverlay.Active);
             sweeper.Step(); Assert.True(sweeper.DrawScale > 1.25); // click delivered the smack
             state.RabbitRateMult = 1000; state.RabbitTrailSec = 2; BubbleOverlay.Field.Bubbles.Clear();
-            ChaosRunHost.SpawnTick(); Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
-            cfg.DartersEnabled = true; ChaosRunHost.SpawnTick();
+            ChaosRunHost.SpawnTick(); Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true); cfg.DartersEnabled = true; ChaosRunHost.SpawnTick();
             var rabbit = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true));
             Assert.Equal(ChaosMotion.RoamBounce, rabbit.TriggerMotion); rabbit.X = 500; rabbit.Y = 500;
             for (int i = 0; i < 25; i++) BubbleOverlay.StepChaosField();
             Assert.True(BubbleOverlay.ChaosTrails[rabbit].Points.Count >= 2);
-            state.Focus = 0; state.SlowMoBonusSec = 2; ChaosSkiaFxOverlay.CloseActive();
-            double score = state.Score, multiplier = state.TotalMult, heat = state.Heat; int combo = state.Combo;
+            state.Focus = 0; state.SlowMoBonusSec = 2; ChaosSkiaFxOverlay.CloseActive(); double score = state.Score, multiplier = state.TotalMult, heat = state.Heat; int combo = state.Combo;
             BubbleOverlay.Press(rabbit, rabbit.CenterX, rabbit.CenterY); Assert.True(rabbit.Popping); Assert.InRange(burstAtCatch, 20, 24);
             Assert.Equal(score + 210 * multiplier, state.Score, 6); var center = BubbleOverlay.CenterPx(rabbit); using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(100, 100)); surface.Canvas.Clear(SkiaSharp.SKColors.Transparent);
             Assert.Equal(15, state.Focus); Assert.Equal(combo + 1, state.Combo); Assert.Equal(Math.Min(1, heat + 0.05), state.Heat, 6); ChaosSkiaFxOverlay.RenderMonitor(surface.Canvas, ChaosSkiaFxOverlay.Active!.Fx, new PixelRect((int)center.X - 50, (int)center.Y - 50, 100, 100), new Size(100, 100));
             Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_quick"), state.RecentEvents); using var snapshot = surface.Snapshot(); using var burst = SkiaSharp.SKBitmap.FromImage(snapshot); Assert.True(burst.GetPixel(50, 50).Alpha > 0); Assert.True(burst.GetPixel(70, 50).Red > burst.GetPixel(70, 50).Green);
-            Assert.Equal(6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
-            Assert.Equal(ChaosRunHost.SlowMoFactor, BubbleOverlay.Field.ChaosTimeScale); Assert.Contains("rabbit_catch", cues);
+            Assert.Equal(6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6); Assert.Equal(ChaosRunHost.SlowMoFactor, BubbleOverlay.Field.ChaosTimeScale); Assert.Contains("rabbit_catch", cues);
+            var recorded = BubbleOverlay.ChaosTrails[rabbit].Points.ToArray(); var point = recorded[0]; double scale = BubbleOverlay.ScaleFor(rabbit); var trailTreat = new AmbientBubble { Screen = rabbit.Screen, X = point.X / scale - 10, Y = point.Y / scale - 10, Size = 20, Spec = new EffectBubbleSpec() }; var trailLive = new AmbientBubble { Screen = rabbit.Screen, X = trailTreat.X, Y = trailTreat.Y, Size = 20, Spec = new EffectBubbleSpec { IsLive = true }, FuseTotalMs = 5000, FuseRemainingMs = 5000 }; BubbleOverlay.Field.Bubbles.AddRange(new[] { trailTreat, trailLive });
+            int defused = state.Defused; var trailClock = BubbleOverlay.Field.Clock; try { BubbleOverlay.Field.Clock = () => recorded[^1].Time.AddSeconds(3); rabbit.X += 500; EffectPayload.Firer = null; BubbleOverlay.TickChaosTrails(); } finally { BubbleOverlay.Field.Clock = trailClock; EffectPayload.Firer = firer; }
+            Assert.True(trailTreat.Popping); Assert.True(trailLive.Popping); Assert.Equal(defused + 1, state.Defused); Assert.True(recorded.SequenceEqual(BubbleOverlay.ChaosTrails[rabbit].Points)); BubbleOverlay.Field.Bubbles.Remove(rabbit); BubbleOverlay.TickChaosTrails(); Assert.False(BubbleOverlay.ChaosTrails.ContainsKey(rabbit)); BubbleOverlay.Field.Bubbles.Remove(trailTreat); BubbleOverlay.Field.Bubbles.Remove(trailLive);
             ChaosSkiaFxOverlay.CloseActive(); settings.ChaosSkiaFxEnabled = false; var another = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(9));
             BubbleOverlay.HoldChaos(true); BubbleOverlay.Press(another, another.CenterX, another.CenterY);
             Assert.False(another.Popping); BubbleOverlay.HoldChaos(false);
