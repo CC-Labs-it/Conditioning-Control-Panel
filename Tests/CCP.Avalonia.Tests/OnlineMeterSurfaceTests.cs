@@ -67,7 +67,7 @@ public sealed class OnlineMeterSurfaceTests
             CoreSettings.Current.StrictLockEnabled = false;
             chaos.SetValue(null, false);
             link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(new[] { AssetsTabView.ScrolllerHome }, opened);
+            Assert.Equal(new[] { ScrolllerCreditRules.HomeLink }, opened);
             CoreSettings.Current.StrictLockEnabled = true;
             link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             CoreSettings.Current.StrictLockEnabled = false;
@@ -339,7 +339,7 @@ public sealed class OnlineMeterSurfaceTests
     [InlineData(false, true, false, false)]
     [InlineData(false, false, true, false)]
     public void The_scrolller_link_never_opens_under_a_lock(bool strict, bool lockdown, bool chaos, bool opens)
-        => Assert.Equal(opens, AssetsTabView.CanOpenScrolllerHome(strict, lockdown, chaos));
+        => Assert.Equal(opens, ScrolllerCreditRules.CanOpenLink(strict, lockdown, chaos));
 
     [Fact]
     public void The_help_names_every_paragraph_and_no_figure()
