@@ -20,6 +20,51 @@ namespace CCP.Avalonia.Tests;
 public class ChaosHubArtTests
 {
     [Theory]
+    [InlineData("slot")]
+    [InlineData("settings")]
+    public Task Art_test_preserves_slots_settings_and_live_state(string part) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var snapshot = ProcessStateSnapshot.Take(repairLateWrites: false);
+        var originalState = ChaosMeta.State;
+        string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string slot = ChaosMetaStore.SlotFilePath(1);
+            const string slotContents = "{\"Sparks\":987}";
+            File.WriteAllText(slot, slotContents);
+            string settings = Path.Combine(root, "settings.json");
+            var service = new ConditioningControlPanel.Services.SettingsService(settings);
+            service.Current.ChaosActiveSlot = 3;
+            Assert.True(service.TrySaveImmediate());
+            var settingsBytes = File.ReadAllBytes(settings);
+            CoreSettings.ServiceProvider = null;
+            var fallback = CoreSettings.Current;
+            var fallbackBefore = (fallback.ChaosActiveSlot, fallback.ChaosAccessoryKey1, fallback.ChaosAccessoryKey2);
+            CoreSettings.ServiceProvider = () => service;
+
+            await Art_is_shown_on_shelves_bag_diary_and_howto_with_fallbacks("upgrade");
+
+            if (part == "slot") Assert.Equal(slotContents, File.Exists(slot) ? File.ReadAllText(slot) : null);
+            if (part == "settings")
+            {
+                Assert.Same(service, CoreSettings.Service);
+                Assert.Equal(3, service.Current.ChaosActiveSlot);
+                Assert.False(service.HasPendingSave);
+                Assert.Equal(settingsBytes, File.ReadAllBytes(settings));
+                Assert.Equal(fallbackBefore, (fallback.ChaosActiveSlot, fallback.ChaosAccessoryKey1, fallback.ChaosAccessoryKey2));
+            }
+            Assert.Same(originalState, ChaosMeta.State);
+        }
+        finally
+        {
+            snapshot.Restore();
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, originalState);
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Theory]
     [InlineData("upgrade")]
     [InlineData("boon")]
     [InlineData("mystery")]
@@ -42,14 +87,19 @@ public class ChaosHubArtTests
             bitmap.Save(path);
         }
         bool oldRendering = global::ConditioningControlPanel.Avalonia.RenderProof.Rendering;
-        int oldSlot = CoreSettings.Current.ChaosActiveSlot;
+        var stateProperty = typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!;
+        var oldState = ChaosMeta.State;
+        var oldProvider = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = null;
+        var fallback = CoreSettings.Current;
+        var oldKeys = (fallback.ChaosAccessoryKey1, fallback.ChaosAccessoryKey2);
+        var oldSlot = fallback.ChaosActiveSlot;
         ChaosHubWindow? hub = null;
         try
         {
             ChaosArt.RootsOverride = () => new[] { root };
-            ChaosMetaStore.Save(new ChaosMetaState { RunsCompleted = 2, LifetimeBoonLevels = new Dictionary<string, int> { ["blank_eyes"] = 1 }, DiscoveredCodexIds = new HashSet<string> { "bubble:tease" } }, 1);
-            ChaosMetaStore.SetActiveSlot(1);
-            ChaosMeta.Init();
+            // RenderProof avoids Init, so the art test can use a private in-memory state.
+            stateProperty.SetValue(null, new ChaosMetaState { RunsCompleted = 2, LifetimeBoonLevels = new Dictionary<string, int> { ["blank_eyes"] = 1 }, DiscoveredCodexIds = new HashSet<string> { "bubble:tease" } });
             global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
             hub = new ChaosHubWindow();
             bool HasArt(Control host, string kind, string id)
@@ -118,13 +168,17 @@ public class ChaosHubArtTests
         }
         finally
         {
-            hub?.Close();
-            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = oldRendering;
-            ChaosArt.ResetForTest();
-            ChaosMetaStore.Delete(1);
-            CoreSettings.Current.ChaosActiveSlot = oldSlot;
-            ChaosMeta.Init();
-            Directory.Delete(root, true);
+            try { hub?.Close(); }
+            finally
+            {
+                global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = oldRendering;
+                ChaosArt.ResetForTest();
+                stateProperty.SetValue(null, oldState);
+                (fallback.ChaosAccessoryKey1, fallback.ChaosAccessoryKey2) = oldKeys;
+                fallback.ChaosActiveSlot = oldSlot;
+                CoreSettings.ServiceProvider = oldProvider;
+                Directory.Delete(root, true);
+            }
         }
         return Task.CompletedTask;
     });
