@@ -176,6 +176,9 @@ public sealed class VoiceCommandsTests
     [Fact]
     public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
+        // Keep the mic armed, but do not let the WAV wake a second command while we inject one.
+        Assert.True(shell.WakeLoopArmed);
+        await Until(() => engine.IsListening, 10);
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
@@ -213,7 +216,7 @@ public sealed class VoiceCommandsTests
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
-    });
+    }, wakeWords: "hey bambi");
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
     /// ships mantras; the WAV says the phrase, so it matches, credits 30 XP and paints the verdict.</summary>
@@ -363,9 +366,9 @@ public sealed class VoiceCommandsTests
             finally { shell.RequestExit(); }
         });
 
-    private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
+    private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body, string wakeWords = WavPhrase) => Run(null, body, wakeWords);
 
-    private static Task Run(byte[]? pcm, Func<MainShellWindow, WavMic, SpeechEngine, Task> body) =>
+    private static Task Run(byte[]? pcm, Func<MainShellWindow, WavMic, SpeechEngine, Task> body, string wakeWords = WavPhrase) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
@@ -378,7 +381,7 @@ public sealed class VoiceCommandsTests
             var saved = (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.SpeechWakeWords,
                 s.AvatarEnabled, s.PanicKeyEnabled, s.PanicKey, s.SpokenMantrasEnabled, s.LockCardVoiceMode);
             (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.SpeechWakeWords, s.AvatarEnabled)
-                = (true, true, false, WavPhrase, true);
+                = (true, true, false, wakeWords, true);
             CoreEntitlement.HasPremiumProvider = () => true;
             PulseMicSource.Use(engine, mic);
             var shell = new MainShellWindow();
