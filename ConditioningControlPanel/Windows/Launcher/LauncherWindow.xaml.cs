@@ -58,6 +58,8 @@ public partial class LauncherWindow : Window
         LauncherHost.FadeOut = FadeOutThen;
         LauncherHost.RequestSignIn = OpenSignIn;
         LauncherHost.OpenDoorPage = OpenDoorPage;
+        // A page swap shows the scroller with no layout yet: fit once it has a height.
+        GamesScroller.SizeChanged += (_, _) => FitTiles();
 
         SetUpSoundButton();
 
