@@ -120,10 +120,10 @@
          refs mid-file trips WPF's deferred-BAML offset bug and the whole dictionary dies
          at load with EndOfStreamException ("Unable to read beyond the end of the stream").
          Static tokens by design, so literals lose nothing. Keep it this way. -->
-    <SolidColorBrush x:Key="SectionHueStudioBrush" Color="#FFFF7E6B"/>
-    <SolidColorBrush x:Key="SectionHueStudioBorderBrush" Color="#40FF7E6B"/>
+    <SolidColorBrush x:Key="SectionHueStudioBrush" Color="#FFFF69B4"/>
+    <SolidColorBrush x:Key="SectionHueStudioBorderBrush" Color="#40FF69B4"/>
     <LinearGradientBrush x:Key="SectionHueStudioWashBrush" StartPoint="0%,0%" EndPoint="90%,70%">
-        <GradientStop Color="#14FF7E6B" Offset="0"/>
+        <GradientStop Color="#14FF69B4" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="SectionHueDevicesBrush" Color="{StaticResource SectionHueDevices}"/>
