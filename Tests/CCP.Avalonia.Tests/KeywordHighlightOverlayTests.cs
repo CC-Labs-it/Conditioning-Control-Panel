@@ -9,6 +9,8 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -16,6 +18,60 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public class KeywordHighlightOverlayTests
 {
+    [Fact]
+    public Task ProductionSourceFeedsScannerAndHighlight() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var saved = (settings.KeywordTriggers, settings.KeywordTriggersEnabled, settings.ScreenOcrEnabled,
+            settings.OcrConfirmationScans, settings.OcrHighlightAll, settings.ScreenOcrIntervalMs,
+            settings.AwarenessIgnoreOwnUi, settings.AwarenessLoopProtectionEnabled, settings.KeywordTriggerIgnoreOwnFocus,
+            settings.KeywordTriggerAppScope, settings.KeywordGlobalCooldownSeconds, settings.KeywordHighlightEnabled,
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
+        var source = KeywordTriggerHead.OcrSource;
+        var execute = WindowsOcrSource.ExecuteForTests;
+        var screens = KeywordHighlightOverlay.Screens;
+        var configure = KeywordHighlightOverlay.Configure;
+        var credit = KeywordTriggerHead.Engine.QuestCredit;
+        var calls = 0;
+        try
+        {
+            KeywordTriggerHead.Stop(); KeywordTriggerHead.Engine.ResetCooldownsForTest();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            settings.KeywordTriggers = [new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0, Actions = [new HighlightAction { Enabled = true }] }];
+            settings.KeywordTriggersEnabled = true; settings.ScreenOcrEnabled = true; settings.OcrConfirmationScans = 1;
+            settings.OcrHighlightAll = true; settings.ScreenOcrIntervalMs = 60000; settings.AwarenessIgnoreOwnUi = false;
+            settings.AwarenessLoopProtectionEnabled = false; settings.KeywordTriggerIgnoreOwnFocus = false;
+            settings.KeywordTriggerAppScope = AwarenessAppScope.Everywhere; settings.KeywordGlobalCooldownSeconds = 0;
+            settings.KeywordHighlightEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => true; CoreEntitlement.IsFreeTodayProvider = _ => false;
+            KeywordTriggerHead.Engine.QuestCredit = () => { };
+            KeywordTriggerHead.OcrSource = null;
+            WindowsOcrSource.ExecuteForTests = _ => { calls++; return Task.FromResult("[{\"Text\":\"sit\",\"X\":130,\"Y\":60,\"Width\":30,\"Height\":15}]"); };
+            KeywordHighlightOverlay.Screens = () => [new(new PixelRect(0, 0, 1000, 800), 1)];
+            KeywordHighlightOverlay.Configure = (_, _) => true;
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest();
+            Assert.Equal(1, calls);
+            var box = Assert.Single(Assert.Single(KeywordHighlightOverlay.Canvases).Children);
+            Assert.Equal(120, Canvas.GetLeft(box)); Assert.Equal(50, Canvas.GetTop(box));
+        }
+        finally
+        {
+            KeywordTriggerHead.Stop(); KeywordTriggerHead.Engine.ResetCooldownsForTest(); KeywordHighlightOverlay.CloseAll();
+            KeywordTriggerHead.OcrSource = source; WindowsOcrSource.ExecuteForTests = execute;
+            KeywordHighlightOverlay.Screens = screens; KeywordHighlightOverlay.Configure = configure;
+            KeywordTriggerHead.Engine.QuestCredit = credit;
+            (settings.KeywordTriggers, settings.KeywordTriggersEnabled, settings.ScreenOcrEnabled,
+                settings.OcrConfirmationScans, settings.OcrHighlightAll, settings.ScreenOcrIntervalMs,
+                settings.AwarenessIgnoreOwnUi, settings.AwarenessLoopProtectionEnabled, settings.KeywordTriggerIgnoreOwnFocus,
+                settings.KeywordTriggerAppScope, settings.KeywordGlobalCooldownSeconds, settings.KeywordHighlightEnabled,
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = saved;
+        }
+    });
+
     private sealed class Lease(Action release) : IDisposable
     {
         public void Dispose() => release();

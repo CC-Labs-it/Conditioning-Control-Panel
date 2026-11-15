@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
 /// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The OCR engine itself
-/// (<see cref="OcrSource"/>) and the Brain Drain visual remain a follow-up.</summary>
+/// uses the Windows OCR helper; the Brain Drain visual remains a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
@@ -92,9 +92,7 @@ internal static class KeywordTriggerHead
         return changed;
     }
 
-    /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
-    /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland
-    /// capture is interactive only. While null the scanner never starts; everything after the source is live.</summary>
+    /// <summary>Optional test source. Production uses the Windows capture and WinRT OCR helper.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
     private static readonly object _ocrGate = new();
@@ -107,8 +105,8 @@ internal static class KeywordTriggerHead
         lock (_ocrGate)
         {
             var s = CoreSettings.Current;
-            if (_ocrSuspended || OcrSource == null) { _ocr?.Stop(); return; }
-            _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
+            if (_ocrSuspended || (OcrSource == null && !WindowsOcrSource.Available)) { _ocr?.Stop(); return; }
+            _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? WindowsOcrSource.Scan(t),
                 () => KeywordAudioRuntime.HasAccess, DeliverOcr);
             _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
         }
