@@ -153,6 +153,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
+                // WPF Bubble.cs:140: an open offer owns the bubble, including during its dots.
+                if (AskLive) return;
                 if (string.IsNullOrEmpty(text)) { HideBubble(); return; }
                 ShowBubble(text!);
             }
