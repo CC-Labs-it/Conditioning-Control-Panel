@@ -103,6 +103,7 @@ public sealed class LeashAskCard : Border
         }
         else IsReadyForAnswer = true;
     }
+    internal LeashOffer Offer => _offer;
     internal LeashIntensity Level => _level;
     internal Button PutItOnButton { get; }
     internal bool IsReadyForAnswer { get; private set; }
