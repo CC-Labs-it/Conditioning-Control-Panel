@@ -26,6 +26,50 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class SharedDeeperThemeTests
 {
+    // WPF Controls.xaml:377,498; MainWindow.xaml:2237,2296.
+    [Fact]
+    public Task PinkAndOutlineButtonsSuppressKeyboardFocusAdorners() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        foreach (var (key, kind, suppress) in new[]
+        {
+            ("PinkButton", HudPlankKind.Plank, true), ("PinkButton", HudPlankKind.Chunky, true),
+            ("OutlineButton", HudPlankKind.Plank, true), ("ActionButton", HudPlankKind.Plank, false),
+            ("SecondaryButton", HudPlankKind.Plank, false),
+        })
+        {
+            var button = new Button { Theme = Theme(key), Content = "Test" };
+            HudPlank.SetKind(button, kind);
+            var window = new Window { Content = button, Width = 200, Height = 100 };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                Assert.NotNull(button.Template);
+                Assert.NotNull(AdornerLayer.GetAdornerLayer(button)!.DefaultFocusAdorner);
+                Assert.Equal(suppress, button.IsSet(Control.FocusAdornerProperty));
+                if (suppress) Assert.Null(button.FocusAdorner);
+            }
+            finally { window.Close(); }
+        }
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            var start = shell.Named<Button>("BtnStart")!;
+            var layer = AdornerLayer.GetAdornerLayer(start)!;
+            Assert.NotNull(layer);
+            Assert.True(start.Focus(NavigationMethod.Tab));
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(layer.Children, child => AdornerLayer.GetAdornedElement(child) == start);
+        }
+        finally { shell?.Close(); CoreSettings.ServiceProvider = oldProvider; }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task TimelineRowsKeepTheirLocalReplacementChrome() => AvaloniaTestDispatcher.RunAsync(() =>
     {
