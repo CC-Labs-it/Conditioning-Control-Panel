@@ -61,7 +61,7 @@ public sealed class NavRailPaintTests
     [Fact]
     public void LitRow_WearsSpurTintAndFadingHalo_LabelsGlow() => Run(MotionLevel.Full, w =>
     {
-        w.ShowTab("play");
+        w.ShowTab("playeyes");
         Dispatcher.UIThread.RunJobs();
         var play = Row(w, NavSections.Play);
         var home = Row(w, NavSections.Home);

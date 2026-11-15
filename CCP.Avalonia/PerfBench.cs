@@ -50,7 +50,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>Shows a tab by panel name the way the rail does; false when the panel is missing or stays hidden.</summary>
         internal static bool Show(MainShellWindow w, string panel)
         {
-            w.ShowTab(panel.EndsWith("Tab", StringComparison.Ordinal) ? panel[..^3] : panel);
+            var key = panel.EndsWith("Tab", StringComparison.Ordinal) ? panel[..^3] : panel;
+            // Declutter wave 2: "play" opens the launcher's Games door now; the Play page is Eyes.
+            w.ShowTab(string.Equals(key, "Play", StringComparison.OrdinalIgnoreCase) ? "playeyes" : key);
             return w.Named<Control>(panel)?.IsVisible == true;
         }
 
