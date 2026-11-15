@@ -9,6 +9,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -18,6 +20,50 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public void Chaos_window_birth_respects_pin_and_existing_ambient(bool pin, bool ambient, bool oneShot) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldPin = CoreSettings.Current.ChaosPinOnTop;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.ChaosPinOnTop = pin;
+            host.Show();
+            if (ambient) BubbleOverlay.Start(host);
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
+            Assert.True(ChaosRunHost.IsActive);
+            if (oneShot) BubbleOverlay.SpawnOnce(host);
+            else BubbleOverlay.BeginChaos(host, _ => { });
+            Assert.NotEmpty(BubbleOverlay.OpenWindows);
+            Assert.All(BubbleOverlay.OpenWindows, w => Assert.Equal(pin || ambient, w.Topmost));
+            ChaosRunHost.ForceShutdown();
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.Start(host);
+            Assert.NotEmpty(BubbleOverlay.OpenWindows);
+            Assert.All(BubbleOverlay.OpenWindows, w => Assert.True(w.Topmost));
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            CoreSettings.Current.ChaosPinOnTop = oldPin;
+            host.Close();
+        }
+    });
+
     [Theory]
     [InlineData(1.0, 0, false)]
     [InlineData(1.5, -1920, false)]

@@ -148,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
         }
         internal static int WindowCount => Windows.Count;
+        internal static IReadOnlyList<BubbleOverlayWindow> OpenWindows => Windows;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
@@ -201,8 +202,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
-                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
-                if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds)))
+                var topmost = !ChaosRunHost.IsActive || s.ChaosPinOnTop;
+                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1, topmost);
+                if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds, topmost: topmost)))
                 {
                     Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
                     w.Close();
@@ -1025,7 +1027,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
-        public BubbleOverlayWindow(int index, PixelRect bounds, double scaling)
+        public BubbleOverlayWindow(int index, PixelRect bounds, double scaling, bool topmost = true)
         {
             Index = index;
             Bounds = bounds;
@@ -1033,7 +1035,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = topmost;
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
