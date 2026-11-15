@@ -58,6 +58,33 @@ public class VaultCompareTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task CompareSaleUsesDoubleRuleStampsAndStrikesMonthlyPrice() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var oldSale = VaultGateDialog.Sale;
+        var proxy = InviteApi.DefaultBaseUrl;
+        InviteApi.DefaultBaseUrl = () => null;
+        VaultGateDialog.Sale = new VaultSaleInfo(20, null, new[] { 1 });
+        try
+        {
+            var dialog = VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            try
+            {
+                Click(dialog, Loc.Get("vaultgate_compare"));
+                var stamps = dialog.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "PriceStamp").ToArray();
+                Assert.Equal(2, stamps.Length);
+                Assert.All(stamps, stamp => Assert.True(stamp.Child is Border inner && inner.BorderThickness.Left == 1));
+                var struck = stamps[0].GetVisualDescendants().OfType<TextBlock>().Single(t => Equals(t.Tag, "struck"));
+                Assert.Equal(TextDecorations.Strikethrough, struck.TextDecorations);
+                Click(dialog, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
+                Assert.DoesNotContain(dialog.GetVisualDescendants().OfType<TextBlock>(), t => Equals(t.Tag, "struck"));
+            }
+            finally { dialog.Close(); }
+        }
+        finally { VaultGateDialog.Sale = oldSale; InviteApi.DefaultBaseUrl = proxy; }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]

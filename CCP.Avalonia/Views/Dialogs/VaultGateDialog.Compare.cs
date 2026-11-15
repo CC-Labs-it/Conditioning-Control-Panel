@@ -99,8 +99,19 @@ public sealed partial class VaultGateDialog
         main.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
         var price = (StackPanel)Price(tier, compact: true, yearly: _yearly);
         price.Tag = text;
+        price.Margin = new Thickness(0);
         PaintPrice(price, tier, true, _yearly, false);
-        main.Children.Add(price);
+        // WPF Compare.cs:416-447: the price sits inside a tilted double-rule stamp.
+        main.Children.Add(new Border
+        {
+            Name = "PriceStamp", BorderBrush = accent, BorderThickness = new Thickness(2.5),
+            CornerRadius = new CornerRadius(3), Padding = new Thickness(2.5),
+            HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 6, 0),
+            RenderTransform = new RotateTransform(-4), RenderTransformOrigin = RelativePoint.Center,
+            Opacity = 0.93,
+            Child = new Border { BorderBrush = accent, BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(1.5), Padding = new Thickness(11, 0, 11, 1), Child = price },
+        });
         main.Children.Add(new Border { Height = 1, Background = accent, Opacity = 0.4, Margin = new Thickness(0, 10, 0, 9) });
         void Perk(string number, string words, IBrush ink)
         {
