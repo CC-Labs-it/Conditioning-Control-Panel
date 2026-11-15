@@ -27,6 +27,9 @@ namespace ConditioningControlPanel.Services
         // half-written temp over settings.json (#761). Never taken while _timerLock is held,
         // and never held across the UI-thread serialize hop — both would deadlock the shutdown
         // path, where SaveImmediate runs ON the UI thread.
+        // Recovery must not delete another instance's in-progress atomic save, and a
+        // Windows reader must release the destination before publication replaces it.
+        private static readonly object SettingsFileIoLock = new();
         private readonly object _saveLock = new();
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
@@ -76,6 +79,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action? AfterTempFileFlushed { get; set; }
 
         public AppSettings Current { get; private set; }
 
@@ -194,12 +198,15 @@ namespace ConditioningControlPanel.Services
                 // per-write temp name now, so glob (the legacy fixed settings.json.tmp matches too)
                 // and only adopt a candidate that still parses — a truncated temp must never be
                 // promoted to settings.json.
-                RecoverAndCleanTempFiles();
-
-                if (File.Exists(_settingsPath))
+                string? json;
+                lock (SettingsFileIoLock)
                 {
-                    var json = File.ReadAllText(_settingsPath);
+                    RecoverAndCleanTempFiles();
+                    json = File.Exists(_settingsPath) ? File.ReadAllText(_settingsPath) : null;
+                }
 
+                if (json != null)
+                {
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
                     // enum value renamed/removed in a new release, which StringEnumConverter throws
@@ -962,6 +969,7 @@ namespace ConditioningControlPanel.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
 
                 lock (_saveLock)
+                lock (SettingsFileIoLock)
                 {
                     // Sealed while this snapshot was being serialized: the reset owns the file now.
                     if (_sealed) return false;
@@ -993,6 +1001,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        AfterTempFileFlushed?.Invoke();
                         PublishAtomicFile(tempPath);
                     }
                     catch
