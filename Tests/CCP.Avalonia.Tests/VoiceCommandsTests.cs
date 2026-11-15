@@ -174,8 +174,10 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
+        Assert.False(shell.WakeLoopArmed);
+        Assert.False(shell.PushToTalkArmed);
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
@@ -213,6 +215,17 @@ public sealed class VoiceCommandsTests
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
+    }, beforeShell: () =>
+    {
+        // This test injects commands directly. A live WAV wake loop can enqueue a second command
+        // while the dispatcher is pumped, contaminating the exact-once escape assertion.
+        CoreSettings.Current.MicConsentGiven = true;
+        CoreSettings.Current.SpeechWakeWordEnabled = false;
+        CoreSettings.Current.SpeechPushToTalkEnabled = false;
+        CoreSettings.Current.SpeechWakeWords = WavPhrase;
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        CoreSpeech.IsAvailableProvider = () => true;
     });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
@@ -352,11 +365,12 @@ public sealed class VoiceCommandsTests
             }
         });
 
-    // The help row is UI state; no recognition or microphone is exercised by this test.
-    private static Task RunUi(Func<MainShellWindow, Task> body) =>
+    // These tests drive UI or inline commands directly; they do not need recognition or a microphone.
+    private static Task RunUi(Func<MainShellWindow, Task> body, Action? beforeShell = null) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
+            beforeShell?.Invoke();
             var shell = new MainShellWindow();
             shell.Show();
             try { await body(shell); }
