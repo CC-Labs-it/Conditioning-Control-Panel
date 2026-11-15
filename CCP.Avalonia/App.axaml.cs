@@ -628,6 +628,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static void SeedSubliminalFeatureUse()
         {
             CoreSubliminal.ShowProvider = Views.Overlays.SubliminalWhisperShow.Phrase;
+            Views.Overlays.SteamOverlay.Seed();   // the Super stage's seams for this head
             Views.Overlays.SubliminalOverlay.Displayed -= NoteSubliminalFeatureUse;
             Views.Overlays.SubliminalOverlay.Displayed += NoteSubliminalFeatureUse;
         }
