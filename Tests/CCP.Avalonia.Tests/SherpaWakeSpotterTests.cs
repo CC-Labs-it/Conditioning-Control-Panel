@@ -169,4 +169,58 @@ public sealed class SherpaWakeCaptureTests
         }
         finally { Directory.Delete(root, true); }
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async System.Threading.Tasks.Task SileroIsPreferredAndMissingModelFallsBackToEnergy(bool silero)
+    {
+        var root = Model(); var mic = new Mic(); var vad = new Handle(); int updates = 0, decoded = 0;
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(),
+            (_, _, _) => { decoded++; return false; }, _ => silero ? (samples => { updates++; return true; }, vad) : null);
+        using var cancel = new System.Threading.CancellationTokenSource();
+        try
+        {
+            var wait = kws.WaitForWakeAsync(mic, .15, 2, cancel.Token, true);
+            mic.Feed!(new byte[1600], 1600);
+            Assert.Equal(silero ? 1 : 0, updates);
+            Assert.Equal(silero ? 1 : 0, decoded);
+            cancel.Cancel(); Assert.False(await wait);
+            Assert.Equal(silero, vad.Disposed);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void StatusAndTooltipFollowModelStateAndLanguage() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var active = new SherpaWakeSpotter(root, (_, _, _) => new Handle());
+        using var failed = new SherpaWakeSpotter(root, (_, _, _) => throw new InvalidOperationException());
+        using var missing = new SherpaWakeSpotter(Path.Combine(root, "missing"));
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        shell.WakeMicOverride = mic;
+        try
+        {
+            shell.Show();
+            var tab = shell.SheListeningPage!;
+            var row = (global::Avalonia.Controls.Control)tab.TxtSL_WakeEngineStatus.Parent!.Parent!;
+            foreach (var (wake, key) in new[] { (missing, "she_wake_model_missing"), (failed, "she_wake_model_failed"), (active, "she_wake_model_active") })
+            {
+                shell.WakeSpotterOverride = wake;
+                shell.RefreshWakeEngineStatus();
+                foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+                {
+                    loc.SetLanguage(code); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    var expected = ConditioningControlPanel.Localization.Loc.Get(key);
+                    Assert.NotEqual(key, expected);
+                    Assert.Equal(expected, tab.TxtSL_WakeEngineStatus.Text);
+                    Assert.Equal(expected, global::Avalonia.Controls.ToolTip.GetTip(row));
+                }
+            }
+        }
+        finally { shell.RequestExit(); loc.SetLanguage(language); Directory.Delete(root, true); }
+    });
+
 }

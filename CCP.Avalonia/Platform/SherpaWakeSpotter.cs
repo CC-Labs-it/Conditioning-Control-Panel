@@ -20,18 +20,22 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private bool _disposed;
         private bool _active;
         private bool _listening;
+        private readonly Func<int, (Func<float[], bool> Update, IDisposable Lifetime)?> _vadFactory;
         private readonly Func<IDisposable, IDisposable> _createStream;
         private readonly Func<IDisposable, IDisposable, float[], bool> _decode;
         internal event EventHandler<bool>? ListeningChanged;
+        internal bool IsConfigured => SherpaWakeService.FindModel(_root) != null;
         internal bool IsListening { get { lock (_gate) return _listening; } }
 
         internal SherpaWakeSpotter(string root, Func<SherpaWakeService.ModelFiles, float, float, IDisposable>? factory = null,
-            Func<IDisposable, IDisposable>? createStream = null, Func<IDisposable, IDisposable, float[], bool>? decode = null)
+            Func<IDisposable, IDisposable>? createStream = null, Func<IDisposable, IDisposable, float[], bool>? decode = null,
+            Func<int, (Func<float[], bool> Update, IDisposable Lifetime)?>? vadFactory = null)
         {
             _root = root;
             _factory = factory ?? BuildSpotter;
             _createStream = createStream ?? (spotter => ((KeywordSpotter)spotter).CreateStream());
             _decode = decode ?? Decode;
+            _vadFactory = vadFactory ?? (rate => SileroVadGate.TryCreate(rate) is { } vad ? (vad.Update, vad) : null);
         }
 
         internal bool IsAvailable(bool hasDevice, double threshold, double boost)
@@ -94,7 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             IDisposable? capture = null;
             var filter = noiseSuppression ? new HighPassFilter(16000) : null;
-            var gate = noiseSuppression ? new NoiseGate(gateFactor, hangoverFrames: 12) : null;
+            var vad = noiseSuppression ? _vadFactory(16000) : null;
+            var gate = noiseSuppression && vad == null ? new NoiseGate(gateFactor, hangoverFrames: 12) : null;
             var preRoll = noiseSuppression ? new PreRollBuffer(16000) : null;
             using var registration = ct.Register(() => done.TrySetResult(false));
             try
@@ -111,11 +116,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         {
                             if (done.Task.IsCompleted) return;
                             filter?.ProcessInPlace(samples, samples.Length);
-                            if (gate != null)
+                            if (gate != null || vad != null)
                             {
                                 double sum = 0;
                                 foreach (var sample in samples) sum += sample * sample;
-                                if (!gate.Update(samples.Length == 0 ? 0 : Math.Sqrt(sum / samples.Length)))
+                                if (!(vad?.Update(samples) ?? gate!.Update(samples.Length == 0 ? 0 : Math.Sqrt(sum / samples.Length))))
                                 {
                                     preRoll!.Push(samples);
                                     return;
@@ -140,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     try { stream?.Dispose(); } catch { }
+                    try { vad?.Lifetime.Dispose(); } catch { }
                     _active = false;
                     _listening = false;
                     if (_disposed) { _spotter?.Dispose(); _spotter = null; }

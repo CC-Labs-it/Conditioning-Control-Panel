@@ -159,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshSheListeningStatus()
         {
             UpdateMicPill(); // WPF SheListening.cs:423: every arm/disarm flows through here
+            RefreshWakeEngineStatus();
             var tab = SheListeningPage;
             if (tab == null) return;
 
@@ -294,6 +295,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// change. The event fires off the capture thread, so it is posted.</summary>
         private void InitializeMicActivePill()
         {
+            void LanguageChanged(object? sender, EventArgs e) => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshWakeEngineStatus);
+            LocalizationManager.Instance.LanguageChanged += LanguageChanged;
+            Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= LanguageChanged;
             _micPillEngine = VoiceSpeech;
             if (_micPillEngine != null) _micPillEngine.ListeningChanged += OnMicListeningChanged;
             _micPillWake = Platform.PulseMicSource.Wake;
@@ -311,6 +315,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnMicListeningChanged(object? sender, bool listening) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(UpdateMicPill);
+
+        internal void RefreshWakeEngineStatus()
+        {
+            var tab = SheListeningPage;
+            if (tab == null) return;
+            var wake = WakeSpotterOverride ?? Platform.PulseMicSource.Wake;
+            var mic = WakeMicOverride ?? Platform.PulseMicSource.Mic;
+            var settings = CoreSettings.Current;
+            var key = wake?.IsConfigured != true ? "she_wake_model_missing"
+                : mic != null && wake.IsAvailable(mic.HasDevice, settings.SpeechWakeThreshold, settings.SpeechWakeBoost)
+                    ? "she_wake_model_active" : "she_wake_model_failed";
+            var text = Loc.Get(key);
+            tab.TxtSL_WakeEngineStatus.Text = text;
+            if (tab.TxtSL_WakeEngineStatus.Parent?.Parent is Control row) ToolTip.SetTip(row, text);
+        }
 
         /// <summary>Calibration remains unavailable until the capture sweep is ported.</summary>
         internal void SL_Calibrate_Click()
