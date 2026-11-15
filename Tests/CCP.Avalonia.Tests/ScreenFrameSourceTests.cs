@@ -172,20 +172,42 @@ public class ScreenFrameSourceTests
         Assert.Null(PortalScreenFrames.FilePath(new()));
     }
 
-    [Theory]
-    [InlineData(1u)]
-    [InlineData(2u)]
-    public async Task APortalRefusalIsUnavailableForTheSessionAndNeverAsksAgain(uint code)
+    [Fact]
+    public async Task ACancelledPortalRequestIsUnavailableForTheSessionAndNeverAsksAgain()
     {
         PortalScreenFrames.Refused = false;
         var calls = 0;
-        var source = new PortalScreenFrames(_ => { calls++; return Task.FromResult((code, new Dictionary<string, VariantValue>())); }, TwoMonitors);
+        var source = new PortalScreenFrames(_ => { calls++; return Task.FromResult((1u, new Dictionary<string, VariantValue>())); }, TwoMonitors);
         Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status);
         Assert.True(PortalScreenFrames.Refused);
         Assert.Equal(ScreenFrameStatus.Unavailable, (await new PortalScreenFrames(_ => { calls++; return Task.FromResult((0u, new Dictionary<string, VariantValue>())); }, TwoMonitors)
             .CaptureAsync(CancellationToken.None)).Status);
         Assert.Equal(1, calls);
         PortalScreenFrames.Refused = false;
+    }
+
+    [Fact]
+    public async Task AFailedPortalResponseCostsScansUntilTheRetryDelayThenRecovers()
+    {
+        PortalScreenFrames.Refused = false;
+        var codes = new Queue<uint>([2u, 0u]);
+        var calls = 0;
+        string? path = null;
+        Task<(uint, Dictionary<string, VariantValue>)> Answer()
+        {
+            calls++;
+            var code = codes.Dequeue();
+            return Task.FromResult((code, code == 0 ? Uri(path = WritePng()) : new Dictionary<string, VariantValue>()));
+        }
+        var source = new PortalScreenFrames(_ => Answer(), TwoMonitors, retryAfter: TimeSpan.FromMilliseconds(200));
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status);
+        Assert.False(PortalScreenFrames.Refused);
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status); // within the delay: no request
+        Assert.Equal(1, calls);
+        await Task.Delay(300);
+        Assert.Equal(ScreenFrameStatus.Available, (await source.CaptureAsync(CancellationToken.None)).Status);
+        Assert.Equal(2, calls);
+        Assert.False(File.Exists(path));
     }
 
     [Fact]
