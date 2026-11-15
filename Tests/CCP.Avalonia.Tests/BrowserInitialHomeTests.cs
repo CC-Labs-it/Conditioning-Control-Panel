@@ -491,6 +491,97 @@ public sealed class BrowserInitialHomeTests
         Assert.False(host.IsVisible);
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public Task StartupTimeoutShowsRetryAndRebuilds(int action) => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = timeout => timeouts.Add(timeout);
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        var oldView = host.NativeView!;
+        var oldAdapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(oldView, () => oldAdapter.Proxy);
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/initial"));
+        Assert.Single(timeouts);
+        timeouts[0]();
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        var status = page.FindControl<TextBlock>("TxtBrowserStatus")!;
+        Assert.False(host.HasEngine);
+        Assert.False(host.IsVisible);
+        Assert.True(prompt.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), prompt.Text);
+        Assert.Equal(IconText.BareLoc("label_error_2"), IconText.Bare(status.Text));
+        WebHostPanicAdapterTests.NativeEvent(oldView, "ControlHostImplOnAdapterCreated", oldAdapter.Proxy);
+        Assert.Null(host.ScrolllerGate);
+        Assert.False(host.HasEngine);
+        Assert.True(prompt.IsVisible);
+
+        if (action == 0) shell.BrowserSiteToggle_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        else if (action == 1) shell.BtnReloadBrowser_Click(page, new global::Avalonia.Interactivity.RoutedEventArgs());
+        else if (action == 2) Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/retry"));
+        else page.OnBrowserPromptClick();
+        var newView = host.NativeView!;
+        Assert.NotSame(oldView, newView);
+        Assert.True(host.IsVisible);
+        var requested = host.Source;
+        Assert.NotNull(requested);
+        var newAdapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(newView, () => newAdapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(newView, "ControlHostImplOnAdapterCreated", newAdapter.Proxy);
+        host.NewScrolllerEngine()(true);
+        if (action == 2) Assert.Equal(requested, newAdapter.Current);
+        else Assert.Null(newAdapter.Current); // the test sandbox refuses public site URLs
+        WebHostPanicAdapterTests.NativeEvent(oldView, "ControlHostImplOnAdapterCreated", oldAdapter.Proxy);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.True(host.IsVisible);
+        if (action == 2) Assert.Equal(requested, newAdapter.Current);
+        else Assert.Null(newAdapter.Current);
+    });
+
+    [Fact]
+    public Task StartupTimeoutFailsAdapterWithoutCore() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        Action? timeout = null;
+        host.StartupWatchScheduler = callback => timeout = callback;
+        host.StartupReadyProbe = _ => false;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/initial"));
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(host.NativeView!, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(host.NativeView!, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        Assert.NotNull(timeout);
+        timeout!();
+        Assert.False(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+    });
+
+    [Fact]
+    public Task StartupTimeoutDoesNotFailReadyAdapter() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        Action? timeout = null;
+        host.StartupWatchScheduler = callback => timeout = callback;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        host.StartupReadyProbe = _ => true;
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/initial"));
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(host.NativeView!, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(host.NativeView!, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        Assert.NotNull(timeout);
+        timeout!();
+        Assert.True(host.HasEngine);
+        Assert.True(host.IsVisible);
+    });
+
     private sealed class Watch(Action dispose) : IDisposable
     {
         public void Dispose() => dispose();

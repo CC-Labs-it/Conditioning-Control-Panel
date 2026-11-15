@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public Func<Uri, bool>? AllowNavigation { get; set; }
         internal bool SuppressNewWindows { get; set; }
         internal event Action? BrowserProcessFailed;
+        internal event Action? BrowserStartupFailed;
         /// <summary>Per-host native settings, run on the UI thread once for every engine the view builds
         /// (Spiral's WebView2 chrome switches). A throwing hook is logged, never fatal.</summary>
         internal Action<IPlatformHandle?>? ConfigureNative { get; set; }
@@ -333,7 +334,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // WPF MainWindow.Browser.cs:2740-2818 moves the existing page without reloading.
         internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
 
-        public bool HasEngine => _web is not null || ScriptInvoker != null;
+        public bool HasEngine => (_web is not null && !_startupFailed) || ScriptInvoker != null;
 
         // WPF MainWindow.Browser.cs:249-280: localized initialization failure categories.
         internal string FailureStatusKey { get; private set; } = "label_not_installed";
@@ -418,6 +419,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal Func<NativeWebView>? NativeViewFactory { get; set; }
         internal NativeWebView? NativeView => _web;
         internal Func<NativeWebView, Action, IDisposable>? FailureWatchFactory { get; set; }
+        internal Action<Action>? StartupWatchScheduler { get; set; }
+        internal Func<NativeWebView, bool>? StartupReadyProbe { get; set; }
+        private bool _adapterCreated, _adapterReady, _startupFailed, _startupWatchPending;
+        private int _startupWatchGeneration;
+
+        private bool StartupReady(NativeWebView native)
+        {
+            try { return StartupReadyProbe?.Invoke(native) ?? Platform.WebViewZoom.IsReady(native.TryGetPlatformHandle()); }
+            catch (Exception ex) { Log.Debug(ex, "Browser readiness probe failed"); return false; }
+        }
+
+        private void WatchStartup(NativeWebView native)
+        {
+            if (!RetryFailedConstruction || _adapterReady || _startupFailed || _startupWatchPending) return;
+            _startupWatchPending = true;
+            var generation = ++_startupWatchGeneration;
+            void Expired()
+            {
+                if (!ReferenceEquals(_web, native) || generation != _startupWatchGeneration || !_startupWatchPending || _adapterReady || _startupFailed) return;
+                _startupWatchPending = false;
+                if (_adapterCreated && StartupReady(native)) { _adapterReady = true; return; }
+                _startupFailed = true;
+                FailureStatusKey = "label_error_2";
+                CancelPendingNavigation();
+                NewScrolllerEngine();
+                BrowserStartupFailed?.Invoke();
+            }
+            if (StartupWatchScheduler is { } schedule) schedule(Expired);
+            else global::Avalonia.Threading.DispatcherTimer.RunOnce(Expired, TimeSpan.FromSeconds(15));
+        }
 
         public WebHost()
         {
@@ -518,6 +549,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             try
             {
                 BrowserZoomAdapterDestroyed();
+                _startupWatchPending = false;
+                ++_startupWatchGeneration;
+                _adapterCreated = false;
+                _adapterReady = false;
+                _startupFailed = false;
                 ClearNativeWatches();
                 if (_web is { } old) _webSlot.Children.Remove(old);
                 _web = null;
@@ -557,15 +593,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // gate has to be live for the FIRST navigation too, and a caller that assigns
                 // the predicate and the Source in that order would otherwise race the engine.
                 native.EnvironmentRequested += (_, e) => OnEnvironmentRequested(e);
-                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
+                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { _adapterCreated = false; _adapterReady = false; _startupWatchPending = false; ++_startupWatchGeneration; BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
                 native.AdapterCreated += (_, e) =>
                 {
-                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { ApplyNativeSettings(native, e.TryGetPlatformHandle()); AttachFailureWatch(native, false); ZoomAdapterCreated(native, () => e.TryGetPlatformHandle()); }
-                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { ApplyNativeSettings(native, null); AttachFailureWatch(native, false); if (ReferenceEquals(_web, native)) TryBrowserZoomAdapterReady(); });
+                    var onUiThread = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
+                    void Ready()
+                    {
+                        if (!ReferenceEquals(_web, native) || _startupFailed) return;
+                        _adapterCreated = true;
+                        if (StartupReady(native))
+                        {
+                            _adapterReady = true;
+                            _startupWatchPending = false;
+                            ++_startupWatchGeneration;
+                        }
+                        ApplyNativeSettings(native, onUiThread ? e.TryGetPlatformHandle() : null);
+                        AttachFailureWatch(native, false);
+                        if (onUiThread) ZoomAdapterCreated(native, () => e.TryGetPlatformHandle());
+                        else TryBrowserZoomAdapterReady();
+                    }
+                    if (onUiThread) Ready();
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(Ready);
                 };
-                native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native)) OnNavigationStarted(native, e); else e.Cancel = true; };
+                native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native) && !_startupFailed) OnNavigationStarted(native, e); else e.Cancel = true; };
                 native.NavigationCompleted += (_, e) => {
-                    if (!ReferenceEquals(_web, native)) return;
+                    if (!ReferenceEquals(_web, native) || _startupFailed) return;
                     // The native core exists now; subscribe before observers can reveal a scene.
                     AttachFailureWatch(native, true);
                     if (BrowserProcessFailed != null && _failureWatch == null) return;
@@ -582,7 +634,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 native.WebResourceRequested += (_, e) => StampRequestHeader(e);
                 // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
                 // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
-                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { },
+                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) && !_startupFailed ? NewScrolllerEngine() : _ => { },
                     () => BlockAds, ShouldBlockAdRequest);
                 _webSlot.Children.Add(native);
                 _fallback.IsVisible = false;
@@ -664,6 +716,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (RetryFailedConstruction && _web is null && NavigationInvoker is null && (IsAvailable || NativeViewFactory != null))
                 CreateNativeView();
             if (_web is null && NavigationInvoker is null) return false;
+            if (_web is { } startupView) WatchStartup(startupView);
             if (_scrolllerGate is null) return true; // held until the gate reports
             try
             {
