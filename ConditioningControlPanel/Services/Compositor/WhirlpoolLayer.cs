@@ -53,6 +53,8 @@ public sealed class WhirlpoolLayer : BaseLayer
         catch (Exception ex) { App.Logger?.Debug("Whirlpool spiral pick: {E}", ex.Message); }
         if (!showing) return;                 // a pool nobody sees does not burn through spirals
         bool gentle = Safety.GentleVisuals.On;
+        _morph.Hold = ConditioningControlPanel.SuperCore.WhirlpoolOptions.ClampHold(
+            App.Settings?.Current?.WhirlpoolNewEvery ?? ConditioningControlPanel.SuperCore.WhirlpoolOptions.HoldDefault);
         _phase += dt * (gentle ? 0.06 : 0.12);
         _morph.Step(gentle ? dt * 0.6 : dt);
     }

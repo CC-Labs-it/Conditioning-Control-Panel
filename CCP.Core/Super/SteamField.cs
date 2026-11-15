@@ -62,6 +62,10 @@ public sealed class SteamField
     };
     private readonly float[][] _mx, _my;
     private readonly double[] _amp = new double[Modes.Length];
+    /// <summary>The heal rate in use (1/s), set from the player's "Fog returns" (<see cref="SteamOptions.HealRate"/>).</summary>
+    public double Heal { get; set; } = HealRate;
+    /// <summary>Share of the stock billow, set from the player's "Drift" (<see cref="SteamOptions.Drift"/>). 0 = still.</summary>
+    public double Drift { get; set; } = 1;
     /// <summary>True when a step changed something worth a repaint.</summary>
     public bool Dirty { get; private set; } = true;
 
@@ -139,7 +143,7 @@ public sealed class SteamField
         Billow((H + 4) / 4);
         Coast(dt);
         Carry(dt);
-        float k = (float)(1 - Math.Exp(-HealRate * dt)), top = (float)MaxPile, lv = (float)level, fcap = (float)cap;
+        float k = (float)(1 - Math.Exp(-Math.Max(0, Heal) * dt)), top = (float)MaxPile, lv = (float)level, fcap = (float)cap;
         bool any = false;
         for (int gy = 0, i = 0; gy < H; gy++)
             for (int gx = 0; gx < W; gx++, i++)
@@ -201,12 +205,12 @@ public sealed class SteamField
     /// </summary>
     private void Carry(double dt)
     {
-        int n1 = W + 1; float umax = 0, top = (float)MaxSpeed;
+        int n1 = W + 1; float umax = 0, top = (float)MaxSpeed; float drift = (float)Math.Max(0, Drift);
         for (int gy = 0, i = 0; gy < H; gy++)
             for (int gx = 0; gx < W; gx++, i++)
             {
                 float b = _psi[(gy + 1) * n1 + gx + 1];
-                float u = b - _psi[gy * n1 + gx + 1], v = _psi[(gy + 1) * n1 + gx] - b;
+                float u = (b - _psi[gy * n1 + gx + 1]) * drift, v = (_psi[(gy + 1) * n1 + gx] - b) * drift;
                 if (_active)
                 {
                     if (gx < W - 1) u += 0.5f * (Vx[i] + Vx[i + 1]) * (1 - Math.Max(_hold[i], _hold[i + 1]));

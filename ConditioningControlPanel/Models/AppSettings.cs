@@ -5564,6 +5564,61 @@ namespace ConditioningControlPanel.Models
             set { _steamWipeSize = ClampSteamWipeSize(value); OnPropertyChanged(); }
         }
 
+        // Steam's other gold-box options (owner, 2026-11-15). Its creep speed reuses SuperCreepSpeed.
+        // "Fog returns": how fast the fog closes over a wipe, percent of the stock speed.
+        private int _steamFogReturn = SuperCore.SteamOptions.ReturnDefault;
+        public int SteamFogReturn
+        {
+            get => _steamFogReturn;
+            set { _steamFogReturn = SuperCore.SteamOptions.ClampReturn(value); OnPropertyChanged(); }
+        }
+
+        // "Drift": how much the fog billows on its own, percent of the stock billow (0 = still).
+        private int _steamDrift = SuperCore.SteamOptions.DriftDefault;
+        public int SteamDrift
+        {
+            get => _steamDrift;
+            set { _steamDrift = SuperCore.SteamOptions.ClampDrift(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool (the spiral's V2): what the pool drags in. All on as shipped.
+        private bool _whirlpoolDragsFog = true;
+        public bool WhirlpoolDragsFog
+        {
+            get => _whirlpoolDragsFog;
+            set { _whirlpoolDragsFog = value; OnPropertyChanged(); }
+        }
+
+        private bool _whirlpoolDragsPictures = true;
+        public bool WhirlpoolDragsPictures
+        {
+            get => _whirlpoolDragsPictures;
+            set { _whirlpoolDragsPictures = value; OnPropertyChanged(); }
+        }
+
+        private bool _whirlpoolDragsBubbles = true;
+        public bool WhirlpoolDragsBubbles
+        {
+            get => _whirlpoolDragsBubbles;
+            set { _whirlpoolDragsBubbles = value; OnPropertyChanged(); }
+        }
+
+        // Whirlpool: its largest size, percent of the stock reach.
+        private int _whirlpoolSize = SuperCore.WhirlpoolOptions.SizeDefault;
+        public int WhirlpoolSize
+        {
+            get => _whirlpoolSize;
+            set { _whirlpoolSize = SuperCore.WhirlpoolOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool: seconds a Loom spiral holds before it melts into a new one ("Always new" only).
+        private int _whirlpoolNewEvery = SuperCore.WhirlpoolOptions.HoldDefault;
+        public int WhirlpoolNewEvery
+        {
+            get => _whirlpoolNewEvery;
+            set { _whirlpoolNewEvery = SuperCore.WhirlpoolOptions.ClampHold(value); OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Attention Game

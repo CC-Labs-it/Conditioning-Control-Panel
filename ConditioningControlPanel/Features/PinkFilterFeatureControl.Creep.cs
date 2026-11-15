@@ -7,9 +7,10 @@ using ConditioningControlPanel.Services.Super;
 namespace ConditioningControlPanel.Features
 {
     /// <summary>
-    /// Super Creep's two sub-settings (speed, fog cap) on the pink filter page. The card only shows
-    /// while Creep is unlocked and switched on; the switch itself belongs to the scaffold lane.
-    /// Kept in its own partial so the pink filter's own code-behind stays untouched.
+    /// Steam's options in the gold box on the pink filter page (words, creep speed, wipe size, fog
+    /// returns, drift). They show while Steam is picked. Numbers and clamps live in
+    /// CCP.Core/Super/SteamOptions. Kept in its own partial so the pink filter's own code-behind
+    /// stays untouched.
     /// </summary>
     public partial class PinkFilterFeatureControl
     {
@@ -36,14 +37,18 @@ namespace ConditioningControlPanel.Features
             _creepLoading = true;
             try
             {
-                // Take two: Steam reads the pink filter's colour and strength. Its one option is
-                // the words switch, shown while Steam is the pick.
+                // Take two: Steam reads the pink filter's colour, strength, monitor and order, so
+                // its box holds only what is Steam's own, shown while Steam is the pick. The old
+                // fog cap stays folded (Steam does not read it).
                 CreepCard.Visibility = Visibility.Collapsed;
-                SteamWordsRow.Visibility = SuperAccess.IsSelected(SuperEffect.Creep) ? Visibility.Visible : Visibility.Collapsed;
+                SteamRows.Visibility = SuperAccess.IsSelected(SuperEffect.Creep) ? Visibility.Visible : Visibility.Collapsed;
                 ChkSteamWords.IsChecked = s.SteamWordsInFog;
-                SteamSizeRow.Visibility = SteamWordsRow.Visibility;
                 SliderSteamSize.Value = s.SteamWipeSize;
                 TxtSteamSize.Text = $"{s.SteamWipeSize}%";
+                SliderSteamReturn.Value = s.SteamFogReturn;
+                TxtSteamReturn.Text = $"{s.SteamFogReturn}%";
+                SliderSteamDrift.Value = s.SteamDrift;
+                TxtSteamDrift.Text = $"{s.SteamDrift}%";
                 if (CmbCreepSpeed.Items.Count == 0)
                 {
                     // DarkComboBoxStyle has a dark popup, so the items take the light brush.
@@ -90,6 +95,29 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
+        // SteamLayer hands the field the heal speed each frame.
+        private void SliderSteamReturn_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_creepLoading || TxtSteamReturn == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.SteamFogReturn = (int)(Math.Round(e.NewValue / 5) * 5);
+            TxtSteamReturn.Text = $"{s.SteamFogReturn}%";
+            App.Settings?.Save();
+        }
+
+        // SteamLayer hands the field the billow share each frame.
+        private void SliderSteamDrift_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_creepLoading || TxtSteamDrift == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.SteamDrift = (int)(Math.Round(e.NewValue / 5) * 5);
+            TxtSteamDrift.Text = $"{s.SteamDrift}%";
+            App.Settings?.Save();
+        }
+
+        // Steam's creep speed (SuperStageHost reads it each step; Normal = four minutes).
         private void CmbCreepSpeed_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_creepLoading || CmbCreepSpeed.SelectedItem is not ComboBoxItem { Tag: CreepSpeed speed }) return;

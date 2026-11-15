@@ -42,8 +42,10 @@ public sealed class Whirlpool
 
     public bool Live => Size > LiveSize;
     public double Eased => Ease(Size);
+    /// <summary>The player's "Pool size" as a share of the stock reach (<see cref="WhirlpoolOptions.ReachScale"/>). 1 = as shipped.</summary>
+    public double ReachScale { get; set; } = 1;
     /// <summary>Reach in pixels: nothing outside it feels the pool.</summary>
-    public double Radius => (MinReach + (MaxReach - MinReach) * Eased) * ShortSide;
+    public double Radius => (MinReach + (MaxReach - MinReach) * Eased) * ShortSide * ReachScale;
     /// <summary>
     /// How far an arm strays from the perfect spiral, in radians, at <paramref name="share"/> of the
     /// reach (0 = the eye, 1 = the rim) and in the direction <paramref name="phi"/>. It drifts with

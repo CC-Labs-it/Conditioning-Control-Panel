@@ -14,9 +14,11 @@ using ConditioningControlPanel.Services.Super;
 namespace ConditioningControlPanel.Controls
 {
     /// <summary>
-    /// The gold V2 box at the foot of a feature page (owner, 2026-10-01). One card per feature: a
-    /// small "v2" tag top left, the BASIC supporter sign top right, then the effect's name and one
-    /// plain line, the <see cref="SuperModePicker"/> row (Classic / Both / Super only) with a line
+    /// The gold V2 box at the foot of a feature page (owner, 2026-10-01). One card per feature, built
+    /// like the page's own option cards (owner, 2026-11-15: SettingCardStyle chrome, a gold edge
+    /// stripe, a head as tall as an option row) so the rows in <see cref="Body"/> read as normal
+    /// option rows: the BASIC supporter sign top right for free accounts, then the star, the
+    /// effect's name with its "v2" tag and help, and one plain line, the <see cref="SuperModePicker"/> row (Classic / Both / Super only) with a line
     /// saying what the pick does, then <see cref="Body"/>: the
     /// effect's own options, or (Flashes, Bubble Pop) the Back Room v2 prize rows merged in.
     ///
@@ -66,8 +68,16 @@ namespace ConditioningControlPanel.Controls
         private readonly TextBlock _modeLine = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Foreground = Brushes.White };
         private readonly Border _modeLineHost = new() { Margin = new Thickness(1, 4, 0, 0) };
         private readonly TranslateTransform _modeLineRise = new();
-        private readonly TextBlock _title = new() { FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Gold) };
-        private readonly TextBlock _twist = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Foreground = Brushes.White, Margin = new Thickness(0, 1, 0, 0) };
+        // Header type follows the feature pages' option rows (13 SemiBold label, 11.5 muted line).
+        private readonly TextBlock _title = new() { FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Gold), VerticalAlignment = VerticalAlignment.Center };
+        private readonly TextBlock _twist = new() { FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Foreground = Brushes.White, Margin = new Thickness(0, 1, 0, 0) };
+        // The 3 px edge accent every SettingCardStyle card carries (in the section hue), in gold.
+        private readonly Border _stripe = new()
+        {
+            Width = 3, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 10),
+            CornerRadius = new CornerRadius(0, 2, 2, 0), IsHitTestVisible = false,
+            Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xCF, 0x6B)),
+        };
         private readonly TextBlock _baseOff = new() { FontSize = 11, FontStyle = FontStyles.Italic, Opacity = 0.6, Foreground = Brushes.White, Margin = new Thickness(0, 3, 0, 0) };
         private readonly StackPanel _superPart = new();
         private readonly Grid _head;
@@ -84,8 +94,10 @@ namespace ConditioningControlPanel.Controls
         private static readonly Brush StarOn = Frozen(Color.FromRgb(0xFF, 0xCF, 0x6B));
         private static readonly Brush StarOff = Frozen(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF));
         private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
-        private readonly StackPanel _corner = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, 0, 0, 0) };
-        private readonly ContentPresenter _body = new() { Margin = new Thickness(0, 8, 0, 0) };
+        private readonly StackPanel _corner = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        // No margin of its own: a body starts with the thin gold rule, which carries the gap, so a
+        // box whose rows are all folded costs no height.
+        private readonly ContentPresenter _body = new();
         private readonly Path _ringArc;
         private readonly TextBlock _ringText = new() { FontSize = 8.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Mint), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         private readonly Grid _ring;
@@ -101,10 +113,12 @@ namespace ConditioningControlPanel.Controls
 
         public SuperBox()
         {
+            // The chrome of the page's own option cards (Resources/Theme/Controls.xaml
+            // SettingCardStyle: radius 12, 2 px edge, rows inset 16,8, the edge stripe), in gold.
             CornerRadius = new CornerRadius(12);
-            Padding = new Thickness(12, 8, 12, 10);
-            Margin = new Thickness(0, 10, 0, 2);
-            BorderThickness = new Thickness(1.2);
+            Padding = new Thickness(0);
+            Margin = new Thickness(0, 4, 0, 10);
+            BorderThickness = new Thickness(2);
 
             _v2Tag = new Border
             {
@@ -115,6 +129,7 @@ namespace ConditioningControlPanel.Controls
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
                 IsHitTestVisible = false,
                 Child = new TextBlock
                 {
@@ -149,8 +164,9 @@ namespace ConditioningControlPanel.Controls
             signGrid.Children.Add(_sheen);
             _signHost.Child = signGrid;
 
-            _head = new Grid { Margin = new Thickness(0, 0, 0, 6), MinHeight = 22 };
-            _head.Children.Add(_v2Tag);
+            // Free accounts only: the BASIC sign on its own line above the name row. The v2 tag
+            // rides the name row, so a supporter's box still says what it is.
+            _head = new Grid { Margin = new Thickness(0, 2, 0, 0), MinHeight = 22 };
             _head.Children.Add(_signHost);
 
             _star = new Button
@@ -180,12 +196,14 @@ namespace ConditioningControlPanel.Controls
             _help.SetResourceReference(StyleProperty, "HelpButtonStyle");
             var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
             titleRow.Children.Add(_title);
+            titleRow.Children.Add(_v2Tag);
             titleRow.Children.Add(_help);
-            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 0, 2) };
             text.Children.Add(titleRow);
             text.Children.Add(_twist);
 
-            var row = new Grid();
+            // As tall as one option row at least, so the head reads as the box's first row.
+            var row = new Grid { MinHeight = 36 };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -211,10 +229,13 @@ namespace ConditioningControlPanel.Controls
             _superPart.Children.Add(_modeLineHost);
             _superPart.Children.Add(_baseOff);
 
-            var root = new StackPanel();
+            var root = new StackPanel { Margin = new Thickness(16, 4, 16, 6) };
             root.Children.Add(_superPart);
             root.Children.Add(_body);
-            Child = root;
+            var card = new Grid();
+            card.Children.Add(_stripe);
+            card.Children.Add(root);
+            Child = card;
 
             Loaded += (_, _) =>
             {
@@ -308,6 +329,7 @@ namespace ConditioningControlPanel.Controls
             SuperChrome.TweenOpacity(_title, o, ms);
             SuperChrome.TweenOpacity(_twist, 0.7 * o, ms);
             SuperChrome.TweenOpacity(_v2Tag, o, ms);
+            SuperChrome.TweenOpacity(_stripe, lit ? 0.9 : 0.35, ms);
             SuperChrome.TweenOpacity(_picker, lit ? 1.0 : 0.75, ms);
             SuperChrome.TweenOpacity(_modeLine, 0.7 * o, ms);
             // The supporter sign is what a free player is asked for, so it stays readable.
