@@ -70,7 +70,9 @@ namespace ConditioningControlPanel.Avalonia
             w.Show();
             await opened.Task.WaitAsync(FrameTimeout);
             var (_, startupMs) = await NextFrame(w, SinceMain);
-            var sinceProcessMs = (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+            // Process start to the same frame as startup_ms (as WPF's twin): this await resumed ~270 ms later behind
+            // queued startup work. The two clocks are read together, so their difference is the pre-Main time.
+            var sinceProcessMs = startupMs + (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds - SinceMain.Elapsed.TotalMilliseconds;
 
             var handoff = tabs.Select(_ => new List<double>()).ToArray();
             var drawn = tabs.Select(_ => new List<double>()).ToArray();
