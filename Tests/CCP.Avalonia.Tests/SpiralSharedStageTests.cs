@@ -56,6 +56,7 @@ public sealed class SpiralSharedStageTests
             }
             finally
             {
+                SubliminalOverlay.CloseAll();   // a failed body must not leak a hosted card's stage lease
                 SpiralOverlay.CloseAll();
                 SpiralOverlay.SkipPlatformChecksForTests = false;
                 CoreSession.IsEngineRunningProvider = engine;
