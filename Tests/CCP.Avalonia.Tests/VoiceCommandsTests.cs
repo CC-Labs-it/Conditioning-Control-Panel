@@ -173,9 +173,13 @@ public sealed class VoiceCommandsTests
         await Until(() => mic.Starts > starts && engine.IsListening, 10);   // the wake loop listens again
     });
 
+    // This test injects commands, so it needs no wake loop or recognition model.
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
+        shell.StopVoiceInput();
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
@@ -210,6 +214,7 @@ public sealed class VoiceCommandsTests
         {
             shell.Autonomy.Stop();
             LockdownService.Current = null;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
