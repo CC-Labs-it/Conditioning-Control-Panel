@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -201,15 +202,20 @@ public sealed class RemoteRelayTests
     // permissive than the panic key. Under Lockdown or with the key off it stops the remote's effects only:
     // the session and engine survive and Circe's safety hold stays shut. The signal still goes out.
     [Theory]
-    [InlineData(true, true)]    // Lockdown on, panic key on
-    [InlineData(false, false)]  // panic key off
-    [InlineData(true, false)]
-    public async Task Stop_signal_under_Lockdown_or_panic_off_stops_only_the_remote_effects(bool lockdown, bool panicKey)
+    [InlineData(true, true, false)]    // Lockdown on, panic key on
+    [InlineData(false, false, false)]  // panic key off
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    public async Task Stop_signal_under_Lockdown_or_panic_off_stops_only_the_remote_effects(bool lockdown, bool panicKey, bool wearerStrict)
     {
         var (old, prevLd, oldStopSession, oldRefresh, oldChaster) = (CoreSettings.ServiceProvider, LockdownService.Current,
             RemoteCommands.StopSession, RemoteCommands.RefreshOverlays, ConditioningControlPanel.Services.Safety.PanicChasterHold.Service);
         var (sessionStops, holds) = (0, 0);
-        var settings = new SettingsService();
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-remote-stop-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var settings = new SettingsService(Path.Combine(dir, "settings.json"));
         CoreSettings.ServiceProvider = () => settings;
         var s = settings.Current;
         (s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.LockdownTripwiresEnabled) = (false, false, false);
@@ -219,6 +225,7 @@ public sealed class RemoteRelayTests
         ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => { holds++; return null; };
         try
         {
+            s.StrictLockEnabled = wearerStrict; // Lockdown records the wearer's value at activation.
             if (lockdown) ld.Activate(TimeSpan.FromMinutes(30));
             s.PanicKeyEnabled = panicKey;
             Assert.Equal(lockdown, ld.IsActive);
@@ -226,11 +233,11 @@ public sealed class RemoteRelayTests
             var f = new FakeRelay();
             using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
             s.SpiralEnabled = false; await r.StartAsync("light");
-            s.StrictLockEnabled = false; Assert.Null(RemoteCommands.Execute("enable_strict_lock", null)); Assert.Null(RemoteCommands.Execute("show_spiral", null));
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null)); Assert.Null(RemoteCommands.Execute("show_spiral", null));
             CoreFlash.Start(); Assert.True(CoreFlash.IsRunning);
             Assert.True(await r.SendSignalAsync("stop"));
             Assert.True(CoreFlash.IsRunning);
-            Assert.False(s.StrictLockEnabled); Assert.False(s.SpiralEnabled);
+            Assert.Equal(wearerStrict, s.StrictLockEnabled); Assert.False(s.SpiralEnabled);
             Assert.Equal("stop", (string?)f.Seen.Last().Body["text"]);
             Assert.Equal(0, sessionStops);
             Assert.True(CoreEngine.IsRunning);
@@ -247,6 +254,8 @@ public sealed class RemoteRelayTests
             RemoteCommands.ReleaseOverlayStop();
             (CoreSettings.ServiceProvider, LockdownService.Current, RemoteCommands.StopSession, RemoteCommands.RefreshOverlays,
                 ConditioningControlPanel.Services.Safety.PanicChasterHold.Service) = (old, prevLd, oldStopSession, oldRefresh, oldChaster);
+            settings.SealForReset();
+            Directory.Delete(dir, recursive: true);
         }
     }
 
