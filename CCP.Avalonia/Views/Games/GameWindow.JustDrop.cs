@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private WindowState _justDropWindowedState = WindowState.Normal;
         private PixelPoint _justDropPosition;
         private double _justDropWidth, _justDropHeight;
+        private double _justDropWindowedWidth, _justDropWindowedHeight;
         private bool _justDropHasFrame, _justDropChangingFrame;
 
         private void CaptureJustDropFrame()
@@ -53,8 +54,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
             if (screen == null) return;
             var scale = screen.Scaling > 0 ? screen.Scaling : 1;
-            Width = screen.Bounds.Width * .85 / scale;
-            Height = screen.Bounds.Height * .85 / scale;
+            if (_justDropWindowedWidth <= 0 || _justDropWindowedHeight <= 0)
+            {
+                var primary = screens.FirstOrDefault(s => s.IsPrimary) ?? screen;
+                var primaryScale = primary.Scaling > 0 ? primary.Scaling : 1;
+                _justDropWindowedWidth = primary.Bounds.Width * .85 / primaryScale;
+                _justDropWindowedHeight = primary.Bounds.Height * .85 / primaryScale;
+            }
+            Width = Math.Min(_justDropWindowedWidth, screen.Bounds.Width / scale);
+            Height = Math.Min(_justDropWindowedHeight, screen.Bounds.Height / scale);
             Position = new PixelPoint(screen.Bounds.X + (int)((screen.Bounds.Width - Width * scale) / 2),
                 screen.Bounds.Y + (int)((screen.Bounds.Height - Height * scale) / 2));
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -207,6 +215,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (WindowState == WindowState.FullScreen) return;
                 _justDropWindowedState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
                 CaptureJustDropFrame();
+                // WPF SetFullscreen :600-606 saves size only for a visible normal frame.
+                if (IsVisible && WindowState == WindowState.Normal && _justDropHasFrame)
+                {
+                    _justDropWindowedWidth = _justDropWidth;
+                    _justDropWindowedHeight = _justDropHeight;
+                }
                 WindowState = WindowState.FullScreen;
             }
             else if (WindowState == WindowState.FullScreen)
