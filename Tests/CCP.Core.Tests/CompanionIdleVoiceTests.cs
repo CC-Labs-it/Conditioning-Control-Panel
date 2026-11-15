@@ -15,9 +15,7 @@ public sealed class CompanionIdleVoiceTests
         var reactions = Read("Views/AvatarTube/AvatarTubeWindow.Reactions.cs");
         Assert.Equal(4, reactions.Split("unprompted: true").Length - 1);
         var speech = Read("Views/AvatarTube/AvatarTubeWindow.axaml.cs");
-        Assert.Contains("bool heldIdle = !MayVoice(unprompted)", speech);
-        Assert.Contains("!IsMuted && !heldIdle", speech);
-        Assert.Contains("text, mood, heldIdle)", speech);
+        Assert.Contains("bool heldIdle = !MayVoice(unprompted)", speech); Assert.Contains("!IsMuted && !heldIdle", speech); Assert.Contains("text, mood, heldIdle)", speech);
         Assert.Contains("unprompted: line.Unprompted", Read("Views/AvatarTube/AvatarTubeWindow.SpeechQueue.cs"));
         Assert.Equal(2, Read("Platform/BarkHead.cs").Split("unprompted: s.Unprompted").Length - 1);
     }
