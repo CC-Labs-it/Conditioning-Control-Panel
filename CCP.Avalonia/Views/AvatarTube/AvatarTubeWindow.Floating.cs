@@ -35,8 +35,32 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             loop.Start();
         }
 
+        private BeatLoop? _speakLoop;
+
+        /// <summary>WPF animates speech on its ungated float timer (Windowing.cs:765-776). While the owner gate
+        /// holds the idle loop, a playing portrait clip runs its own loop for just the clip's length.</summary>
+        private void StartSpeakingMotion()
+        {
+            var clip = _clipPlaying;
+            if (clip.IsCompleted || _floatLoop != null || !_floatWanted || !IsPortraitMode) return;
+            _speakLoop?.Stop();
+            BeatLoop? loop = null;
+            _speakLoop = loop = new BeatLoop(this, seconds =>
+            {
+                if (_speakLoop != loop || !IsPortraitMode) return;
+                PortraitMotion(seconds);
+                if (!clip.IsCompleted) return;
+                StopSpeakingMotion();   // the clip ended: this frame drew the idle mist, and she settles
+                ResetPortraitMotion();
+            });
+            loop.Start();
+        }
+
+        private void StopSpeakingMotion() { _speakLoop?.Stop(); _speakLoop = null; }
+
         private void StopFloatingAnimation()
         {
+            StopSpeakingMotion();
             _floatWanted = false;
             _floatLoop?.Stop();
             _floatLoop = null;

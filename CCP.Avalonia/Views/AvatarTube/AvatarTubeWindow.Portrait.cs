@@ -183,12 +183,23 @@ public partial class AvatarTubeWindow
 
     private readonly ScaleTransform _portraitBreath = new(), _mistScale = new();
     private readonly RotateTransform _portraitWobble = new();
+    // WPF xaml:511,530 turns each portrait layer about its centre; Avalonia's origin here is the feet
+    // (layout scale), so breath and wobble sit between a to-centre and from-centre shift per layer.
+    private readonly TranslateTransform[] _portraitPivot = { new(), new(), new(), new() };
+    private double _portraitLayoutScale = 1;
+    // WPF _isSpeakingAudio (Speech.cs:134,1980-2001): true only while a voiced clip actually plays.
+    private System.Threading.Tasks.Task _clipPlaying = System.Threading.Tasks.Task.CompletedTask;
 
     // WPF Windowing.cs:753-799 at its 16 ms step: breathing, wobble, a speaking shimmer and mist drift.
     private void PortraitMotion(double seconds)
     {
         double t = seconds / 0.016, angle = Math.Sin(t * 0.017) * 0.4, mist = t * 0.009;
-        bool speaking = !SpokenAudioDone.IsCompleted;
+        bool speaking = !_clipPlaying.IsCompleted;
+        for (int i = 0; i < 2; i++)
+        {
+            double c = this.FindControl<Image>(i == 0 ? "ImgAvatar" : "ImgAvatarB")!.Bounds.Height * _portraitLayoutScale / 2;
+            _portraitPivot[2 * i].Y = c; _portraitPivot[2 * i + 1].Y = -c;
+        }
         double vib = speaking ? Math.Sin(t * 0.45) * Math.Pow(Math.Max(0, Math.Sin(t * 0.035)), 3) : 0;
         _portraitBreath.ScaleX = _portraitBreath.ScaleY = 1 + Math.Sin(t * 0.013) * 0.01;
         _portraitWobble.Angle = angle + vib * 0.175;

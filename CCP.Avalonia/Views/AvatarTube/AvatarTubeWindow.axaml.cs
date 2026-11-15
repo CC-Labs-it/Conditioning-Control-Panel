@@ -834,7 +834,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // (its twin is a LayoutTransformControl wrapper). RenderTransform about the feet is the
             // same visual for a bottom-aligned avatar; only the parent's measured size differs, and
             // AvatarBorder's size is margin-driven anyway.
-            var scale = EffAvatarScale();
+            var scale = _portraitLayoutScale = EffAvatarScale();
             foreach (var name in new[] { "ImgAvatar", "ImgAvatarB", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
             {
                 var img = this.FindControl<Image>(name);
@@ -847,8 +847,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 // WPF Avatar.cs:765-771 sets LayoutTransform; xaml:512-517 bobs RenderTransform.
                 // .NET 10 WPF FrameworkElement.SetLayoutOffset appends layout first, render second
                 // (FrameworkElement.cs:5224,5256), so the bob displacement stays unscaled.
+                var pivot = name == "ImgAvatar" ? 0 : 2;
                 img.RenderTransform = name == "ImgAvatar" || name == "ImgAvatarB"
-                    ? new TransformGroup { Children = { new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _portraitBreath, _portraitWobble } }, _avatarFloat } }
+                    ? new TransformGroup { Children = { new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _portraitPivot[pivot], _portraitBreath, _portraitWobble, _portraitPivot[pivot + 1] } }, _avatarFloat } }
                     : transform;
             }
 
@@ -1374,6 +1375,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         // WPF Speech.cs:114,646-661: the expression leads the bubble and voice by 0.6 s.
                         _isGiggling = true;
                         spokenHandled = true;
+                        _clipPlaying = Task.CompletedTask;   // WPF _isSpeakingAudio stays false until the clip plays
                         var generation = _triggerAnimationGeneration;
                         var stop = SpeechDelayScheduler(TimeSpan.FromSeconds(0.6), () =>
                         {
@@ -1414,6 +1416,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         if (SpeechAudioPlayer is { } player) player(playSound, phraseAudioPath, barkVoice, spoken);
                         else PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, fallbackCue: preset && !trigger, soundCaller: soundCaller);
                         handled = true;
+                        _clipPlaying = clipDone.Task;   // a silent or cue-only line has already completed it
+                        StartSpeakingMotion();
                     }
 
                     SyncAskButtonsFor(text);
