@@ -15,6 +15,7 @@ app=$tmp/ConditioningControlPanel
 test -x "$app/CCP.Avalonia"
 test -x "$app/conditioning-control-panel.sh"
 test -f "$app/libvosk.so"
+test -f "$app/models/v5/latin_PP-OCRv5_rec_mobile_infer.onnx"   # OCR models (RapidScreenOcrEngine)
 id=io.github.CodeBambi.ConditioningControlPanel
 test -f "$app/LICENSE"
 # Every bundled native needs a notice (packaging/linux/THIRD-PARTY-NOTICES.txt names each .so).

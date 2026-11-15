@@ -47,11 +47,12 @@ if HOST not in pkgs and RUNTIME in pkgs:
 LISTED = ["microsoft.netcore.app.runtime.linux-x64", "microsoft.netcore.app.host.linux-x64", "skiasharp",
           "skiasharp.nativeassets.linux", "harfbuzzsharp", "harfbuzzsharp.nativeassets.linux", "microsoft.ml.onnxruntime",
           "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia",
-          "avalonia.controls.webview"]
+          "avalonia.controls.webview", "rapidocrnet", "clipper2"]
 FILES = [("microsoft.netcore.app.runtime.linux-x64", ["LICENSE.TXT", "THIRD-PARTY-NOTICES.TXT"]),
          ("skiasharp.nativeassets.linux", ["LICENSE.txt", "THIRD-PARTY-NOTICES.txt"]),
          ("harfbuzzsharp.nativeassets.linux", ["LICENSE.txt", "THIRD-PARTY-NOTICES.txt"]),
-         ("microsoft.ml.onnxruntime", ["LICENSE", "ThirdPartyNotices.txt"])]
+         ("microsoft.ml.onnxruntime", ["LICENSE", "ThirdPartyNotices.txt"]),
+         ("clipper2", ["License.txt"])]
 def find(pkg, name):
     for r in roots:
         f = os.path.join(r, pkg, pkgs[pkg], name)
