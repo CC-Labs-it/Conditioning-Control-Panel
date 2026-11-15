@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -174,6 +175,8 @@ public sealed class LeashAskTests
         {
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+            var oldClock = BeatLoop.Time;
+            BeatLoop.Time = new SteppedTime(); // The WPF thud overshoots; inspect the actual starting frame.
             try
             {
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
@@ -181,8 +184,9 @@ public sealed class LeashAskTests
                 LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
-                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
+                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it
                 Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
+                Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
@@ -191,7 +195,7 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+            finally { BeatLoop.Time = oldClock; (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
     [Fact]
@@ -210,6 +214,26 @@ public sealed class LeashAskTests
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        Run((shell, page, wire, _) =>
+        {
+            // Model the two-second shell poll landing after the page's manual Look.
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ask.IsVisible);
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((_, page, wire, _) =>
