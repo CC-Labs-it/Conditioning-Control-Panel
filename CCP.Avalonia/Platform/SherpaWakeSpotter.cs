@@ -240,13 +240,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         using var stream = _createStream(spk);
                         return _decode(spk, stream, audio) || _decode(spk, stream, new float[16000 / 3]); // trailing silence flushes
                     }
-                    for (int k = 0; k < caught.Length; k++)
+                    for (int k = 0; k < caught.Length && !ct.IsCancellationRequested; k++)
                     {
                         using var spk = _factory(m, (float)SherpaWakeService.CalibrationCandidates[k], (float)Math.Clamp(boost, 0.0, 5.0));
                         fired[k] = amb != null && Fires(spk, amb);
-                        foreach (var say in says) if (Fires(spk, say)) caught[k]++;
+                        foreach (var say in says) if (!ct.IsCancellationRequested && Fires(spk, say)) caught[k]++;
                     }
-                }, ct).ConfigureAwait(false);
+                }).ConfigureAwait(false);
+                // Stop or panic during the sweep: a half-swept table must not be saved as the sensitivity.
+                if (ct.IsCancellationRequested) return (null, Loc.Get("she_wake_cal_cancelled"));
                 if (SherpaWakeService.SelectCalibrationThreshold(says.Count, caught, fired) is not { } pick)
                     return (null, Loc.GetF("she_wake_cal_few_caught", caught.Max(), says.Count));
                 var (t, c, risk) = pick;

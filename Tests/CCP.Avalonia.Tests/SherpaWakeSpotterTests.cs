@@ -260,6 +260,30 @@ public sealed class SherpaWakeCaptureTests
         (spk, _, samples) => ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f));
 
     [Fact]
+    public async System.Threading.Tasks.Task CancelDuringSweepDiscardsTheResult()
+    {
+        var root = Model(); var mic = new Mic();
+        using var cts = new System.Threading.CancellationTokenSource();
+        int decodes = 0;
+        using var kws = new SherpaWakeSpotter(root, (_, t, _) => new Th(t), _ => new Handle(), (spk, _, samples) =>
+        {
+            if (++decodes == 1) cts.Cancel(); // Stop/panic lands while the sweep decodes
+            return ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f);
+        });
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, cts.Token);
+            Feed(mic, 8, 0);
+            for (int say = 0; say < 5; say++) { Feed(mic, 10, 0x4000); Feed(mic, 12, 0); }
+            var (threshold, message) = await run;
+            Assert.Null(threshold);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("she_wake_cal_cancelled"), message);
+            Assert.True(decodes < 4); // the sweep stopped instead of decoding every candidate
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task CalibrationFloorFollowsRisingRoomNoise()
     {
         var root = Model(); var mic = new Mic();
