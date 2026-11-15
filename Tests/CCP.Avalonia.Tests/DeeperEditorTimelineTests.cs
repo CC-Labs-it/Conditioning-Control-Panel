@@ -102,10 +102,13 @@ public sealed class DeeperEditorTimelineTests
                 Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
                 await Task.Delay(50);
             }
-            // A late writer on the suite profile must not overwrite this editor's persisted value.
-            var other = new ConditioningControlPanel.Services.SettingsService();
+            // A separate profile write must not overwrite this editor's persisted value.
+            var otherPath = Path.Combine(directory, "other", "settings.json");
+            var other = new ConditioningControlPanel.Services.SettingsService(otherPath);
             other.Current.DeeperEditorTimelineHeight = 160;
             Assert.True(other.TrySaveImmediate());
+            Assert.True(File.Exists(otherPath));
+            Assert.Equal(160, new ConditioningControlPanel.Services.SettingsService(otherPath).Current.DeeperEditorTimelineHeight);
             Assert.Equal(saved, new ConditioningControlPanel.Services.SettingsService(settingsPath).Current.DeeperEditorTimelineHeight);
             editor.ForceClose();
             next = new DeeperEditorWindow(new Enhancement(), null);
