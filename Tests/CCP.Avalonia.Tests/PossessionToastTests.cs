@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections;
 using System.Reflection;
 using Pointer = Avalonia.Input.Pointer;
+using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using System.Threading;
@@ -14,6 +16,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
 using ConditioningControlPanel.Services.Possession;
@@ -248,8 +251,9 @@ public class PossessionToastTests
         {
             var apply = effect.ApplyAsync(ctx, null, CancellationToken.None);
             var toast = Assert.IsType<Border>(Assert.Single(layer.Children));
-            var face = Assert.IsType<TextBlock>(Assert.IsType<Grid>(toast.Child).Children[0]);
-            Assert.Equal("◆", face.Text);
+            var face = Assert.IsType<IconGlyph>(Assert.IsType<Grid>(toast.Child).Children[0]);
+            Assert.Equal(IconKind.Diamond, face.Kind); Assert.Equal(IconVariant.Filled, face.Variant);
+            Assert.Equal(15, face.Size); Assert.False(face.IsFallback);
             var brush = Assert.IsAssignableFrom<ISolidColorBrush>(border ? toast.BorderBrush : face.Foreground);
             Assert.Equal(Color.Parse("#FF8A5C"), brush.Color);
             await effect.UndoAsync(TimeSpan.Zero); await apply;

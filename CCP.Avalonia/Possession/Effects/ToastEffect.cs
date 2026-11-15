@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Possession;
 using ConditioningControlPanel.Services.Possession.Effects;
@@ -44,7 +45,7 @@ internal sealed class ToastEffect : PossessionEffectBase
         Control portrait = face != null
             ? new Border { Width = 30, Height = 38, CornerRadius = new CornerRadius(4), ClipToBounds = true,
                 Background = new SolidColorBrush(Color.Parse("#DC143C")), Child = new Image { Source = face, Stretch = Stretch.UniformToFill } }
-            : new TextBlock { Text = "◆", Foreground = new SolidColorBrush(EmberAttribution.Ember), FontSize = 15, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
+            : new IconGlyph { Kind = IconKind.Diamond, Variant = IconVariant.Filled, Foreground = new SolidColorBrush(EmberAttribution.Ember), Size = 15, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
         row.Children.Add(portrait);
         var text = new TextBlock { Text = line, Foreground = new SolidColorBrush(Color.Parse("#FFE3DA")), FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0) };
