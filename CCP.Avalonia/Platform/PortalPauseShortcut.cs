@@ -97,7 +97,7 @@ internal sealed class PortalPauseShortcut : IDisposable
                 w.WriteString(Id);
                 w.WriteDictionary(new Dictionary<string, VariantValue>
                 {
-                    ["description"] = Loc.Get("btn_devices_pause"),
+                    ["description"] = Loc.Get("setting_pause_key"),
                     ["preferred_trigger"] = binding._trigger,
                 });
                 w.WriteArrayEnd(shortcuts);
