@@ -280,7 +280,7 @@ public sealed partial class GameWindowTests
             var ack = sent.Last();
             Assert.Equal("fx-ack", (string?)ack["type"]);
             Assert.Equal("t7", (string?)ack["token"]);
-            Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+            Assert.Equal(new[] { "gif-rain", "glitch-bubbles" }, ack["fired"]!.Select(x => (string?)x));
             Assert.All(ack["skipped"]!, skip => Assert.Equal("unknown", (string?)skip["why"]));
             w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"t8\",\"fxId\":\"fx.unknown\",\"station\":\"breakout\"}");
             var unknown = sent.Last();
