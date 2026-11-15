@@ -25,6 +25,8 @@ namespace ConditioningControlPanel.Services
         bool IsFloating(bool strict) => false;
         bool TryFloatingTrigger(bool userInitiated) => false;
         bool FloatingRunOpen => false;
+        int FloatingLimit => 1;
+        int FloatingUp => 0;
         /// <summary>WPF VideoService.cs:2305-2313: wait while bubble count owns the screen.</summary>
         bool BubbleCountActive => false;
         void Freeze() { }
@@ -335,6 +337,15 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             try
             {
+                // WPF VideoService.cs:2945: an open floating run can accept another scheduled window.
+                if (_playing && _host.FloatingRunOpen && _host.FloatingUp > 0
+                    && _host.IsFloating(IsStrict) && _host.IsFloating(CoreSettings.Current.StrictLockEnabled)
+                    && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1)
+                {
+                    if (_host.FloatingUp < _host.FloatingLimit) _host.TryFloatingTrigger(userInitiated: false);
+                    ScheduleNext(_host.FloatingUp < _host.FloatingLimit ? FloatingJoinDelay() : null);
+                    return;
+                }
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
                 if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
@@ -347,10 +358,14 @@ namespace ConditioningControlPanel.Services
             {
                 // WPF #388: a throwing trigger must not end the session's videos.
                 Log.Error(ex, "VideoService: scheduler tick failed - re-arming scheduler");
-                _playing = false;
+                if (!_host.FloatingRunOpen) _playing = false;
                 ScheduleNext();
             }
         }
+
+        private double? FloatingJoinDelay() => Video.MandatoryVideoPresentation.JoinDelaySeconds(
+            CoreSettings.Current.VideosPerHour, _host.FloatingLimit, _random.NextDouble(),
+            CoreSettings.Current.MandatoryVideoFloatingTogether);
 
         // WPF VideoService.cs:8197: never hand an uncached Scrolller URL to the player.
         // Resolve again after pre-roll because the licence or cache can change in the meantime.
@@ -526,6 +541,8 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); return; }
                 // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
                 if (!_playing || generation != _retryGeneration) return;
+                if (_running && _host.FloatingRunOpen && _host.FloatingUp > 0 && _host.IsFloating(strict))
+                    ScheduleNext(_host.FloatingUp < _host.FloatingLimit ? FloatingJoinDelay() : null);
                 LastVideoPath = path;
                 try { VideoStarted?.Invoke(); }
                 catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
@@ -664,6 +681,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            if (_playing && _host.FloatingRunOpen) Dispose(ref _scheduler);
             _feedDefer.Reset(); // A panic cannot leave a held trigger behind.
             Dispose(ref _bubbleWait);
             _waitEndsRun = false;
