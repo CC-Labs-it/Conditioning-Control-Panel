@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Animation;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -16,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -335,6 +338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // target and method, which is what makes "is the sink still MINE?" answerable at all;
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
+            CancelPoseFade();
             _avatarSetsClosed = true;
             if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;
             StopRainPlayback();
@@ -551,16 +555,47 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <para>ponytail: WPF's PoseTimer_Tick also picks a TALKING pose while a bubble is up.
         /// That lives in Avatar.cs with the pose-to-mouth mapping and did not port.</para>
         /// </summary>
-        private void AdvancePose()
+        private CancellationTokenSource? _poseFade;
+
+        private void CancelPoseFade()
+        {
+            _poseFade?.Cancel();
+            _poseFade?.Dispose();
+            _poseFade = null;
+        }
+
+        internal void AdvancePose()
         {
             for (int i = 1; i <= _avatarPoses.Length; i++)
             {
                 int next = (_currentPoseIndex + i) % _avatarPoses.Length;
                 if (_avatarPoses[next] == null) continue;
                 _currentPoseIndex = next;
-                ShowCurrentPose();
+                _ = FadeToCurrentPose();
                 return;
             }
+        }
+
+        private async Task FadeToCurrentPose()
+        {
+            CancelPoseFade();
+            var run = _poseFade = new CancellationTokenSource();
+            var fade = new Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(150),
+                Children =
+                {
+                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 1d) } },
+                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.3d) } }
+                }
+            };
+            try { await fade.RunAsync(_imgAvatar, run.Token); }
+            catch (OperationCanceledException) { return; }
+            if (run.IsCancellationRequested) return;
+            ShowCurrentPose();
+            _imgAvatar.Opacity = 1;
+            _poseFade = null;
+            run.Dispose();
         }
 
         private void ShowCurrentPose()
@@ -1031,6 +1066,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// more than one pose to rotate between.</summary>
         private void ApplyAvatarSet()
         {
+            CancelPoseFade();
+            _imgAvatar.Opacity = 1;
             _poseTimer.Stop();
             _avatarPoses = LoadAvatarPoses(_currentAvatarSet);
             _currentPoseIndex = 0;
