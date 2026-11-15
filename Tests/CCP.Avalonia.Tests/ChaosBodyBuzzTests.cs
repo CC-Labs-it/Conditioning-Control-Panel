@@ -25,6 +25,8 @@ public class ChaosBodyBuzzTests
         var zapField = typeof(ChaosRunHost).GetField("_lastBodyBuzzZap", BindingFlags.NonPublic | BindingFlags.Static)!;
         var previousZap = zapField.GetValue(null);
         var sentinel = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        var ambient = new AmbientBubble { Popping = true };
+        AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Add(ambient));
         try
         {
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
@@ -32,9 +34,11 @@ public class ChaosBodyBuzzTests
             await ShockwaveSelectsRendererAndCancelsHops(false);
             Assert.True(ChaosFieldFxOverlay.SkipPlatformChecksForTests);
             Assert.Equal(sentinel, zapField.GetValue(null));
+            AvaloniaTestDispatcher.Run(() => Assert.Contains(ambient, BubbleOverlay.Field.Bubbles));
         }
         finally
         {
+            AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Remove(ambient));
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = previous;
             zapField.SetValue(null, previousZap);
         }
@@ -56,6 +60,7 @@ public class ChaosBodyBuzzTests
         var composited = ChaosSkiaFxOverlay.Composited;
         var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
         var language = LocalizationManager.Instance.CurrentLanguage;
+        var incomingBubbles = BubbleOverlay.Field.Bubbles.ToArray();
         try
         {
             settings.ChaosSkiaFxEnabled = skia;
@@ -66,6 +71,7 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
+            BubbleOverlay.Field.Bubbles.Clear();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
@@ -93,6 +99,7 @@ public class ChaosBodyBuzzTests
         finally
         {
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(incomingBubbles);
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
             LocalizationManager.Instance.SetLanguage(language);
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();

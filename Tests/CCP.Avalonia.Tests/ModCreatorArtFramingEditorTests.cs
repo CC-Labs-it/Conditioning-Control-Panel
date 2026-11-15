@@ -80,9 +80,8 @@ public class ModCreatorArtFramingEditorTests
             Assert.False(buttons[Slot].IsVisible);
             await (Task)Call("SetImageSlot", Slot, path, false)!;
             Assert.True(buttons[Slot].IsVisible);
-            Click(buttons[Slot]);
-            var dialog = Assert.Single(w.OwnedWindows);
-            Dispatcher.UIThread.RunJobs();
+            Window Open() { Click(buttons[Slot]); var opened = Assert.Single(w.OwnedWindows); Dispatcher.UIThread.RunJobs(); return opened; }
+            var dialog = Open();
             var cards = dialog.GetLogicalDescendants().OfType<StackPanel>().Where(c => c.Tag is string id && (id == Rail || id == Play)).ToList();
             Assert.Equal(2, cards.Count);
             var holder = cards.Single(c => Equals(c.Tag, Rail)).Children.OfType<Grid>().Single();
@@ -101,9 +100,7 @@ public class ModCreatorArtFramingEditorTests
             Click(dialog.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "Cancel")));
             Dispatcher.UIThread.RunJobs();
             Assert.Null(w.BuildManifestFromForm().ArtFraming);
-            Click(buttons[Slot]);
-            dialog = Assert.Single(w.OwnedWindows);
-            Dispatcher.UIThread.RunJobs();
+            dialog = Open();
             holder = dialog.GetLogicalDescendants().OfType<StackPanel>().Single(c => Equals(c.Tag, Rail)).Children.OfType<Grid>().Single();
             at = holder.TranslatePoint(new Point(holder.Width / 2, holder.Height / 2), dialog)!.Value;
             dialog.MouseWheel(at, new Vector(0, 1));
@@ -151,13 +148,7 @@ public class ModCreatorArtFramingEditorTests
             }
             using var preview = ModCreatorWindow.DecodeFramingPreview(path);
             Assert.Equal(new PixelSize(expectedWidth, expectedHeight), preview.PixelSize);
-            var pixel = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
-            try
-            {
-                preview.CopyPixels(new PixelRect(expectedWidth / 2, expectedHeight / 2, 1, 1), pixel, 4, 4);
-                Assert.Equal(new byte[] { 15, 60, 230, 255 }, Enumerable.Range(0, 4).Select(i => System.Runtime.InteropServices.Marshal.ReadByte(pixel, i)));
-            }
-            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pixel); }
+            Assert.Equal(new byte[] { 15, 60, 230, 255 }, Pixel(preview, expectedWidth / 2, expectedHeight / 2));
         }
         finally { File.Delete(path); }
     });
@@ -167,19 +158,19 @@ public class ModCreatorArtFramingEditorTests
     {
         using var preview = ModCreatorWindow.DecodeFramingPreview(Path.Combine(AppContext.BaseDirectory, "Assets", "framing-adam7.png"));
         Assert.Equal(new PixelSize(900, 600), preview.PixelSize);
-        var pixel = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
-        try
-        {
-            preview.CopyPixels(new PixelRect(400, 0, 1, 1), pixel, 4, 4);
-            Assert.True(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 2) > 240);
-            preview.CopyPixels(new PixelRect(401, 599, 1, 1), pixel, 4, 4);
-            Assert.True(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 0) > 240);
-            preview.CopyPixels(new PixelRect(400, 300, 1, 1), pixel, 4, 4);
-            Assert.InRange(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 2), 110, 145);
-            Assert.InRange(System.Runtime.InteropServices.Marshal.ReadByte(pixel, 0), 110, 145);
-        }
-        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pixel); }
+        Assert.True(Pixel(preview, 400, 0)[2] > 240);
+        Assert.True(Pixel(preview, 401, 599)[0] > 240);
+        var middle = Pixel(preview, 400, 300);
+        Assert.InRange(middle[2], 110, 145);
+        Assert.InRange(middle[0], 110, 145);
     });
+
+    private static byte[] Pixel(Bitmap image, int x, int y)
+    {
+        var pixel = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try { image.CopyPixels(new PixelRect(x, y, 1, 1), pixel, 4, 4); return Enumerable.Range(0, 4).Select(i => System.Runtime.InteropServices.Marshal.ReadByte(pixel, i)).ToArray(); }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pixel); }
+    }
 
     [Fact]
     public void SurfaceTitlesAndScrimsMatchTheirRegistry() => AvaloniaTestDispatcher.Run(() =>
