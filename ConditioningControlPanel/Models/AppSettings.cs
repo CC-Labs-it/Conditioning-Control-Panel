@@ -3138,6 +3138,13 @@ namespace ConditioningControlPanel.Models
             set { _launcherSoundEnabled = value; OnPropertyChanged(); }
         }
 
+        // The launcher's doors (Services/Launcher/LauncherDoorRules.cs). The last game started
+        // from the launcher feeds the Games door's Continue button; the seen list is the NEW
+        // cards the Games page has already shown, so the door's "N new" stamp can leave. Both
+        // describe this PC's launcher, nobody's progress.
+        public string LauncherLastPlayedId { get; set; } = "";
+        public List<string> LauncherSeenNewIds { get; set; } = new();
+
         private bool _panicKeyEnabled = true; // ESC to stop
         public bool PanicKeyEnabled
         {
