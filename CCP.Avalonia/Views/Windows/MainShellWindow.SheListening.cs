@@ -328,6 +328,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ? "she_wake_model_active" : "she_wake_model_failed";
             var text = Loc.Get(key);
             tab.TxtSL_WakeEngineStatus.Text = text;
+            // WPF MainWindow.SheListening.cs:151-169: green when the engine runs, grey otherwise.
+            tab.TxtSL_WakeEngineStatus.Foreground = new SolidColorBrush(key == "she_wake_model_active" ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0x88, 0x88, 0x88));
             if (tab.TxtSL_WakeEngineStatus.Parent?.Parent is Control row) ToolTip.SetTip(row, text);
         }
 
@@ -341,7 +343,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (CalibratingWake || tab == null) return;
             if (wake?.IsConfigured != true || mic == null)
             {
-                await Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word", "The offline wake-word model isn't installed yet, so there's nothing to calibrate.");
+                await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("she_wake_cal_title"), Loc.Get("she_wake_cal_no_model"));
                 return;
             }
             if (!s.MicConsentGiven)
@@ -358,12 +360,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StopVoiceInput();
                 for (int i = 0; i < 20 && (wake.IsListening || VoiceSpeech?.IsListening == true); i++) await System.Threading.Tasks.Task.Delay(25);
                 lbl.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA0, 0xFF));
-                lbl.Text = "Listening… say “Hey Bambi” 5 times, pausing between each.";
+                lbl.Text = Loc.Get("she_wake_cal_start");
                 var progress = new Progress<(bool Analyze, int Captured)>(p => lbl.Text = p.Analyze
-                    ? "Got it — finding your best sensitivity…" : $"Listening… say “Hey Bambi” clearly  ({p.Captured}/5)");
+                    ? Loc.Get("she_wake_cal_analyze") : Loc.GetF("she_wake_cal_progress", p.Captured, 5));
                 (double? Threshold, string Message) r;
                 try { r = await wake.CalibrateAsync(mic, s.SpeechWakeBoost, s.SpeechNoiseSuppression, progress, default); }
-                catch (Exception ex) { Log.Warning(ex, "Wake calibration failed"); r = (null, "Calibration failed — see logs."); }
+                catch (Exception ex) { Log.Warning(ex, "Wake calibration failed"); r = (null, Loc.Get("she_wake_cal_failed")); }
                 if (r.Threshold is { } t) { s.SpeechWakeThreshold = t; CoreSettings.Save(); }
                 lbl.Foreground = new SolidColorBrush(r.Threshold != null ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0xFF, 0xB0, 0xB0));
                 lbl.Text = r.Message;

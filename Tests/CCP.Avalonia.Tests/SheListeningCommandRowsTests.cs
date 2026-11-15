@@ -59,27 +59,17 @@ public sealed class SheListeningCommandRowsTests
             shell.Show();
             try
             {
-                var english = new[] { Loc.Get("she_wake_unavailable_tooltip"),
-                    Loc.Get("she_wake_unavailable_status"), Loc.Get("she_wake_calibration_unavailable") };
-                Assert.Contains("not available", english[0]);
-                Assert.Equal("The optional wake engine is not available in this version. Using the built-in recognizer.", english[1]);
+                var english = Loc.Get("she_wake_cal_no_model");
+                shell.WakeSpotterOverride = new ConditioningControlPanel.Avalonia.Platform.SherpaWakeSpotter(System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString()));
                 foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
                 {
                     loc.SetLanguage(code);
                     Dispatcher.UIThread.RunJobs();
-                    var tooltip = Loc.Get("she_wake_unavailable_tooltip");
-                    var status = Loc.Get("she_wake_unavailable_status");
-                    var calibration = Loc.Get("she_wake_calibration_unavailable");
-                    Assert.NotEqual("she_wake_unavailable_tooltip", tooltip);
-                    Assert.NotEqual("she_wake_unavailable_status", status);
-                    Assert.NotEqual("she_wake_calibration_unavailable", calibration);
-                    if (code != "en")
-                    {
-                        Assert.NotEqual(english[0], tooltip);
-                        Assert.NotEqual(english[1], status);
-                        Assert.NotEqual(english[2], calibration);
-                    }
-                    Assert.Equal(tooltip, ToolTip.GetTip(grid));
+                    var status = Loc.Get("she_wake_model_missing");
+                    var calibration = Loc.Get("she_wake_cal_no_model");
+                    Assert.NotEqual("she_wake_cal_no_model", calibration);
+                    if (code != "en") Assert.NotEqual(english, calibration);
+                    Assert.Equal(status, ToolTip.GetTip(grid));
                     Assert.Equal(status, tab.TxtSL_WakeEngineStatus.Text);
                     shell.SL_Calibrate_Click();
                     var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());

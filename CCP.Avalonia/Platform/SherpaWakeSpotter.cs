@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Speech;
 using SherpaOnnx;
 
@@ -169,8 +170,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             SherpaWakeService.ModelFiles m;
             lock (_gate)
             {
-                if (_disposed || SherpaWakeService.FindModel(_root) is not { } model) return (null, "The wake-word model isn't installed.");
-                if (_active || !mic.HasDevice) return (null, "The microphone is busy or missing — stop listening, then calibrate.");
+                if (_disposed || SherpaWakeService.FindModel(_root) is not { } model) return (null, Loc.Get("she_wake_cal_no_model"));
+                if (_active || !mic.HasDevice) return (null, Loc.Get("she_wake_cal_busy"));
                 (m, _active) = (model, true);
             }
             var says = new List<float[]>(); var ambient = new List<float>(); var cur = new List<float>();
@@ -210,8 +211,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 await done.Task.ConfigureAwait(false);
                 try { capture.Dispose(); } catch { } finally { capture = null; }
                 lock (says) done.TrySetResult(false); // waits out an in-flight frame before the lists are read
-                if (ct.IsCancellationRequested) return (null, "Calibration cancelled.");
-                if (says.Count < 2) return (null, $"Only heard {says.Count} clear say(s). Try again — say “Hey Bambi” clearly, with a pause between each.");
+                if (ct.IsCancellationRequested) return (null, Loc.Get("she_wake_cal_cancelled"));
+                if (says.Count < 2) return (null, Loc.GetF("she_wake_cal_few_heard", says.Count));
                 progress?.Report((true, says.Count));
                 var amb = ambient.Count > 8000 ? ambient.ToArray() : null; // ~0.5s+ of room tone to judge
                 var caught = new int[SherpaWakeService.CalibrationCandidates.Length]; var fired = new bool[caught.Length];
@@ -230,10 +231,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     }
                 }, ct).ConfigureAwait(false);
                 if (SherpaWakeService.SelectCalibrationThreshold(says.Count, caught, fired) is not { } pick)
-                    return (null, $"Only caught {caught.Max()}/{says.Count} clearly — didn't change anything. Try again: say “Hey Bambi” a bit louder, with a clear pause between each.");
+                    return (null, Loc.GetF("she_wake_cal_few_caught", caught.Max(), says.Count));
                 var (t, c, risk) = pick;
-                return (t, risk ? $"Calibrated (recall-biased) — caught {c}/{says.Count} at sensitivity {t:0.00}. It may occasionally wake on background noise; re-run somewhere quieter to tighten it."
-                    : $"Calibrated to your voice — caught {c}/{says.Count} at sensitivity {t:0.00}.");
+                return (t, Loc.GetF(risk ? "she_wake_cal_done_noisy" : "she_wake_cal_done", c, says.Count, t));
             }
             finally
             {

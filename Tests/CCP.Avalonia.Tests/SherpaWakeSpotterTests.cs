@@ -206,7 +206,7 @@ public sealed class SherpaWakeCaptureTests
             for (int say = 0; say < 5; say++) { Chunks(10, 0x40); Chunks(12, 0); }
             var (threshold, message) = await run;
             Assert.Equal(.20, threshold!.Value, 3);
-            Assert.Contains("caught 5/5", message);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("she_wake_cal_done", 5, 5, .20), message);
             Assert.Equal(1, mic.Stops);
         }
         finally { Directory.Delete(root, true); }
@@ -239,6 +239,8 @@ public sealed class SherpaWakeCaptureTests
                     Assert.NotEqual(key, expected);
                     Assert.Equal(expected, tab.TxtSL_WakeEngineStatus.Text);
                     Assert.Equal(expected, global::Avalonia.Controls.ToolTip.GetTip(row));
+                    Assert.Equal(key == "she_wake_model_active" ? global::Avalonia.Media.Color.FromRgb(0x90, 0xEE, 0x90) : global::Avalonia.Media.Color.FromRgb(0x88, 0x88, 0x88),
+                        ((global::Avalonia.Media.ISolidColorBrush)tab.TxtSL_WakeEngineStatus.Foreground!).Color);
                 }
             }
         }
