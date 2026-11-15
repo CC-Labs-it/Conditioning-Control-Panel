@@ -960,14 +960,16 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF MainWindow.RefreshMarqueeFromSettings (Marquee.cs:740): the server's marquee line, or null. Never throws.</summary>
-        public async Task<string?> GetMarqueeMessageAsync()
+        public async Task<string?> GetMarqueeMessageAsync(Action<string>? onBody = null)
         {
             try
             {
                 using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var response = await _http.GetAsync($"{SERVER_URL}/config/marquee", cts.Token);
                 if (!response.IsSuccessStatusCode) return null;
-                var message = JObject.Parse(await response.Content.ReadAsStringAsync())["message"]?.ToString();
+                var body = await response.Content.ReadAsStringAsync();
+                onBody?.Invoke(body);
+                var message = JObject.Parse(body)["message"]?.ToString();
                 return string.IsNullOrWhiteSpace(message) ? null : message;
             }
             catch (Exception ex)

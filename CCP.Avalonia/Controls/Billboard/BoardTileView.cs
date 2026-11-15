@@ -2,8 +2,7 @@
 // raised 3D tiles. The tile maths and the software raster are shared (CCP.Core BoardScene,
 // BoardRaster); this view only owns the clock and blits the raster into one WriteableBitmap, as WPF.
 // The clock is the window's shared 30 fps BeatLoop (WPF FrameClock at 30 fps); its time source is
-// BeatLoop.Time, so tests step it. The board card's provider (WPF BoardProvider and BoardService)
-// is not on this head yet: the view is registered and waits for it.
+// BeatLoop.Time, so tests step it.
 
 using System;
 using System.Collections.Generic;
