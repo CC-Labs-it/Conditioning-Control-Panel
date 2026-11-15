@@ -846,7 +846,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
-            if (b.Popping) return;   // WPF BubbleService.cs:4647 rejects an already popping bubble.
+            if (b.Popping || b.ClaimedByAvatar) return;   // WPF BubbleService.cs:4647-4659.
             if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
