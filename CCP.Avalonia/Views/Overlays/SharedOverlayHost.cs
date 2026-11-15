@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -8,7 +9,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
 /// <summary>WPF ChaosBubbleHostOverlay's passive click-through stage for one screen (its own DPI).
-/// The caller keeps one lease per screen; disposing it closes the stage. UI thread only.</summary>
+/// Each consumer keeps one lease per screen; the stage closes when its last lease is disposed. UI thread only.</summary>
 // ponytail: per-screen legacy stages; existing chaos/tint consumers still need a compositor migration.
 internal static class SharedOverlayHost
 {
@@ -19,17 +20,26 @@ internal static class SharedOverlayHost
 
     internal static Func<Window, bool> Raise = X11Overlay.Raise; // WPF SubliminalService.cs:829
 
+    // WPF compositor: one host per screen, so consumers' ZIndex orders them (SpiralLayer above SubliminalLayer).
+    internal sealed class Stage { internal Window Window = null!; internal Grid Canvas = null!; internal int Leases; }
+    private static readonly Dictionary<PixelRect, Stage> Stages = new();
+
     internal sealed class Lease : IDisposable
     {
-        private Window? _window;
+        private Stage? _stage;
         internal Grid Canvas { get; }
-        internal Lease(Window window, Grid canvas) => (_window, Canvas) = (window, canvas);
-        internal void Raise() { if (_window != null) SharedOverlayHost.Raise(_window); }
-        public void Dispose() { var w = _window; _window = null; w?.Close(); }
+        internal Lease(Stage stage) => (_stage, Canvas) = (stage, stage.Canvas);
+        internal void Raise() { if (_stage != null) SharedOverlayHost.Raise(_stage.Window); }
+        public void Dispose()
+        {
+            var s = _stage; _stage = null;
+            if (s != null && --s.Leases == 0) s.Window.Close(); // the last consumer closes the stage
+        }
     }
 
     internal static Lease? Acquire(PixelRect bounds)
     {
+        if (Stages.TryGetValue(bounds, out var live)) { live.Leases++; return new Lease(live); }
         var canvas = new Grid { IsHitTestVisible = false };
         var window = new SharedOverlayStageWindow
         {
@@ -45,7 +55,11 @@ internal static class SharedOverlayHost
             window.Show();
         }
         catch { window.Close(); return null; } // caller falls back to classic cards
-        return new Lease(window, canvas);
+        var stage = new Stage { Window = window, Canvas = canvas, Leases = 1 };
+        Stages[bounds] = stage;
+        // A panic sweep may close it under live leases: forget it so the next Acquire builds a new one.
+        window.Closed += (_, _) => { if (Stages.TryGetValue(bounds, out var s) && s == stage) Stages.Remove(bounds); };
+        return new Lease(stage);
     }
 }
 internal sealed class SharedOverlayStageWindow : Window { }

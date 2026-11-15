@@ -23,6 +23,8 @@ public sealed class SpiralSharedStageTests
     private const string TinyGif =
         "R0lGODlhBAAEAIEAAP8AAAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAwAAACwAAAAABAAEAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEA/wAAAAAAAAAAAAAICQABCBxIsCCAgAAh+QQBAwABACwAAAAABAAEAIEAAP8AAAAAAAAAAAAICQABCBxIsCCAgAA7";
 
+    private static PixelRect _bounds;
+
     private static Task WithSpiral(bool stage, Func<Window, AppSettings, Func<Window?>, Func<int>, Task> body)
         => AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -38,7 +40,7 @@ public sealed class SpiralSharedStageTests
             var engine = CoreSession.IsEngineRunningProvider;
             Window? stageWindow = null;
             var acquired = 0;
-            SharedOverlayHost.Configure = (w, _) => { acquired++; stageWindow = w; w.Width = 300; w.Height = 200; return stage; };
+            SharedOverlayHost.Configure = (w, b) => { _bounds = b; acquired++; stageWindow = w; w.Width = 300; w.Height = 200; return stage; };
             var host = new Window();
             try
             {
@@ -95,6 +97,28 @@ public sealed class SpiralSharedStageTests
 
         SpiralOverlay.Stop();
         Assert.False(SpiralOverlay.IsShowing);
+        Assert.False(stage()!.IsVisible);
+        await Task.CompletedTask;
+    });
+
+    // WPF CompositorLayers: SpiralLayer (60) draws over SubliminalLayer (40) on one host, so a subliminal
+    // shown later must join the spiral's stage (not raise its own window above it) and keep it alive.
+    [Fact]
+    public Task Subliminal_shares_the_spiral_stage_under_it_and_the_last_lease_closes_it() => WithSpiral(true, async (host, s, stage, acquired) =>
+    {
+        var spiralRoot = Hosted(stage()!).Root;
+        Assert.True(SubliminalOverlay.ShowHosted(_bounds, "TEST", 0.8, TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, acquired());
+        var canvas = Assert.IsType<Grid>(stage()!.Content);
+        Assert.Equal(2, canvas.Children.Count);
+        var card = Assert.Single(canvas.Children, c => c != spiralRoot);
+        Assert.Equal(CompositorLayers.Subliminal, card.ZIndex);
+        Assert.True(card.ZIndex < spiralRoot.ZIndex);
+
+        SubliminalOverlay.CloseAll();
+        Assert.True(stage()!.IsVisible);   // the spiral still holds its lease
+        Assert.Same(spiralRoot, Assert.Single(canvas.Children));
+        SpiralOverlay.Stop();
         Assert.False(stage()!.IsVisible);
         await Task.CompletedTask;
     });
