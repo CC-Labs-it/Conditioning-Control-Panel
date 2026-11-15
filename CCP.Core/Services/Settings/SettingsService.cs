@@ -14,6 +14,10 @@ namespace ConditioningControlPanel.Services
     public class SettingsService
     {
         private readonly string _settingsPath;
+        // Recovery must not adopt or delete a temporary file owned by a live save in this process.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ActiveSaveTemps =
+            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
         private long _lastBackupAttemptTicks = 0;
         private System.Threading.Timer? _saveDebounceTimer;
         private volatile bool _savePending;
@@ -76,6 +80,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action? BeforePublishForTest { get; set; }
 
         public AppSettings Current { get; private set; }
 
@@ -364,7 +369,8 @@ namespace ConditioningControlPanel.Services
                 var dir = Path.GetDirectoryName(_settingsPath);
                 if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
 
-                var temps = Directory.GetFiles(dir, Path.GetFileName(_settingsPath) + "*.tmp");
+                var temps = Directory.GetFiles(dir, Path.GetFileName(_settingsPath) + "*.tmp")
+                    .Where(path => !ActiveSaveTemps.ContainsKey(Path.GetFullPath(path))).ToArray();
                 if (temps.Length == 0) return;
 
                 if (!File.Exists(_settingsPath))
@@ -984,6 +990,8 @@ namespace ConditioningControlPanel.Services
                     // settings.json — #761). Flush(true) commits the bytes to the device before
                     // the rename makes them the live settings.
                     var tempPath = _settingsPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                    var activeTempPath = Path.GetFullPath(tempPath);
+                    ActiveSaveTemps[activeTempPath] = 0;
                     try
                     {
                         using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -993,6 +1001,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        BeforePublishForTest?.Invoke();
                         PublishAtomicFile(tempPath);
                     }
                     catch
@@ -1000,6 +1009,7 @@ namespace ConditioningControlPanel.Services
                         try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
                         throw;
                     }
+                    finally { ActiveSaveTemps.TryRemove(activeTempPath, out _); }
 
                     Interlocked.Exchange(ref _lastWrittenSaveSequence, sequence);
                 }

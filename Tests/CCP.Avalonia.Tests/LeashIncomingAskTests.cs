@@ -104,6 +104,36 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = replacement;
+            shell.Show();
+            shell.ShowTab("leash");
+            try
+            {
+                var page = shell.Named<LeashTabView>("LeashTab")!;
+                var look = page.GetLogicalDescendants().OfType<Button>()
+                    .Single(c => c.Tag as string == "leash-offer-look");
+                LeashGateCardTests.Click(look);
+                var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                shell.RebindLeashAsks();
+                ask.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void GateTimerPicksUpAReplacementServiceAndItsWaitingOffer() =>
         LeashGateCardTests.Run(false, (shell, _, _) =>
         {
