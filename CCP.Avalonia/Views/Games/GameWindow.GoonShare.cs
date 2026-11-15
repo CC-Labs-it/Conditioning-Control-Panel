@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using ConditioningControlPanel.Services.Chaos;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -27,8 +30,37 @@ internal sealed partial class GameWindow
 
     private void BootGoonInbox()
     {
-        Interlocked.Increment(ref _goonInboxGeneration);
-        QueueGoonInbox(() => TransferInboxStore.Instance.PurgeCommittedSafe("page boot"));
+        var generation = Interlocked.Increment(ref _goonInboxGeneration);
+        var server = _server;
+        var root = CorePaths.EffectiveAssets;
+        var settings = CoreSettings.Current;
+        var disabled = settings.DisabledAssetPaths?.ToArray();
+        QueueGoonInbox(() =>
+        {
+            var store = TransferInboxStore.Instance;
+            store.PurgeCommittedSafe("page boot");
+            IReadOnlyList<object> received;
+            try { received = store.ListForManifest(); } catch { received = Array.Empty<object>(); }
+            // The walk can be slow; do not hold the inbox queue or the UI while building it.
+            _ = Task.Run(() =>
+            {
+                GameMediaManifest.Manifest media;
+                try
+                {
+                    media = server == null ? new() : GameMediaManifest.Build(root, server.AssetUrl, disabled);
+                    if (server != null) DtrhRemoteMedia.AppendTo(media, settings,
+                        copy => server.AssetUrl(Path.GetRelativePath(root, copy)), DtrhCopier);
+                }
+                catch { media = new(); }
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_closing || generation != Volatile.Read(ref _goonInboxGeneration)) return;
+                    Post(new { type = "manifest", images = media.Images.Select(e => new { name = e.Name, url = e.Url }),
+                        videos = media.Videos.Select(e => new { name = e.Name, url = e.Url }),
+                        skipped = media.Skipped, truncated = media.Truncated, received });
+                });
+            });
+        });
     }
 
     private void CloseGoonInbox()
