@@ -151,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
             list.Add(new RetitleEffect());
+            list.Add(new RetitleHeadingEffect());
             list.Add(new DokiDialogEffect());
             list.Add(new DeleteDialogEffect());
             list.Add(new DodgeEffect());

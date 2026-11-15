@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
@@ -75,4 +77,56 @@ public class PossessionRetitleXpTests
         Assert.True(PossessionDeck.EffectEligible(meta, PossessionRung.Collapse, PossessionIntensity.FullDoki, false));
         Assert.Equal(TimeSpan.Zero, e.HoldFor);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void HeadingRetitleRestoresOnlyItsOwnText(bool newer) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var text = new TextBlock { Text = "Original heading", Width = 200, Height = 30 };
+        var window = new Window { Width = 300, Height = 100, Content = text };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var ctx = new PossessionContext
+            {
+                Host = new Host(window), Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+                Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1),
+                ElapsedFraction = .6, Remaining = TimeSpan.FromMinutes(5), Name = (_, _) => { }
+            };
+            var effect = PossessionAvaloniaHead.CreateEffects().Single(e => e.Id == "retitleheading");
+            var target = new PossessionTarget { Visual = text, Role = PossessionRole.Title, Key = "heading" };
+            Assert.True(effect.CanApply(ctx, target));
+            effect.ApplyAsync(ctx, target, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.NotEqual("Original heading", text.Text);
+            if (newer) text.Text = "New heading";
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.Equal(newer ? "New heading" : "Original heading", text.Text);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void HeadingRetitleRefusesBoundTextAndTimer() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var text = new TextBlock { Text = "Heading", Width = 200, Height = 30 };
+        var window = new Window { Width = 300, Height = 100, Content = text };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var ctx = new PossessionContext
+            {
+                Host = new Host(window), Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+                Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1),
+                ElapsedFraction = .6, Remaining = TimeSpan.FromMinutes(5), Name = (_, _) => { }
+            };
+            var effect = new RetitleHeadingEffect();
+            Assert.False(effect.CanApply(ctx, new PossessionTarget { Visual = text, Role = PossessionRole.Timer, Key = "timer" }));
+            using var binding = text.Bind(TextBlock.TextProperty, new Binding("Text") { Source = new { Text = "Heading" } });
+            Assert.False(effect.CanApply(ctx, new PossessionTarget { Visual = text, Role = PossessionRole.Title, Key = "heading" }));
+        }
+        finally { window.Close(); }
+    });
+
 }
