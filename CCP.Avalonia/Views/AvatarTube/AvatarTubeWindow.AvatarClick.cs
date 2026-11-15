@@ -1,5 +1,6 @@
 // WPF AvatarTubeWindow.ChatInput.cs:48-117 and Speech.cs:839-865.
 using System;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
@@ -24,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             if (_speechBubble.IsVisible) return;
             _txtSpeech.Inlines?.Clear();
-            _txtSpeech.Text = "MUTED";
+            _txtSpeech.Text = Loc.Get("avatar_muted_indicator");
             _txtSpeech.FontSize = 15;
             _speechBubble.IsVisible = true;
             _cancelMutedIndicator();

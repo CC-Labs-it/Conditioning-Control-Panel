@@ -1777,7 +1777,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void OnAvatarPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var point = e.GetCurrentPoint(this);
-            if (point.Properties.IsRightButtonPressed) return; // Avalonia opens the ContextMenu itself
+            if (point.Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed) return;
 
             CoreBark.NotifyAvatarClicked();
             RainClickEmote();
