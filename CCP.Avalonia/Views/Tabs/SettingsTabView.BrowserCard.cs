@@ -40,10 +40,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal static bool RemixBrowserVideoBusy => RemixBrowserMediaBusy || (_remixWatchActive
             && System.Diagnostics.Stopwatch.GetElapsedTime(System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds > 3);
         private string? _remixMediaId;
+        private readonly System.Collections.Generic.Dictionary<string, (bool Active, long Tick)> _frameMedia = new();
+        private bool _topMediaActive, _topMediaInterrupting;
+
+        // Installed at document start in every frame. A cross-origin child cannot be read by
+        // its parent, but can send its own playback state to the top document.
+        internal const string FrameMediaScript = """
+            (() => {
+              if (window === window.top) return;
+              const frame = Math.random().toString(36).slice(2) + Date.now().toString(36);
+              let last = 0;
+              const report = event => {
+                let active = false;
+                try { active = [...document.querySelectorAll('video,audio')].some(m =>
+                  !m.paused && !m.ended && !m.muted && (m.tagName === 'AUDIO' || m.offsetWidth >= 200)); } catch (_) {}
+                if (active) last = Date.now();
+                else if (event?.type === 'ended') last = 0;
+                else active = last > 0 && Date.now() - last < 2000;
+                window.top.postMessage({ type: 'ccpFrameMedia', frame, active }, '*');
+              };
+              for (const event of ['playing', 'pause', 'ended', 'volumechange']) document.addEventListener(event, report, true);
+              setInterval(report, 500); report();
+            })();
+            """;
         internal long RemixAudioTick, InterruptionAudioTick;
 
         // WPF BrowserService.cs:337: watch user-started media, not only takeover playback.
-        // Cross-origin frames are flagged unknown and fall back to the engine's audible-playback state.
+        // Cross-origin frames report themselves; engine audio is an additional fallback.
         internal const string RemixMediaScript = """
             (() => {
               const id = __CCP_TOKEN__;
@@ -61,6 +84,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
                 return active;
               };
+              const send = data => {
+                const msg = JSON.stringify(data);
+                if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
+                else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
+              };
+              window.addEventListener('message', event => {
+                const d = event.data;
+                if (event.source !== window && d?.type === 'ccpFrameMedia' && typeof d.frame === 'string' && typeof d.active === 'boolean')
+                  send({ type: 'ccpRemixMedia', id, frame: d.frame, active: d.active });
+              }, { signal: controller.signal });
               const report = event => {
                 let active = true; unknown = false; interrupting = false;
                 try { active = busy(document); } catch (_) { interrupting = true; }
@@ -69,9 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (interrupting) lastInterrupt = Date.now();
                 else if (event?.type === 'ended') lastInterrupt = 0;
                 else interrupting = lastInterrupt > 0 && Date.now() - lastInterrupt < 2000;
-                const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active, unknown, interrupting });
-                if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
-                else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
+                send({ type: 'ccpRemixMedia', id, active, unknown, interrupting });
               };
               for (const event of ['playing', 'pause', 'ended', 'volumechange']) document.addEventListener(event, report, { capture: true, signal: controller.signal });
               window.__ccpRemixWatch = setInterval(report, 500);
@@ -82,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BeginRemixMediaWatch()
         {
             _remixMediaId = null;
+            _frameMedia.Clear(); _topMediaActive = _topMediaInterrupting = false;
             InterruptionAudioTick = 0;
             var hasEngine = BrowserWebHost.HasEngine;
             RemixBrowserMediaBusy = InterruptingBrowserMedia = hasEngine;
@@ -94,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Views.Windows.LockCardWindow.CompleteWebVideoNavigation(success);
             if (!BrowserWebHost.HasEngine) { Views.Windows.LockCardWindow.EndWebVideo(); _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; return; }
             BeginRemixMediaWatch();
-            if (!success) return; // Unknown playback fails closed until the next navigation.
+            if (!success) { InterruptingBrowserMedia = false; return; } // No loaded page can interrupt scheduled video.
             _remixMediaId = Guid.NewGuid().ToString("N");
             _ = BrowserWebHost.InvokeScriptAsync(RemixMediaScript.Replace("__CCP_TOKEN__", System.Text.Json.JsonSerializer.Serialize(_remixMediaId)));
         }
@@ -108,7 +140,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var root = json.RootElement;
                 if (_remixMediaId == null || root.GetProperty("type").GetString() != "ccpRemixMedia" || root.GetProperty("id").GetString() != _remixMediaId) return;
                 var active = root.GetProperty("active").GetBoolean();
-                var interrupting = root.TryGetProperty("interrupting", out var report) ? report.GetBoolean() : active;
+                var frame = root.TryGetProperty("frame", out var frameValue) ? frameValue.GetString() : null;
+                if (frame != null)
+                {
+                    _frameMedia[frame] = (active, System.Diagnostics.Stopwatch.GetTimestamp());
+                    active = _topMediaActive;
+                }
+                var interrupting = frame != null ? _topMediaInterrupting : root.TryGetProperty("interrupting", out var report) ? report.GetBoolean() : active;
                 // An unreadable frame is idle only while the engine reports no audio, held two seconds like WPF's pause debounce.
                 if (root.TryGetProperty("unknown", out var unknown) && unknown.ValueKind == System.Text.Json.JsonValueKind.True)
                 {
@@ -117,6 +155,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     if (audio == true) InterruptionAudioTick = System.Diagnostics.Stopwatch.GetTimestamp();
                     active |= RemixAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(RemixAudioTick).TotalSeconds < 2;
                     interrupting |= InterruptionAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(InterruptionAudioTick).TotalSeconds < 2;
+                }
+                if (frame == null) { _topMediaActive = active; _topMediaInterrupting = interrupting; }
+                foreach (var (key, state) in _frameMedia)
+                {
+                    if (System.Diagnostics.Stopwatch.GetElapsedTime(state.Tick).TotalSeconds >= 3) { _frameMedia.Remove(key); continue; }
+                    if (state.Active) active = interrupting = true;
                 }
                 Views.Windows.LockCardWindow.NoteWebVideo(interrupting);
                 InterruptingBrowserMedia = interrupting;
@@ -132,6 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void HookBrowserCard()
         {
+            BrowserWebHost.AllFramesDocumentStartScript = FrameMediaScript;
             BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
             _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;

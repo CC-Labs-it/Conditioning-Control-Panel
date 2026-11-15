@@ -735,6 +735,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // A caller sets this before the native adapter is attached. WebView2 installs it on each
         // recreated core before the held first navigation; other engines retain the load fallback.
         internal string? WindowsDocumentStartScript { get; set; }
+        internal string? AllFramesDocumentStartScript { get; set; }
         internal Func<string, Task>? DocumentStartInstaller { get; set; }
 
         internal async Task PrepareScrolllerGate(int engine, bool gated)
@@ -763,6 +764,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     else if (OperatingSystem.IsWindows()) await InstallWindowsDocumentStart(script).WaitAsync(TimeSpan.FromSeconds(5));
                 }
                 catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
+            }
+            if (AllFramesDocumentStartScript is { } allFrames)
+            {
+                try
+                {
+                    if (DocumentStartInstaller is { } install) await install(allFrames).WaitAsync(TimeSpan.FromSeconds(5));
+                    else if (OperatingSystem.IsWindows()) await InstallWindowsDocumentStart(allFrames).WaitAsync(TimeSpan.FromSeconds(5));
+                    else await BoundedNativeStep(Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), allFrames, allFrames: true), "frame media install");
+                }
+                catch (Exception ex) { Log.Warning("WebHost: frame media script failed: {Error}", ex.Message); }
+                if (Stale()) return;
             }
             OnScrolllerGate(engine, gated);
         }

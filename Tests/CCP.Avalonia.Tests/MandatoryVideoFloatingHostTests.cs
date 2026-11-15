@@ -12,6 +12,11 @@ using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Video;
 using Xunit;
@@ -220,6 +225,72 @@ public sealed class MandatoryVideoFloatingHostTests
             CoreEngine.Video = previousVideo; CoreDispatch.PostProvider = post;
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = busy;
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = stamp;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback) = saved;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Cross_origin_frame_reports_hold_and_release_a_scheduled_join(bool failedNavigation) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+            s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback);
+        var busy = (SettingsTabView.RemixBrowserMediaBusy, SettingsTabView.InterruptingBrowserMedia, SettingsTabView.RemixMediaTick);
+        var post = CoreDispatch.PostProvider; var previousVideo = CoreEngine.Video;
+        var clock = new Clock(); var page = new SettingsTabView();
+        var web = page.FindControl<WebHost>("BrowserWebHost")!;
+        string? id = null;
+        web.AudioProbe = () => null; // WKWebView and other engines without an audio probe
+        web.ScriptInvoker = script =>
+        {
+            if (script.Contains("ccpRemixMedia")) id = Regex.Match(script, "const id = \"([^\"]+)\"").Groups[1].Value;
+            return Task.FromResult<string?>("true");
+        };
+        var browser = new Window { Content = page };
+        var o = new MandatoryVideoOverlay(() => new Decoder());
+        o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4" });
+        try
+        {
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback)
+                = (true, 20, true, 3, false, false, false, false, false, true);
+            CoreDispatch.PostProvider = a => a(); CoreEngine.Video = o.Scheduler;
+            o.Scheduler.DeferTrigger = LockCardWindow.DeferVideo;
+            browser.Show();
+            web.OnNavigationCompleted(new Uri("https://example.com"), success: !failedNavigation);
+            if (!failedNavigation)
+            {
+                Assert.False(string.IsNullOrEmpty(id));
+                web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, active = false, interrupting = false, unknown = true }));
+                void Frame(string name, bool active) => web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, frame = name, active }));
+                Frame("first", false); // an idle unreadable iframe does not block
+                Assert.False(o.BrowserMediaBlocksScheduledVideo);
+                Frame("first", true); Frame("second", false);
+                Assert.True(o.BrowserMediaBlocksScheduledVideo); // idle second frame cannot clear the playing first
+                Frame("first", false);
+            }
+            Assert.False(o.BrowserMediaBlocksScheduledVideo); // also after a failed navigation
+            o.Scheduler.Start(); clock.FireLast(); clock.FireLast();
+            Assert.Single(Up(o));
+            if (!failedNavigation)
+            {
+                web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, frame = "first", active = true }));
+                clock.FireLast(); Assert.Single(Up(o)); Assert.Equal(TimeSpan.FromSeconds(30), clock.Armed[^1].Due);
+                web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, frame = "first", active = false }));
+            }
+            clock.FireLast(); Assert.Equal(2, Up(o).Count);
+        }
+        finally
+        {
+            o.Scheduler.Stop(); o.CloseAll(); browser.Close(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            LockCardWindow.EndWebVideo(); LockCardWindow.RetryPendingCard();
+            (SettingsTabView.RemixBrowserMediaBusy, SettingsTabView.InterruptingBrowserMedia, SettingsTabView.RemixMediaTick) = busy;
+            CoreEngine.Video = previousVideo; CoreDispatch.PostProvider = post;
             (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
                 s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback) = saved;
         }
