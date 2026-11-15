@@ -22,16 +22,23 @@ internal sealed class PortalPauseShortcut : IDisposable
     private readonly string _trigger;
     private readonly PanicKeyHold _hold = new();
     private DBusConnection? _bus;
-    private IDisposable? _activated, _deactivated, _changed, _sessionClosed;
+    private IDisposable? _activated, _deactivated, _sessionClosed;
     private string? _session;
     private bool _ready, _disposed, _lost;
     internal static Func<DBusConnection> OpenConnection = () => new(DBusAddress.Session!);
 
     internal PortalPauseShortcut(string key, Action pressed, Action closed) => (_trigger, _pressed, _closed) = (X11PanicKey.XKeyName(key), pressed, closed);
 
-    // A compositor may reassign a shortcut. Only the requested bare key is safe to route.
-    internal bool IsSafeTrigger(string? trigger) => _trigger.Length != 0
-        && string.Equals(trigger?.Trim(), _trigger, StringComparison.OrdinalIgnoreCase);
+    // The portal spec gives no machine-readable trigger (trigger_description is display text), and the
+    // compositor lets the user choose or change the chord. Like the panic session (PortalPanicShortcut.cs:111),
+    // the bound "pause" id is the contract: accept it when the request succeeded and the shortcut is listed.
+    internal static bool Bound(uint code, Dictionary<string, VariantValue> results)
+    {
+        if (code != 0 || !results.TryGetValue("shortcuts", out var list)) return false;
+        for (var i = 0; i < list.Count; i++)
+            if (list.GetItem(i).GetItem(0).GetString() == Id) return true;
+        return false;
+    }
 
     internal static async Task<IDisposable?> BindAsync(string key, Action pressed, Action closed, CancellationToken cancellation)
     {
@@ -67,28 +74,6 @@ internal sealed class PortalPauseShortcut : IDisposable
                 new MatchRule { Type = MessageType.Signal, Interface = "org.freedesktop.portal.Session", Member = "Closed", Path = session },
                 (Message m, object? _) => true,
                 (Exception? ex, bool _, object? a, object? b) => binding.Lost(), null, null, false, ObserverFlags.None);
-            binding._changed = await bus.AddMatchAsync(
-                new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "ShortcutsChanged", Path = Path },
-                (Message m, object? _) =>
-                {
-                    var r = m.GetBodyReader();
-                    var changedSession = r.ReadObjectPathAsString();
-                    var end = r.ReadArrayStart(DBusType.Struct);
-                    string? trigger = null;
-                    while (r.HasNext(end))
-                    {
-                        r.AlignStruct();
-                        var id = r.ReadString();
-                        var props = r.ReadDictionaryOfStringToVariantValue();
-                        if (id == Id && props.TryGetValue("trigger_description", out var value))
-                            trigger = (value.Type == VariantValueType.Variant ? value.GetVariantValue() : value).GetString();
-                    }
-                    return (changedSession, trigger);
-                },
-                (Exception? ex, (string Session, string? Trigger) a, object? _, object? _) =>
-                { if (ex != null) binding.Lost(); else binding.ShortcutChanged(a.Session, a.Trigger); },
-                null, null, false, ObserverFlags.None);
-
             (code, results) = await RequestAsync(bus, "BindShortcuts", "oa(sa{sv})sa{sv}", (ref MessageWriter w, string token) =>
             {
                 w.WriteObjectPath(session);
@@ -104,11 +89,12 @@ internal sealed class PortalPauseShortcut : IDisposable
                 w.WriteString("");
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token });
             }, cancellation);
-            if (code != 0 || !binding.IsSafeTrigger(TriggerOf(results, Id)))
+            if (!Bound(code, results))
             {
-                Log.Warning("Pause key: Wayland shortcut refused or assigned an unverified chord");
+                Log.Warning("Pause key: Wayland shortcut refused");
                 return null;
             }
+            Log.Information("Pause key: bound through the GlobalShortcuts portal, trigger '{Trigger}'", TriggerOf(results, Id));
             if (cancellation.IsCancellationRequested || !binding.Ready()) return null;
             return binding;
         }
@@ -137,13 +123,6 @@ internal sealed class PortalPauseShortcut : IDisposable
         }
     }
 
-    internal void ShortcutChanged(string session, string? trigger)
-    {
-        lock (_gate) { if (_disposed || _lost || session != _session || IsSafeTrigger(trigger)) return; _lost = true; }
-        Dispose();
-        _closed();
-    }
-
     // Allows the same routing rules to be tested without a compositor or a bus.
     internal void SetSessionForTests(string session) => _session = session;
 
@@ -162,7 +141,7 @@ internal sealed class PortalPauseShortcut : IDisposable
             _disposed = true;
             _ready = false;
         }
-        _activated?.Dispose(); _deactivated?.Dispose(); _changed?.Dispose(); _sessionClosed?.Dispose();
+        _activated?.Dispose(); _deactivated?.Dispose(); _sessionClosed?.Dispose();
         // A session belongs to its D-Bus connection. Dropping it also closes a pending request.
         _bus?.Dispose();
     }

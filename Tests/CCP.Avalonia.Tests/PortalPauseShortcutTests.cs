@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -9,6 +10,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using Tmds.DBus.Protocol;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -38,29 +40,37 @@ public class PortalPauseShortcutTests
     }
 
     [Fact]
-    public void ReassignedShortcutClosesAndCannotBeReadied()
+    public void LostSessionClosesOnceAndCannotBeReadied()
     {
         int closed = 0;
         var binding = new PortalPauseShortcut("G", () => { }, () => closed++);
         binding.SetSessionForTests("/pause");
-        binding.ShortcutChanged("/other", "K");
-        binding.ShortcutChanged("/pause", "g");
-        Assert.True(binding.IsSafeTrigger("G"));
-        Assert.False(binding.IsSafeTrigger("Ctrl+G"));
-        binding.ShortcutChanged("/pause", "K");
+        binding.Lost();
+        binding.Lost();
         Assert.False(binding.Ready());
         Assert.Equal(1, closed);
     }
 
-    [Theory]
-    [InlineData("Space", "space")]
-    [InlineData("D1", "1")]
-    [InlineData("PageUp", "Prior")]
-    public void TriggerUsesX11KeysymNames(string key, string trigger)
+    // BindShortcuts responses as KDE and GNOME send them: trigger_description is display text.
+    private static Dictionary<string, VariantValue> Response(string id, string description) => new()
     {
-        var binding = new PortalPauseShortcut(key, () => { }, () => { });
-        Assert.True(binding.IsSafeTrigger(trigger));
-        binding.Dispose();
+        ["shortcuts"] = new Array<Struct<string, Dict<string, VariantValue>>>(new[]
+        {
+            Struct.Create(id, new Dict<string, VariantValue> { ["trigger_description"] = VariantValue.Variant(description) }),
+        }).AsVariantValue(),
+    };
+
+    [Theory]
+    [InlineData("Page Up")]
+    [InlineData("Bild auf")]
+    [InlineData("Ctrl+Shift+F9")]
+    [InlineData("")]
+    public void AnyListedPauseShortcutIsBoundWhateverItsDescription(string description)
+    {
+        Assert.True(PortalPauseShortcut.Bound(0, Response("pause", description)));
+        Assert.False(PortalPauseShortcut.Bound(1, Response("pause", description)));   // refused or cancelled
+        Assert.False(PortalPauseShortcut.Bound(0, Response("panic", description)));   // ours not bound
+        Assert.False(PortalPauseShortcut.Bound(0, new Dictionary<string, VariantValue>()));
     }
 
     private sealed class Registration : IDisposable
