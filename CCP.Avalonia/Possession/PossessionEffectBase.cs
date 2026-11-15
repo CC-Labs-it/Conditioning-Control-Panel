@@ -27,6 +27,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
     protected PossessionTarget? Target { get; private set; }
     protected virtual bool ChargeOnApply => true;
     protected virtual string? NameOverride => null;
+    protected virtual string NameId => Id;
     private CancellationTokenSource? _cts;
     private readonly List<IDisposable> _overrides = new();
     private IDisposable? _outline;
@@ -96,7 +97,7 @@ internal abstract class PossessionEffectBase : IPossessionEffect
     {
         if (_named || !IsBig || Context == null) return;
         _named = true;
-        try { Context.Name(Id, string.IsNullOrWhiteSpace(name) ? Target?.DisplayName : name); }
+        try { Context.Name(NameId, string.IsNullOrWhiteSpace(name) ? Target?.DisplayName : name); }
         catch (Exception ex) { Serilog.Log.Warning("Possession {Id} name failed: {Error}", Id, ex.Message); }
     }
 

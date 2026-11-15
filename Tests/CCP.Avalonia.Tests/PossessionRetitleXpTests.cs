@@ -88,17 +88,19 @@ public class PossessionRetitleXpTests
         Dispatcher.UIThread.RunJobs();
         try
         {
+            string? barkId = null;
             var ctx = new PossessionContext
             {
                 Host = new Host(window), Attribution = new Attribution(), Rung = PossessionRung.Collapse,
                 Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1),
-                ElapsedFraction = .6, Remaining = TimeSpan.FromMinutes(5), Name = (_, _) => { }
+                ElapsedFraction = .6, Remaining = TimeSpan.FromMinutes(5), Name = (id, _) => barkId = id
             };
             var effect = PossessionAvaloniaHead.CreateEffects().Single(e => e.Id == "retitleheading");
             var target = new PossessionTarget { Visual = text, Role = PossessionRole.Title, Key = "heading" };
             Assert.True(effect.CanApply(ctx, target));
             effect.ApplyAsync(ctx, target, CancellationToken.None).GetAwaiter().GetResult();
             Assert.NotEqual("Original heading", text.Text);
+            Assert.Equal("retitle", barkId);
             if (newer) text.Text = "New heading";
             effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
             Assert.Equal(newer ? "New heading" : "Original heading", text.Text);

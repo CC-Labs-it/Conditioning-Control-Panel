@@ -55,6 +55,7 @@ internal sealed class RetitleHeadingEffect : PossessionEffectBase
     private string? _original, _written;
 
     public override string Id => "retitleheading";
+    protected override string NameId => "retitle";
     public override PossessionRung MinRung => PossessionRung.Collapse;
     public override PossessionIntensity MinIntensity => PossessionIntensity.FullDoki;
     public override bool IsBig => true;
