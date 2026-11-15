@@ -151,6 +151,19 @@ namespace ConditioningControlPanel.Services
             if (_playingChaosToken == token) ForceCleanup();
         }
 
+        private int _segmentToken;
+        private int _segmentSeconds;
+        public int PlayingChaosToken => _playingChaosToken;
+        public int FinishedChaosToken { get; private set; }
+        public bool NaturalEnding { get; private set; }
+        public int RandomSegmentSeconds => _playingChaosToken != 0 && _playingChaosToken == _segmentToken ? _segmentSeconds : 0;
+        public void ArmRandomSegment(int token, int seconds)
+        {
+            if (token == 0 || token != _chaosToken) return;
+            _segmentToken = token;
+            _segmentSeconds = Math.Max(1, seconds);
+        }
+
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
@@ -599,6 +612,13 @@ namespace ConditioningControlPanel.Services
         /// Trainer's -25 XP); the Chaster "video" note is the head's, it knows whether a frame showed.</summary>
         public void Ended(bool renderedFrame = false)
         {
+            NaturalEnding = true;
+            try { EndedCore(renderedFrame); }
+            finally { NaturalEnding = false; }
+        }
+
+        private void EndedCore(bool renderedFrame)
+        {
             if (!_playing) return;
             var s = CoreSettings.Current;
             var verdict = Evaluate(s.AttentionChecksEnabled, AttentionSpawned, AttentionHits, _random.NextDouble());
@@ -670,7 +690,7 @@ namespace ConditioningControlPanel.Services
                         WaitForBubbleCount(strict, path, scheduled, chaosToken);
                         _waitEndsRun = endsRun;
                     }
-                    else if (!Trigger(strict, path, scheduled: scheduled, userEarned: chaosToken != 0, chaosToken: chaosToken))
+                    else if (!Trigger(strict, path, scheduled: scheduled, userEarned: chaosToken != 0, silentIfEmpty: chaosToken != 0, chaosToken: chaosToken))
                     {
                         if (endsRun) AfterEnd();
                         else if (scheduled) ScheduleNext();
@@ -729,6 +749,7 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _preroll);
             if (!_playing) { PackVideos?.CleanupTemps(); return false; }
             _playing = false;
+            FinishedChaosToken = _playingChaosToken;
             _playingChaosToken = 0;
             IsStrict = false;
             ShowingPath = null;
@@ -749,6 +770,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
             try { VideoEnded?.Invoke(); }
             catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
+            finally { FinishedChaosToken = 0; }
             return true;
         }
 

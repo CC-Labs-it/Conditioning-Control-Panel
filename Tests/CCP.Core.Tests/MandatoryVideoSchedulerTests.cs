@@ -398,6 +398,27 @@ public sealed class MandatoryVideoSchedulerTests
         finally { v.Stop(); }
     });
 
+    [Fact]
+    public void ChaosSegmentIsBoundToItsTokenAndLeavesFifteenSeconds() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int token = v.ClaimChaosVideoToken();
+        v.ArmRandomSegment(token, 15);
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        Assert.Equal(15, v.RandomSegmentSeconds);
+        var random = new Random(41);
+        for (int i = 0; i < 100; i++)
+            Assert.InRange(ConditioningControlPanel.Services.Video.VideoLengthCapRules.StartOffsetMs(v.RandomSegmentSeconds, 120000, random), 0, 105000);
+        v.CancelChaosVideo(token);
+        Assert.True(v.Trigger(path: Clips[0]));
+        Assert.Equal(0, v.RandomSegmentSeconds);
+        v.ForceCleanup();
+        host.BubbleCountActive = true; int notices = 0; var empty = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>()); empty.NoVideos += () => notices++;
+        int nextToken = empty.ClaimChaosVideoToken(); Assert.True(empty.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: nextToken));
+        host.BubbleCountActive = false; clock.Advance(BubbleCountScheduler.QueuePoll); Assert.Equal(0, notices); empty.ForceCleanup();
+    });
+
     [Theory]
     [InlineData("preroll")]
     [InlineData("cascade")]
