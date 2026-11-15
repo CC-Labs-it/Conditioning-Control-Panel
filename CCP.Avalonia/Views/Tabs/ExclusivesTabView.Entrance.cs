@@ -57,7 +57,8 @@ public partial class ExclusivesTabView
             }
             if (level == MotionLevel.Off) { Frame(0); return; }
             double end = (full ? .038 : .020) * Math.Min(Math.Max(0, children.Length - 1), full ? 16 : 8) + (full ? .420 : .200);
-            _entrance = new BeatLoop(this, t =>
+            // The finite shelf entrance is separate from the view's ambient motion loop.
+            _entrance = new BeatLoop(shelf, t =>
             {
                 Frame(t);
                 if (t >= end) { _entrance?.Stop(); _entrance = null; }

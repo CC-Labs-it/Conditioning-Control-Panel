@@ -37,6 +37,8 @@ public sealed class ExclusivesEntranceTests
             var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
             Border[] Items() => view.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "ExCard" || b.Name == "GroupHead").ToArray();
             var items = Items();
+            var shelf = view.FindControl<ItemsControl>("ExclusivesShelf")!;
+            Assert.Single(BeatLoop.Running.Where(loop => loop.Owner == shelf));
             Assert.True(items.Length > 2);
             var card = items.First(b => b.Name == "ExCard");
             int index = Array.IndexOf(items, card);
