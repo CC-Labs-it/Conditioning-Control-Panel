@@ -182,6 +182,16 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task PreviewWheelScriptIsInstalledForAllFrames() => Run((w, _) =>
+    {
+        var property = w.BrowserPreview.GetType().GetProperty("AllFramesDocumentStartScript", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        var script = Assert.IsType<string>(property!.GetValue(w.BrowserPreview));
+        Assert.Contains("ccp_zoom_out", script);
+        Assert.Contains("window.top.postMessage", script);
+    });
+
+    [Fact]
     public Task PreviewPageZoomButtonsAndMessagesClamp() => Run((w, _) =>
     {
         double applied = 0;

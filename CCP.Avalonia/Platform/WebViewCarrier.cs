@@ -19,9 +19,9 @@ internal static class WebViewCarrier
     private static readonly Idle Apply = OnIdle;
 
     private sealed record Request(IntPtr View, string Script, GetManager Manager, NewScript New, AddScript Add,
-        Unref ScriptUnref, Unref ViewUnref, TaskCompletionSource<bool> Done);
+        Unref ScriptUnref, Unref ViewUnref, TaskCompletionSource<bool> Done, bool AllFrames);
 
-    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script)
+    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script, bool allFrames = false)
     {
         if (!OperatingSystem.IsLinux() || handle is not IGtkWebViewPlatformHandle gtk || gtk.WebKitWebView == IntPtr.Zero)
             return Task.FromResult(false);
@@ -42,7 +42,7 @@ internal static class WebViewCarrier
                 Get<GetManager>(webkit, "webkit_web_view_get_user_content_manager"),
                 Get<NewScript>(webkit, "webkit_user_script_new"),
                 Get<AddScript>(webkit, "webkit_user_content_manager_add_script"),
-                Get<Unref>(webkit, "webkit_user_script_unref"), release, done);
+                Get<Unref>(webkit, "webkit_user_script_unref"), release, done, allFrames);
             var enqueue = Get<IdleAdd>(glib, "g_idle_add");
             Get<Ref>(objects, "g_object_ref")(request.View);
             var state = GCHandle.Alloc(request);
@@ -63,8 +63,8 @@ internal static class WebViewCarrier
         try
         {
             var manager = request.Manager(request.View);
-            // TOP_FRAME and START: the page sees the carrier before its own scripts.
-            var script = manager == IntPtr.Zero ? IntPtr.Zero : request.New(request.Script, 1, 0, IntPtr.Zero, IntPtr.Zero);
+            // ALL_FRAMES = 0, TOP_FRAME = 1; START = 0.
+            var script = manager == IntPtr.Zero ? IntPtr.Zero : request.New(request.Script, request.AllFrames ? 0 : 1, 0, IntPtr.Zero, IntPtr.Zero);
             if (script != IntPtr.Zero)
             {
                 try { request.Add(manager, script); ok = true; }

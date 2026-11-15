@@ -39,6 +39,31 @@ public sealed class WebHostScrolllerGateTests
     });
 
     [Fact]
+    public Task AllFrameScriptInstallsBeforeNavigationOncePerEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource<bool>();
+        var installs = 0;
+        var web = new WebHost { AllFramesDocumentStartScript = "wheel", AllFramesDocumentStartInstaller = script =>
+        {
+            Assert.Equal("wheel", script);
+            installs++;
+            return pending.Task;
+        }};
+        web.NewScrolllerEngine();
+        var gate = web.PrepareScrolllerGate(1, true);
+        Assert.Null(web.ScrolllerGate);
+        Assert.Equal(1, installs);
+        pending.SetResult(true);
+        await gate;
+        Assert.True(web.ScrolllerGate);
+        await web.PrepareScrolllerGate(1, true);
+        Assert.Equal(1, installs);
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(2, true);
+        Assert.Equal(2, installs);
+    });
+
+    [Fact]
     public Task FailedDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => Task.FromException(new InvalidOperationException()) };

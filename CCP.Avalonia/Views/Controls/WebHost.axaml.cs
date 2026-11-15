@@ -374,8 +374,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// (a string result arrives quoted), WebKitGTK hands back the raw value. Callers that read
         /// the result must tolerate both — see <c>EnhancementPlayerWindow.Unquote</c>.
         ///
-        /// There is no equivalent of <c>AddScriptToExecuteOnDocumentCreatedAsync</c>, so anything
-        /// that must be present before the page's own scripts run has no seam here.
+        /// Document-start scripts use the opt-in native installation paths below.
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
@@ -732,8 +731,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // Headless tests supply an engine without loading a native web view.
         internal Func<Uri, bool>? NavigationInvoker { get; set; }
 
-        // A caller sets this before the native adapter is attached. WebView2 installs it on each
-        // recreated core before the held first navigation; other engines retain the load fallback.
+        // Set before attachment. WebView2 and WebKitGTK install before the held first navigation.
+        internal string? AllFramesDocumentStartScript { get; set; }
+        internal Func<string, Task<bool>>? AllFramesDocumentStartInstaller { get; set; }
+        private Task<bool>? _allFramesInstall;
+        // WebView2-only document-start hook; callers retain their own fallback on other engines.
         internal string? WindowsDocumentStartScript { get; set; }
         internal Func<string, Task>? DocumentStartInstaller { get; set; }
 
@@ -755,6 +757,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 await BoundedNativeStep(_carrierInstall, "carrier install");
                 if (Stale()) return;
             }
+            if (AllFramesDocumentStartScript is { } frameScript)
+            {
+                _allFramesInstall ??= InstallAllFramesAsync(frameScript);
+                await BoundedNativeStep(_allFramesInstall, "all-frame document-start script");
+                if (Stale()) return;
+            }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
             {
                 try
@@ -765,6 +773,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
             }
             OnScrolllerGate(engine, gated);
+        }
+
+        private async Task<bool> InstallAllFramesAsync(string script)
+        {
+            try
+            {
+                if (AllFramesDocumentStartInstaller is { } install) return await install(script);
+                if (OperatingSystem.IsWindows()) { await InstallWindowsDocumentStart(script); return true; }
+                return await Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), script, allFrames: true);
+            }
+            catch (Exception ex) { Log.Debug("WebHost: all-frame script install failed: {E}", ex.Message); return false; }
         }
 
         private int _gateReport;
@@ -819,6 +838,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ActiveNavigation = null;
             _loadedOnThisEngine = false;
             _carrierInstall = null;
+            _allFramesInstall = null;
             _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
