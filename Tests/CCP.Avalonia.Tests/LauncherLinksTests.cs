@@ -76,6 +76,8 @@ public sealed class LauncherLinksTests
         {
             string? asked = null;
             w.ShortcutWriter = id => { asked = id; return true; };
+            // Declutter 2026-11-15: the tiles live behind the Games door (tools carry no shortcut).
+            w.SeatDoorPage(global::ConditioningControlPanel.Services.Launcher.LauncherDoor.Games);
             var buttons = TileButtons(w);
             Assert.NotEmpty(buttons);
             foreach (var (id, btn) in buttons)

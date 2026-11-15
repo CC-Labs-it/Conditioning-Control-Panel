@@ -61,6 +61,8 @@ public sealed class LauncherFxTests
                 shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
                 Dispatcher.UIThread.RunJobs();
                 var launcher = LauncherWindow.Instance!;
+                // Declutter 2026-11-15: the launcher opens on its doors; these tests drive the Games page's tiles.
+                launcher.SeatDoorPage(global::ConditioningControlPanel.Services.Launcher.LauncherDoor.Games);
                 launcher.UpdateLayout();
                 body(shell, launcher, cues);
             }

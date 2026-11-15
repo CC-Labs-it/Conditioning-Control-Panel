@@ -435,6 +435,14 @@ public sealed class LauncherWindowTests
         finally { ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink; }
     }, pumpUntilIdle: false);
 
+    /// <summary>Declutter 2026-11-15: the tiles live behind the Games door; open its page at once.</summary>
+    private static LauncherWindow Seat(LauncherWindow w)
+    {
+        w.SeatDoorPage(LauncherDoor.Games);
+        Dispatcher.UIThread.RunJobs();
+        return w;
+    }
+
     private static string[] Tiles(LauncherWindow w) =>
         w.FindControl<UniformGrid>("GamesGrid")!.Children.Select(c => (string)c.Tag!).ToArray();
 
@@ -456,7 +464,7 @@ public sealed class LauncherWindowTests
             LauncherWindow.BackToLauncher(shell);
             shell.StepLauncherFade(1);
             Dispatcher.UIThread.RunJobs();
-            var w = LauncherWindow.Instance!;
+            var w = Seat(LauncherWindow.Instance!);
             var tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
             Assert.True(global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.HasBand(tile));
             CoreAccount.IsLoggedInProvider = () => false;
@@ -682,9 +690,12 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: the Breakout demo, Piece by Piece, Racing Thoughts and Down the Rabbit Hole game hosts,
-        // then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
+        // Declutter 2026-11-15: the launcher opens on its two doors and no tiles; the Games door's page holds
+        // the destinations this head has: the one Breakout card, Piece by Piece, Racing Thoughts and Down the
+        // Rabbit Hole game hosts, then the intake tab.
+        Assert.Empty(Tiles(launcher));
+        Seat(launcher);
+        Assert.Equal(new[] { "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
@@ -705,7 +716,7 @@ public sealed class LauncherWindowTests
         CoreEntitlement.HasLabProvider = () => true;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
-        var w = LauncherWindow.Instance!;
+        var w = Seat(LauncherWindow.Instance!);
         var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         var art = tile.TranslatePoint(new Point(tile.Bounds.Width / 2, tile.Bounds.Height / 4), w)!.Value;
@@ -732,7 +743,7 @@ public sealed class LauncherWindowTests
         CoreAccount.IsLoggedInProvider = () => true;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
-        var w = LauncherWindow.Instance!;
+        var w = Seat(LauncherWindow.Instance!);
         var grid = w.FindControl<UniformGrid>("GamesGrid")!;
         // One tile fits: the block sits centred (WPF FitTiles).
         Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Center, grid.VerticalAlignment);
@@ -763,7 +774,7 @@ public sealed class LauncherWindowTests
         CoreEntitlement.HasLabProvider = () => true;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
-        var launcher = LauncherWindow.Instance!;
+        var launcher = Seat(LauncherWindow.Instance!);
         var ld = LockdownService.Current = new LockdownService();
         try
         {
@@ -788,7 +799,7 @@ public sealed class LauncherWindowTests
         CoreAccount.IsLoggedInProvider = () => false;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
-        var w = LauncherWindow.Instance!;
+        var w = Seat(LauncherWindow.Instance!);
         var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         // A real press/release on the art plate (not the Play button), as a user taps the card.
         void Press()
@@ -848,7 +859,7 @@ public sealed class LauncherWindowTests
         CoreAccount.IsLoggedInProvider = () => false;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
-        var tile = LauncherWindow.Instance!.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
+        var tile = Seat(LauncherWindow.Instance!).FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_sign_in"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_pill_sign_in"), Texts(tile));
         Assert.False(shell.IsVisible);
@@ -1216,8 +1227,9 @@ public sealed class LauncherWindowTests
     public void BreakoutDemoTile_UsesTheBuiltInCover() => Run(shell =>
     {
         LauncherWindow.BackToLauncher(shell);
-        var w = LauncherWindow.Instance!;
-        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "breakoutdemo");
+        // Declutter 2026-11-15: the one Breakout card on the Games page wears the demo's built-in cover.
+        var w = Seat(LauncherWindow.Instance!);
+        var tile = w.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "breakout");
         // The art sits in the tile's sliding art host, under the tilt and sheen layers.
         var cover = Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Border)tile).OfType<Image>());
         Assert.Same(ConditioningControlPanel.Avalonia.Helpers.BreakoutCardArt.Demo, cover.Source);
@@ -1238,7 +1250,7 @@ public sealed class LauncherWindowTests
             var mods = global::ConditioningControlPanel.Avalonia.App.Mods!;
             LauncherWindow.BackToLauncher(shell);
             Dispatcher.UIThread.RunJobs();
-            var w = LauncherWindow.Instance!;
+            var w = Seat(LauncherWindow.Instance!);
             string Label() => LauncherModMenu.Label(Loc.Get("launcher_mod_label"), mods.ActiveMod.Name, "-");
             Assert.Equal(Label(), Text(w, "ModPillText"));
             var tileBefore = w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
