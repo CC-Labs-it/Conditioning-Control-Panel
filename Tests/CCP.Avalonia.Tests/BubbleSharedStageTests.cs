@@ -21,10 +21,14 @@ public sealed class BubbleSharedStageTests
 {
     private static readonly PixelRect Bounds = new(0, 0, 300, 200);
 
+    // One stage per screen (WPF: one compositor, CompositorLayers order): card and bubbles share it in
+    // either show order, bubbles draw above the card, and each owner releases only its own lease.
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Bubbles_draw_on_stage_keep_input_pop_and_release_independently(bool cardFirst) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public void Bubbles_draw_on_stage_keep_input_pop_and_release_independently(bool cardShownFirst, bool cardFirst) => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
@@ -32,7 +36,7 @@ public sealed class BubbleSharedStageTests
         var (dayKey, paid) = (s.AmbientBubbleXpDayKey, s.AmbientBubbleXpPaidToday);
         var play = CoreAudio.PlayOneShotProvider;
         CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
-        Window? stage = null, cardStage = null;
+        var stages = new System.Collections.Generic.List<Window>();
         var w = new BubbleOverlayWindow(0, Bounds, 1) { Width = 300, Height = 200 };
         var ambient = new AmbientBubble { Screen = 0, X = 10, Y = 10, Size = 40, Clickable = true };
         var chaos = new AmbientBubble { Screen = 0, X = 100, Y = 10, Size = 40, Clickable = true, Spec = new EffectBubbleSpec() };
@@ -41,16 +45,19 @@ public sealed class BubbleSharedStageTests
         try
         {
             w.Show();
-            SharedOverlayHost.Configure = (window, _) => { cardStage = window; window.Width = 300; window.Height = 200; return true; };
-            Assert.True(SubliminalOverlay.ShowHosted(Bounds, "TEST", 0.8, TimeSpan.FromSeconds(5), (_, _) => { }));
-            SharedOverlayHost.Configure = (window, _) => { stage = window; window.Width = 300; window.Height = 200; return true; };
-            var layer = w.Content;
+            SharedOverlayHost.Configure = (window, _) => { stages.Add(window); window.Width = 300; window.Height = 200; return true; };
+            var layer = (Control)w.Content!;
+            if (cardShownFirst) Assert.True(SubliminalOverlay.ShowHosted(Bounds, "TEST", 0.8, TimeSpan.FromSeconds(5), (_, _) => { }));
             Assert.True(w.TryHost(true, Bounds));
+            if (!cardShownFirst) Assert.True(SubliminalOverlay.ShowHosted(Bounds, "TEST", 0.8, TimeSpan.FromSeconds(5), (_, _) => { }));
+            var stage = Assert.Single(stages);   // one native stage for the screen, whoever came first
             Assert.Same(stage, w.StageWindow);
-            var canvas = Assert.IsType<Grid>(stage!.Content);
-            Assert.Same(layer, Assert.Single(canvas.Children));
-            Assert.Equal(CompositorLayers.Bubbles, ((Control)layer!).ZIndex);
-            Assert.True(CompositorLayers.Bubbles > CompositorLayers.Subliminal);
+            var canvas = Assert.IsType<Grid>(stage.Content);
+            Assert.Equal(2, canvas.Children.Count);
+            var card = Assert.Single(canvas.Children, c => !ReferenceEquals(c, layer));
+            Assert.Equal(CompositorLayers.Bubbles, layer.ZIndex);
+            Assert.Equal(CompositorLayers.Subliminal, card.ZIndex);
+            Assert.True(layer.ZIndex > card.ZIndex);   // bubbles draw above the card on the shared stage
             Assert.Null(w.Content);   // the input window draws nothing
             w.Sync();
             var both = w.InputRectCount;   // ...but keeps the hit region of ambient and chaos bubbles
@@ -64,14 +71,15 @@ public sealed class BubbleSharedStageTests
             if (cardFirst)
             {
                 SubliminalOverlay.CloseAll();
-                Assert.False(cardStage!.IsVisible);
-                Assert.True(stage.IsVisible);
+                Assert.True(stage.IsVisible);   // the bubble lease keeps the shared stage
+                Assert.Same(layer, Assert.Single(canvas.Children));
                 w.Close();
             }
             else
             {
                 w.Close();
-                Assert.True(cardStage!.IsVisible);
+                Assert.True(stage.IsVisible);   // the card lease keeps the shared stage
+                Assert.Same(card, Assert.Single(canvas.Children));
                 SubliminalOverlay.CloseAll();
             }
             Assert.False(stage.IsVisible);

@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
             card.Opacity = 0;
-            card.ZIndex = 1200; // WPF: above hosted image flashes
+            card.ZIndex = global::ConditioningControlPanel.Services.Compositor.CompositorLayers.Subliminal;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
             lease.Raise();
