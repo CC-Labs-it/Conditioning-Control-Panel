@@ -183,6 +183,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:335: re-arm before the access-gated start.
             if (CoreSettings.Current.AwarenessStartOnLaunch)
                 CoreSettings.Current.KeywordTriggersEnabled = true;
+            // WPF App.xaml.cs:3342 builds the scanner at startup; its source is capture + the Core OCR engine here.
+            Platform.KeywordTriggerHead.OcrSource ??= Platform.ScreenOcrService.CreateSource();
             Platform.KeywordTriggerHead.Sync(); // WPF MainWindow.xaml.cs:341: a saved-on switch arms at boot
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.

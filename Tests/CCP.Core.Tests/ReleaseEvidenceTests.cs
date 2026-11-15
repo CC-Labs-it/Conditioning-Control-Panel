@@ -53,12 +53,13 @@ public sealed class ReleaseEvidenceTests : IDisposable
         Write("packaging/linux/THIRD-PARTY-NOTICES.txt", File.ReadAllText(Path.Combine(Repo(), "packaging/linux/THIRD-PARTY-NOTICES.txt")));
         var listed = new[] { "microsoft.netcore.app.runtime.linux-x64", "microsoft.netcore.app.host.linux-x64", "skiasharp",
             "skiasharp.nativeassets.linux", "harfbuzzsharp", "harfbuzzsharp.nativeassets.linux", "microsoft.ml.onnxruntime",
-            "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia", "avalonia.controls.webview" };
+            "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia", "avalonia.controls.webview",
+            "rapidocrnet", "clipper2" };
         foreach (var (pkg, file) in new[] {
             ("microsoft.netcore.app.runtime.linux-x64", "LICENSE.TXT"), ("microsoft.netcore.app.runtime.linux-x64", "THIRD-PARTY-NOTICES.TXT"),
             ("skiasharp.nativeassets.linux", "LICENSE.txt"), ("skiasharp.nativeassets.linux", "THIRD-PARTY-NOTICES.txt"),
             ("harfbuzzsharp.nativeassets.linux", "LICENSE.txt"), ("harfbuzzsharp.nativeassets.linux", "THIRD-PARTY-NOTICES.txt"),
-            ("microsoft.ml.onnxruntime", "LICENSE"), ("microsoft.ml.onnxruntime", "ThirdPartyNotices.txt") })
+            ("microsoft.ml.onnxruntime", "LICENSE"), ("microsoft.ml.onnxruntime", "ThirdPartyNotices.txt"), ("clipper2", "License.txt") })
             Write(Path.Combine("packages", pkg, "1.0.0", file), pkg + " " + file + " fixture");
         Write("CCP.Avalonia/obj/project.assets.json", System.Text.Json.JsonSerializer.Serialize(new
         {

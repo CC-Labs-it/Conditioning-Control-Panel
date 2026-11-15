@@ -27,6 +27,7 @@ namespace CCP.Avalonia.Tests;
 /// views-companion-keyword-triggers / shell-keyword-triggers: the custom trigger list on the
 /// Awareness tab drives AppSettings.KeywordTriggers like MainWindow.KeywordTriggers.cs:160-575.
 /// </summary>
+[Collection(RunsAloneCollection.Name)]   // OcrDetailSaysWhyTheScannerReadsNothing flips the process-wide PortalScreenFrames.Refused
 public sealed class KeywordTriggersPanelTests
 {
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -93,6 +94,33 @@ public sealed class KeywordTriggersPanelTests
             Assert.Equal("6s", Find<TextBlock>(panel, "TxtScreenOcrInterval").Text);
         }
         finally { s.ScreenOcrIntervalMs = savedInterval; }
+    });
+
+    [Fact]
+    public Task OcrDetailSaysWhyTheScannerReadsNothing() => Run((_, panel, _) =>
+    {
+        var saved = (ConditioningControlPanel.Avalonia.Platform.PortalScreenFrames.Refused,
+            ConditioningControlPanel.Avalonia.Platform.KeywordTriggerHead.OcrSource);
+        var line = Find<TextBlock>(panel, "TxtScreenOcrUnavailable");
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.KeywordTriggerHead.OcrSource =
+                _ => Task.FromResult<IReadOnlyList<ConditioningControlPanel.Avalonia.Platform.ScreenOcrService.Word>>([]);
+            ConditioningControlPanel.Avalonia.Platform.PortalScreenFrames.Refused = true;
+            panel.SetScreenOcrDetail(true);
+            Assert.True(line.IsVisible);
+            Assert.Equal(Loc.Get("ocr_unavailable_refused"), line.Text);
+            panel.SetScreenOcrDetail(false);   // OCR off: the off hint speaks instead
+            Assert.False(line.IsVisible);
+            ConditioningControlPanel.Avalonia.Platform.PortalScreenFrames.Refused = false;
+            panel.SetScreenOcrDetail(true);
+            Assert.False(line.IsVisible);
+        }
+        finally
+        {
+            (ConditioningControlPanel.Avalonia.Platform.PortalScreenFrames.Refused,
+                ConditioningControlPanel.Avalonia.Platform.KeywordTriggerHead.OcrSource) = saved;
+        }
     });
 
     [Fact]
