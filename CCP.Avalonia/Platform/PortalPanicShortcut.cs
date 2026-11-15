@@ -246,7 +246,8 @@ internal static class PortalPanicShortcut
     /// <summary>One portal Request round trip: subscribe to the Response on the predicted request
     /// path BEFORE calling (the portal may answer before the call returns), then call and await.</summary>
     internal static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
-        DBusConnection bus, string member, string signature, BodyWriter writeBody, CancellationToken cancellation = default)
+        DBusConnection bus, string member, string signature, BodyWriter writeBody, CancellationToken cancellation = default,
+        string iface = Iface)
     {
         var token = "ccp" + Guid.NewGuid().ToString("N");
         var sender = bus.UniqueName!.TrimStart(':').Replace('.', '_');
@@ -261,7 +262,7 @@ internal static class PortalPanicShortcut
             },
             null, null, false, ObserverFlags.None);
 
-        await bus.CallMethodAsync(CallHeader(bus, DesktopPath, Iface, member, signature, (ref MessageWriter w) => writeBody(ref w, token)));
+        await bus.CallMethodAsync(CallHeader(bus, DesktopPath, iface, member, signature, (ref MessageWriter w) => writeBody(ref w, token)));
         // KDE may show the user a dialog for BindShortcuts; effects wait at most this long for it.
         return await answer.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellation);
     }

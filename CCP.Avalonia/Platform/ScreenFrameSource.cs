@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -8,6 +9,8 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.ScreenCapture;
+using SkiaSharp;
+using Tmds.DBus.Protocol;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -19,9 +22,13 @@ internal static class ScreenFrameSourceFactory
     {
         if (SandboxNet.Active) return new UnavailableScreenFrames();
         if (OperatingSystem.IsWindows()) return new DesktopScreenFrames(Win32ScreenCapture.Read);
-        if (OperatingSystem.IsLinux() && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
-            return new DesktopScreenFrames(X11ScreenCapture.Read);
-        return new UnavailableScreenFrames(); // Native Wayland portal capture remains to be implemented.
+        if (!OperatingSystem.IsLinux()) return new UnavailableScreenFrames();
+        // The app always runs through XWayland, and on KWin 6 (live 2026-11-15) an XWayland root grab is all
+        // black over native windows, so a Wayland session reads through the Screenshot portal instead.
+        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")) ||
+               Environment.GetEnvironmentVariable("XDG_SESSION_TYPE") == "wayland"
+            ? new PortalScreenFrames()
+            : new DesktopScreenFrames(X11ScreenCapture.Read);
     }
 }
 
@@ -41,10 +48,13 @@ internal sealed class DesktopScreenFrames : IScreenFrameSource
     internal DesktopScreenFrames(Func<CaptureMonitor, byte[]?> read, Func<Task<IReadOnlyList<CaptureMonitor>>>? monitors = null)
     {
         _read = read;
-        _monitors = monitors ?? (() => Dispatcher.UIThread.InvokeAsync<IReadOnlyList<CaptureMonitor>>(() =>
-            WebcamScreens.Enumerate().Select(s => new CaptureMonitor(WebcamScreens.Name(s),
-                new Rectangle(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height), s.Scaling)).ToArray()).GetTask());
+        _monitors = monitors ?? AvaloniaMonitors;
     }
+
+    internal static Task<IReadOnlyList<CaptureMonitor>> AvaloniaMonitors() =>
+        Dispatcher.UIThread.InvokeAsync<IReadOnlyList<CaptureMonitor>>(() =>
+            WebcamScreens.Enumerate().Select(s => new CaptureMonitor(WebcamScreens.Name(s),
+                new Rectangle(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height), s.Scaling)).ToArray()).GetTask();
 
     public async Task<ScreenFrameResult> CaptureAsync(CancellationToken cancellationToken)
     {
@@ -67,6 +77,138 @@ internal sealed class DesktopScreenFrames : IScreenFrameSource
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Screen capture unavailable"); return ScreenFrameResult.Unavailable; }
+    }
+}
+
+// org.freedesktop.portal.Screenshot, non-interactive (spec: interactive=false is a hint; the frontend checks the
+// "screenshot" permission and may ask once: https://github.com/flatpak/xdg-desktop-portal/blob/main/data/org.freedesktop.portal.Screenshot.xml).
+// KDE answers without a dialog (https://github.com/KDE/xdg-desktop-portal-kde/blob/master/src/screenshot.cpp).
+// The portal writes a file of the user's whole screen: decode it, delete it at once, never log where it was.
+internal sealed class PortalScreenFrames : IScreenFrameSource
+{
+    internal delegate Task<(uint Code, Dictionary<string, VariantValue> Results)> Requester(CancellationToken cancellation);
+
+    // Response 1 (cancelled) or 2 (other) ends capture for the session: a scan loop must never re-prompt.
+    // The Awareness tab reads this to say why OCR sees nothing.
+    internal static volatile bool Refused;
+
+    private readonly Requester _request;
+    private readonly Func<Task<IReadOnlyList<CaptureMonitor>>> _monitors;
+    private readonly TimeSpan _timeout;
+    private readonly object _gate = new();
+    private Task<(int Width, int Height, byte[] Pixels)?>? _pending;
+
+    internal PortalScreenFrames(Requester? request = null, Func<Task<IReadOnlyList<CaptureMonitor>>>? monitors = null, TimeSpan? timeout = null)
+    {
+        _request = request ?? ScreenshotAsync;
+        _monitors = monitors ?? DesktopScreenFrames.AvaloniaMonitors;
+        _timeout = timeout ?? TimeSpan.FromSeconds(5);
+    }
+
+    public async Task<ScreenFrameResult> CaptureAsync(CancellationToken cancellationToken)
+    {
+        if (Refused) return ScreenFrameResult.Unavailable;
+        Task<(int Width, int Height, byte[] Pixels)?> call;
+        lock (_gate)
+        {
+            // A call still pending (even past an earlier scan's timeout) skips this scan rather than stacking requests.
+            if (_pending is { IsCompleted: false }) return ScreenFrameResult.Unavailable;
+            call = _pending = ShootAsync();
+        }
+        try
+        {
+            var image = await call.WaitAsync(_timeout, cancellationToken).ConfigureAwait(false);
+            if (image is not { } shot) return ScreenFrameResult.Unavailable;
+            return Split(shot.Width, shot.Height, shot.Pixels, await _monitors().ConfigureAwait(false));
+        }
+        catch (TimeoutException) { return ScreenFrameResult.Unavailable; }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Screen capture unavailable"); return ScreenFrameResult.Unavailable; }
+    }
+
+    // Not cancelled by the scan: a late answer must still have its file deleted.
+    private async Task<(int, int, byte[])?> ShootAsync()
+    {
+        try
+        {
+            var (code, results) = await _request(CancellationToken.None).ConfigureAwait(false);
+            var path = FilePath(results);
+            try
+            {
+                if (code != 0)
+                {
+                    Refused = true;
+                    Serilog.Log.Warning("Screen OCR: the screenshot portal answered {Code}; screen capture stays off until restart", code);
+                    return null;
+                }
+                return path == null ? null : Decode(path);
+            }
+            finally { if (path != null) try { File.Delete(path); } catch { } }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Debug("Screen OCR: screenshot portal call failed ({Type})", ex.GetType().Name);
+            Interlocked.Exchange(ref _bus, null)?.Dispose();
+            return null;
+        }
+    }
+
+    internal static string? FilePath(Dictionary<string, VariantValue> results)
+    {
+        if (!results.TryGetValue("uri", out var v)) return null;
+        if (v.Type == VariantValueType.Variant) v = v.GetVariantValue();
+        return v.Type == VariantValueType.String && Uri.TryCreate(v.GetString(), UriKind.Absolute, out var uri) && uri.IsFile ? uri.LocalPath : null;
+    }
+
+    // SKCodec.GetPixels(SKImageInfo, out byte[]) has the same body in SkiaSharp 2.88.8 and 4.156.1 (ilspy, 2026-11-15).
+    private static (int, int, byte[])? Decode(string path)
+    {
+        using var codec = SKCodec.Create(path);
+        if (codec == null) return null;
+        var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        return codec.GetPixels(info, out byte[] pixels) == SKCodecResult.Success ? (info.Width, info.Height, pixels) : null;
+    }
+
+    // The shot covers the union of the monitors; crop each by its physical bounds, scaled if the image size differs.
+    internal static ScreenFrameResult Split(int width, int height, byte[] pixels, IReadOnlyList<CaptureMonitor> monitors)
+    {
+        if (monitors.Count == 0 || pixels.LongLength != (long)width * height * 4) return ScreenFrameResult.Unavailable;
+        int left = monitors.Min(m => m.Bounds.Left), top = monitors.Min(m => m.Bounds.Top);
+        int unionW = monitors.Max(m => m.Bounds.Right) - left, unionH = monitors.Max(m => m.Bounds.Bottom) - top;
+        if (unionW <= 0 || unionH <= 0) return ScreenFrameResult.Unavailable;
+        double sx = (double)width / unionW, sy = (double)height / unionH;
+        var frames = new List<ScreenFrame>(monitors.Count);
+        foreach (var m in monitors)
+        {
+            var b = m.Bounds;
+            int x0 = (int)Math.Round((b.Left - left) * sx), x1 = Math.Min(width, (int)Math.Round((b.Right - left) * sx));
+            int y0 = (int)Math.Round((b.Top - top) * sy), y1 = Math.Min(height, (int)Math.Round((b.Bottom - top) * sy));
+            int w = x1 - x0, h = y1 - y0;
+            if (w <= 0 || h <= 0) return ScreenFrameResult.Unavailable;
+            var crop = new byte[checked(w * h * 4)];
+            for (int y = 0; y < h; y++) Buffer.BlockCopy(pixels, ((y0 + y) * width + x0) * 4, crop, y * w * 4, w * 4);
+            frames.Add(new ScreenFrame(m.Name, b, m.Scale, w, h, w * 4, ScreenPixelFormat.Bgra32, crop));
+        }
+        return new ScreenFrameResult(ScreenFrameStatus.Available, frames);
+    }
+
+    // Own connection (UniqueName throws on the shared autoconnect one); one call at a time, so lazy init is safe.
+    private static DBusConnection? _bus;
+    private static async Task<(uint, Dictionary<string, VariantValue>)> ScreenshotAsync(CancellationToken cancellation)
+    {
+        var bus = _bus;
+        if (bus == null)
+        {
+            bus = new DBusConnection(DBusAddress.Session!);
+            await bus.ConnectAsync().ConfigureAwait(false);
+            await PortalPanicShortcut.RegisterAsync(bus).ConfigureAwait(false);
+            _bus = bus;
+        }
+        return await PortalPanicShortcut.RequestAsync(bus, "Screenshot", "sa{sv}", (ref MessageWriter w, string token) =>
+        {
+            w.WriteString(""); // parent_window: none
+            w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token, ["interactive"] = false });
+        }, cancellation, "org.freedesktop.portal.Screenshot").ConfigureAwait(false);
     }
 }
 
