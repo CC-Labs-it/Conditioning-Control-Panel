@@ -21,15 +21,12 @@ namespace CCP.Avalonia.Tests;
 /// <summary>WPF VideoService.FloatingInstances.cs: the multi-window floating host, behind the decoder seam.</summary>
 public sealed class MandatoryVideoFloatingHostTests
 {
-    private sealed class StillTime : TimeProvider
+    private sealed class StillTime : TimeProvider, ITimer
     {
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Never();
-        private sealed class Never : ITimer
-        {
-            public bool Change(TimeSpan due, TimeSpan period) => true;
-            public void Dispose() { }
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        }
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => this;
+        public bool Change(TimeSpan due, TimeSpan period) => true;
+        public void Dispose() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class Decoder : IMandatoryPlayback
@@ -217,4 +214,32 @@ public sealed class MandatoryVideoFloatingHostTests
         o.Floaters[0].Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // the holder goes
         Assert.Single(decoders.Where(d => !d.Stopped), d => d.AudioOff != true);
     }, keepSound: keepSound);
+
+    [Fact]
+    public Task Closing_the_first_window_in_a_grace_pause_resumes_the_others() => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger(userInitiated: true);
+        Assert.True(o.TryGracePause(fromPanicKey: false));
+        o.Surfaces[0].Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Single(Up(o));
+        Assert.False(decoders[1].Paused, "the joined window plays on");
+    });
+
+    [Fact]
+    public Task A_Lockdown_hides_and_refuses_the_joined_windows_close_button() => Run((o, _) =>
+    {
+        var (previous, lockdown) = (LockdownService.Current, LockdownService.Current = new LockdownService());
+        try
+        {
+            o.Scheduler.Trigger(userInitiated: true);
+            var close = o.Floaters[0].Surface.Buttons.Close;
+            Assert.True(close.IsVisible);
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(close.IsVisible);
+            close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // refused: the window stays
+            Assert.Equal(2, Up(o).Count);
+        }
+        finally { lockdown.Deactivate(); lockdown.Dispose(); LockdownService.Current = previous; }
+    });
 }
