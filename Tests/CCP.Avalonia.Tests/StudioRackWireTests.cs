@@ -12,6 +12,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 using AvApp = global::ConditioningControlPanel.Avalonia.App;
 
@@ -37,24 +38,24 @@ public sealed class StudioRackWireTests
             box.IsChecked = false;
             Dispatcher.UIThread.RunJobs();
             var dot = rack.DotFor("haptics")!;
-            Assert.Equal(0.35, dot.Opacity);
+            Assert.True(IsRing(dot));
 
             RightClick(shell, rack, "haptics");
             Assert.True(s.Enabled);
             Assert.True(box.IsChecked);
-            Assert.Equal(1.0, dot.Opacity);
+            Assert.False(IsRing(dot));
             Assert.Equal(StudioTabView.DefaultRackKey, rack.SelectedRackKey);   // a toggle never selects
 
             box.IsChecked = false;                       // the page's own box: dot follows live
             Dispatcher.UIThread.RunJobs();
             Assert.False(s.Enabled);
-            Assert.Equal(0.35, dot.Opacity);
+            Assert.True(IsRing(dot));
 
             CoreEntitlement.HasPremiumProvider = () => false;   // the page's premium gate refuses
             RightClick(shell, rack, "haptics");
             Assert.False(s.Enabled);
             Assert.False(box.IsChecked);
-            Assert.Equal(0.35, dot.Opacity);
+            Assert.True(IsRing(dot));
         }
         finally
         {
@@ -121,6 +122,84 @@ public sealed class StudioRackWireTests
             Dispatcher.UIThread.RunJobs();
         }
     });
+
+    /// <summary>Declutter wave 1 (WPF StudioRackRulesTests): on = filled dot + full label, off =
+    /// hollow ring + dimmed label, never opacity alone; the group header counts what is on and
+    /// moves with the dots; a row with no switch (Visuals) counts on neither side.</summary>
+    [Fact]
+    public Task OffIsARingAndADimmedLabelAndTheGroupHeaderCounts() => Run((shell, rack) =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.FlashEnabled, s.MandatoryVideosEnabled, s.SubliminalEnabled, s.SpiralEnabled, s.PinkFilterEnabled);
+        try
+        {
+            s.FlashEnabled = s.MandatoryVideosEnabled = s.SubliminalEnabled = s.SpiralEnabled = s.PinkFilterEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            var dot = rack.DotFor("subliminal")!;
+            var label = rack.LabelFor("subliminal")!;
+            Assert.True(IsRing(dot));
+            Assert.Equal(StudioRackRules.OffRingThickness, dot.StrokeThickness);
+            Assert.Equal(StudioRackRules.OffLabelOpacity, label.Opacity);
+            Assert.Equal((7d, 7d), (dot.Width, dot.Height));
+            var effects = rack.GroupCountTexts[0];
+            Assert.Contains("0", effects);
+            Assert.Contains("5", effects);                 // five switches; Visuals has none
+
+            s.SubliminalEnabled = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(IsRing(dot));
+            Assert.Equal(1.0, label.Opacity);
+            Assert.Contains("1", rack.GroupCountTexts[0]);
+            Assert.DoesNotContain("0", rack.GroupCountTexts[0]);
+            Assert.Equal(4, rack.GroupCountTexts.Count);
+            Assert.All(rack.GroupCountTexts, t => Assert.NotEqual("", t));
+        }
+        finally
+        {
+            (s.FlashEnabled, s.MandatoryVideosEnabled, s.SubliminalEnabled, s.SpiralEnabled, s.PinkFilterEnabled) = old;
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public void TheSelectedRowWearsThePaneSurfaceAndTheStudioHueBarInTheStripsPink()
+    {
+        var dir = new System.IO.DirectoryInfo(System.IO.Path.GetDirectoryName(SourcePath())!);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "CCP.Avalonia", "Views"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        string Read(params string[] parts) =>
+            System.IO.File.ReadAllText(System.IO.Path.Combine(new[] { dir!.FullName, "CCP.Avalonia" }.Concat(parts).ToArray()));
+
+        var axaml = Read("Views", "Tabs", "StudioTabView.axaml");
+        string After(string marker) { var t = axaml.Substring(axaml.IndexOf(marker, StringComparison.Ordinal)); return t.Substring(0, t.IndexOf("/>", StringComparison.Ordinal)); }
+        Assert.Contains($"{{DynamicResource {StudioRackRules.SelectedFillBrushKey}}}", After("Name=\"RowFill\""));
+        Assert.Contains($"{{DynamicResource {StudioRackRules.SelectedBarBrushKey}}}", After("Name=\"RowBar\""));
+        // The fill is the pane's surface, so the rack card sits one step under it.
+        Assert.NotEqual(StudioRackRules.SelectedFillBrushKey, StudioRackRules.RackGroundBrushKey);
+        Assert.Contains($"Background=\"{{DynamicResource {StudioRackRules.RackGroundBrushKey}}}\"",
+            axaml.Substring(axaml.IndexOf("Width=\"230\"", StringComparison.Ordinal), 160));
+
+        var rgb = NavStripTable.Pink.ToString("X6");
+        var colors = Read("Theme", "Colors.xaml");
+        var brushes = Read("Theme", "Brushes.xaml");
+        Assert.Contains($"<Color x:Key=\"SectionHueStudio\">#FF{rgb}</Color>", colors);
+        Assert.Contains($"<Color x:Key=\"SectionHueStudioWash\">#14{rgb}</Color>", colors);
+        Assert.Contains($"<Color x:Key=\"SectionHueStudioBorder\">#40{rgb}</Color>", colors);
+        Assert.Contains($"x:Key=\"SectionHueStudioBrush\" Color=\"#FF{rgb}\"", brushes);
+        Assert.Contains($"x:Key=\"SectionHueStudioBorderBrush\" Color=\"#40{rgb}\"", brushes);
+    }
+
+    private static string SourcePath([System.Runtime.CompilerServices.CallerFilePath] string here = "") => here;
+
+    /// <summary>A hollow ring: a stroke and no painted fill. The opposite is the filled disc.</summary>
+    private static bool IsRing(global::Avalonia.Controls.Shapes.Ellipse dot)
+    {
+        bool filled = dot.Fill is global::Avalonia.Media.ISolidColorBrush f && f.Color.A > 0;
+        bool ring = dot.Stroke != null && dot.StrokeThickness > 0;
+        Assert.True(filled ^ ring, "a rack dot is a filled disc or a hollow ring, never both or neither");
+        Assert.Equal(1.0, dot.Opacity);
+        return ring;
+    }
 
     private static void RightClick(MainShellWindow shell, StudioTabView rack, string key)
     {
