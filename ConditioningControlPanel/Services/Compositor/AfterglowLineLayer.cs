@@ -24,7 +24,7 @@ public sealed class AfterglowLineLayer : BaseLayer
     private double _sinceFrame;
     private System.Drawing.Rectangle _lastBounds;
 
-    private AfterglowLineLayer(CompositorEngine engine) : base(engine) { }
+    private AfterglowLineLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Subliminal + 1;
     public override bool WorldSpacePx => true;

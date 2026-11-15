@@ -40,7 +40,7 @@ public sealed class SteamLayer : BaseLayer
     /// <summary>The player's "Words in the fog" switch. Off: fog only; a word on screen fades out.</summary>
     public static bool WordsOn => App.Settings?.Current?.SteamWordsInFog != false;
 
-    public SteamLayer(CompositorEngine engine) : base(engine) { }
+    public SteamLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => PinkTintLayer.ZFor(App.Settings?.Current?.PinkFilterUnderEffects == true);
     public override bool WorldSpacePx => true;

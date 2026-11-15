@@ -107,7 +107,7 @@ public sealed class BrainDrainLayer : BaseLayer
     private SKPaint? _maskPaint;                // DstOut, unit radial gradient scaled by the canvas
     // (click waves: see BeginWaves)
 
-    public BrainDrainLayer(CompositorEngine engine) : base(engine)
+    public BrainDrainLayer(CompositorEngine engine) : base(engine.Wake)
     {
         // Any Changed re-asks, not only Undertow's own: a tier change or the weekly preview ending
         // may be raised with whichever effect the sender had in hand. The drift check re-asks

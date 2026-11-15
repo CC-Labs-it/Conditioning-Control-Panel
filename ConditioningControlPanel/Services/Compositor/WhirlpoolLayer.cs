@@ -17,7 +17,7 @@ public sealed class WhirlpoolLayer : BaseLayer
     private bool _dirty = true;
     private double _sinceFrame;
 
-    public WhirlpoolLayer(CompositorEngine engine) : base(engine) { }
+    public WhirlpoolLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Whirlpool;
     public override bool WorldSpacePx => true;

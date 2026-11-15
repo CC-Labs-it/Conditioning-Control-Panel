@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Logo = ConditioningControlPanel.Services.BouncingTextEngine.Logo;
 
 namespace ConditioningControlPanel.Services;
 
@@ -26,6 +27,24 @@ namespace ConditioningControlPanel.Services;
 public class BouncingTextService : IDisposable
 {
     private readonly BouncingTextEngine _engine = new();
+    // Super Scrawl reads the engine's logos, bounds and font through these.
+    private IReadOnlyList<Logo> _logos => _engine.Logos;
+    private double _minX => _engine.MinX;
+    private double _minY => _engine.MinY;
+    private double _maxX => _engine.MaxX;
+    private double _maxY => _engine.MaxY;
+    private int _currentFontSize => _engine.FontSize;
+    private string _currentFont => _engine.Font;
+    private readonly Random _random = new();
+
+    // Super Scrawl (Services/Super/CONTRACT.md): null while the switch is off, so the base path is untouched.
+    private Super.ScrawlScene? _scrawl;
+    private GlobalMouseHook? _scrawlHook;
+    private readonly double[] _scrawlHitPx = new double[8]; // physical px boxes, x/y/r/b per logo, read on the hook
+    private volatile int _scrawlHitCount;
+
+    /// <summary>The speed slider as a multiplier: the engine's rule.</summary>
+    public static double SpeedMultiplier(int slider) => BouncingTextEngine.SpeedMultiplier(slider);
     private readonly List<BouncingTextWindow> _windows = new();
     private bool _isRunning;
 
@@ -353,6 +372,14 @@ public class BouncingTextService : IDisposable
         {
             var l = logos[i];
             var (sx, sy, angle) = _engine.ComputeEffectTransform(l, settings);
+            // Super Scrawl: a word the pool has caught shrinks toward the eye and grows back on the way out
+            if (_scrawl != null && l.Fling.Scale > 0 && l.Fling.Scale < 1) { sx *= l.Fling.Scale; sy *= l.Fling.Scale; }
+            // Super Scrawl: a slammed word swells at the screen centre
+            if (l.SlamT >= 0)
+            {
+                double slam = Super.ScrawlRules.SlamWordScale(l.SlamT, _scrawlMotion);
+                sx *= slam; sy *= slam;
+            }
             foreach (var window in _windows)
             {
                 window.UpdatePosition(i, l.PosX, l.PosY);
@@ -369,7 +396,33 @@ public class BouncingTextService : IDisposable
     /// counts XP a second time.</summary>
     private void StepLogo(BouncingTextEngine.Logo l, int index, double dt, Models.AppSettings settings)
     {
+        if (_scrawl != null)
+        {
+            if (l.SlamT >= 0) { StepSlam(l, dt); return; }
+            double spd = Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY);
+            double f = Super.ScrawlRules.RelaxFactor(spd, l.Cruise, dt);
+            l.VelX *= f; l.VelY *= f;
+            if (StepStage(l, dt)) return;   // caught by the pool: it moves the word this frame
+        }
+
         var step = _engine.Step(l, dt, settings);
+
+        if (step.Bounced && _scrawl != null)
+        {
+            var wall = Super.ScrawlRules.WallOf(step.BouncedX && l.VelX > 0, step.BouncedX && l.VelX < 0,
+                                                step.BouncedY && l.VelY > 0, step.BouncedY && l.VelY < 0);
+            var (mx, my, _) = MonitorCentreAt(l.PosX + l.TextWidth / 2, l.PosY + l.TextHeight / 2);
+            _scrawl.WallHit(l.Text, wall, l.PosX, l.PosY, l.PosX + l.TextWidth, l.PosY + l.TextHeight,
+                new Super.ScrawlBounds(_minX, _minY, _maxX, _maxY), new Point(mx, my));
+        }
+
+        if (step.CornerHit && _scrawl != null)
+        {
+            // A gold corner blows a hole in the fog. It knocks nothing: reach 0.
+            double d = _scrawlDpi;
+            Super.SuperStageHost.Stage.Blast(new SuperCore.Blast(
+                (l.PosX + l.TextWidth / 2) * d, (l.PosY + l.TextHeight / 2) * d, 0, 230 * d, SuperCore.BlastKind.GoldCorner));
+        }
 
         if (step.CornerHit)
         {

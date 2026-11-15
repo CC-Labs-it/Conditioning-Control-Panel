@@ -60,7 +60,7 @@ public sealed class AfterglowLayer : BaseLayer
     private readonly SKColor[] _spark = new SKColor[2];
     private string? _hexA, _hexB;
 
-    public AfterglowLayer(CompositorEngine engine) : base(engine)
+    public AfterglowLayer(CompositorEngine engine) : base(engine.Wake)
     {
         _rnd = _rng.NextDouble;
         RefreshColours();

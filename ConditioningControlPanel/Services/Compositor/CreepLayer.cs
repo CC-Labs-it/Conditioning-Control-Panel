@@ -52,7 +52,7 @@ public sealed class CreepLayer : BaseLayer
 
     private struct Mote { public bool Live, Burst; public double X, Y, Vx, Vy, Life, Span, Seed; }
 
-    public CreepLayer(CompositorEngine engine) : base(engine) { }
+    public CreepLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     public override int ZIndex => CompositorLayers.Creep;
     public override bool WorldSpacePx => true;

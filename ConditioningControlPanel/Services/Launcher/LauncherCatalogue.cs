@@ -332,6 +332,8 @@ public static class LauncherCatalogue
         return list;
     }
 
+    private static Color Tile(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
+
     // A gate that cannot be read (no account, no tier service) plays the demo, never a refusal.
     private static bool BreakoutFull()
     {
