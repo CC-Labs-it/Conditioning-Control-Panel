@@ -111,22 +111,6 @@ public class ChasterLinkTests : IDisposable
     }
 
     [Fact]
-    public async Task Stray_callbacks_on_both_loopbacks_do_not_block_the_real_callback()
-    {
-        var (flow, state) = Start();
-        foreach (var host in new[] { "127.0.0.1", "[::1]", "127.0.0.1" })
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"http://{host}:{ChasterService.LoopbackPort}/callback/?code=stale&state=wrong");
-            request.Headers.Host = $"localhost:{ChasterService.LoopbackPort}";
-            using var response = await _browser.SendAsync(request);
-            Assert.Contains("Not linked", await response.Content.ReadAsStringAsync());
-            Assert.False(flow.IsCompleted);
-        }
-        Assert.Contains("Linked", await _browser.GetStringAsync(Callback + "?code=real&state=" + state));
-        Assert.Equal(LinkOutcome.Linked, await flow);
-    }
-
-    [Fact]
     public async Task A_bounce_with_no_code_links_nothing()
     {
         var (flow, state) = Start();

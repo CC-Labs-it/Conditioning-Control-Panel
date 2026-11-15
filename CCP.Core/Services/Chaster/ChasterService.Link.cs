@@ -1,6 +1,6 @@
 using System;
-using System.IO;
-using ConditioningControlPanel.Services;
+using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -47,28 +47,30 @@ public sealed partial class ChasterService
         _linkCancelled = false;
         var state = ChasterClient.NewState();
         var verifier = ChasterClient.NewVerifier();
+        using var listener = new HttpListener();
         try
         {
-            using var listener = new LoopbackOAuth(LoopbackPort, useHttpListener: false);
+            listener.Prefixes.Add($"http://localhost:{LoopbackPort}/callback/");
+            listener.Start();
             openBrowser(ChasterClient.AuthorizeUrl(state, ChasterClient.Challenge(verifier)));
 
             string? error, code;
             while (true)
             {
-                var contextTask = listener.NextCallbackAsync();
+                var contextTask = listener.GetContextAsync();
                 // Observe a fault from a listener torn down under the wait, so it never surfaces
                 // as an unobserved task exception on the finalizer thread.
                 _ = contextTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
                 var done = await Task.WhenAny(contextTask, Task.Delay(Timeout.Infinite, cts.Token)).ConfigureAwait(false);
                 if (done != contextTask) return _linkCancelled ? LinkOutcome.Cancelled : LinkOutcome.TimedOut;
 
-                var (query, respond) = await contextTask.ConfigureAwait(false);
+                var context = await contextTask.ConfigureAwait(false);
+                var query = context.Request.QueryString;
                 error = query["error"];
                 code = query["code"];
                 var stateOk = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                     System.Text.Encoding.UTF8.GetBytes(state), System.Text.Encoding.UTF8.GetBytes(query["state"] ?? ""));
-                try { await respond(ResponseHtml(stateOk && string.IsNullOrEmpty(error) && !string.IsNullOrEmpty(code))).ConfigureAwait(false); }
-                catch (IOException ex) { Diag.Swallowed(ex, "browser closed before the link page was written"); }
+                await RespondAsync(context, stateOk && string.IsNullOrEmpty(error) && !string.IsNullOrEmpty(code)).ConfigureAwait(false);
                 // A knock with the wrong state is a stale tab from an earlier try, or some other
                 // program on this machine. It gets the "not linked" page and the wait goes on;
                 // it must not be able to end a real attempt.
@@ -97,7 +99,7 @@ public sealed partial class ChasterService
         {
             return LinkOutcome.Cancelled;
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpListenerException or InvalidOperationException)
         {
             // Port taken, or the listener was refused. Nothing to clean up but the flag.
             Diag.Swallowed(ex, "chaster link listener failed");
@@ -110,12 +112,30 @@ public sealed partial class ChasterService
         }
     }
 
-    private static string ResponseHtml(bool ok)
+    private static Task RespondAsync(HttpListenerContext context, bool ok)
     {
         var title = ok ? "Linked" : "Not linked";
         var line = ok ? "You can close this tab and go back to the app." : "Nothing was linked. Close this tab and try again from the app.";
-        return "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + title + "</title><style>"
+        var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + title + "</title><style>"
             + "body{font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#1a1a2e;color:#fff;text-align:center}"
             + "h1{color:" + (ok ? "#ff69b4" : "#ff4444") + "}p{color:#888}</style></head><body><div><h1>" + title + "</h1><p>" + line + "</p></div></body></html>";
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(html);
+            // This one-shot listener is disposed next. HTTP.sys must finish the response and
+            // disconnect gracefully, rather than aborting a pooled keep-alive connection.
+            context.Response.KeepAlive = false;
+            context.Response.ContentType = "text/html; charset=utf-8";
+            context.Response.ContentLength64 = bytes.Length;
+            // A refusal returns straight into listener disposal. Finish the response first,
+            // or Windows http.sys can reset the browser's still-open connection.
+            context.Response.KeepAlive = false;
+            context.Response.Close(bytes, willBlock: true);
+        }
+        catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or System.IO.IOException)
+        {
+            Diag.Swallowed(ex, "browser closed before the link page was written");
+        }
+        return Task.CompletedTask;
     }
 }

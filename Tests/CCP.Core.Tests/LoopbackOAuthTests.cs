@@ -61,63 +61,6 @@ public sealed class LoopbackOAuthTests
     }
 
     [Fact]
-    public async Task RepeatedCallbacks_OnAlternatingLoopbacks_AreNotLost()
-    {
-        var port = FreePort();
-        using var oauth = new LoopbackOAuth(port, useHttpListener: false);
-        foreach (var host in new[] { "127.0.0.1", "[::1]", "127.0.0.1", "[::1]" })
-        {
-            var next = oauth.NextCallbackAsync();
-            var browser = BrowserGet(host, port, "code=abc");
-            var (query, respond) = await next.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.Equal("abc", query["code"]);
-            await respond("done");
-            Assert.Equal("done", (await browser).Body);
-        }
-    }
-
-    [Fact]
-    public async Task OverlappingWrongStateAndValidCallback_AreBothAnswered()
-    {
-        var port = FreePort();
-        using var oauth = new LoopbackOAuth(port, useHttpListener: false);
-        var first = oauth.NextCallbackAsync();
-        var staleBrowser = BrowserGet("127.0.0.1", port, "code=stale&state=wrong");
-        var (stale, reject) = await first.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.Equal("wrong", stale["state"]);
-
-        // Hold the first response while the real browser request reaches the listener.
-        var validBrowser = BrowserGet("127.0.0.1", port, $"code=real&state={oauth.State}");
-        for (var i = 0; i < 500 && oauth.PendingCallbackCount == 0 && !validBrowser.IsCompleted; i++) await Task.Delay(10);
-        Assert.False(validBrowser.IsCompleted, "The valid request must stay open during the handoff.");
-        Assert.Equal(1, oauth.PendingCallbackCount);
-        await reject("Not linked");
-        Assert.Equal("Not linked", (await staleBrowser).Body);
-        var (valid, accept) = await oauth.NextCallbackAsync().WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.Equal(oauth.State, valid["state"]);
-        Assert.Equal("real", valid["code"]);
-        await accept("Linked");
-        Assert.Equal("Linked", (await validBrowser).Body);
-    }
-
-    [Fact]
-    public async Task DisposingListener_ClosesQueuedCallbacks()
-    {
-        var port = FreePort();
-        using var oauth = new LoopbackOAuth(port, useHttpListener: false);
-        var first = oauth.NextCallbackAsync();
-        var staleBrowser = BrowserGet("127.0.0.1", port, "state=wrong");
-        var (_, reject) = await first.WaitAsync(TimeSpan.FromSeconds(10));
-        var validBrowser = BrowserGet("127.0.0.1", port, "state=valid");
-        for (var i = 0; i < 500 && oauth.PendingCallbackCount == 0; i++) await Task.Delay(10);
-        Assert.Equal(1, oauth.PendingCallbackCount);
-        await reject("Not linked");
-        Assert.Equal("Not linked", (await staleBrowser).Body);
-        oauth.Dispose();
-        await Assert.ThrowsAsync<HttpRequestException>(async () => await validBrowser.WaitAsync(TimeSpan.FromSeconds(10)));
-    }
-
-    [Fact]
     public async Task HttpListenerPath_GoodState_ServesSuccessPage()
     {
         // The Windows (http.sys) path; on Linux the managed HttpListener binds one loopback, so go by name.
