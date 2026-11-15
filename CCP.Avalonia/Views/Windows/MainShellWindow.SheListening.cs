@@ -331,9 +331,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (tab.TxtSL_WakeEngineStatus.Parent?.Parent is Control row) ToolTip.SetTip(row, text);
         }
 
-        /// <summary>Calibration remains unavailable until the capture sweep is ported.</summary>
+        /// <summary>WPF SheListening.cs:90-95: explain when the model is missing.</summary>
         internal void SL_Calibrate_Click()
-            => _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word",
-                Loc.Get("she_wake_calibration_unavailable"));
+        {
+            var wake = WakeSpotterOverride ?? Platform.PulseMicSource.Wake;
+            var key = wake?.IsConfigured == true ? "she_wake_calibration_unavailable" : "she_wake_model_missing";
+            _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word", Loc.Get(key));
+        }
     }
 }
