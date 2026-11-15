@@ -628,6 +628,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly List<object> _quarantinedNative = new();
         internal static volatile bool NativeUnavailable;
         internal static Func<long> NativeClock = () => Environment.TickCount64;
+        private static long? _mandatoryPoisonedAt;
+        internal static void RecordMandatoryNativePoisoning()
+        {
+            lock (_quarantinedNative) _mandatoryPoisonedAt = NativeClock();
+        }
+        internal static void ClearMandatoryNativePoisoningForTests()
+        {
+            lock (_quarantinedNative) _mandatoryPoisonedAt = null;
+        }
         private sealed class NativeHold { public long From; }
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, NativeHold> _nativeHolds = new();
         // WPF VideoService.cs:170,1320-1344 and VideoCooldownRules.cs:16: four seconds
@@ -638,9 +647,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 lock (_quarantinedNative)
                 {
+                    var now = NativeClock();
+                    if (_mandatoryPoisonedAt is long poisoned && now >= poisoned &&
+                        VideoCooldownRules.PoisonCooldownRemainingMs(1, 1 + (now - poisoned) * TimeSpan.TicksPerMillisecond) > 0)
+                        return true;
                     if (!NativeUnavailable) return false;
                     if (_quarantinedNative.Count == 0) return true;
-                    var now = NativeClock();
                     return _quarantinedNative.Any(r => !_nativeHolds.TryGetValue(r, out var hold) ||
                         (now >= hold.From && now - hold.From < 60000));
                 }
