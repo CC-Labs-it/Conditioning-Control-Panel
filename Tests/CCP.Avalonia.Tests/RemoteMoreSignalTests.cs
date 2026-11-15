@@ -47,11 +47,13 @@ public sealed class RemoteMoreSignalTests
         var oldAttention = MainShellWindow.RemoteJoinAttention;
         var oldSink = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
         var pending = new List<(TimeSpan Duration, CancellationToken Token, TaskCompletionSource<bool> Completion)>();
+        var secondConfirmation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         RemoteControlTabView.MoreConfirmationDelay = (duration, token) =>
         {
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             token.Register(() => completion.TrySetCanceled(token));
             pending.Add((duration, token, completion));
+            if (pending.Count == 2) secondConfirmation.TrySetResult();
             return completion.Task;
         };
         var fake = new FakeRelay();
@@ -103,7 +105,7 @@ public sealed class RemoteMoreSignalTests
             Assert.Equal(expected, tabStatus.Text); // the first confirmation stays until the next response
             Assert.False(pending[0].Token.IsCancellationRequested);
             gate.SetResult(true);
-            for (var i = 0; i < 200 && pending.Count < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            await secondConfirmation.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(2, pending.Count);
             Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[1].Duration);
             Assert.True(pending[0].Token.IsCancellationRequested);
