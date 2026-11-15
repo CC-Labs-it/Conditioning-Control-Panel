@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -15,6 +17,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Compositor;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -35,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// remote pools, gaze pop/linger, shared-stage hosting of clickable, gazed, moving or glowing flashes and avatar pre-announce.</para>
     /// </summary>
     internal static partial class FlashOverlay
     {
@@ -44,6 +47,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private const int StaggerMs = 300;
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
+        /// <summary>Passive flashes on the shared stage, each with its own lifetime and Stop handle.</summary>
+        internal static readonly List<(Control Item, PixelRect Rect, Action Stop)> Hosted = new();
+        internal static int OnScreen => Active.Count + Hosted.Count;
 
         internal static void RaiseAll(Action<Window> raise)
         {
@@ -100,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (generation != _generation || _closed) return;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-                var occupied = Active.Select(a => a.Rect).ToList();
+                var occupied = Active.Select(a => a.Rect).Concat(Hosted.Select(h => h.Rect)).ToList();
                 RemoteFlashSource.EnsurePrefetch();
                 var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
                 if (generation != _generation || _closed)
@@ -314,7 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         // WPF FlashService.cs:1705-1711 reads the current cap at each spawn.
-                        if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient)) { Drop(bmp); return; }
+                        if (refused || _closed || generation != _generation || OnScreen >= Cap(CoreSettings.Current, ambient)) { Drop(bmp); return; }
                         refused = !Show(bmp, rect, path, screen, alpha, fade, timing?.Current ?? lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify: !notified, timing: timing);
                         notified |= !refused;
                     }
@@ -330,13 +336,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null, bool notify = true, BurstLifetime? timing = null)
         {
             var s = CoreSettings.Current;
-            if (Active.Count >= Cap(s, ambient)) { Drop(bmp); return false; }
+            if (OnScreen >= Cap(s, ambient)) { Drop(bmp); return false; }
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
             // Perk effects Off (WPF 7.2.3 FlashService :1895): no lucky gold, no Sparkle Boost pink; XP is paid either way.
             var perkFx = PerkEffectsRules.ShowsVisuals(s.PerkEffects);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1 && perkFx, perkFx ? SkillTreeRules.GetSparkleBoostTier(s) : 0, natasha: false);
+            if (CanHost(s, clickable, glow.HasGlow, inheritMotion, path, GazeFocus.Instance.IsActive) && !GifFrames.TryGetValue(bmp, out _)
+                && ShowHosted(bmp, rect, screen, alpha, fade, lifetime, timing))
+            {
+                _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
+                if (notify) Displayed?.Invoke();
+                Paid(path, s, hydraGeneration, multiplier);
+                return true;
+            }
             var w = new FlashOverlayWindow(bmp, path)
             {
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
@@ -353,6 +367,89 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
             if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
+            return true;
+        }
+
+        /// <summary>WPF FlashService.cs:1697: the compositor (or solid host) takes the flash unless it needs
+        /// input, gaze, motion, glow or a credit badge, which still ride the classic window.
+        /// The gaze settings default on, so they only count while the gaze tracker runs.</summary>
+        internal static bool CanHost(AppSettings s, bool clickable, bool glow, FlashMotionStyle? inheritMotion, string path, bool gazeActive) =>
+            (s.UnifiedOverlayHost || s.FlashSolidMode) && !MouseClickable(s, clickable) && !glow
+            && !(gazeActive && (s.FlashGazePopEnabled || s.FlashGazeLingerEnabled))
+            && (inheritMotion ?? s.FlashMotionStyle) == FlashMotionStyle.Still && !Services.Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(path);
+
+        internal static Func<Action, TimeSpan, IDisposable> HostedTimer = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
+        /// <summary>WPF FlashService.cs:2485 SpawnLayerVisual + FlashLayer.cs:395-470: the picture on the screen's
+        /// shared stage at <see cref="CompositorLayers.Flash"/> (under subliminal cards), its black backing and
+        /// the picture fading together, corners from the fitted picture. False when the stage is refused.</summary>
+        internal static bool ShowHosted(Bitmap bmp, PixelRect rect, Screen screen, double alpha, TimeSpan fade, TimeSpan lifetime,
+            BurstLifetime? timing = null)
+        {
+            var lease = SharedOverlayHost.Acquire(screen.Bounds);
+            if (lease == null) return false;
+            var k = screen.Scaling > 0 ? screen.Scaling : 1;
+            var box = new Size(rect.Width / k, rect.Height / k);
+            var fit = Stretch.Uniform.CalculateSize(box, bmp.Size);
+            var r = FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), false,
+                Math.Min(fit.Width, fit.Height), 1.0);
+            var item = new Border
+            {
+                Background = Brushes.Black, CornerRadius = new CornerRadius(r), IsHitTestVisible = false, Opacity = 0,
+                Width = box.Width, Height = box.Height, ZIndex = CompositorLayers.Flash,
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness((rect.X - screen.Bounds.X) / k, (rect.Y - screen.Bounds.Y) / k, 0, 0),
+                Child = new Image
+                {
+                    Source = bmp, Stretch = Stretch.Uniform,
+                    Clip = r > 0 ? new RectangleGeometry(new Rect((box.Width - fit.Width) / 2, (box.Height - fit.Height) / 2,
+                        fit.Width, fit.Height), r, r) : null,
+                },
+            };
+            var timers = new List<IDisposable>();
+            IDisposable? expiry = null;
+            var stopped = false;
+            var spawnedAt = Clock.GetTimestamp();
+            (Control, PixelRect, Action) entry = default;
+            void Stop()
+            {
+                if (stopped) return;
+                stopped = true;
+                expiry?.Dispose();
+                foreach (var t in timers) t.Dispose();
+                timers.Clear();
+                Hosted.Remove(entry);
+                lease.Canvas.Children.Remove(item);
+                lease.Dispose();
+                bmp.Dispose();
+            }
+            // FlashOverlayWindow.Fade: a ramp takes |to-from| x fade, written in 1/32 steps.
+            void Fade(double from, double to, Action? done = null)
+            {
+                var span = ConditioningControlPanel.Services.Safety.GentleVisuals.Fade(fade) * Math.Abs(to - from);
+                var steps = Math.Max(1, (int)Math.Ceiling(Math.Abs(to - from) * 32));
+                for (var i = 1; i <= steps; i++)
+                {
+                    var v = from + (to - from) * i / steps;
+                    var last = i == steps;
+                    timers.Add(HostedTimer(() => { if (stopped) return; item.Opacity = v; if (last) done?.Invoke(); },
+                        span * i / steps + TimeSpan.FromMilliseconds(1)));
+                }
+            }
+            void Expire(TimeSpan life)
+            {
+                expiry?.Dispose();
+                var remaining = life - Clock.GetElapsedTime(spawnedAt);
+                expiry = HostedTimer(() => { expiry = null; if (!stopped) Fade(item.Opacity, 0, Stop); },
+                    remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(1));
+            }
+            entry = (item, rect, Stop);
+            lease.Canvas.Children.Add(item);
+            Hosted.Add(entry);
+            lease.Raise();
+            Fade(0, alpha);
+            Expire(lifetime);
+            timing?.Track(life => { if (!stopped && expiry != null) Expire(life); });
             return true;
         }
 
@@ -600,6 +697,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void CloseWindows(bool final)
         {
             _closed |= final;
+            foreach (var (_, _, stop) in Hosted.ToList()) stop();
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
             PackImages.CleanupTemps();
@@ -670,7 +768,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FlashService.cs:696-706: with stay on and the screen full, the ambient tick
         /// skips whole (picture and whisper) and waits for a pop.</summary>
         internal static bool StayScreenFull(AppSettings s) =>
-            FlashStayRule.ScreenFull(Stays(s, ambient: true), Active.Count, Cap(s, ambient: true));
+            FlashStayRule.ScreenFull(Stays(s, ambient: true), OnScreen, Cap(s, ambient: true));
 
         /// <summary>WPF OnFlashClicked: off the active list (cap, overlap), then the leave animation
         /// (BuildExit, FlashService.cs:2334) or the plain cut for None.</summary>
@@ -681,7 +779,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
-            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
+            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, OnScreen);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
             if (s.GentleVisuals)
             {
@@ -730,7 +828,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 var s = CoreSettings.Current;
-                var occupied = Active.Select(a => a.Rect).ToList();
+                var occupied = Active.Select(a => a.Rect).Concat(Hosted.Select(h => h.Rect)).ToList();
                 RemoteFlashSource.EnsurePrefetch();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
                 if (generation != _generation) { foreach (var f in flashes) Drop(f.Bitmap); return; }
