@@ -621,6 +621,67 @@ public sealed class ChaosRunHostTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData("ChaosRunStarted")]
+    [InlineData("ChaosWaveEscalated")]
+    [InlineData("ChaosGoldFirst")]
+    [InlineData("ChaosRunCompleted")]
+    public Task Run_lifecycle_barks_carry_WPF_context(string trigger) => WithFreshRun(() =>
+    {
+        var previous = BarkHead.Engine;
+        var settings = CoreSettings.Current;
+        var avatar = settings.AvatarEnabled; var volume = settings.MasterVolume;
+        int spoken = 0;
+        try
+        {
+            settings.AvatarEnabled = true; settings.MasterVolume = 50;
+            var cfg = Cfg();
+            void Listen(Dictionary<string, object>? conditions = null)
+            {
+                var rule = new BarkRule { Id = "run-test", Trigger = trigger, Conditions = conditions,
+                    VariantPool = new() { new BarkVariant("heard") } };
+                var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+                engine.Start(); BarkHead.Engine = engine;
+            }
+            if (trigger == "ChaosRunStarted") Listen(new() { ["difficulty_eq"] = cfg.Difficulty.ToString() });
+            ChaosRunHost.StartRun(cfg); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!;
+            if (trigger == "ChaosWaveEscalated") Listen(new() { ["wave_eq"] = 2.0 });
+            if (trigger == "ChaosGoldFirst") Listen();
+            if (trigger is "ChaosWaveEscalated" or "ChaosGoldFirst") Ticks(80);
+            if (trigger == "ChaosGoldFirst")
+            {
+                Assert.Equal(1, spoken);
+                Listen(); Ticks(80); // a fresh gate proves the lifetime flag suppresses a second bark
+            }
+            if (trigger == "ChaosRunCompleted")
+            {
+                var (_, _, xp) = ChaosPayout.Xp(state.RunDurationSec, state.Config.DifficultyMult, state.Score, state.SkillMult);
+                Listen(new() { ["xp_eq"] = (double)(int)xp, ["difficulty_eq"] = cfg.Difficulty.ToString() });
+                ChaosRunHost.RequestStop();
+            }
+            Assert.Equal(1, spoken);
+        }
+        finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
+    });
+
+    [Fact]
+    public Task Panic_does_not_raise_run_completed() => WithFreshRun(() =>
+    {
+        var previous = BarkHead.Engine; var settings = CoreSettings.Current;
+        var avatar = settings.AvatarEnabled; var volume = settings.MasterVolume; int spoken = 0;
+        try
+        {
+            settings.AvatarEnabled = true; settings.MasterVolume = 50;
+            var rule = new BarkRule { Id = "panic-test", Trigger = "ChaosRunCompleted", VariantPool = new() { new BarkVariant("heard") } };
+            var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+            engine.Start(); BarkHead.Engine = engine;
+            ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.ForceShutdown(); Assert.Equal(0, spoken);
+        }
+        finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
+    });
+
     [Fact]
     public Task Wave_draft_holds_clears_rerolls_picks_and_resumes() => WithFreshRun(() =>
     {
