@@ -23,8 +23,9 @@ public interface IScreenOcrEngine : IDisposable
     IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default);
 }
 
-/// <summary>PP-OCRv5 latin through RapidOcrNet (https://github.com/BobLd/RapidOcrNet), CPU only.
-/// Models load on the first <see cref="Recognize"/>, from &lt;app dir&gt;/models/v5 (shipped by CCP.Core.csproj).</summary>
+/// <summary>PP-OCRv5 through RapidOcrNet (https://github.com/BobLd/RapidOcrNet), CPU only, with the recognizer for the
+/// UI language (WPF reads with the user's OCR languages: ScreenOcrService.cs:41 TryCreateFromUserProfileLanguages).
+/// Models load on the first <see cref="Recognize"/> and on a language change, from &lt;app dir&gt;/models/v5 (CCP.Core.csproj).</summary>
 public sealed class RapidScreenOcrEngine : IScreenOcrEngine
 {
     // Two intra-op threads: a scan must never compete with the UI for every core.
@@ -33,15 +34,37 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
     // "Disable if you know your text is upright"). RecMaxDegreeOfParallelism stays at its default 1.
     private static readonly RapidOcrOptions Options = RapidOcrOptions.Default with { ReturnWordBox = true, DoAngle = false };
     private readonly string _modelDir;
+    private readonly Func<string?> _language;
     private readonly object _gate = new();
     private RapidOcr? _ocr;
+    private string? _loadedRec;
     private bool _failed, _disposed;
 
-    public RapidScreenOcrEngine(string? modelDir = null) =>
+    /// <param name="language">UI language code; defaults to <see cref="Localization.LocalizationManager"/>'s.</param>
+    public RapidScreenOcrEngine(string? modelDir = null, Func<string?>? language = null)
+    {
         _modelDir = Path.GetFullPath(modelDir ?? Path.Combine(AppContext.BaseDirectory, RapidOcr.ModelsFolderName, RapidOcr.ModelsVersion));
+        _language = language ?? (() => Localization.LocalizationManager.Instance.CurrentLanguage);
+    }
 
-    private string[] ModelPaths => new[] { RapidOcr.DefaultDetModelPath, RapidOcr.DefaultClsModelPath,
-        RapidOcr.DefaultRecModelPath, RapidOcr.DefaultKeysFilePath }.Select(f => Path.Combine(_modelDir, f)).ToArray();
+    // PP-OCRv5 per-script recognizers (RapidOCR default_models.yaml): "ch" reads Chinese and Japanese, "eslav" Russian;
+    // the multilingual PP-OCRv6 has no Korean or Cyrillic. Det and cls are shared; every other UI language reads Latin.
+    internal static (string Rec, string Keys) Recognizer(string? language) => language switch
+    {
+        "zh-CN" or "ja" => ("ch_PP-OCRv5_rec_mobile.onnx", "ppocrv5_dict.txt"),
+        "ko" => ("korean_PP-OCRv5_rec_mobile.onnx", "ppocrv5_korean_dict.txt"),
+        "ru" => ("eslav_PP-OCRv5_rec_mobile.onnx", "ppocrv5_eslav_dict.txt"),
+        _ => (RapidOcr.DefaultRecModelPath, RapidOcr.DefaultKeysFilePath),
+    };
+
+    private string[] ModelPaths
+    {
+        get
+        {
+            var (rec, keys) = Recognizer(_language());
+            return new[] { RapidOcr.DefaultDetModelPath, RapidOcr.DefaultClsModelPath, rec, keys }.Select(f => Path.Combine(_modelDir, f)).ToArray();
+        }
+    }
 
     public bool IsAvailable { get { lock (_gate) return !_failed && !_disposed && ModelPaths.All(File.Exists); } }
 
@@ -85,9 +108,10 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
 
     private bool EnsureLoaded()
     {
-        if (_ocr != null) return true;
         if (_failed || _disposed) return false;
         var paths = ModelPaths;
+        if (_ocr != null && _loadedRec == paths[2]) return true;
+        _ocr?.Dispose(); _ocr = null; // the UI language changed: load its recognizer
         if (!paths.All(File.Exists))
         {
             _failed = true;
@@ -95,7 +119,7 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
             return false;
         }
         var ocr = new RapidOcr();
-        try { ocr.InitModels(paths[0], paths[1], paths[2], paths[3], Threads); _ocr = ocr; return true; }
+        try { ocr.InitModels(paths[0], paths[1], paths[2], paths[3], Threads); _ocr = ocr; _loadedRec = paths[2]; return true; }
         catch (Exception ex)
         {
             ocr.Dispose(); _failed = true;

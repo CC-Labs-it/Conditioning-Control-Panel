@@ -32,13 +32,20 @@ public class ScreenFrameSourceTests
     }
 
     [Fact]
-    public async Task AFailedMonitorIsUnavailableRatherThanPartial()
+    public async Task AFailedMonitorIsSkippedAndTheOthersStillCapture()
     {
-        var source = new DesktopScreenFrames(_ => null, () => Task.FromResult<IReadOnlyList<CaptureMonitor>>(
-            [new("screen", new Rectangle(0, 0, 1, 1), 1)]));
+        CaptureMonitor[] monitors = [new("null", new Rectangle(0, 0, 1, 1), 1), new("throws", new Rectangle(1, 0, 1, 1), 1),
+            new("ok", new Rectangle(2, 0, 1, 1), 1), new("short", new Rectangle(3, 0, 2, 1), 1)];
+        var source = new DesktopScreenFrames(m => m.Name switch
+        {
+            "null" => null, "throws" => throw new InvalidOperationException("XGetImage failed"), _ => new byte[4], // "short" needs 8
+        }, () => Task.FromResult<IReadOnlyList<CaptureMonitor>>(monitors));
         var result = await source.CaptureAsync(CancellationToken.None);
-        Assert.Equal(ScreenFrameStatus.Unavailable, result.Status);
-        Assert.Empty(result.Frames);
+        Assert.Equal(ScreenFrameStatus.Available, result.Status);
+        Assert.Equal(["ok"], result.Frames.Select(f => f.Screen));
+        var none = await new DesktopScreenFrames(_ => null, () => Task.FromResult<IReadOnlyList<CaptureMonitor>>(monitors[..1])).CaptureAsync(CancellationToken.None);
+        Assert.Equal(ScreenFrameStatus.Unavailable, none.Status);
+        Assert.Empty(none.Frames);
     }
 
     private sealed class FakeEngine : IScreenOcrEngine
@@ -80,15 +87,15 @@ public class ScreenFrameSourceTests
             () => Task.FromResult<IReadOnlyList<CaptureMonitor>>([new("left", new Rectangle(0, 0, 2, 1), 1), new("right", new Rectangle(2, 0, 2, 1), 1)]));
         var engine = new CountingEngine();
         var scan = ScreenOcrService.Scan(source, engine);
-        Assert.Equal(["left-1", "right-2"], (await scan(CancellationToken.None)).Select(w => w.Text));
-        Assert.Equal(["left-1", "right-2"], (await scan(CancellationToken.None)).Select(w => w.Text)); // same words re-delivered
+        using CancellationTokenSource first = new(), second = new(); // one token per scanner run, as ScreenOcrService.Sync makes
+        Assert.Equal(["left-1", "right-2"], (await scan(first.Token)).Select(w => w.Text));
+        Assert.Equal(["left-1", "right-2"], (await scan(first.Token)).Select(w => w.Text)); // same words re-delivered
         Assert.Equal(2, engine.Calls.Count);
         left = 9; // only the left monitor changed
-        Assert.Equal(["left-3", "right-2"], (await scan(CancellationToken.None)).Select(w => w.Text));
+        Assert.Equal(["left-3", "right-2"], (await scan(first.Token)).Select(w => w.Text));
         Assert.Equal(["left", "right", "left"], engine.Calls);
-        new ScreenOcrService(_ => Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]), () => true, (_, _) => Task.FromResult(true)).Stop();
-        await scan(CancellationToken.None);
-        Assert.Equal(5, engine.Calls.Count); // a stop drops the cache: both monitors are read again
+        await scan(second.Token);
+        Assert.Equal(5, engine.Calls.Count); // a restarted scanner drops the cache: both monitors are read again
     }
 
     private sealed class NoModels : IScreenOcrEngine
@@ -260,5 +267,23 @@ public class ScreenFrameSourceTests
         answer.SetResult((0u, Uri(path)));
         for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
         Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task StoppingTheScannerCancelsItsPendingPortalRequest()
+    {
+        PortalScreenFrames.Refused = false;
+        var asked = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new PortalScreenFrames(ct => { asked.SetResult(ct);
+            return new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>().Task.WaitAsync(ct); }, TwoMonitors, TimeSpan.FromMinutes(1));
+        using var service = new ScreenOcrService(ScreenOcrService.Scan(source, new FakeEngine()), () => true, (_, _) => Task.FromResult(true));
+        service.Sync(true, true, int.MaxValue - 1); // started, but only this test ticks it
+        var tick = service.TickAsync();
+        var request = await asked.Task;
+        Assert.False(request.IsCancellationRequested);
+        service.Stop(); // panic and the OCR switch both stop here
+        Assert.True(request.IsCancellationRequested);
+        await tick;
+        Assert.False(PortalScreenFrames.Refused);
     }
 }

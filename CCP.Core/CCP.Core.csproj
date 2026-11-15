@@ -130,8 +130,10 @@
     <!-- Awareness v2 angle cards: the fail-closed floor AwarenessAngleCards reads with
          typeof(AwarenessAngleCards).Assembly, so it lives in the same assembly as that class.
          Each head still ships the on-disk override copy as Content. -->
-    <!-- OCR models read from AppContext.BaseDirectory/models/v5 by Services/Ocr/RapidScreenOcrEngine. -->
-    <Content Include="$(PkgRapidOcrNet)\models\v5\*" Link="models\v5\%(Filename)%(Extension)">
+    <!-- OCR models read from AppContext.BaseDirectory/models/v5 by Services/Ocr/RapidScreenOcrEngine. Assets/OcrModels
+         adds the zh/ja, ko and ru recognizers (PaddleOCR PP-OCRv5, Apache-2.0), as listed with their SHA256 in RapidOCR
+         python/rapidocr/default_models.yaml v3.10.0: ch, korean and eslav _PP-OCRv5_rec_mobile.onnx plus their dicts. -->
+    <Content Include="$(PkgRapidOcrNet)\models\v5\*;..\Assets\OcrModels\*" Link="models\v5\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

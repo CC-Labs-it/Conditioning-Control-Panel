@@ -87,7 +87,10 @@ The Racing Thoughts engine is not bundled; see RT-ENGINE-NOTICES.txt.
    Files: RapidOcrNet.dll and models/v5/* (ch_PP-OCRv5_mobile_det.onnx,
    latin_PP-OCRv5_rec_mobile_infer.onnx, ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx,
    ppocrv5_latin_dict.txt): models from the PaddleOCR project (Apache-2.0,
-   https://github.com/PaddlePaddle/PaddleOCR), as shipped in the package.
+   https://github.com/PaddlePaddle/PaddleOCR), as shipped in the package; plus
+   ch_, korean_ and eslav_PP-OCRv5_rec_mobile.onnx with ppocrv5_dict.txt,
+   ppocrv5_korean_dict.txt and ppocrv5_eslav_dict.txt, the same PaddleOCR models as
+   converted by RapidOCR (https://github.com/RapidAI/RapidOCR, default_models.yaml).
    Licence text: Apache-2.0 below. The package ships no licence file of its own.
    It uses Clipper2 (NuGet Clipper2, Clipper2Lib.dll, Boost Software License 1.0,
    Angus Johnson, https://github.com/AngusJohnson/Clipper2): licence appended below,

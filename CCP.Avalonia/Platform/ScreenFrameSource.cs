@@ -62,17 +62,20 @@ internal sealed class DesktopScreenFrames : IScreenFrameSource
             var monitors = await _monitors().ConfigureAwait(false);
             if (monitors.Count == 0) return ScreenFrameResult.Unavailable;
             var frames = new List<ScreenFrame>(monitors.Count);
+            // A monitor that fails is skipped and the others still scan (WPF ScreenOcrService.cs:133-136,215-223).
             foreach (var monitor in monitors)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var bounds = monitor.Bounds;
-                if (bounds.Width <= 0 || bounds.Height <= 0) return ScreenFrameResult.Unavailable;
-                var pixels = _read(monitor);
-                if (pixels == null || pixels.LongLength != (long)bounds.Width * bounds.Height * 4) return ScreenFrameResult.Unavailable;
+                if (bounds.Width <= 0 || bounds.Height <= 0) continue;
+                byte[]? pixels;
+                try { pixels = _read(monitor); }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "Screen capture failed for one monitor"); continue; }
+                if (pixels == null || pixels.LongLength != (long)bounds.Width * bounds.Height * 4) continue;
                 frames.Add(new ScreenFrame(monitor.Name, bounds, monitor.Scale, bounds.Width, bounds.Height,
                     checked(bounds.Width * 4), ScreenPixelFormat.Bgra32, pixels));
             }
-            return new ScreenFrameResult(ScreenFrameStatus.Available, frames);
+            return frames.Count == 0 ? ScreenFrameResult.Unavailable : new ScreenFrameResult(ScreenFrameStatus.Available, frames);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Serilog.Log.Debug(ex, "Screen capture unavailable"); return ScreenFrameResult.Unavailable; }

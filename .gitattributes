@@ -17,3 +17,6 @@ packaging/linux/share/**/*.png -text
 
 # Shell scripts that ship in the Linux tarball (or run on Linux) must stay LF: a CRLF shebang cannot run.
 packaging/**/*.sh text eol=lf
+
+# OCR recognizer models and their character dictionaries are data, not text.
+Assets/OcrModels/* binary

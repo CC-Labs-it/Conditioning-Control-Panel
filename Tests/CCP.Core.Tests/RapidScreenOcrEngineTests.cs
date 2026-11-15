@@ -16,7 +16,7 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
     private static readonly RapidScreenOcrEngine Engine = new();
 
     // White 1920x1080 BGRA frame; text drawn black at (x, baseline) with SKFont(SKTypeface.Default, 48) (SkiaSharp 4: explicit face).
-    private static (ScreenFrame Frame, SKRect Drawn) Frame(string? text, float x = 300, float y = 400)
+    private static (ScreenFrame Frame, SKRect Drawn) Frame(string? text, float x = 300, float y = 400, SKTypeface? face = null)
     {
         var info = new SKImageInfo(1920, 1080, SKColorType.Bgra8888, SKAlphaType.Premul);
         using var bitmap = new SKBitmap(info);
@@ -25,7 +25,7 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
             canvas.Clear(SKColors.White);
             if (text != null)
             {
-                using var font = new SKFont(SKTypeface.Default, 48);
+                using var font = new SKFont(face ?? SKTypeface.Default, 48);
                 using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
                 canvas.DrawText(text, x, y, font, paint);
             }
@@ -33,7 +33,7 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         var drawn = SKRect.Empty;
         if (text != null)
         {
-            using var font = new SKFont(SKTypeface.Default, 48);
+            using var font = new SKFont(face ?? SKTypeface.Default, 48);
             font.MeasureText(text, out drawn);
             drawn.Offset(x, y);
         }
@@ -56,6 +56,25 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         Assert.All(words, w => Assert.True(area.Contains(w.Bounds) &&
             drawn.Contains(w.Bounds.X + w.Bounds.Width / 2f, w.Bounds.Y + w.Bounds.Height / 2f), $"{w.Text} {w.Bounds} outside {drawn}"));
         Assert.True(words.Select(w => w.Bounds.Left).SequenceEqual(words.Select(w => w.Bounds.Left).Order()));
+    }
+
+    // One engine across the cases, so each one also switches the loaded recognizer to its UI language.
+    private static string? _language;
+    private static readonly RapidScreenOcrEngine ScriptEngine = new(language: () => _language);
+
+    [Theory] // the Latin recognizer reads none of these
+    [InlineData("zh-CN", "服从命令")]
+    [InlineData("ja", "いい子だね")]
+    [InlineData("ko", "착한 소녀")]
+    [InlineData("ru", "Хорошая девочка")]
+    public void EachUiLanguageReadsItsScript(string language, string text)
+    {
+        using var face = SKFontManager.Default.MatchCharacter(char.ConvertToUtf32(text, 0));
+        if (face == null) Assert.Skip($"No font with '{text[0]}' on this runner (fc-list :lang={language} is empty)");
+        _language = language;
+        var words = ScriptEngine.Recognize(Frame(text, face: face).Frame);
+        output.WriteLine(string.Join(" | ", words.Select(w => $"{w.Text} {w.Bounds}")));
+        Assert.Equal(text.Replace(" ", ""), string.Concat(words.Select(w => w.Text)).Replace(" ", ""));
     }
 
     [Fact]

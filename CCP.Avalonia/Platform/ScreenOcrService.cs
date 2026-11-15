@@ -46,9 +46,6 @@ internal sealed class ScreenOcrService : IDisposable
     internal static string? UnavailableReasonKey() =>
         PortalScreenFrames.Refused ? "ocr_unavailable_refused" : KeywordTriggerHead.OcrSource == null ? _reasonKey : null;
 
-    /// <summary>Raised when any scanner stops: scan sources drop their per-monitor word cache.</summary>
-    internal static event Action? Stopped;
-
     // Every monitor's frame through the engine, mapped to desktop pixels. Recognition is CPU-bound: off the UI thread.
     // An unchanged monitor re-delivers its last words without recognition: WPF ScreenOcrService.cs:128-140 re-reads
     // every screen each scan, so the quick confirmations (:85-115) see the same words either way.
@@ -56,8 +53,7 @@ internal sealed class ScreenOcrService : IDisposable
     {
         var changes = new ScreenFrameChanges();
         var cache = new Dictionary<string, Word[]>();
-        var reset = new int[1]; // set by Stop (UI thread, maybe during a scan); applied by the next scan, never waited on
-        Stopped += () => Interlocked.Exchange(ref reset[0], 1);
+        var run = CancellationToken.None; // each start of the scanner has a new token: a new run drops the cache
         return async token =>
         {
             var result = await frames.CaptureAsync(token).ConfigureAwait(false);
@@ -70,7 +66,7 @@ internal sealed class ScreenOcrService : IDisposable
             {
                 lock (cache)
                 {
-                    if (Interlocked.Exchange(ref reset[0], 0) == 1) { changes.Reset(); cache.Clear(); }
+                    if (token != run) { changes.Reset(); cache.Clear(); run = token; }
                     return result.Frames.SelectMany(f =>
                     {
                         if (!changes.Changed(f) && cache.TryGetValue(f.Screen, out var last)) return last;
@@ -114,7 +110,6 @@ internal sealed class ScreenOcrService : IDisposable
     {
         _timer?.Dispose(); _timer = null;
         _run?.Cancel(); _run?.Dispose(); _run = null;
-        Stopped?.Invoke();
     }
 
     // One discovery and at most three quick confirmations (WPF ScreenOcrService.cs:85-115).
