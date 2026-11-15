@@ -397,6 +397,9 @@ public sealed class RemoteControlShellTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("", box.Text);
             Assert.Equal("on my way", box.Watermark);
+            var ghost = box.GetVisualDescendants().OfType<TextBlock>().Single(x => x.Name == "PART_Placeholder");
+            Assert.True(ghost.IsVisible);
+            Assert.Equal("on my way", ghost.Text);
 
             // A reconnect during the exit fade cancels the pending browser restoration.
             f.Poll = "{\"controller_connected\":false}";
