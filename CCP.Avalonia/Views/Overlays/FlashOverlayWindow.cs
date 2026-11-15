@@ -235,6 +235,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var state = FlashShatter.Create(x, y, fit.Width * scale, fit.Height * scale,
                 bounds.X, bounds.Y, bounds.Width, bounds.Height, motion, rng);
             if (state.Shards.Length == 0) return false; // Motion Off falls through to FlashExit, like WPF.
+            // WPF FlashLayer.cs:103,181-188 holds the current frame for the entire shatter.
+            // A video sink reuses and eventually disposes its writable bitmap on eviction.
+            if (source is WriteableBitmap videoFrame)
+            {
+                var snapshot = new WriteableBitmap(videoFrame.PixelSize, videoFrame.Dpi,
+                    videoFrame.Format!.Value, videoFrame.AlphaFormat ?? AlphaFormat.Premul);
+                try { using var target = snapshot.Lock(); videoFrame.CopyPixels(target); }
+                catch { snapshot.Dispose(); return false; }
+                source = snapshot;
+                Closed += (_, _) => snapshot.Dispose();
+            }
             // WPF FlashLayer.cs:194-196: break the hanging media at its frozen tilt.
             if (FlashOverlay.Drifting.Find(e => e.Window == this).Motion is { Style: FlashMotionStyle.Pendulum } pend)
                 FlashShatter.TakeOverHangingRect(state, pend.PivotX, pend.PivotY, pend.Rope, pend.AngleRad, pend.MediaW, pend.MediaH);

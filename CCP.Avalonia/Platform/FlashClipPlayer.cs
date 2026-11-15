@@ -21,7 +21,8 @@ internal sealed class FlashClipPlayer : IDisposable
     internal static int TearingDown => Volatile.Read(ref _tearingDown);
     internal static bool CanStartFlash => TearingDown < MaxTearingDown && Budget.CanAcquireFor(true);
     internal static Func<string, int, double, Action<Bitmap>, IDisposable> Create =
-        (path, width, speed, show) => new NativePlayer(path, width, speed, show);
+        (path, width, speed, show) => new NativePlayer(
+            LibVlcAudio.Shared ?? throw new InvalidOperationException("LibVLC unavailable"), path, width, speed, show);
 
     private readonly ClipSlotBudget.Lease _lease;
     private IDisposable? _native;
@@ -68,14 +69,13 @@ internal sealed class FlashClipPlayer : IDisposable
         });
     }
 
-    private sealed class NativePlayer : IDisposable
+    internal sealed class NativePlayer : IDisposable
     {
         private readonly MediaPlayer _player;
         private readonly Media _media;
         private readonly VlcFrameSink _sink;
-        internal NativePlayer(string path, int width, double speed, Action<Bitmap> show)
+        internal NativePlayer(LibVLC vlc, string path, int width, double speed, Action<Bitmap> show)
         {
-            var vlc = LibVlcAudio.Shared ?? throw new InvalidOperationException("LibVLC unavailable");
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = false };
             _media = new Media(vlc, path, FromType.FromPath);
             _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);

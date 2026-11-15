@@ -4,6 +4,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using Avalonia.Controls;
+using ConditioningControlPanel.Models;
+using LibVLCSharp.Shared;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -103,25 +107,46 @@ public sealed class FlashClipPlayerTests
             using (var ff = Process.Start(new ProcessStartInfo("ffmpeg", $"-v error -f lavfi -i testsrc=d=1:s=64x48:r=10 -pix_fmt yuv420p \"{clip}\"") { UseShellExecute = false })!)
                 await ff.WaitForExitAsync();
             Assert.True(File.Exists(clip));
-            try { if (LibVlcAudio.Shared == null) _ = new LibVlcAudio("--aout=dummy"); }
+            LibVLC? isolated = null;
+            try { LibVlcAudio.InitializeNative(); isolated = new LibVLC("--aout=dummy"); }
             catch (Exception e) { Assert.Skip("LibVLC unavailable: " + e.Message); }
-            await AvaloniaTestDispatcher.RunAsync(async () =>
+            using var engine = isolated!;
+            var shared = typeof(LibVlcAudio).GetProperty("Shared", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var options = typeof(LibVlcAudio).GetField("_sharedOptions", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var previous = shared.GetValue(null);
+            var previousOptions = options.GetValue(null);
+            var factory = FlashClipPlayer.Create;
+            shared.SetValue(null, null);
+            try
             {
-                var poster = Picture();
-                var w = new FlashOverlayWindow(poster); w.Show();
-                try
+                FlashClipPlayer.Create = (path, width, speed, show) => new FlashClipPlayer.NativePlayer(engine, path, width, speed, show);
+                await AvaloniaTestDispatcher.RunAsync(async () =>
                 {
-                    FlashOverlay.StartClip(w, poster, clip, 64, 1);
-                    for (var i = 0; i < 500 && ReferenceEquals(w.Picture, poster); i++) await Task.Delay(10);
-                    Assert.IsType<WriteableBitmap>(w.Picture);
-                }
-                finally
-                {
-                    w.Close();
-                    for (var i = 0; i < 500 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
-                }
-                Assert.Equal(0, FlashClipPlayer.Budget.Live);
-            });
+                    var poster = Picture();
+                    var w = new FlashOverlayWindow(poster); w.Show();
+                    try
+                    {
+                        FlashOverlay.StartClip(w, poster, clip, 64, 1);
+                        for (var i = 0; i < 500 && ReferenceEquals(w.Picture, poster); i++) await Task.Delay(10);
+                        Assert.IsType<WriteableBitmap>(w.Picture);
+                    }
+                    finally
+                    {
+                        w.Close();
+                        for (var i = 0; i < 500 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
+                    }
+                    Assert.Equal(0, FlashClipPlayer.Budget.Live);
+                    Assert.Equal(0, FlashClipPlayer.TearingDown);
+                });
+                Assert.Null(shared.GetValue(null));
+                Assert.Same(previousOptions, options.GetValue(null));
+            }
+            finally
+            {
+                FlashClipPlayer.Create = factory;
+                shared.SetValue(null, previous);
+                options.SetValue(null, previousOptions);
+            }
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -265,6 +290,33 @@ public sealed class FlashClipPlayerTests
         }
         Assert.Equal(0, FlashClipPlayer.TearingDown);
         Assert.True(FlashClipPlayer.CanStartFlash);
+    });
+
+    [Fact]
+    public Task ShatterKeepsAStableCopyAfterVideoFrameChangesAndIsDisposed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        using var frame = new WriteableBitmap(new PixelSize(32, 32), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
+        using (var pixels = frame.Lock()) Marshal.WriteInt32(pixels.Address, unchecked((int)0xff123456));
+        var w = new FlashOverlayWindow(Picture()) { Width = 160, Height = 160 };
+        w.Show(); w.SetPicture(frame);
+        WriteableBitmap? snapshot = null;
+        try
+        {
+            Assert.True(w.TryBeginShatter(MotionLevel.Full, new Random(3)));
+            var shards = ((Panel)w.Content!).Children.OfType<Panel>().Last();
+            var copies = shards.Children.Cast<Border>().Select(b => (WriteableBitmap)((Image)b.Child!).Source!).ToArray();
+            Assert.NotEmpty(copies);
+            snapshot = copies[0];
+            Assert.All(copies, copy => Assert.NotSame(frame, copy));
+            Assert.All(copies, copy => Assert.Same(copies[0], copy));
+            using (var pixels = frame.Lock()) Marshal.WriteInt32(pixels.Address, unchecked((int)0xffabcdef));
+            frame.Dispose();
+            using (var frozen = copies[0].Lock())
+                Assert.Equal(unchecked((int)0xff123456), Marshal.ReadInt32(frozen.Address));
+        }
+        finally { w.Close(); }
+        Assert.Throws<ObjectDisposedException>(() => { _ = snapshot!.PixelSize; });
+        return Task.CompletedTask;
     });
 
 }
