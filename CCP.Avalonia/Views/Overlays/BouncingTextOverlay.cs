@@ -13,6 +13,9 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.SuperCore;
+using ConditioningControlPanel.Avalonia.Platform.Super;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -152,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _zAccum = 0;
             foreach (var w in Windows) w.Close();
             Windows.Clear();
+            foreach (var l in Engine.Logos) l.Fling = default;
             Engine.Stop();
             if (!rebuilding) Stopped?.Invoke();
         }
@@ -250,9 +254,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             Engine.Tick(dt);
             var logos = Engine.Logos;
+            bool scrawl = SuperAccess.IsOn(SuperEffect.Scrawl);
             for (var i = 0; i < logos.Count; i++)
             {
                 var l = logos[i];
+                if (!scrawl) l.Fling = default;
+                if (scrawl && StepStage(l, SuperStageHost.Stage, _screenScale, dt)) continue;
                 var step = Engine.Step(l, dt, s);
                 if (step.CornerHit) { CornerHit(); Platform.BarkHead.Engine?.Raise("BouncingTextCorner"); }   // WPF BarkService.cs:731
                 if (step.CornerHit && s.BouncingTextFxCornerBurst)
@@ -276,9 +283,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var l = logos[i];
                 var (sx, sy, angle) = Engine.ComputeEffectTransform(l, s);
+                if (scrawl && l.Fling.Scale > 0 && l.Fling.Scale < 1) { sx *= l.Fling.Scale; sy *= l.Fling.Scale; }
                 foreach (var w in Windows) w.Move(i, l.PosX, l.PosY, sx, sy, angle, l.TextWidth, l.TextHeight);
             }
             foreach (var w in Windows) w.AgeBursts(dt);
+        }
+
+        // WPF BouncingTextService.StepStage: stage coordinates are physical pixels.
+        internal static bool StepStage(BouncingTextEngine.Logo l, SuperStage stage, double d, double dt)
+        {
+            d = d <= 0 ? 1 : d;
+            double cx = (l.PosX + l.TextWidth / 2) * d, cy = (l.PosY + l.TextHeight / 2) * d;
+            double vx = l.VelX * d, vy = l.VelY * d;
+            TextFling.Step(ref l.Fling, stage, ref cx, ref cy, ref vx, ref vy, Math.Max(1, l.Cruise) * d, dt);
+            l.VelX = vx / d; l.VelY = vy / d;
+            bool held = l.Fling.Phase == 1;
+            if (held)
+            {
+                l.PosX = Math.Clamp(cx / d - l.TextWidth / 2, Engine.MinX, Math.Max(Engine.MinX, Engine.MaxX - l.TextWidth));
+                l.PosY = Math.Clamp(cy / d - l.TextHeight / 2, Engine.MinY, Math.Max(Engine.MinY, Engine.MaxY - l.TextHeight));
+            }
+            double left = l.PosX * d, top = l.PosY * d, w = l.TextWidth * d, h = l.TextHeight * d;
+            if (!held) stage.Sweep(left, top, left + w, top + h);
+            if (stage.SteamOn)
+                for (int i = -1; i <= 1; i++)
+                    stage.Wipe(left + w / 2 + i * w * 0.32, top + h / 2, Math.Max(h * 0.7, 26 * d), dt * 1.5, mark: false);
+            return held;
         }
 
         private static void Sample(double dt)
