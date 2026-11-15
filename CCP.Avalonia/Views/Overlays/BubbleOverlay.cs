@@ -489,7 +489,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         if (b.Snap()) Field.ChaosDefused?.Invoke(b);
                     }
-                    else if (spec.IsDarter) { bool first = !b.Spanked; b.Spank(Field.Random, 1, dx, dy); if (first && b.Spanked) ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, "FLUNG", Color.FromRgb(0x7A, 0xE0, 0xFF)); } else PopChaos(b);
+                    else if (spec.IsDarter) { bool first = !b.Spanked; b.Spank(Field.Random, 1, dx, dy); if (first && b.Spanked) ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, ConditioningControlPanel.Localization.Loc.Get("chaos_label_flung"), Color.FromRgb(0x7A, 0xE0, 0xFF)); } else PopChaos(b);
                     // A pop callback may end the run and clear the field reentrantly.
                     if (i >= PlayerRipples.Count || !ReferenceEquals(PlayerRipples[i], wave)) return;
                 }
@@ -525,7 +525,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     bool first = !b.Spanked;
                     b.Spank(Field.Random, ChaosRunHost.State?.SpankGrowFactor ?? 1);
                     if (first && b.Spanked)   // WPF BubbleService.cs:4748-4760: the first smack teaches and labels
-                    { Services.Chaos.ChaosLessons.Tick("rabbit_caller"); ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, "SPANKED", Color.FromRgb(0xFF, 0x4D, 0xC4)); }
+                    { Services.Chaos.ChaosLessons.Tick("rabbit_caller"); ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, ConditioningControlPanel.Localization.Loc.Get("chaos_label_spanked"), Color.FromRgb(0xFF, 0x4D, 0xC4)); }
                 }
                 else
                 {

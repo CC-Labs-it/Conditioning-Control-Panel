@@ -21,19 +21,19 @@ public class ChaosRabbitTrailFeedTests
         var stateField = typeof(ChaosRunHost).GetField("_state", BindingFlags.Static | BindingFlags.NonPublic)!;
         var (saved, clock, nowMs, skip) = (stateField.GetValue(null), BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests); var popText = ChaosRunHost.PopText; var labels = new List<string>();
         var settings = ConditioningControlPanel.CoreSettings.Current; var (skia, composited) = (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited);
-        var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc); var language = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
         try
         {
-            var state = new ChaosRunState(new ChaosRunConfig()) { RabbitTrailSec = 2 };
+            var state = new ChaosRunState(new ChaosRunConfig()) { RabbitTrailSec = 2 }; ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("de");
             stateField.SetValue(null, state); BubbleOverlay.Field.Clock = () => t;
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true; settings.ChaosSkiaFxEnabled = false;
             ChaosFieldFxOverlay.NowMs = () => (t - new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
             int treats = 0, snaps = 0;
             BubbleOverlay.BeginChaos(new Border(), _ => treats++, _ => snaps++);
             var rabbit = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsDarter = true, SizePx = 20, LifetimeMs = 8000, DarterSpeed = 9 }, new Random(7));
-            ChaosRunHost.PopText = (_, _, label, _) => labels.Add(label); rabbit.X = rabbit.Y = 500; var origin = BubbleOverlay.CenterPx(rabbit); BubbleOverlay.TriggerPlayerRipple(new Point(origin.X - 40, origin.Y), 100, 128); BubbleOverlay.StepPlayerRipples(); Assert.False(rabbit.Spanked); BubbleOverlay.StepPlayerRipples(); Assert.True(rabbit.Spanked); Assert.False(rabbit.Popping); Assert.Equal(1, rabbit.SpankGrowth); Assert.Single(labels, "FLUNG");
+            ChaosRunHost.PopText = (_, _, label, _) => labels.Add(label); rabbit.X = rabbit.Y = 500; var origin = BubbleOverlay.CenterPx(rabbit); BubbleOverlay.TriggerPlayerRipple(new Point(origin.X - 40, origin.Y), 100, 128); BubbleOverlay.StepPlayerRipples(); Assert.False(rabbit.Spanked); BubbleOverlay.StepPlayerRipples(); Assert.True(rabbit.Spanked); Assert.False(rabbit.Popping); Assert.Equal(1, rabbit.SpankGrowth); Assert.Single(labels, "GESCHLEUDERT");
             var victim = new AmbientBubble { X = rabbit.X, Y = rabbit.Y, Size = 10, Spec = new EffectBubbleSpec() }; BubbleOverlay.Field.Bubbles.Add(victim); BubbleOverlay.TickDarterSweeps(); Assert.True(victim.Popping); Assert.Equal(1, treats); BubbleOverlay.Field.Bubbles.Remove(victim); treats = 0;
-            BubbleOverlay.TriggerPlayerRipple(new Point(origin.X + 40, origin.Y), 100, 128); BubbleOverlay.StepPlayerRipples(); BubbleOverlay.StepPlayerRipples(); double oldX = rabbit.X; rabbit.Step(); Assert.Equal(oldX - 9 * ChaosTuning.RIPPLE_FLING_SPEED_MULT, rabbit.X, 6); Assert.Single(labels, "FLUNG");
+            BubbleOverlay.TriggerPlayerRipple(new Point(origin.X + 40, origin.Y), 100, 128); BubbleOverlay.StepPlayerRipples(); BubbleOverlay.StepPlayerRipples(); double oldX = rabbit.X; rabbit.Step(); Assert.Equal(oldX - 9 * ChaosTuning.RIPPLE_FLING_SPEED_MULT, rabbit.X, 6); Assert.Single(labels, "GESCHLEUDERT");
             ChaosFieldFxOverlay.CloseActive(); rabbit.X = 30; rabbit.Y = -10; BubbleOverlay.TickChaosTrails();
             var dots = new List<FieldFxPrim>(); var fx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
             fx.Model.Frame(0, dots); Assert.Single(dots, p => p.Kind == FieldFxKind.TrailDot && !p.Warm);
@@ -79,7 +79,7 @@ public class ChaosRabbitTrailFeedTests
         {
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.FreezeChaos = false; BubbleOverlay.Field.Bubbles.Clear(); ChaosFieldFxOverlay.CloseActive();
             (BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests) = (clock, nowMs, skip);
-            (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited) = (skia, composited); stateField.SetValue(null, saved); ChaosRunHost.PopText = popText;
+            (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited) = (skia, composited); stateField.SetValue(null, saved); ChaosRunHost.PopText = popText; ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language);
         }
     });
     [Fact]
@@ -147,8 +147,8 @@ public class ChaosRabbitTrailFeedTests
             var indirect = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(4)); BubbleOverlay.PopChaos(indirect);
             Assert.True(indirect.Popping); Assert.Equal(7.6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
             state.SpankerActive = true; state.SpankGrowFactor = 1.5;
-            var ally = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5)); BubbleOverlay.Press(ally, ally.CenterX, ally.CenterY);
-            Assert.False(ally.Popping); Assert.True(ally.Spanked); Assert.Equal(1.5, ally.SpankGrowth); Assert.Single(cues, "SPANKED");
+            var ally = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5)); var language = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage; try { ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("de"); BubbleOverlay.Press(ally, ally.CenterX, ally.CenterY); } finally { ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(language); }
+            Assert.False(ally.Popping); Assert.True(ally.Spanked); Assert.Equal(1.5, ally.SpankGrowth); Assert.Single(cues, "VERSOHLT");
             BubbleOverlay.Field.Bubbles.Clear(); var homer = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5));
             homer.X = homer.Y = 500; while (homer.DarterTelegraphing) homer.Step();
             double x0 = homer.X, y0 = homer.Y; homer.Step(); double h = Math.Atan2(homer.Y - y0, homer.X - x0); (x0, y0) = (homer.X, homer.Y);
