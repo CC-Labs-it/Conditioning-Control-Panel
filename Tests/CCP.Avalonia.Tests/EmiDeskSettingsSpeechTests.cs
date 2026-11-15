@@ -128,9 +128,10 @@ public sealed class EmiDeskSettingsSpeechTests
     {
         public int Ticks, Stops, Disposals;
         public string? Line, Mood;
+        public bool Speaking;
         public bool Tick() { Ticks++; return true; }
-        public bool Speak(string? text, string? mood) { Line = text; Mood = mood; return true; }
-        public void Stop() => Stops++;
+        public bool Speak(string? text, string? mood) { Line = text; Mood = mood; Speaking = true; return true; }
+        public void Stop() { Stops++; Speaking = false; }
         public void Dispose() => Disposals++;
     }
 
@@ -207,6 +208,48 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.False(closed.AskLive);
         Assert.True(closeEngine.AsksExhausted);
         Assert.Equal(1, closeVoice.Disposals);
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PresentationCancelsQuestionAndVoice(bool landed) => InDesk(desk =>
+    {
+        var window = desk.Window!;
+        window.CancelChain();
+        window._vox?.Dispose();
+        var voice = new AskVoice();
+        window._vox = voice;
+        var reply = new LineDraw("reply", "", "yes", "^_^", null, 1, false, 0);
+        var ask = new AskDraw("presentation", "test", "hello?", ">_<", new[] { "yes", "no" }, reply, reply, "", null);
+        var engine = EmiLineEngine.FromJson(Lines);
+        engine.NoteAskIgnored();
+        engine.NoteAskIgnored();
+        window.ShowAsk(ask, engine);
+        if (landed) for (int i = 0; i < 3; i++) window.AdvanceAsk();
+        Assert.True(window.AskLive);
+        Assert.Equal(landed ? "hello?" : ".", window.BubbleText);
+        Assert.Equal(landed, voice.Speaking);
+        if (!landed) Assert.NotNull(window.AskPendingHold);
+        var ticks = voice.Ticks;
+        var stops = voice.Stops;
+        window.BeginPresentation(() => { });
+        Assert.True(window.PresentationActive);
+        Assert.False(window.AskLive);
+        Assert.Null(window.AskPendingHold);
+        Assert.Null(window.BubbleText);
+        Assert.True(voice.Stops > stops);
+        Assert.False(voice.Speaking);
+        Assert.True(engine.AsksExhausted);
+        window.AdvanceAsk();
+        Assert.Equal(ticks, voice.Ticks);
+        Assert.Null(window.BubbleText);
+        window.EndPresentation();
+        window.ShowAsk(ask, EmiLineEngine.FromJson(Lines));
+        Assert.True(window.AskLive);
+        Assert.Equal(".", window.BubbleText);
+        window.CancelAsk();
         return Task.CompletedTask;
     });
 
