@@ -59,7 +59,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
-            Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             try { RaceNoteUsage("race"); } catch (Exception ex) { Log.Debug("RaceHost: usage: {E}", ex.Message); }
             try { RaceRequestPack("audio-web"); } catch (Exception ex) { Log.Debug("RaceHost: audio pack: {E}", ex.Message); }
             _raceOwnedTracks = RacingAccess.OwnedTracks;

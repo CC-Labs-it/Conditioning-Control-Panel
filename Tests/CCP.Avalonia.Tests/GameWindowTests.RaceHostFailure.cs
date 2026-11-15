@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Threading;
+using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -9,6 +10,27 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    [Theory]
+    [InlineData("raceclassic")]
+    [InlineData("glassroad")]
+    public void Race_StartupFailureIsWatchedBeforeOpened(string id) => Run((_, _) =>
+    {
+        var w = new GameWindow(GameWindow.Games[id]);
+        var closed = false;
+        w.Closed += (_, _) => closed = true;
+        Action? failure = null;
+        w.Web.NativeViewFactory = () => new NativeWebView();
+        w.Web.FailureWatchFactory = (_, failed) => { failure = failed; return new System.Threading.CancellationTokenSource(); };
+        Assert.True(w.Web.RecreateNativeView());
+        var native = w.Web.NativeView!;
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(native, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(native, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        Assert.NotNull(failure); // the real adapter-created path must install a watch before Opened
+        failure!();
+        Assert.True(closed);
+    });
+
     [Fact]
     public void Classic_FailureClosesAndOpenRequestsAudioAndNotesUsage() => RunRace("rt.original.03", (_, _, _) =>
     {

@@ -67,8 +67,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
-            Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
-            Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             _grSettingsService = CoreSettings.Service;
             if (_grSettingsService != null) _grSettingsService.CurrentReplaced += OnGlassroadSettingsReplaced;
             HookGlassroadSettings();
