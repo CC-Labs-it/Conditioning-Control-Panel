@@ -93,9 +93,21 @@ public class PossessionRoomWarpTests
         Assert.Equal(0.0025, midway.wash, 6);
     });
 
-    [Fact]
-    public void OnlyOneRoomCanBeWarpedAndItIsNamed() => AvaloniaTestDispatcher.Run(() =>
+    [Theory]
+    [InlineData("en", "the room")]
+    [InlineData("de", "der Raum")]
+    [InlineData("es", "la habitación")]
+    [InlineData("fr", "la pièce")]
+    [InlineData("it", "la stanza")]
+    [InlineData("ja", "その部屋")]
+    [InlineData("ko", "그 방")]
+    [InlineData("pt-BR", "o quarto")]
+    [InlineData("ru", "комната")]
+    [InlineData("zh-CN", "这个房间")]
+    public void OnlyOneRoomCanBeWarpedAndItIsNamed(string language, string expected) => AvaloniaTestDispatcher.Run(() =>
     {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
         var canvas = new Grid { Width = 800, Height = 600 };
         var layer = new Canvas { Width = 800, Height = 600 };
         var window = new Window { Width = 800, Height = 600, Content = new Viewbox { Child = canvas } };
@@ -116,10 +128,11 @@ public class PossessionRoomWarpTests
         window.UpdateLayout(); otherWindow.UpdateLayout();
         try
         {
+            loc.SetLanguage(language);
             Assert.True(first.CanApply(firstContext, null));
             Assert.True(second.CanApply(secondContext, null));
             first.ApplyAsync(firstContext, null, CancellationToken.None).GetAwaiter().GetResult();
-            Assert.Equal("the room", name);
+            Assert.Equal(expected, name);
             Assert.False(second.CanApply(secondContext, null));
             second.ApplyAsync(secondContext, null, CancellationToken.None).GetAwaiter().GetResult();
             Assert.False(second.IsLive);
@@ -131,6 +144,7 @@ public class PossessionRoomWarpTests
             first.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
             second.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
             window.Close(); otherWindow.Close();
+            loc.SetLanguage(previous);
         }
     });
 

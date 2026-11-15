@@ -29,7 +29,7 @@ internal sealed class RoomWarpEffect : PossessionEffectBase
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.Zero;
     protected override bool ChargeOnApply => false;
-    protected override string? NameOverride => "the room";
+    protected override string? NameOverride => ConditioningControlPanel.Localization.Loc.Get("possession_target_room");
 
     private static Control? CanvasOf(IAvaloniaPossessionHost host)
     {
