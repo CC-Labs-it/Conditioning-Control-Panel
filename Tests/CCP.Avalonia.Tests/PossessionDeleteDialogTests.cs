@@ -76,6 +76,33 @@ public class PossessionDeleteDialogTests
     });
 
     [Fact]
+    public void ReadsSessionNamesWithoutWriting() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var folder = Path.Combine(TestUserDataProfile.Root, "delete-dialog-read");
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, "one.session.json");
+        File.WriteAllText(file, "{\"name\":\"My session\"}");
+        int changes = 0;
+        using var spy = new FileSystemWatcher(folder) { EnableRaisingEvents = true };
+        spy.Changed += (_, _) => Interlocked.Increment(ref changes);
+        spy.Created += (_, _) => Interlocked.Increment(ref changes);
+        spy.Deleted += (_, _) => Interlocked.Increment(ref changes);
+        spy.Renamed += (_, _) => Interlocked.Increment(ref changes);
+        try
+        {
+            var names = DeleteDialogEffect.ReadSessionNames(folder);
+            Assert.Equal("My session", names[0]);
+            var dialog = new DeleteDialogWindow(names);
+            Assert.Equal("  My session", ((TextBlock)dialog.FindControl<StackPanel>("Names")!.Children[0]).Text);
+            Assert.NotEmpty(DeleteDialogEffect.ReadSessionNames(Path.Combine(folder, "missing")));
+            SpinWait.SpinUntil(() => Volatile.Read(ref changes) > 0, 200);
+            Assert.Equal(0, Volatile.Read(ref changes));
+            Assert.Equal("{\"name\":\"My session\"}", File.ReadAllText(file));
+        }
+        finally { spy.EnableRaisingEvents = false; Directory.Delete(folder, true); }
+    });
+
+    [Fact]
     public void FinishedWalkClosesOnFailsafeTick() => AvaloniaTestDispatcher.Run(() =>
     {
         var dialog = new DeleteDialogWindow();
