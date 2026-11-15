@@ -227,6 +227,16 @@ namespace ConditioningControlPanel
                 if (Services.Launcher.LauncherDoorRules.TryParse(key, out var door))
                     Services.Launcher.LauncherHost.ShowDoor(door);
             };
+            // The seam is Core's on the port: this head says when Lockdown runs (the door stays
+            // shut then, rule 6) and what the fallback is: the title-bar "Back to CC Labs" button,
+            // same handler, and a disabled button stays a no-op.
+            Services.UI.PanelDoorLink.IsLockedDown = () => App.Lockdown?.IsActive == true;
+            Services.UI.PanelDoorLink.Fallback = () =>
+            {
+                var button = App.MainWindowRef?.BtnBackToLauncher;
+                if (button == null || !button.IsEnabled) return;
+                button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, button));
+            };
             Services.Diagnostics.FxBisect.Watch(this);
             // Nav rework: lane-owned pages register their ShowTab hosts (MainWindow.TabNavigation.cs).
             RegisterLaneNavTabs();

@@ -1,19 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
-using ConditioningControlPanel.Helpers;
-using ConditioningControlPanel.Services.Compositor;
 using ConditioningControlPanel.SuperCore;
 
 namespace ConditioningControlPanel.Services.Super;
 
 /// <summary>
-/// The app's one <see cref="SuperStage"/> and the two layers that draw it: Steam (the pink fog,
+/// The app's one <see cref="SuperStage"/> and the two surfaces that draw it: Steam (the pink fog,
 /// star on the pink filter) and the Whirlpool (star on the spiral). Every other Super effect talks
 /// to <see cref="Stage"/>: it asks what the pool is doing to its things and tells the stage when
 /// something of its own goes off. All the rules live in CCP.Core/Super; this class only feeds them
-/// the cursor and the clock and switches the layers with the overlay engine.
+/// the cursor and the clock and switches the surfaces with the overlay engine.
+/// Lives in Core: each head seeds <see cref="PostToUi"/>, <see cref="EngineUp"/>,
+/// <see cref="CursorProvider"/> and the two surface switches (WPF: compositor layers,
+/// Avalonia: overlay windows). Unseeded, nothing shows and nothing steps.
 /// Rides the overlay service like the old Creep did, so the engine stop that panic, Lockdown's
 /// end and the emergency exit go through takes it down at once; <see cref="Stop"/> is also
 /// called straight from the panic stop pass.
@@ -22,8 +22,17 @@ public static class SuperStageHost
 {
     public static SuperStage Stage { get; } = new();
 
-    private static SteamLayer? _steam;
-    private static WhirlpoolLayer? _pool;
+    /// <summary>Runs the action on the head's UI thread.</summary>
+    public static Action<Action> PostToUi { get; set; } = a => a();
+    /// <summary>The overlay engine is running and this head can draw over the desktop.</summary>
+    public static Func<bool> EngineUp { get; set; } = () => false;
+    /// <summary>Cursor in virtual-desktop device pixels, or null when the head cannot read it.</summary>
+    public static Func<(int X, int Y)?> CursorProvider { get; set; } = () => null;
+    /// <summary>Show (true) or hide (false) the head's Steam surface. UI thread.</summary>
+    public static Action<bool> SteamSurface { get; set; } = _ => { };
+    /// <summary>Show (true) or hide (false) the head's Whirlpool surface. UI thread.</summary>
+    public static Action<bool> PoolSurface { get; set; } = _ => { };
+
     private static bool _subscribed;
     private static long _lastStep;
     private static double _steamAge;
@@ -47,11 +56,11 @@ public static class SuperStageHost
             _subscribed = true;
             SuperAccess.Changed += e => { if (e is SuperEffect.Creep or SuperEffect.Vortex) Sync(); };
         }
-        DispatcherHelper.RunOnUI(() =>
+        PostToUi(() =>
         {
             try
             {
-                bool engine = App.Overlay?.IsRunning == true && App.CompositorEnabled && App.Compositor != null;
+                bool engine = EngineUp();
                 bool steam = engine && SuperAccess.IsOn(SuperEffect.Creep);
                 bool pool = engine && SuperAccess.IsOn(SuperEffect.Vortex);
                 if (steam != Stage.SteamOn)
@@ -65,23 +74,13 @@ public static class SuperStageHost
                     Stage.PoolOn = pool;
                     Stage.Pool.Reset();
                 }
-                if (steam)
-                {
-                    if (_steam == null) { _steam = new SteamLayer(App.Compositor!); App.Compositor!.RegisterLayer(_steam); }
-                    _steam.Show();
-                }
-                else _steam?.Hide();
-                if (pool)
-                {
-                    if (_pool == null) { _pool = new WhirlpoolLayer(App.Compositor!); App.Compositor!.RegisterLayer(_pool); }
-                    _pool.Show();
-                }
-                else _pool?.Hide();
+                SteamSurface(steam);
+                PoolSurface(pool);
                 if (steam || pool) _lastStep = 0;
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "SuperStage: sync failed");
+                Serilog.Log.Warning(ex, "SuperStage: sync failed");
             }
         });
     }
@@ -89,8 +88,8 @@ public static class SuperStageHost
     /// <summary>Gone now (panic, engine stop). Safe to call any number of times. UI thread.</summary>
     public static void Stop()
     {
-        _steam?.Hide();
-        _pool?.Hide();
+        try { SteamSurface(false); PoolSurface(false); }
+        catch (Exception ex) { Serilog.Log.Debug("SuperStage: stop: {E}", ex.Message); }
         Stage.SteamOn = false;
         Stage.PoolOn = false;
         Stage.Reset();
@@ -98,8 +97,8 @@ public static class SuperStageHost
         _haveCursor = false;
     }
 
-    /// <summary>A layer saw this monitor: remember its pixels-per-DIP for the pool's tuning.</summary>
-    internal static void NoteScreen(System.Drawing.Rectangle boundsPx, double dip)
+    /// <summary>A surface saw this monitor: remember its pixels-per-DIP for the pool's tuning.</summary>
+    public static void NoteScreen(System.Drawing.Rectangle boundsPx, double dip)
     {
         for (int i = 0; i < Screens.Count; i++)
             if (Screens[i].Bounds == boundsPx) { if (Screens[i].Dip != dip) Screens[i] = (boundsPx, dip); return; }
@@ -108,10 +107,10 @@ public static class SuperStageHost
     }
 
     /// <summary>
-    /// One step of the shared stage. Both layers call it from their Update; whichever comes first
-    /// in an engine tick does the work and the other finds nothing left to do. UI thread.
+    /// One step of the shared stage. Both surfaces call it from their frame; whichever comes first
+    /// in a tick does the work and the other finds nothing left to do. UI thread.
     /// </summary>
-    internal static void Step()
+    public static void Step()
     {
         long now = Stopwatch.GetTimestamp();
         if (_lastStep == 0) { _lastStep = now; LastDt = 0; return; }
@@ -123,7 +122,9 @@ public static class SuperStageHost
 
         int fromX = _lastX, fromY = _lastY;
         bool hadCursor = _haveCursor;
-        if (GetCursorPos(out var cur))
+        (int X, int Y)? read = null;
+        try { read = CursorProvider(); } catch { }
+        if (read is { } cur)
         {
             if (_haveCursor)
             {
@@ -139,7 +140,7 @@ public static class SuperStageHost
 
         bool gentle = Safety.GentleVisuals.On;
         // The gold-box options, read live so a slider moves the effect at once.
-        var set = App.Settings?.Current;
+        var set = CoreSettings.Service?.Current;
         Stage.DragsFog = set?.WhirlpoolDragsFog != false;
         Stage.DragsPictures = set?.WhirlpoolDragsPictures != false;
         Stage.DragsBubbles = set?.WhirlpoolDragsBubbles != false;
@@ -168,11 +169,6 @@ public static class SuperStageHost
 
     /// <summary>How far in the fog has crept at the stock creep speed (about four minutes): thin at
     /// the edges at first, the whole screen later. The live step reads the player's Creep speed.</summary>
-    internal static double SteamLevel(double ageSeconds)
+    public static double SteamLevel(double ageSeconds)
         => SteamOptions.Level(ageSeconds, SteamOptions.CreepSeconds(SteamOptions.Normal));
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int X, Y; }
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT point);
 }

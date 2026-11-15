@@ -61,7 +61,7 @@ public class StudioRackRulesTests
     [Fact]
     public void TheCountLineIsInEveryLanguageWithBothNumbers()
     {
-        var dir = System.IO.Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = System.IO.Path.Combine(RepoRoot(), "CCP.Core", "Localization", "Languages");
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

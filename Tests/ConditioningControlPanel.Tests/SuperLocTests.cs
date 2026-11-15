@@ -42,7 +42,7 @@ public class SuperLocTests
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         while (d != null)
         {
-            var p = Path.Combine(d.FullName, "ConditioningControlPanel", "Localization", "Languages");
+            var p = Path.Combine(d.FullName, "CCP.Core", "Localization", "Languages");
             if (Directory.Exists(p)) return p;
             d = d.Parent;
         }

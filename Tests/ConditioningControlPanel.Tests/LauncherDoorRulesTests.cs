@@ -140,7 +140,7 @@ public class LauncherDoorRulesTests
         foreach (var t in LauncherCatalogue.Tools.Where(t => t.ArtPath != null))
         {
             Assert.StartsWith("features/", t.ArtPath);
-            Assert.True(File.Exists(Path.Combine(app, "Resources", t.ArtPath!.Replace('/', Path.DirectorySeparatorChar))),
+            Assert.True(File.Exists(Path.Combine(app, "..", "Assets", t.ArtPath!.Replace('/', Path.DirectorySeparatorChar))),
                 $"{t.Id} art missing");
         }
     }

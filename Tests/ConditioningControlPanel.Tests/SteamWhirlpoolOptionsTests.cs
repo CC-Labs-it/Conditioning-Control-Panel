@@ -194,7 +194,7 @@ public class SteamWhirlpoolOptionsTests
             "tooltip_super_pool_every", "super_pool_size", "tooltip_super_pool_size", "super_pool_drags",
             "tooltip_super_pool_drags", "super_pool_drags_fog", "super_pool_drags_pictures", "super_pool_drags_bubbles",
         };
-        var files = Directory.GetFiles(Path.Combine(root, "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(Path.Combine(root, "..", "CCP.Core", "Localization", "Languages"), "*.json");
         Assert.Equal(10, files.Length);
         foreach (var file in files)
         {

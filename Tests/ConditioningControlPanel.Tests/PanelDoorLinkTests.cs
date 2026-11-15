@@ -163,11 +163,16 @@ public class PanelDoorLinkTests
     {
         // The launcher lane owns Windows/Launcher and Services/Launcher; the seam must compile
         // without them, and unwired it presses the title-bar button rather than re-implementing it.
-        var seam = AppFile("Services", "UI", "PanelDoorLink.cs");
+        // The seam is shared (CCP.Core) on the port; the WPF head wires its Lockdown check and
+        // the fallback, which presses the title-bar button.
+        var seam = AppFile("..", "CCP.Core", "Services", "UI", "PanelDoorLink.cs");
         Assert.DoesNotContain("LauncherHost", seam, StringComparison.Ordinal);
         Assert.DoesNotContain("Services.Launcher", seam, StringComparison.Ordinal);
         Assert.DoesNotContain("Windows.Launcher", seam, StringComparison.Ordinal);
-        Assert.Contains("BtnBackToLauncher", seam, StringComparison.Ordinal);
+        var head = AppFile("MainWindow", "MainWindow.xaml.cs");
+        Assert.Contains("PanelDoorLink.IsLockedDown = () => App.Lockdown?.IsActive == true;", head, StringComparison.Ordinal);
+        var fallback = head.Substring(head.IndexOf("PanelDoorLink.Fallback =", StringComparison.Ordinal));
+        Assert.Contains("BtnBackToLauncher", fallback.Substring(0, 400), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -81,11 +81,14 @@ public class SuperStepAsideTests
     {
         foreach (var name in new[] { "PinkTintLayer.cs", "SpiralLayer.cs" })
         {
-            var src = Read("ConditioningControlPanel", "Services", "Compositor", name);
+            // The pink tint layer is shared (CCP.Core) on the port; the spiral layer is still WPF.
+            var src = Read(name == "PinkTintLayer.cs" ? "CCP.Core" : "ConditioningControlPanel", "Services", "Compositor", name);
             var render = src.Substring(src.IndexOf("public override void Render", StringComparison.Ordinal));
             Assert.Contains("SuperStepAside.Ease(_veil)", render);
             Assert.Contains("public void SetStepAside(bool on)", src);
-            Assert.Contains("SuperStepAside.FadeSecondsFor(MotionFx.Level)", src);
+            Assert.Contains(name == "PinkTintLayer.cs"
+                ? "SuperStepAside.FadeSecondsFor(Super.SuperStepAside.LevelProvider())"
+                : "SuperStepAside.FadeSecondsFor(MotionFx.Level)", src);
         }
     }
 

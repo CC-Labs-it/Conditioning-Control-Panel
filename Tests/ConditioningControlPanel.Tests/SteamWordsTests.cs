@@ -257,7 +257,7 @@ public class SteamWordsTests
     [Fact]
     public void The_switch_reads_in_all_ten_languages()
     {
-        var files = Directory.GetFiles(Path.Combine(Root(), "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(Path.Combine(Root(), "..", "CCP.Core", "Localization", "Languages"), "*.json");
         Assert.Equal(10, files.Length);
         foreach (var file in files)
         {

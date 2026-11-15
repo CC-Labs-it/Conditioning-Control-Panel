@@ -18,7 +18,11 @@ public class HapticsFreeTierTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(new[] { dir!.FullName, "ConditioningControlPanel" }.Concat(parts).ToArray()));
+        // On the port a file is either in the WPF tree or already moved to CCP.Core.
+        var inApp = Path.Combine(new[] { dir!.FullName, "ConditioningControlPanel" }.Concat(parts).ToArray());
+        return File.ReadAllText(File.Exists(inApp)
+            ? inApp
+            : Path.Combine(new[] { dir.FullName, "CCP.Core" }.Concat(parts).ToArray()));
     }
 
     [Fact]

@@ -191,7 +191,11 @@ namespace ConditioningControlPanel
             {
                 if (!_isRunning || !CoreSettings.Current.SubliminalEnabled) return;
 
-                var text = PickPhrase();
+                // Super Afterglow picked as "Super only": the ambient cards rest. Asked per tick,
+                // so a pick change applies at the next card with no restart.
+                var text = Services.Super.SuperAccess.ReplacesBase(Services.Super.SuperEffect.Afterglow)
+                    ? null
+                    : PickPhrase();
                 if (text != null)
                 {
                     // A head whose surface throws must not kill the schedule.

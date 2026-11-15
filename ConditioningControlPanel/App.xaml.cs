@@ -557,6 +557,7 @@ namespace ConditioningControlPanel
             Services.Super.SuperStepAside.LevelProvider = () => MotionFx.Level;
             // Super access is Core's: this head says which weekly try runs and wires the tier events.
             Services.Super.SuperAccess.TryingProvider = () => Services.Super.SuperPreview.Trying;
+            Services.Super.SuperStageWpf.Seed();
             Services.Super.SuperAccess.TierEventsHook = raiseAll =>
             {
                 if (Patreon == null) return false;

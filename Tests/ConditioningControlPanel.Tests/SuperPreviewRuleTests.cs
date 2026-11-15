@@ -118,7 +118,7 @@ public class SuperPreviewRuleTests
         SuperPreview.End(panic: true);
         Assert.Null(SuperPreview.Trying);
 
-        var root = Directory.GetParent(FindLanguages())!.Parent!.FullName;
+        var root = Path.Combine(Directory.GetParent(FindLanguages())!.Parent!.Parent!.FullName, "ConditioningControlPanel");   // the languages are in CCP.Core on the port
         var main = File.ReadAllText(Path.Combine(root, "MainWindow", "MainWindow.xaml.cs"));
         int panic = main.IndexOf("private void HandlePanicKeyPress()", StringComparison.Ordinal);
         int end = main.IndexOf("SuperPreview.End(panic: true)", panic, StringComparison.Ordinal);
@@ -136,7 +136,7 @@ public class SuperPreviewRuleTests
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         while (d != null)
         {
-            var p = Path.Combine(d.FullName, "ConditioningControlPanel", "Localization", "Languages");
+            var p = Path.Combine(d.FullName, "CCP.Core", "Localization", "Languages");
             if (Directory.Exists(p)) return p;
             d = d.Parent;
         }

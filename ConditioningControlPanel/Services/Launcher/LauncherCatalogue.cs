@@ -234,144 +234,116 @@ public static class LauncherCatalogue
 
     private static List<LauncherEntry> Build()
     {
-        var list = new List<LauncherEntry>();
-
-        void G(string id, string? art, string glyph, Color hue, Func<bool> available, Func<bool> locked,
-               Action launch, Func<bool> active, Func<bool>? revealed = null,
-               bool requiresAccount = true, bool isNew = false, bool listed = true)
+        // The face, the order, the door and the account rule are Core's LauncherCards; this head
+        // adds how each one starts. A card this head has no host for is left out.
+        var hosts = new Dictionary<string, (Func<bool> available, Func<bool> locked, Action launch,
+            Func<bool> active, Func<bool>? revealed)>(StringComparer.OrdinalIgnoreCase)
         {
-            list.Add(new LauncherEntry(id, "launcher_game_" + id + "_title", "launcher_game_" + id + "_blurb",
-                art, glyph, hue, available, locked, launch, active, revealed, requiresAccount, isNew,
-                LauncherDoor.Games, listed));
-        }
+            // The Back Room: free, no gate (the SP relay just goes quiet signed out).
+            ["backroom"] = (Always, Never,
+                () => BackRoom.BackRoomHostService.Launch(),
+                () => BackRoom.BackRoomHostService.IsRoomActive, null),
 
-        // Order is the order on the launcher: the newest, loudest room first, the quiet ones last.
+            // Breakout: one listed tile that opens the full game when the account has it and the
+            // demo otherwise; the demo keeps its own unlisted id for --game and old shortcuts.
+            ["breakoutdemo"] = (Always, Never,
+                () => BackRoom.BreakoutHostService.LaunchDemo(),
+                () => BackRoom.BackRoomHostService.IsBreakoutDemoActive, null),
+            ["breakout"] = (Always, Never,
+                () =>
+                {
+                    if (BreakoutFull()) BackRoom.BreakoutHostService.LaunchFull();
+                    else BackRoom.BreakoutHostService.LaunchDemo();
+                },
+                () => BackRoom.BackRoomHostService.IsBreakoutFullActive || BackRoom.BackRoomHostService.IsBreakoutDemoActive,
+                null),
 
-        // The Back Room: free, no gate, no account needed (the SP relay just goes quiet signed out).
-        G("backroom", "features/backroom.png", "♦", Tile(0xB9, 0x5C, 0xD8), Always, Never,
-            () => BackRoom.BackRoomHostService.Launch(),
-            () => BackRoom.BackRoomHostService.IsRoomActive);
+            // Piece by Piece: free for everyone (owner, 2026-09-27), no lock and no account.
+            ["piecebypiece"] = (() => PieceByPieceAvailable, Never,
+                () => PieceByPiece.PieceByPieceHostService.Launch(),
+                () => PieceByPiece.PieceByPieceHostService.IsActive, null),
 
-        // Breakout is ONE card (2026-11-15 declutter): the full game for whoever holds it, the
-        // free demo for everyone else, so it never wears a padlock and never asks for an account.
-        // The demo keeps its id for --game and old shortcuts, off the page.
-        G("breakoutdemo", null, "●", Tile(0x8C, 0xF5, 0xC8), Always, Never,
-            () => BackRoom.BreakoutHostService.LaunchDemo(),
-            () => BackRoom.BackRoomHostService.IsBreakoutDemoActive, requiresAccount: false, isNew: true,
-            listed: false);
-        G("breakout", null, "●", Tile(0x55, 0xB7, 0xFF), Always, Never,
-            () =>
-            {
-                if (BreakoutFull()) BackRoom.BreakoutHostService.LaunchFull();
-                else BackRoom.BreakoutHostService.LaunchDemo();
-            },
-            () => BackRoom.BackRoomHostService.IsBreakoutFullActive || BackRoom.BackRoomHostService.IsBreakoutDemoActive,
-            requiresAccount: false, isNew: true);
+            // Racing Thoughts is the 3D race, PRIME ONLY, solo included (owner, 2026-10-29). Below
+            // Prime the tile wears the padlock and the click goes to Launch, which paints the refusal.
+            ["race"] = (Always,
+                () => !Glassroad.GlassroadHostService.PrimeAllowed,
+                () => Glassroad.GlassroadHostService.Launch(),
+                () => Glassroad.GlassroadHostService.IsActive, null),
 
-        // Piece by Piece: free for everyone (owner, 2026-09-27), so no lock and no account: the
-        // computer plays anyone, and the board's own lobby asks a signed-out player to sign in.
-        G("piecebypiece", "features/piecebypiece.png", "♟", Tile(0x7B, 0x5C, 0xFF),
-            () => PieceByPieceAvailable, Never,
-            () => PieceByPiece.PieceByPieceHostService.Launch(),
-            () => PieceByPiece.PieceByPieceHostService.IsActive, requiresAccount: false, isNew: true);
+            // Racing Thoughts Classic: the original 2D race, free for everyone (owner, 2026-11-05).
+            ["raceclassic"] = (Always, Never,
+                () => Chaos.CaucusHostService.Launch(),
+                () => Chaos.CaucusHostService.IsActive, null),
 
-        // Racing Thoughts is the 3D race (Glassroad), PRIME ONLY, solo included (owner, 2026-10-29:
-        // "THE whole feature is for primes"). Always revealed: below Prime the tile wears the
-        // padlock and the click goes to Launch, whose DemandPrime paints the refusal. The 2D race
-        // has its own tile since 2026-11-05 (raceclassic, below). Online is tier 2+ on the server too.
-        G("race", "features/race.png", "☕", Tile(0xFF, 0xB3, 0x6B), Always,
-            () => !Glassroad.GlassroadHostService.PrimeAllowed,
-            () => Glassroad.GlassroadHostService.Launch(),
-            () => Glassroad.GlassroadHostService.IsActive);
+            // Down the Rabbit Hole: Basic since 2026-10-31. Launch does not gate, so the tile asks
+            // the gate itself; a server drop day still opens it for free accounts.
+            ["dtrh"] = (Always,
+                () => !PremiumOk("launcher_game_dtrh_title", "dtrh"),
+                () =>
+                {
+                    var gate = TierGate.RequiresPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh");
+                    if (gate.Allowed) Chaos.DtrhHostService.Launch();
+                    else TierGate.DemandPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh");
+                },
+                () => Chaos.DtrhHostService.IsActive, null),
 
-        // Racing Thoughts Classic: the original 2D race, back beside the 3D one (owner, 2026-11-05).
-        // Free for everyone with every track (RacingAccess.PurchaseDoorArmed is off), so no lock
-        // and no Prime badge. Its own key art: the pre-3D race picture.
-        G("raceclassic", "features/race_classic.png", "☕", Tile(0xFF, 0x8F, 0xB8), Always, Never,
-            () => Chaos.CaucusHostService.Launch(),
-            () => Chaos.CaucusHostService.IsActive);
+            // The Arcademy: Launch owns the build flag, the Lab gate and the audio-only refusal.
+            ["arcademy"] = (() => Arcademy.ArcademyHostService.DoorAvailable,
+                () => !LabOk("launcher_game_arcademy_title", null),
+                () => Arcademy.ArcademyHostService.Launch(),
+                () => Arcademy.ArcademyHostService.IsActive, null),
 
-        // Down the Rabbit Hole: Basic since 2026-10-31 (Racing Thoughts 3D is the Prime game now). The
-        // Play handler gates it; Launch does not, so the tile asks the gate itself and lets
-        // DemandPremium paint the refusal. A server drop day still opens it for free accounts.
-        G("dtrh", "features/dtrh.png", "▼", Tile(0x8C, 0xF5, 0xC8), Always,
-            () => !PremiumOk("launcher_game_dtrh_title", "dtrh"),
-            () =>
-            {
-                var gate = TierGate.RequiresPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh");
-                if (gate.Allowed) Chaos.DtrhHostService.Launch();
-                else TierGate.DemandPremium(Loc.Get("launcher_game_dtrh_title"), "dtrh");
-            },
-            () => Chaos.DtrhHostService.IsActive);
+            // Goon Game: free to join. The launcher has already tucked the panel away.
+            ["goon"] = (Always, Never,
+                () => GoonGame.GoonHostService.Launch(duckMainWindow: false),
+                () => GoonGame.GoonHostService.IsActive, null),
 
-        // The Arcademy: Launch owns the build flag, the Lab gate and the audio-only refusal.
-        // The art is the Arcademy's own entrance-gates plate, copied into Resources/features/
-        // because the web tree is Content (copied to disk) and only a WPF Resource resolves
-        // through a pack:// uri - pointed at the web path the tile drew the glyph plate instead.
-        G("arcademy", "features/arcademy.png", "★", Tile(0xFF, 0x69, 0xB4),
-            () => Arcademy.ArcademyHostService.DoorAvailable,
-            () => !LabOk("launcher_game_arcademy_title", null),
-            () => Arcademy.ArcademyHostService.Launch(),
-            () => Arcademy.ArcademyHostService.IsActive);
-
-        // Goon Game: free to join. The launcher has already tucked the panel away, so the game
-        // must not duck it a second time.
-        G("goon", "features/goon_game_tile.png", "●", Tile(0x76, 0xC8, 0x93), Always, Never,
-            () => GoonGame.GoonHostService.Launch(duckMainWindow: false),
-            () => GoonGame.GoonHostService.IsActive);
-
-        // Graded Intake: a panel tab, not a window, so Launch opens the panel on it and IsActive
-        // never reports a window (the launcher does not wait for the panel). Locked when the
-        // weekly free pass is spent and the account is below tier 2; the click still opens the
-        // tab, whose gate explains the pass, so the tile is never a dead end.
-        G("intake", "features/lab_quiz_hero.png", "❓", Tile(0x8E, 0x7C, 0xF2), Always,
-            () => !(App.IntakePass?.CanStartIntake ?? false),
-            () => LauncherHost.OpenPanelTab("gradedintake"),
-            Never);
-
-        return list;
+            // Graded Intake: a panel tab, not a window. Locked when the weekly pass is spent and
+            // the account is below tier 2; the click still opens the tab, whose gate explains.
+            ["intake"] = (Always,
+                () => !(App.IntakePass?.CanStartIntake ?? false),
+                () => LauncherHost.OpenPanelTab("gradedintake"),
+                Never, null),
+        };
+        return FromCards(LauncherCards.All, hosts);
     }
 
-    private static Color Tile(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
-
-    // A gate that cannot be read (no account, no tier service) plays the demo, never a refusal.
     private static bool BreakoutFull()
     {
         try { return !NeedsAccount && BackRoom.BreakoutAccess.FullAllowed; }
         catch (Exception ex) { Log.Debug(ex, "[Launcher] breakout gate probe failed"); return false; }
     }
 
-    /// <summary>
-    /// The Tools door. Only doors that exist: two panel tabs, the Mod Manager (where a mod is
-    /// made), and the two standalone makers. None needs an account here; each surface keeps its
-    /// own gate.
-    /// </summary>
+    /// <summary>The Tools door (declutter wave 2): real tools only, never locked, no account.</summary>
     private static List<LauncherEntry> BuildTools()
     {
-        var list = new List<LauncherEntry>();
-
-        void T(string id, string? art, string glyph, Color hue, Func<bool> available, Action launch, Func<bool> active)
+        var hosts = new Dictionary<string, (Func<bool> available, Func<bool> locked, Action launch,
+            Func<bool> active, Func<bool>? revealed)>(StringComparer.OrdinalIgnoreCase)
         {
-            list.Add(new LauncherEntry(id, "launcher_tool_" + id + "_title", "launcher_tool_" + id + "_blurb",
-                art, glyph, hue, available, Never, launch, active, null, false, false, LauncherDoor.Tools, true));
+            ["deepereditor"] = (Always, Never, () => LauncherHost.OpenPanelTab("deeper"), Never, null),
+            ["sessioneditor"] = (Always, Never, () => LauncherHost.OpenPanelTab("presets"), Never, null),
+            ["modcreator"] = (Always, Never, () => LauncherHost.OpenPanelModManager(), Never, null),
+            ["justdrop"] = (() => JustDrop.JustDropService.DoorAvailable, Never,
+                () => JustDrop.JustDropHostService.LaunchShop(),
+                () => JustDrop.JustDropHostService.IsActive, null),
+            ["loom"] = (Always, Never,
+                () => Chaos.LoomHostService.Launch(),
+                () => Chaos.LoomHostService.IsActive, null),
+        };
+        return FromCards(LauncherCards.Tools, hosts);
+    }
+
+    private static List<LauncherEntry> FromCards(IEnumerable<LauncherCard> cards,
+        Dictionary<string, (Func<bool> available, Func<bool> locked, Action launch, Func<bool> active, Func<bool>? revealed)> hosts)
+    {
+        var list = new List<LauncherEntry>();
+        foreach (var c in cards)
+        {
+            if (!hosts.TryGetValue(c.Id, out var h)) continue;
+            list.Add(new LauncherEntry(c.Id, c.TitleKey, c.BlurbKey, c.ArtPath, c.Glyph,
+                Color.FromRgb(c.R, c.G, c.B), h.available, h.locked, h.launch, h.active, h.revealed,
+                c.RequiresAccount, c.IsNew, c.Door, c.Listed));
         }
-
-        // The Deeper editor and the Session editor are panel tabs: the panel comes up on them.
-        T("deepereditor", "features/deeper_editor.png", "✎", Tile(0x7B, 0x5C, 0xFF), Always,
-            () => LauncherHost.OpenPanelTab("deeper"), Never);
-        T("sessioneditor", null, "▤", Tile(0xFF, 0x69, 0xB4), Always,
-            () => LauncherHost.OpenPanelTab("presets"), Never);
-        // Mods are made from the Mod Manager, a modal the panel owns: panel first, then the manager.
-        T("modcreator", null, "✂", Tile(0xFF, 0xB3, 0x6B), Always,
-            () => LauncherHost.OpenPanelModManager(), Never);
-        T("justdrop", "features/justdrop.png", "▼", Tile(0x8C, 0xF5, 0xC8),
-            () => JustDrop.JustDropService.DoorAvailable,
-            () => JustDrop.JustDropHostService.LaunchShop(),
-            () => JustDrop.JustDropHostService.IsActive);
-        T("loom", "features/loom.png", "◎", Tile(0x55, 0xB7, 0xFF), Always,
-            () => Chaos.LoomHostService.Launch(),
-            () => Chaos.LoomHostService.IsActive);
-
         return list;
     }
 }
