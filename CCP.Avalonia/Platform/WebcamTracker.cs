@@ -218,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Eyes held shut past BlinkDetector.EyesClosedLongMs (WPF OnEyesClosedLong).</summary>
         public event Action? OnEyesClosedLong;
         public event Action? StateChanged;
+        public event Action<WebcamTrackingState>? OnTrackingStateChanged;
         private volatile WebcamTrackingState _state = WebcamTrackingState.Stopped;
         public WebcamTrackingState State => _state;
 
@@ -231,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (_state == state) return;
                 _state = state;
             }
-            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+            Dispatcher.UIThread.Post(() => { OnTrackingStateChanged?.Invoke(state); StateChanged?.Invoke(); });
         }
         public event Action? OnFaceLost;
         public event Action? OnFaceFound;
@@ -246,7 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal void RaiseLongStareForTest() => OnLongStare?.Invoke(default);
         internal void RaiseFaceLostForTest() => OnFaceLost?.Invoke();
         internal void RaiseFaceFoundForTest() => OnFaceFound?.Invoke();
-        internal void RaiseStateForTest() => StateChanged?.Invoke();
+        internal void RaiseStateForTest() => OnTrackingStateChanged?.Invoke(State);
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
         internal void RaiseGazeForTest(double x, double y) => OnGazeMove?.Invoke(new ScreenPoint(x, y));
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>

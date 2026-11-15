@@ -63,8 +63,8 @@ internal static class BarkHead
         Wire<Action<global::Avalonia.Point>>(h => webcam.OnLongStare += h, h => webcam.OnLongStare -= h, _ => e.Raise("LongStare"));
         Wire<Action>(h => webcam.OnFaceLost += h, h => webcam.OnFaceLost -= h, () => { e.FaceLost(); e.Raise("FaceLost"); });
         Wire<Action>(h => webcam.OnFaceFound += h, h => webcam.OnFaceFound -= h, () => { e.Raise("FaceFound"); e.FaceFound(); });
-        Wire<Action>(h => webcam.StateChanged += h, h => webcam.StateChanged -= h,
-            () => e.Raise("TrackingStateChanged", c => c.Set("state", webcam.State.ToString())));
+        Wire<Action<ConditioningControlPanel.Services.WebcamTrackingState>>(h => webcam.OnTrackingStateChanged += h, h => webcam.OnTrackingStateChanged -= h,
+            state => e.Raise("TrackingStateChanged", c => c.Set("state", state.ToString())));
         Wire<Action<int>>(h => ProgressionBank.LevelUp += h, h => ProgressionBank.LevelUp -= h,
             level => e.Raise("LevelUp", c => c.Set("level", level)));
         Wire<Action<double, string>>(h => ProgressionBank.Awarded += h, h => ProgressionBank.Awarded -= h,

@@ -491,6 +491,47 @@ public sealed class CompanionBarkHeadTests
         finally { BarkHead.Stop(); }
     });
 
+    [Fact]
+    public void WebcamStateBarksCaptureTransitionsAndIgnoreCalibration() => WithSeamsRestored(settings =>
+    {
+        BarkHead.Stop();
+        var camera = WebcamTracker.Instance;
+        var original = camera.State;
+        var calibration = camera.Calibration;
+        var denied = Rule("TrackingStateChanged", "denied", ("state", "CameraDenied"));
+        var inUse = Rule("TrackingStateChanged", "in use", ("state", "CameraInUse"));
+        denied.ClassRaw = inUse.ClassRaw = "safety";
+        var e = new BarkEngine(() => new BarkRuleSet(new[] { denied, inUse }));
+        BarkHead.Seed(e);
+        e.Start();
+        var spoken = new List<string>();
+        e.BarkSpoken += (_, line) => spoken.Add(line);
+        try
+        {
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.Stopped);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            BarkHead.WireSources(e);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraDenied);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraInUse);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraInUse);
+            camera.SetCalibrationLive(calibration);
+            Assert.Empty(spoken);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "denied", "in use" }, spoken);
+            BarkHead.Stop();
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraDenied);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, spoken.Count);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            camera.SetTrackingState(original);
+            camera.SetCalibrationLive(calibration);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
