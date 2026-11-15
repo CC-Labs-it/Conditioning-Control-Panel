@@ -105,7 +105,7 @@ internal sealed class SwapEffect : IPossessionEffect
         return false;
     }
 
-    // Avalonia hit testing stops at ancestor bounds, even where drawing is not clipped.
+    // Like WPF, a landing may leave its panel; only ancestors that clip drawing and hit testing veto it.
     private static bool PairMoves(Canvas layer, Control a, Control b,
         Rect ra, Rect rb, out Vector moveA, out Vector moveB)
     {
@@ -127,8 +127,8 @@ internal sealed class SwapEffect : IPossessionEffect
             if (node is Control parentControl && (!parentControl.IsHitTestVisible || !parentControl.IsEffectivelyEnabled)) return false;
             if (node.TransformToVisual(layer) is not { } transform) return false;
             var bounds = new Rect(node.Bounds.Size).TransformToAABB(transform);
-            if (landing.Left < bounds.Left - .01 || landing.Top < bounds.Top - .01 ||
-                landing.Right > bounds.Right + .01 || landing.Bottom > bounds.Bottom + .01) return false;
+            if (node.ClipToBounds && (landing.Left < bounds.Left - .01 || landing.Top < bounds.Top - .01 ||
+                landing.Right > bounds.Right + .01 || landing.Bottom > bounds.Bottom + .01)) return false;
             if (node.Clip is { } clip)
             {
                 if (clip is not global::Avalonia.Media.RectangleGeometry) return false;

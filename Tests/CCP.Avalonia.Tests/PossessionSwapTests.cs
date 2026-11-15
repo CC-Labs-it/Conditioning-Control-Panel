@@ -228,16 +228,26 @@ public class PossessionSwapTests
     });
 
     [Fact]
-    public Task LandingOutsideParentIsNotOffered() => Run((host, a, b, c, targets, ctx, frames) =>
+    public Task CrossPanelPairSwapsAndHitsUnlessAParentClips() => Run(async (host, a, b, c, targets, ctx, frames) =>
     {
         var panel = (Canvas)a.GetVisualParent()!;
         panel.Children.Remove(c);
-        var wrapper = new Border { Width = 60, Height = 40, Child = c };
+        var wrapper = new Border { Width = 60, Height = 40, Child = c, ClipToBounds = true };
         panel.Children.Add(wrapper); Canvas.SetLeft(wrapper, 180); Canvas.SetTop(wrapper, 40);
-        host.PossessionWindow!.UpdateLayout();
+        var window = host.PossessionWindow!;
+        window.UpdateLayout();
         host.Targets = new[] { targets[0], targets[2] };
-        Assert.False(new SwapEffect().CanApply(ctx, targets[0]));
-        return Task.CompletedTask;
+        var effect = new SwapEffect();
+        Assert.False(effect.CanApply(ctx, targets[0]));
+        wrapper.ClipToBounds = false;
+        Assert.True(effect.CanApply(ctx, targets[0]));
+        var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeC = host.BoundsOnGhostLayer(c)!.Value;
+        var apply = effect.ApplyAsync(ctx, targets[0], CancellationToken.None);
+        frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(550)); await apply;
+        HeadlessInput.RenderLiveTree(window);
+        var pa = HeadlessInput.PressAt(a, window, homeC.Center); var pc = HeadlessInput.PressAt(c, window, homeA.Center);
+        Assert.True(pa.Hit && pa.Pressed && pc.Hit && pc.Pressed);
+        await effect.UndoAsync(TimeSpan.Zero);
     });
 
     [Theory]
