@@ -558,28 +558,43 @@ public sealed class PlayWallTests
                     Assert.DoesNotContain(shell.EntranceTracks, t => t.Target == target);
                 }
 
-                shell.ShowTab("play");
-                Assert.Same(play, shell.EnteringTab);
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-                // WPF Services/MotionFx.cs:123-138: BeginTime leaves delayed cards at base values.
-                for (var i = 0; i < targets.Length; i++)
+                using (var time = CompositorTime.Freeze(shell))
                 {
-                    var delay = 40 * Math.Min(i, 6);
-                    var (fade, rise) = (Track(targets[i], "Opacity"), Track(targets[i], "Translation"));
-                    Assert.Equal((delay, 220, delay, 260), (fade.DelayMs, fade.DurationMs, rise.DelayMs, rise.DurationMs));
-                    if (delay > 0)
+                    shell.ShowTab("play");
+                    Assert.Same(play, shell.EnteringTab);
+                    for (var i = 0; i < targets.Length; i++)
                     {
-                        Assert.Equal(1, fade.At(delay - 1));
-                        Assert.Equal(0, rise.At(delay - 1, y: true));
+                        var delay = 40 * Math.Min(i, 6);
+                        var (fade, rise) = (Track(targets[i], "Opacity"), Track(targets[i], "Translation"));
+                        Assert.Equal((delay, 220, delay, 260), (fade.DelayMs, fade.DurationMs, rise.DelayMs, rise.DurationMs));
                     }
-                    Assert.Equal(0, fade.At(delay));
-                    Assert.Equal(10, rise.At(delay, y: true));
-                    Assert.Equal(0.75, fade.At(delay + 110), 5); // half of the 220 ms quadratic fade
-                    Assert.Equal(1, targets[i].Opacity); // the UI thread never animates the client value
+                    // What the compositor draws (WPF Services/MotionFx.cs:123-138): each card holds its base value
+                    // until its BeginTime, then starts at 0 and 10 px low while the card before it is already moving.
+                    (float, double) Drawn(Control c) => (CompositorTime.Opacity(c), CompositorTime.Translation(c).Y);
+                    for (var slot = 0; slot <= 6; slot++)
+                    {
+                        time.RenderAt(40 * slot);
+                        foreach (var later in slot < 6 ? targets.Skip(slot + 1) : Enumerable.Empty<Control>())
+                            Assert.Equal((1f, 0d), Drawn(later));
+                        if (slot > 0)
+                        {
+                            Assert.InRange(CompositorTime.Opacity(targets[slot - 1]), 0.01, 0.99);
+                            Assert.InRange(CompositorTime.Translation(targets[slot - 1]).Y, 0.01, 9.99);
+                        }
+                        time.RenderAt(40 * slot + 1);
+                        Assert.InRange(CompositorTime.Opacity(targets[slot]), 0, 0.02);
+                        Assert.InRange(CompositorTime.Translation(targets[slot]).Y, 9.8, 10);
+                        Assert.Equal(1, targets[slot].Opacity); // the UI thread never animates the client value
+                    }
+                    Assert.Equal(Drawn(targets[6]), Drawn(targets[7])); // the eighth card shares the capped slot
+                    time.RenderAt(350); // six-slot cap: the seventh and eighth cards share 240 ms, half of the 220 ms fade
+                    Assert.Equal(0.75, CompositorTime.Opacity(targets[6]), 3);
+                    Assert.Equal(Drawn(targets[6]), Drawn(targets[7]));
+                    Assert.Equal(0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
+                    Assert.Equal(0.62, CompositorTime.Opacity(play.FindControl<Border>("PlayFocusCard")!), 5);
+                    time.RenderAt(620);
+                    Assert.All(targets, t => Assert.Equal((1f, 0d), Drawn(t)));
                 }
-                Assert.Equal(Track(targets[6], "Opacity").At(250), Track(targets[7], "Opacity").At(250)); // six-slot cap
-                Assert.Equal(0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
 
                 shell.ShowTab("appsettings");
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();

@@ -97,9 +97,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (ElementComposition.GetElementVisual(t.Target) is not { } visual) return;
             var compositor = visual.Compositor;
             KeyFrameAnimation animation;
+            // WPF BeginTime holds the base value through the delay. Avalonia's SetInitialValueAfterDelay holds the
+            // animation's own empty cache instead (opacity 0), so a delayed track leads with a rest key frame that
+            // SetInitialValueBeforeDelay draws until the delay ends, then jumps to the start value.
+            var held = t.DelayMs > 0;
             if (t.Property == "Opacity")
             {
                 var fade = compositor.CreateScalarKeyFrameAnimation();
+                if (held) fade.InsertKeyFrame(0, 1);
                 fade.InsertKeyFrame(0, (float)t.FromX);
                 fade.InsertKeyFrame(1, 1, new QuadraticEaseOut());
                 animation = fade;
@@ -107,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else
             {
                 var slide = compositor.CreateVector3DKeyFrameAnimation();
+                if (held) slide.InsertKeyFrame(0, default);
                 slide.InsertKeyFrame(0, new Vector3D(t.FromX, t.FromY, 0));
                 slide.InsertKeyFrame(1, default, new QuadraticEaseOut());
                 animation = slide;
@@ -115,8 +121,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The frame that starts an animation samples it at exactly 0 ms, where Avalonia 12.1 keeps the current
             // value: one tick of delay makes that frame draw key frame 0, not a flash of the tab at rest.
             animation.DelayTime = TimeSpan.FromMilliseconds(t.DelayMs) + TimeSpan.FromTicks(1);
-            animation.DelayBehavior = t.DelayMs == 0 ? AnimationDelayBehavior.SetInitialValueBeforeDelay
-                : AnimationDelayBehavior.SetInitialValueAfterDelay; // WPF BeginTime holds the base value
+            animation.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
             visual.StartAnimation(t.Property, animation);
         }
 

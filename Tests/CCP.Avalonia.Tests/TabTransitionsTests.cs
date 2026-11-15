@@ -221,22 +221,42 @@ public sealed class TabTransitionsTests
     [Fact]
     public Task FullEntranceUsesRailDirectionAndSettlesBeforePointerInput() => Run(shell =>
     {
+        using var time = CompositorTime.Freeze(shell);
         shell.ShowTab("quests");
         var quests = shell.Named<Control>("QuestsTab")!;
         var slide = Assert.Single(Tracks(shell, quests, "Translation"));
-        Assert.Equal(12, slide.At(0));
-        Assert.Equal(3, slide.At(100), 5); // QuadraticEaseOut at half time
-        Assert.Equal(0, slide.At(200));
         Assert.Equal((0, 200), (slide.DelayMs, slide.DurationMs));
+        Assert.Equal(1, quests.Opacity); // the client value stays at rest; the compositor animates its copy
+        // What the compositor draws (WPF ChromeFx.cs:235-291): 12 px off and transparent at the switch,
+        // QuadraticEaseOut at half time, at rest after 200 ms.
+        time.RenderAt(0);
+        Assert.Equal(new Vector3D(12, 0, 0), CompositorTime.Translation(quests));
+        Assert.Equal(0, CompositorTime.Opacity(quests));
+        time.RenderAt(100);
+        Assert.Equal(3, CompositorTime.Translation(quests).X, 3);
+        Assert.Equal(0.75, CompositorTime.Opacity(quests), 3);
+        time.RenderAt(620);
+        Assert.Equal(default, CompositorTime.Translation(quests));
+        Assert.Equal(1, CompositorTime.Opacity(quests));
         Step(shell, 620);
         Assert.Empty(shell.EntranceTracks);
         Assert.Equal(1, quests.Opacity);
         shell.ShowTab("achievements");
+        time.Mark();
         shell.ShowTab("quests");
         Assert.Equal(-12, Assert.Single(Tracks(shell, quests, "Translation")).FromX);
+        time.RenderAt(0);
+        Assert.Equal(new Vector3D(-12, 0, 0), CompositorTime.Translation(quests));
+        time.RenderAt(100);
+        Assert.Equal(-3, CompositorTime.Translation(quests).X, 3);
+        time.Mark();
         shell.ShowTab("quests"); // same key has no direction: WPF rises
         slide = Assert.Single(Tracks(shell, quests, "Translation"));
         Assert.Equal((0, 12), (slide.FromX, slide.FromY));
+        time.RenderAt(0);
+        Assert.Equal(new Vector3D(0, 12, 0), CompositorTime.Translation(quests));
+        time.RenderAt(620);
+        Assert.Equal(default, CompositorTime.Translation(quests));
         shell.ShowTab("settings"); // browser airspace never slides
         Assert.Empty(Tracks(shell, shell.SettingsPage!, "Translation"));
         Assert.Empty(Tracks(shell, shell.Named<Control>("SettingsTab")!, "Translation"));
@@ -256,8 +276,7 @@ public sealed class TabTransitionsTests
         Assert.Equal((0, 0, 200), (fade.FromX, fade.DelayMs, fade.DurationMs));
 
         // Landing the entrance early (a new switch, Close, a render proof) ends the compositor's animations at
-        // rest; the client value alone would not, because it never left rest. Headless frames run on wall time,
-        // so the fade's mid-frames are not sampled here.
+        // rest; the client value alone would not, because it never left rest.
         var host = shell.Named<ContentControl>("QuestsTab")!;
         var content = host.Content;
         host.Content = new Border { Background = Brushes.Magenta };
@@ -278,6 +297,28 @@ public sealed class TabTransitionsTests
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             using var after = shell.GetLastRenderedFrame();
             Assert.Equal(0xFF00FFu, Rgb(after!, point));
+
+            // The fade in rendered frames, on a stopped compositor clock (WPF ChromeFx.cs:235-239): the switch frame
+            // does not draw the tab, 100 ms draws it partway (QuadraticEaseOut 0.75), the settled frame draws it whole.
+            shell.ShowTab("achievements");
+            shell.CompleteTabTransition();
+            int FromMagentaAt(CompositorTime clock, double ms)
+            {
+                clock.RenderAt(ms);
+                using var frame = shell.GetLastRenderedFrame();
+                var rgb = Rgb(frame!, point);
+                return 255 - (int)(rgb >> 16 & 0xFF) + (int)(rgb >> 8 & 0xFF) + 255 - (int)(rgb & 0xFF);
+            }
+            using (var time = CompositorTime.Freeze(shell))
+            {
+                shell.ShowTab("quests");
+                var (start, startOpacity) = (FromMagentaAt(time, 0), CompositorTime.Opacity(quests));
+                var (mid, midOpacity) = (FromMagentaAt(time, 100), CompositorTime.Opacity(quests));
+                Assert.True(start > mid && mid > 0, $"switch frame {start}, 100 ms frame {mid} away from magenta");
+                Assert.Equal(0, FromMagentaAt(time, 620));
+                Assert.Equal(0, startOpacity);
+                Assert.Equal(0.75, midOpacity, 3);
+            }
         }
         finally { shell.CompleteTabTransition(); host.Content = content; }
     });
@@ -413,12 +454,20 @@ public sealed class TabTransitionsTests
     {
         shell.ShowTab("quests");
         CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
-        shell.ShowTab("achievements");
+        using (var time = CompositorTime.Freeze(shell))
+        {
+            shell.ShowTab("achievements");
+            var fade = Assert.Single(shell.EntranceTracks); // the crossfade only: no slide, no card stagger
+            Assert.Equal((shell.Named<Control>("AchievementsTab"), "Opacity"), (fade.Target, fade.Property));
+            var entering = shell.Named<Control>("AchievementsTab")!;
+            time.RenderAt(0);
+            Assert.Equal(0, CompositorTime.Opacity(entering));
+            Assert.Equal(default, CompositorTime.Translation(entering));
+            time.RenderAt(100);
+            Assert.Equal(0.75, CompositorTime.Opacity(entering), 3);
+            Assert.Equal(default, CompositorTime.Translation(entering));
+        }
         var tab = shell.Named<Control>("AchievementsTab")!;
-        var fade = Assert.Single(shell.EntranceTracks); // the crossfade only: no slide, no card stagger
-        Assert.Equal((tab, "Opacity"), (fade.Target, fade.Property));
-        Assert.Equal(0, fade.At(0));
-        Assert.Equal(0.75, fade.At(100), 5);
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         shell.ShowTab("quests");
         Assert.Equal(1, tab.Opacity);
@@ -484,27 +533,44 @@ public sealed class TabTransitionsTests
         cards.Children.Insert(1, dim);
         cards.Children.Insert(2, hidden);
         tab.Content = new Border { Child = cards };
+        var time = CompositorTime.Freeze(shell);
         try
         {
             shell.ShowTab("quests");
-            double Fade(Control card, double ms) => Assert.Single(Tracks(shell, card, "Opacity")).At(ms);
-            Assert.Equal(0, Fade(cards.Children[0], 0));
             Assert.Same(authored, cards.Children[0].RenderTransform);
             Assert.Empty(Tracks(shell, cards.Children[0], "Translation")); // an authored transform is left alone
-            Assert.Equal(10, Assert.Single(Tracks(shell, cards.Children[3], "Translation")).At(40, y: true));
-            Assert.InRange(Fade(cards.Children[0], 40), 0.01, 1);
-            Assert.Equal(0, Fade(cards.Children[3], 40)); // second eligible card starts at 40 ms
-            Assert.Equal(Fade(cards.Children[8], 250), Fade(cards.Children[9], 250)); // slots 6 and 7 share the cap
             Assert.Empty(Tracks(shell, cards.Children[10], "Opacity")); // ninth card is outside Take(8)
             Assert.Empty(Tracks(shell, dim, "Opacity"));
             Assert.Empty(Tracks(shell, hidden, "Opacity"));
+            // What the compositor draws (WPF MotionFx.cs:106-138): the first card fades from 0 at the switch while
+            // the second eligible card holds its base value until its 40 ms BeginTime, then starts at 0 and 10 px.
+            var (first, second) = (cards.Children[0], cards.Children[3]);
+            time.RenderAt(0);
+            Assert.Equal(0, CompositorTime.Opacity(first));
+            Assert.Equal(default, CompositorTime.Translation(first));
+            Assert.Equal((1f, default(Vector3D)), (CompositorTime.Opacity(second), CompositorTime.Translation(second)));
+            time.RenderAt(40);
+            Assert.InRange(CompositorTime.Opacity(first), 0.01, 0.99);
+            Assert.Equal((1f, default(Vector3D)), (CompositorTime.Opacity(second), CompositorTime.Translation(second)));
+            time.RenderAt(41);
+            Assert.InRange(CompositorTime.Opacity(second), 0, 0.02);
+            Assert.InRange(CompositorTime.Translation(second).Y, 9.8, 10);
+            time.RenderAt(250); // slots 6 and 7 share the 240 ms cap
+            Assert.InRange(CompositorTime.Opacity(cards.Children[9]), 0.01, 0.99);
+            Assert.Equal(CompositorTime.Opacity(cards.Children[8]), CompositorTime.Opacity(cards.Children[9]));
+            Assert.Equal(CompositorTime.Translation(cards.Children[8]), CompositorTime.Translation(cards.Children[9]));
+            Assert.Equal(1, CompositorTime.Opacity(cards.Children[10]));
+            Assert.Equal(0.6, CompositorTime.Opacity(dim), 5);
             Assert.Equal(0.6, dim.Opacity);
             Assert.False(hidden.IsVisible);
+            time.RenderAt(620);
+            Assert.All(cards.Children.Where(c => c != dim && c != hidden), c => Assert.Equal(1, CompositorTime.Opacity(c)));
+            Assert.All(cards.Children.Skip(1).Where(c => c != hidden), c => Assert.Equal(default, CompositorTime.Translation(c)));
             shell.CompleteTabTransition();
             Assert.Equal(8, MainShellWindow.FindStaggerTargets(tab).Count);
             Assert.All(cards.Children.Where(c => c != dim), c => Assert.Equal(1, c.Opacity));
         }
-        finally { shell.CompleteTabTransition(); tab.Content = content; }
+        finally { time.Dispose(); shell.CompleteTabTransition(); tab.Content = content; }
     });
 
     [Fact]
