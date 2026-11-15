@@ -192,4 +192,36 @@ public class ScreenFrameSourceTests
         Assert.Equal(2, calls);
         Assert.Equal(ScreenFrameStatus.Available, again.Status); // the timeout cost one scan, not the session
     }
+
+    [Fact]
+    public async Task AScreenshotResponseLongAfterTheScanTimeoutIsStillAwaitedAndItsFileDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var closes = 0;
+        var source = new PortalScreenFrames(ct => PortalPanicShortcut.AwaitOrCloseAsync(answer.Task, ct, () => { closes++; return Task.CompletedTask; }),
+            TwoMonitors, TimeSpan.FromMilliseconds(50));
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status);
+        await Task.Delay(400);
+        var path = WritePng();
+        answer.SetResult((0u, Uri(path)));
+        for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
+        Assert.False(File.Exists(path));
+        Assert.Equal(0, closes);
+    }
+
+    [Fact]
+    public async Task ACancelledPortalRequestIsClosedAndAResponseAlreadyInFlightStillWins()
+    {
+        var raced = new TaskCompletionSource<int>();
+        using var cts = new CancellationTokenSource();
+        var waiting = PortalPanicShortcut.AwaitOrCloseAsync(raced.Task, cts.Token, () => { raced.SetResult(7); return Task.CompletedTask; });
+        cts.Cancel();
+        Assert.Equal(7, await waiting);
+
+        var closes = 0;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PortalPanicShortcut.AwaitOrCloseAsync(new TaskCompletionSource<int>().Task, new CancellationToken(true), () => { closes++; return Task.CompletedTask; }));
+        Assert.Equal(1, closes);
+    }
 }

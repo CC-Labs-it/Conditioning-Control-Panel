@@ -247,14 +247,15 @@ internal static class PortalPanicShortcut
     /// path BEFORE calling (the portal may answer before the call returns), then call and await.</summary>
     internal static async Task<(uint Code, Dictionary<string, VariantValue> Results)> RequestAsync(
         DBusConnection bus, string member, string signature, BodyWriter writeBody, CancellationToken cancellation = default,
-        string iface = Iface)
+        string iface = Iface, bool untilAnswered = false)
     {
         var token = "ccp" + Guid.NewGuid().ToString("N");
         var sender = bus.UniqueName!.TrimStart(':').Replace('.', '_');
+        var request = $"{DesktopPath}/request/{sender}/{token}";
         var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var sub = await bus.AddMatchAsync(
             new MatchRule { Type = MessageType.Signal, Interface = "org.freedesktop.portal.Request", Member = "Response",
-                            Path = $"{DesktopPath}/request/{sender}/{token}" },
+                            Path = request },
             (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadUInt32(), r.ReadDictionaryOfStringToVariantValue()); },
             (Exception? ex, (uint, Dictionary<string, VariantValue>) v, object? _, object? _) =>
             {
@@ -263,8 +264,29 @@ internal static class PortalPanicShortcut
             null, null, false, ObserverFlags.None);
 
         await bus.CallMethodAsync(CallHeader(bus, DesktopPath, iface, member, signature, (ref MessageWriter w) => writeBody(ref w, token)));
+        if (untilAnswered)
+            return await AwaitOrCloseAsync(answer.Task, cancellation,
+                () => bus.CallMethodAsync(CallHeader(bus, request, "org.freedesktop.portal.Request", "Close", null)));
         // KDE may show the user a dialog for BindShortcuts; effects wait at most this long for it.
         return await answer.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellation);
+    }
+
+    /// <summary>Waits for a Response with no timeout of its own. On cancellation it calls Request.Close
+    /// ("Closes the portal request to which this object refers and ends all related user interaction
+    /// (dialogs, etc). A Response signal will not be emitted in this case." -
+    /// https://github.com/flatpak/xdg-desktop-portal/blob/main/data/org.freedesktop.portal.Request.xml)
+    /// and still returns a Response that was already in flight, so a result (e.g. a screenshot file) is never dropped.</summary>
+    internal static async Task<T> AwaitOrCloseAsync<T>(Task<T> answer, CancellationToken cancellation, Func<Task> close)
+    {
+        try { return await answer.WaitAsync(cancellation).ConfigureAwait(false); }
+        catch (OperationCanceledException)
+        {
+            if (answer.IsCompletedSuccessfully) return answer.Result;
+            try { await close().ConfigureAwait(false); } catch (Exception ex) { Log.Debug("Portal: Request.Close failed ({Type})", ex.GetType().Name); }
+            await Task.WhenAny(answer, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false); // a Response sent before Close
+            if (answer.IsCompletedSuccessfully) return answer.Result;
+            throw;
+        }
     }
 
     // MessageWriter is a STRUCT: handing it to an Action<MessageWriter> writes the body into a copy,
