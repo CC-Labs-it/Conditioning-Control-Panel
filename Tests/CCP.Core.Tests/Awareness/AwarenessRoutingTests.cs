@@ -18,6 +18,12 @@ public sealed class AwarenessRoutingTests : IDisposable
 {
     private readonly Func<SettingsService?>? _oldSettings = CoreSettings.ServiceProvider;
     private readonly Func<bool>? _oldEntitlement = AwarenessObserver.EntitlementProvider;
+    // Saved, not nulled, on Dispose: these are process-wide seams a head or earlier test may have set.
+    private readonly (Func<ContextFrame, bool>?, Func<string, bool, bool>?, Func<int, bool>?, Action?, Action<string, int>?, Func<string?>?) _oldSpeaker =
+        (AvatarAwarenessSpeaker.RaiseBark, AvatarAwarenessSpeaker.DeliverLine, AvatarAwarenessSpeaker.CompanionBusy,
+         AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho, AvatarAwarenessSpeaker.ForegroundTitle);
+    private readonly (Func<CompanionBrain?>?, Func<IAiService?>?) _oldBrain =
+        (BrainAwarenessLineSource.BrainProvider, BrainAwarenessLineSource.AiProvider);
     private readonly SettingsService _settings = new();
     private readonly List<(string Line, bool Bounce)> _delivered = new();
     private readonly List<(string Line, int Ms)> _muted = new();
@@ -42,11 +48,33 @@ public sealed class AwarenessRoutingTests : IDisposable
 
     public void Dispose()
     {
-        (AvatarAwarenessSpeaker.RaiseBark, AvatarAwarenessSpeaker.DeliverLine, AvatarAwarenessSpeaker.CompanionBusy) = (null, null, null);
-        (AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho, AvatarAwarenessSpeaker.ForegroundTitle) = (null, null, null);
-        (BrainAwarenessLineSource.BrainProvider, BrainAwarenessLineSource.AiProvider) = (null, null);
+        (AvatarAwarenessSpeaker.RaiseBark, AvatarAwarenessSpeaker.DeliverLine, AvatarAwarenessSpeaker.CompanionBusy,
+         AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho, AvatarAwarenessSpeaker.ForegroundTitle) = _oldSpeaker;
+        (BrainAwarenessLineSource.BrainProvider, BrainAwarenessLineSource.AiProvider) = _oldBrain;
         CoreSettings.ServiceProvider = _oldSettings;
         AwarenessObserver.EntitlementProvider = _oldEntitlement;
+    }
+
+    [Fact]
+    public void CleanupRestoresTheSeamsItFoundRatherThanNullingThem()
+    {
+        Func<ContextFrame, bool> bark = _ => true; Func<string, bool, bool> deliver = (_, _) => true; Func<int, bool> busy = _ => false;
+        Action spoken = () => { }; Action<string, int> mute = (_, _) => { }; Func<string?> title = () => "x";
+        Func<CompanionBrain?> brain = () => null; Func<IAiService?> ai = () => null;
+        (AvatarAwarenessSpeaker.RaiseBark, AvatarAwarenessSpeaker.DeliverLine, AvatarAwarenessSpeaker.CompanionBusy) = (bark, deliver, busy);
+        (AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho, AvatarAwarenessSpeaker.ForegroundTitle) = (spoken, mute, title);
+        (BrainAwarenessLineSource.BrainProvider, BrainAwarenessLineSource.AiProvider) = (brain, ai);
+
+        new AwarenessRoutingTests().Dispose();
+
+        Assert.Same(bark, AvatarAwarenessSpeaker.RaiseBark);
+        Assert.Same(deliver, AvatarAwarenessSpeaker.DeliverLine);
+        Assert.Same(busy, AvatarAwarenessSpeaker.CompanionBusy);
+        Assert.Same(spoken, AvatarAwarenessSpeaker.LineSpoken);
+        Assert.Same(mute, AvatarAwarenessSpeaker.MuteKeywordEcho);
+        Assert.Same(title, AvatarAwarenessSpeaker.ForegroundTitle);
+        Assert.Same(brain, BrainAwarenessLineSource.BrainProvider);
+        Assert.Same(ai, BrainAwarenessLineSource.AiProvider);
     }
 
     [Fact]
