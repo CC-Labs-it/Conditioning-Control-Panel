@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -84,12 +85,22 @@ public sealed class EmiRainReviewTests
             {
                 Setup(); var oldPath = CorePaths.EffectiveAssetsProvider; bool oldOffers = CoreSettings.Current.EmiDeskOffers; bool oldGlass = CoreSettings.Current.EmiDeskGlass;
                 var oldBedtime = EmiState.Current.BedtimeUntil; EmiDeskWindow? w = null;
+                ChaosGifCascadeOverlay? rain = null;
+                using var release = new ManualResetEventSlim();
+                var reading = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var oldBeforeDecode = ChaosGifCascadeOverlay.BeforeDecodeForTests;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => root; CoreSettings.Current.EmiDeskOffers = true; CoreSettings.Current.EmiDeskGlass = true;
                     EmiState.Current.BedtimeUntil = DateTime.MinValue;
                     ChaosGifCascadeOverlay.CloseActive(); ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
                     ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = path =>
+                    {
+                        using var stream = File.OpenRead(path);
+                        reading.TrySetResult();
+                        release.Wait();
+                    };
                     w = new EmiDeskWindow(); w.Show(); Dispatcher.UIThread.RunJobs();
                     w.FireRainOffer(EmiLineEngine.FromJson(Lines), "m");
                     Assert.False(w.RainAskLive);
@@ -106,6 +117,9 @@ public sealed class EmiRainReviewTests
                     Assert.NotNull(EmiGifRain.LastPick);
                     await EmiGifRain.LastPick!; Dispatcher.UIThread.RunJobs();
                     Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                    rain = ChaosGifCascadeOverlay.Active;
+                    await reading.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    Assert.False(rain!.PendingDecodes.IsCompleted);
                     EmiGifRain.Stop();
                     w.FireRainOffer(EmiLineEngine.FromJson(Lines), "m");
                     Assert.True(w.RainAskLive);
@@ -132,7 +146,12 @@ public sealed class EmiRainReviewTests
                 finally
                 {
                     ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+                    rain ??= ChaosGifCascadeOverlay.Active;
                     w?.ShutDown(); EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
+                    release.Set();
+                    if (rain != null) await rain.PendingDecodes;
+                    Dispatcher.UIThread.RunJobs();
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = oldBeforeDecode;
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false; ChaosGifCascadeOverlay.ManualFramesForTests = false;
                     CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.Current.EmiDeskOffers = oldOffers; CoreSettings.Current.EmiDeskGlass = oldGlass; EmiState.Current.BedtimeUntil = oldBedtime;
                 }
