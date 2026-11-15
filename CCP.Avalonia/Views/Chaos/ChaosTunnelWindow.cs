@@ -17,7 +17,7 @@ internal sealed class ChaosTunnelWindow : Window
 {
     internal static ChaosTunnelWindow? Active { get; private set; }
     internal static Func<bool> CanOpen = () => WebHost.IsAvailable;
-    internal static Func<Window, bool> Sink = X11Overlay.Sink;
+    internal static Func<Window, bool> Sink = X11Overlay.Sink; internal static Action<Window> PreventActivation = Win32OptionsDismiss.PreventActivation;
     internal static Func<Window?> MainWindow = () => (global::Avalonia.Application.Current?.ApplicationLifetime
         as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
     internal static Func<Window, Window, bool> Guard = X11Overlay.RestackBelow;
@@ -72,7 +72,7 @@ internal sealed class ChaosTunnelWindow : Window
                 Active = w;
                 var url = new Uri(WebAssetServer.Shared.Url("tunnel/index.html"));
                 w.Web.AllowNavigation = u => u.Scheme == url.Scheme && u.Host == url.Host && u.Port == url.Port;
-                w.Show();
+                PreventActivation(w); w.Show(); // WPF ChaosTunnelService.cs:199,557-565
                 // Wayland offers no client-controlled stacking; do not cover unpinned game chrome.
                 if (!Sink(w) && !CoreSettings.Current.ChaosPinOnTop) { CloseActive(); return; }
                 w._timeout.Start();

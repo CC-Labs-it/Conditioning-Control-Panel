@@ -40,9 +40,9 @@ public class ChaosTunnelWindowTests
             var settings = CoreSettings.Current;
             var enabled = settings.ChaosTunnelEnabled;
             var pinned = settings.ChaosPinOnTop;
-            var canOpen = ChaosTunnelWindow.CanOpen;
+            var canOpen = ChaosTunnelWindow.CanOpen; var prevent = ChaosTunnelWindow.PreventActivation; int passive = 0;
             try {
-                ChaosTunnelWindow.CanOpen = () => true;
+                ChaosTunnelWindow.PreventActivation = w => { Assert.False(w.IsVisible); passive++; }; ChaosTunnelWindow.CanOpen = () => true;
                 settings.ChaosPinOnTop = true;
                 settings.ChaosTunnelEnabled = false;
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
@@ -59,7 +59,7 @@ public class ChaosTunnelWindowTests
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
                 ChaosRunHost.BeginRun();
                 var tunnel = Assert.IsType<ChaosTunnelWindow>(ChaosTunnelWindow.Active);
-                Assert.False(tunnel.Topmost);
+                Assert.Equal(3, passive); Assert.Equal((Action<global::Avalonia.Controls.Window>)Win32OptionsDismiss.PreventActivation, prevent); var style = Win32OptionsDismiss.PassiveStyle(0); Assert.Equal(0u, style & (Win32Overlay.WsExTransparent | Win32Overlay.WsExLayered)); Assert.NotEqual(0u, style & Win32Overlay.WsExNoActivate); Assert.False(tunnel.Topmost);
                 Assert.True(ChaosRunHost.Hud!.Topmost);
                 var scripts = new List<string>();
                 tunnel.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
@@ -89,7 +89,7 @@ public class ChaosTunnelWindowTests
             }
             finally {
                 ChaosRunHost.ForceShutdown();
-                ChaosTunnelWindow.CanOpen = canOpen;
+                ChaosTunnelWindow.PreventActivation = prevent; ChaosTunnelWindow.CanOpen = canOpen;
                 settings.ChaosTunnelEnabled = enabled;
                 settings.ChaosPinOnTop = pinned;
             }
