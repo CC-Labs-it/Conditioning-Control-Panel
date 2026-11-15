@@ -54,6 +54,17 @@ internal static class BarkHead
     // WPF BarkService.cs:715, :795-804, :822-840, :876-894. Preserve context and event order.
     internal static void WireSources(BarkEngine e)
     {
+        // WPF BarkService.cs:656-674: keep the lost interval until FaceFound is evaluated.
+        var webcam = WebcamTracker.Instance;
+        Wire<Action>(h => webcam.OnBlink += h, h => webcam.OnBlink -= h,
+            () => { e.RegisterBlink(); e.Raise("Blink", c => c.Set("blink_count", e.BlinkCount)); });
+        Wire<Action>(h => webcam.OnMouthOpen += h, h => webcam.OnMouthOpen -= h, () => e.Raise("MouthOpen"));
+        Wire<Action>(h => webcam.OnTongueOut += h, h => webcam.OnTongueOut -= h, () => e.Raise("TongueOut"));
+        Wire<Action<global::Avalonia.Point>>(h => webcam.OnLongStare += h, h => webcam.OnLongStare -= h, _ => e.Raise("LongStare"));
+        Wire<Action>(h => webcam.OnFaceLost += h, h => webcam.OnFaceLost -= h, () => { e.FaceLost(); e.Raise("FaceLost"); });
+        Wire<Action>(h => webcam.OnFaceFound += h, h => webcam.OnFaceFound -= h, () => { e.Raise("FaceFound"); e.FaceFound(); });
+        Wire<Action>(h => webcam.StateChanged += h, h => webcam.StateChanged -= h,
+            () => e.Raise("TrackingStateChanged", c => c.Set("state", webcam.State.ToString())));
         Wire<Action<int>>(h => ProgressionBank.LevelUp += h, h => ProgressionBank.LevelUp -= h,
             level => e.Raise("LevelUp", c => c.Set("level", level)));
         Wire<Action<double, string>>(h => ProgressionBank.Awarded += h, h => ProgressionBank.Awarded -= h,
@@ -116,6 +127,7 @@ internal static class BarkHead
             ? svc : App.WindowAwareness.CurrentDetectedName;
         e.LiveField = field => field switch
         {
+            "webcam_running" => WebcamTracker.Instance.IsRunning,
             "video_playing" => CoreEngine.Video?.IsPlaying == true,
             // WPF ResolveField :1446: the free collection's 100%, the ceiling the tab shows.
             "achievements_all_unlocked" => App.Achievements is { } a && a.GetTotalCount(false) is var total

@@ -242,6 +242,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Tests: what a classified frame publishes, without a face in front of a camera.</summary>
         internal void RaiseGazeSideForTest(GazeSide side) => OnGazeSide?.Invoke(side);
         internal void RaiseMouthForTest() => OnMouthOpen?.Invoke();
+        internal void RaiseTongueForTest() => OnTongueOut?.Invoke();
+        internal void RaiseLongStareForTest() => OnLongStare?.Invoke(default);
+        internal void RaiseFaceLostForTest() => OnFaceLost?.Invoke();
+        internal void RaiseFaceFoundForTest() => OnFaceFound?.Invoke();
+        internal void RaiseStateForTest() => StateChanged?.Invoke();
         internal void RaiseBlinkForTest() => OnBlink?.Invoke();
         internal void RaiseGazeForTest(double x, double y) => OnGazeMove?.Invoke(new ScreenPoint(x, y));
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
