@@ -63,6 +63,26 @@ namespace ConditioningControlPanel.Services.Super
         private readonly double _fs, _k, _ppd;
         private MotionLevel _motion = MotionLevel.Full;
         private double _shake;
+        // The option box (SuperCore.ScrawlOptions), set by the service every frame. Defaults = as shipped.
+        private double _life = ScrawlRules.StampLife, _slamShake = 1;
+        private int _cap = ScrawlRules.StampCap;
+
+        /// <summary>
+        /// The option box, read live by the service: how long a wall stamp stays (s), how many
+        /// stamps the walls hold, and the slam's shake multiplier. A lower cap drops the oldest at once.
+        /// </summary>
+        public void Configure(double stampLife, int stampCap, double slamShake)
+        {
+            _life = Math.Max(0.5, stampLife);
+            _slamShake = Math.Max(0, slamShake);
+            int cap = Math.Max(1, stampCap);
+            if (cap == _cap) return;
+            _cap = cap;
+            TrimToCap();
+        }
+
+        /// <summary>Wall stamp life in seconds (tests).</summary>
+        internal double StampLife => _life;
 
         /// <summary>The shake offset for this frame, in DIP. The service moves the windows' canvas by it.</summary>
         public double ShakeX { get; private set; }
@@ -125,7 +145,7 @@ namespace ConditioningControlPanel.Services.Super
         /// <summary>A slammed word arrived at the centre: the huge stamp, the shockwave, the shake, every stamp flares.</summary>
         public void SlamLanded(string word, double x, double y, double screenWidth)
         {
-            _shake = ScrawlRules.ShakeSlam;
+            _shake = ScrawlRules.ShakeSlam * _slamShake;
             foreach (var s in _stamps) if (!s.Slam) s.Pulse = 0;
             AddStamp(word, new StampPose(x, y, -0.14), ScrawlRules.SlamStampScale, 1, gold: false, slam: true,
                 ScrawlRules.SlamDots, 2.2, 4.4, 0.6);
@@ -145,7 +165,7 @@ namespace ConditioningControlPanel.Services.Super
                 s.Age += dt;
                 if (s.Pulse >= 0) s.Pulse = s.Pulse + dt > ScrawlRules.PulseLife ? -1 : s.Pulse + dt;
                 if (!s.Slam && !s.Splatted && s.Age >= ScrawlRules.ContactTime(false)) { s.Splatted = true; Splat(s); }
-                if (s.Age >=(s.Slam ? ScrawlRules.SlamStampLife : ScrawlRules.StampLife)) _stamps.RemoveAt(i);
+                if (s.Age >= (s.Slam ? ScrawlRules.SlamStampLife : _life)) _stamps.RemoveAt(i);
             }
             for (int i = _glows.Count - 1; i >= 0; i--)
             {
@@ -184,7 +204,7 @@ namespace ConditioningControlPanel.Services.Super
         {
             foreach (var s in _stamps)
             {
-                double life = s.Slam ? ScrawlRules.SlamStampLife : ScrawlRules.StampLife;
+                double life = s.Slam ? ScrawlRules.SlamStampLife : _life;
                 bool leftover = !s.Slam;
                 // Leftovers hold, then let go (ease-in); the short-lived slam stamp keeps the mockup's linear fade.
                 double al = leftover ? ScrawlRules.LeftoverAlpha(s.Age, life, s.Pulse) : ScrawlRules.StampAlpha(s.Age, life, s.Pulse);
@@ -353,10 +373,17 @@ namespace ConditioningControlPanel.Services.Super
                 HalfW = ft.Width / 2, HalfH = ft.Height / 2, Rot = pose.Rotation, Phase = _rng.NextDouble() * Math.PI * 2,
                 Drips = slam ? Array.Empty<double>() : MakeDrips(),
             });
-            if (!slam && _stamps.Count > ScrawlRules.StampCap)
+            if (!slam) TrimToCap();
+        }
+
+        /// <summary>Past the cap, the oldest wall stamps go first. The slam stamp is never dropped.</summary>
+        private void TrimToCap()
+        {
+            while (_stamps.Count > _cap)
             {
                 int oldest = _stamps.FindIndex(s => !s.Slam);
-                if (oldest >= 0) _stamps.RemoveAt(oldest);
+                if (oldest < 0) break;
+                _stamps.RemoveAt(oldest);
             }
         }
 

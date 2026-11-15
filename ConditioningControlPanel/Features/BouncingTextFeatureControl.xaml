@@ -314,8 +314,62 @@
                     <Button Content="{loc:Str btn_edit_phrases}" Style="{DynamicResource OutlineButton}"
                             Click="BtnEditPhrases_Click"/>
 
-                    <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                    <ctl:SuperBox x:Name="SuperBoxMain" Effect="Scrawl"/>
+                    <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try.
+                         Scrawl's own rows, shown while Scrawl is lit: Features/BouncingTextFeatureControl.Scrawl.cs. -->
+                    <ctl:SuperBox x:Name="SuperBoxMain" Effect="Scrawl">
+                        <StackPanel x:Name="ScrawlRows" Visibility="Collapsed"
+                                    Loaded="ScrawlRows_Loaded" Unloaded="ScrawlRows_Unloaded">
+                            <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_scrawl_life}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str super_scrawl_life}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <Slider Grid.Column="1" x:Name="SliderScrawlLife" Minimum="3" Maximum="60" Value="14"
+                                        SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center" Margin="10,0"
+                                        ValueChanged="SliderScrawlLife_Changed"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtScrawlLife" Text="14s" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </Grid>
+                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_scrawl_cap}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str super_scrawl_cap}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <Slider Grid.Column="1" x:Name="SliderScrawlCap" Minimum="6" Maximum="80" Value="44"
+                                        SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center" Margin="10,0"
+                                        ValueChanged="SliderScrawlCap_Changed"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtScrawlCap" Text="44" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </Grid>
+                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_scrawl_slam}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="56"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str super_scrawl_slam}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <Slider Grid.Column="1" x:Name="SliderScrawlSlam" Minimum="0" Maximum="200" Value="100"
+                                        SmallChange="25" LargeChange="25" TickFrequency="25" IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center" Margin="10,0"
+                                        ValueChanged="SliderScrawlSlam_Changed"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtScrawlSlam" Text="100%" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                           FontSize="13" FontWeight="Bold"/>
+                            </Grid>
+                        </StackPanel>
+                    </ctl:SuperBox>
                 </StackPanel>
 
                 <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its

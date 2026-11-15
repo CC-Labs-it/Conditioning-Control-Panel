@@ -30,7 +30,11 @@ public static class FrothRules
 
     /// <summary>Areas add, so two equal bubbles make one about 1.41 times as wide.</summary>
     public static double MergedRadius(double ar, double br, double freshRadius)
-        => Math.Min(freshRadius * MaxGrow, Math.Sqrt(ar * ar + br * br));
+        => MergedRadius(ar, br, freshRadius, MaxGrow);
+
+    /// <summary>The same, with the player's own size cap (<see cref="FrothOptions.ClampMaxSize"/>). Size never changes pay.</summary>
+    public static double MergedRadius(double ar, double br, double freshRadius, double maxGrow)
+        => Math.Min(freshRadius * maxGrow, Math.Sqrt(ar * ar + br * br));
 
     /// <summary>The merged bubble sits at the area-weighted middle of the two.</summary>
     public static (double X, double Y) MergedCentre(double ax, double ay, double ar, double bx, double by, double br)

@@ -972,6 +972,7 @@ public class BouncingTextService : IDisposable
     // ---- Super Scrawl: wall stamps, corner stamps and the click slam (Services/Super/ScrawlRules.cs) ----
 
     private Models.MotionLevel _scrawlMotion = Models.MotionLevel.Full;
+    private int _scrawlSlam = SuperCore.ScrawlOptions.SlamDefault;   // the option box's slam strength, read each frame
     private string _scrawlFont = "";
     private int _scrawlSize;
     private double _scrawlDpi = 1.0;
@@ -1033,9 +1034,18 @@ public class BouncingTextService : IDisposable
     {
         var scene = _scrawl!;
         _scrawlMotion = MotionFx.Level;
-        scene.Tick(dt, _scrawlMotion, App.Settings?.Current?.LockdownPhotosafe == true);
+        // The option box (SuperCore.ScrawlOptions), read live so a slider moves the walls at once.
+        var so = App.Settings?.Current;
+        _scrawlSlam = SuperCore.ScrawlOptions.ClampSlam(so?.ScrawlSlam ?? SuperCore.ScrawlOptions.SlamDefault);
+        scene.Configure(SuperCore.ScrawlOptions.ClampStampSeconds(so?.ScrawlStampSeconds ?? SuperCore.ScrawlOptions.StampSecondsDefault),
+            SuperCore.ScrawlOptions.ClampStampCap(so?.ScrawlStampCap ?? SuperCore.ScrawlOptions.StampCapDefault),
+            SuperCore.ScrawlOptions.ShakeFactor(_scrawlSlam, Safety.GentleVisuals.On));
+        scene.Tick(dt, _scrawlMotion, so?.LockdownPhotosafe == true);
         bool live = scene.IsLive;
         foreach (var w in _windows) w.UpdateScrawl(scene.ShakeX, scene.ShakeY, live);
+
+        // Slam off: no hit boxes, so the hook never takes a click.
+        if (!SuperCore.ScrawlOptions.SlamOn(_scrawlSlam)) { _scrawlHitCount = 0; return; }
 
         // The hit boxes the mouse hook reads, in physical px, written in place (no per-frame allocation)
         int n = Math.Min(_logos.Count, _scrawlHitPx.Length / 4);
@@ -1071,7 +1081,7 @@ public class BouncingTextService : IDisposable
 
     private void BeginSlam(int idx)
     {
-        if (_scrawl == null || !_isRunning || idx >= _logos.Count) return;
+        if (_scrawl == null || !_isRunning || idx >= _logos.Count || !SuperCore.ScrawlOptions.SlamOn(_scrawlSlam)) return;
         var l = _logos[idx];
         if (l.SlamT >= 0) return;
         (l.SlamX, l.SlamY, l.SlamW) = MonitorCentreAt(l.PosX + l.TextWidth / 2, l.PosY + l.TextHeight / 2);
@@ -1129,8 +1139,9 @@ public class BouncingTextService : IDisposable
                 if (o == l || o.SlamT >= 0) continue;
                 var (dvx, dvy) = Super.ScrawlRules.Knock(o.PosX + o.TextWidth / 2, o.PosY + o.TextHeight / 2,
                     l.SlamX, l.SlamY, o.Cruise, _scrawlMotion);
-                o.VelX += dvx;
-                o.VelY += dvy;
+                double knock = SuperCore.ScrawlOptions.KnockFactor(_scrawlSlam);
+                o.VelX += dvx * knock;
+                o.VelY += dvy * knock;
             }
             // Leave on a fresh diagonal at its own cruise speed, DVD style
             double d = l.Cruise / Math.Sqrt(2);

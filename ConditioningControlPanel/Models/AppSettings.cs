@@ -10473,6 +10473,80 @@ namespace ConditioningControlPanel.Models
             set { _afterglowOnly = value; OnPropertyChanged(); }
         }
 
+        // Super option boxes, lane C (owner 2026-11-15). Clamps and defaults: CCP.Core/Super/*Options.cs.
+
+        // Scrawl: how long a wall stamp stays, in seconds.
+        private int _scrawlStampSeconds = SuperCore.ScrawlOptions.StampSecondsDefault;
+        public int ScrawlStampSeconds
+        {
+            get => _scrawlStampSeconds;
+            set { _scrawlStampSeconds = SuperCore.ScrawlOptions.ClampStampSeconds(value); OnPropertyChanged(); }
+        }
+
+        // Scrawl: the most stamps the walls hold at once.
+        private int _scrawlStampCap = SuperCore.ScrawlOptions.StampCapDefault;
+        public int ScrawlStampCap
+        {
+            get => _scrawlStampCap;
+            set { _scrawlStampCap = SuperCore.ScrawlOptions.ClampStampCap(value); OnPropertyChanged(); }
+        }
+
+        // Scrawl: slam strength in percent; 0 = a click on a word is never taken.
+        private int _scrawlSlam = SuperCore.ScrawlOptions.SlamDefault;
+        public int ScrawlSlam
+        {
+            get => _scrawlSlam;
+            set { _scrawlSlam = SuperCore.ScrawlOptions.ClampSlam(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): how many ghosts make a line.
+        private int _afterglowLineWords = SuperCore.AfterglowLineOptions.WordsDefault;
+        public int AfterglowLineWords
+        {
+            get => _afterglowLineWords;
+            set { _afterglowLineWords = SuperCore.AfterglowLineOptions.ClampWords(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): how long the finished line stays lit, in seconds.
+        private double _afterglowLineHold = SuperCore.AfterglowLineOptions.HoldDefault;
+        public double AfterglowLineHold
+        {
+            get => _afterglowLineHold;
+            set { _afterglowLineHold = SuperCore.AfterglowLineOptions.ClampHold(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): how bright a resting ghost is, in percent.
+        private int _afterglowGhostOpacity = SuperCore.AfterglowLineOptions.GhostDefault;
+        public int AfterglowGhostOpacity
+        {
+            get => _afterglowGhostOpacity;
+            set { _afterglowGhostOpacity = SuperCore.AfterglowLineOptions.ClampGhost(value); OnPropertyChanged(); }
+        }
+
+        // Froth: the biggest a merged bubble may grow, in sizes of a fresh one. Never changes pay.
+        private double _frothMaxSize = SuperCore.FrothOptions.MaxSizeDefault;
+        public double FrothMaxSize
+        {
+            get => _frothMaxSize;
+            set { _frothMaxSize = SuperCore.FrothOptions.ClampMaxSize(value); OnPropertyChanged(); }
+        }
+
+        // Froth: how far a big pop sets off its neighbours, in percent; 0 = no chains.
+        private int _frothPopReach = SuperCore.FrothOptions.ReachDefault;
+        public int FrothPopReach
+        {
+            get => _frothPopReach;
+            set { _frothPopReach = SuperCore.FrothOptions.ClampReach(value); OnPropertyChanged(); }
+        }
+
+        // Froth: how hard the cursor pushes bubbles, in percent; 0 = never.
+        private int _frothCursorPush = SuperCore.FrothOptions.PushDefault;
+        public int FrothCursorPush
+        {
+            get => _frothCursorPush;
+            set { _frothCursorPush = SuperCore.FrothOptions.ClampPush(value); OnPropertyChanged(); }
+        }
+
         private int _superPreviewUsedWeek = -1;
         /// <summary>
         /// Week index (<c>SuperPreviewRule.WeekIndex</c>, Monday UTC weeks) of the last weekly free
