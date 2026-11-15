@@ -16,6 +16,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class BubbleAvatarEggTests
 {
     private sealed class Hit : Random { public override int Next(int maxValue) => 0; }
