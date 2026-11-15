@@ -138,6 +138,67 @@ public sealed class FirstShowPopTests(ITestOutputHelper output)
         finally { host.Content = null; host.Close(); }
     });
 
+    [Fact]
+    public Task ShowGlassAndFlashHaveSoftPinkGlows() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        LifecycleTestPump.Setup();
+        var service = new SettingsService();
+        var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        var path = Path.Combine(Path.GetTempPath(), $"first-show-{Guid.NewGuid():N}.png");
+        using (var solid = new SKBitmap(128, 80))
+        using (var canvas = new SKCanvas(solid))
+        {
+            canvas.Clear(new SKColor(0, 255, 0));
+            using var data = solid.Encode(SKEncodedImageFormat.Png, 100);
+            using var file = File.Create(path); data.SaveTo(file);
+        }
+        var fx = new FirstShowEffects(_ => { }, new Random(7)) { Width = 1600, Height = 900, DrawSparks = false, DrawWords = false, Particles = () => false, PopParticles = () => false };
+        Window? host = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            await fx.LoadAsync(new[] { path, path, path, path });
+            fx.Tick(19.5, 0); fx.Tick(20, .1);
+            var bubble = Assert.Single(fx.LiveBubbles);
+            var flash = Assert.Single(fx.LiveFlashes);
+            host = new Window { Width = fx.Width, Height = fx.Height, Content = fx }; host.Show(); Dispatcher.UIThread.RunJobs();
+            using var shown = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
+            fx.DrawBubbleSprite = false;
+            using var noSprite = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
+            fx.DrawBubbleSprite = true;
+            fx.Pop(bubble.X, bubble.Y);
+            using var without = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
+            SKColor At(SKBitmap image, double x, double y) => image.GetPixel((int)x, (int)y);
+            var halo = At(shown, bubble.X + bubble.W / 2 + 3, bubble.Y);
+            var plain = At(without, bubble.X + bubble.W / 2 + 3, bubble.Y);
+            Assert.True(halo.Red > plain.Red + 3 && halo.Red - plain.Red > halo.Green - plain.Green, $"halo {halo}, base {plain}");
+            var rim = At(shown, bubble.X - bubble.W * .28, bubble.Y - bubble.W * .20);
+            var bare = At(noSprite, bubble.X - bubble.W * .28, bubble.Y - bubble.W * .20);
+            Assert.True(rim.Red > bare.Red + 25 && rim.Blue > bare.Blue + 25, $"sprite rim {rim}, without sprite {bare}");
+            var face = At(shown, bubble.X, bubble.Y);
+            var edge = At(shown, bubble.X + bubble.W * .35, bubble.Y);
+            var shine = At(shown, bubble.X - bubble.W * .15, bubble.Y - bubble.W * .15);
+            var shade = At(shown, bubble.X + bubble.W * .15, bubble.Y + bubble.W * .15);
+            Assert.True(shine.Red > shade.Red + 5, $"shine {shine}, shade {shade}");
+            Assert.True(face.Green > edge.Green + 40, $"face {face}, edge {edge}");
+            var glow = At(shown, flash.Left - 2, flash.Center.Y);
+            var far = At(shown, flash.Left - 25, flash.Center.Y);
+            Assert.True(glow.Red > far.Red + 3 && glow.Red - far.Red > glow.Green - far.Green, $"flash glow {glow}, base {far}");
+            Assert.True(glow.Red < 180, $"hard pink border: {glow}");
+            var inset = At(shown, flash.Left + 2, flash.Center.Y);
+            var picture = At(shown, flash.Left + 12, flash.Center.Y);
+            var corner = At(shown, flash.Left + 5, flash.Top + 5);
+            Assert.True(picture.Green > inset.Green + 50, $"picture {picture}, inset {inset}");
+            Assert.True(picture.Green > corner.Green + 50, $"picture {picture}, corner {corner}");
+        }
+        finally
+        {
+            if (host != null) { host.Content = null; host.Close(); }
+            fx.Dispose(); service.SaveImmediate(); CoreSettings.ServiceProvider = old; File.Delete(path);
+        }
+    });
+
     private static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
     /// <summary>One frame of the whole stage on headless Skia, cropped; the spark field on or off.</summary>
