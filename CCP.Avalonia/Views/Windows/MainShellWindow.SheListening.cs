@@ -383,7 +383,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 cts.Dispose();
                 CalibratingWake = false;
                 tab.BtnSL_Calibrate.IsEnabled = true;
-                RefreshVoiceInputModes(); // re-arm; the spotter rebuilds at the new sensitivity
+                // Re-arm (the spotter rebuilds at the new sensitivity) unless Stop, panic or a mic borrower
+                // cancelled: those own the mic now, and a borrower re-arms when it releases it.
+                if (!cts.IsCancellationRequested) RefreshVoiceInputModes();
                 UpdateMicPill();
             }
         }

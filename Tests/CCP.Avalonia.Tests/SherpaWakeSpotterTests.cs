@@ -319,4 +319,37 @@ public sealed class SherpaWakeCaptureTests
         }
         finally { s.MicConsentGiven = consent; shell.RequestExit(); Directory.Delete(root, true); }
     });
+
+    [Fact]
+    public System.Threading.Tasks.Task MicBorrowerSeesCalibrationTakesMicAtOnceAndOwnsReArm() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(), (_, _, _) => false);
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { WakeSpotterOverride = kws, WakeMicOverride = mic };
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var (consent, ptt) = (s.MicConsentGiven, s.SpeechPushToTalkEnabled);
+        var (premium, speech) = (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider);
+        s.MicConsentGiven = true;
+        try
+        {
+            shell.Show();
+            shell.SL_Calibrate_Click();
+            await Until(() => mic.Feed != null);
+            // Push-to-talk enabled mid-calibration: it would re-arm when calibration ends on its own.
+            (s.SpeechPushToTalkEnabled, ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (true, () => true, () => true);
+            Assert.True(shell.UserDrivenVoiceArmed); // lock card, intake and Deeper speak stand it down
+            shell.StopVoiceInput(); // the borrower's hand-off
+            Assert.Null(mic.Feed); // freed before the borrower opens its own capture
+            await Until(() => !shell.CalibratingWake);
+            Assert.False(shell.PushToTalkArmed); // the borrower still holds the mic
+            shell.RefreshVoiceInputModes(); // the borrower releases it
+            Assert.True(shell.PushToTalkArmed);
+        }
+        finally
+        {
+            (s.MicConsentGiven, s.SpeechPushToTalkEnabled) = (consent, ptt);
+            (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (premium, speech);
+            shell.StopVoiceInput(); shell.RequestExit(); Directory.Delete(root, true);
+        }
+    });
 }

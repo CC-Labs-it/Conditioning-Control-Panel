@@ -180,15 +180,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             using var cap = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cap.CancelAfter(TimeSpan.FromSeconds(40)); // a silent user must not hang the flow
-            using var registration = cap.Token.Register(() => done.TrySetResult(false));
             IDisposable? capture = null;
             void Release()
             {
-                try { capture?.Dispose(); } catch { } finally { capture = null; }
+                try { Interlocked.Exchange(ref capture, null)?.Dispose(); } catch { }
                 bool was;
                 lock (_gate) { was = _listening; _listening = false; }
                 if (was) try { ListeningChanged?.Invoke(this, false); } catch { }
             }
+            // A borrower's StopVoiceInput cancels on its own thread: the mic is free when Cancel returns.
+            using var registration = cap.Token.Register(() => { done.TrySetResult(false); Release(); });
             try
             {
                 if (!done.Task.IsCompleted) capture = mic.Start((bytes, count) => { lock (says) {
