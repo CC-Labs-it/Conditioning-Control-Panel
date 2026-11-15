@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO;
+using IOPath = System.IO.Path;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,6 +14,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Models.Deeper;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -68,19 +71,52 @@ public sealed class DeeperEditorTimelineTests
         return Task.CompletedTask;
     });
 
+    // A settings loader runs temp-file recovery, so polling with one can delete a save in flight.
+    private static int? ReadPublishedTimelineHeight(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return JObject.Parse(reader.ReadToEnd()).Value<int?>("DeeperEditorTimelineHeight");
+        }
+        catch (IOException) { return null; } // Publication may briefly make the file unavailable.
+    }
+
+    [Fact]
+    public void ObservingTimelineHeightDoesNotDeleteAnInFlightSave()
+    {
+        var directory = IOPath.Combine(IOPath.GetTempPath(), "ccp-timeline-read-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var path = IOPath.Combine(directory, "settings.json");
+        var pending = path + ".pending.tmp";
+        try
+        {
+            File.WriteAllText(path, "{\"DeeperEditorTimelineHeight\":160}");
+            File.WriteAllText(pending, "{}");
+            Assert.Equal(160, ReadPublishedTimelineHeight(path));
+            Assert.True(File.Exists(pending));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
     [Fact]
     public Task DraggingTimelineSplitterPersistsHeightForNextEditor() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var oldProvider = CoreSettings.ServiceProvider;
-        var service = new ConditioningControlPanel.Services.SettingsService();
+        var directory = IOPath.Combine(IOPath.GetTempPath(), "ccp-timeline-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var settingsPath = IOPath.Combine(directory, "settings.json");
+        var service = new ConditioningControlPanel.Services.SettingsService(settingsPath);
         CoreSettings.ServiceProvider = () => service;
-        service.Current.DeeperEditorTimelineHeight = 160;
-        service.SaveImmediate();
-        var editor = new DeeperEditorWindow(new Enhancement(), null);
-        DeeperEditorWindow? next = null;
+        DeeperEditorWindow? editor = null, next = null;
         try
         {
+            service.Current.DeeperEditorTimelineHeight = 160;
+            Assert.True(service.TrySaveImmediate());
+            editor = new DeeperEditorWindow(new Enhancement(), null);
             editor.Show(); Dispatcher.UIThread.RunJobs(); editor.UpdateLayout();
             var splitter = editor.TimelineSplitter;
             var start = splitter.TranslatePoint(new Point(splitter.Bounds.Width / 2, 2), editor)!.Value;
@@ -92,11 +128,13 @@ public sealed class DeeperEditorTimelineTests
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
             var deadline = System.Diagnostics.Stopwatch.StartNew();
-            while (new ConditioningControlPanel.Services.SettingsService().Current.DeeperEditorTimelineHeight != saved)
+            while (true)
             {
-                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
+                if (ReadPublishedTimelineHeight(settingsPath) == saved) break;
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "timeline height was not saved");
                 await Task.Delay(50);
             }
+            Assert.Equal(saved, new ConditioningControlPanel.Services.SettingsService(settingsPath).Current.DeeperEditorTimelineHeight);
             editor.ForceClose();
             next = new DeeperEditorWindow(new Enhancement(), null);
             next.Show(); Dispatcher.UIThread.RunJobs();
@@ -104,8 +142,9 @@ public sealed class DeeperEditorTimelineTests
         }
         finally
         {
-            editor.ForceClose(); next?.ForceClose();
+            editor?.ForceClose(); next?.ForceClose();
             service.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
+            Directory.Delete(directory, recursive: true);
         }
     });
 
