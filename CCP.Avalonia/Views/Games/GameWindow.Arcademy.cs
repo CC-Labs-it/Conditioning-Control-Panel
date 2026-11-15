@@ -2,6 +2,7 @@
 // Registration and page init are deliberately left for the host slice.
 using System;
 using Avalonia.Threading;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -34,6 +35,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)message["type"])
             {
+                case "set-setting":
+                    handled = true;
+                    var key = ((string?)message["key"] ?? "").Trim();
+                    var value = message["value"];
+                    var settings = CoreSettings.Current;
+                    object? echo;
+                    switch (key)
+                    {
+                        case "keybinds" when value is JObject binds && binds.ToString(Formatting.None).Length <= 7000:
+                            settings.ArcademyKeybindsJson = binds.ToString(Formatting.None);
+                            echo = binds;
+                            break;
+                        case "audioMute" when value?.Type == JTokenType.Boolean:
+                            settings.ArcademyAudioMute = (bool)value;
+                            echo = settings.ArcademyAudioMute;
+                            break;
+                        default:
+                            return;
+                    }
+                    CoreSettings.Save();
+                    Post(new { type = "setting", key, value = echo });
+                    break;
                 case "ready":
                 case "heartbeat":
                 case "pong":

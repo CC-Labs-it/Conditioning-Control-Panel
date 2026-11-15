@@ -1,12 +1,44 @@
 using System;
 using Avalonia.Threading;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    [Fact]
+    public void Arcademy_Settings_AllowKnownAndRefuseUnknown() => Run((_, _) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("arcademy", "title", "arcademy/index.html"));
+        try
+        {
+            CoreSettings.Current.ArcademyAudioMute = false;
+            CoreSettings.Current.ArcademySettingsJson = "{}";
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"unknown\",\"value\":true}");
+            Assert.Equal("{}", CoreSettings.Current.ArcademySettingsJson);
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"audioMute\",\"value\":true}");
+            Assert.True(CoreSettings.Current.ArcademyAudioMute);
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
+    public void Arcademy_Keybinds_AreStoredAndMalformedInputDoesNotEraseThem() => Run((_, _) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("arcademy", "title", "arcademy/index.html"));
+        try
+        {
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"keybinds\",\"value\":{\"jump\":\"J\"}}");
+            Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"keybinds\",\"value\":\"bad\"}");
+            Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
+        }
+        finally { w.Close(); }
+    });
+
     [Fact]
     public void Arcademy_Heartbeat_UsesClassDeadlineAndStopsOnClose() => Run((_, _) =>
     {
