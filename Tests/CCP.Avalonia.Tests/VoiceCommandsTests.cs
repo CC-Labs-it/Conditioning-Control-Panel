@@ -174,7 +174,7 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
@@ -213,7 +213,7 @@ public sealed class VoiceCommandsTests
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
-    });
+    }, withoutVoiceCapture: true);
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
     /// ships mantras; the WAV says the phrase, so it matches, credits 30 XP and paints the verdict.</summary>
@@ -353,14 +353,28 @@ public sealed class VoiceCommandsTests
         });
 
     // The help row is UI state; no recognition or microphone is exercised by this test.
-    private static Task RunUi(Func<MainShellWindow, Task> body) =>
+    private static Task RunUi(Func<MainShellWindow, Task> body, bool withoutVoiceCapture = false) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
+            var settings = CoreSettings.Current;
+            var savedModes = (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled);
+            var savedPremium = CoreEntitlement.HasPremiumProvider;
+            if (withoutVoiceCapture)
+            {
+                // Inline commands supply their own transcript. A concurrent wake loop can issue another command.
+                (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled) = (false, false);
+                CoreEntitlement.HasPremiumProvider = () => true;
+            }
             var shell = new MainShellWindow();
             shell.Show();
             try { await body(shell); }
-            finally { shell.RequestExit(); }
+            finally
+            {
+                shell.RequestExit();
+                (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled) = savedModes;
+                CoreEntitlement.HasPremiumProvider = savedPremium;
+            }
         });
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
