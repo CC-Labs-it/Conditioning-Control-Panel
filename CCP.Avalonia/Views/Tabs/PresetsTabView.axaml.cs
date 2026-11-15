@@ -375,6 +375,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var lib = SessionLibrary();
             if (lib.GetSession(session.Id) == null) lib.AddNewSession(session, filePath);
             UseSessionManager(lib);
+            SelectSession(lib.GetSession(session.Id) ?? session);
+            ShowDropZoneStatus($"Session loaded: {session.Name}", isError: false);
         }
 
         /// <summary>WPF MainWindow/MainWindow.CompanionAsks.cs:14-30: preserve order and recheck the live rack.</summary>
@@ -392,7 +394,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Session? RevealSession(string sessionId)
         {
             var found = _availableSessions.FirstOrDefault(s => s.Id == sessionId);
-            if (found != null) SelectSession(found);
+            if (found != null)
+            {
+                if (!SessionRackPanel.Children.OfType<Border>().Any(row => (row.Tag as Session)?.Id == sessionId))
+                {
+                    _rackToolbarSyncing = true;
+                    try
+                    {
+                        _rackSourceFilter = RackSourceAll;
+                        _rackDifficulties.Clear();
+                        foreach (SessionDifficulty difficulty in Enum.GetValues<SessionDifficulty>())
+                            _rackDifficulties.Add(difficulty);
+                        _rackSearch = "";
+                        TxtRackSearch.Text = "";
+                        foreach (var chip in RackSourceChips.Children.OfType<ToggleButton>())
+                            chip.IsChecked = (chip.Tag as string) == RackSourceAll;
+                        foreach (var dot in RackDifficultyChips.Children.OfType<ToggleButton>())
+                            dot.IsChecked = true;
+                    }
+                    finally { _rackToolbarSyncing = false; }
+                    if (CoreSettings.HasProvider)
+                    {
+                        CoreSettings.Current.SessionRackSourceFilter = RackSourceAll;
+                        CoreSettings.Save();
+                    }
+                    RepaintSessionRack();
+                }
+                SelectSession(found);
+                SessionRackPanel.Children.OfType<Border>()
+                    .FirstOrDefault(row => (row.Tag as Session)?.Id == sessionId)?.BringIntoView();
+            }
             return found;
         }
 
@@ -1297,9 +1328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             try
             {
-                var lib = SessionLibrary();
-                lib.AddNewSession(session, path);
-                UseSessionManager(lib);
+                RegisterExternallySavedSession(session, path);
             }
             catch (Exception ex)
             {
@@ -1325,9 +1354,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (await PickSessionSavePath(owner, "title_save_as_new_custom_session", edited) is not { } path) return;
                 try
                 {
-                    var lib = SessionLibrary();
-                    lib.AddNewSession(edited, path);
-                    UseSessionManager(lib);
+                    RegisterExternallySavedSession(edited, path);
                 }
                 catch (Exception ex)
                 {
@@ -1422,6 +1449,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var (success, message, session) = lib.ImportSession(filePath);
             if (!success) { ShowDropZoneStatus($"Failed: {message}", isError: true); return; }
             UseSessionManager(lib);
+            if (session != null) SelectSession(session);
             ShowDropZoneStatus($"Session loaded: {session?.Name}", isError: false);
             Serilog.Log.Information("Session imported via drag-drop: {Name}", session?.Name);
         }
