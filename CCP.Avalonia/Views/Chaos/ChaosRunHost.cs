@@ -242,6 +242,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // With a panic already queued, start only after it has run: it usually ends the run, and
             // then nothing (boons, HUD, StartToys) ever starts. Background runs after the panic's Default.
             if (PanicWatchdog.PanicPending) { Dispatcher.UIThread.Post(BeginRun, DispatcherPriority.Background); return; }
+            ChaosTunnelWindow.Open();   // WPF ChaosModeService.cs:519-523
+            _state.PropertyChanged += OnTunnelStateChanged;
+            OnTunnelStateChanged(_state, new System.ComponentModel.PropertyChangedEventArgs(nameof(ChaosRunState.Combo)));
+            OnTunnelStateChanged(_state, new System.ComponentModel.PropertyChangedEventArgs(nameof(ChaosRunState.ActIndex)));
             _heavyUntilUtc = DateTime.MinValue;   // WPF ChaosModeService.cs:405
             HookRunVideo();   // WPF ChaosModeService.cs:504
             _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
@@ -778,6 +782,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
         }
 
+        private static void OnTunnelStateChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            var state = _state;
+            var tunnel = ChaosTunnelWindow.Active;
+            if (state == null || tunnel == null) return;
+            if (e.PropertyName == nameof(ChaosRunState.Combo))
+                tunnel.Post(new { type = "streak", combo = state.Combo, mult = state.ComboMult });
+            else if (e.PropertyName == nameof(ChaosRunState.ActIndex))
+                tunnel.Post(new { type = "zone-hint", depth = state.ActIndex, intensity = Math.Min(1.0, (state.ActIndex - 1) / 5.0) });
+        }
+
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
         private static MandatoryVideoScheduler? _runVideo;
 
@@ -1249,6 +1264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosTunnelWindow.CloseActive();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
@@ -1303,6 +1319,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void EndRun()
         {
             if (!_spawning || _state == null) return;
+            ChaosTunnelWindow.CloseActive();
             bool ranFullCourse = _state.ElapsedSec >= _state.RunDurationSec;
             if (ranFullCourse) AwardLoopTip();   // a quit forfeits it
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
@@ -1561,6 +1578,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer = null;
             _hud = null;
             _overlay = null;
+            if (_state != null) _state.PropertyChanged -= OnTunnelStateChanged;
+            ChaosTunnelWindow.CloseActive();
             _state = null;
             UnhookRunVideo();   // WPF CleanupAfterRun :3318
             _heavyUntilUtc = DateTime.MinValue;
