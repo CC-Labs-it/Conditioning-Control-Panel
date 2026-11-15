@@ -18,6 +18,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)] // Leash service and the current ask are process-wide.
 public sealed class LeashIncomingAskTests
 {
     private const string First = "0123456789abcdef", Second = "fedcba9876543210";
@@ -61,6 +62,34 @@ public sealed class LeashIncomingAskTests
                 second.Card.Dismiss();
                 Dispatcher.UIThread.RunJobs();
                 shell.RebindLeashAsks();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void ManuallyShownOfferBeforeServiceRebindIsNotShownAgain() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno")));
+            shell.Show();
+            LeashHead.Service = replacement;
+            try
+            {
+                var offer = Assert.Single(replacement.Snapshot.Offers);
+                var ask = LeashAskWindow.Open(offer, () => replacement, shell)!;
+                Assert.Same(ask, LeashAskWindow.Current);
+                ask.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                shell.RebindLeashAsks();
+                Dispatcher.UIThread.RunJobs();
                 Assert.Null(LeashAskWindow.Current);
             }
             finally

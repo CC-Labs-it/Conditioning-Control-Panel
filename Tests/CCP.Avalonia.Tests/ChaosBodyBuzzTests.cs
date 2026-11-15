@@ -40,6 +40,16 @@ public class ChaosBodyBuzzTests
         }
     }
 
+    [Fact]
+    public Task ShockwaveStartsWithACleanSharedField() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        BubbleOverlay.EndChaos();
+        BubbleOverlay.Stop();
+        BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true });
+        try { await ShockwaveSelectsRendererAndCancelsHops(false); }
+        finally { BubbleOverlay.EndChaos(); BubbleOverlay.Stop(); }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -66,6 +76,9 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
+            // BeginChaos intentionally preserves an active ambient field. This test owns its field.
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
