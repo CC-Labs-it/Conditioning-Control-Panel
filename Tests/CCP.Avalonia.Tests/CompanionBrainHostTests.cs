@@ -15,6 +15,7 @@ using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class CompanionBrainHostTests
 {
     [Fact]
@@ -28,6 +29,9 @@ public sealed class CompanionBrainHostTests
         var previous = property.GetValue(null);
         var entitlement = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
         var recall = ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled;
+        var eventField = typeof(ConditioningControlPanel.Services.AIService.LocalAiService)
+            .GetField("PersistentMemoryRecalled", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var handlers = eventField.GetValue(null);
         var dir = Directory.CreateTempSubdirectory("ccp-brain-recall-");
         var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
         try
@@ -37,17 +41,24 @@ public sealed class CompanionBrainHostTests
             AvApp.SeedCompanionRecall(); // repeated composition must not add listeners
             var entitlementChecks = 0;
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => { entitlementChecks++; return false; };
+            // Other UI work may independently check entitlement while the dispatcher is drained.
+            bool unrelatedRan = false;
+            Dispatcher.UIThread.Post(() => { _ = ConditioningControlPanel.CoreEntitlement.HasPremium; unrelatedRan = true; });
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
-            Dispatcher.UIThread.RunJobs();
             Assert.False(engine.Progress.IsUnlocked("she_remembers"));
             Assert.Equal(1, entitlementChecks); // each subscribed handler attempts the denied unlock
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(unrelatedRan);
+            Assert.False(engine.Progress.IsUnlocked("she_remembers"));
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
+            Assert.True(engine.Progress.IsUnlocked("she_remembers")); // UI-thread recall is immediate.
             Dispatcher.UIThread.RunJobs();
             Assert.True(engine.Progress.IsUnlocked("she_remembers"));
         }
         finally
         {
+            eventField.SetValue(null, handlers);
             property.SetValue(null, previous);
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = entitlement;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled = recall;
@@ -248,5 +259,46 @@ public sealed class CompanionBrainHostTests
             CompanionAskService.StartSession = start;
         }
         return Task.CompletedTask;
+    });
+}
+
+[Collection(RunsAloneCollection.Name)]
+public sealed class CompanionRecallDispatchTests
+{
+    [Fact]
+    public Task BackgroundRecallUnlocksOnTheUiThread() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var property = typeof(AvApp).GetProperty("Achievements", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var previous = property.GetValue(null);
+        var entitlement = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
+        var recall = ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled;
+        var eventField = typeof(ConditioningControlPanel.Services.AIService.LocalAiService)
+            .GetField("PersistentMemoryRecalled", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var handlers = eventField.GetValue(null);
+        var dir = Directory.CreateTempSubdirectory("ccp-background-recall-");
+        var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
+        var unlocks = new System.Collections.Generic.List<bool>();
+        engine.Unlocked += (_, achievement) =>
+        {
+            if (achievement.Id == "she_remembers") unlocks.Add(Dispatcher.UIThread.CheckAccess());
+        };
+        try
+        {
+            property.SetValue(null, engine);
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
+            AvApp.SeedCompanionRecall();
+            await Task.Run(() => ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!());
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(engine.Progress.IsUnlocked("she_remembers"));
+            Assert.Equal(new[] { true }, unlocks);
+        }
+        finally
+        {
+            eventField.SetValue(null, handlers);
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled = recall;
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = entitlement;
+            property.SetValue(null, previous);
+            dir.Delete(true);
+        }
     });
 }
