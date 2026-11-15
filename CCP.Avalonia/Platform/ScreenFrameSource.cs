@@ -113,7 +113,7 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
         {
             // A call still pending (even past an earlier scan's timeout) skips this scan rather than stacking requests.
             if (_pending is { IsCompleted: false }) return ScreenFrameResult.Unavailable;
-            call = _pending = ShootAsync();
+            call = _pending = ShootAsync(cancellationToken);
         }
         try
         {
@@ -126,12 +126,13 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
         catch (Exception ex) { Serilog.Log.Debug(ex, "Screen capture unavailable"); return ScreenFrameResult.Unavailable; }
     }
 
-    // Not cancelled by the scan: a late answer must still have its file deleted.
-    private async Task<(int, int, byte[])?> ShootAsync()
+    // Stopping the scan closes the portal request (WPF captures only inside the active scan, ScreenOcrService.cs:128,212);
+    // the per-scan timeout does not, and any answer that still arrives has its file deleted here.
+    private async Task<(int, int, byte[])?> ShootAsync(CancellationToken cancellation)
     {
         try
         {
-            var (code, results) = await _request(CancellationToken.None).ConfigureAwait(false);
+            var (code, results) = await _request(cancellation).ConfigureAwait(false);
             var path = FilePath(results);
             try
             {
@@ -145,6 +146,7 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
             }
             finally { if (path != null) try { File.Delete(path); } catch { } }
         }
+        catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
             Serilog.Log.Debug("Screen OCR: screenshot portal call failed ({Type})", ex.GetType().Name);
