@@ -466,6 +466,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 RebuildRegionVisuals();
                 RebuildHapticVisuals();
                 RebuildEffectVisuals();
+                RebuildRuleVisuals();
                 RefreshRulesList();
                 ScheduleValidation();
             }

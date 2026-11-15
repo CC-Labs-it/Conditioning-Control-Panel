@@ -94,26 +94,81 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
-    public Task ParkedRulesShowExplanatoryPinsAndBandRulesDoNot() => Run((w, model) =>
+    public Task ParkedRulesAndTimeRulesOnBandsShowPins() => Run((w, model) =>
     {
         Set(w, "_totalSeconds", 30d);
         var past = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 40 } };
         var gone = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = "deleted" };
         var band = new Region { Id = "band", Start = 1, End = 5 };
         var onBand = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 }, RegionConstraint = band.Id };
+        var pastOnBand = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 50 }, RegionConstraint = band.Id };
+        var gazeOnBand = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = band.Id };
         model.Regions.Add(band);
         model.Rules.Add(past);
         model.Rules.Add(gone);
         model.Rules.Add(onBand);
+        model.Rules.Add(pastOnBand);
+        model.Rules.Add(gazeOnBand);
         Call(w, "RebuildRuleVisuals");
         var pins = w.TimelineCanvas.Children.OfType<Control>().Where(c => c.Tag is EnhancementRule).ToArray();
-        Assert.Equal(2, pins.Length);
+        Assert.Equal(4, pins.Length);
         var pastPin = Assert.Single(pins, c => ReferenceEquals(c.Tag, past));
         var gonePin = Assert.Single(pins, c => ReferenceEquals(c.Tag, gone));
         Assert.Equal(16, pastPin.Height);
         Assert.Contains("past the end of the media", (string)ToolTip.GetTip(pastPin)!);
         Assert.Contains("its region is gone", (string)ToolTip.GetTip(gonePin)!);
-        Assert.DoesNotContain(pins, c => ReferenceEquals(c.Tag, onBand));
+        Assert.Contains(pins, c => ReferenceEquals(c.Tag, onBand));
+        Assert.Contains("past the end of the media", (string)ToolTip.GetTip(Assert.Single(pins, c => ReferenceEquals(c.Tag, pastOnBand)))!);
+        Assert.DoesNotContain(pins, c => ReferenceEquals(c.Tag, gazeOnBand));
+    });
+
+    [Fact]
+    public Task RegionChoiceRefreshesParkedRulePin() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        model.Regions.Add(new Region { Id = "band", Start = 1, End = 5 });
+        var rule = new EnhancementRule { Trigger = new GazeTargetTrigger() };
+        model.Rules.Add(rule);
+        Call(w, "RebuildRuleVisuals");
+        Call(w, "SelectRule", rule);
+        Assert.Contains(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        w.CmbRuleRegion.SelectedIndex = 1;
+        Assert.DoesNotContain(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        w.CmbRuleRegion.SelectedIndex = 0;
+        Assert.Contains(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+    });
+
+    [Fact]
+    public Task BulkRegionDeleteRefreshesParkedRulePin() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var region = new Region { Id = "band", Start = 1, End = 5 };
+        var rule = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = region.Id };
+        model.Regions.Add(region);
+        model.Rules.Add(rule);
+        Call(w, "RebuildRuleVisuals");
+        Assert.DoesNotContain(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        w._selectionSet.Add(region);
+        w.DeleteSelection();
+        Assert.Contains(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+    });
+
+    [Fact]
+    public Task ParkedRuleTooltipUsesSelectedLanguage() => Run((w, model) =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("it");
+            Set(w, "_totalSeconds", 30d);
+            var rule = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 40 } };
+            model.Rules.Add(rule);
+            Call(w, "RebuildRuleVisuals");
+            var pin = Assert.Single(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+            Assert.Equal("Regola #1 · tempo 40s, oltre la fine del media", ToolTip.GetTip(pin));
+        }
+        finally { loc.SetLanguage(previous); }
     });
 
     [Fact]

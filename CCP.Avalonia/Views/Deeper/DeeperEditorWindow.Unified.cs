@@ -11,6 +11,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services.Deeper;
 using Serilog;
@@ -1045,7 +1046,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     var tr = rule.Trigger as TimeReachedTrigger;
                     bool hasBand = !string.IsNullOrEmpty(rule.RegionConstraint)
                         && _enhancement.Regions.Any(r => r != null && r.Id == rule.RegionConstraint);
-                    var kind = ClassifyRulePin(hasBand ? null : tr?.Time, hasBand, _totalSeconds);
+                    var kind = ClassifyRulePin(tr?.Time, hasBand, _totalSeconds);
                     if (kind is RulePinKind.OnItsBand or RulePinKind.None) continue;
                     int strayIndex = kind == RulePinKind.PastEnd ? pastEnd++ : detached++;
                     double x = RulePinX(kind, tr?.Time ?? 0, _totalSeconds, w, strayIndex);
@@ -1128,16 +1129,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private static string RulePinTooltip(EnhancementRule rule, TimeReachedTrigger? tr,
             RulePinKind kind, int oneBasedIndex)
         {
-            var head = $"Rule #{oneBasedIndex}";
-            return kind switch
+            var key = kind switch
             {
-                RulePinKind.PastEnd => $"{head} · time {tr?.Time ?? 0:0.##}s, past the end of the media",
-                RulePinKind.Detached when tr != null => $"{head} · {DescribeRule(rule)} · its time is not a number",
-                RulePinKind.Detached when !string.IsNullOrEmpty(rule.RegionConstraint) =>
-                    $"{head} · {DescribeRule(rule)} · its region is gone",
-                RulePinKind.Detached => $"{head} · {DescribeRule(rule)} · fires anywhere, no place on the ruler",
-                _ => $"{head} · time {tr?.Time ?? 0:0.##}s",
+                RulePinKind.PastEnd => "deeper_editor_pin_past_end_fmt",
+                RulePinKind.Detached when tr != null => "deeper_editor_pin_invalid_time_fmt",
+                RulePinKind.Detached when !string.IsNullOrEmpty(rule.RegionConstraint) => "deeper_editor_pin_region_gone_fmt",
+                RulePinKind.Detached => "deeper_editor_pin_anywhere_fmt",
+                _ => "deeper_editor_pin_time_fmt",
             };
+            var detail = kind == RulePinKind.Detached
+                ? DescribeRule(rule) : (tr?.Time ?? 0).ToString("0.##", CultureInfo.CurrentCulture);
+            return Loc.GetF(key, oneBasedIndex, detail);
         }
 
         // -- Helpers --------------------------------------------------------------
