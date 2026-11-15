@@ -252,6 +252,13 @@ namespace ConditioningControlPanel
         public MainWindow()
         {
             InitializeComponent();
+            // Declutter wave 2: a panel link to something that lives in the launcher now opens
+            // the launcher on that door (Games or Tools).
+            Services.UI.PanelDoorLink.OpenLauncherDoor = key =>
+            {
+                if (Services.Launcher.LauncherDoorRules.TryParse(key, out var door))
+                    Services.Launcher.LauncherHost.ShowDoor(door);
+            };
             Services.Diagnostics.FxBisect.Watch(this);
             // Nav rework: lane-owned pages register their ShowTab hosts (MainWindow.TabNavigation.cs).
             RegisterLaneNavTabs();
