@@ -222,6 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _overlay.Show();
                 ChaosEffectBannerOverlay.EnsureCreated();   // WPF :410 birth the banner window NOW, not mid-chaos
                 Overlays.ChaosFieldFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:411
+                ChaosTunnelWindow.Open(preload: true);   // WPF ChaosModeService.cs:348
                 _overlay.ShowCountdown(BeginRun, shortFlash: isRestart);   // 1s flash on RunAgain
             }
             catch (Exception ex)
@@ -1328,7 +1329,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void EndRun()
         {
             if (!_spawning || _state == null) return;
-            ChaosTunnelWindow.EndActive();
             bool ranFullCourse = _state.ElapsedSec >= _state.RunDurationSec;
             if (ranFullCourse) AwardLoopTip();   // a quit forfeits it
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
@@ -1546,7 +1546,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void RunAgain()
         {
             _overlay?.Close();   // OnOverlayClosed -> CleanupAfterRun
-            Dispatcher.UIThread.Post(() => StartRun(isRestart: true));
+            _active = true;   // pending restart; panic clears it before the posted callback
+            Dispatcher.UIThread.Post(() => { if (_active && _state == null) { _active = false; StartRun(isRestart: true); } });
         }
 
         private static void OnOverlayClosed()
@@ -1588,7 +1589,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _hud = null;
             _overlay = null;
             if (_state != null) _state.PropertyChanged -= OnTunnelStateChanged;
-            ChaosTunnelWindow.CloseActive();
+            ChaosTunnelWindow.EndActive();
             _state = null;
             UnhookRunVideo();   // WPF CleanupAfterRun :3318
             _heavyUntilUtc = DateTime.MinValue;

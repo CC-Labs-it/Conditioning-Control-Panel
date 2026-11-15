@@ -63,6 +63,8 @@ public class ChaosTunnelWindowTests
                 ChaosRunHost.BeginRun();
                 Assert.NotNull(ChaosTunnelWindow.Active);
                 ChaosRunHost.RequestStop();
+                Assert.NotNull(ChaosTunnelWindow.Active);
+                ChaosRunHost.Overlay!.Close();
                 Assert.Null(ChaosTunnelWindow.Active);
                 ChaosRunHost.ForceShutdown();
 
@@ -100,6 +102,8 @@ public class ChaosTunnelWindowTests
             var (enabled, pinned) = (settings.ChaosTunnelEnabled, settings.ChaosPinOnTop);
             var (canOpen, sink, sound, ambient, path) = (ChaosTunnelWindow.CanOpen, ChaosTunnelWindow.Sink,
                 ChaosTunnelWindow.PlaySound, ChaosTunnelWindow.PlayAmbient, ChaosTunnelWindow.AmbientPath);
+            var (mainWindow, guard) = (ChaosTunnelWindow.MainWindow, ChaosTunnelWindow.Guard);
+            var main = new global::Avalonia.Controls.Window(); main.Show(); int guards = 0;
             var file = Path.GetTempFileName();
             var voices = new List<Voice>();
             var sounds = new List<(string, float)>();
@@ -111,18 +115,25 @@ public class ChaosTunnelWindowTests
                 settings.ChaosPinOnTop = false;
                 ChaosTunnelWindow.CanOpen = () => true;
                 ChaosTunnelWindow.Sink = _ => { sinks++; return true; };
+                ChaosTunnelWindow.MainWindow = () => main; ChaosTunnelWindow.Guard = (m, t) => { Assert.Same(main, m); Assert.IsType<ChaosTunnelWindow>(t); guards++; return true; };
                 ChaosTunnelWindow.PlaySound = (name, scale) => sounds.Add((name, scale));
                 ChaosTunnelWindow.AmbientPath = () => file;
                 ChaosTunnelWindow.PlayAmbient = (_, _) => { var v = new Voice(); voices.Add(v); return v; };
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
-                ChaosRunHost.BeginRun();
                 var w = Assert.IsType<ChaosTunnelWindow>(ChaosTunnelWindow.Active);
+                w.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+                w.Web.OnNavigationCompleted(w.Web.Source);
+                Assert.Contains(scripts, s => s.Contains("ccp-tunnel-connect") && s.Contains("invokeCSharpAction"));
+                w.OnMessage("{\"type\":\"ready\"}");
+                Assert.DoesNotContain(scripts, s => s.Contains("\"run-start\""));
+                Assert.Equal(0, guards);
+                ChaosRunHost.BeginRun();
+                Assert.True(guards >= 1); Assert.True(w.GuardRunning); int beforeGuard = guards; w.GuardMain(); Assert.Equal(beforeGuard + 1, guards);
+                Assert.Contains(scripts, s => s.Contains("\"run-start\""));
                 Assert.False(w.Topmost);
                 Assert.False(ChaosRunHost.Hud!.Topmost);
                 Assert.Equal(1, sinks);
                 w.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
-                w.Web.OnNavigationCompleted(w.Web.Source);
-                Assert.Contains(scripts, s => s.Contains("ccp-tunnel-connect") && s.Contains("invokeCSharpAction"));
                 w.OnMessage("{\"type\":\"ready\"}");
                 Assert.Single(voices);
                 w.OnMessage("{\"type\":\"sfx\",\"name\":\"tunnel_exit\",\"scale\":0.32}");
@@ -132,16 +143,24 @@ public class ChaosTunnelWindowTests
                 Assert.Equal(new[] { true, false }, voices[0].Pauses);
                 Assert.Contains(scripts, s => s.Contains("\"video-playing\"") && s.Contains("\"on\":true"));
                 ChaosRunHost.RequestStop();
-                Assert.True(voices[0].Disposed);
+                beforeGuard = guards; w.GuardMain(); Assert.Equal(beforeGuard + 1, guards);
+                Assert.False(voices[0].Disposed);
                 Assert.Same(w, ChaosTunnelWindow.Active);
+                Assert.DoesNotContain(scripts, s => s.Contains("\"run-end\""));
+                int starts = scripts.FindAll(s => s.Contains("\"run-start\"")).Count;
+                ChaosRunHost.Overlay!.OnRunAgain!.Invoke();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(voices[0].Disposed);
                 Assert.Contains(scripts, s => s.Contains("\"run-end\""));
-                ChaosTunnelWindow.Open();
                 Assert.Same(w, ChaosTunnelWindow.Active);
                 Assert.Equal(2, voices.Count);
+                if (!ChaosRunHost.IsDescending) ChaosRunHost.Overlay!.FinishCountdown();
+                Assert.Equal(starts + 1, scripts.FindAll(s => s.Contains("\"run-start\"")).Count);
                 w.OnMessage("{\"type\":\"exit-done\"}");
                 w.OnExitTimeout();
                 Assert.Same(w, ChaosTunnelWindow.Active);
                 ChaosTunnelWindow.EndActive();
+                Assert.False(w.GuardRunning); int lastGuard = guards; w.GuardMain(); Assert.Equal(lastGuard, guards);
                 w.OnMessage("{\"type\":\"exit-done\"}");
                 Assert.Null(ChaosTunnelWindow.Active);
                 Assert.True(voices[1].Disposed);
@@ -158,12 +177,15 @@ public class ChaosTunnelWindowTests
                 scripts.Clear();
                 closed.Web.OnNavigationCompleted(closed.Web.Source);
                 Assert.DoesNotContain(scripts, s => s.Contains("ccp-tunnel-connect"));
+                ChaosRunHost.Overlay!.OnRunAgain!.Invoke(); ChaosRunHost.ForceShutdown();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Assert.False(ChaosRunHost.IsActive); Assert.Null(ChaosTunnelWindow.Active);
             }
             finally
             {
                 ChaosRunHost.ForceShutdown();
                 ChaosTunnelWindow.CanOpen = canOpen;
                 ChaosTunnelWindow.Sink = sink;
+                ChaosTunnelWindow.MainWindow = mainWindow; ChaosTunnelWindow.Guard = guard; main.Close();
                 ChaosTunnelWindow.PlaySound = sound;
                 ChaosTunnelWindow.PlayAmbient = ambient;
                 ChaosTunnelWindow.AmbientPath = path;
@@ -185,6 +207,12 @@ public class ChaosTunnelWindowTests
         Assert.Equal(new IntPtr(42), target);
         Assert.Equal(new IntPtr(1), after);
         Assert.Equal(0x13u, flags & 0x13u);
+        Assert.True(Win32Overlay.RestackBelow(new IntPtr(42), new IntPtr(10), _ => new IntPtr(42),
+            (h, a, f) => { target = h; after = a; flags = f; return true; }));
+        Assert.Equal(new IntPtr(42), target); Assert.Equal(new IntPtr(10), after); Assert.Equal(0x213u, flags & 0x213u);
+        bool moved = false;
+        Assert.True(Win32Overlay.RestackBelow(new IntPtr(42), new IntPtr(10), _ => IntPtr.Zero, (h, a, f) => moved = true));
+        Assert.False(moved);
     }
 
     [Fact]

@@ -20,6 +20,9 @@ internal sealed class ChaosTunnelWindow : Window
     internal static ChaosTunnelWindow? Active { get; private set; }
     internal static Func<bool> CanOpen = () => WebHost.IsAvailable;
     internal static Func<Window, bool> Sink = X11Overlay.Sink;
+    internal static Func<Window?> MainWindow = () => (global::Avalonia.Application.Current?.ApplicationLifetime
+        as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+    internal static Func<Window, Window, bool> Guard = X11Overlay.RestackBelow;
     internal static Action<string, float> PlaySound = ChaosOverlayWindow.ChaosSfx.Play;
     internal static Func<string, double, LibVlcAudio.IPausableVoice?> PlayAmbient =
         (path, volume) => LibVlcAudio.Instance?.PlayVoice(path, volume, true, () => { }) as LibVlcAudio.IPausableVoice;
@@ -29,6 +32,7 @@ internal sealed class ChaosTunnelWindow : Window
     private readonly List<string> _pending = new();
     private readonly DispatcherTimer _timeout = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly DispatcherTimer _bridgeProbe = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private readonly DispatcherTimer _zGuard = new() { Interval = TimeSpan.FromMilliseconds(1500) };
     private readonly DispatcherTimer _exitWatchdog = new() { Interval = TimeSpan.FromMilliseconds(1200) };
     private bool _ready, _runActive, _videoPlaying;
     private LibVlcAudio.IPausableVoice? _ambient;
@@ -59,11 +63,12 @@ internal sealed class ChaosTunnelWindow : Window
         };
         _bridgeProbe.Tick += (_, _) => ProbeBridge();
         _timeout.Tick += (_, _) => OnTimeout();
+        _zGuard.Tick += (_, _) => GuardMain();
         _exitWatchdog.Tick += (_, _) => OnExitTimeout();
-        Closed += (_, _) => { _timeout.Stop(); _bridgeProbe.Stop(); _exitWatchdog.Stop(); StopAmbient(); _pending.Clear(); if (Active == this) Active = null; };
+        Closed += (_, _) => { _timeout.Stop(); _bridgeProbe.Stop(); _zGuard.Stop(); _exitWatchdog.Stop(); StopAmbient(); _pending.Clear(); if (Active == this) Active = null; };
     }
 
-    internal static void Open()
+    internal static void Open(bool preload = false)
     {
         if (!CoreSettings.Current.ChaosTunnelEnabled || !CanOpen()) { CloseActive(); return; }
         try
@@ -85,7 +90,12 @@ internal sealed class ChaosTunnelWindow : Window
             w._runActive = true;
             w._videoPlaying = false;
             if (w._ready) w.StartAmbient();
-            w.Post(new { type = "run-start" });
+            if (!preload)
+            {
+                w.GuardMain();
+                w._zGuard.Start();
+                w.Post(new { type = "run-start" });
+            }
         }
         catch (Exception ex) { Log.Warning("Chaos tunnel: {E}", ex.Message); CloseActive(); }
     }
@@ -96,6 +106,7 @@ internal sealed class ChaosTunnelWindow : Window
         var w = Active;
         if (w == null) return;
         w._runActive = false;
+        w._zGuard.Stop();
         w.StopAmbient();
         if (!w._ready) { CloseActive(); return; }
         w.Post(new { type = "run-end" });
@@ -111,6 +122,12 @@ internal sealed class ChaosTunnelWindow : Window
     }
 
     internal void ProbeBridge() => _ = Web.InvokeScriptAsync(WebHost.CarrierShim + ";window.dispatchEvent(new Event('ccp-tunnel-connect'));");
+    internal void GuardMain()
+    {
+        try { var main = MainWindow(); if (Active == this && _runActive && main is { IsVisible: true, WindowState: not WindowState.Minimized } && main != this) Guard(main, this); }
+        catch (Exception ex) { Log.Debug("Chaos tunnel stacking: {E}", ex.Message); }
+    }
+    internal bool GuardRunning => _zGuard.IsEnabled;
     internal void OnTimeout() { if (!_ready && Active == this) CloseActive(); }
     internal void OnExitTimeout() { if (!_runActive && Active == this) CloseActive(); }
 

@@ -695,6 +695,32 @@ internal static class X11Overlay
         return TryGetXid(window, out var xid) && RestackXid(xid, IntPtr.Zero, Below);
     }
 
+    internal static bool RestackBelow(TopLevel window, TopLevel sibling)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(sibling, OverlayBackend.Win32, out var other) && Win32Overlay.RestackBelow(hwnd, other);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(sibling, out var target)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var root = XDefaultRootWindow(_display); var atom = XInternAtom(_display, "_NET_CLIENT_LIST_STACKING", false);
+            if (XGetWindowProperty(_display, root, atom, 0L, 4096L, false, (IntPtr)33, out _, out var format,
+                out ulong count, out ulong remaining, out var data) != 0 || data == IntPtr.Zero) return false;
+            try
+            {
+                if (format != 32 || remaining != 0) return false;
+                int main = -1, tunnel = -1;
+                for (int i = 0; i < (int)count; i++)
+                {
+                    var id = Marshal.ReadIntPtr(data, i * IntPtr.Size);
+                    if (id == xid) main = i; if (id == target) tunnel = i;
+                }
+                return main >= 0 && tunnel >= 0 && (main <= tunnel || RestackXid(xid, target, Below));
+            }
+            finally { XFree(data); }
+        }
+    }
+
     private static bool RestackXid(IntPtr xid, IntPtr siblingXid, int detail = Above)
     {
         lock (Gate)
