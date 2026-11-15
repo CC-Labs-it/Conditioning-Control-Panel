@@ -990,7 +990,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 else
                 {
                     _state.WaveIndex = newWave;
+                    int previousAct = _state.ActIndex;
                     _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                    AnnounceDepthIfCrossed(previousAct);
                     AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:1460
                 }
             }
@@ -1108,9 +1110,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 else ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             _state.WaveIndex = _pendingWave;
+            int previousAct = _state.ActIndex;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
+            AnnounceDepthIfCrossed(previousAct);
             _pendingWave = 0;
             _overlay?.ShowReadyGo(ResumeAfterDraft);
+        }
+
+        // WPF ChaosModeService.cs:3104-3113: one depth cue when a wave commit crosses an act.
+        private static void AnnounceDepthIfCrossed(int previousAct)
+        {
+            if (_state == null || _state.ActIndex <= previousAct) return;
+            ChaosOverlayWindow.ChaosSfx.Play("depth_change", 0.55f);
+            ChaosAnnouncerOverlay.Announce($"DEPTH {_state.ActIndex}", ChaosAnnounceKind.Depth,
+                artKey: "depth", subText: $"{_state.ActIndex}");
         }
 
         private static void ResumeAfterDraft()

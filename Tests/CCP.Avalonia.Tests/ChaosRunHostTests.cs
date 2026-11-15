@@ -859,6 +859,35 @@ public sealed class ChaosRunHostTests
                 .GetLogicalDescendants(ChaosAnnouncerOverlay.Active!).OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>()).Kind);
     });
 
+    // WPF ChaosModeService.cs:1454,1588,3104-3113: announce each depth crossing once.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Act_crossing_announces_depth_once(bool drafts) => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        var cfg = Cfg(); cfg.DurationSec = 140; cfg.WaveCount = 7; cfg.BoonDraftEnabled = drafts;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        for (int wave = 2; wave <= 6; wave++)
+        {
+            ChaosAnnouncerOverlay.CloseActive();
+            Ticks(80);
+            if (drafts) ChaosRunHost.ChooseBoon(null);
+            if (wave < 6 && drafts) overlay.FinishCountdown();
+        }
+        var queue = (ChaosAnnounceQueue)typeof(ChaosAnnouncerOverlay).GetField("Queue", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var messages = new List<string>();
+        if (ChaosAnnouncerOverlay.Active?.Current is { } current) messages.Add(current.Text);
+        while (queue.TryDequeue(out var item)) messages.Add(item.Text);
+        Assert.Equal(2, ChaosRunHost.State!.ActIndex);
+        Assert.Single(messages.Where(x => x == "DEPTH 2"));
+        if (drafts) overlay.FinishCountdown();
+        Ticks(4);
+        Assert.False(queue.TryDequeue(out _));
+    });
+
     // Hand-ported from #3541: WPF AnnounceFinalLoopIfEntering (ChaosModeService.cs:1460,1625,1639-1647).
     [Theory]
     [InlineData(false)]
