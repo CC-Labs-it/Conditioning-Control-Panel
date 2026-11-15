@@ -20,7 +20,7 @@ public partial class ModCreatorWindow
         try
         {
             var manifest = JObject.Parse(json);
-            if (manifest["skins"] is not JArray skins || manifest["emotions"] is not JObject emotions || skins.Count == 0 || !emotions.HasValues) return;
+            if (manifest.GetValue("skins", StringComparison.OrdinalIgnoreCase) is not JArray skins || manifest.GetValue("emotions", StringComparison.OrdinalIgnoreCase) is not JObject emotions || skins.Count == 0 || !emotions.HasValues) return;
             _portraitManifestJson = json;
             _portraitBaseDir = dir;
         }
@@ -33,16 +33,22 @@ public partial class ModCreatorWindow
         var target = Path.Combine(resourcesDir, "sounds", "companion_audio");
         Directory.CreateDirectory(target);
         File.WriteAllText(Path.Combine(target, "avatar_manifest.json"), _portraitManifestJson);
-        foreach (var skin in (JArray)JObject.Parse(_portraitManifestJson)["skins"]!)
+        foreach (var skin in (JArray)JObject.Parse(_portraitManifestJson).GetValue("skins", StringComparison.OrdinalIgnoreCase)!)
         {
-            var relative = (string?)skin["dir"];
+            var relative = (string?)(skin as JObject)?.GetValue("dir", StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)) continue;
             var source = Path.GetFullPath(Path.Combine(_portraitBaseDir, relative));
             var destination = Path.GetFullPath(Path.Combine(target, relative));
-            if (!source.StartsWith(Path.GetFullPath(_portraitBaseDir) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                || !destination.StartsWith(Path.GetFullPath(target) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
+            if (!IsPortraitPathWithin(source, _portraitBaseDir) || !IsPortraitPathWithin(destination, target)) continue;
             if (Directory.Exists(source)) CopyPortraitDirectory(source, destination);
         }
+    }
+
+    private static bool IsPortraitPathWithin(string path, string baseDir)
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(baseDir));
+        return path.Equals(root, StringComparison.Ordinal)
+            || path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static void CopyPortraitDirectory(string source, string target)
