@@ -228,7 +228,7 @@ public class PossessionSwapTests
     });
 
     [Fact]
-    public Task CrossPanelPairSwapsAndHitsUnlessAParentClips() => Run(async (host, a, b, c, targets, ctx, frames) =>
+    public Task CrossPanelPairSwapsAndHitsThroughAClippingParent() => Run(async (host, a, b, c, targets, ctx, frames) =>
     {
         var panel = (Canvas)a.GetVisualParent()!;
         panel.Children.Remove(c);
@@ -238,8 +238,6 @@ public class PossessionSwapTests
         window.UpdateLayout();
         host.Targets = new[] { targets[0], targets[2] };
         var effect = new SwapEffect();
-        Assert.False(effect.CanApply(ctx, targets[0]));
-        wrapper.ClipToBounds = false;
         Assert.True(effect.CanApply(ctx, targets[0]));
         var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeC = host.BoundsOnGhostLayer(c)!.Value;
         var apply = effect.ApplyAsync(ctx, targets[0], CancellationToken.None);
@@ -247,7 +245,9 @@ public class PossessionSwapTests
         HeadlessInput.RenderLiveTree(window);
         var pa = HeadlessInput.PressAt(a, window, homeC.Center); var pc = HeadlessInput.PressAt(c, window, homeA.Center);
         Assert.True(pa.Hit && pa.Pressed && pc.Hit && pc.Pressed);
+        Assert.False(wrapper.ClipToBounds);
         await effect.UndoAsync(TimeSpan.Zero);
+        Assert.True(wrapper.ClipToBounds);
     });
 
     [Theory]

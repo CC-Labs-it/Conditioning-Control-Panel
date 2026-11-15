@@ -40,6 +40,7 @@ internal sealed class SwapEffect : IPossessionEffect
     private PossessionTarget? _first, _second;
     private PossessionLease? _a, _b;
     private IDisposable? _outlineA, _outlineB, _timer;
+    private readonly List<IDisposable> _unclips = new();
     private CancellationTokenSource? _cancel;
     private IFrameSource? _frames;
     private TaskCompletionSource? _glided, _returned;
@@ -78,7 +79,7 @@ internal sealed class SwapEffect : IPossessionEffect
                 candidate.Visual is not Control other || ReferenceEquals(first, other) || !Eligible(other) ||
                 host.BoundsOnGhostLayer(other) is not { } bounds) continue;
             var score = SwapPartnerRule.Score(origin, bounds, LooksStartStop(first), LooksStartStop(other));
-            if (score >= bestScore || !PairMoves(layer, first, other, origin, bounds, out _, out _)) continue;
+            if (score >= bestScore || !PairMoves(layer, first, other, origin, bounds, out _, out _, null)) continue;
             best = candidate; bestScore = score;
         }
         return best;
@@ -105,18 +106,28 @@ internal sealed class SwapEffect : IPossessionEffect
         return false;
     }
 
-    // Like WPF, a landing may leave its panel; only ancestors that clip drawing and hit testing veto it.
+    // Like WPF, a landing may leave its panel. Plain ClipToBounds ancestors are unclipped while live so the
+    // landing draws and hit-tests; only scroll viewports and clip geometries (truly off-screen) veto it.
     private static bool PairMoves(Canvas layer, Control a, Control b,
-        Rect ra, Rect rb, out Vector moveA, out Vector moveB)
+        Rect ra, Rect rb, out Vector moveA, out Vector moveB, List<Visual>? unclip)
     {
         moveA = moveB = default;
         var delta = rb.Position - ra.Position;
         if (Math.Abs(delta.X) < 4 && Math.Abs(delta.Y) < 4) return false;
-        return MoveFor(a, layer, new Rect(rb.Position, ra.Size), delta, out moveA) &&
-               MoveFor(b, layer, new Rect(ra.Position, rb.Size), -delta, out moveB);
+        return MoveFor(a, layer, new Rect(rb.Position, ra.Size), delta, out moveA, unclip) &&
+               MoveFor(b, layer, new Rect(ra.Position, rb.Size), -delta, out moveB, unclip) &&
+               OnTop(layer, a, b, rb) && OnTop(layer, b, a, ra);
     }
 
-    private static bool MoveFor(Control element, Canvas layer, Rect landing, Vector delta, out Vector move)
+    // With nothing clipping, a later card or panel over the seat would still cover the landing's drawing and input.
+    private static bool OnTop(Canvas layer, Control mover, Control seat, Rect landing)
+    {
+        if (TopLevel.GetTopLevel(layer) is not { } top || layer.TranslatePoint(landing.Center, top) is not { } p) return true;
+        var hit = global::Avalonia.Input.InputExtensions.InputHitTest(top, p, v => v != seat && v != layer, false) as Visual;
+        return hit == null || hit == mover || hit.IsVisualAncestorOf(mover) || mover.IsVisualAncestorOf(hit);
+    }
+
+    private static bool MoveFor(Control element, Canvas layer, Rect landing, Vector delta, out Vector move, List<Visual>? unclip)
     {
         move = default;
         var parent = element.GetVisualParent();
@@ -128,7 +139,11 @@ internal sealed class SwapEffect : IPossessionEffect
             if (node.TransformToVisual(layer) is not { } transform) return false;
             var bounds = new Rect(node.Bounds.Size).TransformToAABB(transform);
             if (node.ClipToBounds && (landing.Left < bounds.Left - .01 || landing.Top < bounds.Top - .01 ||
-                landing.Right > bounds.Right + .01 || landing.Bottom > bounds.Bottom + .01)) return false;
+                landing.Right > bounds.Right + .01 || landing.Bottom > bounds.Bottom + .01))
+            {
+                if (node is global::Avalonia.Controls.Presenters.ScrollContentPresenter) return false;
+                unclip?.Add(node);
+            }
             if (node.Clip is { } clip)
             {
                 if (clip is not global::Avalonia.Media.RectangleGeometry) return false;
@@ -148,6 +163,7 @@ internal sealed class SwapEffect : IPossessionEffect
         IsLive = target.IsLive = partner.IsLive = true;
         _first = target; _second = partner; _frames = host.PossessionFrames;
         var source = _cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        List<Visual> unclip;
         try
         {
             await Task.WhenAll(Charge(ctx, first, source.Token), Charge(ctx, second, source.Token)).ConfigureAwait(true);
@@ -155,11 +171,13 @@ internal sealed class SwapEffect : IPossessionEffect
             if (!Eligible(first) || !Eligible(second) || host.GhostLayer is not { } layer ||
                 host.BoundsOnGhostLayer(first) is not { } ra || host.BoundsOnGhostLayer(second) is not { } rb ||
                 !double.IsFinite(SwapPartnerRule.Score(ra, rb, LooksStartStop(first), LooksStartStop(second))) ||
-                !PairMoves(layer, first, second, ra, rb, out _moveA, out _moveB)) { Release(); return; }
+                !PairMoves(layer, first, second, ra, rb, out _moveA, out _moveB, unclip = new())) { Release(); return; }
             try { ctx.Name(Id, PairName(target, partner)); } catch { }
             _outlineA = ctx.Attribution.Possess(first); _outlineB = ctx.Attribution.Possess(second);
             _a = PossessionLease.Take(first); _b = PossessionLease.Take(second);
             if (_a == null || _b == null) { Release(); return; }
+            foreach (var node in unclip)
+                if (node.SetValue(Visual.ClipToBoundsProperty, false, global::Avalonia.Data.BindingPriority.Animation) is { } hold) _unclips.Add(hold);
             _glided = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var glided = _glided;
             _frames!.Subscribe(Frame);
@@ -230,6 +248,8 @@ internal sealed class SwapEffect : IPossessionEffect
         _frames?.Unsubscribe(Frame); _timer?.Dispose(); _timer = null;
         try { _a?.ReleaseImmediate(); } catch { } try { _b?.ReleaseImmediate(); } catch { }
         try { _outlineA?.Dispose(); } catch { } try { _outlineB?.Dispose(); } catch { }
+        foreach (var hold in _unclips) try { hold.Dispose(); } catch { }
+        _unclips.Clear();
         if (_first != null) _first.IsLive = false; if (_second != null) _second.IsLive = false;
         _a = _b = null; _outlineA = _outlineB = null; _first = _second = null;
         _cancel?.Dispose(); _cancel = null; _frames = null; _start = null; IsLive = _returning = false;
