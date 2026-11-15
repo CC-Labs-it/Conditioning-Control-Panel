@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using CCP.Avalonia.Testing;
@@ -230,6 +231,65 @@ public sealed class WelcomeBackRestoreTests
         }
     });
 
+    // WPF App.xaml.cs:5197-5272 and StartupPresenter.cs:204-260.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task RestoreFailureRoutesThroughLadderAndRetries(bool session) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var saved = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+            CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Shell);
+        var savedInbox = StartupLadder.Inbox.Items.ToArray();
+        try
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            StartupLadder.ResetForTests();
+            StartupLadder.ModalWindowReady = () => true;
+            CoreSecrets.RetrieveProvider = _ => null;
+            CoreSecrets.StoreProvider = (_, _) => { };
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.UnifiedId = "welcome-test";
+            var original = service.Current;
+            CoreSession.IsSessionRunningProvider = () => session;
+            WelcomeBackOffer.Shell = () => null;
+            var server = new BackupServer(new AppSettings { FlashEnabled = false }, false);
+            WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
+            if (!session) StartupLadder.EnqueueModal("restore-test", 10, () => Task.CompletedTask);
+            WelcomeBackOffer.ApplyRestore(null);
+            WelcomeBackOffer.ApplyRestore(null); // the same key is held or filed once
+            Assert.Equal(0, server.Reads);
+            if (session)
+            {
+                var item = Assert.Single(StartupLadder.Inbox.Items);
+                Assert.Equal("welcome-back:restore-failed", item.Key);
+                CoreSession.IsSessionRunningProvider = () => false;
+                StartupLadder.Inbox.Open(item);
+            }
+            else
+            {
+                Assert.Empty(StartupLadder.Inbox.Items);
+                Dispatcher.UIThread.RunJobs();
+                ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+            }
+            for (var i = 0; i < 10; i++) await Task.Yield();
+            Assert.Equal(1, server.Reads);
+            Assert.Empty(StartupLadder.Inbox.Items);
+            Assert.NotSame(original, service.Current);
+            Assert.False(service.Current.FlashEnabled);
+        }
+        finally
+        {
+            StartupLadder.ResetForTests();
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
+                CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Shell) = saved;
+            foreach (var item in savedInbox) StartupLadder.Inbox.Items.Add(item);
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -239,6 +299,7 @@ public sealed class WelcomeBackRestoreTests
             CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
             WelcomeBackOffer.Present, WelcomeBackOffer.Shell);
         var savedInbox = StartupLadder.Inbox.Items.ToArray();
+        var savedModalPending = StartupLadder.ModalPending;
         try
         {
             if (Application.Current is null)
@@ -254,6 +315,7 @@ public sealed class WelcomeBackRestoreTests
             WelcomeBackOffer.ResetForTests();
             StartupLadder.Inbox.Items.Clear();
             WelcomeBackOffer.NewBackup = () => new CloudSettingsBackup(server);
+            CoreSession.IsSessionRunningProvider = () => true;
             WelcomeBackOffer.ApplyRestore(null);
             var item = Assert.Single(StartupLadder.Inbox.Items);
             Assert.Equal("welcome-back:restore-failed", item.Key);
@@ -270,8 +332,11 @@ public sealed class WelcomeBackRestoreTests
             finally { host.Close(); }
             var current = service.Current;
             CoreSession.IsSessionRunningProvider = () => locked;
+            StartupLadder.ModalPending = true; // a failed retry is held until the ladder drains
             StartupLadder.Inbox.Open(item);
             await Task.Yield();
+            StartupLadder.CancelDeferred();
+            StartupLadder.ModalPending = savedModalPending;
             Assert.Equal(locked ? 0 : 1, server.Reads);
             if (locked) WelcomeBackOffer.ApplyRestore(new AppSettings { FlashEnabled = !current.FlashEnabled });
             Assert.Same(current, service.Current);
@@ -279,6 +344,7 @@ public sealed class WelcomeBackRestoreTests
         }
         finally
         {
+            StartupLadder.ModalPending = savedModalPending;
             WelcomeBackOffer.ResetForTests();
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, CoreSettings.ServiceProvider,
                 CoreSession.IsSessionRunningProvider, WelcomeBackOffer.NewBackup, WelcomeBackOffer.Choose,
