@@ -9,6 +9,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _greetingTimer;
+    private DispatcherTimer? _emptyLibraryTimer;
+    internal Action<string> EmptyLibraryMoment;
     private string _summonVia = "rail";
     private bool _summonTouring;
     private DateTime _outSinceUtc;
@@ -16,6 +18,7 @@ internal sealed partial class EmiDeskService
     // Tests build isolated desks (new EmiDeskService()); the engine's probes stay on the shared desk.
     internal EmiDeskService()
     {
+        EmptyLibraryMoment = moment => Fire(moment);
         EmiLineEngine.AskSituationProbe = static () => Instance.AskSituationOk();
         EmiLineEngine.EffectFeasibleProbe = EmiOffers.EffectFeasible;
     }
@@ -143,7 +146,27 @@ internal sealed partial class EmiDeskService
         // WPF EmiDeskService.cs:819,847-855: delayed, ordered greetings.
         var moment = !LineEngine.EverSpent("firstContact") ? "firstContact"
             : !LineEngine.EverSpent("desktopFirstBoot") ? "desktopFirstBoot" : "summoned";
+        ScheduleEmptyLibraryBeat();
         Fire(moment, new { via = _summonVia, minutes = Math.Max(0, (int)(UtcNow() - _outSinceUtc).TotalMinutes), touring = _summonTouring });
+    }
+    private void ScheduleEmptyLibraryBeat()
+    {
+        CancelEmptyLibraryBeat();
+        if (!EmiOffers.LibraryIsEmpty()) return;
+        _emptyLibraryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(7) };
+        _emptyLibraryTimer.Tick += (_, _) => EmptyLibraryDue();
+        _emptyLibraryTimer.Start();
+    }
+    internal void EmptyLibraryDue()
+    {
+        if (_emptyLibraryTimer == null) return;
+        CancelEmptyLibraryBeat();
+        if (IsOut) EmiOffers.AnnounceEmptyLibrary(this);
+    }
+    private void CancelEmptyLibraryBeat()
+    {
+        _emptyLibraryTimer?.Stop();
+        _emptyLibraryTimer = null;
     }
     private void CancelGreeting()
     {
@@ -153,6 +176,7 @@ internal sealed partial class EmiDeskService
     internal void PanicSilence()
     {
         CancelGreeting();
+        CancelEmptyLibraryBeat();
         _window?.CancelAsk();
         _window?.CancelChain();
         Fire("panicPressed");

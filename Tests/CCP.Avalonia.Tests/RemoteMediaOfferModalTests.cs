@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -135,6 +136,10 @@ public sealed class RemoteMediaOfferModalTests
             .Where(f => f.Name is "_busy" or "_closed").ToArray();
         var oldFlags = flags.Select(f => f.GetValue(null)).ToArray();
         var old = (FlashOverlay.OverlaysAvailable, ScreenList.QueryOverride, CorePaths.EffectiveAssetsProvider, ContentPackStore.Current);
+        var desk = EmiDeskService.Instance;
+        var oldMoment = desk.EmptyLibraryMoment;
+        var moments = new System.Collections.Generic.List<string>();
+        desk.EmptyLibraryMoment = moments.Add;
         var empty = Directory.CreateTempSubdirectory("ccp-remote-media-").FullName;
         try
         {
@@ -158,9 +163,11 @@ public sealed class RemoteMediaOfferModalTests
             CoreSettings.Current.MediaSource = "local";
             Burst();
             Assert.Equal(1, opened());
+            Assert.Equal(new[] { "noMediaYet" }, moments);
         }
         finally
         {
+            desk.EmptyLibraryMoment = oldMoment;
             for (var i = 0; i < flags.Length; i++) flags[i].SetValue(null, oldFlags[i]);
             (FlashOverlay.OverlaysAvailable, ScreenList.QueryOverride, CorePaths.EffectiveAssetsProvider, ContentPackStore.Current) = old;
             Directory.Delete(empty, true);
