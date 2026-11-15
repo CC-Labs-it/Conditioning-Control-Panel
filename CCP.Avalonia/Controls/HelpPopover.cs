@@ -299,8 +299,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 CornerRadius = new CornerRadius(8, 8, 0, 0),
             };
             var headerRow = new StackPanel { Orientation = Orientation.Horizontal };
-            Control headerIcon = _headerIcon is { } icon
-                ? IconGlyph.Of(icon, null, 18)
+            Control headerIcon = _showV2
+                ? new IconGlyph { Kind = IconKind.Star, Size = 18 }
+                : _headerIcon is { } icon ? IconGlyph.Of(icon, null, 18)
                 : new TextBlock
             {
                 Text = shown.Icon ?? "?",
@@ -319,7 +320,21 @@ namespace ConditioningControlPanel.Avalonia.Controls
             });
             if (effect is not null)
             {
-                var toggle = new Button { Name = "HelpV2Toggle", Content = Loc.Get(_showV2 ? "help_see_classic" : "help_see_v2"), Margin = new Thickness(10, 0, 0, 0) };
+                var gold = new SolidColorBrush(Color.FromRgb(0xFF, 0xCF, 0x6B));
+                var toggle = new Button
+                {
+                    Name = "HelpV2Toggle",
+                    Foreground = gold, FontSize = 11.5, FontWeight = FontWeight.SemiBold,
+                    BorderBrush = gold, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
+                    Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xCF, 0x6B)),
+                    Padding = new Thickness(9, 3, 9, 4),
+                };
+                var switchRow = new StackPanel { Orientation = Orientation.Horizontal };
+                switchRow.Children.Add(new IconGlyph { Kind = IconKind.Star, Foreground = gold, Size = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) });
+                switchRow.Children.Add(new TextBlock { Text = Loc.Get(_showV2 ? "help_see_classic" : "help_see_v2"), Foreground = gold, VerticalAlignment = VerticalAlignment.Center });
+                toggle.Content = switchRow;
+                toggle.PointerEntered += (_, _) => toggle.Background = new SolidColorBrush(Color.FromArgb(0x4D, 0xFF, 0xCF, 0x6B));
+                toggle.PointerExited += (_, _) => toggle.Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xCF, 0x6B));
                 toggle.Click += (_, _) =>
                 {
                     _showV2 = !_showV2;
@@ -328,7 +343,18 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     _popupRoot = null;
                     EnsureContent();
                 };
-                headerRow.Children.Add(toggle);
+                var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+                stack.Children.Add(toggle);
+                if (!_showV2 && !SuperAccess.IsUnlocked(effect.Value))
+                {
+                    stack.Children.Add(new TextBlock
+                    {
+                        Name = "HelpV2Supporter", Text = Loc.Get("super_for_supporters"),
+                        Foreground = gold,
+                        Opacity = .75, FontSize = 9.5, HorizontalAlignment = HorizontalAlignment.Center,
+                    });
+                }
+                headerRow.Children.Add(stack);
             }
             header.Child = headerRow;
             body.Children.Add(header);

@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Controls.HelpLoops;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Super;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -33,12 +34,12 @@ public sealed class HelpLoopTests
             Click(host, button);
             Assert.Equal("PinkFilter", Find<HelpLoopView>(button).Scene.Id);
             var toggle = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle");
-            Assert.Equal(Loc.Get("help_see_v2"), toggle.Content);
+            Assert.Equal(Loc.Get("help_see_v2"), ((StackPanel)toggle.Content!).Children.OfType<TextBlock>().Single().Text);
             toggle.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.True(HelpPopover.IsOpen(button));
             Assert.True(HelpPopover.IsPinned(button));
-            Assert.Equal(Loc.Get("help_see_classic"), HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").Content);
+            Assert.Equal(Loc.Get("help_see_classic"), ((StackPanel)HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").Content!).Children.OfType<TextBlock>().Single().Text);
             Assert.Contains(HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>(),
                 t => t.Text == Loc.Get("super_name_creep"));
             HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
@@ -48,6 +49,117 @@ public sealed class HelpLoopTests
         finally { HelpPopover.Clear(button); host.Close(); }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData("FlashImages", SuperEffect.FlickerDeck)]
+    [InlineData("BubblePop", SuperEffect.InnerBloom)]
+    [InlineData("Subliminals", SuperEffect.Afterglow)]
+    [InlineData("SpiralOverlay", SuperEffect.Vortex)]
+    [InlineData("PinkFilter", SuperEffect.Creep)]
+    [InlineData("Video", SuperEffect.LightsDown)]
+    [InlineData("BouncingText", SuperEffect.Scrawl)]
+    [InlineData("BrainDrain", SuperEffect.Undertow)]
+    public Task SuperCardShowsItsSceneAndReturnsToClassic(string id, SuperEffect effect) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldFrames = HelpLoopView.RequestAnimationFrame;
+        HelpLoopView.RequestAnimationFrame = (_, _) => { };
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var (host, button) = Host(id);
+        try
+        {
+            Click(host, button);
+            Assert.Equal(id, Find<HelpLoopView>(button).Scene.Id);
+            SwitchV2(button);
+            var view = Find<HelpLoopView>(button);
+            Assert.Equal(SuperDoor.HelpId(effect), view.Scene.Id);
+            Assert.True(view.IsRunning);
+            var chips = Find<HelpLoopSteps>(button);
+            Assert.Equal(3, chips.Children.Count);
+            for (int i = 0; i < view.Scene.Steps.Count; i++)
+            {
+                var step = view.Scene.Steps[i];
+                view.RenderAt((step.StartMs + step.EndMs) / 2);
+                host.CaptureRenderedFrame();
+                Assert.False(view.Failed, $"{view.Scene.Id} failed to render");
+                for (int j = 0; j < view.Scene.Steps.Count; j++) Assert.Equal(i == j, chips.IsLit(j));
+            }
+            Assert.All(chips.Children.OfType<Border>().Select(b => ((TextBlock)b.Child!).Text),
+                text => Assert.False(string.IsNullOrEmpty(text) || text.StartsWith("help_loop_"), text));
+            SwitchV2(button);
+            Assert.Equal(id, Find<HelpLoopView>(button).Scene.Id);
+        }
+        finally { HelpPopover.Clear(button); host.Close(); HelpLoopView.RequestAnimationFrame = oldFrames; CoreSettings.ServiceProvider = oldSettings; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("FlashImages")]
+    [InlineData("BubblePop")]
+    [InlineData("Subliminals")]
+    [InlineData("SpiralOverlay")]
+    [InlineData("PinkFilter")]
+    [InlineData("Video")]
+    [InlineData("BouncingText")]
+    [InlineData("BrainDrain")]
+    public Task SuperCardMotionOffRendersStill(string id) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var (host, button) = Host(id);
+        try
+        {
+            Click(host, button);
+            SwitchV2(button);
+            var view = Find<HelpLoopView>(button);
+            Assert.False(view.IsRunning);
+            Assert.Equal(view.Scene.StillMs, view.CurrentTime);
+            host.CaptureRenderedFrame();
+            Assert.False(view.Failed);
+        }
+        finally { HelpPopover.Clear(button); host.Close(); CoreSettings.ServiceProvider = oldSettings; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task SupporterLabelAppearsOnlyForLockedClassicCard(bool unlocked, bool preview) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var oldTrying = SuperAccess.TryingProvider;
+        CoreEntitlement.HasPremiumProvider = () => unlocked;
+        SuperAccess.TryingProvider = () => preview ? SuperEffect.Creep : null;
+        var (host, button) = Host("PinkFilter");
+        try
+        {
+            Click(host, button);
+            var labels = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "HelpV2Supporter").ToArray();
+            Assert.Equal(unlocked || preview ? 0 : 1, labels.Length);
+            if (!unlocked && !preview) Assert.Equal(Loc.Get("super_for_supporters"), labels[0].Text);
+            SwitchV2(button);
+            Assert.DoesNotContain(HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "HelpV2Supporter");
+            SwitchV2(button);
+            Assert.Equal(unlocked || preview ? 0 : 1, HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name == "HelpV2Supporter"));
+        }
+        finally { HelpPopover.Clear(button); host.Close(); CoreEntitlement.HasPremiumProvider = oldPremium; SuperAccess.TryingProvider = oldTrying; }
+        return Task.CompletedTask;
+    });
+
+    private static void SwitchV2(Button button)
+    {
+        var toggle = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle");
+        toggle.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+    }
 
     [Theory]
     [InlineData("PinkFilter", 4000, 0)]     // still 4400 + 4000 wraps to t=1200: step 1

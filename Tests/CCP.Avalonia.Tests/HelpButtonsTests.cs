@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Controls.HelpLoops;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Super;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -106,8 +107,10 @@ public sealed class HelpButtonsTests
             Assert.True(problems.Count == 0, string.Join("\n", problems));
 
             var reachable = buttons.Select(HelpPopover.SectionOf).Concat(VideoWindowLoops).ToHashSet();
+            foreach (var id in reachable.ToArray())
+                if (SuperDoor.ForHelp(id) is { } effect) reachable.Add(SuperDoor.HelpId(effect));
             var orphans = HelpLoopRegistry.Ids.Where(id => !reachable.Contains(id)).OrderBy(x => x).ToList();
-            Assert.True(HelpLoopRegistry.Ids.Count == 23 && orphans.Count == 0,
+            Assert.True(HelpLoopRegistry.Ids.Count == 31 && orphans.Count == 0,
                 $"{HelpLoopRegistry.Ids.Count} loops; no ? opens: {string.Join(", ", orphans)}");
         }
         finally
