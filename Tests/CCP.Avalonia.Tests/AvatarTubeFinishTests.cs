@@ -371,7 +371,7 @@ public sealed class AvatarTubeFinishTests
                 File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "avatar_pose1.png"), Path.Combine(skin, name));
             change(new ModPackage(new ModManifest { Id = "missing-first" }, root, false));
             Assert.Equal(new[] { 1, 2 }, tube.PickableAvatarSets());
-            Assert.False(tube.IsPortraitMode);
+            Assert.True(tube.IsPortraitMode);
             Action? finish = null;
             tube.AvatarSwitchScheduler = (_, fire) => { finish = fire; return () => { }; };
             Assert.True(tube.SelectAvatarSet(2));
@@ -391,11 +391,11 @@ public sealed class AvatarTubeFinishTests
         var skin = Path.Combine(audio, "a");
         Directory.CreateDirectory(skin);
         File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
-            {"idleEmotion":"neutral","director":{"crossfadeFrames":4},"skins":[{"id":"a","dir":"a"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy1.png"},{"file":"happy2.png"}]},"tender":{"portraits":[{"file":"tender.png"}]}},"lines":{"mapped":{"emotion":"happy"}}}
+            {"idleEmotion":"neutral","director":{"crossfadeFrames":4},"skins":[{"id":"a","dir":"a"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy1.png"},{"file":"happy2.png"}]},"tender":{"portraits":[{"file":"tender.png"}]},"other":{"portraits":[{"file":"happy3.png"}]}},"lines":{"mapped":{"emotion":"happy"}}}
             """);
         try
         {
-            foreach (var name in new[] { "idle.png", "happy1.png", "happy2.png", "tender.png" })
+            foreach (var name in new[] { "idle.png", "happy1.png", "happy2.png", "happy3.png", "tender.png" })
                 File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "avatar_pose1.png"), Path.Combine(skin, name));
             using (var wave = new NAudio.Wave.WaveFileWriter(Path.Combine(audio, "mapped.wav"), new NAudio.Wave.WaveFormat(8000, 16, 1)))
                 wave.Write(new byte[64000], 0, 64000); // four seconds
@@ -435,6 +435,11 @@ public sealed class AvatarTubeFinishTests
             staleStep(); staleFade();
             Assert.False(tube.IsPortraitMode);
             Assert.Null(tube.FindControl<Image>("ImgAvatarB")!.Source);
+            File.Delete(Path.Combine(skin, "idle.png"));
+            change(new ModPackage(new ModManifest { Id = "portrait-no-idle" }, root, false));
+            Assert.True(tube.IsPortraitMode); Assert.Null(tube.PortraitPath); Assert.False(tube.IsPoseRotating);
+            tube.GigglePriority("mood", playSound: false, aiGenerated: false, mood: "soft");
+            Assert.Equal("tender.png", Path.GetFileName(tube.PortraitPath));
         }
         finally { Directory.Delete(root, true); }
     });

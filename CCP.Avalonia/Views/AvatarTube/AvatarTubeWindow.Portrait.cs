@@ -23,7 +23,7 @@ public partial class AvatarTubeWindow
     private double _portraitStepMs, _portraitLastMs;
     private readonly System.Collections.Generic.Dictionary<string, double> _portraitDurations = new();
     internal string? PortraitPath { get; private set; }
-    internal bool IsPortraitMode => _portraitImage != null;
+    internal bool IsPortraitMode => _portraitActive != null;
     internal bool IsPoseRotating => _poseTimer.IsEnabled;
     internal Func<TimeSpan, Action, Action> PortraitStepScheduler = SchedulePortrait;
     internal Func<TimeSpan, Action, Action> PortraitFadeScheduler = SchedulePortrait;
@@ -45,7 +45,6 @@ public partial class AvatarTubeWindow
         Bitmap? image = null;
         foreach (var candidate in _portrait.Bucket(_currentAvatarSet - 1, _portrait.Manifest.IdleEmotion))
             if ((image = _portrait.Open(candidate)) != null) { path = candidate; break; }
-        if (image == null) return false;
         StopRainPlayback();
         _poseTimer.Stop();
         ClearPortraitImage();
@@ -75,7 +74,7 @@ public partial class AvatarTubeWindow
     // WPF Avatar.cs:1217-1384: mapped line, else mood or affirmation; 2-5 poses, then still idle.
     private void PlayPortraitLine(string? lineId, string? audioPath, string text, string? mood, bool heldIdle)
     {
-        if (_portraitImage == null || _portrait == null) return;
+        if (!IsPortraitMode || _portrait == null) return;
         var emotion = _portrait.EmotionForLine(lineId);
         if (string.IsNullOrEmpty(emotion))
         {
@@ -132,7 +131,7 @@ public partial class AvatarTubeWindow
         int version = _portraitStepVersion;
         _cancelPortraitStep = PortraitStepScheduler(TimeSpan.FromMilliseconds(ms), () =>
         {
-            if (version != _portraitStepVersion || _portrait == null || _portraitImage == null) return;
+            if (version != _portraitStepVersion || _portrait == null || !IsPortraitMode) return;
             if (++_portraitStep >= _portraitOrder.Length)
             {
                 var idle = _portrait.Bucket(_currentAvatarSet - 1, _portrait.Manifest.IdleEmotion);

@@ -536,7 +536,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         //  Pose animation
         // =========================================================================================
 
-        public void StartPoseAnimation() => RunOnAvatar(() => { if (_portraitImage == null) _poseTimer.Start(); });
+        public void StartPoseAnimation() => RunOnAvatar(() => { if (!IsPortraitMode) _poseTimer.Start(); });
         public void StopPoseAnimation() => RunOnAvatar(() => _poseTimer.Stop());
         public void SetPoseInterval(TimeSpan interval) => _poseTimer.Interval = interval;
 
@@ -1103,7 +1103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         private void UpdateTitleDisplay()
         {
-            if (_portraitImage != null && _portrait != null) { UpdatePortraitTitle(); return; }
+            if (IsPortraitMode && _portrait != null) { UpdatePortraitTitle(); return; }
             var companionId = CompanionForAvatarSet(_currentAvatarSet);
             if (companionId.HasValue)
             {
