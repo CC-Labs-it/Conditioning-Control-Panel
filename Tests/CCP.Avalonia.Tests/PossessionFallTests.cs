@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -55,6 +56,54 @@ public sealed class PossessionFallTests
         var effect = new FallEffect();
         try { await body(effect, card, layer, target, ctx); }
         finally { await effect.UndoAsync(TimeSpan.Zero); PossessionRuntime.UndoAllLive(); window.Close(); }
+    });
+
+    [Fact]
+    public void TiltAndFallUseWpfCurves() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var rotate = new RotateTransform();
+        var chalk = new Rectangle();
+        FallEffect.TiltFrame(rotate, chalk, 1, 0);
+        Assert.InRange(chalk.Opacity, 0, .5);
+        FallEffect.TiltFrame(rotate, chalk, 1, .25);
+        Assert.Equal(.5, rotate.Angle, 5);
+        Assert.Equal(.55 * .578125, chalk.Opacity, 5);
+        FallEffect.TiltFrame(rotate, chalk, .5, 1);
+        Assert.Equal(4, rotate.Angle, 5);
+        Assert.Equal(.55, chalk.Opacity, 5);
+        Assert.Equal(8.75, FallEffect.FallAngle(1, .5), 5);
+        Assert.Equal(7, FallEffect.FallAngle(.5, 1), 5);
+    });
+
+    [Fact]
+    public void TiltRotationUsesCubicInOut() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var rotate = new RotateTransform();
+        FallEffect.TiltFrame(rotate, new Rectangle(), 1, .25);
+        Assert.Equal(.5, rotate.Angle, 5);
+    });
+
+    [Fact]
+    public void FallRotationUsesCubicIn() =>
+        Assert.Equal(8.75, FallEffect.FallAngle(1, .5), 5);
+
+    [Fact]
+    public void ChalkReturnFadesOverFirstSixtyPercent() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Assert.Equal(.3, FallEffect.ReturnChalkOpacity(.3, 0), 5);
+        Assert.Equal(.15, FallEffect.ReturnChalkOpacity(.3, .3), 5);
+        Assert.Equal(0, FallEffect.ReturnChalkOpacity(.3, .6), 5);
+        Assert.Equal(0, FallEffect.ReturnChalkOpacity(.3, 1), 5);
+    });
+
+    [Fact]
+    public Task ChalkStartsTransparent() => Run(async (effect, card, layer, target, ctx) =>
+    {
+        var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
+        var chalk = Assert.IsType<Rectangle>(Assert.Single(layer.Children));
+        Assert.InRange(chalk.Opacity, 0, .5);
+        await effect.UndoAsync(TimeSpan.Zero);
+        await apply;
     });
 
     [Fact]
