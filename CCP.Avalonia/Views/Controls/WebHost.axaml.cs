@@ -735,6 +735,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // A caller sets this before the native adapter is attached. WebView2 installs it on each
         // recreated core before the held first navigation; other engines retain the load fallback.
         internal string? WindowsDocumentStartScript { get; set; }
+        internal bool HostedPageMotion { get; set; }
+        private Task<bool>? _motionInstall;
+        internal Func<string, Task<bool>>? MotionScriptInstaller { get; set; }
         internal Func<string, Task>? DocumentStartInstaller { get; set; }
 
         internal async Task PrepareScrolllerGate(int engine, bool gated)
@@ -753,6 +756,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 _carrierInstall ??= InstallCarrierAsync();
                 await BoundedNativeStep(_carrierInstall, "carrier install");
+                if (Stale()) return;
+            }
+            if (HostedPageMotion && OperatingSystem.IsLinux())
+            {
+                var reduce = ConditioningControlPanel.CoreSettings.Current.MotionLevel == ConditioningControlPanel.Models.MotionLevel.Off;
+                var motionScript = "(()=>{const original=window.matchMedia.bind(window);window.matchMedia=function(q){const m=original(q);if(/^\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*(reduce|no-preference)\\s*\\)\\s*$/i.test(q)){const match=/reduce\\s*\\)/i.test(q);Object.defineProperty(m,'matches',{value:match === " + (reduce ? "true" : "false") + "});}return m;};})();";
+                _motionInstall ??= MotionScriptInstaller?.Invoke(motionScript) ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), motionScript);
+                await BoundedNativeStep(_motionInstall, "motion install");
                 if (Stale()) return;
             }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
@@ -819,6 +830,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ActiveNavigation = null;
             _loadedOnThisEngine = false;
             _carrierInstall = null;
+            _motionInstall = null;
             _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;

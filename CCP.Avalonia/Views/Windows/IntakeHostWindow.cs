@@ -46,18 +46,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DateTime _openedUtc;
         /// <summary>The intake claim's slip delivery (tests await it).</summary>
         internal System.Threading.Tasks.Task SparklesPending { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
-        internal WebHost Web { get; } = new();
+        internal WebHost Web { get; } = new() { HostedPageMotion = true };
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
 
         /// <summary>The page this host loaded; messages from any other document are dropped.</summary>
         internal Uri? PageUrl { get; set; }
+
+        private WindowState? _pageWindowedState;
+
+        private void SetPageFullscreen(bool on)
+        {
+            if (on)
+            {
+                if (_pageWindowedState != null) return;
+                _pageWindowedState = WindowState;
+                WindowState = WindowState.FullScreen;
+            }
+            else if (_pageWindowedState is { } previous)
+            {
+                _pageWindowedState = null;
+                WindowState = previous;
+            }
+        }
 
         public IntakeHostWindow()
         {
             Title = "Graded Intake";   // WPF IntakeHostService.ProductName
             Width = 1280;
             Height = 800;
+            Web.EnvironmentRequested += Views.Games.GameWindow.ConfigureHostedPageMotion;
             Content = Web;
+            Web.NativeFullscreenEntered += () => SetPageFullscreen(true);
+            Web.NativeFullscreenExited += () => SetPageFullscreen(false);
             Web.WebMessage += OnPageMessage;
             Web.BrowserProcessFailed += OnBrowserProcessFailed;
             // WPF DisposeAll: a closed window never leaves the mic open.

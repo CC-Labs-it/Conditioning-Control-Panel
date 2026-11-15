@@ -184,14 +184,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
         internal GameWindow() : this(Games[BreakoutDemoId]) { }
 
+        internal static void ConfigureHostedPageMotion(WebViewEnvironmentRequestedEventArgs args)
+        {
+            if (args is global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs windows)
+                windows.AdditionalBrowserArguments = HostedPageMotion.Merge(windows.AdditionalBrowserArguments, CoreSettings.Current.MotionLevel);
+        }
+
+        private WindowState? _pageWindowedState;
+
+        private void SetPageFullscreen(bool on)
+        {
+            if (on)
+            {
+                if (_pageWindowedState != null) return;
+                _pageWindowedState = WindowState;
+                WindowState = WindowState.FullScreen;
+            }
+            else if (_pageWindowedState is { } previous)
+            {
+                _pageWindowedState = null;
+                WindowState = previous;
+            }
+        }
+
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            Web = new WebHost();
+            Web = new WebHost { HostedPageMotion = true };
+            // WPF ChaosWebViewHost.cs:1645: Just Drop owns its window mode.
+            if (spec.Id != JustDropId)
+            {
+                Web.NativeFullscreenEntered += () => SetPageFullscreen(true);
+                Web.NativeFullscreenExited += () => SetPageFullscreen(false);
+            }
             if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
             if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
+            Web.EnvironmentRequested += ConfigureHostedPageMotion;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;

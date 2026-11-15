@@ -575,7 +575,7 @@ public sealed partial class GameWindowTests
         {
             case WindowsWebView2EnvironmentRequestedEventArgs windows:
                 Assert.Equal(folder, windows.UserDataFolder);
-                Assert.Equal("--autoplay-policy=no-user-gesture-required", windows.AdditionalBrowserArguments);
+                Assert.Equal("--autoplay-policy=no-user-gesture-required --force-prefers-no-reduced-motion", windows.AdditionalBrowserArguments);
                 break;
             case GtkWebViewEnvironmentRequestedEventArgs gtk:
                 Assert.Equal(folder, gtk.BaseDataDirectory);
@@ -594,7 +594,7 @@ public sealed partial class GameWindowTests
         {
             case WindowsWebView2EnvironmentRequestedEventArgs windows:
                 Assert.Null(windows.UserDataFolder);
-                Assert.Null(windows.AdditionalBrowserArguments);
+                Assert.Equal("--force-prefers-no-reduced-motion", windows.AdditionalBrowserArguments);
                 break;
             case GtkWebViewEnvironmentRequestedEventArgs gtk: Assert.Null(gtk.BaseDataDirectory); break;
             case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe: Assert.Null(wpe.DataDirectory); break;

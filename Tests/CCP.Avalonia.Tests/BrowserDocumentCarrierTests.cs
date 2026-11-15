@@ -10,6 +10,22 @@ namespace CCP.Avalonia.Tests;
 public sealed class BrowserDocumentCarrierTests
 {
     [Fact]
+    public Task MotionScriptIsInstalledBeforeNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var host = new WebHost { HostedPageMotion = true };
+        var pending = new TaskCompletionSource<bool>();
+        string? script = null;
+        host.MotionScriptInstaller = value => { script = value; return pending.Task; };
+        host.NewScrolllerEngine()(true);
+        Assert.Null(host.ScrolllerGate);
+        Assert.Contains("prefers-reduced-motion", script);
+        pending.SetResult(true);
+        await Task.Yield();
+        Assert.True(host.ScrolllerGate);
+    });
+
+    [Fact]
     public Task CarrierIsInstalledBeforeNavigationAndOnEachEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChatThresholdLinksTests.Setup();
