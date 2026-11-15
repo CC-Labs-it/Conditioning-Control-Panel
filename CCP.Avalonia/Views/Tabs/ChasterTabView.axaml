@@ -187,6 +187,9 @@
         </Border>
     <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="26,22,26,20" MaxWidth="1080" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+            <Grid x:Name="TrailerWarmHost" Width="320" Height="190" IsVisible="False" IsHitTestVisible="False">
+                <fx:ChasterTrailerView x:Name="TrailerWeb" IsVisible="False"/>
+            </Grid>
             <!-- header: the name, and the account -->
             <Grid Grid.Row="0" Margin="4,0,4,14">
                 <TextBlock Text="{loc:Str chaster_title}" FontFamily="Fredoka, Segoe UI" FontSize="28"
@@ -767,9 +770,6 @@
             </StackPanel>
         </Grid>
     </ScrollViewer>
-        <Grid x:Name="TrailerWarmHost" Width="320" Height="190" IsVisible="False" IsHitTestVisible="False">
-            <fx:ChasterTrailerView x:Name="TrailerWeb" IsVisible="False"/>
-        </Grid>
         <Popup x:Name="Trailer" Placement="Bottom" VerticalOffset="6" IsLightDismissEnabled="False">
             <Border x:Name="TrailerCard" Width="320" Background="#FF1A1230" BorderBrush="{DynamicResource GlassBorderBrush}"
                     BorderThickness="1" Padding="8" PointerEntered="Trailer_PointerEntered" PointerExited="Trailer_PointerExited">

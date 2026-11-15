@@ -88,7 +88,10 @@ public sealed class ChasterTrailerTests {
         var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("true"); } };
         return WithTab(async (tab, _) => {
             var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
-            Assert.Same(host, view.Browser); Assert.Same(tab.FindControl<Grid>("TrailerWarmHost"), view.Parent);
+            var warmHost = tab.FindControl<Grid>("TrailerWarmHost")!;
+            Assert.Same(host, view.Browser); Assert.Same(warmHost, view.Parent);
+            Assert.Same(tab.FindControl<ScrollViewer>("PageScroll")!.Content, warmHost.Parent);
+            Assert.False(warmHost.IsVisible); Assert.False(warmHost.IsHitTestVisible);
             Assert.False(view.IsVisible); Assert.Empty(scripts); Assert.EndsWith("/chaster/trailers.html", view.Page!.AbsolutePath);
             Assert.Equal(1, host.NavigationRequests); Assert.NotNull(host.ConfigureNative);
             await view.NavigationFinished(view.Page, true); Assert.Single(scripts); Assert.False(view.IsVisible);
