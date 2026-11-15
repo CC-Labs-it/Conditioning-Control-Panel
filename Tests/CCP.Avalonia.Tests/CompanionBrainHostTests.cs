@@ -250,6 +250,72 @@ public sealed class CompanionBrainHostTests
         }
         return Task.CompletedTask;
     });
+    private static Action SaveAskSeams()
+    {
+        var saved = (CompanionAskService.BrainProvider, CompanionAskService.ShowCardSurface, CompanionAskService.SaySurface,
+            CompanionAskService.BusyProvider, CompanionAskService.SessionOptions, CompanionAskService.StartSession,
+            CompanionAskService.OpenLink, ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown,
+            ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.NoticeSurface);
+        var timer = typeof(CompanionAskService).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var stopped = typeof(CompanionAskService).GetField("_stopped", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var instance = CompanionAskService.Instance;
+        var wasRunning = timer.GetValue(instance) != null;
+        var wasStopped = stopped.GetValue(instance);
+        return () =>
+        {
+            if (!wasRunning) { instance.Stop(); stopped.SetValue(instance, wasStopped); }
+            (CompanionAskService.BrainProvider, CompanionAskService.ShowCardSurface, CompanionAskService.SaySurface,
+             CompanionAskService.BusyProvider, CompanionAskService.SessionOptions, CompanionAskService.StartSession,
+             CompanionAskService.OpenLink, ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown,
+             ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.NoticeSurface) = saved;
+        };
+    }
+
+    [Fact]
+    public Task AskSeamCleanupRestoresCallbacksAndTimer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var outerRestore = SaveAskSeams();
+        var instance = CompanionAskService.Instance;
+        var timer = typeof(CompanionAskService).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var stopped = typeof(CompanionAskService).GetField("_stopped", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        void Check()
+        {
+            CompanionAskService.BrainProvider = null;
+            CompanionAskService.ShowCardSurface = null;
+            CompanionAskService.SaySurface = null;
+            CompanionAskService.BusyProvider = null;
+            CompanionAskService.SessionOptions = null;
+            CompanionAskService.StartSession = null;
+            CompanionAskService.OpenLink = null;
+            ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown = null;
+            ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.NoticeSurface = null;
+            var oldTimer = timer.GetValue(instance);
+            var oldStopped = stopped.GetValue(instance);
+            var restore = SaveAskSeams();
+            try { AvApp.SeedCompanionTubeSeams(); }
+            finally { restore(); }
+            Assert.Null(CompanionAskService.BrainProvider);
+            Assert.Null(CompanionAskService.ShowCardSurface);
+            Assert.Null(CompanionAskService.SaySurface);
+            Assert.Null(CompanionAskService.BusyProvider);
+            Assert.Null(CompanionAskService.SessionOptions);
+            Assert.Null(CompanionAskService.StartSession);
+            Assert.Null(CompanionAskService.OpenLink);
+            Assert.Null(ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown);
+            Assert.Null(ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.NoticeSurface);
+            Assert.Same(oldTimer, timer.GetValue(instance));
+            Assert.Equal(oldStopped, stopped.GetValue(instance));
+        }
+        try
+        {
+            if (timer.GetValue(instance) == null) Check();
+            instance.Start();
+            Check();
+        }
+        finally { outerRestore(); }
+        return Task.CompletedTask;
+    });
+
     private sealed class AskBusyAudio : ConditioningControlPanel.Avalonia.Views.Deeper.IDeeperLocalAudio
     {
         public double DurationSeconds => 95;
@@ -271,9 +337,7 @@ public sealed class CompanionBrainHostTests
             AppBuilder.Configure<AvApp>().WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var busy = CompanionAskService.BusyProvider;
-        var sessions = CompanionAskService.SessionOptions;
-        var start = CompanionAskService.StartSession;
+        var restore = SaveAskSeams();
         var open = ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open;
         var audio = new AskBusyAudio();
         ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open = _ => Task.FromResult<ConditioningControlPanel.Avalonia.Views.Deeper.IDeeperLocalAudio?>(audio);
@@ -308,11 +372,46 @@ public sealed class CompanionBrainHostTests
         {
             player.Close();
             ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open = open;
-            CompanionAskService.Instance.Stop();
-            CompanionAskService.BusyProvider = busy;
-            CompanionAskService.SessionOptions = sessions;
-            CompanionAskService.StartSession = start;
+            restore();
         }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CompanionAskBusyVideoBeforePlayback(bool local) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var restore = SaveAskSeams();
+        var player = new ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        web.ScriptInvoker = _ => Task.FromResult<string?>("ok");
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mp4");
+        File.WriteAllText(path, "");
+        try
+        {
+            AvApp.Mantra.EndSession();
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            player.Show();
+            AvApp.SeedCompanionTubeSeams();
+            player.OpenLocalMediaFile(path);
+            Assert.False(CompanionAskService.BusyProvider!());
+            player.LoadEnhancementFromMemory(new ConditioningControlPanel.Models.Deeper.Enhancement
+                { MediaType = ConditioningControlPanel.Models.Deeper.MediaTypes.Video, MediaSource = local ? path : "https://hypnotube.com/video/test" }, "test");
+            Assert.True(CompanionAskService.BusyProvider!());
+            Assert.False(CompanionAskService.Instance.CanOfferFor("what can I do"));
+            player.FindControl<Button>("BtnStop")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.False(CompanionAskService.BusyProvider!());
+            player.FindControl<Button>("BtnPlayPause")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.True(CompanionAskService.BusyProvider!());
+            ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow.PanicPauseAll();
+            Assert.False(CompanionAskService.BusyProvider!());
+        }
+        finally { player.Close(); File.Delete(path); restore(); }
         return Task.CompletedTask;
     });
 }

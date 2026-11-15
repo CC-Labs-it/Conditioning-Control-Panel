@@ -930,11 +930,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // hands LocalPath back in a form that only matches after normalisation.
                 var full = System.IO.Path.GetFullPath(path);
                 _videoBrowser.AllowNavigation = u => u.IsFile && DeeperPreview.PathsEqual(u.LocalPath, full);
+                TickDeeper(bindVideo: true); // WPF binds the enhancement before navigation.
                 _videoBrowser.Source = new Uri(full);
                 _videoNavigated = true;
             }
             catch (Exception ex)
             {
+                StopDeeper();
                 Log.Warning(ex, "EnhancementPlayer: local video load failed");
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_no_video");
             }
@@ -970,11 +972,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
                 // WPF's NavigationStarting (xaml.cs:1796): every later hop passes the same fence.
                 _videoBrowser.AllowNavigation = DeeperPreview.IsAllowedPreviewHost;
+                TickDeeper(bindVideo: true); // WPF binds the enhancement before navigation.
                 _videoBrowser.Source = uri;
                 _videoNavigated = true;
             }
             catch (Exception ex)
             {
+                StopDeeper();
                 Log.Warning(ex, "EnhancementPlayer: video load failed");
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_no_video");
             }
@@ -1022,6 +1026,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // letting the poll correct it would show ⏸ / LIVE / "Playing" in the meantime, and on
             // a page that never grows a video element it would never be corrected at all.
             var want = !_isPlaying;
+            if (want) TickDeeper(bindVideo: true); // WPF rebinds after Stop before Play.
             var load = _videoLoad;
             var result = await _videoBrowser.InvokeScriptAsync(
                 DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"));
