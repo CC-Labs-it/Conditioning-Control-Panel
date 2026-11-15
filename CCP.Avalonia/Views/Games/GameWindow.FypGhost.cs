@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<DateTime> FypGhostNow = () => DateTime.UtcNow;
         internal static Func<Window, PixelRect, bool, bool> FypGhostButtonConfigure = (w, bounds, passive) => X11Overlay.SetOverrideRedirect(w, bounds, passive);
         internal static Func<TopLevel, bool> FypGhostRaise = X11Overlay.Raise;
+        internal static Func<TopLevel, bool> FypGhostRaiseManaged = X11Overlay.RaiseManaged;
         internal static Func<Action, IDisposable> FypGhostStartTick = tick =>
             DispatcherTimer.Run(() => { tick(); return true; }, TimeSpan.FromSeconds(5));
         private IDisposable? _fypGhostTimer;
@@ -134,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!_fypGhosted) return;
             try
             {
-                FypGhostRaise(this);
+                FypGhostRaiseManaged(this);
                 foreach (var button in _fypGhostButtons.OrderByDescending(b => b.Width * b.Height))
                     FypGhostRaise(button);
             }

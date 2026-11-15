@@ -294,15 +294,16 @@ public sealed class FypPanicLadderTests
                 .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity,
-            GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostStartTick);
+            GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostRaiseManaged, GameWindow.FypGhostStartTick);
         Action? tick = null;
         bool stopped = false, through = false;
-        var raised = new List<global::Avalonia.Controls.TopLevel>();
+        var raised = new List<(string operation, global::Avalonia.Controls.TopLevel window)>();
         GameWindow.FypGhostSupport = () => null;
         GameWindow.FypGhostClickThrough = (_, on) => { through = on; return true; };
         GameWindow.FypGhostOpacity = (_, _) => true;
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
-        GameWindow.FypGhostRaise = w => { raised.Add(w); return true; };
+        GameWindow.FypGhostRaise = w => { raised.Add(("direct", w)); return true; };
+        GameWindow.FypGhostRaiseManaged = w => { raised.Add(("managed", w)); return true; };
         GameWindow.FypGhostStartTick = action =>
         {
             if (exit == "start-failure") throw new InvalidOperationException();
@@ -327,7 +328,7 @@ public sealed class FypPanicLadderTests
             Assert.True(feed.IsFypGhosted);
             var buttons = feed.FypGhostButtons.ToArray();
             tick!();
-            Assert.Equal(new global::Avalonia.Controls.TopLevel[] { feed, buttons[0], buttons[1] }, raised);
+            Assert.Equal(new[] { ("managed", (global::Avalonia.Controls.TopLevel)feed), ("direct", buttons[0]), ("direct", buttons[1]) }, raised);
             if (exit == "exit") feed.ExitFypGhost();
             else if (exit == "minimize") feed.WindowState = global::Avalonia.Controls.WindowState.Minimized;
             else if (exit == "hide") feed.Hide();
@@ -342,7 +343,7 @@ public sealed class FypPanicLadderTests
         {
             feed.Close();
             (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity,
-                GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostStartTick) = old;
+                GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostRaiseManaged, GameWindow.FypGhostStartTick) = old;
         }
     });
 
