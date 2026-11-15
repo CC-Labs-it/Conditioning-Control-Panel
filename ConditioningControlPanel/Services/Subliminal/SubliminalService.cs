@@ -117,7 +117,8 @@ namespace ConditioningControlPanel.Services
             
             _isRunning = true;
             ScheduleNext();
-            (_afterglow ??= new Super.AfterglowDriver()).Start();
+            // Take two (2026-11-15): Afterglow is the ghost line fed from FlashSubliminal. The
+            // October near-cursor words (AfterglowDriver) are no longer started.
             
             App.Logger?.Information("SubliminalService started");
 
@@ -133,6 +134,7 @@ namespace ConditioningControlPanel.Services
             _isRunning = false;
             _timer.Stop();
             _afterglow?.Stop();
+            DispatcherHelper.RunOnUI(Compositor.AfterglowLineLayer.StopAll);
             _visibleOneShotGen = null;
 
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
@@ -292,6 +294,7 @@ namespace ConditioningControlPanel.Services
             }
             
             var text = activeTexts[_random.Next(activeTexts.Count)];
+            Compositor.AfterglowLineLayer.WordShown(text);   // Super Afterglow: this word leaves a ghost
             
             // Check for linked audio
             string? audioPath = FindLinkedAudio(text);
