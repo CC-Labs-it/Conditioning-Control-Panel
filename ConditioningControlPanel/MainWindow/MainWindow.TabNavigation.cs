@@ -771,6 +771,9 @@ namespace ConditioningControlPanel
             // Chrome FX: the section row that owns this tab stays lit. Last, so it runs whatever
             // the switch above did - and it never throws.
             ApplyNavActiveGlow(tab);
+
+            // Declutter wave 1: the header banner is Home's alone (BannerFxRules.ShowsOnTab).
+            ApplyHeaderBannerForTab(tab);
         }
 
         // ============================== nav rail: sections ==============================

@@ -132,6 +132,34 @@ public class HeaderBannerFxTests
         Assert.False(BannerFxRules.RepeatSparkles(ambientAllowed: false, supportOnScreen: true));
     }
 
+    // Declutter wave 1 (2026-11-15): the banner is Home's alone.
+    [Theory]
+    [InlineData("settings", true)]
+    [InlineData("Settings", true)]
+    [InlineData("progression", true)]   // permanent alias that lands on the dashboard
+    [InlineData(null, true)]            // nothing navigated yet = the dashboard the app lands on
+    [InlineData("", true)]
+    [InlineData("appsettings", false)]  // the Settings PAGE is not Home
+    [InlineData("studio", false)]
+    [InlineData("play", false)]
+    [InlineData("companion", false)]
+    [InlineData("quests", false)]
+    [InlineData("chaster", false)]
+    [InlineData("friends", false)]
+    public void TheBannerShowsOnHomeOnly(string? tab, bool shows) =>
+        Assert.Equal(shows, BannerFxRules.ShowsOnTab(tab));
+
+    [Fact]
+    public void ShowTabPaintsTheBannerRuleAndAHiddenBannerRunsNoLoop()
+    {
+        var nav = Source("MainWindow", "MainWindow.TabNavigation.cs");
+        Assert.Contains("ApplyHeaderBannerForTab(tab);", nav);
+        var fx = Source("MainWindow", "MainWindow.BannerFx.cs");
+        Assert.Contains("BannerFxRules.ShowsOnTab(tabKey) ? Visibility.Visible : Visibility.Collapsed", fx);
+        Assert.Contains("HeaderBannerGlowHost.Visibility = vis;", fx);   // the halo never outlives the pill
+        Assert.Contains("ChromeAmbientAllowed && HeaderBannerHost?.Visibility == Visibility.Visible", fx);
+    }
+
     [Fact]
     public void TheSparkleRunBelongsToTheSupportBeatOnly()
     {
