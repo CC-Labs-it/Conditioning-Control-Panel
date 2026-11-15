@@ -71,6 +71,34 @@ public sealed class MandatoryVideoFloatingJoinTests
         Assert.Empty(host.Calls);
     }, together, strict);
 
+    [Fact]
+    public void Do_not_disturb_retries_a_join_after_the_short_delay() => With((clock, host, video) =>
+    {
+        var s = CoreSettings.Current;
+        var (list, enabled, provider) = (s.DndProcessList, s.DndSuppressVideos, ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess);
+        var front = "player";
+        try
+        {
+            s.DndProcessList = new List<string> { "player" };
+            s.DndSuppressVideos = true;
+            ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = () => front;
+            ConditioningControlPanel.Services.UI.DndGuard.ResetCacheForTests();
+            Open(clock, video);
+            clock.Advance(TimeSpan.FromSeconds(55));
+            Assert.Empty(host.Calls);
+            front = "";
+            ConditioningControlPanel.Services.UI.DndGuard.ResetCacheForTests();
+            clock.Advance(TimeSpan.FromSeconds(31));
+            Assert.Equal(new[] { false }, host.Calls);
+        }
+        finally
+        {
+            (s.DndProcessList, s.DndSuppressVideos) = (list, enabled);
+            ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = provider;
+            ConditioningControlPanel.Services.UI.DndGuard.ResetCacheForTests();
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

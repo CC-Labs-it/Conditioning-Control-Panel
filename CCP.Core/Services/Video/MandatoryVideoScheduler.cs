@@ -342,6 +342,12 @@ namespace ConditioningControlPanel.Services
                     && _host.IsFloating(IsStrict) && _host.IsFloating(CoreSettings.Current.StrictLockEnabled)
                     && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1)
                 {
+                    if (Services.UI.DndGuard.ShouldSuppressVideos())
+                    {
+                        Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
+                        ScheduleNext(SkipRetrySeconds);
+                        return;
+                    }
                     if (_host.FloatingUp < _host.FloatingLimit) _host.TryFloatingTrigger(userInitiated: false);
                     ScheduleNext(_host.FloatingUp < _host.FloatingLimit ? FloatingJoinDelay() : null);
                     return;
