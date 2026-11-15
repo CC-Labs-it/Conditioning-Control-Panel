@@ -102,10 +102,10 @@ public sealed partial class GameWindowTests
     {
         ChaosMetaStore.Save(new ChaosMetaState { RunsCompleted = 4 }, ChaosMetaStore.ActiveSlot);
         ChaosMeta.State.RunsCompleted = 4;
-        var meta = ChaosMeta.State;
         try
         {
             var web = GameWindow.Launch("dtrh")!;
+            var meta = ChaosMeta.State; // direct launch has loaded the active save
             web.HandleMessage("{\"type\":\"boot-error\"}");
             ChaosRunHost.StartRun(new ChaosRunConfig());
             var overlay = ChaosRunHost.Overlay;

@@ -217,9 +217,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private static void LaunchDtrhLegacy()
         {
             if (Chaos.ChaosRunHost.IsActive) return;
-            // WPF App.xaml.cs:2746 loads the active save first: only the hub's constructor loads it here,
-            // so an unloaded State would read RunsCompleted 0 and deal a repeat player the first run.
-            // A live hub already holds the loaded save; reloading under it would swap its state.
+            // WPF App.xaml.cs:2828 loads the active save before choosing the fallback.
+            // A live hub already owns that state; otherwise read the saved run count.
             if (Chaos.ChaosHubWindow.Current == null) ChaosMeta.Init();
             if (ChaosMeta.State.RunsCompleted == 0)
             {

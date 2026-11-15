@@ -1310,6 +1310,7 @@ public sealed partial class GameWindowTests
     {
         var (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
+        var oldMetaState = ChaosMeta.State;
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
         var oldPending = ChaosMeta.State.PendingReveals.ToArray();
         var oldSeen = ChaosMeta.State.SeenReveals.ToArray();
@@ -1348,6 +1349,7 @@ public sealed partial class GameWindowTests
             (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
             GameWindow.CloseAllForPanic();
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, oldMetaState);
             (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             ChaosMeta.State.PendingReveals.Clear(); ChaosMeta.State.PendingReveals.UnionWith(oldPending);
             ChaosMeta.State.SeenReveals.Clear(); ChaosMeta.State.SeenReveals.UnionWith(oldSeen);
