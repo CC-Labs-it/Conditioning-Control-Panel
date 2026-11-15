@@ -52,6 +52,14 @@ internal sealed class CrashLog
         if (e.Handled) return;
         e.Handled = true;
         Write("DISPATCHER", e.Exception);
+        // WPF App.xaml.cs:2474: desktop quota exhaustion drops a frame, not the app.
+        if (e.Exception is System.ComponentModel.Win32Exception quota &&
+            (quota.NativeErrorCode == 1816 || quota.NativeErrorCode == 1450 ||
+             quota.Message.Contains("Not enough quota", StringComparison.Ordinal)))
+        {
+            try { Serilog.Log.Warning("Window-show quota exhausted, frame dropped"); } catch { }
+            return;
+        }
         if (IsRenderFailure(e.Exception))
         {
             if (Interlocked.Exchange(ref _exitInProgress, 1) == 0) _beginExit();

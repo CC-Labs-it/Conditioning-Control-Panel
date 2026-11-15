@@ -172,6 +172,54 @@ public class CrashLogTests
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
     }
 
+    [Theory]
+    [InlineData(1816, "quota 1816")]
+    [InlineData(1450, "quota 1450")]
+    [InlineData(42, "Not enough quota UCEERR_test")]
+    public async Task QuotaFaultsAreLoggedHandledAndDoNotConsumeTheDialog(int code, string message)
+    {
+        var dir = NewDir();
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                var dialogs = 0;
+                var exits = 0;
+                var log = new CrashLog(dir, "1", _ => dialogs++, () => exits++);
+                Dispatcher.UIThread.UnhandledException += log.DispatcherFault;
+                try
+                {
+                    var faults = new Exception[]
+                    {
+                        new System.ComponentModel.Win32Exception(code, message),
+                        code == 42 ? new InvalidOperationException("Not enough quota") :
+                            new System.ComponentModel.Win32Exception(42, "other error")
+                    };
+                    for (var i = 0; i < faults.Length; i++)
+                    {
+                        var done = new TaskCompletionSource<bool>();
+                        void Check(object? _, DispatcherUnhandledExceptionEventArgs e) => done.TrySetResult(e.Handled);
+                        Dispatcher.UIThread.UnhandledException += Check;
+                        try
+                        {
+                            var error = faults[i];
+                            Dispatcher.UIThread.Post(() => throw error);
+                            Assert.True(await done.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+                            Assert.Equal(i == 1 ? 1 : 0, dialogs);
+                            Assert.Equal(0, exits);
+                        }
+                        finally { Dispatcher.UIThread.UnhandledException -= Check; }
+                    }
+                    var text = File.ReadAllText(Path.Combine(dir, "crash.log"));
+                    Assert.Equal(2, text.Split("CRASH REPORT").Length - 1);
+                    Assert.Contains(message, text);
+                }
+                finally { Dispatcher.UIThread.UnhandledException -= log.DispatcherFault; }
+            });
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
     [Fact]
     public void FatalExitUsesBackgroundThreadsAndBackstopWhenExitHangs()
     {
