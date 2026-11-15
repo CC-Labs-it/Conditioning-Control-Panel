@@ -44,13 +44,13 @@ internal sealed class ToastEffect : PossessionEffectBase
         Control portrait = face != null
             ? new Border { Width = 30, Height = 38, CornerRadius = new CornerRadius(4), ClipToBounds = true,
                 Background = new SolidColorBrush(Color.Parse("#DC143C")), Child = new Image { Source = face, Stretch = Stretch.UniformToFill } }
-            : new TextBlock { Text = "◆", Foreground = new SolidColorBrush(Color.Parse("#DC143C")), FontSize = 15, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
+            : new TextBlock { Text = "◆", Foreground = new SolidColorBrush(EmberAttribution.Ember), FontSize = 15, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
         row.Children.Add(portrait);
         var text = new TextBlock { Text = line, Foreground = new SolidColorBrush(Color.Parse("#FFE3DA")), FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0) };
         Grid.SetColumn(text, 1); row.Children.Add(text);
         var toast = new Border { Width = Width, Background = new SolidColorBrush(Color.Parse("#1A0A0A")),
-            BorderBrush = new SolidColorBrush(Color.Parse("#DC143C")), BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(EmberAttribution.Ember), BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 8, 12, 8), IsHitTestVisible = false, Child = row };
         toast.Measure(new Size(Width, double.PositiveInfinity));
         double height = Math.Max(44, toast.DesiredSize.Height);
@@ -76,8 +76,9 @@ internal sealed class ToastEffect : PossessionEffectBase
     {
         if (_layer != null && _toast != null && _rect.Contains(e.GetPosition(_layer)))
         {
-            if (e.GetCurrentPoint(_layer).Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed)
-                e.Handled = true;
+            var kind = e.GetCurrentPoint(_layer).Properties.PointerUpdateKind;
+            if (e.Pointer.Type != PointerType.Mouse || kind is not (PointerUpdateKind.LeftButtonPressed or PointerUpdateKind.RightButtonPressed)) return;
+            if (kind == PointerUpdateKind.RightButtonPressed) e.Handled = true;
             _ = UndoAsync(TimeSpan.FromMilliseconds(160));
         }
     }

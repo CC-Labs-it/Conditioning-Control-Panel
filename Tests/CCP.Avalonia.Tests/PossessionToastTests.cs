@@ -93,9 +93,11 @@ public class PossessionToastTests
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task PressInsideDismissesAndOnlyRightPressIsHandled(bool right) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(PointerType.Mouse, PointerUpdateKind.LeftButtonPressed, RawInputModifiers.LeftMouseButton, true, false)]
+    [InlineData(PointerType.Mouse, PointerUpdateKind.RightButtonPressed, RawInputModifiers.RightMouseButton, false, true)]
+    [InlineData(PointerType.Mouse, PointerUpdateKind.MiddleButtonPressed, RawInputModifiers.MiddleMouseButton, true, false)]
+    [InlineData(PointerType.Touch, PointerUpdateKind.LeftButtonPressed, RawInputModifiers.LeftMouseButton, true, false)]
+    public Task PressInsideDismissesAndOnlyRightPressIsHandled(PointerType pointerType, PointerUpdateKind kind, RawInputModifiers modifiers, bool reachesBelow, bool handled) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var below = new Border { Background = Brushes.Transparent };
         var layer = new Canvas { IsHitTestVisible = false };
@@ -114,14 +116,14 @@ public class PossessionToastTests
             await apply;
             bool received = false;
             below.PointerPressed += (_, _) => received = true;
-            var press = new PointerPressedEventArgs(below, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), layer,
+            var press = new PointerPressedEventArgs(below, new Pointer(Pointer.GetNextFreeId(), pointerType, true), layer,
                 new Point(Canvas.GetLeft(toast) + 5, Canvas.GetTop(toast) + 5), 0,
-                new PointerPointProperties(right ? RawInputModifiers.RightMouseButton : RawInputModifiers.LeftMouseButton,
-                    right ? PointerUpdateKind.RightButtonPressed : PointerUpdateKind.LeftButtonPressed), KeyModifiers.None);
+                new PointerPointProperties(modifiers, kind), KeyModifiers.None);
             below.RaiseEvent(press);
-            Assert.Equal(!right, received); Assert.Equal(right, press.Handled);
+            Assert.Equal(reachesBelow, received); Assert.Equal(handled, press.Handled);
             host.Frames.Frame(TimeSpan.FromMilliseconds(300)); host.Frames.Frame(TimeSpan.FromMilliseconds(460));
-            Assert.Empty(layer.Children);
+            if (pointerType != PointerType.Mouse || kind == PointerUpdateKind.MiddleButtonPressed) { Assert.Single(layer.Children); Assert.True(effect.IsLive); }
+            else Assert.Empty(layer.Children);
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
@@ -225,6 +227,32 @@ public class PossessionToastTests
                 await apply.WaitAsync(TimeSpan.FromSeconds(2));
                 Assert.Single(layer.Children);
             }
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ToastBorderAndFallbackGlyphUseEmber(bool border) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 600, Height = 400, Content = new Grid { Children = { layer } } };
+        window.Show(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var host = new Host(window, layer);
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var effect = new ToastEffect();
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, null, CancellationToken.None);
+            var toast = Assert.IsType<Border>(Assert.Single(layer.Children));
+            var face = Assert.IsType<TextBlock>(Assert.IsType<Grid>(toast.Child).Children[0]);
+            Assert.Equal("◆", face.Text);
+            var brush = Assert.IsAssignableFrom<ISolidColorBrush>(border ? toast.BorderBrush : face.Foreground);
+            Assert.Equal(Color.Parse("#FF8A5C"), brush.Color);
+            await effect.UndoAsync(TimeSpan.Zero); await apply;
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
