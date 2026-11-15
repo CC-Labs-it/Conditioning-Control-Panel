@@ -149,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
             HookBrowserEnhance();
+            HookBrowserDiscovery();
             SyncBrowserCard();
         }
 
