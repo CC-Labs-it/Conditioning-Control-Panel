@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _askEngine = engine;
             engine.Ack(ask.Id);
             DrawFace(ask.Face);
+            _voxMood = EmiChains.FrameForFace(string.IsNullOrEmpty(ask.Face) ? "^_^" : ask.Face);
             ShowBubble(ask.Question);
             _askChips!.Children.Clear();
             for (int i = 0; i < 2; i++)
@@ -137,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
         private void ShowBubble(string text)
         {
+            Vox(text);
             EnsureBubble();
             if (_bubble == null || _bubbleText == null) return;
             _bubbleText.Text = text;
@@ -149,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void HideBubble()
         {
+            try { _vox?.Stop(); } catch { }
             if (_bubble != null) _bubble.IsVisible = false;
             if (_bubbleTail != null) _bubbleTail.IsVisible = false;
         }

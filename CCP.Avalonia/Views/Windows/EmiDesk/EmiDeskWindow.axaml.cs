@@ -989,19 +989,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void PlayChain(EmiChain? chain, Action? done = null, string? bodyFrameOverride = null)
         {
             if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
-            // ponytail: voice mood, prop teardown and pixel/art rendering still need their hosts.
+            // A chain pose supplies its voice mood; a pose-free chain retains the caller's mood.
             // #3329: the goodbye wink owns her until the dismissal lands, and any other chain during the
             // wake completes the summon first (WPF React.cs:132-138 order), so its done hook still runs once.
             if (_dismissPending && chain.Id != "wink") return;
+            var voice = EmiChains.FrameKey(bodyFrameOverride) ?? EmiChains.FrameKey(chain.BodyFrame);
+            if (voice != null) _voxMood = voice;
             if (_summonChainLive && chain.Id != "wake") FinishSummon();
             StopPatFeedback();
             StopIdleBeats();
             _player.Play(chain, BuildHooks(done), bodyFrameOverride);
         }
 
-        /// <summary>Play the shared WPF dots/reaction cadence. Bubble/voice hosts remain unported.</summary>
+        /// <summary>Play the shared WPF dots/reaction cadence.</summary>
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
-            => PlayChain(EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line)), done);
+        {
+            _voxMood = EmiChains.FrameForFace(reactionFace);
+            PlayChain(EmiChains.MakeSay(line, reactionFace, EmiChains.SayHoldMs(line)), done);
+        }
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
@@ -2780,9 +2785,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <inheritdoc cref="LayoutProp"/>
         private void HideProp() { }
-
-        /// <summary>ponytail: EmiDeskWindow.Bubble.cs - drops the voice hooks.</summary>
-        private void TearDownVox() { }
 
         /// <summary>WPF EmiDeskWindow.xaml.cs:1832 - the pat sound.</summary>
         private void PlayPatSfx() => EmiSfx.Pat();
