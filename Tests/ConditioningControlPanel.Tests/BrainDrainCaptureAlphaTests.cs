@@ -91,7 +91,6 @@ public class BrainDrainCaptureAlphaTests
         SKImageFilter? meltFilter = null;
         SKShader? drift = null;
         SKImageFilter? noiseFilter = null;
-        SKPaint? noisePaint = null;
         SKImage? tile = null;
         if (melt)
         {
@@ -107,9 +106,9 @@ public class BrainDrainCaptureAlphaTests
             }
             tile = tileSurface.Snapshot();
             drift = SKShader.CreateImage(tile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
+                                         new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None),
                                          SKMatrix.CreateScale(3f, 3f));
-            noisePaint = new SKPaint { FilterQuality = SKFilterQuality.Low, Shader = drift };
-            noiseFilter = SKImageFilter.CreatePaint(noisePaint);
+            noiseFilter = SKImageFilter.CreateShader(drift);
             meltFilter = SKImageFilter.CreateDisplacementMapEffect(
                 SKColorChannel.R, SKColorChannel.G, amplitude, noiseFilter, blurFilter);
             paint.ImageFilter = meltFilter;
@@ -122,7 +121,6 @@ public class BrainDrainCaptureAlphaTests
         paint.ColorFilter = null;   // shared static: drop the reference, never dispose it
         meltFilter?.Dispose();
         noiseFilter?.Dispose();
-        noisePaint?.Dispose();
         drift?.Dispose();
         tile?.Dispose();
         return published;

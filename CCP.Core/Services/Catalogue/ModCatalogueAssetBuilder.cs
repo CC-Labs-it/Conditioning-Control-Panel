@@ -29,7 +29,7 @@ public static class ModCatalogueAssetBuilder
             using var decoded = SKBitmap.Decode(codec, new SKImageInfo(size.Width, size.Height));
             if (decoded == null) return null;
             var height = Math.Max(1, (int)Math.Round(codec.Info.Height * 160d / codec.Info.Width));
-            using var thumb = decoded.Resize(new SKImageInfo(160, height), SKFilterQuality.Medium);
+            using var thumb = decoded.Resize(new SKImageInfo(160, height), SkSampling.Medium);
             if (thumb == null) return null;
             using var image = SKImage.FromBitmap(thumb);
             using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 80);

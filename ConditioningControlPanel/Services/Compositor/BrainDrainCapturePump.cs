@@ -218,7 +218,6 @@ internal sealed class BrainDrainCapturePump
     private SKImage? _meltNoiseTile;
     private float _meltTileCoverage;
     private int _meltNoiseShort = -1;
-    private SKPaint? _meltNoisePaint;
     private SKPaint? _meltPaint;
     private int _errorsLogged;
     private DateTime _lastStallLogUtc = DateTime.MinValue;
@@ -458,11 +457,13 @@ internal sealed class BrainDrainCapturePump
                 float dx = MeltSwayPx * tierScale * MathF.Sin(phaseSeconds * MeltSwayRate);
                 float dy = (MeltDriftPxPerSec * tierScale * phaseSeconds) % _meltTileCoverage;
                 float s = _meltTileCoverage / NoiseTilePx;
-                drift = SKShader.CreateImage(tile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
-                                             SKMatrix.CreateScaleTranslation(s, s, dx, dy));
                 // Bilinear: a nearest-sampled noise tile would quantise the warp into visible blocks.
-                (_meltNoisePaint ??= new SKPaint { FilterQuality = SKFilterQuality.Low }).Shader = drift;
-                noiseFilter = SKImageFilter.CreatePaint(_meltNoisePaint);
+                // SkiaSharp 3 migration: image shaders no longer inherit the paint's FilterQuality, so the
+                // shader carries the sampling that the old FilterQuality.Low carrier paint gave it.
+                drift = SKShader.CreateImage(tile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
+                                             new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None),
+                                             SKMatrix.CreateScaleTranslation(s, s, dx, dy));
+                noiseFilter = SKImageFilter.CreateShader(drift); // SkiaSharp 3: CreatePaint(paint) removed
                 if (noiseFilter != null)
                 {
                     // input: _blurFilter (may be null at low intensity, where sigma is sub-pixel -
@@ -541,7 +542,6 @@ internal sealed class BrainDrainCapturePump
             // Drop the per-tick wrappers the same tick they were made (the carrier paints and the
             // turbulence tile are the only melt state that survives to the next capture).
             if (_meltPaint != null) _meltPaint.ImageFilter = null;
-            if (_meltNoisePaint != null) _meltNoisePaint.Shader = null;
             meltFilter?.Dispose();
             noiseFilter?.Dispose();
             drift?.Dispose();
@@ -723,7 +723,6 @@ internal sealed class BrainDrainCapturePump
             _blurFilter = null;
             _blurPaint.Dispose();
             if (_meltPaint != null) { _meltPaint.ImageFilter = null; _meltPaint.ColorFilter = null; _meltPaint.Dispose(); _meltPaint = null; }
-            if (_meltNoisePaint != null) { _meltNoisePaint.Shader = null; _meltNoisePaint.Dispose(); _meltNoisePaint = null; }
             _meltNoiseTile?.Dispose();
             _meltNoiseTile = null;
             _meltNoiseShort = -1;

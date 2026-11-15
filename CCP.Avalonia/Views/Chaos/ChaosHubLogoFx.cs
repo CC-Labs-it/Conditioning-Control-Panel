@@ -85,7 +85,7 @@ internal sealed class ChaosHubLogoFx : Control
             _logoWidth = source.Width; _logoHeight = source.Height;
             _mask = SKImage.FromBitmap(raw);
             int h = Math.Max(1, raw.Height * 96 / Math.Max(1, raw.Width));
-            using var small = raw.Resize(new SKImageInfo(96, h), SKFilterQuality.Medium);
+            using var small = raw.Resize(new SKImageInfo(96, h), SkSampling.Medium);
             if (small != null)
             {
                 int cols = Math.Max(1, small.Width / 8), rows = Math.Max(1, small.Height / 8);
@@ -107,9 +107,9 @@ internal sealed class ChaosHubLogoFx : Control
             var rect = new SKRect(0, 0, w, bh);
             using var s1 = SKSurface.Create(info);
             s1.Canvas.Clear(SKColors.Transparent);
-            using (var p = new SKPaint { FilterQuality = SKFilterQuality.Medium }) s1.Canvas.DrawImage(source, rect, p);
+            s1.Canvas.DrawImage(source, rect, SkSampling.Medium);
             using (var filter = Channel(0))
-            using (var p = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = filter, FilterQuality = SKFilterQuality.Medium }) s1.Canvas.DrawImage(_mask, rect, p);
+            using (var p = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = filter }) s1.Canvas.DrawImage(_mask, rect, SkSampling.Medium, p);
             using var masked = s1.Snapshot();
             using var s2 = SKSurface.Create(info);
             s2.Canvas.Clear(SKColors.Transparent);
@@ -169,8 +169,8 @@ internal sealed class ChaosHubLogoFx : Control
         if (_bloom != null && _glowI > .001f)
         {
             float a = (.42f + .22f * (float)Math.Sin(_clock * 1.6 * _glowF)) * _glowI;
-            using var p = new SKPaint { BlendMode = SKBlendMode.Plus, FilterQuality = SKFilterQuality.High, Color = SKColors.White.WithAlpha((byte)Math.Clamp(a * 255, 0, 255)) };
-            canvas.DrawImage(_bloom, rect, p);
+            using var p = new SKPaint { BlendMode = SKBlendMode.Plus, Color = SKColors.White.WithAlpha((byte)Math.Clamp(a * 255, 0, 255)) };
+            canvas.DrawImage(_bloom, rect, SkSampling.High, p);
         }
         float phase = _sweep % (7.5f / Math.Max(.05f, _sheenF));
         if (_sheenI > .001f && phase < 1.4f)
@@ -186,7 +186,7 @@ internal sealed class ChaosHubLogoFx : Control
                     new[] { SKColors.Transparent, SKColors.White.WithAlpha(a), SKColors.Transparent }, new[] { c0, Math.Clamp(center, c0, c2), c2 }, SKShaderTileMode.Clamp))
                 using (var p = new SKPaint { Shader = shader }) canvas.DrawRect(rect, p);
                 using (var filter = Channel(2))
-                using (var p = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = filter, FilterQuality = SKFilterQuality.Medium }) canvas.DrawImage(_mask, rect, p);
+                using (var p = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = filter }) canvas.DrawImage(_mask, rect, SkSampling.Medium, p);
                 canvas.Restore();
             }
         }
