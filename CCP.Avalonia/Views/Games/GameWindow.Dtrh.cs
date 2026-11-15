@@ -9,8 +9,8 @@
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
-// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
-// fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
+// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins,
+// fire-payload, freeze/mute (native video), haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
