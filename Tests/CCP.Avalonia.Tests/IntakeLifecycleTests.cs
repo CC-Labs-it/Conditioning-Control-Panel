@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -49,6 +51,60 @@ public sealed class IntakeLifecycleTests
             CoreSettings.Current.IntakeFullscreen = fullscreen;
         }
     }
+
+    [Fact]
+    public Task IntakeOwnerTracksShellAndUnhooksOnClose() => WithCleanState(() =>
+    {
+        var get = NativeWindowOwner.HandleForTests;
+        var set = NativeWindowOwner.SetForTests;
+        var visible = NativeWindowOwner.NativeVisibleForTests;
+        var show = NativeWindowOwner.ShowForTests;
+        var owners = new List<Window?>();
+        var repaired = new List<Window>();
+        NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+        NativeWindowOwner.SetForTests = (_, owner) => { owners.Add(owner); return true; };
+        NativeWindowOwner.NativeVisibleForTests = _ => false;
+        NativeWindowOwner.ShowForTests = repaired.Add;
+        var main = new Window();
+        main.Show();
+        try
+        {
+            var intake = GradedIntakeTabView.OpenIntake(main, duckMain: false);
+            Assert.Same(main, owners.Last());
+            Assert.True(intake.IntakeOwnerLinked);
+            main.WindowState = WindowState.Minimized;
+            Assert.Null(owners.Last());
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(intake, repaired);
+            main.WindowState = WindowState.Normal;
+            Assert.Same(main, owners.Last());
+            main.Hide();
+            Assert.Null(owners.Last());
+            main.Show();
+            Assert.Same(main, owners.Last());
+            intake.Close();
+            int count = owners.Count;
+            main.Hide();
+            Assert.Equal(count, owners.Count);
+        }
+        finally
+        {
+            main.Close();
+            NativeWindowOwner.HandleForTests = get;
+            NativeWindowOwner.SetForTests = set;
+            NativeWindowOwner.NativeVisibleForTests = visible;
+            NativeWindowOwner.ShowForTests = show;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task IntakeEnablesAutoplay() => WithCleanState(() =>
+    {
+        var intake = GradedIntakeTabView.OpenIntake(null, duckMain: false);
+        Assert.Contains("--autoplay-policy=no-user-gesture-required", intake.Web.WindowsBrowserArguments);
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task OpeningRecordsOnceAndHoldEndsOnCloseAndRecovery() => WithCleanState(() =>
