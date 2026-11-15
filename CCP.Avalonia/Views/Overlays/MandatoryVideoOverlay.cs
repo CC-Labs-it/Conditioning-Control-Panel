@@ -1305,6 +1305,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            LightsDownOverlay.CloseAll(); // WPF LightsDownService.cs:106, before decoder teardown
             EndEnhancement();
             System.Threading.Interlocked.Increment(ref _escapeGeneration);
             _floatingOnScreen = false;

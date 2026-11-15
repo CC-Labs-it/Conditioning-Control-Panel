@@ -165,7 +165,7 @@ internal static class X11Overlay
             if (region != IntPtr.Zero)
                 XFixesDestroyRegion(_display, region);
 
-            XFlush(_display);
+            XSync(_display, false); // apply the input shape before Avalonia can map the window
             return true;
         }
     }

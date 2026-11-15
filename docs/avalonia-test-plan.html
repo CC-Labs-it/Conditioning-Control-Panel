@@ -1010,6 +1010,7 @@ changes served unchanged from <code>Assets/web/dtrh</code> (automated-only: byte
 <h2 id="19-retained-lane-contract-rows">19. Retained lane contract rows</h2>
 <ol>
 <li><code>blocked-migration-input</code> is resolved: test it through the profile migration step (section 15 step 10, row <code>settings-migration-test</code>). The real-profile run itself is automated-only and local (<code>Tests/CCP.Avalonia.Migration.Tests</code>). WPF <code>CCP.Core/Models/AppSettings.cs</code>. Rows: <code>blocked-migration-input</code>, <code>settings-migration-test</code>.</li>
+<li><strong>[SAFETY] Not on this build yet.</strong> With Lights Down enabled, watch a mandatory video, look away, then test photosafe and Motion Off; check panic and video stop clear the dim. WPF <code>ConditioningControlPanel/Services/Super/LightsDownService.cs:113</code>, <code>ConditioningControlPanel/Services/Super/LightsDownOverlay.cs:14</code>. Rows: <code>lights-down-a</code>.</li>
 </ol>
 <h2 id="rows-with-no-manual-check">Rows with no manual check</h2>
 <ul>

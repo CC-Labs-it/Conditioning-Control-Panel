@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Stricter than WPF: panic must not leave this modal or its delete confirmation open.
             new("personality-studio", _ => Dialogs.PersonalityStudio.CloseForPanic()),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
+            new("lights-down", _ => Overlays.LightsDownOverlay.CloseAll()), // WPF LightsDownService.cs:89
             new("help-video", _ => HelpVideoWindow.CloseCurrent(forPanic: true)), // Stricter than WPF MainWindow.xaml.cs:2017: include tutorial media in stop-all.
             new("emi-ring", _ => EmiDesk.EmiDeskService.Instance.Window?.CloseRing()), // stricter safety: fold on every panic route
             // Stricter than WPF MainWindow.Patreon.cs:1544: panic discards pending trigger edits.
