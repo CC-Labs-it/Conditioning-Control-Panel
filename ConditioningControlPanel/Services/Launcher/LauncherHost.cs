@@ -368,6 +368,7 @@ public static partial class LauncherHost
 
         _panelRequested = false;
         if (!LauncherCatalogue.TryLaunch(entry.Id)) return false;
+        NoteLaunched(entry);
 
         // A tile that lives in the panel opened it through OpenPanel during Launch. The panel
         // owns the hide (and the beat) and there is no window to wait on, so the poll stays off:
@@ -389,6 +390,23 @@ public static partial class LauncherHost
         else FadeThenHide(RaiseGame, StillWaiting);
         StartReturnPoll();
         return true;
+    }
+
+    /// <summary>A game that really started is what Continue offers next time. Tools are not kept.</summary>
+    private static void NoteLaunched(LauncherEntry entry)
+    {
+        try
+        {
+            if (!LauncherDoorRules.RemembersLaunch(entry.Door)) return;
+            var settings = App.Settings;
+            var current = settings?.Current;
+            if (current == null) return;
+            var id = LauncherDoorRules.ListedId(entry.Id);
+            if (string.Equals(current.LauncherLastPlayedId, id, StringComparison.OrdinalIgnoreCase)) return;
+            current.LauncherLastPlayedId = id;
+            settings!.Save();
+        }
+        catch (Exception ex) { Log.Debug(ex, "[Launcher] last-played note failed"); }
     }
 
     private static LauncherDoor? _pendingDoor;
