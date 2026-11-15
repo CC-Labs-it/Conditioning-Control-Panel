@@ -195,6 +195,22 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = new LeashService(wire, () => "u_me");
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
