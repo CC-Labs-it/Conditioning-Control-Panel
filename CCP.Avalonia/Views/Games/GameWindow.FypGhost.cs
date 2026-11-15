@@ -42,7 +42,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<TopLevel, bool> FypGhostRaiseManaged = X11Overlay.RaiseManaged;
         internal static Func<Action, IDisposable> FypGhostStartTick = tick =>
             DispatcherTimer.Run(() => { tick(); return true; }, TimeSpan.FromSeconds(5));
+        internal static Func<Action, IDisposable> FypGhostStartButtonRepair = tick =>
+            DispatcherTimer.Run(() => { tick(); return true; }, TimeSpan.FromMilliseconds(250));
         private IDisposable? _fypGhostTimer;
+        private IDisposable? _fypGhostButtonRepair;
         private static double ClampFypGhostOpacity(double value) =>
             double.IsFinite(value) ? Math.Clamp(value, 0.01, 1.0) : 1.0;
 
@@ -86,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     {
                         ShowFypGhostButtons(screen);
                         _fypGhostTimer = FypGhostStartTick(ReassertFypGhost) ?? throw new InvalidOperationException("ghost timer failed to start");
+                        _fypGhostButtonRepair = FypGhostStartButtonRepair(RepairFypGhostButtons) ?? throw new InvalidOperationException("ghost button timer failed to start");
                     }
                 }
                 catch (Exception ex)
@@ -109,6 +113,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _fypGhosted = false;
             _fypGhostTimer?.Dispose();
             _fypGhostTimer = null;
+            _fypGhostButtonRepair?.Dispose();
+            _fypGhostButtonRepair = null;
             foreach (var b in _fypGhostButtons)
                 try { b.Close(); } catch (Exception ex) { Log.Debug("[Game] fyp: ghost button close: {E}", ex.Message); }
             _fypGhostButtons.Clear();
@@ -136,10 +142,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 FypGhostRaiseManaged(this);
-                foreach (var button in _fypGhostButtons.OrderByDescending(b => b.Width * b.Height))
-                    FypGhostRaise(button);
+                RaiseFypGhostButtons(_fypGhostButtons);
             }
             catch (Exception ex) { Log.Debug("[Game] fyp: ghost raise: {E}", ex.Message); }
+        }
+
+        // WM requests are asynchronous. Keep repairing the controls after a late frame raise,
+        // rather than assuming a fixed delay is long enough for every window manager.
+        private void RepairFypGhostButtons()
+        {
+            if (!_fypGhosted) return;
+            try { RaiseFypGhostButtons(_fypGhostButtons); }
+            catch (Exception ex) { Log.Debug("[Game] fyp: ghost button raise: {E}", ex.Message); }
+        }
+
+        internal static void RaiseFypGhostButtons(IReadOnlyList<Window> buttons)
+        {
+            foreach (var button in buttons.OrderByDescending(b => b.Width * b.Height))
+                FypGhostRaise(button);
         }
 
         /// <summary>WPF ShowButtons (FypGhostOverlay.cs:154): gear top-left, speaker top-right, own clickable windows.</summary>
