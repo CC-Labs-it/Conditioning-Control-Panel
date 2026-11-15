@@ -152,7 +152,11 @@ public sealed class LeashIncomingAskTests
                 Assert.Equal("leash-ask:juno", next.Card.Tag); // The other offer still waits.
                 next.Card.Dismiss();
                 Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current); // The offer opened by Look must not return.
+                var repeated = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:vex", repeated.Card.Tag); // Rebind queues it again, as in WPF.
+                repeated.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
                 Assert.Contains(page.GetLogicalDescendants().OfType<Border>(), c => c.Tag as string == "leash-offer-row:vex");
             }
             finally
