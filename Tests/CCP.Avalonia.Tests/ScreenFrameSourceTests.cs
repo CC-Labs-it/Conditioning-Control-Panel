@@ -224,4 +224,41 @@ public class ScreenFrameSourceTests
             PortalPanicShortcut.AwaitOrCloseAsync(new TaskCompletionSource<int>().Task, new CancellationToken(true), () => { closes++; return Task.CompletedTask; }));
         Assert.Equal(1, closes);
     }
+
+    [Fact]
+    public async Task StoppingTheScanClosesThePortalRequestAndAnInFlightFileIsDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var path = WritePng();
+        var closes = 0;
+        var source = new PortalScreenFrames(ct => PortalPanicShortcut.AwaitOrCloseAsync(answer.Task, ct,
+            () => { closes++; answer.SetResult((0u, Uri(path))); return Task.CompletedTask; }), TwoMonitors);
+        using var stop = new CancellationTokenSource();
+        var scan = source.CaptureAsync(stop.Token);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
+        Assert.Equal(1, closes);
+        Assert.False(File.Exists(path));
+        Assert.False(PortalScreenFrames.Refused);
+    }
+
+    [Fact]
+    public async Task AFailedRequestCloseKeepsObservingAndALateFileIsStillDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var source = new PortalScreenFrames(ct => PortalPanicShortcut.AwaitOrCloseAsync(answer.Task, ct,
+            () => Task.FromException(new InvalidOperationException("close failed"))), TwoMonitors);
+        using var stop = new CancellationTokenSource();
+        var scan = source.CaptureAsync(stop.Token);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        await Task.Delay(1500); // past the one-second in-flight window that follows a successful Close
+        var path = WritePng();
+        answer.SetResult((0u, Uri(path)));
+        for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
+        Assert.False(File.Exists(path));
+    }
 }
