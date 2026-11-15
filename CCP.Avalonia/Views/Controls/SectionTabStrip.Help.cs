@@ -1,5 +1,6 @@
 // PORTED from ConditioningControlPanel/Controls/NavRail/SectionTabStrip.Help.cs (d0ec7aa8d, owner
-// 2026-10-07): help badges and the window pill confirmation card. Colour math through Core.
+// 2026-10-07; declutter wave 1, WPF f04bd6a52e): the strip's one help button for the lit pill and
+// the window pill confirmation card. Colour math through Core.
 // The window host is now available; window pills use the WPF ask-first card below.
 
 using System;
@@ -83,10 +84,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var part = _activePill == null ? null : Part(_activePill);
             var help = part == null ? string.Empty : HelpText(part.Tab);
             _helpShown = part != null && _section != null && !string.IsNullOrEmpty(help);
+            bool hadFocus = _helpButton.IsFocused;
             _helpButton.Opacity = _helpShown ? 1 : 0;
             _helpButton.IsHitTestVisible = _helpButton.Focusable = _helpShown;
             if (!_helpShown)
             {
+                // "Hidden" here is clear + not focusable, which does not take focus away: a
+                // section change that hides the button while it holds the keyboard hands focus to
+                // the lit pill (else the first pill), never to an invisible control.
+                if (hadFocus) MoveFocusOffHiddenHelp();
                 ToolTip.SetTip(_helpButton, null);
                 _helpKey = null;
                 _helpLine = string.Empty;
@@ -98,6 +104,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             global::Avalonia.Automation.AutomationProperties.SetHelpText(_helpButton, help);
             _helpKey = part.Tab.Key;
             _helpLine = help;
+        }
+
+        private void MoveFocusOffHiddenHelp()
+        {
+            var target = (_activePill == null ? null : PillFor(_activePill))
+                ?? (_pills.Count > 0 ? _pills[0].Pill : null);
+            if (target is { IsEffectivelyVisible: true, Focusable: true } && target.Focus(NavigationMethod.Directional)) return;
+            TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);   // no pill to take it: clear it
         }
 
         /// <summary>The hover card: the page name, what it does, and the tier line for a locked page.</summary>

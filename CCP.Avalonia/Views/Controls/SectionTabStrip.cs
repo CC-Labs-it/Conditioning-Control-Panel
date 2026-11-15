@@ -8,8 +8,8 @@
 //
 // sync6-nav-polish-c: the leading glyph (a Fluent IconGlyph via IconMap.ForTab, wave 3), the
 // sunken tray / pill drop bands / pressed-in fill (wave 10, SectionTabStrip.Fx.cs) and the hover
-// lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The "?" help badges:
-// SectionTabStrip.Help.cs.
+// lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The strip's one "?" help
+// button (declutter wave 1; it replaced the per-pill badges): SectionTabStrip.Help.cs.
 // Choose rings reuse NavGlow; the press squish shares WPF MotionFx's Core values.
 // The "Moved" note (ShowMovedNote, WPF :503) landed in wire-ctrl-section-tab-strip-b.
 // Remaining section edge effects are tracked in the parity ledger.
@@ -148,10 +148,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 VerticalAlignment = VerticalAlignment.Center, Template = PlainTemplate(),
             };
             _crumbSection.Click += (_, e) => { e.Handled = true; if (_section != null) SectionRequested?.Invoke(_section); };
+            // Right margin 5, not WPF's 9: Skia lays Companion's crumb + tray 2.5 px wider than WPF,
+            // and at the default 1469 px strip the tray then ran under the help button
+            // (NavRehomeShellTests.TheTrayEndsBeforeTheHelpButtonAt1469AndSettingsHidesIt).
             var crumb = _crumbPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 9, 0), Children = { _crumbSection, _crumbSep, _crumbPage },
+                Margin = new Thickness(4, 0, 5, 0), Children = { _crumbSection, _crumbSep, _crumbPage },
             };
             _track = new Border
             {
@@ -181,8 +184,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
-            NavStripTable.BadgesChanged -= RefreshBadges;
-            NavStripTable.BadgesChanged += RefreshBadges;
+            NavStripTable.BadgesChanged -= OnBadgesChanged;
+            NavStripTable.BadgesChanged += OnBadgesChanged;
             RefreshBadges();
             UpdateSheenClock();
         }
@@ -190,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            NavStripTable.BadgesChanged -= RefreshBadges;
+            NavStripTable.BadgesChanged -= OnBadgesChanged;
             CloseConfirm();
             StopSheenClock();   // P65: a detached strip never ticks
             _crumbFadeRun?.Cancel();
@@ -580,8 +583,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             p.CountPlate.IsVisible = text != null;
         }
 
+        /// <summary>NavStripTable.BadgesChanged fires on the caller's thread (a page's count can move
+        /// from a service or timer): hop to the UI thread before touching the pills.</summary>
+        internal void OnBadgesChanged()
+        {
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) RefreshBadges();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshBadges);
+        }
+
         /// <summary>Ask the badge provider again for every pill (NavStripTable.NotifyBadgesChanged
-        /// lands here on a mounted strip), then put the fill back under its pill.</summary>
+        /// lands here on a mounted strip, through <see cref="OnBadgesChanged"/>), then put the fill
+        /// back under its pill.</summary>
         internal void RefreshBadges()
         {
             foreach (var p in _pills) PaintBadge(p);
