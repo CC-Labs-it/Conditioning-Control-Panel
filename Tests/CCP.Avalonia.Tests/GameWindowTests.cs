@@ -1311,6 +1311,10 @@ public sealed partial class GameWindowTests
         var (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock) = (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider,
             CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow);
         var (oldRuns, oldForce) = (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun);
+        var oldPending = ChaosMeta.State.PendingReveals.ToArray();
+        var oldSeen = ChaosMeta.State.SeenReveals.ToArray();
+        var metaPath = ChaosMetaStore.SlotFilePath(ChaosMetaStore.ActiveSlot);
+        var oldMetaFile = File.Exists(metaPath) ? File.ReadAllBytes(metaPath) : null;
         var (oldFavorites, oldMerge) = (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats);
         var oldRelaunched = GameWindow.DtrhRelaunchedOnce;
         GameWindow.DtrhRelaunchedOnce = false;
@@ -1343,8 +1347,11 @@ public sealed partial class GameWindowTests
         {
             (CoreEntitlement.HasLabProvider, CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreEntitlement.ShowDeniedHandler, GameWindow.DtrhBankSparks,
                 CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.DtrhUtcNow) = (oldLab, oldPremium, oldFree, oldDenied, oldBank, oldXp, oldAssets, oldClock);
-            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
             GameWindow.CloseAllForPanic();
+            (ChaosMeta.State.RunsCompleted, ChaosMeta.State.ForceScriptedRun) = (oldRuns, oldForce);
+            ChaosMeta.State.PendingReveals.Clear(); ChaosMeta.State.PendingReveals.UnionWith(oldPending);
+            ChaosMeta.State.SeenReveals.Clear(); ChaosMeta.State.SeenReveals.UnionWith(oldSeen);
+            if (oldMetaFile == null) File.Delete(metaPath); else File.WriteAllBytes(metaPath, oldMetaFile);
             (GameWindow.DtrhFavorites, GameWindow.DtrhMergeAssetStats) = (oldFavorites, oldMerge);
             GameWindow.DtrhRelaunchedOnce = oldRelaunched;
             Directory.Delete(lib, true);
@@ -1424,9 +1431,13 @@ public sealed partial class GameWindowTests
             var w = GameWindow.Launch("dtrh")!;
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
             w.HandleMessage("{\"type\":\"run-started\"}");
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
-            var payout = Assert.Single(sent);
+            Assert.Equal(2, sent.Count);
+            Assert.Equal("meta", (string?)sent[0]["type"]);
+            var payout = Assert.Single(sent.Where(o => (string?)o["type"] == "payout-result"));
             var expected = global::ConditioningControlPanel.Models.SkillTreeRules.GetTotalXpMultiplier(settings, DateTime.Now.Hour, 0.0);
             Assert.Equal(expected, (double)payout["skillMult"]!, 6);
             Assert.Equal(300 * expected, (double)payout["finalXp"]!, 6);
@@ -1583,18 +1594,19 @@ public sealed partial class GameWindowTests
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
-            Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "init", "meta", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal("reduced", (string?)sent[0]["motionLevel"]);
             Assert.Equal("Normal", (string?)sent[0]["runSetup"]!["difficulty"]);
             Assert.Equal("Basic", (string?)sent[0]["plans"]!["basic"]!["name"]);
-            Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
-            Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)sent[1]["videos"]!.Single()["url"]);
+            Assert.EndsWith("/ccp.assets/images/pic.png", (string?)sent[2]["images"]!.Single()["url"]);
+            Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)sent[2]["videos"]!.Single()["url"]);
             sent.Clear();
 
             ChaosMeta.State.RunsCompleted = 0;
             w.HandleMessage("{\"type\":\"request-run\",\"setup\":{\"difficulty\":\"Hard\"}}");
             Assert.Equal("Hard", s.ChaosDifficulty);                                   // the hub's choice persists
-            Assert.True((bool)Assert.Single(sent)["runConfig"]!["scriptedFirstRun"]!);  // the first descent is the classroom
+            Assert.Equal(new[] { "meta", "run-config" }, sent.Select(o => (string?)o["type"]));
+            Assert.True((bool)sent[1]["runConfig"]!["scriptedFirstRun"]!);  // the first descent is the classroom
             sent.Clear();
 
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // no run-started: nothing
@@ -1610,7 +1622,9 @@ public sealed partial class GameWindowTests
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // a second end pays nothing
             Assert.False(GameWindow.IsDtrhRunning);
-            var pay = Assert.Single(sent);
+            Assert.Equal(2, sent.Count);
+            Assert.Equal("meta", (string?)sent[0]["type"]);
+            var pay = Assert.Single(sent.Where(o => (string?)o["type"] == "payout-result"));
             Assert.Equal("payout-result", (string?)pay["type"]);
             Assert.Equal(300, (double)pay["baseXp"]!);
             Assert.Equal(5, (int)pay["sparksEarned"]!);

@@ -8,10 +8,9 @@
 // Slice B: the manifest's online half (Core DtrhRemoteMedia: online media copied to this machine, re-posted as
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // Slice C: heartbeat recovery (one relaunch per app session).
-// ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
-// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
+// Remaining game-dtrh host work includes the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
-// achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
+// achievements bubble credit, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
@@ -54,6 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Action<JObject> DtrhMergeAssetStats = DtrhAssetStatsStore.Merge;
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
+        private DtrhMetaBridge? _dtrhMeta;
         private bool _dtrhRunActive, _dtrhExiting;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
@@ -141,6 +141,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     // WPF DtrhHostService.cs:400-404: deltas are additive, best-effort telemetry.
                     try { DtrhMergeAssetStats(o); }
                     catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
+                    return true;
+                case "meta-command":
+                    _dtrhMeta?.Handle(o);
                     return true;
                 case "request-run":
                     OnDtrhRequestRun(o);
@@ -314,6 +317,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { Web.Focus(); }   // Escape (pause / hold-to-exit) works from the first frame
             catch (Exception ex) { Log.Debug("DtrhHost: focus: {E}", ex.Message); }
             Post(DtrhInitMessage());
+            _dtrhMeta ??= new DtrhMetaBridge(false, Post);
+            Post(_dtrhMeta.SnapshotMessage());
             _ = ConditioningControlPanel.Services.Vault.PlanCatalog.GetAsync();
             try { PostDtrhManifest(); }
             catch (Exception ex) { Log.Warning("DtrhHostService.OnPageReady: {E}", ex.Message); }
@@ -378,6 +383,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 if (o["setup"] is JObject setup) DtrhRunWire.PersistRunSetup(setup, CoreSettings.Current);
                 var (cfg, scripted, _) = DtrhRunWire.Deal(testMode: false);
+                _dtrhMeta?.Rebroadcast();
                 Post(new { type = "run-config", runConfig = DtrhRunWire.RunConfig(cfg, CoreSettings.Current) });
                 Log.Information("DtrhHost: dealt run config (diff={D}, scripted={S})", cfg.Difficulty, scripted);
             }
@@ -412,6 +418,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);
                 CoreProgression.AddXP(booking.BaseXp, "Chaos");   // WPF AddXP(baseXp, XPSource.Chaos)
+                try { RevealService.Sync("run_end"); } catch (Exception ex) { Log.Debug("DtrhHost: reveal sync: {E}", ex.Message); }
+                _dtrhMeta?.Rebroadcast();
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
@@ -480,6 +488,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 snapshot["abandoned"] = true;
                 OnDtrhRunEnded(snapshot, fromTeardown: true);
             }
+            _dtrhMeta?.FlushSave();
+            _dtrhMeta = null;
             _dtrhRunActive = false;
             _dtrhExiting = false;
             Log.Information("DtrhHostService: closed");
