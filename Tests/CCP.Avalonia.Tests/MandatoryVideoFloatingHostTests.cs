@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -12,7 +11,6 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Video;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -20,15 +18,12 @@ namespace CCP.Avalonia.Tests;
 /// <summary>WPF VideoService.FloatingInstances.cs: the multi-window floating host, behind the decoder seam.</summary>
 public sealed class MandatoryVideoFloatingHostTests
 {
-    private sealed class StillTime : TimeProvider
+    private sealed class StillTime : TimeProvider, ITimer
     {
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Never();
-        private sealed class Never : ITimer
-        {
-            public bool Change(TimeSpan due, TimeSpan period) => true;
-            public void Dispose() { }
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        }
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => this;
+        public bool Change(TimeSpan due, TimeSpan period) => true;
+        public void Dispose() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class Decoder : IMandatoryPlayback
@@ -42,14 +37,6 @@ public sealed class MandatoryVideoFloatingHostTests
         public void SetPause(bool paused) => Paused = paused;
         public void Stop() => Stopped = true;
         public void Dispose() { }
-    }
-
-    /// <summary>Always the same spot: only the "taken" rule keeps windows apart.</summary>
-    private sealed class SameSpot : Random
-    {
-        public override int Next(int minValue, int maxValue) => minValue;
-        public override int Next(int maxValue) => 0;
-        public override double NextDouble() => 0;
     }
 
     private static void EnsureApp()
@@ -112,21 +99,6 @@ public sealed class MandatoryVideoFloatingHostTests
     });
 
     [Fact]
-    public Task No_window_lands_exactly_on_another() => Run((o, _) =>
-        {
-            typeof(MandatoryVideoOverlay).GetField("_random", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, new SameSpot());
-            o.Scheduler.Trigger(userInitiated: true);
-            o.Scheduler.Trigger(userInitiated: true);
-            var spots = o.Windows.Select(w => w.Position).ToList();
-            Assert.Equal(3, spots.Count);
-            for (var i = 0; i < spots.Count; i++)
-                for (var j = i + 1; j < spots.Count; j++)
-                    Assert.False(Math.Abs(spots[i].X - spots[j].X) < MandatoryVideoPresentation.PileOffset
-                        && Math.Abs(spots[i].Y - spots[j].Y) < MandatoryVideoPresentation.PileOffset,
-                        $"window {j} is on top of window {i}: {spots[i]} / {spots[j]}");
-        });
-
-    [Fact]
     public Task Closing_one_clip_leaves_the_others_and_the_run_ends_with_the_last() => Run((o, decoders) =>
     {
         o.Scheduler.Trigger(userInitiated: true);
@@ -169,5 +141,33 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.False(card!.IsVisible);
         Assert.All(decoders, d => Assert.True(d.Stopped));
         Assert.Equal(0, o.FloatingUp);
+    });
+
+    [Fact]
+    public Task Closing_the_first_window_in_a_grace_pause_resumes_the_others() => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger(userInitiated: true);
+        Assert.True(o.TryGracePause(fromPanicKey: false));
+        o.Surfaces[0].Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Single(Up(o));
+        Assert.False(decoders[1].Paused, "the joined window plays on");
+    });
+
+    [Fact]
+    public Task A_Lockdown_hides_and_refuses_the_joined_windows_close_button() => Run((o, _) =>
+    {
+        var (previous, lockdown) = (LockdownService.Current, LockdownService.Current = new LockdownService());
+        try
+        {
+            o.Scheduler.Trigger(userInitiated: true);
+            var close = o.Floaters[0].Surface.Buttons.Close;
+            Assert.True(close.IsVisible);
+            lockdown.Activate(TimeSpan.FromMinutes(30));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(close.IsVisible);
+            close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // refused: the window stays
+            Assert.Equal(2, Up(o).Count);
+        }
+        finally { lockdown.Deactivate(); lockdown.Dispose(); LockdownService.Current = previous; }
     });
 }

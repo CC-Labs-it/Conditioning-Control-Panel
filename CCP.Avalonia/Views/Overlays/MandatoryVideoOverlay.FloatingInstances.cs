@@ -15,13 +15,9 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
-/// <summary>
-/// WPF VideoService.FloatingInstances.cs:18-130: floating mandatory videos as equal windows. The run's own
-/// clip (Show) is the first window; every later trigger adds a joined window here with its own LibVLC
-/// player, frame and reveal, up to MandatoryVideoFloatingCount. A clip's end closes only its own window
-/// with its own watch credit; the run ends when the last window goes. Every teardown (CloseAll: panic,
-/// Esc, stop) closes them all.
-/// </summary>
+/// <summary>WPF VideoService.FloatingInstances.cs:18-130: the run's clip (Show) is the first floating window; later triggers
+/// join windows with their own LibVLC player, frame and reveal, up to MandatoryVideoFloatingCount. A clip's end closes only
+/// its own window with its own credit; the last one ends the run. Every teardown (CloseAll: panic, Esc, stop) closes all.</summary>
 internal sealed partial class MandatoryVideoOverlay
 {
     internal sealed class FloatingInstance(string clip)
@@ -46,7 +42,6 @@ internal sealed partial class MandatoryVideoOverlay
     internal IReadOnlyList<FloatingInstance> Floaters => _floaters;
     private IEnumerable<Surface> AllSurfaces => _surfaces.Concat(_floaters.Select(f => f.Surface));
 
-    /// <summary>WPF FloatingLimit (:84): "Most at once".</summary>
     public int FloatingLimit => MandatoryVideoPresentation.ClampCount(CoreSettings.Current.MandatoryVideoFloatingCount);
     /// <summary>Floating windows on screen: the run's own (while it plays) and the joined ones.</summary>
     public int FloatingUp => (Floating ? _surfaces.Count : 0) + _floaters.Count;
@@ -217,6 +212,7 @@ internal sealed partial class MandatoryVideoOverlay
     private void ShowInstanceControls(FloatingInstance f)
     {
         if (f.Closed || !ControlsAllowed) return;
+        WatchForLocks();   // WPF VideoService.Controls.cs:66
         f.Surface.Buttons.Close.IsVisible = CloseAllowed;
         f.Surface.Buttons.SetMuted(f.UserMuted);
         f.Surface.Buttons.Row.IsVisible = true;
@@ -256,7 +252,10 @@ internal sealed partial class MandatoryVideoOverlay
 
     private void RetirePrimary(string reason, bool endRun = true)
     {
-        var watched = ClosePrimary(retire: true);
+        var held = _gracePaused;
+        var watched = ClosePrimary(retire: true);   // ends the grace pause with the first window's card
+        // WPF FloatingInstances.cs:417-430: a grace pause always ends in a resume; the joined windows play on.
+        if (held) SetFloatingPaused(false);
         if (watched >= 1) CoreProgression.TrackVideoWatched(watched);   // WPF CreditInstance (:779-797)
         Log.Information("VideoService: floating window closed ({Reason}), {Left} left", reason, FloatingUp);
         if (endRun && FloatingUp == 0 && Scheduler.IsPlaying) Scheduler.End();

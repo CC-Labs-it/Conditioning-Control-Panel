@@ -459,7 +459,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = inst == null ? new VideoButtons(ToggleUserMute, CloseFromButton)
-                : new VideoButtons(() => ToggleInstanceMute(inst), () => CloseInstance(inst, "close button"));
+                : new VideoButtons(() => ToggleInstanceMute(inst),   // WPF VideoService.Controls.cs:157-159: a lock refuses and hides the X
+                    () => { if (!CloseAllowed) HideCloseButtons(); else CloseInstance(inst, "close button"); });
             var w = new Window
             {
                 Title = "CCP Video",
