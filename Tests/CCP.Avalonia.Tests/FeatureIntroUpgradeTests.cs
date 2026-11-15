@@ -22,6 +22,29 @@ public sealed class FeatureIntroUpgradeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task RunRestoresPatchNotesProvider(bool bodyThrows)
+    {
+        var original = CoreReleaseContent.PatchNotesProvider;
+        Func<string?> sentinel = () => "original notes";
+        CoreReleaseContent.PatchNotesProvider = sentinel;
+        try
+        {
+            async Task Exercise() => await Run("old-version", _ =>
+            {
+                CoreReleaseContent.PatchNotesProvider = () => "";
+                if (bodyThrows) throw new InvalidOperationException("test cleanup");
+                return Task.CompletedTask;
+            });
+            if (bodyThrows) await Assert.ThrowsAsync<InvalidOperationException>(Exercise);
+            else await Exercise();
+            Assert.Same(sentinel, CoreReleaseContent.PatchNotesProvider);
+        }
+        finally { CoreReleaseContent.PatchNotesProvider = original; }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public Task VersionBumpFiresBeforeStampEvenWithoutNotes(bool blankNotes) => Run("old-version", async shell =>
     {
         var calls = new List<(string moment, object? context, string seen)>();
@@ -421,6 +444,7 @@ public sealed class FeatureIntroUpgradeTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         LocalizationManager.Instance.SetLanguage("en");
+        var oldPatchNotesProvider = CoreReleaseContent.PatchNotesProvider;
         CoreReleaseContent.PatchNotesProvider = () => $"v{CoreReleaseContent.AppVersion} - Test notes";
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
@@ -451,6 +475,7 @@ public sealed class FeatureIntroUpgradeTests
             MainShellWindow.IsStartupDialogShowing = false;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = old;
+            CoreReleaseContent.PatchNotesProvider = oldPatchNotesProvider;
             LocalizationManager.Instance.SetLanguage(oldLanguage);
             StartupLadder.ResetForTests();
             FeatureIntroPopup.ResetForTests();
