@@ -40,6 +40,20 @@ public class ChaosBodyBuzzTests
         }
     }
 
+    [Fact]
+    public Task ShockwaveTestPreservesAnIncomingPoppingBubble() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var incoming = new AmbientBubble { Popping = true };
+        BubbleOverlay.Field.Bubbles.Add(incoming);
+        try
+        {
+            await ShockwaveSelectsRendererAndCancelsHops(false);
+            Assert.Contains(incoming, BubbleOverlay.Field.Bubbles);
+            Assert.True(incoming.Popping);
+        }
+        finally { BubbleOverlay.Field.Bubbles.Remove(incoming); }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -56,8 +70,10 @@ public class ChaosBodyBuzzTests
         var composited = ChaosSkiaFxOverlay.Composited;
         var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
         var language = LocalizationManager.Instance.CurrentLanguage;
+        var incomingBubbles = BubbleOverlay.Field.Bubbles.ToArray();
         try
         {
+            BubbleOverlay.Field.Bubbles.Clear();
             settings.ChaosSkiaFxEnabled = skia;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.Composited = () => true;
@@ -93,6 +109,7 @@ public class ChaosBodyBuzzTests
         finally
         {
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(incomingBubbles);
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
             LocalizationManager.Instance.SetLanguage(language);
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();
