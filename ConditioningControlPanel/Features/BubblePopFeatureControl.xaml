@@ -274,6 +274,61 @@
 
                 <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
                 <ctl:SuperBox x:Name="SuperBoxMain" Effect="InnerBloom">
+                  <StackPanel>
+                    <!-- Froth's own rows, shown while Froth is lit: Features/BubblePopFeatureControl.Froth.cs.
+                         No row here changes pay: a merged bubble always pays the sum of its parts. -->
+                    <StackPanel x:Name="FrothRows" Visibility="Collapsed"
+                                Loaded="FrothRows_Loaded" Unloaded="FrothRows_Unloaded">
+                        <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_froth_size}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_froth_size}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderFrothSize" Minimum="2.5" Maximum="6" Value="4.5"
+                                    SmallChange="0.5" LargeChange="0.5" TickFrequency="0.5" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderFrothSize_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtFrothSize" Text="4.5x" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_froth_reach}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_froth_reach}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderFrothReach" Minimum="0" Maximum="200" Value="100"
+                                    SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderFrothReach_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtFrothReach" Text="100%" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_froth_push}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_froth_push}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderFrothPush" Minimum="0" Maximum="200" Value="100"
+                                    SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderFrothPush_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtFrothPush" Text="100%" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                    </StackPanel>
                     <!-- The Back Room v2 prize rows, merged into the gold box under the Super switch.
                          Each row is lit by its own ownership (PrizeGrants), never by the tier; the
                          section collapses while nothing in it applies. See RefreshV2Box / RebuildMotionPicker. -->
@@ -302,6 +357,7 @@
                                       SelectionChanged="CmbMotion_Changed"/>
                         </Grid>
                     </StackPanel>
+                  </StackPanel>
                 </ctl:SuperBox>
             </StackPanel>
 

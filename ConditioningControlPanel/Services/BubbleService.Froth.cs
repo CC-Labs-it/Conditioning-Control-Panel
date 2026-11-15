@@ -116,6 +116,10 @@ public partial class BubbleService
         bool poolLive = stage.PoolLive;
         bool gentle = Safety.GentleVisuals.On;
         double freshDip = FrothFreshRadiusDip();
+        // The option box, read live (FrothOptions): the size cap and the cursor push. Neither touches pay.
+        var fs = App.Settings?.Current;
+        double maxGrow = FrothOptions.ClampMaxSize(fs?.FrothMaxSize ?? FrothOptions.MaxSizeDefault);
+        double pushGain = FrothOptions.PushFactor(fs?.FrothCursorPush ?? FrothOptions.PushDefault);
         // The nudge reads the cursor itself (device px, same as the stage): SuperStageHost.Cursor
         // only moves while Steam or the Whirlpool steps the stage. Read only, nothing is hooked.
         bool haveCursor = TryCursorPx(out var cursorPx);
@@ -141,11 +145,11 @@ public partial class BubbleService
             double ax = pull.Ax / dpi, ay = pull.Ay / dpi;           // px/s2 -> DIP/s2
 
             // The cursor herds bubbles while the pool is not using it.
-            if (!poolLive && haveCursor)
+            if (!poolLive && haveCursor && pushGain > 0)
             {
                 double dx = (cPx.X - cursorPx.X) / dpi, dy = (cPx.Y - cursorPx.Y) / dpi;   // px -> DIP
                 double dd = Math.Sqrt(dx * dx + dy * dy);
-                double push = FrothRules.NudgeAccel(dd - rDip, rDip, freshDip);
+                double push = FrothRules.NudgeAccel(dd - rDip, rDip, freshDip) * pushGain;
                 if (push > 0 && dd > 1e-6) { ax += dx / dd * push; ay += dy / dd * push; }
             }
             b.FrothStep(dt, ax, ay, pull.Scale, pull.Inside, freshDip, gentle);
@@ -168,7 +172,7 @@ public partial class BubbleService
                 var keep = keepA ? a : b; var gone = keepA ? b : a;
                 try
                 {
-                    keep.FrothAbsorb(gone, freshDip);
+                    keep.FrothAbsorb(gone, freshDip, maxGrow);
                     gone.ForceDestroy();                             // no pop: no sound, no award
                 }
                 catch (Exception ex) { App.Logger?.Debug("Froth merge: {E}", ex.Message); }
@@ -189,6 +193,7 @@ public partial class BubbleService
             var c = b.CenterPx;                                       // DIP -> device px
             double rPx = b.FrothRadiusPx, freshPx = FrothFreshRadiusDip() * b.DpiScale;
             double reach = FrothRules.Chains(rPx, freshPx) ? FrothRules.Reach(rPx) : 0;   // a small one reaches nothing
+            reach *= FrothOptions.ReachFactor(App.Settings?.Current?.FrothPopReach ?? FrothOptions.ReachDefault);
             var kind = FrothRules.Ripe(rPx, freshPx) ? BlastKind.RipePop : BlastKind.BubblePop;
             SuperStageHost.Stage.Blast(new Blast(c.X, c.Y, reach, rPx * FrothRules.HoleRadii, kind));
         }
@@ -360,7 +365,7 @@ internal partial class Bubble
     /// <summary>Take <paramref name="other"/> in: areas add, the centre is the weighted middle,
     /// its pictures float inside, and its pay is remembered for the pop. The caller removes it.
     /// Both bubbles are on the same dpi scale, so one DIP space.</summary>
-    internal void FrothAbsorb(Bubble other, double freshRadiusDip)
+    internal void FrothAbsorb(Bubble other, double freshRadiusDip, double maxGrow = FrothRules.MaxGrow)
     {
         _frothTouched = true;
         double ar = FrothRadiusDip, br = other.FrothRadiusDip;
@@ -373,7 +378,7 @@ internal partial class Bubble
             _frothVx = (_frothVx * wa + other._frothVx * wb) / w;
             _frothVy = (_frothVy * wa + other._frothVy * wb) / w;
         }
-        _frothGrow = Math.Max(_frothGrow, FrothRules.MergedRadius(ar, br, freshRadiusDip) / (_size * FrothRules.GlassOfSprite));
+        _frothGrow = Math.Max(_frothGrow, FrothRules.MergedRadius(ar, br, freshRadiusDip, maxGrow) / (_size * FrothRules.GlassOfSprite));
         _frothWob = 1;
         // A grown bubble leaves by the top or bottom only once the whole of it is past the edge.
         double pad = _size * (_frothGrow - 1) / 2.0;

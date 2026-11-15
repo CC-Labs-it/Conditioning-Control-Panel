@@ -164,7 +164,7 @@ public class FrothTests
 
         // The merge itself takes the other bubble away without a pop.
         var step = Body(froth, "private void StepFroth()");
-        int absorb = step.IndexOf("keep.FrothAbsorb(gone, freshDip);", StringComparison.Ordinal);
+        int absorb = step.IndexOf("keep.FrothAbsorb(gone, freshDip, maxGrow);", StringComparison.Ordinal);
         Assert.True(absorb > 0);
         Assert.Contains("gone.ForceDestroy();", step.Substring(absorb, 200));
     }
@@ -198,7 +198,7 @@ public class FrothTests
         var end = Body(froth, "private void EndFroth()");
         Assert.Contains("b.FrothReset();", end);
         // The pool owns the cursor while it is live: no nudge then.
-        Assert.Contains("if (!poolLive && haveCursor)", Body(froth, "private void StepFroth()"));
+        Assert.Contains("if (!poolLive && haveCursor && pushGain > 0)", Body(froth, "private void StepFroth()"));
         // Chaos bubbles, magnets, the red one and other trigger kinds are never Froth.
         Assert.Contains("_spec == null || (_isAmbientTrigger && _spec.VariantId == \"flash\")", froth);
         Assert.Contains("!_isMagnetBubble && !_isNatasha", froth);

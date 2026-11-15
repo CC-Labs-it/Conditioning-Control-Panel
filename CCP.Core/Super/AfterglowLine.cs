@@ -7,8 +7,10 @@ namespace ConditioningControlPanel.SuperCore;
 /// </summary>
 public sealed class AfterglowLine
 {
-    /// <summary>Ghosts in a full line.</summary>
+    /// <summary>Ghosts in a full line, as built. The option box sets <see cref="Words"/>.</summary>
     public const int Capacity = 4;
+    /// <summary>The most ghosts a line can ever be set to hold.</summary>
+    public const int MaxCapacity = 6;
     /// <summary>The ghost rises where the word flashed, as the flash itself leaves.</summary>
     public const double RiseSeconds = 0.5;
     /// <summary>Then travels to its place in the line.</summary>
@@ -22,8 +24,17 @@ public sealed class AfterglowLine
     /// <summary>Longest text one ghost keeps.</summary>
     public const int MaxChars = 28;
 
-    private readonly List<(string Text, double Age)> _ghosts = new(Capacity);
+    private readonly List<(string Text, double Age)> _ghosts = new(MaxCapacity);
     private double _finale = -1, _idle;
+    private int _words = Capacity;
+    private double _hold = FinaleHold, _ghost = GhostAlpha;
+
+    /// <summary>Ghosts that make a full line (<see cref="AfterglowLineOptions"/>). A line already longer finishes as it is.</summary>
+    public int Words { get => _words; set => _words = Math.Clamp(value, 1, MaxCapacity); }
+    /// <summary>How long the finished line holds lit, seconds. The rise stays <see cref="FinaleRise"/> (never under 300 ms).</summary>
+    public double HoldSeconds { get => _hold; set => _hold = double.IsNaN(value) ? FinaleHold : Math.Clamp(value, 0, 60); }
+    /// <summary>How visible a resting ghost is, 0..1.</summary>
+    public double Ghost { get => _ghost; set => _ghost = double.IsNaN(value) ? GhostAlpha : Math.Clamp(value, 0, 1); }
 
     public int Count => _ghosts.Count;
     public string TextAt(int i) => _ghosts[i].Text;
@@ -42,7 +53,7 @@ public sealed class AfterglowLine
     /// <summary>A subliminal was shown. False when the line cannot take it (full, in its finale, or empty text).</summary>
     public bool Add(string? text)
     {
-        if (InFinale || _ghosts.Count >= Capacity) return false;
+        if (InFinale || _ghosts.Count >= _words) return false;
         text = (text ?? "").Trim();
         if (text.Length == 0) return false;
         if (text.Length > MaxChars) text = text[..MaxChars].TrimEnd();
@@ -59,12 +70,12 @@ public sealed class AfterglowLine
         if (InFinale)
         {
             _finale += dt;
-            if (_finale >= FinaleRise + FinaleHold + FinaleSink) Clear();
+            if (_finale >= FinaleRise + _hold + FinaleSink) Clear();
             return null;
         }
         _idle += dt;
         if (_idle >= StaleSeconds) { Clear(); return null; }
-        if (_ghosts.Count == Capacity && _ghosts[^1].Age >= RiseSeconds + TravelSeconds)
+        if (_ghosts.Count >= _words && _ghosts[^1].Age >= RiseSeconds + TravelSeconds)
         {
             _finale = 0;
             var parts = new string[_ghosts.Count];
@@ -81,9 +92,9 @@ public sealed class AfterglowLine
     public double Alpha(int i)
     {
         double age = _ghosts[i].Age;
-        if (InFinale) return (GhostAlpha + (1 - GhostAlpha) * FinaleGlowIn) * (1 - FinaleSinkOut);
+        if (InFinale) return (_ghost + (1 - _ghost) * FinaleGlowIn) * (1 - FinaleSinkOut);
         if (age < RiseSeconds) return 0.9 * age / RiseSeconds;
-        double a = 0.9 + (GhostAlpha - 0.9) * Travel(i);
+        double a = 0.9 + (_ghost - 0.9) * Travel(i);
         if (_idle > StaleSeconds - 2) a *= Math.Clamp((StaleSeconds - _idle) / 2, 0, 1);
         return a;
     }
@@ -91,7 +102,7 @@ public sealed class AfterglowLine
     /// <summary>0..1 as the finished line brightens.</summary>
     public double FinaleGlowIn => !InFinale ? 0 : Math.Clamp(_finale / FinaleRise, 0, 1);
     /// <summary>0..1 as the finished line sinks away.</summary>
-    public double FinaleSinkOut => !InFinale ? 0 : Whirlpool.Ease((_finale - FinaleRise - FinaleHold) / FinaleSink);
+    public double FinaleSinkOut => !InFinale ? 0 : Whirlpool.Ease((_finale - FinaleRise - _hold) / FinaleSink);
 
     public void Clear()
     {

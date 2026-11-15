@@ -59,6 +59,7 @@ public sealed class AfterglowLineLayer : BaseLayer
                     _instance = new AfterglowLineLayer(App.Compositor);
                     App.Compositor.RegisterLayer(_instance);
                 }
+                _instance.ApplyOptions();
                 if (_instance._line.Add(text.ToLowerInvariant()))
                 {
                     _instance._dirty = true;
@@ -80,9 +81,21 @@ public sealed class AfterglowLineLayer : BaseLayer
         l.SetActive(false);
     }
 
+    /// <summary>The option box, read live: words per line, how long the line stays lit, ghost strength.</summary>
+    private void ApplyOptions()
+    {
+        var s = App.Settings?.Current;
+        if (s == null) return;
+        _line.Words = AfterglowLineOptions.ClampWords(s.AfterglowLineWords);
+        _line.HoldSeconds = AfterglowLineOptions.ClampHold(s.AfterglowLineHold);
+        double ghost = AfterglowLineOptions.GhostAlpha(s.AfterglowGhostOpacity);
+        if (ghost != _line.Ghost) { _line.Ghost = ghost; _dirty = true; }
+    }
+
     public override void Update(TimeSpan delta)
     {
         double dt = Math.Min(delta.TotalSeconds, 0.1);
+        ApplyOptions();
         string? done = _line.Step(dt);
         if (done != null)
         {

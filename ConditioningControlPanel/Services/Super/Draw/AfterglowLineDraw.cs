@@ -16,7 +16,7 @@ public sealed class AfterglowLineDraw : IDisposable
     private readonly SKPaint _rule = new() { IsAntialias = false };
     private SKMaskFilter? _blur;
     private float _blurSigma = -1;
-    private readonly float[] _widths = new float[AfterglowLine.Capacity];
+    private readonly float[] _widths = new float[AfterglowLine.MaxCapacity];
 
     /// <summary>
     /// <paramref name="bounds"/> is the monitor on the canvas. (<paramref name="fromX"/>,
