@@ -131,4 +131,48 @@ public sealed class EmiDeskChordTests
         Assert.False(svc.HotkeyArmed);
         return Task.CompletedTask;
     });
+    private sealed class Release(Action action) : IDisposable
+    {
+        public void Dispose() => action();
+    }
+
+    [Fact]
+    public Task WindowsChordRebindsAndDisarms() => Run((svc, grabs, _, _) =>
+    {
+        var oldWindows = svc.IsWindows;
+        var oldRegister = svc.RegisterWindowsChord;
+        var calls = new List<Grab>();
+        int releases = 0;
+        try
+        {
+            svc.IsWindows = () => true;
+            svc.RegisterWindowsChord = (mods, key, press) =>
+            {
+                calls.Add(new Grab(mods, key, press));
+                return new Release(() => releases++);
+            };
+            svc.ApplyHotkey();
+            Assert.Empty(grabs);
+            Assert.Equal((ChordMods.Ctrl | ChordMods.Alt, "E"), (calls[0].Mods, calls[0].Key));
+            Assert.True(svc.HotkeyArmed);
+            calls[0].OnPress();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(svc.IsOut);
+            CoreSettings.Current.EmiDeskHotkey = "Ctrl+Shift+K";
+            svc.ApplyHotkey();
+            Assert.Equal(2, calls.Count);
+            Assert.Equal(1, releases);
+            CoreSettings.Current.EmiDeskEnabled = false;
+            svc.ApplyHotkey();
+            Assert.Equal(2, releases);
+            Assert.False(svc.HotkeyArmed);
+        }
+        finally
+        {
+            svc.IsWindows = oldWindows;
+            svc.RegisterWindowsChord = oldRegister;
+        }
+        return Task.CompletedTask;
+    });
+
 }
