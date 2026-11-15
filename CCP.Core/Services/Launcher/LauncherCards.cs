@@ -14,11 +14,18 @@ namespace ConditioningControlPanel.Services.Launcher;
 /// <param name="Rgb">Tile hue as 0xRRGGBB.</param>
 /// <param name="RequiresAccount">False only for entries that explicitly allow signed-out play.</param>
 /// <param name="IsNew">Shows the NEW badge.</param>
+/// <param name="Door">Which door's page the card sits on (<see cref="LauncherDoorRules"/>).</param>
+/// <param name="Listed">False keeps the card off every page; <c>Find</c>, <c>--game</c> and a
+/// shortcut still reach it.</param>
 public sealed record LauncherCard(string Id, string? ArtPath, string Glyph, uint Rgb,
-    bool RequiresAccount = true, bool IsNew = false)
+    bool RequiresAccount = true, bool IsNew = false, LauncherDoor Door = LauncherDoor.Games, bool Listed = true)
 {
-    public string TitleKey => "launcher_game_" + Id + "_title";
-    public string BlurbKey => "launcher_game_" + Id + "_blurb";
+    private string KeyPrefix => Door == LauncherDoor.Tools ? "launcher_tool_" : "launcher_game_";
+    public string TitleKey => KeyPrefix + Id + "_title";
+    public string BlurbKey => KeyPrefix + Id + "_blurb";
+
+    /// <summary>The card as the door rules see it, with this head's answers for today.</summary>
+    public LauncherDoorCard DoorCard(bool available, bool locked) => new(Id, Door, Listed, available, IsNew, locked);
     public byte R => (byte)(Rgb >> 16);
     public byte G => (byte)(Rgb >> 8);
     public byte B => (byte)Rgb;
@@ -34,8 +41,11 @@ public static class LauncherCards
     public static readonly IReadOnlyList<LauncherCard> All = new LauncherCard[]
     {
         new("backroom", "features/backroom.png", "♦", 0xB95CD8),
-        new("breakoutdemo", null, "●", 0x8CF5C8, RequiresAccount: false, IsNew: true),
-        new("breakout", null, "●", 0x55B7FF, IsNew: true),
+        // Breakout is ONE card (declutter 2026-11-15): the full game for whoever holds it, the free
+        // demo for everyone else, so it never asks for an account. The demo keeps its id for --game
+        // and old shortcuts, off every page.
+        new("breakoutdemo", null, "●", 0x8CF5C8, RequiresAccount: false, IsNew: true, Listed: false),
+        new("breakout", null, "●", 0x55B7FF, RequiresAccount: false, IsNew: true),
         // Piece by Piece: free for everyone (owner, 2026-09-27); its lobby asks a signed-out player.
         new("piecebypiece", "features/piecebypiece.png", "♟", 0x7B5CFF, RequiresAccount: false, IsNew: true),
         new("race", "features/race.png", "☕", 0xFFB36B),
@@ -47,11 +57,31 @@ public static class LauncherCards
         new("intake", "features/lab_quiz_hero.png", "❓", 0x8E7CF2),
     };
 
-    public static LauncherCard? Find(string? id)
+    /// <summary>The Tools door: editors and makers. No desktop shortcut, never a --game target;
+    /// each head attaches its own open (a panel tab, the Mod Manager, a window of its own).</summary>
+    public static readonly IReadOnlyList<LauncherCard> Tools = new LauncherCard[]
+    {
+        new("deepereditor", "features/deeper_editor.png", "✎", 0x7B5CFF, RequiresAccount: false, Door: LauncherDoor.Tools),
+        new("sessioneditor", null, "▤", 0xFF69B4, RequiresAccount: false, Door: LauncherDoor.Tools),
+        new("modcreator", null, "✂", 0xFFB36B, RequiresAccount: false, Door: LauncherDoor.Tools),
+        new("justdrop", "features/justdrop.png", "▼", 0x8CF5C8, RequiresAccount: false, Door: LauncherDoor.Tools),
+        new("loom", "features/loom.png", "◎", 0x55B7FF, RequiresAccount: false, Door: LauncherDoor.Tools),
+    };
+
+    /// <summary>Every card behind either door, games first.</summary>
+    public static IEnumerable<LauncherCard> Every => All.Concat(Tools);
+
+    /// <summary>A game card by id. Games only: the boot, --game and shortcuts never start a tool.</summary>
+    public static LauncherCard? Find(string? id) => Find(All, id);
+
+    /// <summary>A card behind either door by id.</summary>
+    public static LauncherCard? FindAny(string? id) => Find(Every, id);
+
+    private static LauncherCard? Find(IEnumerable<LauncherCard> cards, string? id)
     {
         if (string.IsNullOrWhiteSpace(id)) return null;
         var key = id.Trim();
-        return All.FirstOrDefault(c => string.Equals(c.Id, key, StringComparison.OrdinalIgnoreCase));
+        return cards.FirstOrDefault(c => string.Equals(c.Id, key, StringComparison.OrdinalIgnoreCase));
     }
 }
 
