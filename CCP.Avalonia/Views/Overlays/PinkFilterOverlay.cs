@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The tint is on screen now.</summary>
         internal static bool IsShowing => Windows.Count > 0;
+        internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
         private static int[] _shownOn = Array.Empty<int>();
         private static Window? _hookedOwner;
 

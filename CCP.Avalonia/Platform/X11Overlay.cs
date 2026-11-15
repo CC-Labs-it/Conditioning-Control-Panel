@@ -350,18 +350,32 @@ internal static class X11Overlay
         }
     }
 
-    /// <summary>Back on top of everything (WPF ReassertTopmost: SetWindowPos HWND_TOPMOST). An
-    /// override-redirect window is outside the WM, so the plain XRaiseWindow is the one that holds.</summary>
+    /// <summary>WPF OverlayService.cs:3376-3381: repin at the top without activation.
+    /// Managed clients can be reparented: ask the WM to raise the client and also raise its
+    /// root-level frame. Override-redirect windows are already children of root.</summary>
     internal static bool Raise(TopLevel window)
     {
         if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd);
-        if (!TryGetXid(window, out var xid)) return false;
+        return TryGetXid(window, out var xid) && RaiseX11(xid);
+    }
+
+    // The native-handle entry point also lets a dedicated X11 test exercise a reparenting WM.
+    internal static bool RaiseX11(IntPtr xid)
+    {
+        if (xid == IntPtr.Zero) return false;
         lock (Gate)
         {
             if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            var frame = Frame(xid);
+            if (frame == IntPtr.Zero || _xErrored) return false;
+            // A WM that redirects configure requests manages the client, not its frame.
+            // Some WMs do not redirect requests for their frame; raise that too. For an
+            // override-redirect window the client is already the root-level frame.
             XRaiseWindow(_display, xid);
-            XFlush(_display);
-            return true;
+            if (frame != xid) XRaiseWindow(_display, frame);
+            XSync(_display, false);
+            return !_xErrored;
         }
     }
 

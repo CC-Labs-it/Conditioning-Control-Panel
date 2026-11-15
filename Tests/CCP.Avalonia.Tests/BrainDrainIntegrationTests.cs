@@ -8,6 +8,7 @@ using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -131,5 +132,25 @@ public sealed class BrainDrainIntegrationTests
             var host = Assert.Single(BrainDrainOverlay.Active); Assert.NotSame(old, host); Assert.False(old.IsVisible);
             Assert.Equal(bounds.Position, host.Position); Assert.Equal(bounds.Width / scale, host.Width); Assert.Equal(bounds.Height / scale, host.Height);
         } return Task.CompletedTask;
+    });
+    [Fact]
+    public Task OverlaySweepPinsThenSinksBlurBelowPictures() => Run(owner =>
+    {
+        BrainDrainOverlay.Start(owner);
+        var blur = BrainDrainOverlay.Active.ToArray();
+        var video = new Window(); var tint = new Window();
+        var band = new List<Window> { video, tint, owner }; band.AddRange(blur);
+        BrainDrainOverlay.OwnWindows = () => band;
+        BrainDrainOverlay.ReadBand = _ => band.Select(w => new E(BrainDrainOverlay.Handle(w), true, false)).ToArray();
+        void Below(Window w, Window anchor) { band.Remove(w); band.Insert(band.IndexOf(anchor) + 1, w); }
+        BrainDrainOverlay.Below = Below;
+        CoreSettings.Current.BrainDrainKeepPicturesClear = true;
+        bool hadAnchor = false;
+        OverlayZOrder.Reconcile(new[] { tint }.Concat(blur), new[] { video }, Array.Empty<Window>(),
+            false, false, _ => 0, _ => true, Below, _ => { }, BrainDrainOverlay.SinkKeepClear, ref hadAnchor);
+        Assert.True(band.IndexOf(video) < band.IndexOf(tint));
+        Assert.All(blur, w => Assert.True(band.IndexOf(tint) < band.IndexOf(w)));
+        Assert.All(blur, w => Assert.True(band.IndexOf(owner) < band.IndexOf(w)));
+        return Task.CompletedTask;
     });
 }
