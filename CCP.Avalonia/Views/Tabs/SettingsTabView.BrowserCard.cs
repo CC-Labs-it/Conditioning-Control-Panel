@@ -31,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void HookBrowserCard()
         {
+            BrowserContainer.Children.CollectionChanged += (_, _) => SyncBrowserPrompt();
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
@@ -174,7 +175,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             bool prompt = BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             bool offline = CoreSettings.Current.OfflineMode;
-            BrowserLoadingText.IsVisible = offline || _browserPoppedOut || prompt;
+            bool fullscreen = !_browserPoppedOut && !BrowserContainer.Children.Contains(BrowserWebHost);
+            BrowserLoadingText.IsVisible = offline || _browserPoppedOut || fullscreen || prompt;
+            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBareBinding(offline
+                ? "label_browser_disabled_in_offline_mode" : _browserPoppedOut
+                    ? "label_browser_popped_out_nclick_to_focus_window" : fullscreen
+                        ? "label_browser_in_fullscreen" : "label_click_to_load_browser"));
             BrowserWebHost.IsVisible = _browserPoppedOut || (!offline && !prompt);
         }
 
@@ -189,9 +195,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SetBrowserPoppedOut(bool poppedOut)
         {
             _browserPoppedOut = poppedOut;
-            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBareBinding(CoreSettings.Current.OfflineMode
-                ? "label_browser_disabled_in_offline_mode" : poppedOut
-                    ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser"));
             PopOutBrowserIcon.Kind = poppedOut ? IconKind.Window : IconKind.Open;
             TxtPopOutBrowser.Bind(TextBlock.TextProperty, LocBareBinding(poppedOut ? "btn_focus" : "btn_pop_out"));
             if (!CoreSettings.Current.OfflineMode)
