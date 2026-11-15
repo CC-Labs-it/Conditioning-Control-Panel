@@ -578,6 +578,22 @@ public sealed class AvatarTubeFinishTests
             Assert.Equal(Math.Sin(0.68) * 0.4 + Math.Sin(18) * Math.Pow(Math.Sin(1.4), 3) * 0.175, wobble.Angle, 8);
             end!(); BeatLoop.StepAll();
             Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube); Assert.Equal(0, wobble.Angle);
+
+            // Lighter effects switched on mid-clip: the bob holds, the speech keeps moving.
+            s.LighterEffects = LighterEffectsMode.Off;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(tube.IsFloating);
+            tube.PanicSilence(); end = null;
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true);
+            Assert.NotNull(end);
+            s.LighterEffects = LighterEffectsMode.On;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tube.IsFloating); Assert.Single(BeatLoop.Running, l => l.Owner == tube);
+            time.Advance(TimeSpan.FromSeconds(40 * 0.016)); BeatLoop.StepAll(); Assert.NotEqual(0, wobble.Angle);
+
+            // Leaving portrait mode mid-clip ends the speech loop instead of ticking until close.
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false)); Assert.False(tube.IsPortraitMode);
+            BeatLoop.StepAll(); Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube);
         }
         finally
         {

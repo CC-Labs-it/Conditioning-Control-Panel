@@ -47,7 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             BeatLoop? loop = null;
             _speakLoop = loop = new BeatLoop(this, seconds =>
             {
-                if (_speakLoop != loop || !IsPortraitMode) return;
+                if (_speakLoop != loop) return;
+                if (!IsPortraitMode) { StopSpeakingMotion(); return; }   // left portrait mid-clip: nothing left to move
                 PortraitMotion(seconds);
                 if (!clip.IsCompleted) return;
                 StopSpeakingMotion();   // the clip ended: this frame drew the idle mist, and she settles
@@ -96,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 FloatingFrame = null;
                 _avatarFloat.Y = 0;
                 ResetPortraitMotion();
+                StartSpeakingMotion();   // WPF Windowing.cs:765-776: a clip already playing keeps her talking
             }
             else if (!hold && _floatLoop == null) StartFloatingAnimation();
         }
