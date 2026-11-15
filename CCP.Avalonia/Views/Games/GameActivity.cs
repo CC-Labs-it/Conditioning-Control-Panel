@@ -18,12 +18,22 @@ internal static class GameActivity
         foreach (var w in IntakeHostWindow.Snapshot()) Open.Add(w);
         Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
         {
-            if (Counts(w) && Open.Add(w)) GameActiveChanged?.Invoke();
+            if (Counts(w)) Register(w);
         });
         Window.WindowClosedEvent.AddClassHandler<Window>((w, _) =>
         {
-            if (Open.Remove(w)) GameActiveChanged?.Invoke();
+            Unregister(w);
         });
+    }
+
+    internal static void Register(Window w)
+    {
+        if (Open.Add(w)) GameActiveChanged?.Invoke();
+    }
+
+    internal static void Unregister(Window w)
+    {
+        if (Open.Remove(w)) GameActiveChanged?.Invoke();
     }
 
     private static bool Counts(Window w) => w is IntakeHostWindow ||
