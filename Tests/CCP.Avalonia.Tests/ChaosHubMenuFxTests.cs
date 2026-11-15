@@ -122,7 +122,21 @@ public class ChaosHubMenuFxTests
             long sheen = Frame(0);
             Assert.True(sheen > noSheen, $"{sheen}, {noSheen}");
         }
-        finally { host.Close(); CoreSettings.Current.ChaosSkiaFxEnabled = enabled; ChaosArt.ResetForTest(); Directory.Delete(root, true); }
+        finally { BeatLoop.Time = oldTime; host.Close(); CoreSettings.Current.ChaosSkiaFxEnabled = enabled; ChaosArt.ResetForTest(); Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public void Bloom_test_restores_the_previous_beat_clock() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var previous = BeatLoop.Time;
+        var sentinel = new SteppedTime();
+        try
+        {
+            BeatLoop.Time = sentinel;
+            Bloom_follows_the_frame_crossfade();
+            Assert.Same(sentinel, BeatLoop.Time);
+        }
+        finally { BeatLoop.Time = previous; }
     });
 
     private static long RgbSum(global::Avalonia.Media.Imaging.Bitmap frame)
