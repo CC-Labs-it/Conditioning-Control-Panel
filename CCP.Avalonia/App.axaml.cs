@@ -959,10 +959,9 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
-                // WPF App.xaml.cs:2797-2798: migrate legacy personality settings at startup.
-                // The shared migration saves even when it changes nothing; avoid a needless startup write.
-                if (Settings.Current.SlutModeEnabled || Settings.Current.CompanionPrompt?.UseCustomPrompt == true)
-                    PersonalityService.Shared.MigrateFromLegacy(Settings.Current);
+                // WPF App.xaml.cs:2797-2798: migrate legacy personality settings at startup. WPF re-runs it every
+                // launch; Core now latches PersonalityLegacyMigrated and saves only when something changed.
+                PersonalityService.Shared.MigrateFromLegacy(Settings.Current);
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.

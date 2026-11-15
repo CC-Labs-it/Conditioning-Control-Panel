@@ -375,11 +375,15 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// Migrates from legacy SlutModeEnabled setting to new preset system.
-        /// Should be called once during app startup.
+        /// Runs once per settings file: latched by <see cref="AppSettings.PersonalityLegacyMigrated"/>, because
+        /// SlutModeEnabled is now the live spice switch and re-running would reset the user's chosen preset.
         /// </summary>
         public void MigrateFromLegacy(AppSettings? settings)
         {
-            if (settings == null) return;
+            if (settings == null || settings.PersonalityLegacyMigrated) return;
+            // Latched in memory; persisted by this save when something migrated, else by the next settings save.
+            settings.PersonalityLegacyMigrated = true;
+            if (!settings.SlutModeEnabled && settings.CompanionPrompt?.UseCustomPrompt != true) return;
 
             // Only migrate if not already using new system (i.e. still on a default).
             // If they've already changed to something else, they're using new system.

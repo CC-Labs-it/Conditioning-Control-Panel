@@ -2611,6 +2611,16 @@ namespace ConditioningControlPanel.Models
             set { _marqueeNeutralDefaultMigrated = value; OnPropertyChanged(); }
         }
 
+        private bool _personalityLegacyMigrated;
+        /// <summary>One-shot guard for PersonalityService.MigrateFromLegacy, so a preset picked after the
+        /// migration is never reset at a later launch while spice (SlutModeEnabled) is on.</summary>
+        [JsonProperty]
+        public bool PersonalityLegacyMigrated
+        {
+            get => _personalityLegacyMigrated;
+            set { _personalityLegacyMigrated = value; OnPropertyChanged(); }
+        }
+
         private bool _circeNeutralTextMigrated;
         /// <summary>One-shot guard for Services.Migrations.CirceNeutralMigration, which rewrites the
         /// old Circe's Lock defaults saved in pools, phrase toggles and a pasted custom prompt. Latched

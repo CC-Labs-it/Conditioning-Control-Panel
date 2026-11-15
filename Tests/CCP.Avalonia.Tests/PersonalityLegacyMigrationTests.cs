@@ -20,6 +20,7 @@ public class PersonalityLegacyMigrationTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
+    [InlineData(4)]
     public Task DesktopStartupMigratesSavedPersonality(int scenario) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
@@ -50,9 +51,33 @@ public class PersonalityLegacyMigrationTests
             var method = typeof(App).GetMethod("StartDesktop", BindingFlags.NonPublic | BindingFlags.Instance)!;
             Func<double, string, Task> step = (progress, _) => progress == 0.4
                 ? Task.FromException(new StopStartup()) : Task.CompletedTask;
-            var task = (Task)method.Invoke(app, new object[] { step })!;
-            await Assert.ThrowsAsync<StopStartup>(() => task);
-            var migrated = App.Settings!.Current;
+            async Task<AppSettings> Launch()
+            {
+                (dispatchField.GetValue(app) as ConditioningControlPanel.Avalonia.AvaloniaCoreDispatch)?.Stop();
+                App.Settings?.SaveImmediate(suppressCloudBackup: true); // the exit flush of the previous launch
+                App.Settings?.SealForReset();
+                var task = (Task)method.Invoke(app, new object[] { step })!;
+                await Assert.ThrowsAsync<StopStartup>(() => task);
+                return App.Settings!.Current;
+            }
+            var migrated = await Launch();
+            Assert.True(migrated.PersonalityLegacyMigrated);
+            if (scenario == 4)
+            {
+                // The legacy profile migrated once; now the user picks CCP Default with spice still on and
+                // re-activates a community prompt. Later launches must keep both.
+                Assert.Equal("slutmode", migrated.ActivePersonalityPresetId);
+                migrated.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
+                migrated.CompanionPrompt.UseCustomPrompt = true;
+                for (var i = 0; i < 2; i++)
+                {
+                    migrated = await Launch();
+                    Assert.Equal(PersonalityPresets.NeutralDefaultId, migrated.ActivePersonalityPresetId);
+                    Assert.True(migrated.SlutModeEnabled);
+                    Assert.True(migrated.CompanionPrompt.UseCustomPrompt);
+                    Assert.Empty(migrated.UserPersonalityPresets);
+                }
+            }
             if (scenario == 0 || scenario == 3) Assert.Equal("slutmode", migrated.ActivePersonalityPresetId);
             if (scenario == 1)
             {
