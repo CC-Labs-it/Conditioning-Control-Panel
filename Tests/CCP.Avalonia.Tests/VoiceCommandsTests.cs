@@ -174,8 +174,10 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
+        // This test injects commands directly; no replaying microphone should race its tripwire.
+        CoreEntitlement.HasPremiumProvider = () => true;
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;

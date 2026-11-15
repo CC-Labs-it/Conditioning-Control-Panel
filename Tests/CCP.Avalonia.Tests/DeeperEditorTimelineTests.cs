@@ -73,7 +73,9 @@ public sealed class DeeperEditorTimelineTests
     {
         Setup();
         var oldProvider = CoreSettings.ServiceProvider;
-        var service = new ConditioningControlPanel.Services.SettingsService();
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-timeline-" + Guid.NewGuid().ToString("N"));
+        var path = System.IO.Path.Combine(dir, "settings.json");
+        var service = new ConditioningControlPanel.Services.SettingsService(path);
         CoreSettings.ServiceProvider = () => service;
         service.Current.DeeperEditorTimelineHeight = 160;
         service.SaveImmediate();
@@ -92,11 +94,19 @@ public sealed class DeeperEditorTimelineTests
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
             var deadline = System.Diagnostics.Stopwatch.StartNew();
-            while (new ConditioningControlPanel.Services.SettingsService().Current.DeeperEditorTimelineHeight != saved)
+            // A SettingsService constructor cleans up abandoned temp files. Polling by creating
+            // services can delete the debounced save's temp file before it is published.
+            while (true)
             {
+                using var stream = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read,
+                    System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
+                using var reader = new System.IO.StreamReader(stream);
+                var json = Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd());
+                if ((int?)json["DeeperEditorTimelineHeight"] == saved) break;
                 Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
                 await Task.Delay(50);
             }
+            Assert.Equal(saved, new ConditioningControlPanel.Services.SettingsService(path).Current.DeeperEditorTimelineHeight);
             editor.ForceClose();
             next = new DeeperEditorWindow(new Enhancement(), null);
             next.Show(); Dispatcher.UIThread.RunJobs();
@@ -106,6 +116,7 @@ public sealed class DeeperEditorTimelineTests
         {
             editor.ForceClose(); next?.ForceClose();
             service.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
+            System.IO.Directory.Delete(dir, recursive: true);
         }
     });
 
