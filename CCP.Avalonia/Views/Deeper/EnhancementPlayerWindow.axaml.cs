@@ -898,6 +898,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void LoadLocalVideo(string path)
         {
             StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false;
+            _currentSec = _durationSec = 0; // WPF BindVideoSource (xaml.cs:1430): a fresh BrowserVideoTimeSource starts at 0 (BrowserVideoTimeSource.cs:33).
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -945,6 +946,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void LoadVideoUrl(string url)
         {
             StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false;
+            _currentSec = _durationSec = 0; // WPF BindVideoSource (xaml.cs:1430): a fresh BrowserVideoTimeSource starts at 0 (BrowserVideoTimeSource.cs:33).
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");

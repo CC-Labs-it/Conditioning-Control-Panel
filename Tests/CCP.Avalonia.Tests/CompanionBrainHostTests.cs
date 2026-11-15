@@ -349,8 +349,6 @@ public sealed class CompanionBrainHostTests
             .Invoke(player, new object?[] { null, EventArgs.Empty });
         try
         {
-            AvApp.Mantra.EndSession();
-            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             player.Show();
             AvApp.SeedCompanionTubeSeams();
             player.OpenLocalMediaFile("plain.mp3");
@@ -394,8 +392,6 @@ public sealed class CompanionBrainHostTests
         File.WriteAllText(path, "");
         try
         {
-            AvApp.Mantra.EndSession();
-            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             player.Show();
             AvApp.SeedCompanionTubeSeams();
             player.OpenLocalMediaFile(path);
@@ -412,6 +408,50 @@ public sealed class CompanionBrainHostTests
             Assert.False(CompanionAskService.BusyProvider!());
         }
         finally { player.Close(); File.Delete(path); restore(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task VideoEnhancementBindsAtZeroAfterMidPlaybackSwitch() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var open = ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open;
+        var audio = new AskBusyAudio();
+        ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open = _ => Task.FromResult<ConditioningControlPanel.Avalonia.Views.Deeper.IDeeperLocalAudio?>(audio);
+        var player = new ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow(null, null);
+        player.LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks;
+        player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!.ScriptInvoker = _ => Task.FromResult<string?>("0|95|0");
+        var speaks = 0;
+        player.SpeakSessionFactory = (_, _) => { speaks++; throw new InvalidOperationException("speak"); };
+        void Tick() => player.GetType().GetMethod("UiTimer_Tick", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(player, new object?[] { null, EventArgs.Empty });
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mp4");
+        File.WriteAllText(path, "");
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile("plain.mp3");
+            audio.PositionSeconds = 50;
+            Tick();
+            Assert.True(audio.Playing);
+            player.LoadEnhancementFromMemory(new ConditioningControlPanel.Models.Deeper.Enhancement
+            {
+                MediaType = ConditioningControlPanel.Models.Deeper.MediaTypes.Video, MediaSource = path, TimelineItems = {
+                    new ConditioningControlPanel.Models.Deeper.TimelineItem { Id = "band", Kind = ConditioningControlPanel.Models.Deeper.TimelineItemKind.Rule, Start = 40, Duration = 20,
+                        Trigger = new ConditioningControlPanel.Models.Deeper.TimeReachedTrigger { Time = 41 },
+                        Action = new ConditioningControlPanel.Models.Deeper.TriggerEffectAction { EffectType = ConditioningControlPanel.Models.Deeper.EffectTypes.Haptic, PatternName = "pulse" } },
+                    new ConditioningControlPanel.Models.Deeper.TimelineItem { Kind = ConditioningControlPanel.Models.Deeper.TimelineItemKind.Rule, Duration = double.MaxValue,
+                        Trigger = new ConditioningControlPanel.Models.Deeper.RegionExitedTrigger { RegionId = "band" },
+                        Action = new ConditioningControlPanel.Models.Deeper.TriggerEffectAction { EffectType = ConditioningControlPanel.Models.Deeper.EffectTypes.Speak, SpeakTarget = "yes" } } }
+            }, "test");
+            Tick(); // the new video's first poll reads 0: the previous media's 50 s must not count as leaving the band
+            Assert.Equal(0, speaks);
+        }
+        finally
+        {
+            player.Close();
+            ConditioningControlPanel.Avalonia.Views.Deeper.DeeperLocalAudio.Open = open;
+            File.Delete(path);
+        }
         return Task.CompletedTask;
     });
 }
