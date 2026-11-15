@@ -174,7 +174,7 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
@@ -184,6 +184,7 @@ public sealed class VoiceCommandsTests
         {
             Assert.True(shell.SetAutonomyEnabled(true));
             ld.Activate(TimeSpan.FromMinutes(30));
+            Dispatcher.UIThread.RunJobs(); // drain activation work before observing the command
             var escapes = new System.Collections.Generic.List<string>();
             ld.EscapeAttempted += a => escapes.Add(a.Kind);
             var wake = new[] { "hey bambi" };
@@ -213,6 +214,13 @@ public sealed class VoiceCommandsTests
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
+    }, () =>
+    {
+        // This test feeds an inline command directly, so an unrelated WAV wake loop must not
+        // issue a second command while its lockdown tripwire is being counted.
+        CoreSettings.Current.SpeechWakeWordEnabled = false;
+        CoreSettings.Current.SpeechPushToTalkEnabled = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
     });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
@@ -352,11 +360,12 @@ public sealed class VoiceCommandsTests
             }
         });
 
-    // The help row is UI state; no recognition or microphone is exercised by this test.
-    private static Task RunUi(Func<MainShellWindow, Task> body) =>
+    // Inline command and help tests need the shell, but do not exercise recognition or a microphone.
+    private static Task RunUi(Func<MainShellWindow, Task> body, Action? beforeShow = null) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
+            beforeShow?.Invoke();
             var shell = new MainShellWindow();
             shell.Show();
             try { await body(shell); }

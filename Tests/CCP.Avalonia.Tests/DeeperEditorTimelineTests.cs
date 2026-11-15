@@ -73,7 +73,9 @@ public sealed class DeeperEditorTimelineTests
     {
         Setup();
         var oldProvider = CoreSettings.ServiceProvider;
-        var service = new ConditioningControlPanel.Services.SettingsService();
+        var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-timeline-" + Guid.NewGuid().ToString("N"));
+        var path = System.IO.Path.Combine(directory, "settings.json");
+        var service = new ConditioningControlPanel.Services.SettingsService(path);
         CoreSettings.ServiceProvider = () => service;
         service.Current.DeeperEditorTimelineHeight = 160;
         service.SaveImmediate();
@@ -92,12 +94,26 @@ public sealed class DeeperEditorTimelineTests
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
             var deadline = System.Diagnostics.Stopwatch.StartNew();
-            while (new ConditioningControlPanel.Services.SettingsService().Current.DeeperEditorTimelineHeight != saved)
+            while (true)
             {
+                // A SettingsService constructor runs temp-file recovery; polling it can delete the
+                // concurrent save's temp file before publication. Observe the published file instead.
+                try
+                {
+                    using var stream = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read,
+                        System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
+                    using var reader = new System.IO.StreamReader(stream);
+                    var json = Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd());
+                    if ((int?)json[nameof(ConditioningControlPanel.Models.AppSettings.DeeperEditorTimelineHeight)] == saved) break;
+                }
+                catch (System.IO.IOException) { } // Windows can briefly hold the file during replace.
                 Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
                 await Task.Delay(50);
             }
             editor.ForceClose();
+            var reloaded = new ConditioningControlPanel.Services.SettingsService(path);
+            Assert.Equal(saved, reloaded.Current.DeeperEditorTimelineHeight);
+            CoreSettings.ServiceProvider = () => reloaded;
             next = new DeeperEditorWindow(new Enhancement(), null);
             next.Show(); Dispatcher.UIThread.RunJobs();
             Assert.Equal(saved, next.PreviewTimelineGrid.RowDefinitions[2].Height.Value);
@@ -106,6 +122,7 @@ public sealed class DeeperEditorTimelineTests
         {
             editor.ForceClose(); next?.ForceClose();
             service.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
+            if (System.IO.Directory.Exists(directory)) System.IO.Directory.Delete(directory, true);
         }
     });
 
