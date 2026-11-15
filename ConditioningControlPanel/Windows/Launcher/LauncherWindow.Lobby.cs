@@ -30,7 +30,7 @@ public partial class LauncherWindow
 {
     internal const int LobbyDropMax = 6;
 
-    private static readonly FontFamily Fredoka = new("/Fonts/#Fredoka, Segoe UI");
+    private static FontFamily Fredoka => LauncherDoorCard.DisplayFont;
     private Button? _lobbyChip;
     private TextBlock? _lobbyChipText;
     private Popup? _lobbyDrop;
