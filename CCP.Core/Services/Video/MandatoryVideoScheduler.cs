@@ -25,8 +25,10 @@ namespace ConditioningControlPanel.Services
         bool IsFloating(bool strict) => false;
         bool TryFloatingTrigger(bool userInitiated) => false;
         bool FloatingRunOpen => false;
-        int FloatingLimit => 1;
-        int FloatingUp => 0;
+        /// <summary>WPF FloatingLimit (VideoService.FloatingInstances.cs:86): most floating windows at once.</summary>
+        int FloatingLimit { get; }
+        /// <summary>Floating windows on screen now; the scheduler joins one more while this is under the limit.</summary>
+        int FloatingUp { get; }
         /// <summary>WPF VideoService.cs:2305-2313: wait while bubble count owns the screen.</summary>
         bool BubbleCountActive => false;
         void Freeze() { }

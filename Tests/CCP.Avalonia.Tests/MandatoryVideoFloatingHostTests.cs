@@ -94,6 +94,88 @@ public sealed class MandatoryVideoFloatingHostTests
 
     private static List<Window> Up(MandatoryVideoOverlay o) => o.Windows.Where(w => w.IsVisible).ToList();
 
+    /// <summary>Timers wait for <see cref="FireLast"/>: the most recently armed one fires.</summary>
+    private sealed class Clock : TimeProvider
+    {
+        public readonly List<Timer> Armed = new();
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Timer(this, () => callback(state));
+        public void FireLast() { var t = Armed[^1]; Armed.Remove(t); t.Fire(); }
+        public sealed class Timer(Clock clock, Action fire) : ITimer
+        {
+            public void Fire() => fire();
+            public bool Change(TimeSpan due, TimeSpan period)
+            {
+                clock.Armed.Remove(this);
+                if (due != Timeout.InfiniteTimeSpan) clock.Armed.Add(this);
+                return true;
+            }
+            public void Dispose() => clock.Armed.Remove(this);
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    /// <summary>WPF VideoService.cs:2940-2946 + VideoService.FloatingInstances.cs:117,250 (SchedulerMayTrigger):
+    /// a scheduler tick during an open floating run with room opens one more window through the real host.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Scheduler_ticks_join_the_open_run_until_the_limit_and_panic_closes_all(bool together) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var s = CoreSettings.Current;
+            var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
+                s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled);
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
+                s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled)
+                = (true, 20, true, 3, together, false, false, false, false, 0, false);
+            var post = CoreDispatch.PostProvider;
+            var clock = new Clock();
+            var decoders = new List<Decoder>();
+            var o = new MandatoryVideoOverlay(() => { var d = new Decoder(); decoders.Add(d); return d; });
+            o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4" });
+            try
+            {
+                CoreDispatch.PostProvider = a => a();
+                o.Scheduler.Start();
+                clock.FireLast();   // the schedule fires: pre-roll
+                clock.FireLast();   // pre-roll ends: the run's first window
+                Assert.True(o.FloatingRunOpen);
+                if (together)
+                {
+                    Assert.Equal(3, Up(o).Count);
+                    o.Floaters[0].Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // room again
+                    Assert.Equal(2, Up(o).Count);
+                    clock.FireLast();   // the next tick
+                    Assert.Equal(2, Up(o).Count);   // Pop up together: the run waits to end, no join
+                }
+                else
+                {
+                    Assert.Single(Up(o));
+                    clock.FireLast();   // join tick
+                    Assert.Equal(2, Up(o).Count);
+                    clock.FireLast();
+                    Assert.Equal(3, Up(o).Count);
+                    clock.FireLast();   // at the limit: skipped
+                    Assert.Equal(3, Up(o).Count);
+                    Assert.Equal(3, decoders.Count);
+                }
+                o.Scheduler.ForceCleanup();   // the engine stop a panic runs
+                Assert.Empty(Up(o));
+                Assert.Equal(0, o.FloatingUp);
+                Assert.Empty(clock.Armed);
+            }
+            finally
+            {
+                o.Scheduler.Stop();
+                o.CloseAll();
+                CoreDispatch.PostProvider = post;
+                (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
+                    s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled) = saved;
+            }
+            return Task.CompletedTask;
+        });
+
     [Fact]
     public Task Test_presses_add_windows_up_to_the_limit_then_replace_the_oldest() => Run((o, decoders) =>
     {

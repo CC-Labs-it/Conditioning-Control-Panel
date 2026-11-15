@@ -17,6 +17,7 @@ public sealed class MandatoryVideoSchedulerTests
 {
     private sealed class Host : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public readonly List<(string Path, bool Strict)> Shown = new();
         public bool Floating;
         public bool Lockdown;

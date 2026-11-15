@@ -90,6 +90,7 @@ public sealed class BubblePayloadHostTests
 
     private sealed class FeedHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public bool FeedOwnsTheScreen => true;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
