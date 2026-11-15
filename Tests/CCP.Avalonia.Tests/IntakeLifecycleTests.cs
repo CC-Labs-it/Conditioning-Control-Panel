@@ -139,12 +139,24 @@ public sealed class IntakeLifecycleTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, calls);
             Assert.Equal(1, value); // WebView2 BOOL true
+
+            // A cascade may land before main is restored, before the queued repair runs.
+            main.WindowState = WindowState.Normal;
+            nativeVisible = false;
+            main.WindowState = WindowState.Minimized;
+            main.WindowState = WindowState.Normal;
+            Assert.True(intake.IntakeOwnerLinked);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(nativeVisible);
+            Assert.Equal(2, calls);
+            Assert.Equal(1, value);
+
             intake.Close();
             nativeVisible = false;
             main.WindowState = WindowState.Normal;
             main.WindowState = WindowState.Minimized;
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, calls);
+            Assert.Equal(2, calls);
         }
         finally
         {
