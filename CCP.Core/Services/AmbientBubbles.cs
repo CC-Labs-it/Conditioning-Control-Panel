@@ -134,6 +134,16 @@ namespace ConditioningControlPanel.Services
             if (!Spanked) { Spanked = true; SpankGrowth = Math.Max(1, growth); }
         }
         public bool DarterTelegraphing => _darterTelegraphMs > 0;
+        /// <summary>WPF BubbleService.cs:3877-3893 (The Pull): turn toward a point, at most 0.065 rad per frame.</summary>
+        public void SteerToward(double x, double y, double timeScale)
+        {
+            if (Spec?.IsDarter != true || Popping || DarterTelegraphing || _darterEscaping) return;
+            double dx = x - CenterX, dy = y - CenterY;
+            if (dx * dx + dy * dy <= 1) return;
+            double cur = Math.Atan2(_vy, _vx), diff = Math.IEEERemainder(Math.Atan2(dy, dx) - cur, 2 * Math.PI);
+            double maxTurn = 0.065 * Math.Max(timeScale, 0.4), angle = cur + Math.Clamp(diff, -maxTurn, maxTurn), speed = Math.Sqrt(_vx * _vx + _vy * _vy);
+            _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed;
+        }
         private int _darterBounces;
         private bool _darterEscaping;
 
@@ -463,6 +473,7 @@ namespace ConditioningControlPanel.Services
                     sp.Alpha -= Lucky ? 0.04 : 0.06;
                 }
                 // Pop animation - expand and fade; lucky pops linger ~50% longer.
+                if (Spec?.IsDarter == true && !_dissolving) { Scale += 0.07; Fade -= 0.030; return Fade <= 0 ? Result.Done : Result.Alive; }   // WPF :3785-3789
                 Scale = _dissolving ? Math.Max(0.1, Scale - 0.02) : Scale + (Deflating ? -0.03 : 0.04);
                 Fade -= _dissolving ? 0.05 : Lucky ? 0.044 : 0.066;
                 if (!_dissolving) Angle += 2;

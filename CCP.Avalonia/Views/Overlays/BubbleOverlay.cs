@@ -524,7 +524,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     bool first = !b.Spanked;
                     b.Spank(Field.Random, ChaosRunHost.State?.SpankGrowFactor ?? 1);
-                    if (first && b.Spanked) Services.Chaos.ChaosLessons.Tick("rabbit_caller");
+                    if (first && b.Spanked)   // WPF BubbleService.cs:4748-4760: the first smack teaches and labels
+                    { Services.Chaos.ChaosLessons.Tick("rabbit_caller"); ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, "SPANKED", Color.FromRgb(0xFF, 0x4D, 0xC4)); }
                 }
                 else
                 {
@@ -944,6 +945,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static void StepChaosField()
         {
+            SteerRabbits();
             Field.Step();
             if (Field.HoldChaos) return;
             TickChaosTrails();
@@ -1312,16 +1314,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     finally { glow?.Dispose(); }
                 }
             }
-            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
+            private static readonly Dictionary<(uint, double), DropShadowEffect> LuckyShadows = new();
             /// <summary>WPF Bubble.SetLucky: #FFD700 at 0.8, no offset. The shadow is taken of what is drawn,
             /// so it fades with the bubble and its sparkles. Bounds cover the turned sprite and every live sparkle.</summary>
             private static DrawingContext.PushedState? LuckyGlow(DrawingContext dc, AmbientBubble b, double cx, double cy,
                 double size, double scale, double k, double ox, double oy)
             {
-                if (b.LuckyGlowBlur <= 0) return null;
-                var blur = b.LuckyGlowBlur * k;
-                if (!LuckyShadows.TryGetValue(blur, out var effect))
-                    LuckyShadows[blur] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+                // WPF BubbleService.cs:3701, 4759: sweepers glow amber, spanked allies hot pink.
+                var (color, blur, opacity) = b.Spec?.IsSweeper == true ? (0xFFFF8A14u, 36 * k, 1.0) : b.Spanked ? (0xFFFF1493u, 34 * k, 1.0) : (0xFFFFD700u, b.LuckyGlowBlur * k, 0.8);
+                if (blur <= 0) return null;
+                if (!LuckyShadows.TryGetValue((color, blur), out var effect))
+                    LuckyShadows[(color, blur)] = effect = new DropShadowEffect { Color = Color.FromUInt32(color), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = opacity };
                 var angle = b.Angle * Math.PI / 180;
                 var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
                 double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;

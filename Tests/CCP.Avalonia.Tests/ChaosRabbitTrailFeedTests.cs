@@ -19,35 +19,23 @@ public class ChaosRabbitTrailFeedTests
     public void Trails_draw_pop_expire_and_clear() => AvaloniaTestDispatcher.Run(() =>
     {
         var stateField = typeof(ChaosRunHost).GetField("_state", BindingFlags.Static | BindingFlags.NonPublic)!;
-        var saved = stateField.GetValue(null);
-        var clock = BubbleOverlay.Field.Clock;
-        var nowMs = ChaosFieldFxOverlay.NowMs;
-        var skip = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
+        var (saved, clock, nowMs, skip) = (stateField.GetValue(null), BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests);
+        var settings = ConditioningControlPanel.CoreSettings.Current; var (skia, composited) = (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited);
         var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         try
         {
             var state = new ChaosRunState(new ChaosRunConfig()) { RabbitTrailSec = 2 };
-            stateField.SetValue(null, state);
-            BubbleOverlay.Field.Clock = () => t;
-            ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+            stateField.SetValue(null, state); BubbleOverlay.Field.Clock = () => t;
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = true; settings.ChaosSkiaFxEnabled = false;
             ChaosFieldFxOverlay.NowMs = () => (t - new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
             int treats = 0, snaps = 0;
             BubbleOverlay.BeginChaos(new Border(), _ => treats++, _ => snaps++);
             var rabbit = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsDarter = true, SizePx = 20, LifetimeMs = 8000, DarterSpeed = 9 }, new Random(7));
-            rabbit.X = 30; rabbit.Y = -10;
-            BubbleOverlay.TickChaosTrails();
-            var dots = new List<FieldFxPrim>();
-            var fx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
-            fx.Model.Frame(0, dots);
-            Assert.Single(dots.Where(p => p.Kind == FieldFxKind.TrailDot && !p.Warm));
-            rabbit.X = 69;
-            BubbleOverlay.TickChaosTrails();
-            fx.Model.Frame(0, dots);
-            Assert.Single(dots);
-            rabbit.X = 70;
-            BubbleOverlay.TickChaosTrails();
-            fx.Model.Frame(0, dots);
-            Assert.Equal(2, dots.Count);
+            rabbit.X = 30; rabbit.Y = -10; BubbleOverlay.TickChaosTrails();
+            var dots = new List<FieldFxPrim>(); var fx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
+            fx.Model.Frame(0, dots); Assert.Single(dots, p => p.Kind == FieldFxKind.TrailDot && !p.Warm);
+            rabbit.X = 69; BubbleOverlay.TickChaosTrails(); fx.Model.Frame(0, dots); Assert.Single(dots);
+            rabbit.X = 70; BubbleOverlay.TickChaosTrails(); fx.Model.Frame(0, dots); Assert.Equal(2, dots.Count);
             AmbientBubble Add(double x, EffectBubbleSpec spec) {
                 var b = new AmbientBubble { X = x - 10, Y = -10, Size = 20, Spec = spec, FuseRemainingMs = 5000, FuseTotalMs = 5000 };
                 BubbleOverlay.Field.Bubbles.Add(b); return b;
@@ -57,16 +45,13 @@ public class ChaosRabbitTrailFeedTests
             var far = Add(127, new EffectBubbleSpec());
             var otherRabbit = Add(80, new EffectBubbleSpec { IsDarter = true });
             var freeze = Add(80, new EffectBubbleSpec { IsFreeze = true });
-            BubbleOverlay.Field.FreezeChaos = true;
-            BubbleOverlay.TickChaosTrails();
-            Assert.False(treat.Popping);
-            BubbleOverlay.Field.FreezeChaos = false;
-            BubbleOverlay.TickChaosTrails();
+            BubbleOverlay.Field.FreezeChaos = true; BubbleOverlay.TickChaosTrails(); Assert.False(treat.Popping);
+            BubbleOverlay.Field.FreezeChaos = false; BubbleOverlay.TickChaosTrails();
             Assert.True(treat.Popping); Assert.True(live.Popping); Assert.False(far.Popping);
             Assert.False(otherRabbit.Popping); Assert.False(freeze.Popping);
             Assert.Equal(1, treats); Assert.Equal(1, snaps);
             var flags = new[] { "_running", "_chaosOpenedWindows", "_oneShotWindows" }.Select(n => typeof(BubbleOverlay).GetField(n, BindingFlags.NonPublic | BindingFlags.Static)!).ToArray();
-            var flagValues = flags.Select(f => f.GetValue(null)).ToArray(); var settings = ConditioningControlPanel.CoreSettings.Current;
+            var flagValues = flags.Select(f => f.GetValue(null)).ToArray();
             var xp = (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday); var oldFreeze = ConditioningControlPanel.CoreSubliminal.BambiFreezeProvider; int payloads = 0;
             try {
                 flags[0].SetValue(null, true); flags[1].SetValue(null, false); flags[2].SetValue(null, false);
@@ -77,49 +62,37 @@ public class ChaosRabbitTrailFeedTests
                 ConditioningControlPanel.CoreSubliminal.BambiFreezeProvider = oldFreeze; (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday) = xp;
                 for (int i = 0; i < flags.Length; i++) flags[i].SetValue(null, flagValues[i]);
             }
-            t = t.AddSeconds(2.01);
-            BubbleOverlay.TickChaosTrails();
-            Assert.Empty(BubbleOverlay.ChaosTrails[rabbit].Points);
+            t = t.AddSeconds(2.01); BubbleOverlay.TickChaosTrails(); Assert.Empty(BubbleOverlay.ChaosTrails[rabbit].Points);
             state.RabbitTrailSec = 0;
             var sweeper = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsDarter = true, IsSweeper = true, SizePx = 20, LifetimeMs = 8000, DarterSpeed = 9 }, new Random(7));
             sweeper.X = 190; sweeper.Y = -10;
             var boonOffTreat = Add(200, new EffectBubbleSpec());
-            BubbleOverlay.TickChaosTrails();
-            Assert.False(boonOffTreat.Popping);
-            fx.Model.Frame(2010, dots);
-            Assert.Contains(dots, p => p.Kind == FieldFxKind.TrailDot && p.Warm);
-            t = t.AddMilliseconds(501);
-            BubbleOverlay.TickChaosTrails();
-            Assert.Empty(BubbleOverlay.ChaosTrails[sweeper].Points);
-            BubbleOverlay.EndChaos();
-            Assert.Empty(BubbleOverlay.ChaosTrails);
+            BubbleOverlay.TickChaosTrails(); Assert.False(boonOffTreat.Popping);
+            fx.Model.Frame(2010, dots); Assert.Contains(dots, p => p.Kind == FieldFxKind.TrailDot && p.Warm);
+            t = t.AddMilliseconds(501); BubbleOverlay.TickChaosTrails(); Assert.Empty(BubbleOverlay.ChaosTrails[sweeper].Points);
+            settings.ChaosSkiaFxEnabled = true; ChaosSkiaFxOverlay.Composited = () => false; // WPF :3943-3949: Skia trail, 22 DIP gap
+            sweeper.X += 22; BubbleOverlay.TickChaosTrails(); fx.Model.Frame(2511, dots);
+            Assert.Single(BubbleOverlay.ChaosTrails[sweeper].Points); Assert.Empty(dots);
+            BubbleOverlay.EndChaos(); Assert.Empty(BubbleOverlay.ChaosTrails);
         }
         finally
         {
-            BubbleOverlay.EndChaos();
-            BubbleOverlay.Field.FreezeChaos = false;
-            BubbleOverlay.Field.Bubbles.Clear();
-            BubbleOverlay.Field.Clock = clock;
-            ChaosFieldFxOverlay.CloseActive();
-            ChaosFieldFxOverlay.NowMs = nowMs;
-            ChaosFieldFxOverlay.SkipPlatformChecksForTests = skip;
-            stateField.SetValue(null, saved);
+            BubbleOverlay.EndChaos(); BubbleOverlay.Field.FreezeChaos = false; BubbleOverlay.Field.Bubbles.Clear(); ChaosFieldFxOverlay.CloseActive();
+            (BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests) = (clock, nowMs, skip);
+            (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited) = (skia, composited); stateField.SetValue(null, saved);
         }
     });
     [Fact]
     public void Spawned_darter_moves_and_feeds_the_recorder() => AvaloniaTestDispatcher.Run(() =>
     {
         var cues = new List<string>();
-        var cue = ChaosRunHost.RippleCue;
+        var (cue, popText, cursor) = (ChaosRunHost.RippleCue, ChaosRunHost.PopText, BubbleOverlay.ReadCursorPx);
         try
         {
-            ChaosRunHost.RippleCue = (key, _) => cues.Add(key);
+            ChaosRunHost.RippleCue = (key, _) => cues.Add(key); ChaosRunHost.PopText = (_, _, word, _) => cues.Add(word);
             var cfg = new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false, DartersEnabled = false };
-            ChaosRunHost.StartRun(cfg);
-            ChaosRunHost.Overlay!.FinishCountdown();
-            ChaosRunHost.StopTimerForTests();
-            var state = ChaosRunHost.State!;
-            state.GgRabbitChance = 1;
+            ChaosRunHost.StartRun(cfg); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!; state.GgRabbitChance = 1;
             var treat = new AmbientBubble { X = 400, Y = 400, Size = 20, Spec = new EffectBubbleSpec() };
             var firer = EffectPayload.Firer;
             try { EffectPayload.Firer = null; ChaosRunHost.OnBubblePopped(treat); }
@@ -138,8 +111,7 @@ public class ChaosRabbitTrailFeedTests
             var ambient = new AmbientBubble { AmbientTrigger = true, X = 1001, Y = 501, Size = 20, Spec = new EffectBubbleSpec { Payload = null! } };
             BubbleOverlay.Field.Bubbles.AddRange(new[] { target, live, frozen, otherRabbit, otherScreen, ambient });
             BubbleOverlay.HoldChaos(true); BubbleOverlay.TickDarterSweeps();
-            Assert.False(target.Popping || live.Popping);
-            BubbleOverlay.HoldChaos(false);
+            Assert.False(target.Popping || live.Popping); BubbleOverlay.HoldChaos(false);
             try { EffectPayload.Firer = null; BubbleOverlay.TickDarterSweeps(); }
             finally { EffectPayload.Firer = firer; }
             Assert.True(target.Popping && live.Popping && otherScreen.Popping && ambient.Popping);
@@ -149,48 +121,42 @@ public class ChaosRabbitTrailFeedTests
             finally { EffectPayload.Firer = firer; }
             Assert.False(sweeper.Popping); Assert.True(sweeper.Spanked);
             sweeper.Step(); Assert.True(sweeper.DrawScale > 1.25); // click delivered the smack
-            state.RabbitRateMult = 1000;
-            state.RabbitTrailSec = 2;
-            BubbleOverlay.Field.Bubbles.Clear();
-            ChaosRunHost.SpawnTick();
-            Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
-            cfg.DartersEnabled = true;
-            ChaosRunHost.SpawnTick();
+            state.RabbitRateMult = 1000; state.RabbitTrailSec = 2; BubbleOverlay.Field.Bubbles.Clear();
+            ChaosRunHost.SpawnTick(); Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.IsDarter == true);
+            cfg.DartersEnabled = true; ChaosRunHost.SpawnTick();
             var rabbit = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDarter == true));
-            Assert.Equal(ChaosMotion.RoamBounce, rabbit.TriggerMotion);
-            rabbit.X = 500; rabbit.Y = 500;
+            Assert.Equal(ChaosMotion.RoamBounce, rabbit.TriggerMotion); rabbit.X = 500; rabbit.Y = 500;
             for (int i = 0; i < 25; i++) BubbleOverlay.StepChaosField();
             Assert.True(BubbleOverlay.ChaosTrails[rabbit].Points.Count >= 2);
             state.Focus = 0; state.SlowMoBonusSec = 2;
             double score = state.Score, multiplier = state.TotalMult, heat = state.Heat; int combo = state.Combo;
-            BubbleOverlay.Press(rabbit, rabbit.CenterX, rabbit.CenterY);
-            Assert.True(rabbit.Popping);
+            BubbleOverlay.Press(rabbit, rabbit.CenterX, rabbit.CenterY); Assert.True(rabbit.Popping);
             Assert.Equal(score + 210 * multiplier, state.Score, 6);
-            Assert.Equal(15, state.Focus); Assert.Equal(combo + 1, state.Combo);
-            Assert.Equal(Math.Min(1, heat + 0.05), state.Heat, 6);
+            Assert.Equal(15, state.Focus); Assert.Equal(combo + 1, state.Combo); Assert.Equal(Math.Min(1, heat + 0.05), state.Heat, 6);
             Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_quick"), state.RecentEvents);
             Assert.Equal(6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
-            Assert.Equal(ChaosRunHost.SlowMoFactor, BubbleOverlay.Field.ChaosTimeScale);
-            Assert.Contains("rabbit_catch", cues);
+            Assert.Equal(ChaosRunHost.SlowMoFactor, BubbleOverlay.Field.ChaosTimeScale); Assert.Contains("rabbit_catch", cues);
             var another = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(9));
             BubbleOverlay.HoldChaos(true); BubbleOverlay.Press(another, another.CenterX, another.CenterY);
             Assert.False(another.Popping); BubbleOverlay.HoldChaos(false);
-            score = state.Score; multiplier = state.TotalMult;
-            BubbleOverlay.Field.FreezeChaos = true;
-            BubbleOverlay.Press(another, another.CenterX, another.CenterY);
-            BubbleOverlay.Field.FreezeChaos = false;
+            score = state.Score; multiplier = state.TotalMult; BubbleOverlay.Field.FreezeChaos = true;
+            BubbleOverlay.Press(another, another.CenterX, another.CenterY); BubbleOverlay.Field.FreezeChaos = false;
             Assert.Equal(score + 120 * multiplier, state.Score, 6); // telegraph catches are not quick
             Assert.Equal(6.8 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
             Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_rabbit_extend"), state.RecentEvents);
-            var indirect = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(4));
-            BubbleOverlay.PopChaos(indirect);
+            var indirect = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(4)); BubbleOverlay.PopChaos(indirect);
             Assert.True(indirect.Popping); Assert.Equal(7.6 + state.SlowMoBonusSec, ChaosRunHost.SlowMoRemainingSec, 6);
             state.SpankerActive = true; state.SpankGrowFactor = 1.5;
-            var ally = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5));
-            BubbleOverlay.Press(ally, ally.CenterX, ally.CenterY);
-            Assert.False(ally.Popping); Assert.True(ally.Spanked); Assert.Equal(1.5, ally.SpankGrowth);
+            var ally = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5)); BubbleOverlay.Press(ally, ally.CenterX, ally.CenterY);
+            Assert.False(ally.Popping); Assert.True(ally.Spanked); Assert.Equal(1.5, ally.SpankGrowth); Assert.Single(cues, "SPANKED");
+            BubbleOverlay.Field.Bubbles.Clear(); var homer = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(0), new Random(5));
+            homer.X = homer.Y = 500; while (homer.DarterTelegraphing) homer.Step();
+            double x0 = homer.X, y0 = homer.Y; homer.Step(); double h = Math.Atan2(homer.Y - y0, homer.X - x0); (x0, y0) = (homer.X, homer.Y);
+            BubbleOverlay.ReadCursorPx = () => new PixelPoint((int)(homer.CenterX - 300 * Math.Sin(h)), (int)(homer.CenterY + 300 * Math.Cos(h)));
+            state.CursorPullStrength = 1; BubbleOverlay.StepChaosField(); // WPF :3877-3893: The Pull turns it toward the cursor
+            Assert.True(Math.IEEERemainder(Math.Atan2(homer.Y - y0, homer.X - x0) - h, 2 * Math.PI) > 0.01);
         }
-        finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.RippleCue = cue; }
+        finally { ChaosRunHost.ForceShutdown(); (ChaosRunHost.RippleCue, ChaosRunHost.PopText, BubbleOverlay.ReadCursorPx) = (cue, popText, cursor); }
     });
 
     [Fact]
@@ -206,16 +172,12 @@ public class ChaosRabbitTrailFeedTests
             byte[] Frame()
             {
                 using var bitmap = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(240, 240));
-                bitmap.Render((Control)w.Content!);
-                var bytes = new byte[240 * 240 * 4];
-                var ptr = System.Runtime.InteropServices.Marshal.AllocHGlobal(bytes.Length);
-                try { bitmap.CopyPixels(new PixelRect(0, 0, 240, 240), ptr, bytes.Length, 240 * 4); System.Runtime.InteropServices.Marshal.Copy(ptr, bytes, 0, bytes.Length); }
-                finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr); }
-                return bytes;
+                bitmap.Render((Control)w.Content!); using var png = new System.IO.MemoryStream(); bitmap.Save(png); return png.ToArray();
             }
             var flare = Frame();
-            b.Step(); b.Step(); b.Scale = 1;
-            Assert.False(flare.SequenceEqual(Frame()));
+            b.Step(); b.Step(); b.Scale = 1; var plain = Frame();
+            Assert.False(flare.SequenceEqual(plain));
+            b.Spank(new Random(1), 1); b.Scale = 1; Assert.False(plain.SequenceEqual(Frame())); // WPF :4759 ally glow
         }
         finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
     });

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -13,6 +14,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF BubbleService.cs:1639, 1764-1780, 3929-3954.
         internal const double TrailPopRadiusPx = 46;
         internal static readonly Dictionary<AmbientBubble, ChaosRabbitTrails> ChaosTrails = new();
+
+        internal static Func<PixelPoint?> ReadCursorPx = () => X11Pointer.Read()?.At;
+
+        // WPF BubbleService.cs:534, ChaosModeService.cs:375: The Pull steers rabbits at the cursor.
+        internal static void SteerRabbits()
+        {
+            if (_chaosPopped == null || Field.HoldChaos || Field.FreezeChaos || !(ChaosRunHost.State?.CursorPullStrength > 0)
+                || !Field.Bubbles.Any(b => b.Spec?.IsDarter == true) || ReadCursorPx() is not { } cursor) return;
+            foreach (var b in Field.Bubbles) b.SteerToward(cursor.X / ScaleFor(b), cursor.Y / ScaleFor(b), Field.ChaosTimeScale);
+        }
 
         // WPF BubbleService.cs:1901-1915: the grown body mows while the field moves.
         internal static void TickDarterSweeps()
@@ -49,9 +60,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (!ChaosTrails.TryGetValue(rabbit, out var trail)) ChaosTrails[rabbit] = trail = new();
                 var center = CenterPx(rabbit);
                 var direction = trail.Step(center.X, center.Y, ScaleFor(rabbit), trailSec,
-                    spec.IsSweeper, rabbit.DarterTelegraphing, rabbit.Popping, false, Field.Clock());
-                if (direction != null)
-                    ChaosFieldFxOverlay.TrailDot(center, spec.IsSweeper ? Math.Max(0.5, trailSec) : trailSec, spec.IsSweeper);
+                    spec.IsSweeper, rabbit.DarterTelegraphing, rabbit.Popping, ChaosSkiaFxOverlay.Enabled, Field.Clock());
+                double life = spec.IsSweeper ? Math.Max(0.5, trailSec) : trailSec;
+                if (direction is { } d && ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(center, life, spec.IsSweeper, d.X, d.Y);
+                else if (direction != null) ChaosFieldFxOverlay.TrailDot(center, life, spec.IsSweeper);
                 if (trailSec <= 0) continue;
                 foreach (var b in snapshot)
                 {
