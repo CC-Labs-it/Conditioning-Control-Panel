@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Features
             _afterglowLoading = true;
             try
             {
-                AfterglowRows.Visibility = SuperAccess.IsSelected(SuperEffect.Afterglow) ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(AfterglowRows, SuperEffect.Afterglow);
                 SliderAfterglowWords.Value = s.AfterglowLineWords;
                 TxtAfterglowWords.Text = s.AfterglowLineWords.ToString();
                 SliderAfterglowHold.Value = s.AfterglowLineHold;

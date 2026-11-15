@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Features
             _scrawlLoading = true;
             try
             {
-                ScrawlRows.Visibility = SuperAccess.IsSelected(SuperEffect.Scrawl) ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(ScrawlRows, SuperEffect.Scrawl);
                 SliderScrawlLife.Value = s.ScrawlStampSeconds;
                 TxtScrawlLife.Text = Loc.GetF("super_opt_seconds", s.ScrawlStampSeconds);
                 SliderScrawlCap.Value = s.ScrawlStampCap;

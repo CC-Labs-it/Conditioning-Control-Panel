@@ -144,7 +144,7 @@ namespace ConditioningControlPanel.Services.Super
 
             bool attended = IsAttended(v, now);
             var opt = App.Settings?.Current;
-            bool photosafe = opt?.LockdownPhotosafe == true;
+            bool photosafe = opt?.LockdownPhotosafe == true || Safety.GentleVisuals.On;   // Gentle: the lights come back as a plain fade, no stutter
             // The player's options, read live so a slider moves the room at once.
             s.Tuning = opt == null ? SuperCore.LightsDownTuning.Stock
                 : SuperCore.LightsDownOptions.Tuning(opt.LightsDownDarkness, opt.LightsDownDimSpeed, opt.LightsDownReturnSpeed);

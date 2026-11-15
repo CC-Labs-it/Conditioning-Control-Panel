@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
         /// <inheritdoc/>
         public void RebindToCurrentSettings()
         {
+            LoadUndertow();     // the gold box's rows show the new settings too
             (_settingsHook ??= new Features.SettingsHook(OnSettingsPropertyChanged)).Rebind();
             LoadFromSettings();
         }

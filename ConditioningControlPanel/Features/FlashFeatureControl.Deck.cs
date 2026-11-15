@@ -37,9 +37,7 @@ namespace ConditioningControlPanel.Features
             _deckLoading = true;
             try
             {
-                bool lit = false;
-                try { lit = SuperAccess.IsSelected(SuperEffect.FlickerDeck); } catch { }
-                DeckRows.Visibility = lit ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(DeckRows, SuperEffect.FlickerDeck);
                 SliderDeckFlips.Value = s.DeckFlips;
                 TxtDeckFlips.Text = s.DeckFlips.ToString();
                 SliderDeckReach.Value = s.DeckBreakReach;

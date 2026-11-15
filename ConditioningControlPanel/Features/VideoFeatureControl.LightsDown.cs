@@ -37,9 +37,7 @@ namespace ConditioningControlPanel.Features
             _lightsDownLoading = true;
             try
             {
-                bool lit = false;
-                try { lit = SuperAccess.IsSelected(SuperEffect.LightsDown); } catch { }
-                LightsDownRows.Visibility = lit ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(LightsDownRows, SuperEffect.LightsDown);
                 SliderLightsDarkness.Value = s.LightsDownDarkness;
                 TxtLightsDarkness.Text = $"{s.LightsDownDarkness}%";
                 SliderLightsDimSpeed.Value = s.LightsDownDimSpeed;

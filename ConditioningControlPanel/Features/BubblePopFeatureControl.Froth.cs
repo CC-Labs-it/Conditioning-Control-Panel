@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Features
             _frothLoading = true;
             try
             {
-                FrothRows.Visibility = SuperAccess.IsSelected(SuperEffect.InnerBloom) ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(FrothRows, SuperEffect.InnerBloom);
                 SliderFrothSize.Value = s.FrothMaxSize;
                 TxtFrothSize.Text = SizeText(s.FrothMaxSize);
                 SliderFrothReach.Value = s.FrothPopReach;

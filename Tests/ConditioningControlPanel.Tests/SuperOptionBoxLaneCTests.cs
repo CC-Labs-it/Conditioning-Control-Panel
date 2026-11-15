@@ -211,7 +211,7 @@ public class SuperOptionBoxLaneCTests
         foreach (var f in code)
         {
             var t = File.ReadAllText(f);
-            if (t.Contains(rows + ".Visibility = SuperAccess.IsSelected(" + effect + ")") && t.Contains("SuperAccess.Changed +=")) wired = true;
+            if (t.Contains("SuperRows.Apply(" + rows + ", " + effect + ")") && t.Contains("SuperAccess.Changed +=")) wired = true;
         }
         Assert.True(wired);
     }

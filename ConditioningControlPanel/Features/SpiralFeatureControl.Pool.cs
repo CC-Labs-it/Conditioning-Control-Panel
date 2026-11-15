@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Features
             _poolLoading = true;
             try
             {
-                PoolRows.Visibility = SuperAccess.IsSelected(SuperEffect.Vortex) ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(PoolRows, SuperEffect.Vortex);
                 // DarkComboBoxStyle has a dark popup, so the items take the light brush.
                 var fg = (System.Windows.Media.Brush)FindResource("TextLightBrush");
                 CmbPoolSpiral.Items.Clear();

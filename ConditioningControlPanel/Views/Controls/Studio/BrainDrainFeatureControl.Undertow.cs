@@ -37,9 +37,7 @@ namespace ConditioningControlPanel.Views.Controls.Studio
             _undertowLoading = true;
             try
             {
-                bool lit = false;
-                try { lit = SuperAccess.IsSelected(SuperEffect.Undertow); } catch { }
-                UndertowRows.Visibility = lit ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(UndertowRows, SuperEffect.Undertow);
                 SliderUndertowSize.Value = s.UndertowLensSize;
                 TxtUndertowSize.Text = $"{s.UndertowLensSize}%";
                 SliderUndertowShrink.Value = s.UndertowShrinkSpeed;

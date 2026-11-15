@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Features
                 // its box holds only what is Steam's own, shown while Steam is the pick. The old
                 // fog cap stays folded (Steam does not read it).
                 CreepCard.Visibility = Visibility.Collapsed;
-                SteamRows.Visibility = SuperAccess.IsSelected(SuperEffect.Creep) ? Visibility.Visible : Visibility.Collapsed;
+                ConditioningControlPanel.Controls.SuperRows.Apply(SteamRows, SuperEffect.Creep);
                 ChkSteamWords.IsChecked = s.SteamWordsInFog;
                 SliderSteamSize.Value = s.SteamWipeSize;
                 TxtSteamSize.Text = $"{s.SteamWipeSize}%";
