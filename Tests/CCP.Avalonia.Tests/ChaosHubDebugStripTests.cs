@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
@@ -101,6 +102,70 @@ public class ChaosHubDebugStripTests
             hub?.Close(); ChaosHubWindow.DebugStripEnabled = oldFlag; ChaosHubWindow.SetCompanionActive = oldCompanion;
             settings.SealForReset();
             CoreSettings.ServiceProvider = oldProvider;
+            if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
+            if (slot == null) File.Delete(slotPath); else File.WriteAllBytes(slotPath, slot);
+            if (temp == null) File.Delete(tempPath); else File.WriteAllBytes(tempPath, temp);
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, oldState);
+        }
+    });
+
+    [Fact]
+    public void Repeated_debug_actions_keep_one_reveal_loop_and_independent_batch_timing() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var oldFlag = ChaosHubWindow.DebugStripEnabled;
+        var oldCompanion = ChaosHubWindow.SetCompanionActive;
+        var oldSfx = ChaosHubWindow.PlayRevealSfx;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldState = ChaosMeta.State;
+        var settingsDir = Path.Combine(Path.GetTempPath(), "ccp-debug-reveal-" + Guid.NewGuid());
+        Directory.CreateDirectory(settingsDir);
+        var settings = new SettingsService(Path.Combine(settingsDir, "settings.json"));
+        var slotPath = ChaosMetaStore.SlotFilePath(1);
+        var slot = File.Exists(slotPath) ? File.ReadAllBytes(slotPath) : null;
+        var tempPath = slotPath + ".tmp";
+        var temp = File.Exists(tempPath) ? File.ReadAllBytes(tempPath) : null;
+        ChaosHubWindow? hub = null;
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            ChaosHubWindow.SetCompanionActive = _ => { };
+            ChaosHubWindow.DebugStripEnabled = () => true;
+            ChaosHubWindow.PlayRevealSfx = (_, _) => { };
+            ChaosMetaStore.Save(new ChaosMetaState { SeenIntroGuide = true, SeenDollhouse = true, RunsCompleted = 10 }, 1);
+            CoreSettings.Current.ChaosActiveSlot = 1;
+            hub = new ChaosHubWindow(); hub.Show();
+            RevealService.Sync("test");
+            foreach (var id in RevealService.PendingIds()) RevealService.MarkSeen(id);
+            hub.FindControl<Button>("BtnMenuDollhouse")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var strip = Assert.IsType<WrapPanel>(hub.DebugStrip);
+            void Click(string text) => strip.Children.OfType<Button>().Single(b => (string?)b.Content == text)
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            hub.AdvanceRevealFlashes(100);
+            int chimes = 0;
+            ChaosHubWindow.PlayRevealSfx = (_, _) => chimes++;
+            int baseline = BeatLoop.Running.Count(loop => loop.Owner == hub);
+            ChaosMeta.State.SeenReveals.Remove(RevealIds.TabLookingGlass);
+            ChaosMeta.State.PendingReveals.Add(RevealIds.TabLookingGlass);
+            Assert.True(hub.FindControl<Control>("TabImprove")!.IsVisible, "target is visible");
+            hub.RunRevealFlashes();
+            Assert.Equal(1, chimes);
+            hub.AdvanceRevealFlashes(1);
+            Click("+500 gold");
+            Click("+500 gold");
+            Assert.Equal(baseline + 1, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            Assert.Equal(3, chimes);
+            hub.AdvanceRevealFlashes(3);
+            Assert.Equal(baseline + 1, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            hub.AdvanceRevealFlashes(4);
+            Assert.Equal(baseline, BeatLoop.Running.Count(loop => loop.Owner == hub));
+            hub.Close();
+            Assert.DoesNotContain(BeatLoop.Running, loop => loop.Owner == hub);
+        }
+        finally
+        {
+            hub?.Close(); ChaosHubWindow.DebugStripEnabled = oldFlag; ChaosHubWindow.SetCompanionActive = oldCompanion;
+            ChaosHubWindow.PlayRevealSfx = oldSfx;
+            settings.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
             if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
             if (slot == null) File.Delete(slotPath); else File.WriteAllBytes(slotPath, slot);
             if (temp == null) File.Delete(tempPath); else File.WriteAllBytes(tempPath, temp);
