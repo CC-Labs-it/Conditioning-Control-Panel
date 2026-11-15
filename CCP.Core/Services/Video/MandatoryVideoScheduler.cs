@@ -21,6 +21,8 @@ namespace ConditioningControlPanel.Services
         void Show(string path, bool strict);
         /// <summary>WPF VideoService.cs:1982: visible, non-ghosted For You feed.</summary>
         bool FeedOwnsTheScreen => false;
+        /// <summary>WPF VideoService.cs:2948: browser media or an active web-video takeover.</summary>
+        bool BrowserMediaBlocksScheduledVideo => false;
         /// <summary>Use the host's presentation rule before the pre-roll as well as at Show.</summary>
         bool IsFloating(bool strict) => false;
         bool TryFloatingTrigger(bool userInitiated) => false;
@@ -341,9 +343,15 @@ namespace ConditioningControlPanel.Services
             try
             {
                 // WPF VideoService.cs:2945: an open floating run can accept another scheduled window.
-                if (_playing && _host.FloatingRunOpen && _host.FloatingUp > 0
+                var floatingJoin = _playing && _host.FloatingRunOpen && _host.FloatingUp > 0
                     && _host.IsFloating(IsStrict) && _host.IsFloating(CoreSettings.Current.StrictLockEnabled)
-                    && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1)
+                    && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1;
+                if ((!_playing || floatingJoin) && _host.BrowserMediaBlocksScheduledVideo)
+                {
+                    ScheduleNext(SkipRetrySeconds);
+                    return;
+                }
+                if (floatingJoin)
                 {
                     if (Services.UI.DndGuard.ShouldSuppressVideos())
                     {

@@ -99,10 +99,12 @@ public sealed class MandatoryVideoFloatingHostTests
         public void FireLast() { var t = Armed[^1]; Armed.Remove(t); t.Fire(); }
         public sealed class Timer(Clock clock, Action fire) : ITimer
         {
+            public TimeSpan Due { get; private set; }
             public void Fire() => fire();
             public bool Change(TimeSpan due, TimeSpan period)
             {
                 clock.Armed.Remove(this);
+                Due = due;
                 if (due != Timeout.InfiniteTimeSpan) clock.Armed.Add(this);
                 return true;
             }
@@ -172,6 +174,48 @@ public sealed class MandatoryVideoFloatingHostTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task Browser_media_holds_a_real_floating_join_until_retry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+            s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback);
+        var busy = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia;
+        var stamp = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick;
+        var post = CoreDispatch.PostProvider;
+        var clock = new Clock();
+        var o = new MandatoryVideoOverlay(() => new Decoder());
+        o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4" });
+        try
+        {
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback)
+                = (true, 20, true, 3, false, false, false, false, false, true);
+            CoreDispatch.PostProvider = a => a();
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = System.Diagnostics.Stopwatch.GetTimestamp();
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = false;
+            o.Scheduler.Start(); clock.FireLast(); clock.FireLast();
+            Assert.Single(Up(o));
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = true;
+            clock.FireLast();
+            Assert.Single(Up(o));
+            Assert.Equal(TimeSpan.FromSeconds(30), clock.Armed[^1].Due);
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = false;
+            clock.FireLast();
+            Assert.Equal(2, Up(o).Count);
+        }
+        finally
+        {
+            o.Scheduler.Stop(); o.CloseAll(); CoreDispatch.PostProvider = post;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = busy;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = stamp;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback) = saved;
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task Test_presses_add_windows_up_to_the_limit_then_replace_the_oldest() => Run((o, decoders) =>

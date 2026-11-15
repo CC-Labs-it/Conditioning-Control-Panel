@@ -17,6 +17,7 @@ public sealed class MandatoryVideoFloatingJoinTests
         public int FloatingLimit { get; set; } = 3;
         public int FloatingUp { get; set; } = 1;
         public bool FeedOwnsTheScreen { get; set; }
+        public bool BrowserMediaBlocksScheduledVideo { get; set; }
         public int Shown;
         public List<bool> Calls = new();
         public bool AddOnTrigger;
@@ -207,6 +208,32 @@ public sealed class MandatoryVideoFloatingJoinTests
         clock.Advance(TimeSpan.FromSeconds(3));
         Assert.True(video.IsPlaying);
         Assert.Equal(2, host.Shown);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Browser_media_retries_scheduled_video_after_thirty_seconds(bool floating) => With((clock, host, video) =>
+    {
+        host.Floating = floating;
+        if (floating) Open(clock, video); else video.Start();
+        host.BrowserMediaBlocksScheduledVideo = true;
+        clock.Advance(TimeSpan.FromSeconds(230));
+        Assert.Empty(host.Calls);
+        if (!floating) Assert.False(video.IsPlaying);
+        host.BrowserMediaBlocksScheduledVideo = false;
+        clock.Advance(TimeSpan.FromSeconds(31));
+        if (floating) Assert.Equal(new[] { false }, host.Calls);
+        else Assert.True(video.IsPlaying);
+    });
+
+    [Fact]
+    public void Browser_media_does_not_block_an_explicit_floating_trigger() => With((clock, host, video) =>
+    {
+        Open(clock, video);
+        host.BrowserMediaBlocksScheduledVideo = true;
+        Assert.True(video.Trigger(userInitiated: true));
+        Assert.Equal(new[] { true }, host.Calls);
     });
 
     [Fact]
