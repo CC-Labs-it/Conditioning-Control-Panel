@@ -214,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
+            Closing += (_, _) => { _closing = true; if (IsBreakout) StopBreakoutHaptic(); _backRoomFx?.CancelAll(); CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
@@ -357,7 +357,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "fx-release" when IsBreakout:
                     _backRoomFx?.Release((string?)o["token"] ?? "", (string?)o["station"] ?? "");
                     break;
+                case "haptic" when IsBreakout:
+                    if (!_closing && !_shellExiting && !_roomMinimized && !_breakoutPanicSuspended && ConditioningControlPanel.Services.BackRoom.BackRoomBridge.ReadHaptic(o) is { } pulse) BreakoutHaptic(pulse);
+                    break;
                 case "station-close" when IsBreakout:
+                    StopBreakoutHaptic();
                     _backRoomFx?.ReleaseStation((string?)o["station"] ?? "");
                     break;
                 case "fx" when IsBreakout:
@@ -382,6 +386,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
                     _backRoomFx?.CancelAll();
+                    if (IsBreakout) StopBreakoutHaptic();
                     _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;
