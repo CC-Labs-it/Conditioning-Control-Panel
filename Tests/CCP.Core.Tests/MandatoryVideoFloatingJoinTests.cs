@@ -16,10 +16,13 @@ public sealed class MandatoryVideoFloatingJoinTests
         public bool FloatingRunOpen { get; set; } = true;
         public int FloatingLimit { get; set; } = 3;
         public int FloatingUp { get; set; } = 1;
+        public bool FeedOwnsTheScreen { get; set; }
+        public int Shown;
         public List<bool> Calls = new();
+        public bool AddOnTrigger;
         public bool IsFloating(bool strict) => Floating && !strict;
-        public bool TryFloatingTrigger(bool userInitiated) { Calls.Add(userInitiated); return true; }
-        public void Show(string path, bool strict) { }
+        public bool TryFloatingTrigger(bool userInitiated) { Calls.Add(userInitiated); if (AddOnTrigger) FloatingUp++; return true; }
+        public void Show(string path, bool strict) { Shown++; }
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
     }
@@ -70,6 +73,141 @@ public sealed class MandatoryVideoFloatingJoinTests
         clock.Advance(TimeSpan.FromSeconds(220));
         Assert.Empty(host.Calls);
     }, together, strict);
+
+    [Fact]
+    public void Full_run_keeps_short_interval_after_a_window_closes() => With((clock, host, video) =>
+    {
+        host.FloatingUp = host.FloatingLimit - 1;
+        host.AddOnTrigger = true;
+        Open(clock, video);
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.Single(host.Calls);
+        Assert.Equal(host.FloatingLimit, host.FloatingUp);
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.Single(host.Calls);
+        host.FloatingUp--;
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.True(host.Calls.Count >= 2);
+        Assert.All(host.Calls, userInitiated => Assert.False(userInitiated));
+    });
+
+    [Fact]
+    public void Run_opening_full_also_uses_short_interval() => With((clock, host, video) =>
+    {
+        host.FloatingUp = host.FloatingLimit;
+        Open(clock, video);
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.Empty(host.Calls);
+        host.FloatingUp--;
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.NotEmpty(host.Calls);
+    });
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Scheduled_join_waits_for_cascade_and_feed(bool rain, bool feed) => With((clock, host, video) =>
+    {
+        var raining = false;
+        video.CascadeIsRaining = () => raining;
+        Open(clock, video);
+        raining = rain;
+        host.FeedOwnsTheScreen = feed;
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.Empty(host.Calls);
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        if (feed) Assert.Empty(host.Calls);
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(new[] { false }, host.Calls);
+    });
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public void End_or_panic_cancels_a_held_join(bool cascade, bool panic) => With((clock, host, video) =>
+    {
+        var raining = false;
+        video.CascadeIsRaining = () => raining;
+        Open(clock, video);
+        raining = cascade;
+        host.FeedOwnsTheScreen = !cascade;
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.Empty(host.Calls);
+        host.FloatingRunOpen = false; // The last host window closed before End.
+        if (panic) video.ForceCleanup(); else video.End();
+        raining = false;
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Calls);
+        Assert.False(video.IsPlaying);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Queued_scheduled_join_observes_feed_and_ends_with_its_run(bool endBeforeReplay) => With((clock, host, video) =>
+    {
+        Open(clock, video);
+        Action? queued = null;
+        video.DeferTrigger = action => { queued = action; return true; };
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.NotNull(queued);
+        Assert.Empty(host.Calls);
+        video.DeferTrigger = null;
+        host.FeedOwnsTheScreen = true;
+        if (endBeforeReplay) { host.FloatingRunOpen = false; video.End(); }
+        queued!();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Empty(host.Calls);
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        if (endBeforeReplay) Assert.False(video.IsPlaying);
+        else Assert.Equal(new[] { false }, host.Calls);
+    });
+
+    [Fact]
+    public void Queued_join_keeps_scheduled_eligibility_through_cascade() => With((clock, host, video) =>
+    {
+        var raining = false;
+        video.CascadeIsRaining = () => raining;
+        Open(clock, video);
+        Action? queued = null;
+        video.DeferTrigger = action => { queued = action; return true; };
+        clock.Advance(TimeSpan.FromSeconds(55));
+        Assert.NotNull(queued);
+        video.DeferTrigger = null;
+        raining = true;
+        queued!();
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Empty(host.Calls);
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void User_request_held_during_run_is_not_cancelled_by_end(bool cascade) => With((clock, host, video) =>
+    {
+        var raining = false;
+        video.CascadeIsRaining = () => raining;
+        Open(clock, video);
+        raining = cascade;
+        host.FeedOwnsTheScreen = !cascade;
+        Assert.True(video.Trigger(userInitiated: true));
+        host.FloatingRunOpen = false;
+        video.End();
+        raining = false;
+        host.FeedOwnsTheScreen = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.True(video.IsPlaying);
+        Assert.Equal(2, host.Shown);
+    });
 
     [Fact]
     public void Do_not_disturb_retries_a_join_after_the_short_delay() => With((clock, host, video) =>
