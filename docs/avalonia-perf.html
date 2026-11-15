@@ -166,6 +166,7 @@ Artifact <code>perf-bench-linux</code>.</li>
 startup (info) Avalonia 5124 / WPF 4268 ms; working set 1172.4 / 1030.8 MB (FAIL); 12 of 48 tab rows FAIL: SettingsTab 99.7/18.4, ProgramsTab 64.3/31.1,
 EnhancementsTab 72.6/44.4, AvailableSubjectsTab 64.0/12.9, BlinkTrainerTab 65.1/24.3, <strong>ExclusivesTab 423.0/108.7 ms median</strong> (p95 also DiscordTab, RemoteControlTab).
 WPF missing-tab run exited 3 with no JSON. One run; report-only until three stable runs are reviewed. Artifact <code>perf-bench-windows</code>.</li>
+<li>2026-11-15, LOCAL Linux dummy Xorg, CPU Skia, base <code>669eb1b72b</code>, five full-order <code>--perf-bench</code> runs: AvailableSubjects handoff p95 143.30, 135.47, 125.46, 133.88, 135.19 ms (medians 4.08, 4.46, 4.39, 104.42, 4.16); #4611 card reuse remains intact. Many other tabs have similar tails; cause and fix remain unproven. Windows rerun owed to next rgate.</li>
 <li>2026-11-11, LOCAL Linux headless (Skia, <code>UseHeadlessDrawing=false</code>, uncommitted test harness, not <code>--perf-bench</code> and not comparable with the Windows rows), AvailableSubjectsTab only,
 200 switches per variant (3 × 40 cycles RemoteControl → AvailableSubjects → BambiTakeover, 4 × 20 cycles of the full <code>NavCheck.TabPanels</code> order), <code>ShowTab</code> + all dispatcher jobs + layout:
 before 1.68 ms median / 52.87 ms p95 (15 of 200 above 20 ms), after 1.61 / 5.72 (9 of 200). The view rebuilt its three lists three times per switch
