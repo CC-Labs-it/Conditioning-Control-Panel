@@ -113,6 +113,8 @@ public class JackpotRemixFlowTests
             var s = CoreSettings.Current;
             var old = (s.GlobalTargetMonitor, s.FlashClickable, s.FlashStayUntilPopped, s.HydraLimit);
             var saved = (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present, CoreProgression.AddXPProvider);
+            var warning = typeof(FlashOverlay).GetField("_warnedUnavailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var warned = (bool)warning.GetValue(null)!;
             var settings = new HapticSettings { LuminanceSyncEnabled = true, LuminanceSyncIntensity = 0.6 };
             using var haptics = new HapticService(settings);
             var calls = new List<(double Value, int Ms)>();
@@ -150,12 +152,27 @@ public class JackpotRemixFlowTests
             finally
             {
                 FlashOverlay.CloseAll(false);
+                warning.SetValue(null, warned);
                 host.Close();
                 (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present, CoreProgression.AddXPProvider) = saved;
                 (s.GlobalTargetMonitor, s.FlashClickable, s.FlashStayUntilPopped, s.HydraLimit) = old;
                 Directory.Delete(dir, true);
             }
         });
+
+    [Fact]
+    public async Task RefusedRemixSpawnRestoresUnavailableWarningState()
+    {
+        var field = typeof(FlashOverlay).GetField("_warnedUnavailable", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var previous = (bool)field.GetValue(null)!;
+        try
+        {
+            field.SetValue(null, false);
+            await RemixLuminanceFollowsSuccessfulSpawns(false, true, true, 1);
+            Assert.False((bool)field.GetValue(null)!);
+        }
+        finally { field.SetValue(null, previous); }
+    }
 
     private sealed class LuckyRandom : Random { public override double NextDouble() => 0; }
 
