@@ -113,7 +113,7 @@ public partial class BubbleService
         if (dt <= 0 || _bubbles.Count == 0) return;
 
         var stage = SuperStageHost.Stage;
-        bool poolLive = stage.PoolLive;
+        bool poolLive = stage.PoolLive && stage.Drags(PullKind.Bubble);
         bool gentle = Safety.GentleVisuals.On;
         double freshDip = FrothFreshRadiusDip();
         // The option box, read live (FrothOptions): the size cap and the cursor push. Neither touches pay.
@@ -140,7 +140,7 @@ public partial class BubbleService
 
             double dpi = b.DpiScale, rDip = b.FrothRadiusDip;
             var cPx = b.CenterPx;                                    // DIP -> device px
-            var pull = stage.Pull(cPx.X, cPx.Y, FrothRules.Mass(rDip, freshDip));
+            var pull = stage.Pull(cPx.X, cPx.Y, FrothRules.Mass(rDip, freshDip), PullKind.Bubble);
             if (pull.Eaten) { b.Pop(); continue; }                   // owner rule: the pool's bubble pays normally
             double ax = pull.Ax / dpi, ay = pull.Ay / dpi;           // px/s2 -> DIP/s2
 

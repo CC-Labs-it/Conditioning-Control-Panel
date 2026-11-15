@@ -904,7 +904,7 @@ public sealed class FlashLayer : BaseLayer
         var stage = Super.SuperStageHost.Stage;
         bool moving = item.Motion is { Style: not FlashMotionStyle.Still };
         var pull = stage.PoolLive && !moving && !item.PoolEaten
-            ? stage.Pull(item.X + item.W / 2, item.Y + item.H / 2, 1.4)
+            ? stage.Pull(item.X + item.W / 2, item.Y + item.H / 2, 1.4, SuperCore.PullKind.Picture)
             : default;
         double want = pull.Inside ? pull.Scale : 1;
         if (!pull.Inside && item.PoolVx == 0 && item.PoolVy == 0 && item.PoolScale >= 0.999)
