@@ -77,6 +77,7 @@ internal static class KeywordTriggerHead
     /// Nothing turns them back on. UI thread, idempotent, never throws; true when a switch changed.</summary>
     internal static bool SwitchOffForPanic()
     {
+        KeywordHighlightOverlay.CloseAll();
         var changed = false;
         try
         {
@@ -173,6 +174,7 @@ internal static class KeywordTriggerHead
             global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return rects;
         foreach (var w in desktop.Windows)
         {
+            if (KeywordHighlightOverlay.IsHighlightWindow(w)) continue;
             if (!w.IsVisible || w.WindowState == global::Avalonia.Controls.WindowState.Minimized) continue;
             var size = global::Avalonia.PixelSize.FromSize(w.FrameSize ?? w.ClientSize, w.RenderScaling);
             if (size.Width <= 0 || size.Height <= 0 || w.Screens.All.Any(m =>
@@ -341,7 +343,7 @@ internal sealed class KeywordAudioRuntime
     }
 
     // One fire path for both sources (WPF KeywordTriggerService.cs:126-140 keyboard, :933-943 OCR).
-    private void Fire(List<KeywordTrigger> fired, string source, DateTime now)
+    private void Fire(List<KeywordTrigger> fired, string source, DateTime now, IReadOnlyList<ScreenOcrService.Word>? words = null)
     {
         var s = CoreSettings.Current;
         _cooldowns.LastGlobal = now;
@@ -359,7 +361,7 @@ internal sealed class KeywordAudioRuntime
             Log.Information("KeywordTriggers: held - a panic is still quiet");
             return;
         }
-        LastDispatch = DispatchAsync(fired);
+        LastDispatch = DispatchAsync(fired, words);
         // WPF KeywordTriggerService.cs:1272,1345,1363: all enabled actions for one trigger;
         // :1283-1293: only the first enabled comment when multiple triggers merge.
         var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
@@ -428,7 +430,7 @@ internal sealed class KeywordAudioRuntime
         }
         _ocrFired.UnionWith(confirmed);
         // Fire holds the response during a panic's quiet, the same as a keyboard match (WPF DispatchMergedAsync).
-        Fire(fired, "OCR", now);
+        Fire(fired, "OCR", now, confirmed.Select(key => matched.First(w => $"{w.Text.ToLowerInvariant()}_{w.Bounds.X / 120}_{w.Bounds.Y / 120}" == key)).ToArray());
         return NeedsOcrConfirmation;
     }
 
@@ -505,7 +507,7 @@ internal sealed class KeywordAudioRuntime
     // WPF GetRecentFires: the Awareness pulse feed reads the shared Core ring (KeywordFireLog).
     internal IReadOnlyList<TriggerFireRecord> GetRecentFires() => Fires.Recent();
     internal Task LastDispatch { get; private set; } = Task.CompletedTask;
-    private async Task DispatchAsync(List<KeywordTrigger> fired)
+    private async Task DispatchAsync(List<KeywordTrigger> fired, IReadOnlyList<ScreenOcrService.Word>? words)
     {
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
         foreach (var _ in fired)
@@ -516,7 +518,7 @@ internal sealed class KeywordAudioRuntime
         if (legacy)
         {
             actions = new();
-            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
+            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) { KeywordHighlightOverlay.Show(words); return; }
             actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
                 PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
             // WPF DispatchLegacyFlatFieldsAsync: the flat visual fires after the audio, before haptic and XP.
@@ -553,7 +555,11 @@ internal sealed class KeywordAudioRuntime
                         if (result == ClipResult.Stopped) return;
                         played |= result == ClipResult.Played;
                         break;
-                    case VisualEffectAction visual: (Visual ?? FireVisual)(visual.Effect, first.Keyword); break;
+                    case HighlightAction: KeywordHighlightOverlay.Show(words); break;
+                    case VisualEffectAction visual:
+                        (Visual ?? FireVisual)(visual.Effect, first.Keyword);
+                        if (legacy) KeywordHighlightOverlay.Show(words);
+                        break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     case AddXpAction xp when xp.Amount > 0:
                         AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));
