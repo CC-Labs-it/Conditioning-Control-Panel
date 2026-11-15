@@ -25,6 +25,7 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
+        if (HandleGoonInbox(message)) { handled = true; return; }
         switch ((string?)message["type"])
         {
             case "ready":
