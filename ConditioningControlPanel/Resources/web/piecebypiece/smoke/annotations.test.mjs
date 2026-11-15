@@ -9,10 +9,12 @@ import { createAnnotations, createAnnotator } from '../board/annotations.js';
 /** A canvas stand-in: the square under a pointer is just carried on the event. */
 function rig({ blocked = false } = {}) {
   const target = new EventTarget();
+  const win = new EventTarget();   // the page's window, for blur
   const draws = [];
   const camera = [];
   const hand = createAnnotator({
     target,
+    win,
     squareAt: (ev) => ev.square ?? null,
     onChange: (shapes, preview) => draws.push({ shapes, preview }),
     blocked: () => blocked,
@@ -30,7 +32,7 @@ function rig({ blocked = false } = {}) {
     if (to !== from) fire('pointermove', { button: -1, square: to });
     fire('pointerup', { button: 2, square: to });
   };
-  return { hand, draws, camera, fire, right };
+  return { hand, draws, camera, fire, right, win };
 }
 
 const keys = (list) => list.map(s => `${s.kind}:${s.from}${s.to === s.from ? '' : '-' + s.to}`).sort();
@@ -117,6 +119,57 @@ test('released off the board, the arrow ends on the last square the pointer was 
   fire('pointermove', { square: 'c3' });
   fire('pointermove', { square: null });
   fire('pointerup', { button: 2, square: null });
+  assert.deepEqual(keys(hand.list()), ['arrow:b1-c3']);
+});
+
+// ccp-bugs #1625: the right button let go where the board never heard it (alt-tab, an overlay, outside
+// the window). The open press used to stay open, so the next LEFT click closed it and drew an arrow.
+test('a lost right release: the next left click draws nothing and wipes the board', () => {
+  const { hand, fire, right } = rig();
+  right('d4');
+  fire('pointerdown', { button: 2, square: 'c3' });
+  fire('pointermove', { button: -1, square: 'f6' });   // no pointerup ever comes
+  const down = fire('pointerdown', { button: 0, square: 'f6' });
+  fire('pointerup', { button: 0, square: 'f6' });
+  assert.deepEqual(keys(hand.list()), [], 'no c3-f6 arrow, and the old circle is wiped');
+  assert.equal(hand.isDrawing(), false);
+  assert.equal(down.defaultPrevented, false, 'the click still goes on to drag.js');
+});
+
+test('a lost right release: a new right press starts over from its own square', () => {
+  const { hand, camera, fire, right } = rig();
+  fire('pointerdown', { button: 2, square: 'c3' });   // released unheard
+  right('e2', 'e4');
+  assert.deepEqual(keys(hand.list()), ['arrow:e2-e4'], 'not c3-e4');
+  assert.deepEqual(camera, [], 'and the camera did not take the second press');
+});
+
+test('lost capture, a window blur, or a move with the right button up ends the open arrow', () => {
+  for (const end of ['lostpointercapture', 'blur', 'move']) {
+    const { hand, draws, fire, win } = rig();
+    fire('pointerdown', { button: 2, square: 'c3' });
+    fire('pointermove', { button: -1, buttons: 2, square: 'f6' });
+    assert.equal(hand.isDrawing(), true, end);
+    if (end === 'lostpointercapture') fire('lostpointercapture', {});
+    else if (end === 'blur') win.dispatchEvent(new Event('blur'));
+    else fire('pointermove', { button: -1, buttons: 0, square: 'g7' });
+    assert.equal(hand.isDrawing(), false, end);
+    assert.equal(draws.at(-1).preview, null, `${end}: the faint arrow is gone`);
+    fire('pointerup', { button: 2, square: 'g7' });
+    fire('pointerdown', { button: 0, square: 'g7' });
+    fire('pointerup', { button: 0, square: 'g7' });
+    assert.equal(hand.size(), 0, `${end}: nothing drawn afterwards`);
+  }
+});
+
+test('only the right button lets go of an arrow', () => {
+  const { hand, fire } = rig();
+  fire('pointerdown', { button: 2, square: 'b1' });
+  fire('pointermove', { button: -1, buttons: 2, square: 'c3' });
+  fire('pointerup', { button: 0, square: 'c3' });
+  fire('pointerup', { button: 1, square: 'c3' });
+  assert.equal(hand.size(), 0, 'a left or middle release adds nothing');
+  fire('pointerup', { button: 2, square: 'c3' });
   assert.deepEqual(keys(hand.list()), ['arrow:b1-c3']);
 });
 
