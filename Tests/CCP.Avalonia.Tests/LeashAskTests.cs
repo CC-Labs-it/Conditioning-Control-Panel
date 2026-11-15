@@ -25,6 +25,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF LeashDrawerSection offer row -> LeashSurfaces.ShowAsk -> LeashAskCard, from the Leash page.</summary>
+[Collection(RunsAloneCollection.Name)]
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";

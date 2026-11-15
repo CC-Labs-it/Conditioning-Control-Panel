@@ -212,7 +212,8 @@ public sealed class RemoteRelayTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var s = settings.Current;
-        (s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.LockdownTripwiresEnabled) = (false, false, false);
+        // Lockdown records the pre-activation value; do not inherit a saved strict lock from another test.
+        (s.StrictLockEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.LockdownTripwiresEnabled) = (false, false, false, false);
         var ld = LockdownService.Current = new LockdownService();
         RemoteCommands.StopSession = () => sessionStops++;
         RemoteCommands.RefreshOverlays = () => { };
