@@ -52,6 +52,34 @@ public sealed class PanicSurfacesTests
         }
     });
 
+    [Fact]
+    public void StopAllClosesEveryLightsDownWindowBeforeEngine() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var video = new global::Avalonia.Controls.Window();
+        var prev = PanicSurfaces.All;
+        var lights = prev.Single(s => s.Id == "lights-down");
+        var engine = prev.Single(s => s.Id == "engine");
+        try
+        {
+            for (var i = 0; i < 2; i++)
+                Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.TryOpen(video,
+                    new PixelRect(0, 0, 100, 100), 1, _ => true, _ => true, _ => true, (_, _) => true));
+            Assert.Contains("lights-down", engine.After!);
+            var countAtEngine = -1;
+            PanicSurfaces.All = new[] { lights, new PanicSurfaces.Surface("engine", _ =>
+                countAtEngine = ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count) };
+            PanicSurfaces.StopAll("test");
+            Assert.Equal(0, countAtEngine);
+            Assert.Equal(0, ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count);
+        }
+        finally
+        {
+            PanicSurfaces.All = prev;
+            ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.CloseAll();
+            video.Close();
+        }
+    });
+
     private static void EnsureApp()
     {
         if (Application.Current is null)
