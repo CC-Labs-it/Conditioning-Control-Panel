@@ -28,6 +28,40 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow.RemoteControl.cs overlay, toast, Start lock, big emotes and End Session.</summary>
 public sealed class RemoteControlShellTests
 {
+    // WPF RemoteControlService.cs:1524-1530: a local panic owns its paused run.
+    [Fact]
+    public void Start_session_refuses_a_local_panic_without_replacing_the_paused_run() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var runner = new SessionRunner(new SessionLogService());
+        MainShellWindow? shell = null;
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+            shell = new MainShellWindow();
+            var session = new Session { DurationMinutes = 1 };
+            runner.Start(session);
+            runner.Pause();
+            shell.NoteLocalPanicPause();
+            Assert.True(shell.LocalPanicHoldsSession);
+            Assert.Equal("panic", RemoteControlTabView.ExecuteRemoteCommand("start_session", null));
+            Assert.True(runner.IsRunning);
+            Assert.True(runner.IsPaused);
+            Assert.Same(session, runner.CurrentSession);
+        }
+        finally
+        {
+            shell?.Close();
+            runner.Stop();
+            CoreEngine.Stop();
+            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+        }
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

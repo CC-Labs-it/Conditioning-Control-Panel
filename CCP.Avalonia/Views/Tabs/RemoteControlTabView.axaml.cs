@@ -89,6 +89,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// Other commands retain the Core table and its explicit refusals.</summary>
         internal static string? ExecuteRemoteCommand(string action, Newtonsoft.Json.Linq.JObject? parameters)
         {
+            // WPF RemoteControlService.cs:1524-1530: a remote start must not replace a local panic pause.
+            if (action == "start_session" && Windows.MainShellWindow.RemoteCommandOwner?.LocalPanicHoldsSession == true)
+                return "panic";
             if (action == "stop_session") { Windows.MainShellWindow.StopSessionFromRemote(); return null; }
             if (action == "pause_session")
             {
