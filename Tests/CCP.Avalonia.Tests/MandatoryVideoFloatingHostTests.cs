@@ -242,4 +242,24 @@ public sealed class MandatoryVideoFloatingHostTests
         }
         finally { lockdown.Deactivate(); lockdown.Dispose(); LockdownService.Current = previous; }
     });
+
+    [Fact]
+    public Task AI_play_video_refuses_while_a_floating_run_plays() => Run((o, _) =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (CoreEngine.Video, CoreAccount.HasLabAccessProvider, s.CompanionPrompt.AllowAiToControlEffects);
+        (CoreEngine.Video, CoreAccount.HasLabAccessProvider, s.CompanionPrompt.AllowAiToControlEffects) = (o.Scheduler, () => true, true);
+        global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = start => start();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.Seed();
+            Assert.False(ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface!("x"));   // WPF App.AiEffects.cs:69-74
+            Assert.Equal(1, o.FloatingUp);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = global::ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.StartEffect;
+            (CoreEngine.Video, CoreAccount.HasLabAccessProvider, s.CompanionPrompt.AllowAiToControlEffects) = saved;
+        }
+    });
 }
