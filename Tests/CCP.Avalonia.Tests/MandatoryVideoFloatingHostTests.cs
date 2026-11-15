@@ -256,6 +256,15 @@ public sealed class MandatoryVideoFloatingHostTests
             global::ConditioningControlPanel.Avalonia.CompanionEffects.Seed();
             Assert.False(ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface!("x"));   // WPF App.AiEffects.cs:69-74
             Assert.Equal(1, o.FloatingUp);
+            // Held behind the portal bind while the video starts: the released start still refuses.
+            System.Action? held = null;
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = start => held = start;
+            o.Scheduler.ForceCleanup();
+            ConditioningControlPanel.Services.Commands.MediaCommand.VideoSurface!("x");
+            Assert.True(o.Scheduler.Trigger(userInitiated: false));
+            o.Show("/v/first.mp4", strict: false);
+            held!();
+            Assert.Equal(1, o.FloatingUp);
         }
         finally
         {
