@@ -14,7 +14,10 @@ public sealed class CompanionIdleVoiceTests
         string Read(string path) => System.IO.File.ReadAllText(System.IO.Path.Combine(root, "CCP.Avalonia", path));
         var reactions = Read("Views/AvatarTube/AvatarTubeWindow.Reactions.cs");
         Assert.Equal(4, reactions.Split("unprompted: true").Length - 1);
-        Assert.Contains("!IsMuted && MayVoice(unprompted)", Read("Views/AvatarTube/AvatarTubeWindow.axaml.cs"));
+        var speech = Read("Views/AvatarTube/AvatarTubeWindow.axaml.cs");
+        Assert.Contains("bool heldIdle = !MayVoice(unprompted)", speech);
+        Assert.Contains("!IsMuted && !heldIdle", speech);
+        Assert.Contains("text, mood, heldIdle)", speech);
         Assert.Contains("unprompted: line.Unprompted", Read("Views/AvatarTube/AvatarTubeWindow.SpeechQueue.cs"));
         Assert.Equal(2, Read("Platform/BarkHead.cs").Split("unprompted: s.Unprompted").Length - 1);
     }

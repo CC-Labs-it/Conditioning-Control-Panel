@@ -439,6 +439,97 @@ public sealed class AvatarTubeFinishTests
         finally { Directory.Delete(root, true); }
     });
 
+    private static (string Root, string Audio, ModPackage Mod) PortraitReviewFixture()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ccp-portrait-review-" + Guid.NewGuid().ToString("N"));
+        var audio = Path.Combine(root, "resources", "sounds", "companion_audio");
+        foreach (var skin in new[] { "a", "b" })
+        {
+            Directory.CreateDirectory(Path.Combine(audio, skin));
+            foreach (var name in new[] { "idle.png", "happy.png" })
+                File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "avatar_pose1.png"), Path.Combine(audio, skin, name));
+        }
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy.png"}]}}}
+            """);
+        return (root, audio, new ModPackage(new ModManifest { Id = "portrait-review" }, root, false));
+    }
+
+    [Fact]
+    public Task PortraitChromeShowsMistAndRestoresEffects() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            var a = tube.FindControl<Image>("ImgAvatar")!;
+            var b = tube.FindControl<Image>("ImgAvatarB")!;
+            var mist = tube.FindControl<Control>("MistOverlay")!;
+            var effectA = a.Effect; var effectB = b.Effect;
+            Assert.NotNull(effectA); Assert.NotNull(effectB); Assert.False(mist.IsVisible);
+            change(mod);
+            Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
+            Action? finish = null;
+            tube.AvatarSwitchScheduler = (_, fire) => { finish = fire; return () => { }; };
+            Assert.True(tube.SelectAvatarSet(2)); finish!();
+            Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false));
+            Assert.Same(effectA, a.Effect); Assert.Same(effectB, b.Effect); Assert.False(mist.IsVisible);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitCorruptImagesFallBackToSkinZeroThenIdle() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitReviewFixture();
+        try
+        {
+            foreach (var name in new[] { "idle.png", "happy.png" }) File.WriteAllText(Path.Combine(audio, "b", name), "corrupt");
+            change(mod);
+            Action? finish = null;
+            tube.AvatarSwitchScheduler = (_, fire) => { finish = fire; return () => { }; };
+            Assert.True(tube.SelectAvatarSet(2)); finish!();
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
+            tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(Path.Combine(audio, "a", "happy.png"), tube.PortraitPath);
+            File.WriteAllText(Path.Combine(audio, "a", "happy.png"), "corrupt");
+            change(mod); // reload the manifest and its verified image cache
+            tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitHeldIdleUsesTwoPosesAtNormalCadence() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            change(mod);
+            var steps = new List<(TimeSpan Delay, Action Fire)>();
+            tube.PortraitStepScheduler = (delay, fire) => { steps.Add((delay, fire)); return () => { }; };
+            tube.PortraitFadeScheduler = (_, _) => () => { };
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.False(AvatarTubeWindow.MayVoice(true));
+            foreach (var text in new[] { "short", new string('a', 200).Replace("a", "a ") })
+            {
+                steps.Clear();
+                tube.GigglePriority(text, playSound: false, aiGenerated: false, mood: "happy", unprompted: true);
+                Assert.Equal(TimeSpan.FromSeconds(1), Assert.Single(steps).Delay);
+                steps[0].Fire();
+                Assert.Equal(TimeSpan.FromSeconds(2), steps[1].Delay);
+                steps[1].Fire();
+                Assert.Equal(2, steps.Count);
+                Assert.Equal("idle.png", Path.GetFileName(tube.PortraitPath));
+            }
+            steps.Clear();
+            tube.GigglePriority("short", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(TimeSpan.FromMilliseconds(500), Assert.Single(steps).Delay);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); Directory.Delete(root, true); }
+    });
+
     [Fact]
     public Task AttachedTubeMakesRoomAndDetachRestoresTheShell() => Run((shell, tube, _) =>
     {

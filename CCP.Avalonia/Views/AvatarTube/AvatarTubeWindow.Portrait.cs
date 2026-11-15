@@ -15,6 +15,8 @@ public partial class AvatarTubeWindow
     private AvatarPortraitLoader? _portrait;
     private Bitmap? _portraitImage, _portraitOld;
     private Image? _portraitActive;
+    private IEffect? _portraitEffectA, _portraitEffectB;
+    private bool _portraitEffectsSaved;
     private Action _cancelPortraitStep = static () => { }, _cancelPortraitFade = static () => { };
     private int _portraitStepVersion, _portraitFadeVersion, _portraitStep;
     private string[] _portraitOrder = Array.Empty<string>();
@@ -53,6 +55,9 @@ public partial class AvatarTubeWindow
         PortraitPath = path;
         var second = this.FindControl<Image>("ImgAvatarB")!;
         second.IsVisible = true;
+        _portraitEffectA = _imgAvatar.Effect; _portraitEffectB = second.Effect; _portraitEffectsSaved = true;
+        _imgAvatar.Effect = second.Effect = null;
+        this.FindControl<Control>("MistOverlay")!.IsVisible = true;
         _imgAvatar.MaxHeight = second.MaxHeight = 306 * 0.88;
         _imgAvatar.MaxWidth = second.MaxWidth = 198 * 0.88;
         _avatarBorder.RenderTransform = new TranslateTransform(10, -30);
@@ -68,7 +73,7 @@ public partial class AvatarTubeWindow
     }
 
     // WPF Avatar.cs:1217-1384: mapped line, else mood or affirmation; 2-5 poses, then still idle.
-    private void PlayPortraitLine(string? lineId, string? audioPath, string text, string? mood)
+    private void PlayPortraitLine(string? lineId, string? audioPath, string text, string? mood, bool heldIdle)
     {
         if (_portraitImage == null || _portrait == null) return;
         var emotion = _portrait.EmotionForLine(lineId);
@@ -79,7 +84,7 @@ public partial class AvatarTubeWindow
         }
         var bucket = _portrait.Bucket(_currentAvatarSet - 1, emotion!);
         if (bucket.Length == 0) return;
-        double seconds = audioPath != null ? PortraitAudioDuration(audioPath) : string.IsNullOrWhiteSpace(text) ? 2.5
+        double seconds = heldIdle ? 0 : audioPath != null ? PortraitAudioDuration(audioPath) : string.IsNullOrWhiteSpace(text) ? 2.5
             : Math.Clamp(0.45 * text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length + 0.8, 2.0, 7.0);
         int count = seconds <= 0 ? 2 : Math.Clamp((int)Math.Round(seconds) - 1, 2, 5);
         var order = new string[count];
@@ -184,6 +189,12 @@ public partial class AvatarTubeWindow
         CancelPortraitStep();
         FinishPortraitFade();
         var second = this.FindControl<Image>("ImgAvatarB")!;
+        this.FindControl<Control>("MistOverlay")!.IsVisible = false;
+        if (_portraitEffectsSaved)
+        {
+            _imgAvatar.Effect = _portraitEffectA; second.Effect = _portraitEffectB;
+            _portraitEffectsSaved = false;
+        }
         _imgAvatar.Source = null; _imgAvatar.Opacity = 1;
         second.Source = null; second.Opacity = 0; second.IsVisible = false;
         _portraitActive = null;

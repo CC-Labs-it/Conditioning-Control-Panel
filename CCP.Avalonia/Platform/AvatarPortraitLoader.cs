@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class AvatarPortraitLoader
 {
     private readonly string _directory;
+    private readonly Dictionary<string, bool> _readable = new();
     internal AvatarPortraitManifest Manifest { get; }
     private AvatarPortraitLoader(AvatarPortraitManifest manifest, string directory) => (Manifest, _directory) = (manifest, directory);
 
@@ -50,7 +51,7 @@ internal sealed class AvatarPortraitLoader
             skinIndex = Math.Clamp(skinIndex, 0, Manifest.Skins.Count - 1);
             string[] Load(int index, string name) => Manifest.Emotions.TryGetValue(name, out var e)
                 ? e.Portraits.Where(p => !string.IsNullOrEmpty(p.File))
-                    .Select(p => Resolve(Manifest.Skins[index], p.File)).Where(p => p != null).Cast<string>().ToArray()
+                    .Select(p => Resolve(Manifest.Skins[index], p.File)).Where(p => p != null && IsReadable(p)).Cast<string>().ToArray()
                 : Array.Empty<string>();
             var files = Load(skinIndex, emotion);
             if (files.Length == 0 && skinIndex != 0) files = Load(0, emotion);
@@ -59,6 +60,13 @@ internal sealed class AvatarPortraitLoader
             return files;
         }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Portrait bucket could not be loaded"); return Array.Empty<string>(); }
+    }
+
+    private bool IsReadable(string path)
+    {
+        if (_readable.TryGetValue(path, out var valid)) return valid;
+        using var image = Open(path);
+        return _readable[path] = image != null;
     }
 
     internal Bitmap? Open(string path)

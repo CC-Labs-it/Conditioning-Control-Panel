@@ -1363,7 +1363,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
                     // thread pool, and a voice waiter woken by it must already see this line in the air.
-                    PlayPortraitLine(emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)), phraseAudioPath, text, mood);
+                    bool heldIdle = !MayVoice(unprompted);
+                    PlayPortraitLine(emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)), phraseAudioPath, text, mood, heldIdle);
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
@@ -1384,7 +1385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted && MayVoice(unprompted))
+                    if (!IsMuted && !heldIdle)
                     {
                         // WPF Speech.cs:546-552: a non-AI bubble without its own sound takes the fallback cue.
                         if (SpeechAudioPlayer is { } player) player(playSound, phraseAudioPath, barkVoice, spoken);
