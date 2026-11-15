@@ -36,6 +36,8 @@ public sealed class EmiDeskChordTests
         CoreSettings.ServiceProvider = () => service;
         var svc = EmiDeskService.Instance;
         var (oldReg, oldUnreg, oldAsk) = (svc.RegisterChord, svc.UnregisterChord, svc.AskMute);
+        var oldWindows = svc.IsWindows;
+        svc.IsWindows = () => false;
         var grabs = new List<Grab>();
         int unregs = 0;
         bool accept = true;
@@ -56,6 +58,7 @@ public sealed class EmiDeskChordTests
         {
             if (svc.IsOut) svc.Dismiss();
             (svc.RegisterChord, svc.UnregisterChord, svc.AskMute) = (oldReg, oldUnreg, oldAsk);
+            svc.IsWindows = oldWindows;
             CoreSettings.ServiceProvider = oldSettings;
         }
     });
