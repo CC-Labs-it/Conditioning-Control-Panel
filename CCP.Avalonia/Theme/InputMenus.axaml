@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls">
   <!-- Inputs.xaml:476: context-menu rows. Keep Fluent's popup and part names so local
        view styles and submenu behavior continue to work. -->
   <Style Selector="ContextMenu MenuItem">
@@ -27,8 +28,7 @@
     <Setter Property="Margin" Value="0,0,8,0"/>
     <Setter Property="Content">
       <Template>
-        <Path Width="10" Height="10" Stretch="Uniform" Fill="{DynamicResource PinkBrush}"
-              Data="M9.86 3.14a.5.5 0 0 1 0 .72L4.5 9.22 1.64 6.36a.5.5 0 1 1 .72-.72L4.5 7.78l4.64-4.64a.5.5 0 0 1 .72 0z"/>
+        <fx:IconGlyph Kind="Checkmark" Size="10" Foreground="{DynamicResource PinkBrush}"/>
       </Template>
     </Setter>
   </Style>
