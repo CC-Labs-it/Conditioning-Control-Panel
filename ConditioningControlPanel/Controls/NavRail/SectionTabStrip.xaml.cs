@@ -650,8 +650,8 @@ namespace ConditioningControlPanel.Controls.NavRail
             CrumbSectionText.FontSize = NavStripRules.CrumbTitleSize;
             CrumbSep.FontSize = CrumbPage.FontSize = NavStripRules.CrumbPageSize;
             PillRow.PreviewKeyDown += PillRow_PreviewKeyDown;
-            Loaded += (_, _) => { NavStripRules.BadgesChanged -= RefreshBadges; NavStripRules.BadgesChanged += RefreshBadges; RefreshBadges(); };
-            Unloaded += (_, _) => NavStripRules.BadgesChanged -= RefreshBadges;
+            Loaded += (_, _) => { NavStripRules.BadgesChanged -= OnBadgesChanged; NavStripRules.BadgesChanged += OnBadgesChanged; RefreshBadges(); };
+            Unloaded += (_, _) => NavStripRules.BadgesChanged -= OnBadgesChanged;
             SizeChanged += (_, _) => PositionFill(animate: false);
         }
 
@@ -1175,8 +1175,17 @@ namespace ConditioningControlPanel.Controls.NavRail
             p.CountPlate.Visibility = text == null ? Visibility.Collapsed : Visibility.Visible;
         }
 
+        /// <summary>NavStripRules.BadgesChanged fires on the caller's thread (a page's count can
+        /// move from a service or timer): hop to this strip's dispatcher before touching the pills.</summary>
+        internal void OnBadgesChanged()
+        {
+            if (Dispatcher.CheckAccess()) RefreshBadges();
+            else Dispatcher.BeginInvoke(new Action(RefreshBadges));
+        }
+
         /// <summary>Ask the badge provider again for every pill (NavStripRules.NotifyBadgesChanged
-        /// lands here on a mounted strip), then put the fill back under its pill.</summary>
+        /// lands here on a mounted strip, through <see cref="OnBadgesChanged"/>), then put the fill
+        /// back under its pill.</summary>
         internal void RefreshBadges()
         {
             foreach (var p in _pills) PaintBadge(p);
