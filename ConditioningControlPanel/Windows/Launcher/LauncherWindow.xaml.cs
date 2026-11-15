@@ -57,6 +57,7 @@ public partial class LauncherWindow : Window
         Closed += OnClosedCleanup;
         LauncherHost.FadeOut = FadeOutThen;
         LauncherHost.RequestSignIn = OpenSignIn;
+        LauncherHost.OpenDoorPage = OpenDoorPage;
 
         SetUpSoundButton();
 
@@ -101,6 +102,8 @@ public partial class LauncherWindow : Window
         try
         {
             FadeIn();
+            // The panel asked for a door (LauncherHost.ShowDoor): open on its page, no swap.
+            if (LauncherHost.TakePendingDoor() is { } asked) _door = asked;
             BuildTiles();
             RefreshAccount();
             RefreshMod();
@@ -174,6 +177,7 @@ public partial class LauncherWindow : Window
         _shortcutTextTimer.Stop();
         StopOpenTables();
         LauncherHost.RequestSignIn = null;
+        LauncherHost.OpenDoorPage = null;
         UnhookEngine();
         var mods = App.Mods;
         if (mods != null) mods.ModChanged -= OnModChanged;
@@ -300,7 +304,7 @@ public partial class LauncherWindow : Window
     {
         try
         {
-            var now = LauncherCatalogue.Games.Where(g => g.Available)
+            var now = LauncherCatalogue.All.Where(g => g.Available)
                 .Select(g => new KeyValuePair<string, bool>(g.Id, g.Revealed));
             if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
             Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
@@ -540,9 +544,13 @@ public partial class LauncherWindow : Window
         _tiles.Clear();
         _tileById.Clear();
         _revealedAtBuild.Clear();
-        foreach (var entry in LauncherCatalogue.Games.Where(g => g.Available))
-        {
+        // The reveal record covers every card, shown or not, so a grant flip behind a closed door
+        // still repaints the page when it next opens (and the doors' collage now).
+        foreach (var entry in LauncherCatalogue.All.Where(g => g.Available))
             _revealedAtBuild[entry.Id] = entry.Revealed;
+        // Only the open door's page is tiled; the doors themselves leave the grid empty.
+        foreach (var entry in PageEntries())
+        {
             try
             {
                 var tile = CreateTile(entry);
@@ -552,6 +560,7 @@ public partial class LauncherWindow : Window
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] tile {Id} failed to build", entry.Id); }
         }
+        ApplyDoorView();
         FitTiles();
     }
 

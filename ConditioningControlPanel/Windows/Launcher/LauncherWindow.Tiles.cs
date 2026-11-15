@@ -173,7 +173,7 @@ public partial class LauncherWindow
             LauncherSfx.Click();
             ShowShortcutResult(LauncherShortcuts.TryCreateDesktopShortcut(entry.Id));
         };
-        if (revealed) plate.Children.Add(shortcutBtn);
+        if (revealed && LauncherDoorRules.OffersShortcut(entry.Door)) plate.Children.Add(shortcutBtn);
         body.Children.Add(plate);
 
         // --- title, blurb, play ---
