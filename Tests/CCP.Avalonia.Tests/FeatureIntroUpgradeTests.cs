@@ -20,6 +20,36 @@ namespace CCP.Avalonia.Tests;
 public sealed class FeatureIntroUpgradeTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VersionBumpFiresBeforeStampEvenWithoutNotes(bool blankNotes) => Run("old-version", async shell =>
+    {
+        var calls = new List<(string moment, object? context, string seen)>();
+        shell.UpgradeFire = (moment, context) => calls.Add((moment, context, CoreSettings.Current.LastSeenVersion));
+        if (blankNotes) CoreReleaseContent.PatchNotesProvider = () => "";
+        var showing = shell.ShowWhatsNewIfNeeded();
+        var call = Assert.Single(calls);
+        Assert.Equal("afterUpdate", call.moment);
+        Assert.Equal(CoreReleaseContent.AppVersion, call.context!.GetType().GetProperty("target")!.GetValue(call.context));
+        Assert.Equal("old-version", call.seen);
+        foreach (var dialog in shell.OwnedWindows.OfType<WhatsNewDialog>().ToArray()) dialog.Close();
+        await showing;
+        await shell.ShowWhatsNewIfNeeded();
+        Assert.Single(calls);
+    });
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public Task FreshAndCurrentDoNotFireAfterUpdate(string? previous) => Run(previous, async shell =>
+    {
+        var calls = 0;
+        shell.UpgradeFire = (_, _) => calls++;
+        await shell.ShowWhatsNewIfNeeded();
+        Assert.Equal(0, calls);
+    });
+
+    [Theory]
     [InlineData("")]
     [InlineData(null)]
     public Task FreshAndCurrentVersionsStaySilent(string? previous) => Run(previous, async shell =>
