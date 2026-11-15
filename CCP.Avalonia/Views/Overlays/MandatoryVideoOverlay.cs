@@ -88,6 +88,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly Func<IMandatoryPlayback>? _playbackFactory;
         internal Random CutRandom { get; set; } = Random.Shared;
         private bool _cutStartChosen;
+        internal int LoopPasses { get; private set; } = 1;
+        internal Func<Window, bool> MakeLoopPassive { get; set; } = w => { X11Overlay.SetPassive(w); return X11Overlay.SetClickThrough(w, true); };
+        private bool _loopSurfaceFailed;
+
+        // WPF VideoService.cs:3261,6763-6780: resolve before Media creation; a cache miss plays once.
+        private int PassesFor(string path, bool floating)
+        {
+            var s = CoreSettings.Current;
+            bool enabled = s.MandatoryVideoLoopShortClips || s.MandatoryVideoFillShortWithOthers;
+            if (!enabled || s.VideoMinDurationSeconds <= 0) return 1;
+            bool enhanced = false;
+            if (s.VideoEnhanceIfPossible)
+            {
+                try { enhanced = ConditioningControlPanel.Services.Deeper.EnhancementResolver.ResolveForLocalMedia(path).Found; }
+                catch (Exception ex) { Log.Debug(ex, "Video loop enhancement probe failed"); enhanced = true; }
+            }
+            bool credited = ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.LinkFor(
+                ConditioningControlPanel.Services.Fyp.Online.ScrolllerItemIndex.MetaFor(_source)?.Sub) != null;
+            var duration = Scheduler.DurationOf?.Invoke(path);
+            return VideoMinLoop.Passes(VideoMinLoop.Applies(true, s.VideoMinDurationSeconds, floating, enhanced: enhanced, credited: credited),
+                s.VideoMinDurationSeconds, (long)Math.Round((duration ?? 0) * 1000));
+        }
 
         // UI thread only. Poll the native position after choosing the slice, never credit the seek.
         private void SampleCutPlayback()
@@ -105,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return; // wait for the native seek before taking a baseline
                 }
             }
-            _cutClock.Observe(_playback.Time, (long)Time.GetElapsedTime(0).TotalMilliseconds);
+            _cutClock.Observe(_playback.Time, (long)Time.GetElapsedTime(0).TotalMilliseconds, LoopPasses > 1 ? _playback.Length : 0);
         }
 
         // WPF Services/Video/VideoService.cs:2783: the primary player's raw millisecond clock
@@ -232,6 +254,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             SafetyDeadline.Arm(Now, 0);   // WPF StartFallbackSafetyTimer: armed before the length is known
             _safetyLengthArmed = false;
 
+            Floating = Floats(strict);
+            LoopPasses = PassesFor(path, Floating);
+            // A passive loop cannot receive target clicks, so do not score unanswerable checks.
+            _attention = LoopPasses <= 1 && MandatoryVideoPresentation.AttentionChecksApply(CoreSettings.Current.AttentionChecksEnabled, Floating);
+            _loopSurfaceFailed = false;
+
             // The injected decoder omits native allocation and windows; lifecycle methods stay shared.
             if (_playbackFactory != null)
             {
@@ -244,12 +272,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
-            Floating = Floats(strict);
             _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
             _revealAudioHeld = false;
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
-            foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
+            foreach (var screen in screens)
+            {
+                _surfaces.Add(Build(screen, strict));
+                if (_loopSurfaceFailed) { Scheduler.ForceCleanup(); return; }
+            }
 
             var vlc = LibVlcAudio.Shared;
             if (vlc == null)
@@ -262,7 +293,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // bouncing text, and arm the attention checks.
             if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
-            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
@@ -347,6 +377,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
             foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
+            if (LoopPasses > 1) _media.AddOption($":input-repeat={LoopPasses - 1}");
             _player.Play(_media);
             BeginEnhancement(path);
             // WPF VideoService.cs:3410: discover the companion script only after playback starts.
@@ -475,6 +506,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row, CreditButton(_source) } },
             };
             var floating = Floating;
+            if (LoopPasses > 1)
+            {
+                w.ShowActivated = false;
+                w.Focusable = false;
+                w.IsHitTestVisible = false;
+                w.Opened += (_, _) =>
+                {
+                    try { _loopSurfaceFailed = !MakeLoopPassive(w); }
+                    catch (Exception ex) { Log.Warning(ex, "Video loop could not be made passive"); _loopSurfaceFailed = true; }
+                    if (_loopSurfaceFailed) w.Hide();
+                };
+            }
             // A floating window can be smaller than the 360x200 card: its card opens in its own window (WPF VideoService.cs:6440).
             if (!floating) ((Panel)w.Content).Children.Insert(2, grace);
             CoverGentleEntrance((Panel)w.Content!);
@@ -544,7 +587,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 w.Show();
                 w.WindowState = WindowState.FullScreen;
-                w.Activate();
+                if (LoopPasses <= 1) w.Activate();
             }
             return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel };
         }
@@ -801,7 +844,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // wall clock; the timer keeps running through a voice pause, so a held clip still ends.
             if (!_safetyLengthArmed && _playback.Length > 0)
             {
-                SafetyDeadline.Arm(Now, _playback.Length / 1000.0);
+                SafetyDeadline.Arm(Now, VideoMinLoop.SafetySeconds(_playback.Length / 1000.0, LoopPasses));
                 _safetyLengthArmed = true;
             }
             var enhanced = EnhancementOwnsLength(_playback.Length / 1000.0);
@@ -832,9 +875,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var remote = VideoSelectionRules.IsRemoteMediaPath(_source);
             // The played-time "overran" guard is the same length guillotine: the deadline above owns it then.
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                _playback.HasVideo, enhanced ? double.PositiveInfinity : _playback.Length / 1000.0,
+                _playback.HasVideo, enhanced ? double.PositiveInfinity : VideoMinLoop.SafetySeconds(_playback.Length / 1000.0, LoopPasses),
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent,
-                _cutClock == null ? null : _cutClock.PlayedMs / 1000.0 + PlayedSkew, remote);
+                _cutClock == null ? null : LoopPasses > 1 ? Math.Max(played, _cutClock.PlayedMs / 1000.0 + PlayedSkew) : _cutClock.PlayedMs / 1000.0 + PlayedSkew, remote);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed, remote))
             {

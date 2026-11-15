@@ -68,6 +68,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
             SliderVideoMaxDur.ValueChanged += SliderVideoMaxDur_Changed;
+            ChkVideoLoopShort.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoLoopShortClips = ChkVideoLoopShort.IsChecked == true;
+                CoreSettings.Save();
+            };
+            ChkVideoFillShort.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFillShortWithOthers = ChkVideoFillShort.IsChecked == true;
+                CoreSettings.Save();
+            };
             ChkVideoCutRandomStart.IsCheckedChanged += (_, _) =>
             {
                 if (_isLoading) return;
@@ -200,6 +212,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
+                ChkVideoLoopShort.IsChecked = s.MandatoryVideoLoopShortClips;
+                ChkVideoFillShort.IsChecked = s.MandatoryVideoFillShortWithOthers;
                 ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
                 ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
                 ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
@@ -251,6 +265,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.VideoMaxDurationSeconds) ||
                 e.PropertyName == nameof(AppSettings.VideoCutRandomStart) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoLoopShortClips) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFillShortWithOthers) ||
                 e.PropertyName == nameof(AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.AttentionDensity) ||

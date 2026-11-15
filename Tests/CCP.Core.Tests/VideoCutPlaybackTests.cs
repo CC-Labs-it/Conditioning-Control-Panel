@@ -47,4 +47,14 @@ public class VideoCutPlaybackTests
         Assert.Equal("max length", MandatoryVideoScheduler.Guard(42, 42, true, true, 120, 0, 5, capPlayed: clock.PlayedMs / 1000.0));
         Assert.Equal("max length", MandatoryVideoScheduler.Guard(1, 1, true, true, 120, 0, 5, 4, 1)); // heal budget
     }
+    [Fact]
+    public void Repeating_position_counts_the_wrapped_tail_but_not_a_backward_seek()
+    {
+        var clock = new VideoPlaybackClock();
+        clock.Observe(9000, 0, 10000);
+        clock.Observe(500, 1500, 10000);
+        Assert.Equal(1500, clock.PlayedMs);
+        clock.Observe(400, 1600, 10000);
+        Assert.Equal(1500, clock.PlayedMs);
+    }
 }
