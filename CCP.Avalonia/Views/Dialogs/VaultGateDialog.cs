@@ -57,7 +57,7 @@ public sealed partial class VaultGateDialog : Window
     /// <summary>The card on screen, if any. One at a time: a second padlock or toast replaces it.</summary>
     internal static VaultGateDialog? Open { get; private set; }
 
-    private readonly StackPanel _body = new();
+    private StackPanel _body = new();
     private readonly Border _card;
     private readonly ExclusiveFeature? _feature;
     private readonly int _tier;
@@ -93,6 +93,7 @@ public sealed partial class VaultGateDialog : Window
             Margin = new Thickness(12), Padding = new Thickness(22, 20, 22, 18),
             BoxShadow = BoxShadows.Parse("0 0 22 0 #73FF69B4"), Child = _body,
         };
+        SizeChanged += CompareSizeChanged;
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
         // Buttons handle their own press, so only the card's empty surface drags.
         PointerPressed += (_, e) => { if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e); };
@@ -138,6 +139,7 @@ public sealed partial class VaultGateDialog : Window
 
     private void BuildOffer()
     {
+        _comparing = false;
         FaceChrome(false);
         _body.Children.Clear();
         _priceSlots.Clear();
@@ -237,6 +239,7 @@ public sealed partial class VaultGateDialog : Window
             }
             foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
                 PaintPrice(slot, tier, compact, yearly, hints);
+            if (_comparing) PaintCompare(false);
             if (!_plans.FromServer) await FillSaleAsync();
         }
         catch (Exception ex) { Log.Debug("[VaultGate] plans refresh failed: {E}", ex.GetType().Name); }
