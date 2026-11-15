@@ -204,12 +204,36 @@ public sealed class LeashAskTests
             var ask = LeashAskWindow.Current!;
             Assert.False(previous.IsVisible);
             Assert.NotSame(previous, ask);
+            // The service timer can bind after a manual Look, even while this ask is open.
+            shell.RebindLeashAsks();
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+
+            // Open synchronously before the timer can bind the service.
+            var look = Tagged<Button>(page, "leash-offer-look");
+            Assert.True(look.IsEffectivelyEnabled);
+            look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+            shell.RebindLeashAsks();
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((_, page, wire, _) =>
