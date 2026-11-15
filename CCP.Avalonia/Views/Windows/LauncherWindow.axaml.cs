@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private MainShellWindow? _panel;
         private MainShellWindow? _engineSource;
         private MainShellWindow? Panel => _panel ?? MainShellWindow.Current;
+        internal bool IsLinkedTo(MainShellWindow panel) => ReferenceEquals(_panel, panel);
 
         /// <summary>The launcher, if it has been built this run.</summary>
         internal static LauncherWindow? Instance => _window;

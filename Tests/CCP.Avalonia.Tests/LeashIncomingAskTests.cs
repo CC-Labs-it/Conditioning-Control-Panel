@@ -73,6 +73,40 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void AHiddenUnrelatedShellCannotReplayOffersOnTheLinkedLauncher() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var other = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            other.Show();
+            other.Hide();
+            try
+            {
+                var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+                LeashHead.Service = service;
+                shell.RebindLeashAsks();
+                service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                launcher.Show();
+                shell.RebindLeashAsks();
+                LeashAskWindow.Current!.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                LeashAskWindow.Current!.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+                other.RebindLeashAsks(); // Its delayed gate tick must not use another shell's launcher.
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                other.MarkExitRequestedForTest();
+                other.Close();
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
