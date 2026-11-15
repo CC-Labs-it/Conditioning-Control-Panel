@@ -28,18 +28,28 @@ namespace ConditioningControlPanel.Services.UI
         public static string Normalize(string? door) =>
             string.Equals(door?.Trim(), Tools, StringComparison.OrdinalIgnoreCase) ? Tools : Games;
 
-        /// <summary>Open the launcher on a door. Never throws.</summary>
-        public static void Open(string? door)
+        /// <summary>True while Lockdown runs. Swappable so tests need no app.</summary>
+        internal static Func<bool> IsLockedDown { get; set; } = () => App.Lockdown?.IsActive == true;
+
+        /// <summary>Open the launcher on a door. Never throws. During Lockdown it does nothing and
+        /// answers false: the launcher's way back counts as an escape attempt (AGENTS.md rule 6),
+        /// and a Drop-day card or a palette row is not the user trying to leave.</summary>
+        public static bool Open(string? door)
         {
             var key = Normalize(door);
+            bool locked;
+            try { locked = IsLockedDown(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "PanelDoorLink: Lockdown check failed"); locked = true; }
+            if (locked) return false;
             var hook = OpenLauncherDoor;
             if (hook != null)
             {
-                try { hook(key); return; }
+                try { hook(key); return true; }
                 catch (Exception ex) { App.Logger?.Warning(ex, "PanelDoorLink: door {Door} hook failed", key); }
             }
             try { Fallback(); }
             catch (Exception ex) { App.Logger?.Warning(ex, "PanelDoorLink: fallback for {Door} failed", key); }
+            return true;
         }
 
         /// <summary>Presses the panel's title-bar "Back to CC Labs" button (<c>BtnBackToLauncher</c>),

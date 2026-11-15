@@ -29,10 +29,12 @@ public class PanelDoorLinkTests
     {
         var hook = PanelDoorLink.OpenLauncherDoor;
         var fallback = PanelDoorLink.Fallback;
+        var locked = PanelDoorLink.IsLockedDown;
         try
         {
             var opened = new List<string>();
             var fellBack = 0;
+            PanelDoorLink.IsLockedDown = () => false;
             PanelDoorLink.Fallback = () => fellBack++;
 
             PanelDoorLink.OpenLauncherDoor = null;
@@ -55,6 +57,46 @@ public class PanelDoorLinkTests
         {
             PanelDoorLink.OpenLauncherDoor = hook;
             PanelDoorLink.Fallback = fallback;
+            PanelDoorLink.IsLockedDown = locked;
+        }
+    }
+
+    [Fact]
+    public void DuringLockdownTheSeamOpensNothing()
+    {
+        // AGENTS.md rule 6: the launcher's way back reports an escape attempt to Lockdown, so a
+        // Drop-day card or a palette row reaching the seam mid-Lockdown must not get that far.
+        var hook = PanelDoorLink.OpenLauncherDoor;
+        var fallback = PanelDoorLink.Fallback;
+        var locked = PanelDoorLink.IsLockedDown;
+        try
+        {
+            var opened = new List<string>();
+            var fellBack = 0;
+            PanelDoorLink.Fallback = () => fellBack++;
+            PanelDoorLink.IsLockedDown = () => true;
+
+            PanelDoorLink.OpenLauncherDoor = opened.Add;
+            Assert.False(PanelDoorLink.Open("games"));
+            PanelDoorLink.OpenLauncherDoor = null;
+            Assert.False(PanelDoorLink.Open("tools"));
+            Assert.Empty(opened);
+            Assert.Equal(0, fellBack);
+
+            // A check that throws counts as locked: when in doubt, never trip the wire.
+            PanelDoorLink.IsLockedDown = () => throw new InvalidOperationException();
+            Assert.False(PanelDoorLink.Open("games"));
+            Assert.Equal(0, fellBack);
+
+            PanelDoorLink.IsLockedDown = () => false;
+            Assert.True(PanelDoorLink.Open("games"));
+            Assert.Equal(1, fellBack);
+        }
+        finally
+        {
+            PanelDoorLink.OpenLauncherDoor = hook;
+            PanelDoorLink.Fallback = fallback;
+            PanelDoorLink.IsLockedDown = locked;
         }
     }
 
