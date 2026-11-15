@@ -1653,6 +1653,8 @@ namespace ConditioningControlPanel
             // arm EMI's silence, the Chaster safety hold or the stop pass.
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
+            // The weekly free Super try ends with a cut, before any hand-off below can return early.
+            try { Services.Super.SuperPreview.End(panic: true); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // EMI Desk (MOMENTS 4.B): FIRST LINE, before any of the ladder below. panicPressed is a
             // HOLD with a five-minute silence tail, and it has to be armed even if something further
@@ -2214,6 +2216,7 @@ namespace ConditioningControlPanel
                 App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
+                Services.Super.CreepController.Stop();
             }
             catch (Exception ex)
             {

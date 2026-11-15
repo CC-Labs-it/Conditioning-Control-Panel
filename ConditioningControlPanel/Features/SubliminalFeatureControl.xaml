@@ -1,6 +1,7 @@
 ﻿<UserControl x:Class="ConditioningControlPanel.Features.SubliminalFeatureControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
@@ -194,6 +195,11 @@
                             Style="{DynamicResource OutlineButton}" Click="BtnAdvanced_Click"
                             ToolTip="{loc:Str tooltip_advanced_subliminal_visual_settings}"/>
                 </Grid>
+
+                <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="Afterglow">
+                    <ctl:AfterglowOptionsBox/>
+                </ctl:SuperBox>
             </StackPanel>
 
             <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its

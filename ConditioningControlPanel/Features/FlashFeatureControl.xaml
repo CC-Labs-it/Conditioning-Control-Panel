@@ -472,6 +472,10 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+
+                <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="FlickerDeck">
+                </ctl:SuperBox>
             </StackPanel>
 
             <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its

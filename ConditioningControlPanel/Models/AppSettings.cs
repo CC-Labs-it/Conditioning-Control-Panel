@@ -2817,6 +2817,22 @@ namespace ConditioningControlPanel.Models
             set { _mandatoryVideoReplayAfterFailedCheck = value; OnPropertyChanged(); }
         }
 
+        private Services.Super.CreepSpeed _superCreepSpeed = Services.Super.CreepSpeed.Normal;
+        /// <summary>Super Creep: how fast the pink fog climbs to its cap (Slow 15, Normal 10, Fast 5 minutes).</summary>
+        public Services.Super.CreepSpeed SuperCreepSpeed
+        {
+            get => _superCreepSpeed;
+            set { _superCreepSpeed = value; OnPropertyChanged(); }
+        }
+
+        private double _superCreepCap = 0.9;
+        /// <summary>Super Creep: the most the fog may cover, 0.2..0.9 (clamped where it is read).</summary>
+        public double SuperCreepCap
+        {
+            get => _superCreepCap;
+            set { _superCreepCap = value; OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC
@@ -10319,6 +10335,128 @@ namespace ConditioningControlPanel.Models
         {
             get => _audioPlaylistEnhancements;
             set { _audioPlaylistEnhancements = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, int> _superModes = new();
+        /// <summary>
+        /// The player's pick per Super effect, keyed by <c>SuperEffect</c> name: 0 Classic, 1 Both, 2 Super only
+        /// (<c>SuperMode</c>). Absent = Both. Read only through <c>SuperAccess</c>, which also asks the tier gate.
+        /// </summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, int> SuperModes
+        {
+            get => _superModes;
+            set { _superModes = value ?? new(); OnPropertyChanged(); }
+        }
+
+        private List<string> _superEffectsOn = new();
+        /// <summary>
+        /// Super effects the player has switched on, as <c>SuperEffect</c> names. Read only through
+        /// <c>SuperAccess</c>, which also asks the tier gate; a name left here after a lapse is inert.
+        /// </summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public List<string> SuperEffectsOn
+        {
+            get => _superEffectsOn;
+            set { _superEffectsOn = value ?? new(); OnPropertyChanged(); }
+        }
+
+        // Super Afterglow's own option box (Services/Super/AfterglowOptions). Defaults are the effect as
+        // it shipped. Cosmetic: they travel with the cloud profile like every neighbour.
+        private int _afterglowFrequency = Services.Super.AfterglowOptions.FrequencyDefault;
+        /// <summary>Afterglow pops, 1 (rare) to 10 (often). Its own clock, not the main subliminal's. 5 = 1.5..4.5 s.</summary>
+        [JsonProperty]
+        public int AfterglowFrequency
+        {
+            get => _afterglowFrequency;
+            set { _afterglowFrequency = Services.Super.AfterglowOptions.ClampFrequency(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowCount = Services.Super.AfterglowOptions.CountDefault;
+        /// <summary>Words per Afterglow pop, 1 to 4 (a small burst).</summary>
+        [JsonProperty]
+        public int AfterglowCount
+        {
+            get => _afterglowCount;
+            set { _afterglowCount = Services.Super.AfterglowOptions.ClampCount(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowSize = Services.Super.AfterglowOptions.SizeDefault;
+        /// <summary>Afterglow word size, 1 (20 DIP) to 10 (90 DIP). 5 = 40 DIP.</summary>
+        [JsonProperty]
+        public int AfterglowSize
+        {
+            get => _afterglowSize;
+            set { _afterglowSize = Services.Super.AfterglowOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        private string _afterglowColorA = Services.Super.AfterglowOptions.ColorADefault;
+        /// <summary>First Afterglow glow colour, "#RRGGBB". A bad value falls back to pink.</summary>
+        [JsonProperty]
+        public string AfterglowColorA
+        {
+            get => _afterglowColorA;
+            set { _afterglowColorA = Services.Super.AfterglowOptions.Normalise(value, Services.Super.AfterglowOptions.ColorADefault); OnPropertyChanged(); }
+        }
+
+        private string _afterglowColorB = Services.Super.AfterglowOptions.ColorBDefault;
+        /// <summary>Second Afterglow glow colour, "#RRGGBB". A bad value falls back to mint.</summary>
+        [JsonProperty]
+        public string AfterglowColorB
+        {
+            get => _afterglowColorB;
+            set { _afterglowColorB = Services.Super.AfterglowOptions.Normalise(value, Services.Super.AfterglowOptions.ColorBDefault); OnPropertyChanged(); }
+        }
+
+        private int _afterglowDuration = Services.Super.AfterglowOptions.DurationDefault;
+        /// <summary>How long Afterglow words stay, 1-10 (5 = the shipped 0.42 s, 10 = about 1.7 s).</summary>
+        [JsonProperty]
+        public int AfterglowDuration
+        {
+            get => _afterglowDuration;
+            set { _afterglowDuration = Services.Super.AfterglowOptions.ClampDuration(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowOpacity = Services.Super.AfterglowOptions.OpacityDefault;
+        /// <summary>Afterglow words, echoes and sparks opacity in percent, 10-100.</summary>
+        [JsonProperty]
+        public int AfterglowOpacity
+        {
+            get => _afterglowOpacity;
+            set { _afterglowOpacity = Services.Super.AfterglowOptions.ClampOpacity(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowTilt = Services.Super.AfterglowOptions.TiltSliderDefault;
+        /// <summary>How much Afterglow words tilt, 0-10 (0 = straight, 5 = about 8 degrees, 10 = double).</summary>
+        [JsonProperty]
+        public int AfterglowTilt
+        {
+            get => _afterglowTilt;
+            set { _afterglowTilt = Services.Super.AfterglowOptions.ClampTilt(value); OnPropertyChanged(); }
+        }
+
+        private bool _afterglowOnly;
+        /// <summary>
+        /// "Use only Afterglow": while Afterglow runs, the normal subliminal cards are not shown, only
+        /// the near-cursor words. Off by default; ignored whenever Afterglow itself is not running.
+        /// </summary>
+        [JsonProperty]
+        public bool AfterglowOnly
+        {
+            get => _afterglowOnly;
+            set { _afterglowOnly = value; OnPropertyChanged(); }
+        }
+
+        private int _superPreviewUsedWeek = -1;
+        /// <summary>
+        /// Week index (<c>SuperPreviewRule.WeekIndex</c>, Monday UTC weeks) of the last weekly free
+        /// Super try. -1 = never. One 10 second try per week.
+        /// </summary>
+        [JsonProperty]
+        public int SuperPreviewUsedWeek
+        {
+            get => _superPreviewUsedWeek;
+            set { _superPreviewUsedWeek = value; OnPropertyChanged(); }
         }
 
         private bool _companionAsksEnabled = true;
