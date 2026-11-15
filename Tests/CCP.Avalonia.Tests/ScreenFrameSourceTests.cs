@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -57,6 +58,37 @@ public class ScreenFrameSourceTests
         Assert.Equal([new ScreenOcrService.Word("left-word", new Rectangle(-1, 0, 1, 1), "left"),
             new ScreenOcrService.Word("right-word", new Rectangle(1, 0, 1, 1), "right")], words);
         Assert.Empty(await ScreenOcrService.Scan(new UnavailableScreenFrames(), new FakeEngine())(CancellationToken.None));
+    }
+
+    private sealed class CountingEngine : IScreenOcrEngine
+    {
+        public readonly List<string> Calls = [];
+        public bool IsAvailable => true;
+        public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
+        {
+            Calls.Add(frame.Screen);
+            return [new($"{frame.Screen}-{Calls.Count}", new Rectangle(0, 0, 1, 1))];
+        }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public async Task UnchangedMonitorsReuseTheirWordsUntilTheScannerStops()
+    {
+        byte left = 0;
+        var source = new DesktopScreenFrames(m => { var px = new byte[m.Bounds.Width * m.Bounds.Height * 4]; if (m.Name == "left") px[0] = left; return px; },
+            () => Task.FromResult<IReadOnlyList<CaptureMonitor>>([new("left", new Rectangle(0, 0, 2, 1), 1), new("right", new Rectangle(2, 0, 2, 1), 1)]));
+        var engine = new CountingEngine();
+        var scan = ScreenOcrService.Scan(source, engine);
+        Assert.Equal(["left-1", "right-2"], (await scan(CancellationToken.None)).Select(w => w.Text));
+        Assert.Equal(["left-1", "right-2"], (await scan(CancellationToken.None)).Select(w => w.Text)); // same words re-delivered
+        Assert.Equal(2, engine.Calls.Count);
+        left = 9; // only the left monitor changed
+        Assert.Equal(["left-3", "right-2"], (await scan(CancellationToken.None)).Select(w => w.Text));
+        Assert.Equal(["left", "right", "left"], engine.Calls);
+        new ScreenOcrService(_ => Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]), () => true, (_, _) => Task.FromResult(true)).Stop();
+        await scan(CancellationToken.None);
+        Assert.Equal(5, engine.Calls.Count); // a stop drops the cache: both monitors are read again
     }
 
     private sealed class NoModels : IScreenOcrEngine

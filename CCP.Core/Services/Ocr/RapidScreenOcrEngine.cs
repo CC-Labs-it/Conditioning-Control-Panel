@@ -29,7 +29,9 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
 {
     // Two intra-op threads: a scan must never compete with the UI for every core.
     private const int Threads = 2;
-    private static readonly RapidOcrOptions Options = RapidOcrOptions.Default with { ReturnWordBox = true };
+    // DoAngle off: screen text is upright, so the 180 degree classifier per crop is wasted work (README "Key options":
+    // "Disable if you know your text is upright"). RecMaxDegreeOfParallelism stays at its default 1.
+    private static readonly RapidOcrOptions Options = RapidOcrOptions.Default with { ReturnWordBox = true, DoAngle = false };
     private readonly string _modelDir;
     private readonly object _gate = new();
     private RapidOcr? _ocr;

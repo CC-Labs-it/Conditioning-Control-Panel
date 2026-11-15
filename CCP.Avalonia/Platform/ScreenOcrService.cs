@@ -46,9 +46,19 @@ internal sealed class ScreenOcrService : IDisposable
     internal static string? UnavailableReasonKey() =>
         PortalScreenFrames.Refused ? "ocr_unavailable_refused" : KeywordTriggerHead.OcrSource == null ? _reasonKey : null;
 
+    /// <summary>Raised when any scanner stops: scan sources drop their per-monitor word cache.</summary>
+    internal static event Action? Stopped;
+
     // Every monitor's frame through the engine, mapped to desktop pixels. Recognition is CPU-bound: off the UI thread.
-    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>> Scan(IScreenFrameSource frames, IScreenOcrEngine engine) =>
-        async token =>
+    // An unchanged monitor re-delivers its last words without recognition: WPF ScreenOcrService.cs:128-140 re-reads
+    // every screen each scan, so the quick confirmations (:85-115) see the same words either way.
+    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>> Scan(IScreenFrameSource frames, IScreenOcrEngine engine)
+    {
+        var changes = new ScreenFrameChanges();
+        var cache = new Dictionary<string, Word[]>();
+        var reset = new int[1]; // set by Stop (UI thread, maybe during a scan); applied by the next scan, never waited on
+        Stopped += () => Interlocked.Exchange(ref reset[0], 1);
+        return async token =>
         {
             var result = await frames.CaptureAsync(token).ConfigureAwait(false);
             if (result.Status != ScreenFrameStatus.Available)
@@ -56,9 +66,22 @@ internal sealed class ScreenOcrService : IDisposable
                 if (PortalScreenFrames.Refused) UnavailableChanged?.Invoke();
                 return [];
             }
-            return await Task.Run<IReadOnlyList<Word>>(() => result.Frames.SelectMany(f => engine.Recognize(f, token)
-                .Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen))).ToArray(), token).ConfigureAwait(false);
+            return await Task.Run<IReadOnlyList<Word>>(() =>
+            {
+                lock (cache)
+                {
+                    if (Interlocked.Exchange(ref reset[0], 0) == 1) { changes.Reset(); cache.Clear(); }
+                    return result.Frames.SelectMany(f =>
+                    {
+                        if (!changes.Changed(f) && cache.TryGetValue(f.Screen, out var last)) return last;
+                        cache.Remove(f.Screen); // a cancelled recognition must not leave stale words behind
+                        return cache[f.Screen] = engine.Recognize(f, token)
+                            .Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen)).ToArray();
+                    }).ToArray();
+                }
+            }, token).ConfigureAwait(false);
         };
+    }
 
     internal ScreenOcrService(Func<CancellationToken, Task<IReadOnlyList<Word>>> scan,
         Func<bool> hasAccess, Func<IReadOnlyList<Word>, CancellationToken, Task<bool>> deliver,
@@ -91,6 +114,7 @@ internal sealed class ScreenOcrService : IDisposable
     {
         _timer?.Dispose(); _timer = null;
         _run?.Cancel(); _run?.Dispose(); _run = null;
+        Stopped?.Invoke();
     }
 
     // One discovery and at most three quick confirmations (WPF ScreenOcrService.cs:85-115).
