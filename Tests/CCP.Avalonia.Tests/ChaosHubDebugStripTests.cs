@@ -57,8 +57,10 @@ public class ChaosHubDebugStripTests
                 Assert.False(hub.FindControl<Grid>(hiddenView)!.IsEffectivelyVisible);
                 Assert.True(strip.IsEffectivelyVisible);
                 Assert.Same(root, strip.Parent);
-                Assert.Equal(2, root.RowDefinitions.Count);
-                Assert.Equal(1, Grid.GetRow(strip));
+                Assert.Single(root.RowDefinitions);
+                Assert.Equal(GridLength.Auto, root.RowDefinitions[0].Height);
+                Assert.Equal(0, Grid.GetRow(strip));
+                Assert.Equal(0, Grid.GetRow(hub.FindControl<Grid>(visibleView)!));
                 foreach (var control in strip.Children.OfType<Control>().Where(c => c is Button or TextBox))
                 {
                     var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), hub)!.Value;

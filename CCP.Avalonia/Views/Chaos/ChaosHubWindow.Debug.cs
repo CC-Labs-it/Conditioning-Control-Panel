@@ -32,7 +32,6 @@ public partial class ChaosHubWindow
         {
             if (Content is not Border root || root.Child is not Grid grid) return;
             Height += 44;
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var panel = new WrapPanel { Margin = new Thickness(22, 10, 22, 0), VerticalAlignment = VerticalAlignment.Center };
             panel.Children.Add(new TextBlock { Text = "DEBUG", Foreground = Brushes.Goldenrod, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
@@ -58,7 +57,7 @@ public partial class ChaosHubWindow
                 ChaosMeta.State.SeenReveals.Remove(id); ChaosMeta.State.PendingReveals.Add(id); ChaosMeta.Save(); DebugRefresh();
             }));
             panel.Children.Add(DebugButton("reset meta", () => { ChaosMeta.DebugResetState(); DebugRefresh(); }));
-            Grid.SetRow(panel, 1);
+            Grid.SetRow(panel, grid.RowDefinitions.Count - 1);
             grid.Children.Add(panel);
             DebugStrip = panel;
         }
