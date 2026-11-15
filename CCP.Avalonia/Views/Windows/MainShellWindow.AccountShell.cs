@@ -159,11 +159,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Match WPF: the live bindings update now, while code-behind strings finish on a
                 // restart. This control is absent on the headless view paths, so the notification
-                // remains safe before a Window has been shown.
+                // remains safe before a Window has been shown. The header banner is Home only, so
+                // the notice goes through the announcement path, which shows it on every page
+                // (Settings is where the language was changed). It runs after SetApplicationLanguage,
+                // so the LanguageChanged handler cannot wipe it.
                 var banner = Named<TextBlock>("TxtBannerSecondary");
                 if (banner is not null)
                 {
-                    banner.Text = Loc.Get("msg_restart_to_apply");
+                    SetBannerAnnouncement(Loc.Get("msg_restart_to_apply"));
                     banner.Opacity = 1;
                     banner.IsHitTestVisible = true;
                 }
