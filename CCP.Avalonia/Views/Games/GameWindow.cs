@@ -189,6 +189,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Spec = spec;
             Web = new WebHost();
             if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            // WPF PrizeCounterHostService.cs:360: a dead browser closes the counter as failed.
+            if (spec.Id == PrizeCounterId) Web.BrowserProcessFailed += () => Dispatcher.UIThread.Post(() => { if (!_closing) CloseFor(PrizeCounterRules.CloseFailed); });
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
             if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
