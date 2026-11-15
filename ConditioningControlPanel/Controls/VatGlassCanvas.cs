@@ -900,15 +900,11 @@ namespace ConditioningControlPanel.Controls
         /// </summary>
         private void DrawTicks(SKCanvas canvas, SKPaint paint, float x1, float yT, float yB)
         {
-            using var text = new SKPaint
-            {
-                IsAntialias = true,
-                TextSize = 7f,
-                TextAlign = SKTextAlign.Left,
-                FakeBoldText = true,
-                Typeface = SKTypeface.FromFamilyName("Consolas") ?? SKTypeface.Default,
-            };
-            var metrics = text.FontMetrics;
+            // SkiaSharp 4: text state moved from SKPaint to SKFont (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html);
+            // FakeBoldText -> Embolden, default edging = the antialiased paint's; LinearMetrics: the legacy paint's font had it on (https://github.com/mono/skia/blob/v3.119.4/src/xamarin/SkCompatPaint.cpp), so widths stay identical.
+            using var text = new SKPaint { IsAntialias = true };
+            using var font = new SKFont(SKTypeface.FromFamilyName("Consolas") ?? SKTypeface.Default, 7f) { Embolden = true, LinearMetrics = true };
+            var metrics = font.Metrics;
             float middle = -(metrics.Ascent + metrics.Descent) / 2f;
 
             DrawTick(0.2, "20");
@@ -927,7 +923,7 @@ namespace ConditioningControlPanel.Controls
                 canvas.DrawLine(x1 - 7, y, x1, y, paint);
 
                 text.Color = hit ? _accent.WithAlpha(242) : new SKColor(255, 255, 255, 115);
-                canvas.DrawText(label, x1 + 3, y + middle, text);
+                canvas.DrawText(label, x1 + 3, y + middle, SKTextAlign.Left, font, text);
             }
         }
 

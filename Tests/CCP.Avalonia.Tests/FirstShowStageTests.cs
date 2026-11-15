@@ -672,8 +672,10 @@ public sealed partial class FirstShowStageTests
         tileSurface.Canvas.DrawRect(64, 0, 192, 256, white);
         using var tile = tileSurface.Snapshot();
         using var first = SkiaSharp.SKBitmap.Decode(FirstShowCapture.RenderFrame(raw, tile, .10f));
-        // The fractional map edge blends here: nearest sampling leaves the pixel near black.
-        Assert.InRange(first.GetPixel(58, 48).Red, (byte)20, (byte)60);
+        // The fractional map edge blends here: nearest sampling leaves the pixel near black (4).
+        // SkiaSharp 3.119.4 blended it to 32, 4.156.1 to 100: same code, newer Skia engine (m156) displacement
+        // + small-sigma blur (https://mono.github.io/SkiaSharp/docs/releases/4.150.0.html, blur fix #4269).
+        Assert.InRange(first.GetPixel(58, 48).Red, (byte)20, (byte)140);
     }
 
     /// <summary>WPF Guide.cs: verdict -> "Show me around" walks Core WelcomeSteps on the real shell, rings the
