@@ -61,6 +61,34 @@ public class PanelDoorLinkTests
         }
     }
 
+    [Theory]
+    [InlineData("playeyes", false, "top")]      // rail door / default landing: the page from its title
+    [InlineData("playeyes", true, "eyes")]      // a click on the Eyes pill still scrolls to Eyes
+    [InlineData("PlayEyes", false, "top")]
+    [InlineData("playsessions", false, "sessions")]
+    [InlineData("playsessions", true, "sessions")]
+    [InlineData("deeper", true, null)]
+    [InlineData("play", false, null)]
+    [InlineData(null, false, null)]
+    public void PlayShowsItsTopUnlessAZonePillAsked(string? tab, bool fromPill, string? scroll)
+        => Assert.Equal(scroll, NavSections.PlayLandingScroll(tab, fromPill));
+
+    [Fact]
+    public void OnlyAnArrivalThatCameForTheGamesSpendsTheMovedNote()
+    {
+        Assert.True(NavSections.CameForGames("play"));
+        Assert.False(NavSections.CameForGames("playeyes"));
+        Assert.False(NavSections.CameForGames("playsessions"));
+        Assert.False(NavSections.CameForGames("deeper"));
+        Assert.False(NavSections.CameForGames(null));
+
+        var nav = AppFile("MainWindow", "MainWindow.TabNavigation.cs");
+        Assert.Contains("if (_playCameForGames)", nav, StringComparison.Ordinal);
+        Assert.Contains("NavSections.PlayLandingScroll(tab, _playZoneFromPill)", nav, StringComparison.Ordinal);
+        Assert.Contains("NavSections.CameForGames(NavRailRules.ReadLastTab(section, json))",
+            AppFile("MainWindow", "MainWindow.NavRail.cs"), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void DuringLockdownTheSeamOpensNothing()
     {
