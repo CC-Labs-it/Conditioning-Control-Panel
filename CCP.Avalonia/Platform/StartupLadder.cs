@@ -20,8 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// the next waits and is re-routed once it has gone.
     /// WPF Services/Startup/StartupPresenter.cs:247,350,554: defer until the modal queue drains.
     /// Modal offers share the Core priority queue (<see cref="EnqueueModal"/>, WPF StartupPresenter.cs:89)
-    /// and park while the launcher hold or a game is up. Upgrade What's New and the online licence
-    /// card still hold passive offers through ModalPending until they move onto the queue.
+    /// and park while the launcher hold or a game is up. The online licence card, and What's New
+    /// until the shell opens and queues it, hold passive offers through ModalPending.
     /// </summary>
     internal static class StartupLadder
     {
