@@ -81,6 +81,13 @@ The Racing Thoughts engine is not bundled; see RT-ENGINE-NOTICES.txt.
    where the corresponding source is published.
 
 
+10. sherpa-onnx (NuGet org.k2fsa.sherpa.onnx and org.k2fsa.sherpa.onnx.runtime.linux-x64)
+    Apache-2.0 (package licence expression), Copyright 2019-2023 Xiaomi Corporation.
+    https://github.com/k2-fsa/sherpa-onnx
+    Files: libsherpa-onnx-c-api.so, sherpa-onnx.dll, libonnxruntime.so.
+    Licence text: Apache-2.0 below. The packages ship no licence file of their own.
+
+
 ======================================================================
 MIT License (Avalonia)
 ======================================================================
@@ -107,7 +114,7 @@ SOFTWARE.
 
 
 ======================================================================
-Apache License 2.0 (Vosk, OpenCvSharp, OpenCV, Tesseract)
+Apache License 2.0 (Vosk, OpenCvSharp, OpenCV, Tesseract, sherpa-onnx)
 ======================================================================
 
 Apache License
