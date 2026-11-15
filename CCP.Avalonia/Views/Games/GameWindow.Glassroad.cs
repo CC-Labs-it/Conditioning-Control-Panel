@@ -5,7 +5,6 @@
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
 // forwards ONLY /v2/race/, judged on the built Uri (HostNetPathRule). Escape pauses (GameWindow.Escape.cs), a second
 // Escape inside 2 s panics, and panic closes it with every other game (PanicSurfaces "games").
-// Not here yet: MergedAccountRecovery on a merged-account answer (the board host lacks it too).
 using System;
 using System.Net.Http;
 using System.Text;
@@ -40,7 +39,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Action<string> GlassroadNoteEvent { get; set; } = key => App.FeatureDayLog?.Note(key);
 
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
-        private bool _grOpen, _grEarlyInitSent, _grPinged;
+        internal static Func<int, string?, bool> GlassroadMergedRecovery = ConditioningControlPanel.Services.MergedAccountRecovery.TryHandle;
+        internal bool GlassroadWatchRunning => _grWatch?.IsEnabled == true;
+        private bool _grOpen, _grEarlyInitSent, _grPinged, _grUnresponsive;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
         private DateTime? _grLastLoadingUtc;   // #1543: the page's last `loading` frame (a course build may follow)
         private DispatcherTimer? _grWatch;
@@ -66,6 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_grOpen) return;
             _grOpen = true;
+            Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             _grSettingsService = CoreSettings.Service;
             if (_grSettingsService != null) _grSettingsService.CurrentReplaced += OnGlassroadSettingsReplaced;
             HookGlassroadSettings();
@@ -145,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_closing) return true;
             _grLastProgressUtc = DateTime.UtcNow;
+            _grUnresponsive = false;
             var type = (string?)o["type"];
             try
             {
@@ -274,6 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     using var response = await http.SendAsync(request).ConfigureAwait(false);
                     status = (int)response.StatusCode;
                     reply = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    GlassroadMergedRecovery(status, reply);
                 }
                 catch (Exception ex)
                 {
@@ -293,7 +298,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal string CheckGlassroadWatch(DateTime nowUtc)
         {
             if (!_grOpen || _closing) return "idle";
-            bool busy = GlassroadHostRules.IsBusy(nowUtc - _grLastLoadingUtc);
+            bool busy = _grUnresponsive || GlassroadHostRules.IsBusy(nowUtc - _grLastLoadingUtc);
             switch (GlassroadHostRules.Watch(IsReady, nowUtc - _grLastProgressUtc, nowUtc - _grLastBeatUtc, _grPinged, busy))
             {
                 case PbpHostRules.WatchStep.Ping:
