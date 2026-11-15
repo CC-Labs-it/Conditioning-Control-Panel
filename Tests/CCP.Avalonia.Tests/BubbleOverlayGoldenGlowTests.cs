@@ -12,7 +12,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleOverlayGoldenGlowTests
 {
     [Fact]
-    public void GoldenSpawnUsesGoldGlowUnlessPerformanceDisablesIt() => AvaloniaTestDispatcher.Run(() =>
+    public void GoldenSpawnUsesGoldGlowAtEveryPerformanceTier() => AvaloniaTestDispatcher.Run(() =>
     {
         var settings = CoreSettings.Current;
         var saved = (settings.PerformanceMode, settings.AutoPerformanceMode);
@@ -30,7 +30,11 @@ public sealed class BubbleOverlayGoldenGlowTests
             Assert.Null(BubbleOverlayWindow.GlowEffect(plain, 1));
             settings.PerformanceMode = true;
             var low = BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildGolden(), new Random(1));
-            Assert.Null(BubbleOverlayWindow.GlowEffect(low, 1));
+            var lowEffect = BubbleOverlayWindow.GlowEffect(low, 1);
+            Assert.NotNull(lowEffect);
+            Assert.Equal(20, lowEffect.BlurRadius);
+            Assert.Equal(Color.FromRgb(255, 215, 0), lowEffect.Color);
+            Assert.Equal(0.55, lowEffect.Opacity);
         }
         finally
         {

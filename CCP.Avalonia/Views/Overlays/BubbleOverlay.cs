@@ -758,9 +758,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, motion);
             }
             // WPF BubbleService.cs:3060,5085: golden chaos bubbles glow while alive.
-            var tier = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier;
-            if (spec.IsGolden && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowGlow(tier))
-                b.LuckyGlowBlur = Math.Min(20, global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MaxGlowBlurRadius(tier));
+            if (spec.IsGolden) b.LuckyGlowBlur = 20;
             b.ApplyChaosHitbox(hitboxScale, liveMagnet);
             Field.Bubbles.Add(b);
             if (spec.IsTease) LoadTeaseFace(b);
