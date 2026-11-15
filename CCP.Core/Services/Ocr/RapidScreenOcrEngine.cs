@@ -37,6 +37,7 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
     private RapidOcr? _ocr;
     private readonly bool _modelsPresent;
     private volatile bool _failed, _disposed;
+    internal Action? BeforeDetect; // test seam: holds a recognition in flight
 
     public RapidScreenOcrEngine(string? modelDir = null)
     {
@@ -56,37 +57,52 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
         if (frame.Width <= 0 || frame.Height <= 0 || frame.Stride < (long)frame.Width * 4 ||
             frame.Pixels.Length < (long)frame.Stride * frame.Height) return Array.Empty<OcrWord>();
         // One engine, one detect at a time: RapidOcr reuses its ORT sessions and buffers.
-        lock (_gate)
+        try
         {
-            if (!EnsureLoaded()) return Array.Empty<OcrWord>();
-            try
+            lock (_gate)
             {
-                // Wraps the capture buffer (no copy unless it is not array-backed); Detect only reads it while pinned.
-                var segment = MemoryMarshal.TryGetArray(frame.Pixels, out var s) ? s : new ArraySegment<byte>(frame.Pixels.ToArray());
-                var pin = GCHandle.Alloc(segment.Array!, GCHandleType.Pinned);
-                OcrResult result;
+                if (!EnsureLoaded()) return Array.Empty<OcrWord>();
                 try
                 {
-                    using var bitmap = new SKBitmap();
-                    var info = new SKImageInfo(frame.Width, frame.Height,
-                        frame.Format == ScreenPixelFormat.Bgra32 ? SKColorType.Bgra8888 : SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                    if (!bitmap.InstallPixels(info, pin.AddrOfPinnedObject() + segment.Offset, frame.Stride)) return Array.Empty<OcrWord>();
-                    result = _ocr!.Detect(bitmap, Options, cancellationToken);
-                }
-                finally { pin.Free(); }
-                var words = new List<OcrWord>();
-                foreach (var block in result.TextBlocks)
-                    foreach (var (text, box) in block.WordResults is { Length: > 0 } w
-                                 ? w.Select(x => (x.Text, x.BoxPoints)) : new[] { (block.Text, block.BoxPoints) })
+                    // Wraps the capture buffer (no copy unless it is not array-backed); Detect only reads it while pinned.
+                    var segment = MemoryMarshal.TryGetArray(frame.Pixels, out var s) ? s : new ArraySegment<byte>(frame.Pixels.ToArray());
+                    var pin = GCHandle.Alloc(segment.Array!, GCHandleType.Pinned);
+                    OcrResult result;
+                    try
                     {
-                        var rect = Bounds(box, frame.Width, frame.Height);
-                        if (!string.IsNullOrWhiteSpace(text) && rect.Width > 0 && rect.Height > 0) words.Add(new OcrWord(text.Trim(), rect));
+                        using var bitmap = new SKBitmap();
+                        var info = new SKImageInfo(frame.Width, frame.Height,
+                            frame.Format == ScreenPixelFormat.Bgra32 ? SKColorType.Bgra8888 : SKColorType.Rgba8888, SKAlphaType.Unpremul);
+                        if (!bitmap.InstallPixels(info, pin.AddrOfPinnedObject() + segment.Offset, frame.Stride)) return Array.Empty<OcrWord>();
+                        BeforeDetect?.Invoke();
+                        result = _ocr!.Detect(bitmap, Options, cancellationToken);
                     }
-                return words;
+                    finally { pin.Free(); }
+                    var words = new List<OcrWord>();
+                    foreach (var block in result.TextBlocks)
+                        foreach (var (text, box) in block.WordResults is { Length: > 0 } w
+                                     ? w.Select(x => (x.Text, x.BoxPoints)) : new[] { (block.Text, block.BoxPoints) })
+                        {
+                            var rect = Bounds(box, frame.Width, frame.Height);
+                            if (!string.IsNullOrWhiteSpace(text) && rect.Width > 0 && rect.Height > 0) words.Add(new OcrWord(text.Trim(), rect));
+                        }
+                    return words;
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { Log.Debug(ex, "Screen OCR recognition failed"); return Array.Empty<OcrWord>(); }
             }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { Log.Debug(ex, "Screen OCR recognition failed"); return Array.Empty<OcrWord>(); }
         }
+        finally { ReleaseIfDisposed(); }
+    }
+
+    // Dispose never waits for a recognition: whoever holds the gate after disposal frees the sessions.
+    // Each Recognize re-checks after leaving the gate, so a TryEnter miss means the holder will free them.
+    private void ReleaseIfDisposed()
+    {
+        Interlocked.MemoryBarrier(); // the _disposed read must not move before the gate exit
+        if (!_disposed || !Monitor.TryEnter(_gate)) return;
+        try { _ocr?.Dispose(); _ocr = null; }
+        finally { Monitor.Exit(_gate); }
     }
 
     private bool EnsureLoaded()
@@ -121,6 +137,6 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
     public void Dispose()
     {
         _disposed = true;
-        lock (_gate) { _ocr?.Dispose(); _ocr = null; }
+        ReleaseIfDisposed();
     }
 }

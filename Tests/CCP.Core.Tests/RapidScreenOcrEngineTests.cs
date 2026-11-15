@@ -92,6 +92,34 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void DisposeDuringRecognitionDoesNotWaitAndReleasesSessionsAfterIt()
+    {
+        var engine = new RapidScreenOcrEngine();
+        var ocr = typeof(RapidScreenOcrEngine).GetField("_ocr", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        engine.Recognize(Frame(null).Frame); // loads the sessions
+        Assert.NotNull(ocr.GetValue(engine));
+        using var inDetect = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        engine.BeforeDetect = () => { inDetect.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
+        var scan = Task.Run(() => engine.Recognize(Frame(null).Frame));
+        Assert.True(inDetect.Wait(TimeSpan.FromSeconds(5)));
+
+        var sw = Stopwatch.StartNew();
+        engine.Dispose();
+        sw.Stop();
+        Assert.True(sw.ElapsedMilliseconds < 50, $"Dispose blocked {sw.ElapsedMilliseconds} ms on the active recognition");
+        Assert.False(engine.IsAvailable);
+        Assert.NotNull(ocr.GetValue(engine)); // still in use by the active scan
+
+        release.Set();
+        Assert.True(scan.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Null(ocr.GetValue(engine));
+        engine.BeforeDetect = null;
+        Assert.Empty(engine.Recognize(Frame("Good girl obey").Frame));
+        Assert.Null(ocr.GetValue(engine));
+    }
+
+    [Fact]
     public void ShippedModelsAreInTheTestOutput() =>
         Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "models", "v5", "latin_PP-OCRv5_rec_mobile_infer.onnx")));
 }
