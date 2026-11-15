@@ -29,10 +29,12 @@ public class PanelDoorLinkTests
     {
         var hook = PanelDoorLink.OpenLauncherDoor;
         var fallback = PanelDoorLink.Fallback;
+        var locked = PanelDoorLink.IsLockedDown;
         try
         {
             var opened = new List<string>();
             var fellBack = 0;
+            PanelDoorLink.IsLockedDown = () => false;
             PanelDoorLink.Fallback = () => fellBack++;
 
             PanelDoorLink.OpenLauncherDoor = null;
@@ -55,6 +57,74 @@ public class PanelDoorLinkTests
         {
             PanelDoorLink.OpenLauncherDoor = hook;
             PanelDoorLink.Fallback = fallback;
+            PanelDoorLink.IsLockedDown = locked;
+        }
+    }
+
+    [Theory]
+    [InlineData("playeyes", false, "top")]      // rail door / default landing: the page from its title
+    [InlineData("playeyes", true, "eyes")]      // a click on the Eyes pill still scrolls to Eyes
+    [InlineData("PlayEyes", false, "top")]
+    [InlineData("playsessions", false, "sessions")]
+    [InlineData("playsessions", true, "sessions")]
+    [InlineData("deeper", true, null)]
+    [InlineData("play", false, null)]
+    [InlineData(null, false, null)]
+    public void PlayShowsItsTopUnlessAZonePillAsked(string? tab, bool fromPill, string? scroll)
+        => Assert.Equal(scroll, NavSections.PlayLandingScroll(tab, fromPill));
+
+    [Fact]
+    public void OnlyAnArrivalThatCameForTheGamesSpendsTheMovedNote()
+    {
+        Assert.True(NavSections.CameForGames("play"));
+        Assert.False(NavSections.CameForGames("playeyes"));
+        Assert.False(NavSections.CameForGames("playsessions"));
+        Assert.False(NavSections.CameForGames("deeper"));
+        Assert.False(NavSections.CameForGames(null));
+
+        var nav = AppFile("MainWindow", "MainWindow.TabNavigation.cs");
+        Assert.Contains("if (_playCameForGames)", nav, StringComparison.Ordinal);
+        Assert.Contains("NavSections.PlayLandingScroll(tab, _playZoneFromPill)", nav, StringComparison.Ordinal);
+        Assert.Contains("NavSections.CameForGames(NavRailRules.ReadLastTab(section, json))",
+            AppFile("MainWindow", "MainWindow.NavRail.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DuringLockdownTheSeamOpensNothing()
+    {
+        // AGENTS.md rule 6: the launcher's way back reports an escape attempt to Lockdown, so a
+        // Drop-day card or a palette row reaching the seam mid-Lockdown must not get that far.
+        var hook = PanelDoorLink.OpenLauncherDoor;
+        var fallback = PanelDoorLink.Fallback;
+        var locked = PanelDoorLink.IsLockedDown;
+        try
+        {
+            var opened = new List<string>();
+            var fellBack = 0;
+            PanelDoorLink.Fallback = () => fellBack++;
+            PanelDoorLink.IsLockedDown = () => true;
+
+            PanelDoorLink.OpenLauncherDoor = opened.Add;
+            Assert.False(PanelDoorLink.Open("games"));
+            PanelDoorLink.OpenLauncherDoor = null;
+            Assert.False(PanelDoorLink.Open("tools"));
+            Assert.Empty(opened);
+            Assert.Equal(0, fellBack);
+
+            // A check that throws counts as locked: when in doubt, never trip the wire.
+            PanelDoorLink.IsLockedDown = () => throw new InvalidOperationException();
+            Assert.False(PanelDoorLink.Open("games"));
+            Assert.Equal(0, fellBack);
+
+            PanelDoorLink.IsLockedDown = () => false;
+            Assert.True(PanelDoorLink.Open("games"));
+            Assert.Equal(1, fellBack);
+        }
+        finally
+        {
+            PanelDoorLink.OpenLauncherDoor = hook;
+            PanelDoorLink.Fallback = fallback;
+            PanelDoorLink.IsLockedDown = locked;
         }
     }
 

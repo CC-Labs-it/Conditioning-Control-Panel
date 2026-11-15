@@ -166,6 +166,23 @@ namespace ConditioningControlPanel.Services.UI
         public static string? LauncherDoorFor(string? tabKey) =>
             !string.IsNullOrEmpty(tabKey) && LauncherDoors.TryGetValue(tabKey!, out var door) ? door : null;
 
+        /// <summary>Scroll target when the Play page shows a zone key: "sessions" or "eyes" scroll
+        /// to that zone, "top" shows the page from its title, null leaves the scroll alone.
+        /// Eyes is the landing, so only a click on its pill scrolls there; a rail door or a
+        /// default landing on it shows the top (title, subtitle and the Together zone).</summary>
+        public static string? PlayLandingScroll(string? tab, bool fromPill) =>
+            (tab ?? "").ToLowerInvariant() switch
+            {
+                "playsessions" => "sessions",
+                "playeyes" => fromPill ? "eyes" : "top",
+                _ => null,
+            };
+
+        /// <summary>True when a remembered tab is a key whose page left for the launcher's Games
+        /// door (the old Games pill): that arrival came for the games and earns the "Moved" note.</summary>
+        public static bool CameForGames(string? rememberedTab) =>
+            LauncherDoorFor(rememberedTab) == PanelDoorLink.Games;
+
         /// <summary>Old and alternate names per destination, for search ("(was X)" hints).
         /// Keyed by tab key; the Settings account section is "account", the full vault "premium".</summary>
         public static readonly IReadOnlyDictionary<string, string[]> Aliases =

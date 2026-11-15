@@ -42,6 +42,8 @@ public partial class LauncherWindow
     private const double TileArtMinHeight = LauncherGridLayout.MinArtHeight;
     private const double TileTiltDegrees = 1.2;
     private const double TileArtParallaxPx = 7;
+    /// <summary>One decode size for tile and door art, so both read the same bitmap cache entry.</summary>
+    private const int TileArtDecodeWidth = 640;
     private const int TileTiltMs = 90;
     private const int TileHoverMs = 160;
     private const double TileGlowRest = 0.35;
@@ -104,7 +106,7 @@ public partial class LauncherWindow
         ImageSource? art = null;
         if (revealed && entry.ArtPath != null)
         {
-            try { art = ModResourceResolver.ResolveImageDecoded(entry.ArtPath, 640); }
+            try { art = ModResourceResolver.ResolveImageDecoded(entry.ArtPath, TileArtDecodeWidth); }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] art {Path} failed", entry.ArtPath); }
         }
         art ??= entry.Id switch

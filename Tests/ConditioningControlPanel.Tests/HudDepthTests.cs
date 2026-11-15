@@ -175,6 +175,14 @@ public class HudDepthTests
         Assert.Contains("x:Name=\"DepthDrop\"", style);
         Assert.Contains("x:Name=\"DepthFace\"", style);
         Assert.Contains("BorderBrush=\"{TemplateBinding BorderBrush}\"", style);
+
+        // FocusVisualStyle is off, so the template carries its own keyboard focus state: a bright,
+        // thicker outline on the template part (Exit shares the template, so it gets it too).
+        var focus = Regex.Match(style, "<Trigger Property=\"IsKeyboardFocused\" Value=\"True\">.*?</Trigger>", RegexOptions.Singleline).Value;
+        Assert.NotEqual("", focus);
+        Assert.Contains("<Setter TargetName=\"b\" Property=\"BorderBrush\" Value=\"{DynamicResource TextLightBrush}\"/>", focus);
+        Assert.Contains("<Setter TargetName=\"b\" Property=\"BorderThickness\" Value=\"2\"/>", focus);
+        Assert.DoesNotContain("<Setter Property=\"Template\"", exit);
     }
 
     [Fact]

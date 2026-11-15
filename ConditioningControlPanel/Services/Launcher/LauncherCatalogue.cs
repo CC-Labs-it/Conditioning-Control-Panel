@@ -57,7 +57,7 @@ public sealed record LauncherEntry(
     bool Listed = true)
 {
     /// <summary>The entry as the door rules see it: no delegates left, no UI types.</summary>
-    public LauncherDoorCard Card => new(Id, Door, Listed, Available, IsNew);
+    public LauncherDoorCard Card => new(Id, Door, Listed, Available, IsNew, Locked);
 
     public string Title
     {

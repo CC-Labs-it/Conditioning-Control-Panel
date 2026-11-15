@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Tests;
 /// round-trips, and ShowTab's door (registry, redirects, built-in keys) agrees with its switch.
 /// Set NAV_STRIP_SHOTS to a folder to also save offscreen renders of every section's strip.
 /// </summary>
+[Collection(SectionTabStripCollection.Name)]
 public class SectionTabStripTests
 {
     private static string RepoRoot()
@@ -155,7 +156,7 @@ public class SectionTabStripTests
     }
 
     [Theory]
-    [InlineData("lab", "play")]
+    [InlineData("lab", "playeyes")]        // declutter wave 2: the Games pill left, "lab" lands on Eyes
     [InlineData("playeyes", "playeyes")]
     [InlineData("gradedintake", "playsessions")]
     [InlineData("lockdown", "playsessions")]

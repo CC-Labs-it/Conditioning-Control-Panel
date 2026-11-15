@@ -182,6 +182,29 @@ public class HeaderBannerFxTests
         Assert.Contains("ChromeAmbientAllowed && HeaderBannerHost?.Visibility == Visibility.Visible", fx);
     }
 
+    // The banner is Home only, so a notice written straight into a beat would never be seen on
+    // the page that raised it. The language restart notice is raised on Settings: it goes through
+    // SetBannerAnnouncement, which makes the banner show off Home (Shows(tab, true)).
+    [Fact]
+    public void TheRestartNoticeIsAnAnnouncementSoItShowsOffHome()
+    {
+        var shell = Source("MainWindow", "MainWindow.AccountShell.cs");
+        Assert.Contains("SetBannerAnnouncement(Loc.Get(\"msg_restart_to_apply\"));", shell);
+        Assert.DoesNotContain("Text = Loc.Get(\"msg_restart_to_apply\")", shell);
+        Assert.True(BannerFxRules.Shows("appsettings", announcementLive: true));
+        Assert.False(BannerFxRules.Shows("appsettings", announcementLive: false));
+
+        // Only the Marquee partial writes beat text (welcome lines, the announcement, the pool).
+        var mainDir = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var writers = Directory.EnumerateFiles(mainDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
+                     && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"TxtBanner(Primary|Secondary|Web|Pool)\.Text\s*="))
+            .Select(Path.GetFileName)
+            .ToArray();
+        Assert.Equal(new[] { "MainWindow.Marquee.cs" }, writers);
+    }
+
     [Fact]
     public void TheSparkleRunBelongsToTheSupportBeatOnly()
     {

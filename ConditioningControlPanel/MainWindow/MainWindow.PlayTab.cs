@@ -43,12 +43,17 @@ namespace ConditioningControlPanel
     /// </summary>
     public partial class MainWindow
     {
-        /// <summary>Nav strip zone pills (Sessions / Eyes / Games) land here: the Play wall
-        /// scrolls to the zone header and glows it once (PlayTabView.ScrollToZone).</summary>
+        /// <summary>Nav strip zone pills (Sessions / Eyes) land here: the Play wall scrolls to the
+        /// zone header and glows it once (PlayTabView.ScrollToZone). "top" = the page from its
+        /// title, no glow (a rail door or default landing on Eyes).</summary>
         partial void ScrollPlayZone(string zone)
         {
             if (PlayTab == null) { App.Logger?.Debug("ScrollPlayZone({Zone}): no Play view", zone); return; }
-            try { PlayTab.ScrollToZone(zone); }
+            try
+            {
+                if (zone == "top") PlayTab.WallScroll?.ScrollToVerticalOffset(0);
+                else PlayTab.ScrollToZone(zone);
+            }
             catch (Exception ex) { App.Logger?.Debug("ScrollPlayZone({Zone}): {E}", zone, ex.Message); }
         }
 

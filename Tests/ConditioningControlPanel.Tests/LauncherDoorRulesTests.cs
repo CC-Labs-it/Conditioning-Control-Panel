@@ -14,7 +14,8 @@ namespace ConditioningControlPanel.Tests;
 public class LauncherDoorRulesTests
 {
     private static LauncherDoorCard C(string id, LauncherDoor door = LauncherDoor.Games, bool listed = true,
-                                      bool available = true, bool isNew = false) => new(id, door, listed, available, isNew);
+                                      bool available = true, bool isNew = false, bool locked = false)
+        => new(id, door, listed, available, isNew, locked);
 
     private static readonly LauncherDoorCard[] Cards =
     {
@@ -61,6 +62,10 @@ public class LauncherDoorRulesTests
         Assert.Null(LauncherDoorRules.ContinuePick(Cards, "gone"));
         Assert.Null(LauncherDoorRules.ContinuePick(Cards, "hidden"));    // not available today
         Assert.Null(LauncherDoorRules.ContinuePick(Cards, "loom"));      // a tool is never continued
+        // Access lost since the last run: no button, so no Click sound before a refusal.
+        var withLocked = Cards.Append(C("prime", locked: true)).ToArray();
+        Assert.Null(LauncherDoorRules.ContinuePick(withLocked, "prime"));
+        Assert.Equal("chess", LauncherDoorRules.ContinuePick(withLocked, "chess"));
         Assert.True(LauncherDoorRules.RemembersLaunch(LauncherDoor.Games));
         Assert.False(LauncherDoorRules.RemembersLaunch(LauncherDoor.Tools));
     }

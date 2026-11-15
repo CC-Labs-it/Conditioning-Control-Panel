@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -79,7 +82,11 @@ internal sealed class LauncherDoorCard
     private bool _hover;
 
     internal Grid Root { get; }
-    internal Border Card { get; }
+    internal Border Card => _card;
+    private readonly DoorCardBorder _card;
+
+    /// <summary>What UI Automation's Invoke runs on this door (the window passes its open).</summary>
+    internal Action? Invoked { get => _card.Invoked; set => _card.Invoked = value; }
     internal Color Hue => _spec.Hue;
     internal bool ReelRunning => _reelTimer?.IsEnabled == true;
 
@@ -113,7 +120,7 @@ internal sealed class LauncherDoorCard
             Root.Children.Add(_glow);
         }
 
-        Card = new Border
+        _card = new DoorCardBorder
         {
             CornerRadius = new CornerRadius(Radius),
             Background = new SolidColorBrush(spec.Surface),
@@ -126,6 +133,8 @@ internal sealed class LauncherDoorCard
             RenderTransform = new TransformGroup { Children = { new ScaleTransform(1, 1), new TranslateTransform() } },
         };
         Root.Children.Add(Card);
+        // UI Automation reads the door as a button: its title and what it holds.
+        AutomationProperties.SetName(Card, spec.Title + ", " + SafeFormat(spec.CountFormat, spec.Count));
 
         var body = new Grid();
         body.SizeChanged += (_, _) =>
@@ -234,13 +243,20 @@ internal sealed class LauncherDoorCard
 
         // --- the words
         var text = new StackPanel { Margin = new Thickness(36, 0, 90, 0), VerticalAlignment = VerticalAlignment.Center };
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
-        titleRow.Children.Add(new TextBlock
+        // The title shrinks to fit the room the stamp leaves (never grows): "Herramientas" at
+        // the window's minimum width would otherwise run under the chevron.
+        var titleRow = new DoorTitleRow();
+        titleRow.Children.Add(new Viewbox
         {
-            Text = spec.Title,
-            FontFamily = DisplayFont, FontSize = 60, FontWeight = FontWeights.SemiBold,
-            Foreground = _titleBrush,
-            VerticalAlignment = VerticalAlignment.Center,
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.DownOnly,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new TextBlock
+            {
+                Text = spec.Title,
+                FontFamily = DisplayFont, FontSize = 60, FontWeight = FontWeights.SemiBold,
+                Foreground = _titleBrush,
+            },
         });
         if (spec.Stamp is { } stamp)
         {
@@ -592,6 +608,76 @@ internal sealed class LauncherDoorCard
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
         pan.BeginAnimation(TranslateTransform.XProperty, slide);
+    }
+}
+
+/// <summary>
+/// The door card's surface: a Border that UI Automation sees as an invokable button. Mouse,
+/// hover and keyboard stay with the window's own handlers; <see cref="Invoked"/> is the same
+/// open the click runs.
+/// </summary>
+internal sealed class DoorCardBorder : Border
+{
+    internal Action? Invoked { get; set; }
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new Peer(this);
+
+    private sealed class Peer : FrameworkElementAutomationPeer, IInvokeProvider
+    {
+        public Peer(DoorCardBorder owner) : base(owner) { }
+
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Button;
+        protected override string GetClassNameCore() => "LauncherDoor";
+        protected override bool IsControlElementCore() => true;
+        protected override bool IsContentElementCore() => true;
+
+        public override object GetPattern(PatternInterface patternInterface) =>
+            patternInterface == PatternInterface.Invoke ? this : base.GetPattern(patternInterface)!;
+
+        void IInvokeProvider.Invoke()
+        {
+            if (!IsEnabled()) throw new ElementNotEnabledException();
+            var owner = (DoorCardBorder)Owner;
+            // Like ButtonAutomationPeer: never run the open inside the UIA call itself.
+            owner.Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => owner.Invoked?.Invoke()));
+        }
+    }
+}
+
+/// <summary>
+/// The door title row: the trailing children (the "N new" stamp) keep their own size and the
+/// first child (the title) gets what is left, so a long title shrinks instead of clipping.
+/// </summary>
+internal sealed class DoorTitleRow : Panel
+{
+    protected override Size MeasureOverride(Size available)
+    {
+        double trail = 0, height = 0;
+        for (int i = 1; i < InternalChildren.Count; i++)
+        {
+            var child = InternalChildren[i];
+            child.Measure(new Size(double.PositiveInfinity, available.Height));
+            trail += child.DesiredSize.Width;
+            height = Math.Max(height, child.DesiredSize.Height);
+        }
+        if (InternalChildren.Count == 0) return new Size(trail, height);
+        var title = InternalChildren[0];
+        double room = double.IsPositiveInfinity(available.Width) ? double.PositiveInfinity : Math.Max(0, available.Width - trail);
+        title.Measure(new Size(room, available.Height));
+        height = Math.Max(height, title.DesiredSize.Height);
+        return new Size(title.DesiredSize.Width + trail, height);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        double x = 0;
+        foreach (UIElement child in InternalChildren)
+        {
+            var d = child.DesiredSize;
+            child.Arrange(new Rect(x, Math.Max(0, (finalSize.Height - d.Height) / 2), d.Width, d.Height));
+            x += d.Width;
+        }
+        return finalSize;
     }
 }
 

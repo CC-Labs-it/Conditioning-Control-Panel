@@ -58,6 +58,8 @@ public partial class LauncherWindow : Window
         LauncherHost.FadeOut = FadeOutThen;
         LauncherHost.RequestSignIn = OpenSignIn;
         LauncherHost.OpenDoorPage = OpenDoorPage;
+        // A page swap shows the scroller with no layout yet: fit once it has a height.
+        GamesScroller.SizeChanged += (_, _) => FitTiles();
 
         SetUpSoundButton();
 
@@ -104,6 +106,7 @@ public partial class LauncherWindow : Window
             FadeIn();
             // The panel asked for a door (LauncherHost.ShowDoor): open on its page, no swap.
             if (LauncherHost.TakePendingDoor() is { } asked) _door = asked;
+            _doorsEnter = true;
             BuildTiles();
             RefreshAccount();
             RefreshMod();

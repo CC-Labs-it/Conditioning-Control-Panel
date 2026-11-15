@@ -2251,6 +2251,14 @@
                                     </Grid>
                                 </Grid>
                                 <ControlTemplate.Triggers>
+                                    <!-- Keyboard focus (FocusVisualStyle is off): the outline turns
+                                         bright and thick, the padding gives the extra pixel back.
+                                         The template part only, so the hover fill keeps its colour. -->
+                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                        <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource TextLightBrush}"/>
+                                        <Setter TargetName="b" Property="BorderThickness" Value="2"/>
+                                        <Setter TargetName="b" Property="Padding" Value="15,9"/>
+                                    </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="b" Property="Background" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
                                     </Trigger>

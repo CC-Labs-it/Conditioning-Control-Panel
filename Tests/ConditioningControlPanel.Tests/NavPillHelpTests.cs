@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// a new window". Every visible pill carries a "what is this" line in every language, the badge
 /// never grows the pill, and a Window pill only opens after "Open it".
 /// </summary>
+[Collection(SectionTabStripCollection.Name)]
 public class NavPillHelpTests
 {
     private static string LanguagesDir()
@@ -179,6 +180,16 @@ public class NavPillHelpTests
                 strip.RefreshBadges();
                 Assert.Equal("6 on", strip.PillBadge("studio"));
                 Assert.Equal(NavStripRules.PillHeight, strip.PillFor("studio")!.ActualHeight, 1);
+                // A count that moves on a worker thread never touches the pills there: the strip's
+                // handler hops to its own dispatcher and repaints when that runs.
+                NavStripRules.BadgeProvider = k => k == "studio" ? "7 on" : null;
+                System.Threading.Tasks.Task.Run(strip.OnBadgesChanged).Wait();
+                Assert.Equal("6 on", strip.PillBadge("studio"));
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                strip.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                    new Action(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                Assert.Equal("7 on", strip.PillBadge("studio"));
                 NavStripRules.BadgeProvider = _ => throw new InvalidOperationException("page gone");
                 strip.RefreshBadges();
                 Assert.Null(strip.PillBadge("studio"));

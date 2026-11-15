@@ -490,13 +490,14 @@ namespace ConditioningControlPanel.Services
             // Nav rework polish (2026-10-06): this row is the Games pill ("Go to > Play", caption
             // Games) and lands on the Games zone, so it is the navigation twin of the game.* rows
             // below, which LAUNCH. The Play door row above keeps the "Play" caption.
+            // Declutter wave 2: "play" opens the launcher's Games door now, so the row names no
+            // Play zone (it would scroll and glow a collapsed header behind the launcher).
             list.Add(new SettingsPaletteEntry
             {
                 Id = "tab.play",
                 LabelKey = "nav_tab_games",
                 Glyph = "🕹️",
                 TabKey = "play",
-                PlayZone = "games",
                 ContextKeys = new[] { GroupNav, "nav_door_play" },
                 Aliases = "play games launcher " +
                           "arcade",

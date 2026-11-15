@@ -112,6 +112,12 @@ namespace ConditioningControlPanel
         /// <summary>Declutter wave 2: the Games pill left Play for the launcher's Games door. The
         /// strip's "Moved" note says so on arrival ("Moved: CC Labs › Games"), sharing the
         /// redirect note's three-hit budget so it never nags. Existing keys only.</summary>
+        /// <summary>Set by the strip's pill click around its ShowTab: an explicit zone pill scrolls.</summary>
+        private bool _playZoneFromPill;
+
+        /// <summary>Set by the Play rail door when the remembered tab was the old Games pill.</summary>
+        private bool _playCameForGames;
+
         private void ShowGamesMovedNote()
         {
             try
@@ -253,7 +259,9 @@ namespace ConditioningControlPanel
             // the one seam and leaves the tab on screen alone, like the window keys below.
             if (Services.UI.NavSections.LauncherDoorFor(tab) is { } launcherDoor)
             {
-                Services.UI.PanelDoorLink.Open(launcherDoor);
+                // Refused during Lockdown: the panel stays, so the strip says where the games went.
+                if (!Services.UI.PanelDoorLink.Open(launcherDoor) && launcherDoor == Services.UI.PanelDoorLink.Games)
+                    Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowGamesMovedNote));
                 return;
             }
             // "lab" (bark rules, tutorial steps, third-party deep links) was the Lab page: gaze,
@@ -578,20 +586,16 @@ namespace ConditioningControlPanel
                     // budget with the lockdown and blink-trainer cards.
                     MaybeShowFeatureIntro("play-wall", "play");
                     {
-                        // The Games pill scrolls back to the top only when the previous pill was
-                        // another Play zone; a plain return to Play keeps its scroll.
-                        string? zone = tab switch
-                        {
-                            "playsessions" => "sessions",
-                            "playeyes" => "eyes",
-                            _ => _navCurrentTab is "playsessions" or "playeyes" ? "games" : null,
-                        };
+                        // Eyes is the landing: only its pill scrolls to it, a rail door or default
+                        // landing shows the page from the top (NavSections.PlayLandingScroll).
+                        string? zone = Services.UI.NavSections.PlayLandingScroll(tab, _playZoneFromPill);
                         if (zone != null)
                             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => ScrollPlayZone(zone)));
                     }
-                    // Declutter wave 2: arriving on Play from elsewhere, the strip says where the
-                    // Games pill went ("Moved: CC Labs › Games"), on the shared three-hit budget.
-                    if (_navCurrentTab is not ("playeyes" or "playsessions" or "deeper"))
+                    // Declutter wave 2: someone who came for the games (Play's remembered tab was
+                    // the old Games pill) is told where it went ("Moved: CC Labs › Games"), on the
+                    // shared three-hit budget. Eyes and Sessions visits never spend it.
+                    if (_playCameForGames)
                         Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowGamesMovedNote));
                     break;
 
