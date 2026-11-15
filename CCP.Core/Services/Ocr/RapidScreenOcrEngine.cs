@@ -19,8 +19,8 @@ public interface IScreenOcrEngine : IDisposable
 {
     /// <summary>False once the models are missing or failed to load; <see cref="Recognize"/> then returns no words.</summary>
     bool IsAvailable { get; }
-    /// <summary>CPU-bound: call off the UI thread. Never throws except for cancellation.</summary>
-    IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default);
+    /// <summary>CPU-bound: call off the UI thread. Never throws except for cancellation; null when reading failed.</summary>
+    IReadOnlyList<OcrWord>? Recognize(ScreenFrame frame, CancellationToken cancellationToken = default);
     /// <summary>Changes when the recognizers <see cref="Recognize"/> would read with change; scan caches key on it.</summary>
     string Recognizers => "";
 }
@@ -49,8 +49,8 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
         _languages = languages ?? (() => OsLanguages().Append(Localization.LocalizationManager.Instance.CurrentLanguage));
     }
 
-    // The user's languages: the Linux locale list, then the OS display language (on Windows the first of the user language
-    // list WPF's OCR reads). shortcut: later Windows list entries are unread (Core has no registry), add them if users ask.
+    // The user's languages: the Linux locale list, then the OS display language. The Windows user language list WPF's OCR
+    // reads is in the registry, which Core cannot use: the head prepends it (ScreenOcrService.Languages).
     internal static IEnumerable<string?> OsLanguages(Func<string, string?>? env = null)
     {
         foreach (var name in new[] { "LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG" })
@@ -79,7 +79,7 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
 
     public bool IsAvailable { get { lock (_gate) return !_failed && !_disposed && ModelPaths.All(File.Exists); } }
 
-    public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
+    public IReadOnlyList<OcrWord>? Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
     {
         if (frame.Width <= 0 || frame.Height <= 0 || frame.Stride < (long)frame.Width * 4 ||
             frame.Pixels.Length < (long)frame.Stride * frame.Height) return Array.Empty<OcrWord>();
@@ -98,7 +98,7 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
                     using var bitmap = new SKBitmap();
                     var info = new SKImageInfo(frame.Width, frame.Height,
                         frame.Format == ScreenPixelFormat.Bgra32 ? SKColorType.Bgra8888 : SKColorType.Rgba8888, SKAlphaType.Unpremul);
-                    if (!bitmap.InstallPixels(info, pin.AddrOfPinnedObject() + segment.Offset, frame.Stride)) return Array.Empty<OcrWord>();
+                    if (!bitmap.InstallPixels(info, pin.AddrOfPinnedObject() + segment.Offset, frame.Stride)) return null;
                     // Every recognizer sees the same det boxes: per line keep the most confident reading, so nothing doubles.
                     blocks = _ocr.SelectMany(o => o.Detect(bitmap, Options, cancellationToken).TextBlocks).ToArray()
                         .GroupBy(b => string.Join(",", b.BoxPoints)).Select(g => g.MaxBy(b => b.CharScores.DefaultIfEmpty().Average())!);
@@ -115,7 +115,7 @@ public sealed class RapidScreenOcrEngine : IScreenOcrEngine
                 return words;
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { Log.Debug(ex, "Screen OCR recognition failed"); return Array.Empty<OcrWord>(); }
+            catch (Exception ex) { Log.Debug(ex, "Screen OCR recognition failed"); return null; }
         }
     }
 

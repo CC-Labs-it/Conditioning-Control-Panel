@@ -72,10 +72,11 @@ public class ScreenFrameSourceTests
         public readonly List<string> Calls = [];
         public string Recognizers { get; set; } = "latin";
         public bool IsAvailable => true;
-        public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
+        public bool Fail;
+        public IReadOnlyList<OcrWord>? Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
         {
             Calls.Add(frame.Screen);
-            return [new($"{frame.Screen}-{Calls.Count}", new Rectangle(0, 0, 1, 1))];
+            return Fail ? null : [new($"{frame.Screen}-{Calls.Count}", new Rectangle(0, 0, 1, 1))];
         }
         public void Dispose() { }
     }
@@ -99,7 +100,14 @@ public class ScreenFrameSourceTests
         Assert.Equal(5, engine.Calls.Count); // a restarted scanner drops the cache: both monitors are read again
         engine.Recognizers = "latin|ch"; // a language change: unchanged monitors are read with the new recognizers
         Assert.Equal(["left-6", "right-7"], (await scan(second.Token)).Select(w => w.Text));
+        (engine.Fail, left) = (true, 1); // a failed read delivers nothing and is read again next scan (WPF re-reads every scan)
+        Assert.Equal(["right-7"], (await scan(second.Token)).Select(w => w.Text)); engine.Fail = false;
+        Assert.Equal(["left-9", "right-7"], (await scan(second.Token)).Select(w => w.Text));
     }
+
+    [Fact]
+    public void WindowsUserLanguagesComeFirst() => Assert.Equal(["latin", "korean"], RapidScreenOcrEngine.RecognizerSet(
+        ScreenOcrService.Languages(["en-US", "ko-KR"])).Select(r => r.Rec.Split('_')[0]));
 
     private sealed class NoModels : IScreenOcrEngine
     {

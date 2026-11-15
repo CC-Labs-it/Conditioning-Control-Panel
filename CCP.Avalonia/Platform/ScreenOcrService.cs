@@ -31,11 +31,17 @@ internal sealed class ScreenOcrService : IDisposable
     {
         frames ??= ScreenFrameSourceFactory.Create();
         if (frames is UnavailableScreenFrames) { _reasonKey = "ocr_unavailable_capture"; return null; }
-        engine ??= new RapidScreenOcrEngine(); // one per process; its ORT sessions live until exit
+        engine ??= new RapidScreenOcrEngine(languages: () => Languages(WindowsLanguages())); // one per process; its ORT sessions live until exit
         if (!engine.IsAvailable) { _reasonKey = "ocr_unavailable_models"; return null; }
         _reasonKey = null;
         return Scan(frames, engine);
     }
+
+    // WPF ScreenOcrService.cs:41 reads the Windows user language list (not .NET's display-language UI culture): it goes first.
+    internal static IEnumerable<string?> Languages(string[]? windows) => (windows ?? []).Concat(RapidScreenOcrEngine.OsLanguages())
+        .Append(ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage);
+    private static string[]? WindowsLanguages() => OperatingSystem.IsWindows() ? Microsoft.Win32.Registry.GetValue(
+        @"HKEY_CURRENT_USER\Control Panel\International\User Profile", "Languages", null) as string[] : null;
 
     private static volatile string? _reasonKey;
     /// <summary>Raised off the UI thread when a scan finds capture refused (the portal answer ends it for the session).</summary>
@@ -72,9 +78,9 @@ internal sealed class ScreenOcrService : IDisposable
                     return result.Frames.SelectMany(f =>
                     {
                         if (!changes.Changed(f) && cache.TryGetValue(f.Screen, out var last)) return last;
-                        cache.Remove(f.Screen); // a cancelled recognition must not leave stale words behind
-                        return cache[f.Screen] = engine.Recognize(f, token)
-                            .Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen)).ToArray();
+                        cache.Remove(f.Screen); // a cancelled or failed (null) read leaves no words: the next scan reads it again
+                        if (engine.Recognize(f, token) is not { } words) return [];
+                        return cache[f.Screen] = words.Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen)).ToArray();
                     }).ToArray();
                 }
             }, token).ConfigureAwait(false);

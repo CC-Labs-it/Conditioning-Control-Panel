@@ -20,23 +20,13 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
     {
         var info = new SKImageInfo(1920, 1080, SKColorType.Bgra8888, SKAlphaType.Premul);
         using var bitmap = new SKBitmap(info);
-        using (var canvas = new SKCanvas(bitmap))
-        {
-            canvas.Clear(SKColors.White);
-            if (text != null)
-            {
-                using var font = new SKFont(face ?? SKTypeface.Default, 48);
-                using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-                canvas.DrawText(text, x, y, font, paint);
-            }
-        }
+        using var canvas = new SKCanvas(bitmap);
+        using var font = new SKFont(face ?? SKTypeface.Default, 48);
+        using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
+        canvas.Clear(SKColors.White);
         var drawn = SKRect.Empty;
-        if (text != null)
-        {
-            using var font = new SKFont(face ?? SKTypeface.Default, 48);
-            font.MeasureText(text, out drawn);
-            drawn.Offset(x, y);
-        }
+        if (text != null) { canvas.DrawText(text, x, y, font, paint); font.MeasureText(text, out drawn); drawn.Offset(x, y); }
+        canvas.Flush();
         return (new ScreenFrame("test", new Rectangle(0, 0, 1920, 1080), 1, 1920, 1080, info.RowBytes,
             ScreenPixelFormat.Bgra32, bitmap.Bytes), drawn);
     }
@@ -48,7 +38,7 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         Assert.True(Engine.IsAvailable);
         Engine.Recognize(Frame(null).Frame); // model load is not part of the per-frame cost
         var sw = Stopwatch.StartNew();
-        var words = Engine.Recognize(frame);
+        var words = Engine.Recognize(frame)!;
         output.WriteLine($"{sw.ElapsedMilliseconds} ms: " + string.Join(" | ", words.Select(w => $"{w.Text} {w.Bounds}")));
         Assert.Equal(new[] { "Good", "girl", "obey", "2026" }, words.Select(w => w.Text));
         // DBNet unclips its boxes beyond the glyphs, so allow half an em around the drawn text; the centre must be on it.
@@ -73,7 +63,7 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         using var face = SKFontManager.Default.MatchCharacter(char.ConvertToUtf32(text, 0));
         if (face == null) Assert.Skip($"No font with '{text[0]}' on this runner (fc-list :lang={language} is empty)");
         _language = language;
-        var words = ScriptEngine.Recognize(Frame(text, face: face).Frame);
+        var words = ScriptEngine.Recognize(Frame(text, face: face).Frame)!;
         output.WriteLine(string.Join(" | ", words.Select(w => $"{w.Text} {w.Bounds}")));
         Assert.Equal(text.Replace(" ", ""), string.Concat(words.Select(w => w.Text)).Replace(" ", ""));
     }
@@ -88,14 +78,14 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void BlankFrameHasNoWords() => Assert.Empty(Engine.Recognize(Frame(null).Frame));
+    public void BlankFrameHasNoWords() => Assert.Empty(Engine.Recognize(Frame(null).Frame)!);
 
     [Fact]
     public void MissingModelsAreUnavailableWithoutThrowing()
     {
         using var engine = new RapidScreenOcrEngine(Path.Combine(Path.GetTempPath(), "ccp-no-ocr-models-" + Guid.NewGuid()));
         Assert.False(engine.IsAvailable);
-        Assert.Empty(engine.Recognize(Frame("Good girl").Frame));
+        Assert.Empty(engine.Recognize(Frame("Good girl").Frame)!);
         Assert.False(engine.IsAvailable);
     }
 
