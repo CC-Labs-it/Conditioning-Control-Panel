@@ -84,12 +84,17 @@ public sealed class EmiRainReviewTests
             {
                 Setup(); var oldPath = CorePaths.EffectiveAssetsProvider; bool oldOffers = CoreSettings.Current.EmiDeskOffers; bool oldGlass = CoreSettings.Current.EmiDeskGlass;
                 var oldBedtime = EmiState.Current.BedtimeUntil; EmiDeskWindow? w = null;
+                ChaosGifCascadeOverlay? rain = null;
+                var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var oldDecode = ChaosGifCascadeOverlay.BeforeDecodeForTests;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => root; CoreSettings.Current.EmiDeskOffers = true; CoreSettings.Current.EmiDeskGlass = true;
                     EmiState.Current.BedtimeUntil = DateTime.MinValue;
                     ChaosGifCascadeOverlay.CloseActive(); ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
                     ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = path => { if (!string.Equals(path, Path.Combine(root, "images", "a.gif"), StringComparison.OrdinalIgnoreCase)) { oldDecode?.Invoke(path); return; } using var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read); entered.TrySetResult(true); release.Task.GetAwaiter().GetResult(); System.Threading.Thread.Sleep(1000); };
                     w = new EmiDeskWindow(); w.Show(); Dispatcher.UIThread.RunJobs();
                     w.FireRainOffer(EmiLineEngine.FromJson(Lines), "m");
                     Assert.False(w.RainAskLive);
@@ -106,6 +111,9 @@ public sealed class EmiRainReviewTests
                     Assert.NotNull(EmiGifRain.LastPick);
                     await EmiGifRain.LastPick!; Dispatcher.UIThread.RunJobs();
                     Assert.True(ChaosGifCascadeOverlay.IsRaining);
+                    rain = ChaosGifCascadeOverlay.Active;
+                    await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                    Assert.False(rain!.PendingDecodes.IsCompleted); // The worker still owns the file.
                     EmiGifRain.Stop();
                     w.FireRainOffer(EmiLineEngine.FromJson(Lines), "m");
                     Assert.True(w.RainAskLive);
@@ -132,9 +140,15 @@ public sealed class EmiRainReviewTests
                 finally
                 {
                     ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+                    rain ??= ChaosGifCascadeOverlay.Active;
                     w?.ShutDown(); EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
+                    release.TrySetResult(true);
+                    try { if (rain != null) await rain.PendingDecodes; }
+                    finally { ChaosGifCascadeOverlay.BeforeDecodeForTests = oldDecode; }
+                    Dispatcher.UIThread.RunJobs(); // Dispose frames from decodes that completed after close.
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false; ChaosGifCascadeOverlay.ManualFramesForTests = false;
                     CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.Current.EmiDeskOffers = oldOffers; CoreSettings.Current.EmiDeskGlass = oldGlass; EmiState.Current.BedtimeUntil = oldBedtime;
+                    Assert.True(rain == null || rain.PendingDecodes.IsCompleted);
                 }
             });
         }
