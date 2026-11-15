@@ -247,4 +247,76 @@ public sealed class SherpaWakeCaptureTests
         finally { shell.RequestExit(); loc.SetLanguage(language); Directory.Delete(root, true); }
     });
 
+    private static void Feed(Mic mic, int n, short v)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            var b = new byte[1600];
+            for (int j = 0; j < b.Length; j += 2) (b[j], b[j + 1]) = ((byte)v, (byte)(v >> 8));
+            mic.Feed?.Invoke(b, b.Length);
+        }
+    }
+    private static SherpaWakeSpotter LoudSaysFireAtPointTwenty(string root) => new(root, (_, t, _) => new Th(t), _ => new Handle(),
+        (spk, _, samples) => ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f));
+
+    [Fact]
+    public async System.Threading.Tasks.Task CalibrationFloorFollowsRisingRoomNoise()
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = LoudSaysFireAtPointTwenty(root);
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, default);
+            Feed(mic, 8, 200); // a quiet room seeds the floor
+            for (double v = 200; v < 1200; v *= 1.01) Feed(mic, 1, (short)v); // a fan spins up past the seeded onset gate
+            for (int say = 0; say < 5; say++) { Feed(mic, 10, 0x4000); Feed(mic, 12, 1200); }
+            var (threshold, message) = await run;
+            Assert.Equal(.20, threshold!.Value, 3);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("she_wake_cal_done", 5, 5, .20), message);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CalibrationCatchingUnderSeventyPercentReportsPartialFit()
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = LoudSaysFireAtPointTwenty(root);
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, default);
+            Feed(mic, 8, 0);
+            foreach (var loud in new[] { true, true, true, false, false }) { Feed(mic, 10, (short)(loud ? 0x4000 : 0x2000)); Feed(mic, 12, 0); }
+            var (threshold, message) = await run;
+            Assert.Equal(.20, threshold!.Value, 3);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("she_wake_cal_partial", 3, 5, .20), message);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public System.Threading.Tasks.Task PanicDuringCalibrationClosesMicAtOnce() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(), (_, _, _) => false);
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { WakeSpotterOverride = kws, WakeMicOverride = mic };
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var consent = s.MicConsentGiven;
+        s.MicConsentGiven = true;
+        try
+        {
+            shell.Show();
+            shell.SL_Calibrate_Click();
+            await Until(() => mic.Feed != null);
+            Assert.True(kws.IsListening); // the mic pill reads this
+            System.Linq.Enumerable.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, x => x.Id == "wake-calibration").Stop(shell);
+            var end = DateTime.UtcNow.AddMilliseconds(250);
+            while (mic.Feed != null && DateTime.UtcNow < end) await System.Threading.Tasks.Task.Delay(5);
+            Assert.Null(mic.Feed);
+            await Until(() => !shell.CalibratingWake);
+            Assert.False(kws.IsListening);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("she_wake_cal_cancelled"), shell.SheListeningPage!.TxtSL_WakeEngineStatus.Text);
+        }
+        finally { s.MicConsentGiven = consent; shell.RequestExit(); Directory.Delete(root, true); }
+    });
 }

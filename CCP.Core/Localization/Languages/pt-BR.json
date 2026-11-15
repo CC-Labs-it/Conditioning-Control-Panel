@@ -8490,6 +8490,7 @@
   "she_wake_cal_few_caught": "Só {0}/{1} foram captadas com clareza. Nada foi alterado. Diga Hey Bambi um pouco mais alto, com uma pausa clara entre cada uma.",
   "she_wake_cal_done": "Calibrado para a sua voz. {0}/{1} captadas com sensibilidade {2:0.00}.",
   "she_wake_cal_done_noisy": "Calibrado para captar mais. {0}/{1} captadas com sensibilidade {2:0.00}. Ruído de fundo pode ativá-lo. Repita em um lugar mais silencioso para ajustar.",
+  "she_wake_cal_partial": "Sensibilidade {2:0.00} definida. {0}/{1} captadas. Repita para um ajuste melhor, falando com clareza e com uma pausa entre cada uma.",
   "she_wake_cal_start": "Ouvindo. Diga Hey Bambi 5 vezes, com uma pausa entre cada uma.",
   "she_wake_cal_progress": "Ouvindo. Diga Hey Bambi com clareza ({0}/{1}).",
   "she_wake_cal_analyze": "Certo. Procurando a melhor sensibilidade.",

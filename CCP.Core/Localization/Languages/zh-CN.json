@@ -8993,6 +8993,7 @@
   "she_wake_cal_few_caught": "只清楚识别了 {0}/{1} 次。未做任何更改。请稍大声地说 Hey Bambi，每次之间明显停顿。",
   "she_wake_cal_done": "已按你的声音校准。在灵敏度 {2:0.00} 下识别了 {0}/{1} 次。",
   "she_wake_cal_done_noisy": "已按识别优先校准。在灵敏度 {2:0.00} 下识别了 {0}/{1} 次。背景噪音可能会触发唤醒。在更安静的地方重新运行可提高精度。",
+  "she_wake_cal_partial": "已将灵敏度设为 {2:0.00}。识别了 {0}/{1} 次。请重新运行以获得更好的匹配，每次说清楚并稍作停顿。",
   "she_wake_cal_start": "正在聆听。请说 5 次 Hey Bambi，每次之间停顿一下。",
   "she_wake_cal_progress": "正在聆听。请清楚地说 Hey Bambi ({0}/{1})。",
   "she_wake_cal_analyze": "收到。正在寻找最佳灵敏度。",

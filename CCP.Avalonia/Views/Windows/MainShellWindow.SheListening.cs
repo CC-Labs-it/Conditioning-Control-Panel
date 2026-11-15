@@ -334,6 +334,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         internal bool CalibratingWake;
+        private System.Threading.CancellationTokenSource? _wakeCalCts;
+
+        /// <summary>Stop, consent revoke, window close (all via StopVoiceInput) and panic ("wake-calibration")
+        /// end a calibration capture at once rather than after its 40 s cap.</summary>
+        internal void CancelWakeCalibration() { try { _wakeCalCts?.Cancel(); } catch (ObjectDisposedException) { } }
 
         /// <summary>WPF SL_Calibrate_Click (MainWindow.SheListening.cs:84-140): free the mic, record a few
         /// "Hey Bambi"s, store the chosen sensitivity, then re-arm. Progress and the result use the status line.</summary>
@@ -355,16 +360,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CalibratingWake = true; // RefreshVoiceInputModes keeps the mic closed while this owns it
             tab.BtnSL_Calibrate.IsEnabled = false;
             var lbl = tab.TxtSL_WakeEngineStatus;
+            var cts = new System.Threading.CancellationTokenSource();
             try
             {
                 StopVoiceInput();
+                _wakeCalCts = cts; // after StopVoiceInput, which would cancel it
                 for (int i = 0; i < 20 && (wake.IsListening || VoiceSpeech?.IsListening == true); i++) await System.Threading.Tasks.Task.Delay(25);
                 lbl.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA0, 0xFF));
                 lbl.Text = Loc.Get("she_wake_cal_start");
                 var progress = new Progress<(bool Analyze, int Captured)>(p => lbl.Text = p.Analyze
                     ? Loc.Get("she_wake_cal_analyze") : Loc.GetF("she_wake_cal_progress", p.Captured, 5));
                 (double? Threshold, string Message) r;
-                try { r = await wake.CalibrateAsync(mic, s.SpeechWakeBoost, s.SpeechNoiseSuppression, progress, default); }
+                try { r = await wake.CalibrateAsync(mic, s.SpeechWakeBoost, s.SpeechNoiseSuppression, progress, cts.Token); }
                 catch (Exception ex) { Log.Warning(ex, "Wake calibration failed"); r = (null, Loc.Get("she_wake_cal_failed")); }
                 if (r.Threshold is { } t) { s.SpeechWakeThreshold = t; CoreSettings.Save(); }
                 lbl.Foreground = new SolidColorBrush(r.Threshold != null ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0xFF, 0xB0, 0xB0));
@@ -372,6 +379,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             finally
             {
+                _wakeCalCts = null;
+                cts.Dispose();
                 CalibratingWake = false;
                 tab.BtnSL_Calibrate.IsEnabled = true;
                 RefreshVoiceInputModes(); // re-arm; the spotter rebuilds at the new sensitivity

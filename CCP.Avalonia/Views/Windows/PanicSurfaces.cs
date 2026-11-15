@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets
             new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),
             new("voice-capture", sh => sh?.CancelVoicePrompt(), After: ["intake"]),   // intake loops end before the mic abort
+            new("wake-calibration", sh => sh?.CancelWakeCalibration()),   // stricter than WPF, which never cancelled it: the mic closes now
             // decisions "Panic <-> mic": capture and the command chain end first; WPF :1553 FirstShowService.Stop() before CancelPendingAi.
             // WPF ConversationPage.xaml.cs:42 cancels on unload; keep the old lane's stricter explicit panic stop.
             new("companion-conversation", sh => sh?.Named<Tabs.CompanionTabView>("CompanionTab")

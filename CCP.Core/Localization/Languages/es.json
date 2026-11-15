@@ -8490,6 +8490,7 @@
   "she_wake_cal_few_caught": "Solo se captaron {0}/{1} con claridad. No se cambió nada. Di Hey Bambi un poco más alto, con una pausa clara entre cada una.",
   "she_wake_cal_done": "Calibrado a tu voz. {0}/{1} captadas con sensibilidad {2:0.00}.",
   "she_wake_cal_done_noisy": "Calibrado para captar más. {0}/{1} captadas con sensibilidad {2:0.00}. Puede activarse con ruido de fondo. Repítelo en un lugar más tranquilo para ajustarlo.",
+  "she_wake_cal_partial": "Sensibilidad {2:0.00} ajustada. {0}/{1} captadas. Repítelo para un mejor ajuste, dilo con claridad y con una pausa entre cada una.",
   "she_wake_cal_start": "Escuchando. Di Hey Bambi 5 veces, con una pausa entre cada una.",
   "she_wake_cal_progress": "Escuchando. Di Hey Bambi con claridad ({0}/{1}).",
   "she_wake_cal_analyze": "Entendido. Buscando tu mejor sensibilidad.",

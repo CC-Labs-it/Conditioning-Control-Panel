@@ -240,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // First: a command prompt in flight must end too, or its "you called?" re-prompt / retry
             // would reopen the mic after the user closed it.
             CancelVoicePrompt();
+            CancelWakeCalibration();
             StopWakeLoop();
             _pttArmed = false;
         }

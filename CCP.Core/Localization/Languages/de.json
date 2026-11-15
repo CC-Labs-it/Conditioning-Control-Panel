@@ -8490,6 +8490,7 @@
   "she_wake_cal_few_caught": "Nur {0}/{1} deutlich erkannt. Nichts wurde geändert. Sag Hey Bambi etwas lauter, mit einer deutlichen Pause dazwischen.",
   "she_wake_cal_done": "Auf deine Stimme kalibriert. {0}/{1} erkannt bei Empfindlichkeit {2:0.00}.",
   "she_wake_cal_done_noisy": "Auf Erkennung kalibriert. {0}/{1} erkannt bei Empfindlichkeit {2:0.00}. Hintergrundgeräusche können es auslösen. Wiederhole es an einem ruhigeren Ort, um es zu verschärfen.",
+  "she_wake_cal_partial": "Empfindlichkeit {2:0.00} gesetzt. {0}/{1} erkannt. Wiederhole es für eine bessere Anpassung, deutlich und mit einer Pause dazwischen.",
   "she_wake_cal_start": "Hört zu. Sag 5 Mal Hey Bambi, mit einer Pause dazwischen.",
   "she_wake_cal_progress": "Hört zu. Sag Hey Bambi deutlich ({0}/{1}).",
   "she_wake_cal_analyze": "Verstanden. Die beste Empfindlichkeit wird gesucht.",

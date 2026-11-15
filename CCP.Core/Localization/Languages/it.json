@@ -9228,6 +9228,7 @@
   "she_wake_cal_few_caught": "Riconosciute solo {0}/{1} chiaramente. Nulla è cambiato. Di' Hey Bambi un po' più forte, con una pausa netta tra una e l'altra.",
   "she_wake_cal_done": "Calibrato sulla tua voce. {0}/{1} riconosciute con sensibilità {2:0.00}.",
   "she_wake_cal_done_noisy": "Calibrato per riconoscere di più. {0}/{1} riconosciute con sensibilità {2:0.00}. Il rumore di fondo potrebbe attivarlo. Ripeti in un luogo più silenzioso per affinarlo.",
+  "she_wake_cal_partial": "Sensibilità {2:0.00} impostata. {0}/{1} riconosciute. Ripeti per una regolazione migliore, pronunciandolo chiaramente con una pausa tra una e l'altra.",
   "she_wake_cal_start": "In ascolto. Di' Hey Bambi 5 volte, con una pausa tra una e l'altra.",
   "she_wake_cal_progress": "In ascolto. Di' Hey Bambi chiaramente ({0}/{1}).",
   "she_wake_cal_analyze": "Fatto. Cerco la sensibilità migliore.",

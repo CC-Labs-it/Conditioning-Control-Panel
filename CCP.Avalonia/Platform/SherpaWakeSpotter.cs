@@ -182,16 +182,30 @@ namespace ConditioningControlPanel.Avalonia.Platform
             cap.CancelAfter(TimeSpan.FromSeconds(40)); // a silent user must not hang the flow
             using var registration = cap.Token.Register(() => done.TrySetResult(false));
             IDisposable? capture = null;
+            void Release()
+            {
+                try { capture?.Dispose(); } catch { } finally { capture = null; }
+                bool was;
+                lock (_gate) { was = _listening; _listening = false; }
+                if (was) try { ListeningChanged?.Invoke(this, false); } catch { }
+            }
             try
             {
-                // shortcut: the room-tone floor is seeded once (WPF also drifts it), upgrade if loud rooms miss says.
-                capture = mic.Start((bytes, count) => { lock (says) {
+                if (!done.Task.IsCompleted) capture = mic.Start((bytes, count) => { lock (says) {
                     if (done.Task.IsCompleted) return;
                     var buf = Pcm(bytes, count); filter?.ProcessInPlace(buf, buf.Length);
                     double sum = 0; foreach (var x in buf) sum += x * x;
                     double rms = buf.Length == 0 ? 0 : Math.Sqrt(sum / buf.Length);
-                    if (seeded < 4800) { floor = Math.Min(floor, rms); seeded += buf.Length; preRoll.Push(buf); return; }
-                    double onset = Math.Clamp(Math.Clamp(floor, .0005, .05) * 4, .006, .08);
+                    if (seeded < 4800)
+                    {
+                        floor = Math.Min(floor, rms); seeded += buf.Length; preRoll.Push(buf);
+                        if (seeded >= 4800) floor = Math.Clamp(floor, .0005, .05);
+                        return;
+                    }
+                    // WPF SherpaWakeService.cs:485-486: the floor drifts with the room between says.
+                    if (!speaking) floor = Math.Min(floor * 1.02 + 1e-5, Math.Max(floor, rms));
+                    if (rms < floor * 1.5) floor = .9 * floor + .1 * rms;
+                    double onset = Math.Clamp(floor * 4, .006, .08);
                     if (!speaking)
                     {
                         if (rms < onset * .6 && ambient.Count < 32000) ambient.AddRange(buf);
@@ -208,8 +222,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (spokenMs - silentMs >= 250) { says.Add(cur.ToArray()); progress?.Report((false, says.Count)); }
                     if (says.Count >= target) done.TrySetResult(true);
                 } });
+                lock (_gate) _listening = capture != null; // WPF SherpaWakeService.cs:541-547: the mic pill stays lit while calibration holds the mic
+                if (capture != null) try { ListeningChanged?.Invoke(this, true); } catch { }
                 await done.Task.ConfigureAwait(false);
-                try { capture.Dispose(); } catch { } finally { capture = null; }
+                Release();
                 lock (says) done.TrySetResult(false); // waits out an in-flight frame before the lists are read
                 if (ct.IsCancellationRequested) return (null, Loc.Get("she_wake_cal_cancelled"));
                 if (says.Count < 2) return (null, Loc.GetF("she_wake_cal_few_heard", says.Count));
@@ -233,11 +249,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (SherpaWakeService.SelectCalibrationThreshold(says.Count, caught, fired) is not { } pick)
                     return (null, Loc.GetF("she_wake_cal_few_caught", caught.Max(), says.Count));
                 var (t, c, risk) = pick;
-                return (t, Loc.GetF(risk ? "she_wake_cal_done_noisy" : "she_wake_cal_done", c, says.Count, t));
+                // WPF SherpaWakeService.cs:625-629: below 70% of the says is a partial fit, not a calibration.
+                bool fit = c >= Math.Max(2, (int)Math.Ceiling(says.Count * 0.7));
+                return (t, Loc.GetF(risk ? "she_wake_cal_done_noisy" : fit ? "she_wake_cal_done" : "she_wake_cal_partial", c, says.Count, t));
             }
             finally
             {
-                try { capture?.Dispose(); } catch { }
+                Release();
                 lock (_gate) { _active = false; if (_disposed) { _spotter?.Dispose(); _spotter = null; } }
             }
         }

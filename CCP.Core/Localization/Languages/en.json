@@ -9231,6 +9231,7 @@
   "she_wake_cal_few_caught": "Only caught {0}/{1} clearly. Nothing changed. Say Hey Bambi a bit louder, with a clear pause between each.",
   "she_wake_cal_done": "Calibrated to your voice. Caught {0}/{1} at sensitivity {2:0.00}.",
   "she_wake_cal_done_noisy": "Calibrated for recall. Caught {0}/{1} at sensitivity {2:0.00}. It may wake on background noise. Run it again somewhere quieter to tighten it.",
+  "she_wake_cal_partial": "Set sensitivity {2:0.00}. Caught {0}/{1}. Run it again for a better fit, saying it clearly with a pause between each.",
   "she_wake_cal_start": "Listening. Say Hey Bambi 5 times, pausing between each.",
   "she_wake_cal_progress": "Listening. Say Hey Bambi clearly ({0}/{1}).",
   "she_wake_cal_analyze": "Got it. Finding your best sensitivity.",
