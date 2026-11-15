@@ -106,8 +106,7 @@ internal static class KeywordTriggerHead
         {
             var s = CoreSettings.Current;
             if (_ocrSuspended || (OcrSource == null && !WindowsOcrSource.Available)) { _ocr?.Stop(); return; }
-            _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? WindowsOcrSource.Scan(t),
-                () => KeywordAudioRuntime.HasAccess, DeliverOcr);
+            _ocr ??= CreateOcrScanner(Engine);
             _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
         }
     }
@@ -139,9 +138,14 @@ internal static class KeywordTriggerHead
 
     internal static Task TickOcrForTest() => _ocr?.TickAsync() ?? Task.CompletedTask;
 
+    // Share the production source and delivery path with an isolated runtime in headless tests.
+    internal static ScreenOcrService CreateOcrScanner(KeywordAudioRuntime engine) =>
+        new(t => OcrSource?.Invoke(t) ?? WindowsOcrSource.Scan(t),
+            () => KeywordAudioRuntime.HasAccess, (words, token) => DeliverOcr(engine, words, token));
+
     // WPF ScreenOcrService.cs:143-198: own-UI filter, then the consumer on the UI thread. Stop runs on the
     // UI thread too, so a scan that finished after it is dropped here.
-    private static Task<bool> DeliverOcr(IReadOnlyList<ScreenOcrService.Word> words, CancellationToken token) =>
+    private static Task<bool> DeliverOcr(KeywordAudioRuntime engine, IReadOnlyList<ScreenOcrService.Word> words, CancellationToken token) =>
         Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (token.IsCancellationRequested) return false;
@@ -153,7 +157,7 @@ internal static class KeywordTriggerHead
                 GetWindowThreadProcessId(GetForegroundWindow(), out var id);
                 foreground = Foreground(id);
             }
-            return Engine.CheckOcrWords(words, foreground.Process, foreground.Own);
+            return engine.CheckOcrWords(words, foreground.Process, foreground.Own);
         }).GetTask();
 
     internal static IReadOnlyList<ScreenOcrService.Word> WithoutOwnWindows(

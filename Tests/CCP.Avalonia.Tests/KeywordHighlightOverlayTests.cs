@@ -34,15 +34,15 @@ public class KeywordHighlightOverlayTests
         var execute = WindowsOcrSource.ExecuteForTests;
         var screens = KeywordHighlightOverlay.Screens;
         var configure = KeywordHighlightOverlay.Configure;
-        var credit = KeywordTriggerHead.Engine.QuestCredit;
-        // The shared engine's pulse ring is process-wide: put back exactly what earlier tests left.
-        var ring = (System.Collections.Generic.LinkedList<TriggerFireRecord>)typeof(KeywordFireLog)
-            .GetField("_fires", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(KeywordTriggerHead.Engine.Fires)!;
-        var fires = ring.ToList();
+        var engine = new KeywordAudioRuntime { QuestCredit = () => { }, AchievementCredit = () => { } };
+        using var scanner = KeywordTriggerHead.CreateOcrScanner(engine);
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        var quiet = typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetField("_quietUntilMs", flags)!;
+        var hold = typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetField("_engineHeld", flags)!;
+        var quietBefore = quiet.GetValue(null); var holdBefore = hold.GetValue(null);
         var calls = 0;
         try
         {
-            KeywordTriggerHead.Stop(); KeywordTriggerHead.Engine.ResetCooldownsForTest();
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             settings.KeywordTriggers = [new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0, Actions = [new HighlightAction { Enabled = true }] }];
             settings.KeywordTriggersEnabled = true; settings.ScreenOcrEnabled = true; settings.OcrConfirmationScans = 1;
@@ -51,31 +51,61 @@ public class KeywordHighlightOverlayTests
             settings.KeywordTriggerAppScope = AwarenessAppScope.Everywhere; settings.KeywordGlobalCooldownSeconds = 0;
             settings.KeywordHighlightEnabled = true;
             CoreEntitlement.HasPremiumProvider = () => true; CoreEntitlement.IsFreeTodayProvider = _ => false;
-            KeywordTriggerHead.Engine.QuestCredit = () => { };
             KeywordTriggerHead.OcrSource = null;
             WindowsOcrSource.ExecuteForTests = _ => { calls++; return Task.FromResult("[{\"Text\":\"sit\",\"X\":130,\"Y\":60,\"Width\":30,\"Height\":15}]"); };
             KeywordHighlightOverlay.Screens = () => [new(new PixelRect(0, 0, 1000, 800), 1)];
             KeywordHighlightOverlay.Configure = (_, _) => true;
-            KeywordTriggerHead.Sync();
-            await KeywordTriggerHead.TickOcrForTest();
+            engine.Start(); scanner.Sync(true, true, 60000);
+            await scanner.TickAsync();
             Assert.Equal(1, calls);
             var box = Assert.Single(Assert.Single(KeywordHighlightOverlay.Canvases).Children);
             Assert.Equal(120, Canvas.GetLeft(box)); Assert.Equal(50, Canvas.GetTop(box));
         }
         finally
         {
-            KeywordTriggerHead.Stop(); KeywordTriggerHead.Engine.ResetCooldownsForTest(); KeywordHighlightOverlay.CloseAll();
+            quiet.SetValue(null, quietBefore); hold.SetValue(null, holdBefore);
+            scanner.Stop(); engine.Stop(); KeywordHighlightOverlay.CloseAll();
             KeywordTriggerHead.OcrSource = source; WindowsOcrSource.ExecuteForTests = execute;
             KeywordHighlightOverlay.Screens = screens; KeywordHighlightOverlay.Configure = configure;
-            KeywordTriggerHead.Engine.QuestCredit = credit;
-            ring.Clear(); foreach (var fire in fires) ring.AddLast(fire);
             (settings.KeywordTriggers, settings.KeywordTriggersEnabled, settings.ScreenOcrEnabled,
                 settings.OcrConfirmationScans, settings.OcrHighlightAll, settings.ScreenOcrIntervalMs,
                 settings.AwarenessIgnoreOwnUi, settings.AwarenessLoopProtectionEnabled, settings.KeywordTriggerIgnoreOwnFocus,
                 settings.KeywordTriggerAppScope, settings.KeywordGlobalCooldownSeconds, settings.KeywordHighlightEnabled,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = saved;
         }
-        Assert.Equal(fires, KeywordTriggerHead.Engine.GetRecentFires());
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ProductionSourceTestPreservesSharedEngineAndPanic(bool checkPanic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        var panic = typeof(ConditioningControlPanel.Services.Safety.PanicAftermath);
+        var fields = panic.GetFields(flags).Where(f => !f.IsInitOnly && !f.IsLiteral).ToArray();
+        var before = fields.Select(f => f.GetValue(null)).ToArray();
+        var engine = KeywordTriggerHead.Engine;
+        var cooldowns = typeof(KeywordAudioRuntime).GetField("_cooldowns", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var priorCooldowns = cooldowns.GetValue(engine);
+        var instance = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var guards = (System.Collections.Generic.HashSet<string>)typeof(KeywordAudioRuntime).GetField("_ocrFired", instance)!.GetValue(engine)!;
+        var seen = (System.Collections.Generic.Dictionary<string, int>)typeof(KeywordAudioRuntime).GetField("_ocrSeen", instance)!.GetValue(engine)!;
+        var marker = Guid.NewGuid().ToString(); guards.Add(marker); seen[marker] = 42;
+        var wasActive = engine.IsActive; var fires = engine.GetRecentFires().ToArray();
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            var armed = fields.Select(f => f.GetValue(null)).ToArray();
+            await ProductionSourceFeedsScannerAndHighlight();
+            if (checkPanic) Assert.Equal(armed, fields.Select(f => f.GetValue(null)).ToArray());
+            else
+            {
+                Assert.Same(priorCooldowns, cooldowns.GetValue(engine));
+                Assert.Equal(wasActive, engine.IsActive); Assert.Equal(fires, engine.GetRecentFires());
+                Assert.Contains(marker, guards); Assert.Equal(42, seen[marker]);
+            }
+        }
+        finally { guards.Remove(marker); seen.Remove(marker); for (var i = 0; i < fields.Length; i++) fields[i].SetValue(null, before[i]); }
     });
 
     [Fact] // WPF KeywordTriggerService.cs:1117-1146: a regex match unions only the words on its first word's screen.
