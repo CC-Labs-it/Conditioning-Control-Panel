@@ -218,6 +218,47 @@ public sealed class InlineLoopVideoTests
     }
 
     [Fact]
+    public async Task FinalHapticStopStillRunsAfterOutputDuringGazeWait()
+    {
+        var settings = new HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        settings.V2.Provider("lovense").Enabled = false;
+        settings.V2.Provider("buttplug").Enabled = false;
+        settings.V2.Provider("mock").Enabled = true;
+        using var haptics = new ConditioningControlPanel.Services.HapticService(settings);
+        var oldService = ConditioningControlPanel.CoreHaptics.Service;
+        var oldToast = ConditioningControlPanel.Services.Haptics.Core.MockProviderV2.Toast;
+        var messages = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        ConditioningControlPanel.Services.Haptics.Core.MockProviderV2.Toast = messages.Enqueue;
+        ConditioningControlPanel.CoreHaptics.Service = haptics;
+        try
+        {
+            Assert.True(await haptics.ConnectAsync());
+            var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var exit = global::ConditioningControlPanel.Avalonia.App.ShutdownAfterGazeCleanupAsync(
+                global::ConditioningControlPanel.Avalonia.App.StopHapticsBeforeGazeWait,
+                () => pending.Task,
+                global::ConditioningControlPanel.Avalonia.App.StopHapticsForExit, TimeSpan.FromSeconds(3));
+            await Task.Delay(800); // The early panic's retries have finished.
+            messages.Clear();
+            var provider = haptics.DeviceManager.Providers.Single(p => p.Key == "mock");
+            await provider.SetOutputsAsync("mock-lush", new[] {
+                new ConditioningControlPanel.Services.Haptics.Core.ActuatorOutput(
+                    ConditioningControlPanel.Services.Haptics.Core.ActuatorType.Vibrate, 0, 1)
+            }, CancellationToken.None);
+            Assert.Contains(messages, m => m.Contains("100%"));
+            pending.SetResult();
+            await exit.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Contains(messages, m => m.Contains("ALL STOP"));
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreHaptics.Service = oldService;
+            ConditioningControlPanel.Services.Haptics.Core.MockProviderV2.Toast = oldToast;
+        }
+    }
+
+    [Fact]
     public async Task GazeCloseAndShutdownAreBoundedWithPendingRoundCleanup()
     {
         await WithClip(async clip =>

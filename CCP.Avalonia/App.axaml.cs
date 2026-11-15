@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia
 
         // The pending teardown retains its player, media and sink if native Stop wedges.
         internal static Task ShutdownAfterGazeCleanupAsync(Action shutdown) =>
-            ShutdownAfterGazeCleanupAsync(StopHapticsForExit,
+            ShutdownAfterGazeCleanupAsync(StopHapticsBeforeGazeWait,
                 Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync, shutdown,
                 TimeSpan.FromMilliseconds(500));
 
@@ -34,7 +34,13 @@ namespace ConditioningControlPanel.Avalonia
             shutdown();
         }
 
-        private static void StopHapticsForExit()
+        internal static void StopHapticsBeforeGazeWait()
+        {
+            try { CoreHaptics.Service?.PanicStop(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics early stop failed"); }
+        }
+
+        internal static void StopHapticsForExit()
         {
             try { CoreHaptics.Service?.ShutdownStop(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
@@ -970,7 +976,7 @@ namespace ConditioningControlPanel.Avalonia
                 desktop.ShutdownRequested += (_, e) =>
                 {
                     if (_shutdownAfterGazeReady) return;
-                    StopHapticsForExit();
+                    StopHapticsBeforeGazeWait();
                     var cleanup = Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync();
                     if (!cleanup.IsCompleted)
                     {
