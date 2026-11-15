@@ -1,6 +1,5 @@
 // WPF Services/Possession/Effects/SwapEffect.cs:136-194: partner geometry and preference.
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Automation;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using Avalonia;
 using Avalonia.VisualTree;
@@ -156,8 +156,7 @@ internal sealed class SwapEffect : IPossessionEffect
                 host.BoundsOnGhostLayer(first) is not { } ra || host.BoundsOnGhostLayer(second) is not { } rb ||
                 !double.IsFinite(SwapPartnerRule.Score(ra, rb, LooksStartStop(first), LooksStartStop(second))) ||
                 !PairMoves(layer, first, second, ra, rb, out _moveA, out _moveB)) { Release(); return; }
-            var name = string.Join(" and ", new[] { target.DisplayName, partner.DisplayName }.Where(n => !string.IsNullOrWhiteSpace(n)));
-            try { ctx.Name(Id, string.IsNullOrWhiteSpace(name) ? "two buttons" : name); } catch { }
+            try { ctx.Name(Id, PairName(target, partner)); } catch { }
             _outlineA = ctx.Attribution.Possess(first); _outlineB = ctx.Attribution.Possess(second);
             _a = PossessionLease.Take(first); _b = PossessionLease.Take(second);
             if (_a == null || _b == null) { Release(); return; }
@@ -171,6 +170,15 @@ internal sealed class SwapEffect : IPossessionEffect
         }
         catch (OperationCanceledException) { if (ReferenceEquals(_cancel, source) && !_returning) Release(); }
         catch (Exception ex) { Serilog.Log.Warning(ex, "Possession swap failed"); if (ReferenceEquals(_cancel, source)) Release(); }
+    }
+
+    internal static string PairName(PossessionTarget a, PossessionTarget b)
+    {
+        bool hasA = !string.IsNullOrWhiteSpace(a.DisplayName), hasB = !string.IsNullOrWhiteSpace(b.DisplayName);
+        if (hasA && hasB) return Loc.GetF("possession_swap_pair", a.DisplayName, b.DisplayName);
+        if (hasA) return a.DisplayName;
+        if (hasB) return b.DisplayName;
+        return Loc.Get("possession_swap_two_buttons");
     }
 
     private static async Task Charge(PossessionContext ctx,

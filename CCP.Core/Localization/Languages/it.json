@@ -6612,6 +6612,8 @@
   "lockdown_audio_tics": "Tic sonori",
   "lockdown_audio_tics_tip": "Un piccolo crepitio di brace quando la stanza fa qualcosa di grosso, e un breve calo quando peggiora. Disattivalo per una possessione silenziosa.",
   "lockdown_poss_stay": "Resta",
+  "possession_swap_pair": "{0} e {1}",
+  "possession_swap_two_buttons": "due pulsanti",
   "lockdown_poss_level_hers": "livello di lei",
   "lockdown_poss_suffix_mine": " (mio)",
   "lockdown_poss_suffix_hers": " (di lei)",

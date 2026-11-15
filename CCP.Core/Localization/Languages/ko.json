@@ -6359,6 +6359,8 @@
   "lockdown_audio_tics": "사운드 틱",
   "lockdown_audio_tics_tip": "방이 크게 움직일 때의 작은 잔불 소리와, 상황이 나빠질 때의 짧은 가라앉음. 조용한 홀림을 원하면 끄세요.",
   "lockdown_poss_stay": "그대로",
+  "possession_swap_pair": "{0} 및 {1}",
+  "possession_swap_two_buttons": "버튼 두 개",
   "lockdown_poss_level_hers": "레벨은 그녀의 것",
   "lockdown_poss_suffix_mine": " (내 것)",
   "lockdown_poss_suffix_hers": " (그녀의 것)",

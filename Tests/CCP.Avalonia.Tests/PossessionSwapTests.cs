@@ -136,6 +136,9 @@ public class PossessionSwapTests
     {
         var effect = new SwapEffect();
         var attribution = (Attribution)ctx.Attribution;
+        string? named = null;
+        ctx = new PossessionContext { Host = ctx.Host, Attribution = attribution, Rung = ctx.Rung, Intensity = ctx.Intensity,
+            Photosafe = ctx.Photosafe, Rng = ctx.Rng, ElapsedFraction = ctx.ElapsedFraction, Remaining = ctx.Remaining, Name = (_, n) => named = n };
         attribution.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var transformA = a.RenderTransform; var transformC = c.RenderTransform;
         var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeC = host.BoundsOnGhostLayer(c)!.Value;
@@ -147,6 +150,7 @@ public class PossessionSwapTests
         Assert.Equal(1, frames.Count);
         Assert.True(PossessionLease.IsLeased(a)); Assert.True(PossessionLease.IsLeased(c));
         Assert.Equal(2, attribution.Outlines);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("possession_swap_pair", "a", "c"), named);
         frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(275));
         Assert.Equal(80, host.BoundsOnGhostLayer(a)!.Value.X - homeA.X, 1);
         frames.Frame(TimeSpan.FromMilliseconds(550)); await apply;
@@ -234,6 +238,35 @@ public class PossessionSwapTests
         host.Targets = new[] { targets[0], targets[2] };
         Assert.False(new SwapEffect().CanApply(ctx, targets[0]));
         return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("en", "A and B", "two buttons")]
+    [InlineData("de", "A und B", "zwei Schaltflächen")]
+    [InlineData("es", "A y B", "dos botones")]
+    [InlineData("fr", "A et B", "deux boutons")]
+    [InlineData("it", "A e B", "due pulsanti")]
+    [InlineData("ja", "AとB", "二つのボタン")]
+    [InlineData("ko", "A 및 B", "버튼 두 개")]
+    [InlineData("pt-BR", "A e B", "dois botões")]
+    [InlineData("ru", "A и B", "две кнопки")]
+    [InlineData("zh-CN", "A和B", "两个按钮")]
+    public void PairNameUsesEachLanguageAndPreservesSingleNames(string language, string pair, string fallback) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage(language);
+            var a = new PossessionTarget { Visual = new Button(), Key = "a", Role = PossessionRole.Button, DisplayName = "A" };
+            var b = new PossessionTarget { Visual = new Button(), Key = "b", Role = PossessionRole.Button, DisplayName = "B" };
+            var empty = new PossessionTarget { Visual = new Button(), Key = "empty", Role = PossessionRole.Button };
+            Assert.Equal(pair, SwapEffect.PairName(a, b));
+            Assert.Equal("A", SwapEffect.PairName(a, empty));
+            Assert.Equal("B", SwapEffect.PairName(empty, b));
+            Assert.Equal(fallback, SwapEffect.PairName(empty, empty));
+        }
+        finally { loc.SetLanguage(previous); }
     });
 
 }
