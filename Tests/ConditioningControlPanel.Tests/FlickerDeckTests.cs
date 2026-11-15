@@ -199,7 +199,7 @@ public class FlickerDeckTests
         Assert.False(FlickerDeck.Applies(true, true, true, true, false, false, false, false));  // v2 preview
         Assert.False(FlickerDeck.Applies(true, true, true, false, true, false, false, false));  // remix
         Assert.False(FlickerDeck.Applies(true, true, true, false, false, true, false, false));  // natasha
-        Assert.False(FlickerDeck.Applies(true, true, true, false, false, false, true, false));  // owned drag
+        Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, true, false));   // owned drag keeps the card: a tap flips
         Assert.False(FlickerDeck.Applies(true, true, true, false, false, false, false, true));  // owned shatter
     }
 

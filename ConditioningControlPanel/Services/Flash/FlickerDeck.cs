@@ -133,13 +133,14 @@ public static class FlickerDeck
     /// <summary>
     /// Does a flash become a card? Super on, drawn by the compositor and clickable by the mouse.
     /// Anything owned that would also act on the press or the dismiss wins and Super stands down
-    /// for that flash: a v2 preview, owned dragging, owned Shatter. A remix (one hero picture
+    /// for that flash: a v2 preview, owned Shatter. Owned dragging keeps the card (owner,
+    /// 2026-11-15): a drag moves it, a tap flips it. A remix (one hero picture
     /// across the screens) and Natasha's red flash (a click is how you dodge it) stay plain too.
     /// </summary>
     public static bool Applies(bool superOn, bool usesLayer, bool clickable, bool previewV2, bool isRemix,
         bool isNatasha, bool dragOwnedOn, bool shatterOwnedOn)
         => superOn && usesLayer && clickable && !previewV2 && !isRemix && !isNatasha
-           && !dragOwnedOn && !shatterOwnedOn;
+           && !shatterOwnedOn;
 
     /// <summary>A fresh card with its BreakAt rolled and its cracks laid out.</summary>
     public static FlickerDeckState Create(int index, Random rng) => new()

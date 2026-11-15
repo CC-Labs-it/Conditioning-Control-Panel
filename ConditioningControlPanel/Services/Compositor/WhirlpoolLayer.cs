@@ -51,6 +51,10 @@ public sealed class WhirlpoolLayer : BaseLayer
         var stage = SuperStageHost.Stage;
         if (!stage.PoolOn) return;
         double strength = Math.Clamp((App.Settings?.Current?.SpiralOpacity ?? 10) / 100.0, 0, 1);
-        _draw.Draw(canvas, stage.Pool, strength);
+        // The user's own spiral (stock, or woven in the Loom) when one is loaded; the drawn arms
+        // only stand in while there is none.
+        SKImage? own = null;
+        try { own = SpiralLayer.Main?.CurrentFrame; } catch (Exception ex) { App.Logger?.Debug("Whirlpool frame: {E}", ex.Message); }
+        _draw.Draw(canvas, stage.Pool, strength, own);
     }
 }

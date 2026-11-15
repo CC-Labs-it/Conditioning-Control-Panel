@@ -26,6 +26,17 @@ public class SpiralLayer : BaseLayer
 
     public SpiralLayer(CompositorEngine engine) : base(engine) { }
 
+    /// <summary>The overlay's own spiral layer (set by OverlayService). The Whirlpool borrows its
+    /// picture, so the pool is whatever spiral the user picked or wove in the Loom.</summary>
+    public static SpiralLayer? Main { get; set; }
+
+    /// <summary>The frame the spiral is on right now, or null while nothing is loaded. It keeps
+    /// stepping while the spiral has stepped aside for the Whirlpool. Render thread.</summary>
+    public SKImage? CurrentFrame
+    {
+        get { var f = _frames; return f.Length == 0 ? null : f[Math.Min(_frameIndex, f.Length - 1)]; }
+    }
+
     public override int ZIndex => CompositorLayers.Spiral;
 
     protected override bool GentleFades => true;   // gentle visuals: spiral fades in and out
@@ -165,7 +176,12 @@ public class SpiralLayer : BaseLayer
         }
         // Only repaint the surface when the frame changed, and never for a spiral fully stepped aside.
         if (_frameIndex != start && _veil > 0) _dirty = true;
+        _stepped = _frameIndex != start;
     }
+
+    private bool _stepped;
+    /// <summary>Did the last update move to a new frame (the Whirlpool repaints on it).</summary>
+    public bool Stepped => _stepped;
 
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
     {

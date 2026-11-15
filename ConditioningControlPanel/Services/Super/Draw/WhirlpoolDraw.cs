@@ -20,7 +20,9 @@ public sealed class WhirlpoolDraw : IDisposable
     private float _glowR; private int _glowKey;
 
     /// <summary><paramref name="strength"/> 0..1 is the base spiral's own opacity setting.</summary>
-    public void Draw(SKCanvas canvas, Whirlpool p, double strength)
+    /// <summary><paramref name="picture"/> = a frame of the user's own spiral: it is drawn as the pool
+    /// (round, soft at the rim) in place of the three arms.</summary>
+    public void Draw(SKCanvas canvas, Whirlpool p, double strength, SKImage? picture = null)
     {
         if (p.Size <= 0.004) return;
         double e = p.Eased;
@@ -45,6 +47,13 @@ public sealed class WhirlpoolDraw : IDisposable
         _glow.Shader = _glowShader;
         _glow.Color = SKColors.White.WithAlpha((byte)(255 * master));
         canvas.DrawCircle(0, 0, r, _glow);
+
+        if (picture != null && picture.Width > 1 && picture.Height > 1)
+        {
+            DrawPicture(canvas, picture, r, master, (float)e);
+            canvas.Restore();
+            return;
+        }
 
         // Each arm is ONE stroked path (no joints to show), and one radial shader fades all three
         // from full strength at 45% of the reach to nothing at the rim: a soft edge, no circle.
@@ -85,8 +94,36 @@ public sealed class WhirlpoolDraw : IDisposable
         canvas.Restore();
     }
 
+    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
+    private readonly SKPaint _rim = new() { BlendMode = SKBlendMode.DstIn };
+    private SKShader? _rimShader; private float _rimR;
+
+    /// <summary>The middle square of the picture, as a disc that fades out over its outer third.
+    /// The canvas is already centred on the pool.</summary>
+    private void DrawPicture(SKCanvas canvas, SKImage picture, float r, float master, float e)
+    {
+        float side = Math.Min(picture.Width, picture.Height);
+        var src = SKRect.Create((picture.Width - side) / 2f, (picture.Height - side) / 2f, side, side);
+        var dst = new SKRect(-r, -r, r, r);
+        if (_rimShader == null || Math.Abs(_rimR - r) > 1.5f)
+        {
+            _rimShader?.Dispose();
+            _rimShader = SKShader.CreateRadialGradient(new SKPoint(0, 0), r,
+                new[] { SKColors.White, SKColors.White, SKColors.White.WithAlpha(120), SKColors.Transparent },
+                new[] { 0f, 0.55f, 0.8f, 1f }, SKShaderTileMode.Clamp);
+            _rimR = r;
+        }
+        canvas.SaveLayer(dst, null);
+        _pic.Color = SKColors.White.WithAlpha((byte)(255 * master * (0.55f + 0.45f * e)));
+        canvas.DrawImage(picture, src, dst, _pic);
+        _rim.Shader = _rimShader;
+        canvas.DrawRect(dst, _rim);
+        canvas.Restore();
+    }
+
     public void Dispose()
     {
+        _rimShader?.Dispose(); _rimShader = null; _pic.Dispose(); _rim.Dispose();
         _glowShader?.Dispose(); _glowShader = null;
         _armShader?.Dispose(); _armShader = null;
         _arm.Dispose(); _glow.Dispose(); _path.Dispose();

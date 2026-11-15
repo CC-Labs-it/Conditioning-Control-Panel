@@ -270,6 +270,7 @@ public class OverlayService : IDisposable
         {
             _spiralLayer = new Compositor.SpiralLayer(App.Compositor!);
             App.Compositor!.RegisterLayer(_spiralLayer);
+            Compositor.SpiralLayer.Main = _spiralLayer;
             PushStepAside();
         }
         return _spiralLayer;

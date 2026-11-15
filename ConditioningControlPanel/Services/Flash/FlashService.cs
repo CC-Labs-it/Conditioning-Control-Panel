@@ -3054,7 +3054,9 @@ namespace ConditioningControlPanel.Services
             }
             if (outcome == FlashDragOutcome.Tap && !window.IsFadingOut)
             {
-                OnFlashClicked(window, App.Settings.Current);
+                // A tap on a Deck card is its press (flip, then break); a drag only moved it.
+                if (window.LayerItem?.Deck != null) DeckPress(window);
+                else OnFlashClicked(window, App.Settings.Current);
             }
             else if (outcome == FlashDragOutcome.Fling && window.IsNatasha && !window.NatashaDodged && !window.IsFadingOut)
             {
