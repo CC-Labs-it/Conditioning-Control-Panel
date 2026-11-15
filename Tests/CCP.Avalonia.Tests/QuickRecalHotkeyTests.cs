@@ -490,8 +490,17 @@ public sealed class QuickRecalHotkeyTests
             tracker.Calibration = new WebcamCalibrationData();
             shell.StartQuickRecalHotkey();
             Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+            camera.SetSessionForTests("/session");
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint()); // A bound shortcut with no reported trigger is unknown.
+            camera.ShortcutChanged("/other", "Wrong+Key");
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
             camera.SetSessionForTests("/session", "Meta+Shift+P");
             Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("webcam_quick_recal_hotkey_hint", "Ctrl+Alt+G", "Meta+Shift+P"), WebcamQuickRecalWindow.HotkeyHint());
+            camera.ShortcutChanged("/session", "Ctrl+Alt+J");
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("webcam_quick_recal_hotkey_hint", "Ctrl+Alt+G", "Ctrl+Alt+J"), WebcamQuickRecalWindow.HotkeyHint());
+            camera.ShortcutChanged("/session", null);
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+            camera.ShortcutChanged("/session", "Ctrl+Alt+J");
             s.WebcamQuickRecalHotkeyEnabled = false;
             shell.ApplyQuickRecalHotkey();
             Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
