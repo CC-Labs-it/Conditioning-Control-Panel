@@ -135,7 +135,8 @@ namespace ConditioningControlPanel.Features
                 {
                     Inverted = () => DashboardDepth && DimWhenInactive && DashCardTip.Inverted,
                 };
-                ContentRoot.Children.Add(_superCorner);
+                // Under the rim, the active ring and the lock veil: the ring runs over the corner.
+                ContentRoot.Children.Insert(ContentRoot.Children.IndexOf(RimLight), _superCorner);
             }
             BadgeColumn.Margin = new Thickness(_superCorner != null ? Controls.SuperCorner.Leg - 4 : 8, 8, 0, 0);
         }

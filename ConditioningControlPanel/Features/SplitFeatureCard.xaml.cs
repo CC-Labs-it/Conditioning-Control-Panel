@@ -153,10 +153,13 @@ namespace ConditioningControlPanel.Features
 
         private Controls.SuperCorner? Swap(Controls.SuperCorner? old, string? name, bool bottomRight)
         {
-            if (old != null) ContentRoot.Children.Remove(old);
+            // The corner lives in its half's region, just under that half's active ring, so the ring
+            // runs over it and the half's clip cuts it with the seam.
+            var region = bottomRight ? HalfRegionB : HalfRegionA;
+            if (old != null) region.Children.Remove(old);
             if (!Enum.TryParse<Services.Super.SuperEffect>(name, out var effect)) return null;
             var corner = new Controls.SuperCorner(effect, bottomRight) { Inverted = () => DashboardDepth && DashCardTip.Inverted };
-            ContentRoot.Children.Add(corner);
+            region.Children.Insert(region.Children.IndexOf(bottomRight ? ActiveRingB : ActiveRingA), corner);
             return corner;
         }
 

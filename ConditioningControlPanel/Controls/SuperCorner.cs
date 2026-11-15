@@ -18,16 +18,20 @@ namespace ConditioningControlPanel.Controls
     public sealed class SuperCorner : FrameworkElement
     {
         /// <summary>Length of the two short sides, DIPs.</summary>
-        public const double Leg = 32;
+        public const double Leg = 34;
 
         private static readonly Color Gold = Color.FromRgb(0xFF, 0xCF, 0x6B);
         private static readonly Brush GoldBrush = Frozen(Gold);
-        private static readonly Brush GoldHot = Frozen(Color.FromRgb(0xFF, 0xE0, 0x9A));
-        private static readonly Brush OffBrush = Frozen(Color.FromArgb(0xE6, 0x1A, 0x1A, 0x2E));
-        private static readonly Brush OffHot = Frozen(Color.FromArgb(0xF2, 0x3A, 0x30, 0x52));
+        // See-through on purpose (owner, 2026-11-15): the corner sits BEHIND the tile's ring and the
+        // art shows through it. On is a warm gold glass, off a dark one; hover firms both up.
+        private static readonly Brush OnFill = Frozen(Color.FromArgb(0xD0, 0xFF, 0xCF, 0x6B));
+        private static readonly Brush GoldHot = Frozen(Color.FromArgb(0xF2, 0xFF, 0xE0, 0x9A));
+        private static readonly Brush OffBrush = Frozen(Color.FromArgb(0x8C, 0x12, 0x0E, 0x22));
+        private static readonly Brush OffHot = Frozen(Color.FromArgb(0xC8, 0x3A, 0x30, 0x52));
+        private static readonly Pen EdgeGlow = FrozenPen(Color.FromArgb(0x50, 0xFF, 0xCF, 0x6B), 5);
         private static readonly Brush Ink = Frozen(Color.FromRgb(0x1A, 0x10, 0x30));
-        private static readonly Brush DimStar = Frozen(Color.FromArgb(0xB0, 0xFF, 0xCF, 0x6B));
-        private static readonly Pen Edge = FrozenPen(Color.FromArgb(0xC0, 0xFF, 0xCF, 0x6B), 1.2);
+        private static readonly Brush DimStar = Frozen(Color.FromRgb(0xFF, 0xD9, 0x85));
+        private static readonly Pen Edge = FrozenPen(Color.FromRgb(0xFF, 0xD9, 0x85), 1.6);
         private static readonly Typeface Face = new(new FontFamily("Segoe UI Symbol, Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
 
         private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
@@ -47,7 +51,6 @@ namespace ConditioningControlPanel.Controls
             HorizontalAlignment = bottomRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             VerticalAlignment = bottomRight ? VerticalAlignment.Bottom : VerticalAlignment.Top;
             Cursor = Cursors.Hand;
-            Panel.SetZIndex(this, 12);
             ToolTip = new ToolTip();
             ToolTipService.SetInitialShowDelay(this, 350);
             ToolTipService.SetShowDuration(this, 20000);
@@ -110,13 +113,18 @@ namespace ConditioningControlPanel.Controls
         protected override void OnRender(DrawingContext dc)
         {
             bool lit = Lit, hot = IsMouseOver;
-            dc.DrawGeometry(lit ? (hot ? GoldHot : GoldBrush) : (hot ? OffHot : OffBrush), null, Shape());
+            var shape = Shape();
+            dc.DrawGeometry(lit ? (hot ? GoldHot : OnFill) : (hot ? OffHot : OffBrush), null, shape);
+            // A soft gold halo along the cut, kept inside the triangle, so the corner pops off the art.
+            dc.PushClip(shape);
+            dc.DrawLine(EdgeGlow, BottomRight ? new Point(0, Leg) : new Point(Leg, 0), BottomRight ? new Point(Leg, 0) : new Point(0, Leg));
+            dc.Pop();
             // The cut edge: the long side, so an off corner still reads as a gold dog-ear.
             dc.DrawLine(Edge, BottomRight ? new Point(0, Leg) : new Point(Leg, 0), BottomRight ? new Point(Leg, 0) : new Point(0, Leg));
 
-            var star = new FormattedText("★", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 12.5,
+            var star = new FormattedText("★", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 14,
                 lit ? Ink : DimStar, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            double c = BottomRight ? Leg * 0.69 : Leg * 0.31;
+            double c = BottomRight ? Leg * 0.66 : Leg * 0.34;
             dc.DrawText(star, new Point(c - star.Width / 2, c - star.Height / 2));
         }
 
