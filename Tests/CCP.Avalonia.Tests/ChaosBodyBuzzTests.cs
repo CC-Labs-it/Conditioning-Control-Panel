@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
@@ -13,8 +14,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>Runs alone: it fills the shared BubbleOverlay.Field and waits 800 ms for the hops to land; a parallel chaos class
-/// popping a bubble in that gap counted 9 instead of 8 (restack wave 2 run 3, Linux shard 0).</summary>
+/// <summary>Exercises the shared bubble field with a stepped hop clock and a clean field.</summary>
 [Collection(RunsAloneCollection.Name)]
 public class ChaosBodyBuzzTests
 {
@@ -29,6 +29,8 @@ public class ChaosBodyBuzzTests
         {
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
             zapField.SetValue(null, sentinel);
+            // A previous ambient session can leave a popping bubble in the shared field.
+            AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true }));
             await ShockwaveSelectsRendererAndCancelsHops(false);
             Assert.True(ChaosFieldFxOverlay.SkipPlatformChecksForTests);
             Assert.Equal(sentinel, zapField.GetValue(null));
@@ -43,7 +45,7 @@ public class ChaosBodyBuzzTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task ShockwaveSelectsRendererAndCancelsHops(bool skia) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ShockwaveSelectsRendererAndCancelsHops(bool skia) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var field = typeof(ChaosRunHost).GetField("_state", BindingFlags.NonPublic | BindingFlags.Static)!;
         var old = field.GetValue(null);
@@ -56,8 +58,13 @@ public class ChaosBodyBuzzTests
         var composited = ChaosSkiaFxOverlay.Composited;
         var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
         var language = LocalizationManager.Instance.CurrentLanguage;
+        var schedule = ChaosRunHost.ScheduleBodyBuzzHop;
+        var clock = new StartupLadder.TestClock();
         try
         {
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop(); // An earlier ambient run may have left popping bubbles and a spawn timer.
+            ChaosRunHost.ScheduleBodyBuzzHop = (fire, delay) => clock.CreateTimer(_ => fire(), null, delay, System.Threading.Timeout.InfiniteTimeSpan);
             settings.ChaosSkiaFxEnabled = skia;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.Composited = () => true;
@@ -76,23 +83,26 @@ public class ChaosBodyBuzzTests
             Assert.Equal(8, ChaosRunHost.BodyBuzzHopCount);
             if (skia) Assert.Equal(1, ChaosSkiaFxOverlay.Active!.Fx.RippleCount);
             else Assert.Equal(1, ChaosFieldFxOverlay.Active!.Model.TransientCount);
-            await Task.Delay(800);
+            clock.Advance(TimeSpan.FromMilliseconds(560));
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
             Assert.False(outside.Popping);
             Assert.Equal(8, BubbleOverlay.Field.Bubbles.FindAll(b => b.Popping).Count);
             ChaosRunHost.BodyBuzz(source);
             BubbleOverlay.EndChaos();
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
+            Assert.Empty(clock.Timers);
             ChaosFieldFxOverlay.CloseActive();
             ChaosSkiaFxOverlay.CloseActive();
             field.SetValue(null, new ChaosRunState(new ChaosRunConfig()) { EStimShockwaveChance = 0 });
             ChaosRunHost.BodyBuzz(source);
             Assert.Null(ChaosFieldFxOverlay.Active);
             Assert.Null(ChaosSkiaFxOverlay.Active);
+            return Task.CompletedTask;
         }
         finally
         {
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
+            ChaosRunHost.ScheduleBodyBuzzHop = schedule;
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
             LocalizationManager.Instance.SetLanguage(language);
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();

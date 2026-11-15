@@ -12,7 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 
 internal static partial class ChaosRunHost
 {
-    private static readonly List<DispatcherTimer> BodyBuzzHops = new();
+    private static readonly List<IDisposable> BodyBuzzHops = new();
+    internal static Func<Action, TimeSpan, IDisposable> ScheduleBodyBuzzHop = (fire, delay) => DispatcherTimer.RunOnce(fire, delay);
     private static DateTime _lastBodyBuzzZap;
     internal static int BodyBuzzHopCount => BodyBuzzHops.Count;
 
@@ -32,15 +33,13 @@ internal static partial class ChaosRunHost
         for (int i = 0; i < targets.Length; i++)
         {
             var target = targets[i].Bubble;
-            var hop = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(70 * (i + 1)) };
-            hop.Tick += (_, _) =>
+            IDisposable? hop = null;
+            hop = ScheduleBodyBuzzHop(() =>
             {
-                hop.Stop();
-                BodyBuzzHops.Remove(hop);
+                BodyBuzzHops.Remove(hop!);
                 if (BubbleOverlay.Field.Bubbles.Contains(target) && !target.Popping) BubbleOverlay.PopChaos(target);
-            };
+            }, TimeSpan.FromMilliseconds(70 * (i + 1)));
             BodyBuzzHops.Add(hop);
-            hop.Start();
         }
         if (bolts.Length > 0)
         {
@@ -61,7 +60,7 @@ internal static partial class ChaosRunHost
 
     internal static void ClearBodyBuzzHops()
     {
-        foreach (var hop in BodyBuzzHops) hop.Stop();
+        foreach (var hop in BodyBuzzHops) hop.Dispose();
         BodyBuzzHops.Clear();
     }
 }
