@@ -137,15 +137,33 @@ internal sealed class LauncherDoorCard
             IsHitTestVisible = false,
             RenderTransformOrigin = new Point(0.7, 0.5),
             RenderTransform = _zoom,
+            // The picture is shown WHOLE (owner, 2026-11-15: "the image is clipped"): the reel is
+            // a 16:9 box as tall as the card, seated at the right, and its left edge melts away.
+            HorizontalAlignment = HorizontalAlignment.Right,
+            OpacityMask = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromArgb(0x00, 0, 0, 0), 0),
+                    new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 0.28),
+                    new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 1),
+                },
+            },
+        };
+        body.SizeChanged += (_, _) =>
+        {
+            if (body.ActualHeight > 0)
+                reel.Width = Math.Min(body.ActualWidth, body.ActualHeight * 16.0 / 9.0);
         };
         for (int i = 0; i < 2; i++)
         {
             var img = new Image
             {
-                Stretch = Stretch.UniformToFill,
+                Stretch = Stretch.Uniform,
                 Opacity = 0,
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = new TransformGroup { Children = { new ScaleTransform(1.08, 1.08), new TranslateTransform() } },
+                RenderTransform = new TransformGroup { Children = { new ScaleTransform(1.0, 1.0), new TranslateTransform() } },
             };
             RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
             _layers[i] = img;
@@ -560,9 +578,10 @@ internal sealed class LauncherDoorCard
         var pan = (TranslateTransform)g.Children[1];
         _driftLeft = !_driftLeft;
         var span = TimeSpan.FromSeconds(ReelDriftSeconds + ReelHoldMs / 1000.0);
-        var zoom = new DoubleAnimation(1.06, 1.18, span);
+        // A gentle push only: the picture starts whole and never loses more than its outer edge.
+        var zoom = new DoubleAnimation(1.0, 1.05, span);
         Timeline.SetDesiredFrameRate(zoom, ReelFps);
-        var slide = new DoubleAnimation(_driftLeft ? 18 : -18, _driftLeft ? -18 : 18, span);
+        var slide = new DoubleAnimation(_driftLeft ? 6 : -6, _driftLeft ? -6 : 6, span);
         Timeline.SetDesiredFrameRate(slide, ReelFps);
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
