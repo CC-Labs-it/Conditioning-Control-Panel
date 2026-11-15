@@ -230,7 +230,23 @@
                            Margin="0,2,0,0"/>
 
                 <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <ctl:SuperBox x:Name="SuperBoxMain" Effect="Vortex"/>
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="Vortex">
+                    <!-- The Whirlpool's one option: always new Loom spirals, or one saved Loom spiral
+                         (Features/SpiralFeatureControl.Pool.cs). Shown while the Whirlpool is picked. -->
+                    <Grid x:Name="PoolSpiralRow" Height="36" Background="Transparent" Visibility="Collapsed"
+                          Loaded="PoolSpiralRow_Loaded" Unloaded="PoolSpiralRow_Unloaded"
+                          ToolTip="{loc:Str tooltip_super_pool_spiral}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_spiral}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" Width="180" VerticalAlignment="Center"
+                                  Style="{DynamicResource DarkComboBoxStyle}"
+                                  SelectionChanged="CmbPoolSpiral_Changed"/>
+                    </Grid>
+                </ctl:SuperBox>
             </StackPanel>
 
             <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its

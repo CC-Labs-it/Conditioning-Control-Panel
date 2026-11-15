@@ -5478,6 +5478,15 @@ namespace ConditioningControlPanel.Models
             set { _steamWordsInFog = value; OnPropertyChanged(); }
         }
 
+        // Whirlpool (the spiral's V2): "" = always new Loom spirals, melting into each other;
+        // otherwise the slug of the saved Loom spiral it holds.
+        private string _whirlpoolSpiral = "";
+        public string WhirlpoolSpiral
+        {
+            get => _whirlpoolSpiral;
+            set { _whirlpoolSpiral = value ?? ""; OnPropertyChanged(); }
+        }
+
         // Steam: how big the spot around the cursor that moves the fog is, in percent of the stock size.
         public static int ClampSteamWipeSize(int v) => Math.Clamp(v, 40, 300);
         private int _steamWipeSize = 100;

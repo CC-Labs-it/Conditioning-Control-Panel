@@ -29,6 +29,34 @@ public sealed class WhirlpoolLayer : BaseLayer
     public override bool Dirty => _dirty;
     public override void ClearDirty() => _dirty = false;
 
+    // The pool wears Loom spirals (owner, 2026-11-15): a newly rolled one every so often, each
+    // melting into the next, or the one saved Loom spiral the user pinned.
+    private readonly ConditioningControlPanel.SuperCore.LoomMorph _morph = new(new Random());
+    private double _phase;
+    private string _pinKey = "";
+
+    private void StepSpiral(double dt, bool showing)
+    {
+        try
+        {
+            var key = App.Settings?.Current?.WhirlpoolSpiral ?? "";
+            if (key != _pinKey)
+            {
+                _pinKey = key;
+                ConditioningControlPanel.SuperCore.LoomSpec? pin = null;
+                if (key.Length > 0)
+                    foreach (var (slug, _, json) in Services.Chaos.DtrhLoomStore.List())
+                        if (slug == key) { pin = LoomSpecJson.Parse(json); break; }
+                _morph.Pin(pin);
+            }
+        }
+        catch (Exception ex) { App.Logger?.Debug("Whirlpool spiral pick: {E}", ex.Message); }
+        if (!showing) return;                 // a pool nobody sees does not burn through spirals
+        bool gentle = Safety.GentleVisuals.On;
+        _phase += dt * (gentle ? 0.06 : 0.12);
+        _morph.Step(gentle ? dt * 0.6 : dt);
+    }
+
     public void Show() { _dirty = true; SetActive(true); }
     public void Hide() { if (IsActive) { SetActive(false); _dirty = true; } }
 
@@ -40,6 +68,7 @@ public sealed class WhirlpoolLayer : BaseLayer
         SuperStageHost.Step();
         _sinceFrame += Math.Min(delta.TotalSeconds, 0.1);
         var pool = SuperStageHost.Stage.Pool;
+        StepSpiral(Math.Min(delta.TotalSeconds, 0.1), pool.Size > 0.004);
         // Nothing to draw while the mouse keeps the pool at nothing: no repaint either.
         if (pool.Size <= 0.004) { if (_sinceFrame > 0.5) { _sinceFrame = 0; _dirty = true; } return; }
         if (_sinceFrame >= 1 / 30.0) { _sinceFrame = 0; _dirty = true; }
@@ -51,10 +80,6 @@ public sealed class WhirlpoolLayer : BaseLayer
         var stage = SuperStageHost.Stage;
         if (!stage.PoolOn) return;
         double strength = Math.Clamp((App.Settings?.Current?.SpiralOpacity ?? 10) / 100.0, 0, 1);
-        // The user's own spiral (stock, or woven in the Loom) when one is loaded; the drawn arms
-        // only stand in while there is none.
-        SKImage? own = null;
-        try { own = SpiralLayer.Main?.CurrentFrame; } catch (Exception ex) { App.Logger?.Debug("Whirlpool frame: {E}", ex.Message); }
-        _draw.Draw(canvas, stage.Pool, strength, own);
+        _draw.Draw(canvas, stage.Pool, strength, _morph.From, _morph.To, _morph.Mix, _phase);
     }
 }

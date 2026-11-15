@@ -20,9 +20,10 @@ public sealed class WhirlpoolDraw : IDisposable
     private float _glowR; private int _glowKey;
 
     /// <summary><paramref name="strength"/> 0..1 is the base spiral's own opacity setting.</summary>
-    /// <summary><paramref name="picture"/> = a frame of the user's own spiral: it is drawn as the pool
-    /// (round, soft at the rim) in place of the three arms.</summary>
-    public void Draw(SKCanvas canvas, Whirlpool p, double strength, SKImage? picture = null)
+    /// <summary><paramref name="from"/> = the Loom spiral the pool wears (round, soft at the rim), melting
+    /// into <paramref name="to"/> by <paramref name="mix"/>; with none, the three drawn arms stand in.
+    /// <paramref name="phase"/> runs the spiral's pulse and wobble.</summary>
+    public void Draw(SKCanvas canvas, Whirlpool p, double strength, LoomSpec? from = null, LoomSpec? to = null, double mix = 0, double phase = 0)
     {
         if (p.Size <= 0.004) return;
         double e = p.Eased;
@@ -48,9 +49,19 @@ public sealed class WhirlpoolDraw : IDisposable
         _glow.Color = SKColors.White.WithAlpha((byte)(255 * master));
         canvas.DrawCircle(0, 0, r, _glow);
 
-        if (picture != null && picture.Width > 1 && picture.Height > 1)
+        if (from != null)
         {
-            DrawPicture(canvas, picture, r, master, (float)e);
+            _loom ??= new LoomSpiral(LoomSize);
+            _loomBmp ??= new SKBitmap(new SKImageInfo(LoomSize, LoomSize, SKColorType.Rgba8888, SKAlphaType.Premul));
+            _loomPx ??= new byte[LoomSize * LoomSize * 4];
+            double k = to == null ? 0 : Math.Clamp(mix, 0, 1);
+            _loom.Clear();
+            _loom.Add(from, p.Angle, phase, 1 - k);
+            if (to != null) _loom.Add(to, p.Angle, phase, k);
+            _loom.CopyTo(_loomPx);
+            System.Runtime.InteropServices.Marshal.Copy(_loomPx, 0, _loomBmp.GetPixels(), _loomPx.Length);
+            _loomBmp.NotifyPixelsChanged();
+            DrawPicture(canvas, _loomBmp, r, master, (float)e);
             canvas.Restore();
             return;
         }
@@ -94,16 +105,20 @@ public sealed class WhirlpoolDraw : IDisposable
         canvas.Restore();
     }
 
-    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
+    // The Loom spiral is worked out small and stretched: it is all soft curves, and this keeps
+    // a frame well under a millisecond or two on the CPU.
+    private const int LoomSize = 320;
+    private LoomSpiral? _loom;
+    private SKBitmap? _loomBmp;
+    private byte[]? _loomPx;
+    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
     private readonly SKPaint _rim = new() { BlendMode = SKBlendMode.DstIn };
     private SKShader? _rimShader; private float _rimR;
 
-    /// <summary>The middle square of the picture, as a disc that fades out over its outer third.
-    /// The canvas is already centred on the pool.</summary>
-    private void DrawPicture(SKCanvas canvas, SKImage picture, float r, float master, float e)
+    /// <summary>The picture as a disc that fades out over its outer third. The canvas is already
+    /// centred on the pool.</summary>
+    private void DrawPicture(SKCanvas canvas, SKBitmap picture, float r, float master, float e)
     {
-        float side = Math.Min(picture.Width, picture.Height);
-        var src = SKRect.Create((picture.Width - side) / 2f, (picture.Height - side) / 2f, side, side);
         var dst = new SKRect(-r, -r, r, r);
         if (_rimShader == null || Math.Abs(_rimR - r) > 1.5f)
         {
@@ -115,7 +130,7 @@ public sealed class WhirlpoolDraw : IDisposable
         }
         canvas.SaveLayer(dst, null);
         _pic.Color = SKColors.White.WithAlpha((byte)(255 * master * (0.55f + 0.45f * e)));
-        canvas.DrawImage(picture, src, dst, _pic);
+        canvas.DrawBitmap(picture, dst, _pic);
         _rim.Shader = _rimShader;
         canvas.DrawRect(dst, _rim);
         canvas.Restore();
@@ -124,6 +139,7 @@ public sealed class WhirlpoolDraw : IDisposable
     public void Dispose()
     {
         _rimShader?.Dispose(); _rimShader = null; _pic.Dispose(); _rim.Dispose();
+        _loomBmp?.Dispose(); _loomBmp = null;
         _glowShader?.Dispose(); _glowShader = null;
         _armShader?.Dispose(); _armShader = null;
         _arm.Dispose(); _glow.Dispose(); _path.Dispose();
