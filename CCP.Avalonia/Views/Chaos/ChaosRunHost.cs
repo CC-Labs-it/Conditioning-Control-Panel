@@ -1122,7 +1122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (_state == null || _state.ActIndex <= previousAct) return;
             ChaosOverlayWindow.ChaosSfx.Play("depth_change", 0.55f);
-            ChaosAnnouncerOverlay.Announce($"DEPTH {_state.ActIndex}", ChaosAnnounceKind.Depth,
+            ChaosAnnouncerOverlay.Announce(Loc.GetF("chaos_announce_depth", _state.ActIndex), ChaosAnnounceKind.Depth,
                 artKey: "depth", subText: $"{_state.ActIndex}");
         }
 
