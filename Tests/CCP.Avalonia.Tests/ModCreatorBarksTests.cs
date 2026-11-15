@@ -126,6 +126,24 @@ public sealed class ModCreatorBarksTests
     });
 
     [Fact]
+    public void LoadedOverrideWithWhitespaceIdIsSkipped() => Run((w, root) =>
+    {
+        w.BarkBaseManifestPath = Path.Combine(root, "base.json");
+        File.WriteAllText(w.BarkBaseManifestPath, "[{id:'base.one',trigger:'Event'}]");
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        var rules = new JArray(
+            new JObject { ["id"] = "  ", ["variant_pool"] = new JArray("bad") },
+            new JObject { ["id"] = "base.one", ["variant_pool"] = new JArray("good") });
+        File.WriteAllText(FileAt(root), rules.ToString());
+        w.LoadBarksFrom(root);
+        var picker = Card(w).GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker"));
+        Assert.Equal("  ", picker.SelectedItem);
+        var exported = Export(w, Path.Combine(root, "out"));
+        Assert.Equal("base.one", Assert.Single(exported).Value<string>("id"));
+        Assert.Equal(Loc.GetF("mod_barks_skipped", 1, Loc.Get("mod_barks_no_id")), w.FindControl<TextBlock>("TxtStatus")!.Text);
+    });
+
+    [Fact]
     public void LoadedOverrideUsesFreeTextWhenManifestIsAbsent() => Run((w, root) =>
     {
         w.BarkBaseManifestPath = Path.Combine(root, "absent.json");

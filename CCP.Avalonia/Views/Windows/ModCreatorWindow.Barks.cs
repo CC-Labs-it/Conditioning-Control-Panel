@@ -254,7 +254,7 @@ public partial class ModCreatorWindow
             var id = isOverride && card.OverrideId != null
                 ? card.OverrideId.SelectedItem as string ?? "" : card.Id.Text?.Trim() ?? "";
             if (!isOverride) id = Regex.Replace(id.ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
-            if (id.Length == 0) { skipped.Add(Loc.Get("mod_barks_no_id")); continue; }
+            if (string.IsNullOrWhiteSpace(id)) { skipped.Add(Loc.Get("mod_barks_no_id")); continue; }
             var pool = new JArray();
             foreach (var (box, original, _) in card.Lines)
             {
