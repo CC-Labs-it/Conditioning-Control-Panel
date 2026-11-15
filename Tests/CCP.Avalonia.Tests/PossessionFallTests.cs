@@ -97,6 +97,16 @@ public sealed class PossessionFallTests
     });
 
     [Fact]
+    public Task ChalkUsesWpfEmberColor() => Run(async (effect, card, layer, target, ctx) =>
+    {
+        var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
+        var chalk = Assert.IsType<Rectangle>(Assert.Single(layer.Children));
+        Assert.Equal(Color.FromRgb(0xFF, 0x8A, 0x5C), Assert.IsType<SolidColorBrush>(chalk.Stroke).Color);
+        await effect.UndoAsync(TimeSpan.Zero);
+        await apply;
+    });
+
+    [Fact]
     public Task ChalkStartsTransparent() => Run(async (effect, card, layer, target, ctx) =>
     {
         var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
