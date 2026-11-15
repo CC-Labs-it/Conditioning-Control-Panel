@@ -103,8 +103,23 @@ namespace ConditioningControlPanel.Views.Controls.Companion.Runtime
         public string OllamaHost
         {
             get => _ollamaHost;
-            set { if (Set(ref _ollamaHost, value ?? string.Empty) && !_suppressWrite) WriteField(s => s.AiOllamaHost = _ollamaHost.Trim()); }
+            set
+            {
+                if (!Set(ref _ollamaHost, value ?? string.Empty) || _suppressWrite) return;
+                // #5197: an unusable host used to be saved as typed and stopped the panel opening on
+                // the next start. Blank still saves (blank means the default host); a scheme-less
+                // address saves (the provider adds http://); anything else is not saved and the
+                // status line says the host failed.
+                if (IsSavableHost(_ollamaHost))
+                    WriteField(s => s.AiOllamaHost = _ollamaHost.Trim());
+                else
+                    SetStatus(Loc.Get("label_status_failed"), healthy: false);
+            }
         }
+
+        /// <summary>Whether the host box's text may be written to settings. Pure, for tests.</summary>
+        internal static bool IsSavableHost(string? text) =>
+            string.IsNullOrWhiteSpace(text) || ConditioningControlPanel.Services.AIService.LocalAiHost.TryNormalize(text, out _);
 
         // ---- custom (BYO) ----
         public string CustomEndpoint
