@@ -30,7 +30,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// while this head's ModChanged also fires on a same-mod asset refresh (#4330).</summary>
         private string? _browserCardModId;
 
-        internal static volatile bool RemixBrowserMediaBusy;
+        internal static volatile bool RemixBrowserMediaBusy, InterruptingBrowserMedia;
+        // A dead page reporter must not suppress scheduled videos forever (WPF BrowserMediaService heartbeat).
+        internal static bool BrowserMediaRecent => System.Diagnostics.Stopwatch.GetElapsedTime(
+            System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds < 60;
+        internal static bool InterruptingBrowserMediaBusy => InterruptingBrowserMedia && BrowserMediaRecent;
         private static volatile bool _remixWatchActive;
         internal static long RemixMediaTick;
         internal static bool RemixBrowserVideoBusy => RemixBrowserMediaBusy || (_remixWatchActive
@@ -45,9 +49,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
               const id = __CCP_TOKEN__;
               clearInterval(window.__ccpRemixWatch); window.__ccpRemixAbort?.abort();
               const controller = window.__ccpRemixAbort = new AbortController();
-              let lastPlaying = 0, unknown = false;
+              let lastPlaying = 0, lastInterrupt = 0, unknown = false, interrupting = false;
               const busy = d => {
-                let active = [...d.querySelectorAll('video,audio')].some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200));
+                const media = [...d.querySelectorAll('video,audio')];
+                let active = media.some(m => !m.paused && !m.ended && (m.tagName === 'AUDIO' ? !m.muted : m.offsetWidth >= 200));
+                interrupting = interrupting || media.some(m => !m.paused && !m.ended && !m.muted && (m.tagName === 'AUDIO' || m.offsetWidth >= 200));
                 for (const f of d.querySelectorAll('iframe')) {
                   if (f.offsetWidth < 200) continue;
                   let inner = null; try { inner = f.contentDocument; } catch (_) {}
@@ -55,12 +61,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
                 return active;
               };
-              const report = () => {
-                let active = true; unknown = false;
-                try { active = busy(document); } catch (_) {}
+              const report = event => {
+                let active = true; unknown = false; interrupting = false;
+                try { active = busy(document); } catch (_) { interrupting = true; }
                 if (active) lastPlaying = Date.now();
                 else active = lastPlaying > 0 && Date.now() - lastPlaying < 2000;
-                const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active, unknown });
+                if (interrupting) lastInterrupt = Date.now();
+                else if (event?.type === 'ended') lastInterrupt = 0;
+                else interrupting = lastInterrupt > 0 && Date.now() - lastInterrupt < 2000;
+                const msg = JSON.stringify({ type: 'ccpRemixMedia', id, active, unknown, interrupting });
                 if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
                 else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
               };
@@ -74,14 +83,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _remixMediaId = null;
             var hasEngine = BrowserWebHost.HasEngine;
-            RemixBrowserMediaBusy = hasEngine;
+            RemixBrowserMediaBusy = InterruptingBrowserMedia = hasEngine;
             System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
             _remixWatchActive = hasEngine;
         }
 
         private void InstallRemixMediaWatch(Uri uri, bool success)
         {
-            if (!BrowserWebHost.HasEngine) { _remixWatchActive = false; RemixBrowserMediaBusy = false; return; }
+            if (!BrowserWebHost.HasEngine) { _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; return; }
             BeginRemixMediaWatch();
             if (!success) return; // Unknown playback fails closed until the next navigation.
             _remixMediaId = Guid.NewGuid().ToString("N");
@@ -97,12 +106,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var root = json.RootElement;
                 if (_remixMediaId == null || root.GetProperty("type").GetString() != "ccpRemixMedia" || root.GetProperty("id").GetString() != _remixMediaId) return;
                 var active = root.GetProperty("active").GetBoolean();
+                var interrupting = root.TryGetProperty("interrupting", out var report) ? report.GetBoolean() : active;
                 // An unreadable frame is idle only while the engine reports no audio, held two seconds like WPF's pause debounce.
                 if (root.TryGetProperty("unknown", out var unknown) && unknown.ValueKind == System.Text.Json.JsonValueKind.True)
                 {
                     if (BrowserWebHost.IsPlayingAudio() != false) RemixAudioTick = System.Diagnostics.Stopwatch.GetTimestamp();
-                    active |= RemixAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(RemixAudioTick).TotalSeconds < 2;
+                    var audible = RemixAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(RemixAudioTick).TotalSeconds < 2;
+                    active |= audible; interrupting |= audible;
                 }
+                InterruptingBrowserMedia = interrupting;
                 if (active) RemixBrowserMediaBusy = true;
                 System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
                 if (!active) RemixBrowserMediaBusy = false;
@@ -129,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             BrowserWebHost.DetachedFromVisualTree += (_, _) => Dispatcher.UIThread.Post(() =>
             {
-                if (!BrowserWebHost.IsAttachedToVisualTree()) { _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = false; }
+                if (!BrowserWebHost.IsAttachedToVisualTree()) { _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; }
             });
             BrowserWebHost.NavigationFinished += (url, success) =>
                 _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);
