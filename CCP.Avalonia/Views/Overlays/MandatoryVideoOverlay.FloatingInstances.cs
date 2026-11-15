@@ -255,7 +255,7 @@ internal sealed partial class MandatoryVideoOverlay
         var held = _gracePaused;
         var watched = ClosePrimary(retire: true);   // ends the grace pause with the first window's card
         // WPF FloatingInstances.cs:417-430: a grace pause always ends in a resume; the joined windows play on.
-        if (held) SetFloatingPaused(false);
+        if (held) { _graceConsumed = true; SetFloatingPaused(false); }   // one grace per run (WPF VideoService.cs:6328-6329)
         if (watched >= 1) CoreProgression.TrackVideoWatched(watched);   // WPF CreditInstance (:779-797)
         Log.Information("VideoService: floating window closed ({Reason}), {Left} left", reason, FloatingUp);
         if (endRun && FloatingUp == 0 && Scheduler.IsPlaying) Scheduler.End();

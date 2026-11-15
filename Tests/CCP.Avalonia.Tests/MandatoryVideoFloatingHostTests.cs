@@ -151,6 +151,7 @@ public sealed class MandatoryVideoFloatingHostTests
         o.Surfaces[0].Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Single(Up(o));
         Assert.False(decoders[1].Paused, "the joined window plays on");
+        Assert.Equal(GraceDecision.FallThrough, o.EvaluateGraceRequest(true, double.MaxValue));   // the grace pause stays spent
     });
 
     [Fact]
