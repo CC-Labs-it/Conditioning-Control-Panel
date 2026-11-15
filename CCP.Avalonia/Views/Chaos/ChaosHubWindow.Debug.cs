@@ -30,9 +30,11 @@ public partial class ChaosHubWindow
         if (!DebugStripEnabled() || DebugStrip != null) return;
         try
         {
+            if (Content is not Border root || root.Child is not Grid grid) return;
             Height += 44;
-            _dollhouseView.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var panel = new WrapPanel { Margin = new Thickness(0, 10, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var panel = new WrapPanel { Margin = new Thickness(22, 10, 22, 0), VerticalAlignment = VerticalAlignment.Center };
             panel.Children.Add(new TextBlock { Text = "DEBUG", Foreground = Brushes.Goldenrod, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
             _dbgRuns = Box(ChaosMeta.State.RunsCompleted.ToString(), 42); panel.Children.Add(_dbgRuns);
             panel.Children.Add(DebugButton("set runs", () => { if (int.TryParse(_dbgRuns.Text?.Trim(), out var n) && n >= 0) { ChaosMeta.State.RunsCompleted = n; ChaosMeta.Save(); DebugRefresh(); } }));
@@ -56,8 +58,8 @@ public partial class ChaosHubWindow
                 ChaosMeta.State.SeenReveals.Remove(id); ChaosMeta.State.PendingReveals.Add(id); ChaosMeta.Save(); DebugRefresh();
             }));
             panel.Children.Add(DebugButton("reset meta", () => { ChaosMeta.DebugResetState(); DebugRefresh(); }));
-            Grid.SetRow(panel, _dollhouseView.RowDefinitions.Count - 1);
-            _dollhouseView.Children.Add(panel);
+            Grid.SetRow(panel, 1);
+            grid.Children.Add(panel);
             DebugStrip = panel;
         }
         catch (Exception ex) { Log.Warning("Chaos debug strip build failed ({E})", ex.Message); }

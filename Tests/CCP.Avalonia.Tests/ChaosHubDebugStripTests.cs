@@ -5,7 +5,10 @@ using System.Reflection;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -20,6 +23,7 @@ public class ChaosHubDebugStripTests
     public void Strip_is_flagged_and_actions_refresh_the_hub() => AvaloniaTestDispatcher.Run(() =>
     {
         var oldFlag = ChaosHubWindow.DebugStripEnabled;
+        var oldCompanion = ChaosHubWindow.SetCompanionActive;
         var oldProvider = CoreSettings.ServiceProvider;
         var settingsDir = Path.Combine(Path.GetTempPath(), "ccp-debug-strip-" + Guid.NewGuid());
         Directory.CreateDirectory(settingsDir);
@@ -33,15 +37,43 @@ public class ChaosHubDebugStripTests
         try
         {
             CoreSettings.ServiceProvider = () => settings;
+            ChaosHubWindow.SetCompanionActive = _ => { };
             ChaosMetaStore.Save(new ChaosMetaState { SeenIntroGuide = true, SeenDollhouse = true }, 1);
             CoreSettings.Current.ChaosActiveSlot = 1;
             ChaosHubWindow.DebugStripEnabled = () => false;
             hub = new ChaosHubWindow(); hub.Show();
             Assert.Null(hub.DebugStrip);
+            Assert.Empty(Assert.IsType<Grid>(Assert.IsType<Border>(hub.Content).Child).RowDefinitions);
             hub.Close();
             ChaosHubWindow.DebugStripEnabled = () => true;
             hub = new ChaosHubWindow(); hub.Show();
             var strip = Assert.IsType<WrapPanel>(hub.DebugStrip);
+            var root = Assert.IsType<Grid>(Assert.IsType<Border>(hub.Content).Child);
+            void AssertStripReachable(string visibleView, string hiddenView)
+            {
+                hub.UpdateLayout();
+                HeadlessInput.RenderLiveTree(hub);
+                Assert.True(hub.FindControl<Grid>(visibleView)!.IsEffectivelyVisible);
+                Assert.False(hub.FindControl<Grid>(hiddenView)!.IsEffectivelyVisible);
+                Assert.True(strip.IsEffectivelyVisible);
+                Assert.Same(root, strip.Parent);
+                Assert.Equal(2, root.RowDefinitions.Count);
+                Assert.Equal(1, Grid.GetRow(strip));
+                foreach (var control in strip.Children.OfType<Control>().Where(c => c is Button or TextBox))
+                {
+                    var point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), hub)!.Value;
+                    Assert.InRange(point.X, 0, hub.Bounds.Width);
+                    Assert.InRange(point.Y, 0, hub.Bounds.Height);
+                    var hit = hub.InputHitTest(point) as Visual;
+                    Assert.True(hit == control || (hit != null && control.IsVisualAncestorOf(hit)),
+                        $"{visibleView}: {control}, point {point}, bounds {control.Bounds}, hit {hit}");
+                }
+            }
+            AssertStripReachable("MenuView", "DollhouseView");
+            hub.FindControl<Button>("BtnMenuDollhouse")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AssertStripReachable("DollhouseView", "MenuView");
+            hub.FindControl<Button>("BtnBackToMenu")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AssertStripReachable("MenuView", "DollhouseView");
             var boxes = strip.Children.OfType<TextBox>().ToArray();
             void Click(string text) => strip.Children.OfType<Button>().Single(b => (string?)b.Content == text)
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -64,7 +96,7 @@ public class ChaosHubDebugStripTests
         }
         finally
         {
-            hub?.Close(); ChaosHubWindow.DebugStripEnabled = oldFlag;
+            hub?.Close(); ChaosHubWindow.DebugStripEnabled = oldFlag; ChaosHubWindow.SetCompanionActive = oldCompanion;
             settings.SealForReset();
             CoreSettings.ServiceProvider = oldProvider;
             if (Directory.Exists(settingsDir)) Directory.Delete(settingsDir, true);
