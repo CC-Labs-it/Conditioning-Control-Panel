@@ -63,12 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             engine.NoteAskAnswered();
             EmiDeskService.Instance.Fire("askAnswered", new { answer = index == 0 ? "yes" : "no" });
             SpeakLine(index == 0 ? ask.Yes : ask.No, engine);
-            if (index == 0 && string.Equals(ask.Effect, "pinTop:fyp", StringComparison.OrdinalIgnoreCase))
-            {
-                EmiSuggester.PinToTop("fyp");
-                RebuildRing();
-                EmiDeskService.Instance.Fire("pinAdded", new { target = "fyp", fromAsk = true });
-            }
+            EmiOffers.Run(index == 0 ? ask.Effect : ask.EffectNo, fromAsk: true);
         }
         internal void CancelAsk()
         {

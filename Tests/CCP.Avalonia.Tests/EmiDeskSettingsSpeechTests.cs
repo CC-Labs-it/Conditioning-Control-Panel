@@ -122,6 +122,19 @@ public sealed class EmiDeskSettingsSpeechTests
     });
 
     [Fact]
+    public Task NoChipRunsItsOwnEffect() => InDesk(async desk =>
+    {
+        var window = desk.Window!;
+        for (int i = 0; window.Transiting && i < 150; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+        var reply = new LineDraw("reply", "test", "ok", "^_^", null, 3, false, 0);
+        var ask = new AskDraw("test", "test", "question", "^_^", new[] { "yes", "no" }, reply, reply, "none", "bedtime");
+        EmiState.Current.BedtimeUntil = DateTime.MinValue;
+        window.ShowAsk(ask, desk.LineEngine);
+        window.AnswerAsk(1);
+        Assert.True(EmiLineEngine.BedtimeSet);
+    });
+
+    [Fact]
     public async Task DeskHelperRestoresEmiStateAndItsPendingSave()
     {
         string before = "";
