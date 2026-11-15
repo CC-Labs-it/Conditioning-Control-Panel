@@ -27,6 +27,13 @@ public sealed class FlashSharedStageTests
         public void Dispose() => Disposed = true;
     }
 
+    // FlashOverlay.Clock follows the fake timers, so the ramp's dt is the simulated frame time.
+    private sealed class StageClock : TimeProvider
+    {
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _now.Ticks;
+    }
+
     private static Bitmap Picture() => new(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/flash.png")));
 
     /// <summary>Passive settings, a fake stage, recorded timers; restores everything after.</summary>
@@ -35,15 +42,16 @@ public sealed class FlashSharedStageTests
         SubliminalSilentHintTests.EnsureAvalonia();
         var s = CoreSettings.Current;
         var saved = (s.UnifiedOverlayHost, s.FlashSolidMode, s.FlashGlowEnabled, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled,
-            s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashClickable);
-        var (configure, timer, present, granted) = (SharedOverlayHost.Configure, FlashOverlay.HostedTimer, FlashOverlay.Present, PrizeOwnership.IsGranted);
+            s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashClickable, s.FlashOpacity, s.FadeDuration);
+        var (configure, timer, present, granted, clock) = (SharedOverlayHost.Configure, FlashOverlay.HostedTimer, FlashOverlay.Present, PrizeOwnership.IsGranted, FlashOverlay.Clock);
         Window? stage = null;
         var timers = new List<Timer>();
         _now = TimeSpan.Zero;
         try
         {
             (s.UnifiedOverlayHost, s.FlashSolidMode, s.FlashGlowEnabled, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled,
-                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashClickable) = (true, false, false, false, false, FlashMotionStyle.Still, false, false);
+                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashClickable, s.FlashOpacity, s.FadeDuration) = (true, false, false, false, false, FlashMotionStyle.Still, false, false, 60, 100);
+            FlashOverlay.Clock = new StageClock();
             SharedOverlayHost.Configure = (w, b) => { stage = w; w.Width = b.Width; w.Height = b.Height; return stageAvailable; };
             FlashOverlay.HostedTimer = (fire, at) => { var t = new Timer { At = _now + at, Fire = fire }; timers.Add(t); return t; };
             FlashOverlay.Present = (_, _, _) => true;
@@ -54,8 +62,8 @@ public sealed class FlashSharedStageTests
             FlashOverlay.CloseAll(final: false);
             SubliminalOverlay.CloseAll();
             (s.UnifiedOverlayHost, s.FlashSolidMode, s.FlashGlowEnabled, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled,
-                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashClickable) = saved;
-            (SharedOverlayHost.Configure, FlashOverlay.HostedTimer, FlashOverlay.Present, PrizeOwnership.IsGranted) = (configure, timer, present, granted);
+                s.FlashMotionStyle, s.FlashRoundedCorners, s.FlashClickable, s.FlashOpacity, s.FadeDuration) = saved;
+            (SharedOverlayHost.Configure, FlashOverlay.HostedTimer, FlashOverlay.Present, PrizeOwnership.IsGranted, FlashOverlay.Clock) = (configure, timer, present, granted, clock);
         }
     }
 
@@ -73,9 +81,50 @@ public sealed class FlashSharedStageTests
         _now = to;
     }
 
-    private static bool ShowOne(bool clickable = false) =>
+    // Alpha and fade match the stage settings (Opacity 60, Fade 100 = 1 s).
+    private static bool ShowOne(bool clickable = false, double lifetimeSeconds = 5) =>
         FlashOverlay.Show(Picture(), new PixelRect(100, 100, 400, 300), "sample.png", new Window().Screens.All[0],
-            0.6, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5), clickable, ambient: false, hydraGeneration: 0);
+            0.6, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(lifetimeSeconds), clickable, ambient: false, hydraGeneration: 0);
+
+    [Fact]
+    public void A_flash_expiring_mid_fade_in_turns_around_and_never_brightens_again() => AvaloniaTestDispatcher.Run(() =>
+        WithStage((timers, _) =>
+        {
+            // WPF Heartbeat_Tick: past ExpiresAt the target is 0, so the ramp reverses from the current alpha.
+            Assert.True(ShowOne(lifetimeSeconds: 0.3));
+            var item = Assert.Single(FlashOverlay.Hosted).Item;
+            Advance(timers, TimeSpan.FromSeconds(0.3));
+            var peak = item.Opacity;
+            Assert.InRange(peak, 0.2, 0.35);
+            for (var t = 0.31; t < 1.5 && FlashOverlay.Hosted.Count > 0; t += 0.01)
+            {
+                var before = item.Opacity;
+                Advance(timers, TimeSpan.FromSeconds(t));
+                Assert.True(item.Opacity <= before, $"brightened from {before} to {item.Opacity} at {t:0.00}s");
+            }
+            Assert.Empty(FlashOverlay.Hosted);
+        }));
+
+    [Fact]
+    public void Opacity_and_fade_sliders_reach_a_flash_already_on_screen() => AvaloniaTestDispatcher.Run(() =>
+        WithStage((timers, _) =>
+        {
+            // WPF FlashService.cs:3199-3202 reads FlashOpacity and FadeDuration on every heartbeat.
+            var s = CoreSettings.Current;
+            Assert.True(ShowOne());
+            var item = Assert.Single(FlashOverlay.Hosted).Item;
+            Advance(timers, TimeSpan.FromSeconds(1));
+            Assert.Equal(0.6, item.Opacity, 3);
+            s.FlashOpacity = 90;
+            Advance(timers, TimeSpan.FromSeconds(2));
+            Assert.Equal(0.9, item.Opacity, 3);
+            s.FadeDuration = 200; // 2 s: the fade-out from 0.9 now takes 1.8 s
+            Advance(timers, TimeSpan.FromSeconds(6));
+            Assert.InRange(item.Opacity, 0.35, 0.5); // 0.9 - 1 s / 2 s, give or take a frame
+            Assert.Single(FlashOverlay.Hosted);
+            Advance(timers, TimeSpan.FromSeconds(9));
+            Assert.Empty(FlashOverlay.Hosted);
+        }));
 
     [Fact]
     public void Passive_flash_goes_to_the_stage_under_subliminal_cards_fades_in_and_expires_alone() => AvaloniaTestDispatcher.Run(() =>

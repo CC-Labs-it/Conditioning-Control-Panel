@@ -344,7 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1 && perkFx, perkFx ? SkillTreeRules.GetSparkleBoostTier(s) : 0, natasha: false);
             if (CanHost(s, clickable, glow.HasGlow, inheritMotion, path, GazeFocus.Instance.IsActive) && !GifFrames.TryGetValue(bmp, out _)
-                && ShowHosted(bmp, rect, screen, alpha, fade, lifetime, timing))
+                && ShowHosted(bmp, rect, screen, lifetime, timing))
             {
                 _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
                 if (notify) Displayed?.Invoke();
@@ -378,13 +378,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             && !(gazeActive && (s.FlashGazePopEnabled || s.FlashGazeLingerEnabled))
             && (inheritMotion ?? s.FlashMotionStyle) == FlashMotionStyle.Still && !Services.Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(path);
 
+        private static readonly TimeSpan HostedFrame = TimeSpan.FromMilliseconds(16);
         internal static Func<Action, TimeSpan, IDisposable> HostedTimer = (action, delay) => DispatcherTimer.RunOnce(action, delay);
 
         /// <summary>WPF FlashService.cs:2485 SpawnLayerVisual + FlashLayer.cs:395-470: the picture on the screen's
         /// shared stage at <see cref="CompositorLayers.Flash"/> (under subliminal cards), its black backing and
         /// the picture fading together, corners from the fitted picture. False when the stage is refused.</summary>
-        internal static bool ShowHosted(Bitmap bmp, PixelRect rect, Screen screen, double alpha, TimeSpan fade, TimeSpan lifetime,
-            BurstLifetime? timing = null)
+        internal static bool ShowHosted(Bitmap bmp, PixelRect rect, Screen screen, TimeSpan lifetime, BurstLifetime? timing = null)
         {
             var lease = SharedOverlayHost.Acquire(screen.Bounds);
             if (lease == null) return false;
@@ -406,50 +406,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         fit.Width, fit.Height), r, r) : null,
                 },
             };
-            var timers = new List<IDisposable>();
-            IDisposable? expiry = null;
+            IDisposable? tick = null;
             var stopped = false;
-            var spawnedAt = Clock.GetTimestamp();
+            var fadingOut = false;
+            var last = Clock.GetTimestamp();
+            var spawnedAt = last;
+            long ExpiresAt(TimeSpan life) => spawnedAt + (long)(life.TotalSeconds * Clock.TimestampFrequency);
+            var expiresAt = ExpiresAt(lifetime);
             (Control, PixelRect, Action) entry = default;
             void Stop()
             {
                 if (stopped) return;
                 stopped = true;
-                expiry?.Dispose();
-                foreach (var t in timers) t.Dispose();
-                timers.Clear();
+                tick?.Dispose();
                 Hosted.Remove(entry);
                 lease.Canvas.Children.Remove(item);
                 lease.Dispose();
                 bmp.Dispose();
             }
-            // FlashOverlayWindow.Fade: a ramp takes |to-from| x fade, written in 1/32 steps.
-            void Fade(double from, double to, Action? done = null)
+            // WPF Heartbeat_Tick (FlashService.cs:3199-3206, 3238-3290): Opacity and Fade are read live every
+            // frame, alpha moves dt/fadeSeconds towards the target, and expiry turns the ramp around from wherever it is.
+            void Tick()
             {
-                var span = ConditioningControlPanel.Services.Safety.GentleVisuals.Fade(fade) * Math.Abs(to - from);
-                var steps = Math.Max(1, (int)Math.Ceiling(Math.Abs(to - from) * 32));
-                for (var i = 1; i <= steps; i++)
-                {
-                    var v = from + (to - from) * i / steps;
-                    var last = i == steps;
-                    timers.Add(HostedTimer(() => { if (stopped) return; item.Opacity = v; if (last) done?.Invoke(); },
-                        span * i / steps + TimeSpan.FromMilliseconds(1)));
-                }
-            }
-            void Expire(TimeSpan life)
-            {
-                expiry?.Dispose();
-                var remaining = life - Clock.GetElapsedTime(spawnedAt);
-                expiry = HostedTimer(() => { expiry = null; if (!stopped) Fade(item.Opacity, 0, Stop); },
-                    remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(1));
+                tick = null;
+                if (stopped) return;
+                var now = Clock.GetTimestamp();
+                var dt = Clock.GetElapsedTime(last, now).TotalSeconds;
+                last = now;
+                var s = CoreSettings.Current;
+                fadingOut |= now >= expiresAt;
+                var target = fadingOut ? 0 : Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
+                var fadeSeconds = ConditioningControlPanel.Services.Safety.GentleVisuals.Fade(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
+                var step = fadeSeconds > 0 ? dt / fadeSeconds : 1.0;
+                var from = item.Opacity;
+                item.Opacity = target > from ? Math.Min(target, from + step) : Math.Max(target, from - step);
+                if (item.Opacity < from && item.Opacity <= 0) { Stop(); return; }
+                tick = HostedTimer(Tick, HostedFrame);
             }
             entry = (item, rect, Stop);
             lease.Canvas.Children.Add(item);
             Hosted.Add(entry);
             lease.Raise();
-            Fade(0, alpha);
-            Expire(lifetime);
-            timing?.Track(life => { if (!stopped && expiry != null) Expire(life); });
+            tick = HostedTimer(Tick, HostedFrame);
+            timing?.Track(life => { if (!stopped && !fadingOut) expiresAt = ExpiresAt(life); });
             return true;
         }
 
