@@ -66,8 +66,8 @@ public partial class EmiDeskWindow
     {
         if (!IsVisible || _closingForGood) return;
         bool wayland = AliveWaylandOverride ?? LeashHead.WaylandSession;
-        Point cursor;
-        double bodyX, bodyY, width, height;
+        Point? cursor = null;
+        double bodyX = 0, bodyY = 0, width = 0, height = 0;
         if (wayland && _surfacePointer is { } local)
         {
             cursor = local;
@@ -87,17 +87,20 @@ public partial class EmiDeskWindow
                 pointer = sample is { OverWindow: true } ? sample.Value.At : null;
             }
             else pointer = AlivePointer();
-            if (pointer is null) return;
-            double s = DipScale;
-            var body = BodyScreenRect;
-            cursor = new Point(pointer.Value.X / s, pointer.Value.Y / s);
-            bodyX = body.X / s; bodyY = body.Y / s;
-            width = body.Width / s; height = body.Height / s;
+            if (pointer is { } position)
+            {
+                double s = DipScale;
+                var body = BodyScreenRect;
+                cursor = new Point(position.X / s, position.Y / s);
+                bodyX = body.X / s; bodyY = body.Y / s;
+                width = body.Width / s; height = body.Height / s;
+            }
         }
-        if (width <= 0 || height <= 0) return;
+        if (cursor is not null && (width <= 0 || height <= 0)) return;
+        // A refused read has no gaze target. Ease home so a lost Wayland pointer cannot freeze it.
         double x = 0, y = 0;
-        if (AmbientFxCanvas.Env.Level == MotionLevel.Full && !Busy() && !_dragging && !_resizing)
-            (x, y) = EmiAlive.GazeTarget(cursor.X, cursor.Y, bodyX, bodyY, width, height, _bodyWidth);
+        if (cursor is { } at && AmbientFxCanvas.Env.Level == MotionLevel.Full && !Busy() && !_dragging && !_resizing)
+            (x, y) = EmiAlive.GazeTarget(at.X, at.Y, bodyX, bodyY, width, height, _bodyWidth);
         _gazeShift.X = EmiAlive.Ease(_gazeShift.X, x, EmiAlive.GazeEasePerPoll);
         _gazeShift.Y = EmiAlive.Ease(_gazeShift.Y, y, EmiAlive.GazeEasePerPoll);
         if (Math.Abs(_gazeShift.X - x) + Math.Abs(_gazeShift.Y - y) < .02)
