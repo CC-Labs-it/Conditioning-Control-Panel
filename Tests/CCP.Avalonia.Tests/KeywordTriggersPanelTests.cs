@@ -27,6 +27,7 @@ namespace CCP.Avalonia.Tests;
 /// views-companion-keyword-triggers / shell-keyword-triggers: the custom trigger list on the
 /// Awareness tab drives AppSettings.KeywordTriggers like MainWindow.KeywordTriggers.cs:160-575.
 /// </summary>
+[Collection(RunsAloneCollection.Name)]   // OcrDetailSaysWhyTheScannerReadsNothing flips the process-wide PortalScreenFrames.Refused
 public sealed class KeywordTriggersPanelTests
 {
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

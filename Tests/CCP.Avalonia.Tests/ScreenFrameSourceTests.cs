@@ -14,8 +14,14 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public class ScreenFrameSourceTests
+// PortalScreenFrames.Refused is process-wide and KeywordTriggersPanelTests flips it too: no concurrent test may see it.
+[Collection(RunsAloneCollection.Name)]
+public class ScreenFrameSourceTests : IDisposable
 {
+    private readonly bool _savedRefused = PortalScreenFrames.Refused;
+
+    public void Dispose() => PortalScreenFrames.Refused = _savedRefused;
+
     [Fact]
     public async Task CapturesEachMonitorWithItsPhysicalOriginAndScale()
     {
@@ -139,7 +145,7 @@ public class ScreenFrameSourceTests
         }
     }
 
-    // Portal tests share the session-wide PortalScreenFrames.Refused flag; xunit runs one class's tests in sequence.
+    // Portal tests share the session-wide PortalScreenFrames.Refused flag; Dispose restores it after each test.
     private static Task<IReadOnlyList<CaptureMonitor>> TwoMonitors() => Task.FromResult<IReadOnlyList<CaptureMonitor>>(
         [new("left", new Rectangle(0, 0, 2, 2), 1), new("right", new Rectangle(2, 1, 1, 1), 2)]);
 
