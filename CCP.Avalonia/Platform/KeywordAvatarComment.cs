@@ -67,6 +67,7 @@ internal static class KeywordAvatarComment
             return;
         }
         tube.GigglePriority(line, playSound: true, aiGenerated: aiGenerated);
-        // ponytail: v2's arbiter/ledger is not ported, so no external-line ledger write yet.
+        if (AwarenessV2Routing.IsActive)
+            AwarenessV2Routing.Arbiter?.RecordExternalLine(ReactionSource.Keyword);
     }
 }

@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Awareness;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -37,10 +41,18 @@ public sealed class AwarenessFinishViewTests
         Action? finished = null;
         var file = Path.GetTempFileName();
         AvatarTubeWindow? tube = null;
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var oldEntitlement = AwarenessObserver.EntitlementProvider;
+        var arbiter = new RecordingArbiter();
         var volume = CoreSettings.Current.MasterVolume;
         try
         {
             ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            (settings.Current.UseAwarenessV2, settings.Current.AwarenessModeEnabled, settings.Current.AwarenessConsentGiven, settings.Current.AwarenessConsentShownV2) = (true, true, true, true);
+            AwarenessObserver.EntitlementProvider = () => true;
+            AwarenessV2Routing.Attach(arbiter);
             CoreSettings.Current.MasterVolume = 100;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, done) => { finished = done; return () => { }; };
             KeywordAvatarComment.ScheduleRetry = (delay, fire) =>
@@ -62,9 +74,10 @@ public sealed class AwarenessFinishViewTests
                 ConditioningControlPanel.Avalonia.App.Ai = null;
                 s.CustomCompanionPhrases = new() { new() { Id = "retry:test", Category = "retry-test", Text = "comment", Enabled = true } };
                 KeywordAvatarComment.DispatchAsync(new AvatarCommentAction { FallbackPhraseCategory = "retry-test" }, new()).GetAwaiter().GetResult();
-                Dispatcher.UIThread.RunJobs(); Assert.Single(pending);
+                Dispatcher.UIThread.RunJobs(); Assert.Single(pending); Assert.Equal(0, arbiter.Lines);
                 finished!(); Dispatcher.UIThread.RunJobs(); Assert.True(tube.SpokenAudioDone.IsCompleted);
                 pending.Dequeue()(); Assert.Equal("comment", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+                Assert.Equal(1, arbiter.Lines);
                 KeywordAvatarComment.DispatchAsync(new AvatarCommentAction { FallbackPhraseCategory = "retry-test" }, new()).GetAwaiter().GetResult();
                 Dispatcher.UIThread.RunJobs();
                 for (var i = 0; i < 16; i++) pending.Dequeue()();
@@ -74,6 +87,7 @@ public sealed class AwarenessFinishViewTests
                 Assert.Single(PanicSurfaces.All, x => x.Id == "keyword-comments").Stop(null);
                 tube.PanicSilence(); pending.Dequeue()();
                 Assert.False(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+                Assert.Equal(1, arbiter.Lines);
             }
             finally { CoreEntitlement.HasPremiumProvider = entitlement; s.CustomCompanionPhrases = phrases; ConditioningControlPanel.Avalonia.App.Ai = ai; }
         }
@@ -81,7 +95,15 @@ public sealed class AwarenessFinishViewTests
         {
             tube?.Close(); KeywordAvatarComment.CancelPending(); File.Delete(file);
             CoreSettings.Current.MasterVolume = volume;
+            AwarenessV2Routing.Detach(); AwarenessObserver.EntitlementProvider = oldEntitlement; CoreSettings.ServiceProvider = oldSettings;
             (CoreAudio.PlayStoppableProvider, KeywordAvatarComment.ScheduleRetry, KeywordAvatarComment.TubeSource) = saved;
         }
     });
+    private sealed class RecordingArbiter : IReactionArbiter
+    {
+        internal int Lines;
+        public Task<ArbiterDecision> SubmitAsync(ContextFrame frame, CancellationToken cancellationToken = default) => Task.FromResult(ArbiterDecision.Silent("test"));
+        public void RecordExternalLine(ReactionSource source, string? appId = null) { Assert.Equal(ReactionSource.Keyword, source); Lines++; }
+        public bool CanSpeak(ReactionSource source, string? appId = null) => true;
+    }
 }
