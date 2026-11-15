@@ -111,7 +111,7 @@ public sealed partial class FriendsDrawerTests
         Assert.Null(Tagged<StackPanel>(Tagged<Border>(d, "friends-row:u_off")!, "friends-platforms"));
     });
 
-    private const string State = """
+    internal const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
          "friends":[{"id":"u_on","name":"Mia","tier":0,"online":true,"activity":"session","lock_day":3,"last_seen":null,"squelched":false},
                     {"id":"u_off","name":"Zed","tier":0,"online":false,"activity":"online","lock_day":null,"last_seen":"2026-09-01T00:00:00Z","squelched":false}],
@@ -128,7 +128,7 @@ public sealed partial class FriendsDrawerTests
         public TaskCompletionSource? HoldSends;
         public string StateBody = State;
         public bool ActSucceeds = true;
-        public string? LinkBody, ClaimBody;
+        public string? LinkBody, ClaimBody, RequestBody;
         public readonly List<string> Polls = new();
         public TaskCompletionSource? HoldLinks;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
@@ -139,7 +139,7 @@ public sealed partial class FriendsDrawerTests
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
             if (op == "poll") Polls.Add(await r.Content!.ReadAsStringAsync(ct));
             if (op is "link" or "claim" && HoldLinks != null) await HoldLinks.Task;
-            var body = op == "link" ? LinkBody ?? "{}" : op == "claim" ? ClaimBody ?? """{"ok":true,"status":"friends"}""" : op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
+            var body = op == "request" && RequestBody != null ? RequestBody : op == "link" ? LinkBody ?? "{}" : op == "claim" ? ClaimBody ?? """{"ok":true,"status":"friends"}""" : op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
                 : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
