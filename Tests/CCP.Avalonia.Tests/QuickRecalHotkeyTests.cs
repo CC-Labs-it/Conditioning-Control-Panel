@@ -481,7 +481,10 @@ public sealed class QuickRecalHotkeyTests
         var camera = new PortalCameraHotkey(() => { });
         var shell = new MainShellWindow { QuickRecalWayland = true, QuickRecalPlatformSupported = true };
         shell.RegisterWaylandQuickRecal = (_, _, _) => Task.FromResult<IDisposable?>(new Registration());
-        shell.RegisterPortalCamera = (_, _, _) => camera;
+        shell.CameraHotkeyWayland = () => true;
+        int portalRegistrations = 0, nativeRegistrations = 0;
+        shell.RegisterPortalCamera = (_, _, _) => { portalRegistrations++; return camera; };
+        shell.RegisterCameraHotkey = (_, _, _, _) => { nativeRegistrations++; return null; };
         try
         {
             Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-0");
@@ -489,6 +492,8 @@ public sealed class QuickRecalHotkeyTests
                 (true, true, "Escape", "", true, WebcamConsent.ConsentVersion, true);
             tracker.Calibration = new WebcamCalibrationData();
             shell.StartQuickRecalHotkey();
+            Assert.Equal(1, portalRegistrations);
+            Assert.Equal(0, nativeRegistrations);
             Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
             camera.SetSessionForTests("/session");
             Assert.Null(WebcamQuickRecalWindow.HotkeyHint()); // A bound shortcut with no reported trigger is unknown.
