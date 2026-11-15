@@ -19,6 +19,29 @@ namespace CCP.Avalonia.Tests;
 public class TestIsolationTests
 {
     [Fact]
+    public void EmiOfferProbesAreInstalledBeforeTheSnapshot()
+    {
+        var ask = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe;
+        var effect = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe;
+        Assert.NotNull(ask);
+        Assert.NotNull(effect);
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe = null;
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = null;
+            snapshot.Restore();
+            Assert.Same(ask, ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe);
+            Assert.Same(effect, ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe = ask;
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = effect;
+        }
+    }
+
+    [Fact]
     public void MotionPreferenceCacheIsRestoredWithItsTimestamp() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         var oldProbe = UiMotionPreference.OsProbe;

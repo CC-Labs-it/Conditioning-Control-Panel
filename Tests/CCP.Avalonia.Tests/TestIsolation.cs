@@ -70,6 +70,9 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
                     .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            // The line engine probes belong to this singleton. Initialize it before capturing them,
+            // or restoring an initial null after its first use permanently disables later offers.
+            _ = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
             Current = ProcessStateSnapshot.Take();
             // A get-only singleton retained queued toasts, old hosts and live sticky keys across tests.
             // The snapshot restores the original service after each test; each body gets fresh state.
