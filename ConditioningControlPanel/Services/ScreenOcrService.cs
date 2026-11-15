@@ -34,7 +34,34 @@ namespace ConditioningControlPanel.Services
         /// <summary>True when the OCR models are available and the engine is usable.</summary>
         internal bool IsOcrAvailable => _ocrEngine.IsAvailable;
 
-        public ScreenOcrService() : this(new RapidScreenOcrEngine()) { }
+        public ScreenOcrService() : this(CreateEngine()) { }
+
+        private static IScreenOcrEngine CreateEngine()
+        {
+            try
+            {
+                var windows = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+                return SelectEngine(windows?.RecognizerLanguage.LanguageTag,
+                    () => new WindowsProfileOcrEngine(windows!), () => new RapidScreenOcrEngine());
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("ScreenOcrService: Windows OCR unavailable: {Error}", ex.Message);
+                return new RapidScreenOcrEngine();
+            }
+        }
+
+        internal static IScreenOcrEngine SelectEngine(string? languageTag,
+            Func<IScreenOcrEngine> windows, Func<IScreenOcrEngine> core)
+        {
+            // The bundled Core model supports Latin text. Preserve Windows profile language
+            // coverage for all other profiles rather than guessing their writing system.
+            if (!string.IsNullOrEmpty(languageTag) &&
+                !languageTag.Equals("en", StringComparison.OrdinalIgnoreCase) &&
+                !languageTag.StartsWith("en-", StringComparison.OrdinalIgnoreCase))
+                return windows();
+            return core();
+        }
 
         internal ScreenOcrService(IScreenOcrEngine engine)
         {
