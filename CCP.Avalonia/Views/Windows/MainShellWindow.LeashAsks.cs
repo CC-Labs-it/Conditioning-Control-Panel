@@ -89,7 +89,8 @@ public partial class MainShellWindow
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 
-    private Window? LeashOwner() => IsVisible && WindowState != WindowState.Minimized ? this : LauncherWindow.Instance;
+    private Window? LeashOwner() => IsVisible && WindowState != WindowState.Minimized ? this
+        : LauncherWindow.Instance is { } launcher && launcher.IsLinkedTo(this) ? launcher : null;
 
     // The ask and the snap share one overlay slot: a waiting ask holds while either is up.
     private void TryShowLeashAsk()
