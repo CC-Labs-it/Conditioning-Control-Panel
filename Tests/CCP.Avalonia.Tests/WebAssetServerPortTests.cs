@@ -28,7 +28,7 @@ public class WebAssetServerPortTests
     }
 
     [Fact]
-    public void Occupied_preference_falls_back_and_is_recorded()
+    public void Occupied_preference_falls_back_then_returns_to_saved_origin()
     {
         var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(dir);
@@ -41,11 +41,13 @@ public class WebAssetServerPortTests
             {
                 int port = ((IPEndPoint)held.LocalEndpoint).Port;
                 File.WriteAllText(preference, port.ToString());
-                using var server = new WebAssetServer(dir, preference);
-                Assert.NotEqual(port, server.Port);
-                Assert.Equal(server.Port.ToString(), File.ReadAllText(preference));
+                using (var server = new WebAssetServer(dir, preference))
+                    Assert.NotEqual(port, server.Port);
+                Assert.Equal(port.ToString(), File.ReadAllText(preference));
             }
             finally { held.Stop(); }
+            using var restarted = new WebAssetServer(dir, preference);
+            Assert.Equal(int.Parse(File.ReadAllText(preference)), restarted.Port);
         }
         finally { Directory.Delete(dir, true); }
     }

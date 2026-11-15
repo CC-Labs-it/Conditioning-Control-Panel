@@ -96,7 +96,8 @@ public sealed class WebAssetServer : IDisposable
             catch (UnauthorizedAccessException) { }
         }
         Port = Bind(ref _listener, preferred);
-        if (portFile != null)
+        // A temporary collision must not strand the browser storage at the original origin.
+        if (portFile != null && preferred is not (> 0 and <= 65535))
         {
             try
             {
