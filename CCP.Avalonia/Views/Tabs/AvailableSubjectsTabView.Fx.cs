@@ -25,7 +25,7 @@ public partial class AvailableSubjectsTabView
     internal bool SubjectsFxRunning => _subjectsFxBeat?.IsRunning == true;
 
     private sealed record Entrance(Control Container, TranslateTransform Slide, long Start, int Delay);
-    private sealed record Pop(Control Owner, ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start);
+    private sealed record Pop(Control Owner, ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start, bool AnimateCard = true);
     private readonly List<Pop> _pops = new();
     private sealed record Lift(ScaleTransform Scale, double From, double To, long Start);
     private readonly List<Lift> _lifts = new();
@@ -37,9 +37,13 @@ public partial class AvailableSubjectsTabView
     {
         var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
         card.RenderTransform = scale;
-        foreach (var pop in _pops.Where(p => p.Card == scale))
-            if (pop.Ring != null) pop.Ring.Opacity = 0;
-        _pops.RemoveAll(p => p.Card == scale);
+        // Hover takes the card scale; the ring keeps its independent 520 ms pop.
+        for (int i = _pops.Count - 1; i >= 0; i--)
+            if (_pops[i].Card == scale)
+            {
+                if (_pops[i].Ring == null) _pops.RemoveAt(i);
+                else _pops[i] = _pops[i] with { AnimateCard = false };
+            }
         _lifts.RemoveAll(l => l.Scale == scale);
         double target = hovered ? 1.02 : 1;
         if (!Env.AllowTransitions) { scale.ScaleX = scale.ScaleY = target; return; }
@@ -180,7 +184,8 @@ public partial class AvailableSubjectsTabView
             var p = _pops[i];
             double ms = FxTime.GetElapsedTime(p.Start).TotalMilliseconds;
             double grow = Math.Clamp(ms / 320, 0, 1), spread = Math.Clamp(ms / 520, 0, 1);
-            p.Card.ScaleX = p.Card.ScaleY = 0.9 + ((p.Owner.IsPointerOver ? 1.02 : 1) - 0.9) * BackOut(grow);
+            if (p.AnimateCard)
+                p.Card.ScaleX = p.Card.ScaleY = 0.9 + ((p.Owner.IsPointerOver ? 1.02 : 1) - 0.9) * BackOut(grow);
             if (p.Ring != null)
             {
                 p.RingScale!.ScaleX = p.RingScale.ScaleY = 1 + 0.08 * (1 - (1 - spread) * (1 - spread));
@@ -204,7 +209,7 @@ public partial class AvailableSubjectsTabView
         _subjectsFxBeat?.Stop();
         foreach (var e in _entrances) { e.Container.Opacity = 1; e.Slide.Y = 0; }
         _entrances.Clear();
-        foreach (var p in _pops) { p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
+        foreach (var p in _pops) { if (p.AnimateCard) p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
         _pops.Clear();
         foreach (var l in _lifts) l.Scale.ScaleX = l.Scale.ScaleY = l.To;
         _lifts.Clear();
