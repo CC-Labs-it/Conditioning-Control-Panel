@@ -305,6 +305,47 @@ public sealed class SessionIoTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task EditorSaveWithExistingIdWritesAndSelectsANewSession() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var root = Path.Combine(Path.GetTempPath(), "ccp-editor-collision-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Window? host = null;
+        try
+        {
+            var files = new SessionFileService(root, root);
+            var manager = new SessionManager(files);
+            manager.LoadAllSessions();
+            var original = manager.AllSessions.First(s => s.Source == SessionSource.BuiltIn);
+            var session = SessionDefinition.FromSession(original).ToSession();
+            session.Name = "Editor Copy";
+            var originalId = session.Id;
+            var path = Path.Combine(root, "editor-copy.session.json");
+            var view = new PresetsTabView();
+            host = new Window { Content = view, Width = 1100, Height = 760 };
+            host.Show();
+            view.UseSessionManager(manager);
+
+            view.SaveEditorSession(session, path);
+
+            Assert.True(File.Exists(path));
+            Assert.NotEqual(originalId, session.Id);
+            Assert.Same(original, manager.GetSession(originalId));
+            Assert.Same(session, manager.GetSession(session.Id));
+            Assert.Equal(session.Id, files.ImportSession(path)!.Id);
+            Assert.Same(session, typeof(PresetsTabView).GetField("_selectedSession", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view));
+            Assert.Contains("Editor Copy", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+            Assert.Equal("Session loaded: Editor Copy", view.FindControl<TextBlock>("DropZoneStatus")!.Text);
+        }
+        finally
+        {
+            host?.Close();
+            try { Directory.Delete(root, true); } catch { }
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF HandleSessionDrop: an invalid file is refused with "Invalid: ..." and nothing
     /// is copied into CustomSessions or added to the rack.</summary>
     [Fact]

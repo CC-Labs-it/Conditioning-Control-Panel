@@ -379,6 +379,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowDropZoneStatus($"Session loaded: {session.Name}", isError: false);
         }
 
+        internal void SaveEditorSession(Session session, string filePath)
+        {
+            var lib = SessionLibrary();
+            lib.AddNewSession(session, filePath);
+            UseSessionManager(lib);
+            SelectSession(session);
+            ShowDropZoneStatus($"Session loaded: {session.Name}", isError: false);
+        }
+
         /// <summary>WPF MainWindow/MainWindow.CompanionAsks.cs:14-30: preserve order and recheck the live rack.</summary>
         internal IReadOnlyList<ConditioningControlPanel.Services.Companion.Asks.AskOption> CompanionSessionOptions() =>
             _availableSessions.Where(s => s.IsAvailable && !string.IsNullOrEmpty(s.Id))
@@ -1328,7 +1337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             try
             {
-                RegisterExternallySavedSession(session, path);
+                SaveEditorSession(session, path);
             }
             catch (Exception ex)
             {
@@ -1354,7 +1363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (await PickSessionSavePath(owner, "title_save_as_new_custom_session", edited) is not { } path) return;
                 try
                 {
-                    RegisterExternallySavedSession(edited, path);
+                    SaveEditorSession(edited, path);
                 }
                 catch (Exception ex)
                 {
