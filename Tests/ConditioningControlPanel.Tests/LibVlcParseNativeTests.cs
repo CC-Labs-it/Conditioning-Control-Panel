@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Tests;
 /// LibVLCSharp completes <c>Media.Parse</c> inside libvlc's ParsedChanged callback, on libvlc's
 /// thread. Disposing the media in that continuation frees it under libvlc and corrupts the
 /// native heap (the host dies later at ntdll+0x1A12D). The Deeper duration probe
-/// (<see cref="MediaDurationCache"/>) did exactly that with a <c>using var media</c>; the same
+/// (<see cref="MediaDurationProbe"/>) did exactly that with a <c>using var media</c>; the same
 /// bug was proven on the Avalonia head (restack fixw4c #5071: 3 of 3 host crashes before, 0 after).
 /// </summary>
 public sealed class LibVlcParseNativeTests
@@ -81,7 +81,7 @@ public sealed class LibVlcParseNativeTests
         {
             var path = Bogus(dir);
             for (int i = 0; i < 20; i++)
-                Assert.Null(await Task.Run(() => MediaDurationCache.ProbeLibVlcAsync(vlc, path)));
+                Assert.Null(await Task.Run(() => MediaDurationProbe.ProbeLibVlcAsync(vlc, path)));   // the probe moved out of the Core cache
         }
         finally { Directory.Delete(dir, true); }
     }

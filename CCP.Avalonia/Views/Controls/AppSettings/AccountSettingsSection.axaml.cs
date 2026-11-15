@@ -326,6 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         // ProfilePrivacyPanel reuses these account flows; do not fork OAuth or provider logout logic.
         internal Task DiscordFromProfileAsync() => ProviderClickAsync("discord", Find<Button>("BtnDiscordLogin"), "TxtBtnDiscordLogin");
 
+        private void BtnRedeemCode_Click(object? sender, RoutedEventArgs e) { if (Owner is { } owner) PostCodeDialog.Present(owner, passDoor: true); }
         private async void BtnPatreonLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("patreon", Find<Button>("BtnPatreonLogin"), "TxtBtnPatreonLogin"));
         private async void BtnSubscribeStarLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("substar", Find<Button>("BtnSubscribeStarLogin"), "TxtBtnSubscribeStarLogin"));
         private async void BtnDiscordLogin_Click(object? sender, RoutedEventArgs e) => await Guard(ProviderClickAsync("discord", Find<Button>("BtnDiscordLogin"), "TxtBtnDiscordLogin"));

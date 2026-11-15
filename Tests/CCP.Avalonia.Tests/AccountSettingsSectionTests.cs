@@ -60,6 +60,22 @@ public sealed class AccountSettingsSectionTests
         Assert.Empty(shell.OwnedWindows.OfType<LoginDialog>());
     });
 
+    /// <summary>WPF main 2ecd886350: the quiet "Redeem a code" link under the tier card opens the code box
+    /// titled for any code.</summary>
+    [Fact]
+    public void Redeem_link_opens_the_code_box_as_the_pass_door() => Run((shell, section, _, _) =>
+    {
+        try
+        {
+            section.FindControl<Button>("BtnRedeemCode")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var box = Assert.IsType<PostCodeDialog>(PostCodeDialog.Open);
+            Assert.Contains(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(box).OfType<TextBlock>(),
+                t => t.Text == Loc.Get("pass_redeem_door"));
+        }
+        finally { PostCodeDialog.Open?.Close(); }
+    });
+
     private static void ClickTierCard(MainShellWindow shell, AccountSettingsSection section)
     {
         shell.OpenAppSettingsSection("account");

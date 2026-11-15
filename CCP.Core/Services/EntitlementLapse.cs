@@ -30,7 +30,8 @@ namespace ConditioningControlPanel.Services
                 cleared.Add("voice-mic");
             }
             if (s.MantraChantEnabled && Lapsed("takeover")) { s.MantraChantEnabled = false; cleared.Add("mantra-chant"); }
-            if (s.Haptics?.Enabled == true && Lapsed("haptics")) { s.Haptics.Enabled = false; cleared.Add("haptics"); }
+            // Toys are free since 2026-11-11 (WPF MainWindow.Patreon.cs): never fires while HapticsAccess is open.
+            if (s.Haptics?.Enabled == true && !Haptics.HapticsAccess.IsOpen) { s.Haptics.Enabled = false; cleared.Add("haptics"); }
             return cleared;
         }
     }

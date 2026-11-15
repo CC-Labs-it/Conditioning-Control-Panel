@@ -26,9 +26,9 @@ public sealed class HapticsCoreTests
         return s;
     }
 
-    /// <summary>WPF HapticMixer.IsGateOpen: premium OR the "haptics" free day, and the master toggle.</summary>
+    /// <summary>WPF HapticMixer.IsGateOpen: HapticsAccess (free for everyone since main f54203401b) and the master toggle.</summary>
     [Fact]
-    public void GateFollowsPremiumAndTheHapticsFreeDay()
+    public void GateIsOpenForEveryoneAndFollowsTheMasterToggle()
     {
         var old = (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider);
         using var haptics = new HapticService(Settings(mock: true, buttplug: false));
@@ -36,11 +36,6 @@ public sealed class HapticsCoreTests
         {
             CoreEntitlement.HasPremiumProvider = () => false;
             CoreEntitlement.IsFreeTodayProvider = _ => false;
-            Assert.False(haptics.Mixer.IsGateOpen);
-            CoreEntitlement.IsFreeTodayProvider = key => key == "haptics";
-            Assert.True(haptics.Mixer.IsGateOpen);
-            CoreEntitlement.IsFreeTodayProvider = _ => false;
-            CoreEntitlement.HasPremiumProvider = () => true;
             Assert.True(haptics.Mixer.IsGateOpen);
             haptics.Settings.Enabled = false;
             Assert.False(haptics.Mixer.IsGateOpen);
@@ -58,14 +53,15 @@ public sealed class HapticsCoreTests
         using var haptics = new HapticService(Settings(mock: true, buttplug: false));
         try
         {
-            CoreEntitlement.HasPremiumProvider = () => false;
+            CoreEntitlement.HasPremiumProvider = () => false;   // toys are free: premium no longer shuts the gate
             Assert.True(await haptics.ConnectAsync());
+            haptics.Settings.Enabled = false;                   // the master toggle does
             toasts.Clear();
             _ = haptics.BubblePopAsync();
             await Task.Delay(600);
             Assert.DoesNotContain(toasts, t => t.Contains('%'));
 
-            CoreEntitlement.HasPremiumProvider = () => true;
+            haptics.Settings.Enabled = true;
             await Task.Delay(300);   // past the mock's toast throttle and the 2 s combo is irrelevant here
             _ = haptics.BubblePopAsync();
             for (var i = 0; i < 20 && !toasts.Any(t => t.Contains('%')); i++) await Task.Delay(100);

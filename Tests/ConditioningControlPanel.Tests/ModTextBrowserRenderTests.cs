@@ -12,6 +12,7 @@ namespace ConditioningControlPanel.Tests;
 /// The Mod Creator's original-text browser (<c>ModCreatorWindow.CreateOriginalTextBrowser</c>)
 /// realizes off screen, lists every text grouped, and narrows to a search.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class ModTextBrowserRenderTests
 {
     [Fact]

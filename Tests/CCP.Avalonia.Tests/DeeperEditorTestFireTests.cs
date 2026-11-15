@@ -66,11 +66,15 @@ public sealed class DeeperEditorTestFireTests
         }
         return Task.CompletedTask;
     });
+    // Toys are free for everyone (main f54203401b, HapticsAccess.IsOpen): a free account's test fire plays
+    // like a premium one. WPF DeeperEditorWindow.xaml.cs:2776 keeps the "_premium" strip for a refused preview,
+    // now only reachable when the gate is shut by something else, so the head keeps it too.
     [Theory]
     [InlineData(false, true, "deeper_editor_haptic_test_row_off")]
-    [InlineData(true, false, "deeper_editor_haptic_test_premium")]
+    [InlineData(false, false, "deeper_editor_haptic_test_row_off")]
+    [InlineData(true, false, null)]
     [InlineData(true, true, null)]
-    public Task HapticTestHonoursRoutingAndPremium(bool routing, bool premium, string? message) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task HapticTestHonoursRoutingAndPlaysForEveryone(bool routing, bool premium, string? message) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var settings = CoreSettings.Current.Haptics;
