@@ -134,7 +134,7 @@
                  the stroke width is unchanged, so peak weight is exactly what shipped. -->
             <Border x:Name="ActiveBorder"
                     BorderBrush="{DynamicResource FxGlowBrush}"
-                    BorderThickness="3.5"
+                    BorderThickness="5"
                     CornerRadius="12"
                     IsHitTestVisible="False"
                     Visibility="Collapsed"/>

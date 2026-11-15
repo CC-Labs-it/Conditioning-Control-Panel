@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Features
         private const double PeekScrimOpacity = 0.20;
         private const double TitleExpandedScale = 1.35;
         /// <summary>Half the ring's 3px stroke, so its OUTER edge lands on the card edge.</summary>
-        private const double RingInset = 1.5;
+        private const double RingInset = 2.5;
         /// <summary>ContentRoot's clip radius (RootBorder 12 minus its 1px border).</summary>
         private const double ContentCornerRadius = 11;
         /// <summary>Pill margin + padding, taken off before capping the grown title's width.</summary>

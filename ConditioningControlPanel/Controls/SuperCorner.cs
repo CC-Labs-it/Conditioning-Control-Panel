@@ -100,7 +100,12 @@ namespace ConditioningControlPanel.Controls
                 }
             }
             g.Freeze();
-            return g;
+            // Round the outer tip like the tile (content radius 11), so nothing pokes past the
+            // rounded frame when the tile is off and has no ring to hide it.
+            var card = BottomRight ? new Rect(Leg - 200, Leg - 200, 200, 200) : new Rect(0, 0, 200, 200);
+            var cut = new CombinedGeometry(GeometryCombineMode.Intersect, g, new RectangleGeometry(card, 11, 11));
+            cut.Freeze();
+            return cut;
         }
 
         protected override HitTestResult? HitTestCore(PointHitTestParameters p)
