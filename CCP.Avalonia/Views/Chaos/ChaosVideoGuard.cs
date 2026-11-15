@@ -31,7 +31,7 @@ internal sealed class ChaosVideoGuard(MandatoryVideoScheduler video, Func<DateTi
     internal bool Tick(bool runClosing)
     {
         if (_token == 0 || (!runClosing && clock() < _cap)) return false;
-        bool credit = _started && clock() >= _cap;
+        bool credit = clock() >= _cap;
         bool cut = Stop();
         if (credit) endured();
         return cut;

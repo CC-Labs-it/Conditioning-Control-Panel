@@ -33,16 +33,18 @@ public class ChaosVideoGuardTests
             public ValueTask DisposeAsync() { Dispose(); return default; }
         }
     }
-    [Fact]
-    public void CapCancelsPendingWithoutCrediting() => AvaloniaTestDispatcher.Run(() =>
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)]
+    public void CapCreditsUnstartedRequestAndCancelsPending(bool empty, bool closing) => AvaloniaTestDispatcher.Run(() =>
     {
         var clock = new Clock(); var host = new Host(); int credit = 0; var now = DateTime.UnixEpoch;
-        var video = new MandatoryVideoScheduler(host, clock, () => new[] { "/chaos.mp4" });
+        var video = new MandatoryVideoScheduler(host, clock, () => empty ? Array.Empty<string>() : new[] { "/chaos.mp4" });
         var guard = new ChaosVideoGuard(video, () => now, () => credit++);
         try {
-            Assert.True(video.Trigger(userEarned: true, chaosToken: guard.Arm()));
-            now = now.AddSeconds(15); Assert.False(guard.Tick(false)); clock.Fire();
-            Assert.False(video.IsPlaying); Assert.Equal(0, host.Shows); Assert.Equal(0, credit);
+            Assert.Equal(!empty, video.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: guard.Arm()));
+            now = now.AddSeconds(closing ? 3 : 14); Assert.False(guard.Tick(closing)); Assert.Equal(0, credit);
+            if (!closing) { now = now.AddSeconds(1); Assert.False(guard.Tick(false)); } clock.Fire();
+            Assert.False(video.IsPlaying); Assert.Equal(0, host.Shows); Assert.Equal(closing ? 0 : 1, credit);
+            Assert.False(guard.Armed); Assert.False(guard.Tick(false)); guard.Stop(); Assert.Equal(closing ? 0 : 1, credit);
         }
         finally { guard.Stop(); video.ForceCleanup(); }
     });
@@ -120,8 +122,8 @@ public class ChaosVideoGuardTests
             CoreDispatch.PostProvider = oldPost; CoreSubliminal.BambiFreezeProvider = oldFreeze; CoreBubbles.PauseAction = oldPause; CoreBubbles.ResumeAction = oldResume;
         }
     });
-    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)]
-    public void DetonationRunTickCutsAndCreditsTheLesson(bool closing, bool natural) => AvaloniaTestDispatcher.Run(() =>
+    [Theory] [InlineData(false, false, false)] [InlineData(true, false, false)] [InlineData(false, true, false)] [InlineData(false, false, true)]
+    public void DetonationRunTickCutsAndCreditsTheLesson(bool closing, bool natural, bool empty) => AvaloniaTestDispatcher.Run(() =>
     {
         var oldVideo = CoreEngine.Video; var oldFirer = EffectPayload.Firer; var oldAttention = CoreSettings.Current.AttentionChecksEnabled;
         var oldPost = CoreDispatch.PostProvider; var oldFreeze = CoreSubliminal.BambiFreezeProvider; var oldClock = BubbleOverlay.Field.Clock;
@@ -132,7 +134,7 @@ public class ChaosVideoGuardTests
         bool hadProgress = meta.LessonProgress.TryGetValue("porn_dvd", out var progress);
         bool completed = meta.LessonsComplete.Remove("porn_dvd");
         var clock = new Clock(); var host = new Host(); var now = DateTime.UtcNow.AddDays(1);
-        var video = new MandatoryVideoScheduler(host, clock, () => new[] { "/chaos.mp4" });
+        var video = new MandatoryVideoScheduler(host, clock, () => empty ? Array.Empty<string>() : new[] { "/chaos.mp4" });
         try {
             meta.LessonProgress["porn_dvd"] = 0; CoreSettings.Current.AttentionChecksEnabled = false;
             CoreDispatch.PostProvider = a => a(); CoreSubliminal.BambiFreezeProvider = null;
@@ -140,12 +142,12 @@ public class ChaosVideoGuardTests
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
             ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new VideoPayload() }); clock.Fire();
-            Assert.Equal(1, host.Shows);
+            Assert.Equal(empty ? 0 : 1, host.Shows);
             if (natural) { now = now.AddSeconds(3); video.Ended(); } else if (closing) ChaosRunHost.State!.ElapsedSec = ChaosRunHost.State.RunDurationSec - 3.25;
-            now = now.AddSeconds(closing ? 1 : 15); ChaosRunHost.Tick();
+            if (empty) { now = now.AddSeconds(14); ChaosRunHost.Tick(); Assert.Equal(0, ChaosLessons.Progress("porn_dvd")); now = now.AddSeconds(1); } else now = now.AddSeconds(closing ? 1 : 15); ChaosRunHost.Tick();
             Assert.False(video.IsPlaying);
-            Assert.Equal(1, host.Closes); if (!natural) Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_tape_snaps"), ChaosRunHost.State!.RecentEvents);
-            Assert.Equal(closing || natural ? 0 : 1, ChaosLessons.Progress("porn_dvd")); if (natural) return; ChaosRunHost.ForceShutdown();
+            Assert.Equal(empty ? 0 : 1, host.Closes); if (!natural && !empty) Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_tape_snaps"), ChaosRunHost.State!.RecentEvents);
+            Assert.Equal(closing || natural ? 0 : 1, ChaosLessons.Progress("porn_dvd")); if (natural || empty) return; ChaosRunHost.ForceShutdown();
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); now = now.AddSeconds(1);
             ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new VideoPayload() });
