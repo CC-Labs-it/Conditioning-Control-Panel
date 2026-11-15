@@ -25,8 +25,11 @@ public interface IScreenOcrEngine : IDisposable
 
 internal static class ScreenOcrEngineSelection
 {
-    internal static IScreenOcrEngine Select(string? languageTag, Func<IScreenOcrEngine> windows, Func<IScreenOcrEngine> core) =>
-        string.IsNullOrEmpty(languageTag) ? core() : windows();
+    internal static IScreenOcrEngine? Create(Func<IScreenOcrEngine?> windows)
+    {
+        try { return windows(); }
+        catch (Exception ex) { Log.Debug(ex, "Windows profile OCR unavailable"); return null; }
+    }
 }
 
 /// <summary>PP-OCRv5 latin through RapidOcrNet (https://github.com/BobLd/RapidOcrNet), CPU only.

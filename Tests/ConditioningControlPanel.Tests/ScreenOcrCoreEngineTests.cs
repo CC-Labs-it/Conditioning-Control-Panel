@@ -111,32 +111,25 @@ public class ScreenOcrCoreEngineTests
         Assert.Equal(bounds, engine.Frame.ScreenBounds);
     }
 
-    [Theory]
-    [InlineData("en-US")]
-    [InlineData("ja-JP")]
-    [InlineData("ru-RU")]
-    [InlineData("zh-Hans-CN")]
+    [Theory, InlineData("en-US"), InlineData("ja-JP"), InlineData("ru-RU"), InlineData("zh-Hans-CN")]
     public async Task InstalledWindowsProfileUsesProfileEngine(string profile)
     {
         var profileEngine = new FakeEngine { Text = "こんにちは" };
-        var coreEngine = new FakeEngine();
-        using var service = new ScreenOcrService(ScreenOcrEngineSelection.Select(profile, () => profileEngine, () => coreEngine));
+        using var service = new ScreenOcrService(ScreenOcrEngineSelection.Create(() => string.IsNullOrEmpty(profile) ? null : profileEngine));
         var (text, words) = await service.DecodeAndRecognizeAsync(new Bitmap(20, 10, PixelFormat.Format32bppArgb),
             new Rectangle(-100, 200, 20, 10), null);
         Assert.Equal("こんにちは", text);
         Assert.Equal(new Rectangle(-97, 204, 5, 6), Assert.Single(words!).ScreenRect);
         Assert.NotNull(profileEngine.Frame);
-        Assert.Null(coreEngine.Frame);
     }
 
-    [Theory]
-    [InlineData(null)]
-    public void MissingProfileUsesCore(string? profile)
+    [Theory, InlineData(false), InlineData(true)]
+    public void MissingOrFailedWindowsProfileLeavesScanningUnavailable(bool throws)
     {
-        var profileEngine = new FakeEngine();
-        var coreEngine = new FakeEngine();
-        using var selected = ScreenOcrEngineSelection.Select(profile, () => profileEngine, () => coreEngine);
-        Assert.Same(coreEngine, selected);
+        using var service = new ScreenOcrService(ScreenOcrEngineSelection.Create(() => throws ? throw new InvalidOperationException() : null));
+        Assert.False(service.IsOcrAvailable);
+        service.Start();
+        Assert.Null(typeof(ScreenOcrService).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(service));
     }
 
     [Fact]

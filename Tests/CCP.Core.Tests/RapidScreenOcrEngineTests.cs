@@ -119,17 +119,21 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         Assert.Null(ocr.GetValue(engine));
     }
 
-    [Theory]
-    [InlineData("en")]
-    [InlineData("en-US")]
-    [InlineData("ja-JP")]
+    [Theory, InlineData("en"), InlineData("en-US"), InlineData("ja-JP")]
     public void InstalledProfileWinsWithoutCoreModels(string language)
     {
         using var native = new RapidScreenOcrEngine();
         using var missing = new RapidScreenOcrEngine(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
         Assert.True(native.IsAvailable);
         Assert.False(missing.IsAvailable);
-        Assert.Same(native, ScreenOcrEngineSelection.Select(language, () => native, () => missing));
+        Assert.Same(native, ScreenOcrEngineSelection.Create(() => string.IsNullOrEmpty(language) ? null : native));
+    }
+
+    [Theory, InlineData(false), InlineData(true)]
+    public void MissingOrFailedWindowsProfileDoesNotCreateCoreEngine(bool throws)
+    {
+        using var engine = ScreenOcrEngineSelection.Create(() => throws ? throw new InvalidOperationException() : null);
+        Assert.Null(engine);
     }
 
     [Fact]

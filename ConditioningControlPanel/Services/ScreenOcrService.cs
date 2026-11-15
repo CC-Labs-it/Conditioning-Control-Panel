@@ -29,34 +29,25 @@ namespace ConditioningControlPanel.Services
         private bool _isRunning;
         private bool _scanInProgress;
         private long _stopVersion;
-        private readonly IScreenOcrEngine _ocrEngine;
+        private readonly IScreenOcrEngine? _ocrEngine;
         private readonly object _lock = new();
 
-        /// <summary>True when the OCR models are available and the engine is usable.</summary>
-        internal bool IsOcrAvailable => _ocrEngine.IsAvailable;
+        /// <summary>True when the Windows OCR engine is usable.</summary>
+        internal bool IsOcrAvailable => _ocrEngine?.IsAvailable == true;
 
         public ScreenOcrService() : this(CreateEngine()) { }
 
-        private static IScreenOcrEngine CreateEngine()
+        private static IScreenOcrEngine? CreateEngine() => ScreenOcrEngineSelection.Create(() =>
         {
-            try
-            {
-                var windows = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
-                return ScreenOcrEngineSelection.Select(windows?.RecognizerLanguage.LanguageTag,
-                    () => new WindowsProfileOcrEngine(windows!), () => new RapidScreenOcrEngine());
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("ScreenOcrService: Windows OCR unavailable: {Error}", ex.Message);
-                return new RapidScreenOcrEngine();
-            }
-        }
+            var windows = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+            return windows == null ? null : new WindowsProfileOcrEngine(windows);
+        });
 
-        internal ScreenOcrService(IScreenOcrEngine engine)
+        internal ScreenOcrService(IScreenOcrEngine? engine)
         {
             _ocrEngine = engine;
-            if (!engine.IsAvailable)
-                App.Logger?.Warning("ScreenOcrService: OCR models unavailable");
+            if (!IsOcrAvailable)
+                App.Logger?.Warning("ScreenOcrService: No OCR language pack available");
         }
 
         public void Start()
@@ -68,7 +59,7 @@ namespace ConditioningControlPanel.Services
                 version = _stopVersion;
             }
             // Never hold the service lock while asking an engine about its state.
-            if (!_ocrEngine.IsAvailable) return;
+            if (!IsOcrAvailable) return;
             lock (_lock)
             {
                 if (_disposed || _isRunning || version != _stopVersion) return;
@@ -104,7 +95,7 @@ namespace ConditioningControlPanel.Services
 
         private async void OnTimerTick(object? state)
         {
-            if (_disposed || !_isRunning || !_ocrEngine.IsAvailable) return;
+            if (_disposed || !_isRunning || !IsOcrAvailable) return;
             if (_scanInProgress) return;
             _scanInProgress = true;
 
@@ -268,7 +259,7 @@ namespace ConditioningControlPanel.Services
 
         private (string? text, List<OcrWordHit>? words) Recognize(byte[] pixels, Rectangle bounds, WinForms.Screen? screen)
         {
-            if (!_ocrEngine.IsAvailable) return (null, null);
+            if (_ocrEngine == null || !_ocrEngine.IsAvailable) return (null, null);
             var frame = new ScreenFrame(screen?.DeviceName ?? "", bounds, 1, bounds.Width, bounds.Height,
                 bounds.Width * 4, ScreenPixelFormat.Bgra32, pixels);
             var hits = new List<OcrWordHit>();
@@ -282,7 +273,7 @@ namespace ConditioningControlPanel.Services
             if (_disposed) return;
             _disposed = true;
             Stop();
-            _ocrEngine.Dispose();
+            _ocrEngine?.Dispose();
         }
     }
 }
