@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform.Super;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -49,4 +50,20 @@ public class SuperStageTests
             SuperStageHost.EffectOn = oldEffect;
         }
     });
+    [Fact]
+    public void PanicStopsActiveSteamAndDropsItsField() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var stage = SuperStageHost.Stage;
+        try
+        {
+            SuperStageHost.Stop();
+            stage.SteamOn = true;
+            var field = stage.Field("panic-steam", 0, 0, 100, 100);
+            PanicSurfaces.All.Single(s => s.Id == "super-stage").Stop(null);
+            Assert.False(stage.SteamOn);
+            Assert.NotSame(field, stage.Field("panic-steam", 0, 0, 100, 100));
+        }
+        finally { SuperStageHost.Stop(); }
+    });
+
 }
