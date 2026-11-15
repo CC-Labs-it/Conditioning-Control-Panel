@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Avalonia.Media.Imaging;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Flash;
 
@@ -22,7 +22,8 @@ internal static partial class FlashOverlay
             => (Window, Poster, Path, Width, Speed) = (window, poster, path, width, speed);
     }
     private static readonly List<ClipState> Clips = new();
-    private static DispatcherTimer? _clipTimer;
+    private static BeatLoop? _clipLoop;
+    private static FlashOverlayWindow? _clipOwner;
 
     internal static void StartClip(FlashOverlayWindow window, Bitmap poster, string? path, int width, double speed)
     {
@@ -33,11 +34,22 @@ internal static partial class FlashOverlay
         {
             Clips.Remove(state);
             state.Player?.Dispose();
-            if (Clips.Count == 0) { _clipTimer?.Stop(); _clipTimer = null; }
+            if (_clipOwner == window)
+            {
+                _clipLoop?.Stop(); _clipLoop = null; _clipOwner = null;
+                if (Clips.Count > 0) StartClipBeat(Clips[0].Window);
+            }
         };
-        _clipTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Normal, (_, _) => ClipTick());
-        _clipTimer.Start();
+        if (_clipLoop == null) StartClipBeat(window);
         ClipTick();
+    }
+
+    private static void StartClipBeat(FlashOverlayWindow owner)
+    {
+        _clipOwner = owner;
+        var first = true; // Start invokes the callback synchronously, even during CloseAll.
+        _clipLoop = new BeatLoop(owner, _ => { if (first) first = false; else ClipTick(); }, TimeSpan.FromMilliseconds(50));
+        _clipLoop.Start();
     }
 
     internal static void ClipTick()

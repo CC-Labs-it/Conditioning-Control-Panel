@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -16,6 +15,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
@@ -57,7 +57,9 @@ public sealed class FlashClipPlayerTests
             Assert.Same(frame, windows[0].Picture);
             Assert.NotSame(frame, windows[8].Picture);
             windows[0].Close();
-            FlashOverlay.ClipTick();
+            Assert.Equal(8, starts); // Rebinding the beat must not start a player during CloseAll.
+            Assert.Contains(BeatLoop.Running, loop => loop.Owner == windows[1]);
+            BeatLoop.StepAll();
             Assert.Equal(9, starts);
             Assert.Same(frame, windows[8].Picture);
             Assert.Equal(8, FlashClipPlayer.Budget.Live);
@@ -80,6 +82,7 @@ public sealed class FlashClipPlayerTests
             for (var i = 0; i < 200 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
         }
         Assert.Equal(0, FlashClipPlayer.Budget.Live);
+        Assert.DoesNotContain(BeatLoop.Running, loop => windows.Any(w => ReferenceEquals(w, loop.Owner)));
     });
 
     [Fact]
@@ -102,55 +105,48 @@ public sealed class FlashClipPlayerTests
     [Fact]
     public async Task NativePlayerDecodesIntoTheWindow()
     {
-        var dir = Directory.CreateTempSubdirectory("ccp-flash-native-").FullName;
-        var clip = Path.Combine(dir, "clip.mp4");
+        var clip = Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4");
+        Assert.True(File.Exists(clip));
+        LibVLC? isolated = null;
+        try { LibVlcAudio.InitializeNative(); isolated = new LibVLC("--aout=dummy"); }
+        catch (Exception e) { Assert.Skip("LibVLC unavailable: " + e.Message); }
+        using var engine = isolated!;
+        var shared = typeof(LibVlcAudio).GetProperty("Shared", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var options = typeof(LibVlcAudio).GetField("_sharedOptions", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var previous = shared.GetValue(null);
+        var previousOptions = options.GetValue(null);
+        var factory = FlashClipPlayer.Create;
+        shared.SetValue(null, null);
         try
         {
-            using (var ff = Process.Start(new ProcessStartInfo("ffmpeg", $"-v error -f lavfi -i testsrc=d=1:s=64x48:r=10 -pix_fmt yuv420p \"{clip}\"") { UseShellExecute = false })!)
-                await ff.WaitForExitAsync();
-            Assert.True(File.Exists(clip));
-            LibVLC? isolated = null;
-            try { LibVlcAudio.InitializeNative(); isolated = new LibVLC("--aout=dummy"); }
-            catch (Exception e) { Assert.Skip("LibVLC unavailable: " + e.Message); }
-            using var engine = isolated!;
-            var shared = typeof(LibVlcAudio).GetProperty("Shared", BindingFlags.Static | BindingFlags.NonPublic)!;
-            var options = typeof(LibVlcAudio).GetField("_sharedOptions", BindingFlags.Static | BindingFlags.NonPublic)!;
-            var previous = shared.GetValue(null);
-            var previousOptions = options.GetValue(null);
-            var factory = FlashClipPlayer.Create;
-            shared.SetValue(null, null);
-            try
+            FlashClipPlayer.Create = (path, width, speed, show) => new FlashClipPlayer.NativePlayer(engine, path, width, speed, show);
+            await AvaloniaTestDispatcher.RunAsync(async () =>
             {
-                FlashClipPlayer.Create = (path, width, speed, show) => new FlashClipPlayer.NativePlayer(engine, path, width, speed, show);
-                await AvaloniaTestDispatcher.RunAsync(async () =>
+                var poster = Picture();
+                var w = new FlashOverlayWindow(poster); w.Show();
+                try
                 {
-                    var poster = Picture();
-                    var w = new FlashOverlayWindow(poster); w.Show();
-                    try
-                    {
-                        FlashOverlay.StartClip(w, poster, clip, 64, 1);
-                        for (var i = 0; i < 500 && ReferenceEquals(w.Picture, poster); i++) await Task.Delay(10);
-                        Assert.IsType<WriteableBitmap>(w.Picture);
-                    }
-                    finally
-                    {
-                        w.Close();
-                        for (var i = 0; i < 500 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
-                    }
-                    Assert.Equal(0, FlashClipPlayer.Budget.Live);
-                    Assert.Equal(0, FlashClipPlayer.TearingDown);
-                });
-                Assert.Null(shared.GetValue(null));
-                Assert.Same(previousOptions, options.GetValue(null));
-            }
-            finally
-            {
-                FlashClipPlayer.Create = factory;
-                shared.SetValue(null, previous);
-                options.SetValue(null, previousOptions);
-            }
+                    FlashOverlay.StartClip(w, poster, clip, 64, 1);
+                    for (var i = 0; i < 500 && ReferenceEquals(w.Picture, poster); i++) await Task.Delay(10);
+                    Assert.IsType<WriteableBitmap>(w.Picture);
+                }
+                finally
+                {
+                    w.Close();
+                    for (var i = 0; i < 500 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
+                }
+                Assert.Equal(0, FlashClipPlayer.Budget.Live);
+                Assert.Equal(0, FlashClipPlayer.TearingDown);
+            });
+            Assert.Null(shared.GetValue(null));
+            Assert.Same(previousOptions, options.GetValue(null));
         }
-        finally { Directory.Delete(dir, true); }
+        finally
+        {
+            FlashClipPlayer.Create = factory;
+            shared.SetValue(null, previous);
+            options.SetValue(null, previousOptions);
+        }
     }
 
     [Theory]

@@ -75,6 +75,7 @@ public partial class MainShellWindow
         foreach (var offer in snap.Offers)
         {
             if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
+            if (LeashAskWindow.Current?.Body is LeashAskCard showing && showing.Offer.From.Id == offer.From.Id && showing.Offer.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds()) { _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id); continue; }
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
             _waitingLeashAsks.Add(offer);
         }
