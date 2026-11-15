@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Services
         // WPF BubbleCountWindow.xaml.cs:308-319: a poisoned native start is a skip, not a loss.
         void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) =>
             Show(path, difficulty, strict, onComplete);
+        /// <summary>Report duration corrections for this game only.</summary>
+        void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration) =>
+            Show(path, difficulty, strict, onComplete, onSkipped);
         /// <summary>Full-screen retry/mercy message for <paramref name="ms"/>, then <paramref name="then"/>
         /// (WPF ShowFullscreenMessage).</summary>
         void ShowMessage(string text, int ms, Action then);
@@ -296,12 +299,11 @@ namespace ConditioningControlPanel.Services
             {
                 _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
                     success => { if (generation == _generation) OnComplete(success); },
-                    () => { if (generation == _generation) OnSkipped(); });
+                    () => { if (generation == _generation) OnSkipped(); },
+                    duration => { if (IsBusy && generation == _generation) ExtendStuck(duration); });
                 if (IsBusy && generation == _generation)
                 {
-                    var duration = _host.LastVideoDurationSeconds;
-                    if (!double.IsFinite(duration) || duration < 0) duration = 0;
-                    ArmStuck(TimeSpan.FromSeconds(Math.Max(300, Math.Min(duration + 150, 4294967))));
+                    ExtendStuck(_host.LastVideoDurationSeconds);
                 }
             }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
@@ -357,6 +359,12 @@ namespace ConditioningControlPanel.Services
                 ArmStuck(TimeSpan.FromMinutes(5));
                 if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
             });
+        }
+
+        private void ExtendStuck(double duration)
+        {
+            if (!double.IsFinite(duration) || duration < 0) return;
+            ArmStuck(TimeSpan.FromSeconds(Math.Max(300, Math.Min(duration + 150, 4294967))));
         }
 
         private void ArmStuck(TimeSpan timeout)

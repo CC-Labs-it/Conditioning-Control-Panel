@@ -25,10 +25,16 @@ public sealed class BubbleCountSchedulerTests
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public Action? Skipped;
+        public Action<double>? Duration;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped)
         {
             Skipped = onSkipped;
             Show(path, difficulty, strict, onComplete);
+        }
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration)
+        {
+            Duration = onDuration;
+            Show(path, difficulty, strict, onComplete, onSkipped);
         }
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
         public void CloseAll() { Closes++; Closing?.Invoke(); }
@@ -274,6 +280,23 @@ public sealed class BubbleCountSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(1));
         Assert.False(b.IsBusy); Assert.Equal(1, host.Closes); Assert.Empty(xp);
         host.Shown[0].Done(true); Assert.Empty(xp);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Late_duration_extends_only_its_active_game(bool strict) => With(true, strict, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { LastVideoDurationSeconds = 30 };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        var oldDuration = host.Duration!;
+        clock.Advance(TimeSpan.FromSeconds(100)); oldDuration(600);
+        clock.Advance(TimeSpan.FromSeconds(749)); Assert.True(b.IsBusy); Assert.Equal(0, host.Closes);
+        clock.Advance(TimeSpan.FromSeconds(1)); Assert.False(b.IsBusy); Assert.Equal(1, host.Closes);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        oldDuration(600); // the previous game's late event cannot extend this round
+        clock.Advance(TimeSpan.FromSeconds(300)); Assert.False(b.IsBusy); Assert.Equal(2, host.Closes);
     });
 
     [Fact]
