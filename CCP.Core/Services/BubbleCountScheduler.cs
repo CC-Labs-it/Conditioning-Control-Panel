@@ -66,7 +66,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
+        private ITimer? _scheduler, _leadIn, _queued, _feedDefer, _stuck;
         private readonly HashSet<ITimer> _feedPolls = new();
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
@@ -206,6 +206,7 @@ namespace ConditioningControlPanel.Services
                 return;
             }
             IsBusy = true;
+            ArmStuck(TimeSpan.FromMinutes(5));
             HoldsEffects = CoreSettings.Current.BubbleCountPauseEffects;
             if (HoldsEffects)
             {
@@ -296,6 +297,12 @@ namespace ConditioningControlPanel.Services
                 _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
                     success => { if (generation == _generation) OnComplete(success); },
                     () => { if (generation == _generation) OnSkipped(); });
+                if (IsBusy && generation == _generation)
+                {
+                    var duration = _host.LastVideoDurationSeconds;
+                    if (!double.IsFinite(duration) || duration < 0) duration = 0;
+                    ArmStuck(TimeSpan.FromSeconds(Math.Max(300, Math.Min(duration + 150, 4294967))));
+                }
             }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
@@ -347,7 +354,18 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(CoreMods.BubbleCountRetryMessage ?? "WRONG!\nWATCH AGAIN", 2000, () =>
             {
                 if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
+                ArmStuck(TimeSpan.FromMinutes(5));
                 if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
+            });
+        }
+
+        private void ArmStuck(TimeSpan timeout)
+        {
+            Dispose(ref _stuck);
+            _stuck = After(timeout, mine =>
+            {
+                if (!ReferenceEquals(mine, _stuck) || !IsBusy) return;
+                ForceCleanup();
             });
         }
 
@@ -359,6 +377,7 @@ namespace ConditioningControlPanel.Services
 
         private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
+            Dispose(ref _stuck);
             _generation++; // invalidate callbacks from a closed round
             IsBusy = false;
             if (HoldsEffects)
