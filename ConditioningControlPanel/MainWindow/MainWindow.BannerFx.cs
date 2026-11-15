@@ -82,6 +82,17 @@ namespace ConditioningControlPanel
         public static bool Breathe(bool ambientAllowed) => ambientAllowed;
 
         /// <summary>
+        /// Declutter wave 1 (2026-11-15): the header banner belongs to Home. It shows on the
+        /// dashboard tab ("settings") and its permanent alias "progression", and is collapsed on
+        /// every other tab so the header row breathes. Case is not significant; a null or empty
+        /// key means no navigation has happened yet, which is the dashboard the app lands on.
+        /// </summary>
+        public static bool ShowsOnTab(string? tabKey) =>
+            string.IsNullOrEmpty(tabKey)
+            || string.Equals(tabKey, "settings", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(tabKey, "progression", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
         /// Plans one run over a line of text that starts at <paramref name="textLeft"/> and is
         /// <paramref name="textWidth"/> wide, on a layer <paramref name="layerHeight"/> tall. Every
         /// star crosses the text left to right; they leave in a stagger so the run reads as a
@@ -168,7 +179,8 @@ namespace ConditioningControlPanel
             try
             {
                 if (BannerGlow == null) return;
-                bool ambient = ChromeAmbientAllowed;
+                // A collapsed banner (any tab but Home) runs no ambient loop at all.
+                bool ambient = ChromeAmbientAllowed && HeaderBannerHost?.Visibility == Visibility.Visible;
 
                 if (BannerFxRules.Breathe(ambient))
                 {
@@ -212,6 +224,25 @@ namespace ConditioningControlPanel
                 }
             }
             catch (Exception ex) { App.Logger?.Debug("ApplyBannerFxLoops: {E}", ex.Message); }
+        }
+
+        /// <summary>
+        /// Paints <see cref="BannerFxRules.ShowsOnTab"/>: the pill and its halo sibling show or
+        /// collapse together, and the ambient loops re-evaluate so nothing breathes off screen.
+        /// Called at the end of ShowTab; the dashboard's own MarqueeBanner is not involved.
+        /// </summary>
+        private void ApplyHeaderBannerForTab(string? tabKey)
+        {
+            try
+            {
+                if (HeaderBannerHost == null) return;
+                var vis = BannerFxRules.ShowsOnTab(tabKey) ? Visibility.Visible : Visibility.Collapsed;
+                if (HeaderBannerHost.Visibility == vis) return;
+                HeaderBannerHost.Visibility = vis;
+                if (HeaderBannerGlowHost != null) HeaderBannerGlowHost.Visibility = vis;
+                ApplyBannerFxLoops();
+            }
+            catch (Exception ex) { App.Logger?.Debug("ApplyHeaderBannerForTab: {E}", ex.Message); }
         }
 
         private bool SupportBeatOnScreen =>
