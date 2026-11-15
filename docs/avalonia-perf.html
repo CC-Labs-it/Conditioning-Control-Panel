@@ -134,6 +134,7 @@ No new Windows parity result is claimed by this review fix.</p>
 <h2 id="ledger">Ledger</h2>
 <p>One line per run: date, machine/runner, commit, artifact or evidence path, headline numbers.</p>
 <ul>
+<li>2026-11-15, cloud Linux, base <code>669eb1b72</code>: BLOCKED — Windows rgate 43595478555 reported Avalonia startup 4275 / 4952 ms (Main / process), WPF 4211 / 4341 ms; the hypothesized ReadyToRun difference is absent (Avalonia <code>Properties/PublishProfiles/win-x64.pubxml:11</code>, WPF <code>ConditioningControlPanel.csproj:51</code>, bench <code>.github/workflows/build.yml:236</code>). Avalonia samples process time after the rendered-frame clock (<code>CCP.Avalonia/PerfBench.cs:72-73,148-151</code>), so the difference does not isolate pre-Main time. Linux before/after unavailable (no Xvfb); instrument the startup phases and rerun on Linux and Windows before choosing a fix. Windows result owed to the next rgate bench.</li>
 <li>2026-11-11, cloud Linux, test syntax correction on parent <code>217dae076</code>, base
 <code>e62cb9ecd005</code>: Core, Avalonia and Avalonia test projects built in Release;
 Core tests 4650 passed / 5 skipped; 21 focused headless tests passed. Fail-proof: disabling the mod-revision check made the same-ID
