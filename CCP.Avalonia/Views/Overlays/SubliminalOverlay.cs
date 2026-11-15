@@ -124,7 +124,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// re-raise every later family in that order. Flashes call this after they map (they sit under the card).</summary>
         internal static void RestackStages()
         {
-            if (HostedCards.Count == 0) return;
+            // WPF OverlayService.ReassertZOrder (#497, SubliminalOverVideo.cs:9-12) pins the compositor, spiral and tint
+            // below a playing video: with one up, raising anything here would bury the clip.
+            if (HostedCards.Count == 0 || VideoWindowCount() > 0) return;
             foreach (var lease in Hosts.Values) lease.Raise();
             IEnumerable<Window> above = PinkFilterOverlay.EffectWindows()
                 .Where(w => w is BubbleOverlayWindow or BouncingTextOverlayWindow or SpiralOverlayWindow)

@@ -193,6 +193,15 @@ public sealed class SubliminalCompositorRouteTests
                 TimeSpan.FromSeconds(6), false, false, 0));
             Assert.Equal(expected(stage), raised);
 
+            env.Videos = 1; // a video starts between the card and a flash: the stage, spiral and tint stay under it (WPF #497)
+            raised.Clear();
+            Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
+                    new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
+                new PixelRect(10, 10, 50, 50), "flash-video.png", env.Owner.Screens.All[0], 1, TimeSpan.Zero,
+                TimeSpan.FromSeconds(6), false, false, 0));
+            Assert.Empty(raised);
+            env.Videos = 0;
+
             SubliminalOverlay.CloseAll(); // no hosted card: a flash restacks nothing
             raised.Clear();
             Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
