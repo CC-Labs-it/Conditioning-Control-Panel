@@ -127,13 +127,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OverlayService.ReassertZOrder (#497, SubliminalOverVideo.cs:9-12) pins the compositor, spiral and tint
             // below a playing video: with one up, raising anything here would bury the clip.
             if (HostedCards.Count == 0 || VideoWindowCount() > 0) return;
+            // PinkFilterUnderEffects puts the tint at PinkTintUnder (35): over a flash (30), under the stage (40).
+            if (CoreSettings.Current.PinkFilterUnderEffects) RaiseAll(PinkFilterOverlay.Shown);
             foreach (var lease in Hosts.Values) lease.Raise();
             IEnumerable<Window> above = PinkFilterOverlay.EffectWindows()
                 .Where(w => w is BubbleOverlayWindow or BouncingTextOverlayWindow or SpiralOverlayWindow)
                 .OrderBy(w => w is BubbleOverlayWindow ? 0 : w is BouncingTextOverlayWindow ? 1 : 2);
-            // PinkFilterUnderEffects puts the tint at PinkTintUnder (35), already under the stage.
             if (!CoreSettings.Current.PinkFilterUnderEffects) above = above.Concat(PinkFilterOverlay.Shown);
-            foreach (var w in above.ToArray())
+            RaiseAll(above);
+        }
+
+        private static void RaiseAll(IEnumerable<Window> windows)
+        {
+            foreach (var w in windows.ToArray())
             {
                 try { PinkFilterOverlay.RaiseWindow(w); }
                 catch (Exception ex) { Log.Debug("Subliminal: compositor-order raise failed: {E}", ex.Message); }

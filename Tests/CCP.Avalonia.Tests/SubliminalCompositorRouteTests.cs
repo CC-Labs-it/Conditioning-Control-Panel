@@ -180,7 +180,7 @@ public sealed class SubliminalCompositorRouteTests
             PinkFilterOverlay.RaiseWindow = w => { raised.Add(w); return true; };
             SharedOverlayHost.Raise = w => { raised.Add(w); return true; };
             FlashOverlay.Present = (_, _, _) => true;
-            var expected = (Window stage) => tintUnder ? new Window[] { stage, spiral } : new Window[] { stage, spiral, tint };
+            var expected = (Window stage) => tintUnder ? new Window[] { tint, stage, spiral } : new Window[] { stage, spiral, tint };
 
             SubliminalOverlay.Show(env.Owner, "CARD");
             var stage = Assert.Single(env.Stages);
