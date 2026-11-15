@@ -23,6 +23,32 @@ namespace CCP.Avalonia.Tests;
 /// motion Off shows the still frame without a running clock.</summary>
 public sealed class HelpLoopTests
 {
+    [Fact]
+    public Task V2HelpSwitchShowsItsOwnCardAndReturns() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var (host, button) = Host("PinkFilter");
+        try
+        {
+            Click(host, button);
+            Assert.Equal("PinkFilter", Find<HelpLoopView>(button).Scene.Id);
+            var toggle = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle");
+            Assert.Equal(Loc.Get("help_see_v2"), toggle.Content);
+            toggle.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(HelpPopover.IsOpen(button));
+            Assert.True(HelpPopover.IsPinned(button));
+            Assert.Equal(Loc.Get("help_see_classic"), HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").Content);
+            Assert.Contains(HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Text == Loc.Get("super_name_creep"));
+            HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("PinkFilter", Find<HelpLoopView>(button).Scene.Id);
+        }
+        finally { HelpPopover.Clear(button); host.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData("PinkFilter", 4000, 0)]     // still 4400 + 4000 wraps to t=1200: step 1
     [InlineData("FlashImages", 1000, 2)]    // still 2900 + 1000 = t=3900: step 3

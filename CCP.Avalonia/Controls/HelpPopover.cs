@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Super;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Controls
@@ -51,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private Control? _popupRoot;
         private Window? _hostWindow;
         private bool _pinned;
+        private bool _showV2;
         private bool _detached;
 
         private HelpPopover(Button button, HelpContent content, IconEntry? headerIcon)
@@ -281,11 +283,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (_popupRoot is not null) return;
 
+            var effect = SuperDoor.ForHelp(_content.SectionId);
+            var shown = _showV2 && effect is { } fx ? SuperDoor.Help(fx) : _content;
             var pink = Brush("PinkBrush", Color.FromRgb(0xFF, 0x69, 0xB4));
             var body = new StackPanel { MaxWidth = BodyMaxWidth };
-            if (HelpLoops.HelpLoopRegistry.TryGet(_content.SectionId, out var scene))
+            if (HelpLoops.HelpLoopRegistry.TryGet(shown.SectionId, out var scene))
                 body.Children.Add(BuildLoop(scene, pink));
-            else if (_content.HasClip)
+            else if (shown.HasClip)
                 body.Children.Add(BuildVideoPoster(pink));
 
             var header = new Border
@@ -299,7 +303,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 ? IconGlyph.Of(icon, null, 18)
                 : new TextBlock
             {
-                Text = _content.Icon ?? "?",
+                Text = shown.Icon ?? "?",
                 FontSize = 18,
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -307,18 +311,31 @@ namespace ConditioningControlPanel.Avalonia.Controls
             headerRow.Children.Add(headerIcon);
             headerRow.Children.Add(new TextBlock
             {
-                Text = _content.Title ?? string.Empty,
+                Text = shown.Title ?? string.Empty,
                 Foreground = pink,
                 FontSize = 14,
                 FontWeight = FontWeight.Bold,
                 VerticalAlignment = VerticalAlignment.Center,
             });
+            if (effect is not null)
+            {
+                var toggle = new Button { Name = "HelpV2Toggle", Content = Loc.Get(_showV2 ? "help_see_classic" : "help_see_v2"), Margin = new Thickness(10, 0, 0, 0) };
+                toggle.Click += (_, _) =>
+                {
+                    _showV2 = !_showV2;
+                    _pinned = true;
+                    _closeTimer.Stop();
+                    _popupRoot = null;
+                    EnsureContent();
+                };
+                headerRow.Children.Add(toggle);
+            }
             header.Child = headerRow;
             body.Children.Add(header);
 
             var what = new StackPanel { Margin = new Thickness(12, 12, 12, 8) };
             what.Children.Add(Heading("help_heading_what_it_does", pink));
-            what.Children.Add(Marked(_content.WhatItDoes, pink, new TextBlock
+            what.Children.Add(Marked(shown.WhatItDoes, pink, new TextBlock
             {
                 Foreground = Brush("TextSecondaryBrush", Color.FromRgb(0xD0, 0xD0, 0xD0)),
                 FontSize = 12,
@@ -327,7 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             }));
             body.Children.Add(what);
 
-            if (_content.HasTips)
+            if (shown.HasTips)
             {
                 var tips = new StackPanel { Margin = new Thickness(12, 0, 12, 8) };
                 var tipsGold = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00));
@@ -344,7 +361,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 });
                 tipsHeading.Children.Add(Heading("help_heading_tips", tipsGold));
                 tips.Children.Add(tipsHeading);
-                foreach (var tip in _content.Tips ?? new())
+                foreach (var tip in shown.Tips ?? new())
                 {
                     var row = new StackPanel
                     {
@@ -370,7 +387,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 body.Children.Add(tips);
             }
 
-            if (_content.HasHowItWorks)
+            if (shown.HasHowItWorks)
             {
                 var howForeground = Brush("TextMutedBrush", Color.FromRgb(0xA0, 0xA0, 0xBC));
                 var how = new Border
@@ -394,7 +411,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 howBody.Children.Add(Heading("help_heading_how_it_works", howForeground));
                 var howContent = new StackPanel();
                 howContent.Children.Add(howBody);
-                howContent.Children.Add(Marked(_content.HowItWorks, pink, new TextBlock
+                howContent.Children.Add(Marked(shown.HowItWorks, pink, new TextBlock
                 {
                     Foreground = howForeground,
                     FontSize = 10,
@@ -442,8 +459,17 @@ namespace ConditioningControlPanel.Avalonia.Controls
             root.PointerEntered += OnPopupPointerEntered;
             root.PointerExited += OnPopupPointerExited;
 
-            _popupRoot = root;
-            _popup.Child = root;
+            if (_popup.Child is Border existing)
+            {
+                root.Child = null;
+                existing.Child = card;
+                _popupRoot = existing;
+            }
+            else
+            {
+                _popupRoot = root;
+                _popup.Child = root;
+            }
         }
 
         /// <summary>WPF HelpPopover.BuildLoop: the drawn loop in a pink-rimmed frame, its step chips
