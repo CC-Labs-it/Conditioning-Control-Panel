@@ -304,7 +304,15 @@ public sealed class InlineLoopVideoTests
                 Assert.True(shutdown);
                 Assert.False(sinkA.Freed);
                 Assert.False(sinkB.Freed);
-                release.Set();
+                // The exit handler's wait is bounded while a stop stays held...
+                var held = Stopwatch.StartNew();
+                Assert.False(GazeMinigameWindow.WaitForRoundCleanupOnExit(TimeSpan.FromMilliseconds(100)));
+                Assert.True(held.ElapsedMilliseconds < 1000, "exit wait exceeded its budget");
+                // ...and completes the native stop and frees the sinks with the UI thread blocked, as in OnDesktopExit.
+                _ = Task.Run(async () => { await Task.Delay(200); release.Set(); });
+                Assert.True(GazeMinigameWindow.WaitForRoundCleanupOnExit(TimeSpan.FromSeconds(5)));
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+                Assert.True(sinkA.Freed && sinkB.Freed);
                 await GazeMinigameWindow.PrepareForShutdownAsync().WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.True(shutdown);
                 Assert.True(closed);

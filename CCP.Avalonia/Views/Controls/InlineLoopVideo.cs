@@ -185,13 +185,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 return Task.CompletedTask;
             }
             if (player == null && media == null && sink == null) return Task.CompletedTask;
-            return FinishAsync();
-
-            async Task FinishAsync()
-            {
-                await Task.Run(StopAndDispose).ConfigureAwait(false);
-                await Dispatcher.UIThread.InvokeAsync(() => sink?.Free());
-            }
+            // No dispatcher hop: app exit waits for this while the UI thread is blocked or stopped.
+            return Task.Run(() => { StopAndDispose(); sink?.Free(); });
         }
     }
 }

@@ -1051,6 +1051,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             finally { PendingRoundTeardowns.Remove(task); }
         }
 
+        // App exit, UI thread: WPF Window_Closing disposes players synchronously before libvlc unloads
+        // (GazeMinigameWindow.xaml.cs:1661); here the native work still running gets a bounded wait.
+        internal static bool WaitForRoundCleanupOnExit(TimeSpan budget)
+        {
+            try
+            {
+                if (Task.WaitAll(PendingRoundTeardowns.ToArray(), budget)) return true;
+                Log.Warning("GazeMinigame: round video cleanup still running at exit");
+            }
+            catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+            return false;
+        }
+
         internal static async Task PrepareForShutdownAsync()
         {
             while (true)

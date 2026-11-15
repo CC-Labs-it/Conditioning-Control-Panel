@@ -1926,6 +1926,8 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
+            // Gaze round players still stopping off-thread finish before exit continues (bounded).
+            Views.Lab.GazeMinigame.GazeMinigameWindow.WaitForRoundCleanupOnExit(TimeSpan.FromSeconds(2));
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
