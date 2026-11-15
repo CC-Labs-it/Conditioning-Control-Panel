@@ -454,4 +454,58 @@ public sealed class CompanionBrainHostTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task CompanionAskBusyBrowserEnhancement() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().WithInterFont().With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register).UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var restore = SaveAskSeams();
+        var oldSetting = ConditioningControlPanel.CoreSettings.Current.BrowserEnhanceIfPossible;
+        var lifetimeField = typeof(Application).GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .Single(f => typeof(global::Avalonia.Controls.ApplicationLifetimes.IApplicationLifetime).IsAssignableFrom(f.FieldType));
+        var oldLifetime = Application.Current!.ApplicationLifetime;
+        using var lifetime = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime
+            { ShutdownMode = global::Avalonia.Controls.ShutdownMode.OnExplicitShutdown };
+        ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
+        string? path = null;
+        try
+        {
+            lifetimeField.SetValue(Application.Current, lifetime);
+            ConditioningControlPanel.CoreSettings.Current.BrowserEnhanceIfPossible = true;
+            shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            lifetime.MainWindow = shell;
+            shell.Show();
+            AvApp.Mantra.EndSession();
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            AvApp.SeedCompanionTubeSeams();
+            var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var web = tab.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("BrowserWebHost")!;
+            web.ScriptInvoker = _ => Task.FromResult<string?>(null);
+            var library = shell.BrowserEnhancementLibrary!;
+            var id = Guid.NewGuid().ToString("N");
+            var url = "https://hypnotube.com/watch/" + id;
+            path = Path.Combine(library.LibraryFolder, id + ".ccpenh.json");
+            File.WriteAllText(path, "{\"$schema\":\"ccp-enhancement/v1\",\"version\":1,\"media_type\":\"video\",\"media_source\":\"" + url + "\",\"metadata\":{\"name\":\"Ask busy test\",\"creator\":\"test\"}}");
+            Assert.False(CompanionAskService.BusyProvider!());
+            web.OnNavigationCompleted(new Uri(url));
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            Assert.True(CompanionAskService.BusyProvider!());
+            Assert.False(CompanionAskService.Instance.CanOfferFor("what can I do"));
+            web.OnNavigationCompleted(new Uri("https://example.com/unrelated"));
+            Assert.False(tab.BrowserEnhanceHost.IsRunning);
+            Assert.False(CompanionAskService.BusyProvider!());
+        }
+        finally
+        {
+            shell?.Close();
+            if (path != null) File.Delete(path);
+            ConditioningControlPanel.CoreSettings.Current.BrowserEnhanceIfPossible = oldSetting;
+            lifetimeField.SetValue(Application.Current, oldLifetime);
+            restore();
+        }
+        return Task.CompletedTask;
+    });
+
 }
