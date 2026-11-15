@@ -947,8 +947,10 @@
                     <Grid>
                         <Border CornerRadius="11" RenderOptions.BitmapScalingMode="HighQuality">
                             <Border.Background>
+                                <!-- Uniform: the plate is two rows tall since the declutter strip-out,
+                                     and a filled picture lost its sides there. Show it whole. -->
                                 <ImageBrush x:Name="MysteryRevealArtBrush" x:FieldModifier="internal"
-                                            Stretch="UniformToFill"/>
+                                            Stretch="Uniform"/>
                             </Border.Background>
                         </Border>
                         <Border CornerRadius="0,0,11,11" VerticalAlignment="Bottom" IsHitTestVisible="False">
