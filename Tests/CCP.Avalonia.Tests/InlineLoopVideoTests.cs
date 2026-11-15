@@ -203,7 +203,22 @@ public sealed class InlineLoopVideoTests
     }
 
     [Fact]
-    public async Task GazeCloseIsBoundedAndShutdownWaitsForEarlierRoundCleanup()
+    public async Task ShutdownStopsSafetyBeforeBoundedWaitForStuckCleanup()
+    {
+        var pending = new TaskCompletionSource();
+        var safety = false;
+        var exited = false;
+        var exit = global::ConditioningControlPanel.Avalonia.App.ShutdownAfterGazeCleanupAsync(
+            () => safety = true, () => { Assert.True(safety); return pending.Task; },
+            () => exited = true, TimeSpan.FromMilliseconds(50));
+        await exit.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(exited);
+        Assert.False(pending.Task.IsCompleted);
+        pending.SetResult();
+    }
+
+    [Fact]
+    public async Task GazeCloseAndShutdownAreBoundedWithPendingRoundCleanup()
     {
         await WithClip(async clip =>
         {
@@ -244,12 +259,12 @@ public sealed class InlineLoopVideoTests
                 var shutdown = false;
                 var exit = global::ConditioningControlPanel.Avalonia.App.ShutdownAfterGazeCleanupAsync(() => shutdown = true);
                 await Task.Delay(550);
-                Assert.False(exit.IsCompleted);
-                Assert.False(shutdown);
+                await exit.WaitAsync(TimeSpan.FromSeconds(2));
+                Assert.True(shutdown);
                 Assert.False(sinkA.Freed);
                 Assert.False(sinkB.Freed);
                 release.Set();
-                await exit.WaitAsync(TimeSpan.FromSeconds(5));
+                await GazeMinigameWindow.PrepareForShutdownAsync().WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.True(shutdown);
                 Assert.True(closed);
                 Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
