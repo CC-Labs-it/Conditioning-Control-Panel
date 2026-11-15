@@ -404,6 +404,51 @@ public sealed class VaultGateTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task BitcoinIsAvailableOnEveryFaceAndCountsTheClick() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        var lines = new ConcurrentQueue<string>();
+        var oldRoot = FunnelBeacon.BaseUrlOverride;
+        var oldSend = FunnelBeacon.SendOverride;
+        var oldLaunch = VaultGateDialog.Launch;
+        var opened = new System.Collections.Generic.List<string>();
+        FunnelBeacon.BaseUrlOverride = "https://proxy.test";
+        FunnelBeacon.SendOverride = (_, body) => { lines.Enqueue(body); return Task.CompletedTask; };
+        VaultGateDialog.Launch = url => { opened.Add(url); return true; };
+        try
+        {
+            void Check(VaultGateDialog dialog, int count, bool stacked)
+            {
+                Dispatcher.UIThread.RunJobs();
+                var buttons = dialog.GetVisualDescendants().OfType<Button>().ToList();
+                var coins = buttons.Where(b => b.Content is TextBlock t && t.Text == Loc.Get("vaultgate_or_crypto")).ToList();
+                Assert.Equal(count, coins.Count);
+                Assert.Equal(count, buttons.Count(b => b.Content is TextBlock t && t.Text == Loc.Get("vaultgate_or_card")));
+                Assert.All(coins, coin => { Assert.Equal(Loc.Get("vaultgate_crypto_tip"), ToolTip.GetTip(coin)); Assert.True(coin.Focusable); });
+                if (stacked) Assert.All(coins, coin => Assert.Equal(new Thickness(0, 4, 0, 0), coin.Margin));
+            }
+            var dialog = VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            Check(dialog, 1, false);
+            Click(dialog, Loc.Get("vaultgate_compare"));
+            Check(dialog, 2, true);
+            Click(dialog, Loc.Get("vaultgate_or_crypto"));
+            Assert.Null(VaultGateDialog.Open);
+            Assert.Equal(PlanCatalog.CryptoPassUrl, Assert.Single(opened));
+            for (var i = 0; i < 100 && !lines.Contains("cta_clicked|panel|vault|crypto"); i++) await Task.Delay(10);
+            Assert.Contains("cta_clicked|panel|vault|crypto", lines);
+            dialog = VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddDays(2), () => { });
+            Check(dialog, 1, false);
+        }
+        finally
+        {
+            VaultGateDialog.Open?.Close();
+            FunnelBeacon.BaseUrlOverride = oldRoot;
+            FunnelBeacon.SendOverride = oldSend;
+            VaultGateDialog.Launch = oldLaunch;
+        }
+    });
+
     [Theory]
     [InlineData("prices")]
     [InlineData("hints")]

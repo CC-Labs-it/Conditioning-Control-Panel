@@ -306,7 +306,7 @@ public sealed class VaultGateDialog : Window
         choose.HorizontalAlignment = HorizontalAlignment.Stretch;
         choose.Click += (_, _) => { OpenPlan(tier, lab ? "compare-lab" : "compare-vault"); Close(); };
         col.Children.Add(choose);
-        col.Children.Add(CardLink(lab, lab ? "compare-lab" : "compare-vault"));
+        col.Children.Add(PayWays(tier, lab ? "compare-lab" : "compare-vault", stacked: true));
         return new Border { Background = RowBg, BorderBrush = lab ? Gold : Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14), Child = col };
     }
 
@@ -347,14 +347,32 @@ public sealed class VaultGateDialog : Window
         if (!Launch(_plans.For(tier).PatreonUrl)) Log.Warning("[VaultGate] checkout link refused or failed");
     }
 
-    /// <summary>The other way to pay, under every Patreon button: the site's card / PayPal checkout (WPF CardLink).</summary>
-    private Button CardLink(bool lab, string from)
+    /// <summary>Card and Bitcoin links under each Patreon button (WPF PayWays).</summary>
+    private Control CardLink(bool lab, string from) => PayWays(lab ? 2 : 1, from, stacked: false);
+
+    private Control PayWays(int tier, string from, bool stacked)
     {
-        var link = Link(Loc.Get("vaultgate_or_card"));
-        link.Margin = new Thickness(0, 8, 0, 0);
-        if (link.Content is TextBlock t) t.TextAlignment = TextAlignment.Center;   // WPF CardLink: wrapped lines centred
-        link.Click += (_, _) => { OpenCard(lab ? 2 : 1, from); Close(); };
-        return link;
+        Panel row = stacked ? new StackPanel() : new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
+        row.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_pay_with"), Foreground = Muted, FontSize = stacked ? 11.5 : 12,
+            Margin = stacked ? new Thickness(0, 0, 0, 3) : new Thickness(0, 0, 4, 0) });
+        var card = Link(Loc.Get("vaultgate_or_card"));
+        if (card.Content is TextBlock text) text.TextAlignment = TextAlignment.Center;
+        card.Click += (_, _) => { OpenCard(tier, from); Close(); };
+        row.Children.Add(card);
+        if (!stacked) row.Children.Add(new TextBlock { Text = "·", Foreground = Muted, FontSize = 12, Margin = new Thickness(6, 0, 6, 0) });
+        var coin = Link(Loc.Get("vaultgate_or_crypto"));
+        ToolTip.SetTip(coin, Loc.Get("vaultgate_crypto_tip"));
+        if (stacked) coin.Margin = new Thickness(0, 4, 0, 0);
+        coin.Click += (_, _) => { OpenCrypto(tier, from); Close(); };
+        row.Children.Add(coin);
+        return row;
+    }
+
+    private void OpenCrypto(int tier, string from)
+    {
+        Log.Information("[VaultGate] open crypto pass page ({Tier}) from {From}", FunnelBeacon.TierName(tier), from);
+        FunnelBeacon.Post("cta_clicked", _funnelKey, "crypto");
+        if (!Launch(PlanCatalog.CryptoPassUrl)) Log.Warning("[VaultGate] crypto link refused or failed");
     }
 
     private void OpenCard(int tier, string from)
