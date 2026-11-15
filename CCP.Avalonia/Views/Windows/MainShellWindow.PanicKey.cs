@@ -224,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // run, one notice, and the effect starts anyway.
         private static Task? _portalBind;
         private static bool _portalFailed, _portalAllowed;
+        internal static bool? PortalLinuxForTests { get; set; }
         private static DispatcherTimer? _portalWatch;
 
         // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
@@ -247,7 +248,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static void StartEffect(Action start)
         {
             if (!_portalAllowed || PortalPanicShortcut.IsBound || _portalFailed || !CoreSettings.Current.PanicKeyEnabled
-                || !OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+                || !(PortalLinuxForTests ?? OperatingSystem.IsLinux()) || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
             {
                 start();
                 return;
