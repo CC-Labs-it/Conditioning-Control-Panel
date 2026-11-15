@@ -123,6 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF ScrolllerCredit.OpenHome: refused under Strict Lock, a Lockdown or a Chaos run (a browser
         /// coming up over them would be a way out).</summary>
+        private void ScrolllerLink_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => OpenScrolllerHome();
+
         internal static bool OpenScrolllerHome()
         {
             try
