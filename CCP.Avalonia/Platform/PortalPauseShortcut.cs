@@ -40,9 +40,21 @@ internal sealed class PortalPauseShortcut : IDisposable
         return false;
     }
 
-    internal static async Task<IDisposable?> BindAsync(string key, Action pressed, Action closed, CancellationToken cancellation)
+    // A missing preferred trigger lets the compositor ask the user for the ISO key.
+    internal static Dictionary<string, VariantValue> ShortcutOptions(string trigger)
     {
-        if (SandboxMarker.Active || string.IsNullOrWhiteSpace(key) || X11PanicKey.XKeyName(key).Length == 0) return null;
+        var options = new Dictionary<string, VariantValue> { ["description"] = Loc.Get("setting_pause_key") };
+        if (trigger.Length != 0) options["preferred_trigger"] = trigger;
+        return options;
+    }
+
+    internal static Task<IDisposable?> BindAsync(string key, Action pressed, Action closed, CancellationToken cancellation) =>
+        BindAsync(key, pressed, closed, cancellation, SandboxMarker.Active);
+
+    // Tests inject the sandbox state and a failing bus, without contacting the desktop.
+    internal static async Task<IDisposable?> BindAsync(string key, Action pressed, Action closed, CancellationToken cancellation, bool sandboxed)
+    {
+        if (sandboxed || string.IsNullOrWhiteSpace(key)) return null;
         var binding = new PortalPauseShortcut(key, pressed, closed);
         try
         {
@@ -80,11 +92,7 @@ internal sealed class PortalPauseShortcut : IDisposable
                 var shortcuts = w.WriteArrayStart(DBusType.Struct);
                 w.WriteStructureStart();
                 w.WriteString(Id);
-                w.WriteDictionary(new Dictionary<string, VariantValue>
-                {
-                    ["description"] = Loc.Get("setting_pause_key"),
-                    ["preferred_trigger"] = binding._trigger,
-                });
+                w.WriteDictionary(ShortcutOptions(binding._trigger));
                 w.WriteArrayEnd(shortcuts);
                 w.WriteString("");
                 w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token });

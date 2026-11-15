@@ -107,7 +107,7 @@ public partial class MainShellWindow
     internal static bool PauseKeyRefused(AppSettings s) =>
         string.IsNullOrWhiteSpace(s.PauseKey)
         || PanicPolicy.PauseKeyIsShadowedByPanicKey(s.PanicKey, s.PanicKeyEnabled, s.PauseKey)
-        || (s.PanicKeyEnabled && string.Equals(X11PanicKey.XKeyName(s.PanicKey ?? ""), X11PanicKey.XKeyName(s.PauseKey), StringComparison.OrdinalIgnoreCase))
+        || (s.PanicKeyEnabled && !string.IsNullOrWhiteSpace(s.PanicKey) && string.Equals(X11PanicKey.XKeyName(s.PanicKey), X11PanicKey.XKeyName(s.PauseKey), StringComparison.OrdinalIgnoreCase))
         || LockdownActive || CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey;
 
     internal void ApplyPauseKeyPortal()

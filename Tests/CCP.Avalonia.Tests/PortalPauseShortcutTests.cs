@@ -73,6 +73,68 @@ public class PortalPauseShortcutTests
         Assert.False(PortalPauseShortcut.Bound(0, new Dictionary<string, VariantValue>()));
     }
 
+    [Theory]
+    [InlineData("Oem102")]
+    [InlineData("OemBackslash")]
+    public async Task OemKeyReachesPortalWithoutPreferredTrigger(string key)
+    {
+        var options = PortalPauseShortcut.ShortcutOptions(X11PanicKey.XKeyName(key));
+        Assert.True(options.ContainsKey("description"));
+        Assert.False(options.ContainsKey("preferred_trigger"));
+        Assert.Equal("F9", PortalPauseShortcut.ShortcutOptions(X11PanicKey.XKeyName("F9"))["preferred_trigger"].GetString());
+        var original = PortalPauseShortcut.OpenConnection;
+        int attempts = 0;
+        try
+        {
+            PortalPauseShortcut.OpenConnection = () => { attempts++; throw new InvalidOperationException("fake bus"); };
+            Assert.Null(await PortalPauseShortcut.BindAsync(key, () => { }, () => { }, CancellationToken.None, false));
+            Assert.Equal(1, attempts);
+            Assert.Null(await PortalPauseShortcut.BindAsync("  ", () => { }, () => { }, CancellationToken.None, false));
+            Assert.Null(await PortalPauseShortcut.BindAsync(key, () => { }, () => { }, CancellationToken.None, true));
+            Assert.Equal(1, attempts);
+        }
+        finally { PortalPauseShortcut.OpenConnection = original; }
+    }
+
+    [Theory]
+    [InlineData("Oem102", "OemBackslash")]
+    [InlineData("OemBackslash", "Oem102")]
+    public Task OemKeyBindsDuringVideoUnlessPanicShadowsIt(string pause, string panic) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var oldLockdown = LockdownService.Current;
+        var shell = new MainShellWindow { PauseKeyWayland = true, PauseKeyVideoPlaying = () => true };
+        int attempts = 0, graces = 0;
+        Action? press = null;
+        var registrations = new List<Registration>();
+        shell.RegisterWaylandPauseKey = (key, action, _, _) =>
+        {
+            Assert.Equal(pause, key);
+            Assert.False(PortalPauseShortcut.ShortcutOptions(X11PanicKey.XKeyName(key)).ContainsKey("preferred_trigger"));
+            attempts++; press = action;
+            var r = new Registration(); registrations.Add(r); return Task.FromResult<IDisposable?>(r);
+        };
+        shell.PauseKeyGracePause = () => { graces++; return true; };
+        try
+        {
+            LockdownService.Current = null;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, "", pause);
+            shell.StartPauseKeyPortal();
+            Assert.Equal(1, attempts); Assert.True(shell.PauseKeyArmed);
+            press!(); Dispatcher.UIThread.RunJobs(); Assert.Equal(1, graces);
+            s.PanicKey = panic; shell.ApplyPauseKeyPortal();
+            Assert.True(registrations[0].Disposed); Assert.False(shell.PauseKeyArmed);
+            Assert.Equal(1, attempts);
+        }
+        finally
+        {
+            shell.StopPauseKeyPortal(); shell.Close(); LockdownService.Current = oldLockdown;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = saved;
+        }
+        return Task.CompletedTask;
+    });
+
     private sealed class Registration : IDisposable
     {
         internal bool Disposed;
