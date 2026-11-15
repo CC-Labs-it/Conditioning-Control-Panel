@@ -59,6 +59,7 @@ public class BouncingTextService : IDisposable
         public double SlamT = -1;       // Super Scrawl: seconds into a click slam; <0 = idle
         public double SlamX, SlamY, SlamW; // where the slam lands (centre of the word's monitor) and that monitor's width
         public bool SlamLanded;
+        public SuperCore.FlingState Fling; // Super Scrawl against the Whirlpool: free, caught or thrown
     }
 
     // Super Scrawl (Services/Super/CONTRACT.md): null while the switch is off, so the base path is untouched.
@@ -495,6 +496,7 @@ public class BouncingTextService : IDisposable
             double spd = Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY);
             double f = Super.ScrawlRules.RelaxFactor(spd, l.Cruise, dt);
             l.VelX *= f; l.VelY *= f;
+            if (StepStage(l, dt)) return;   // caught by the pool: it moves the word this frame
         }
 
         // Move (delta-time based; velocities are DIP/second)
@@ -568,6 +570,14 @@ public class BouncingTextService : IDisposable
             var (mx, my, _) = MonitorCentreAt(l.PosX + l.TextWidth / 2, l.PosY + l.TextHeight / 2);
             _scrawl.WallHit(l.Text, wall, l.PosX, l.PosY, l.PosX + l.TextWidth, l.PosY + l.TextHeight,
                 new Super.ScrawlBounds(_minX, _minY, _maxX, _maxY), new Point(mx, my));
+        }
+
+        if (cornerHit && _scrawl != null)
+        {
+            // A gold corner blows a hole in the fog. It knocks nothing: reach 0.
+            double d = _scrawlDpi;
+            Super.SuperStageHost.Stage.Blast(new SuperCore.Blast(
+                (l.PosX + l.TextWidth / 2) * d, (l.PosY + l.TextHeight / 2) * d, 0, 230 * d, SuperCore.BlastKind.GoldCorner));
         }
 
         if (cornerHit)
@@ -699,6 +709,13 @@ public class BouncingTextService : IDisposable
                 sx *= pop;
                 sy *= pop;
             }
+        }
+
+        // Super Scrawl: a word the pool has caught shrinks toward the eye and grows back on the way out
+        if (_scrawl != null && l.Fling.Scale > 0 && l.Fling.Scale < 1)
+        {
+            sx *= l.Fling.Scale;
+            sy *= l.Fling.Scale;
         }
 
         // Super Scrawl: a slammed word swells at the screen centre
@@ -919,6 +936,37 @@ public class BouncingTextService : IDisposable
             else
                 OnVideoStartedPause(null, EventArgs.Empty);
         }
+    }
+
+    // ---- Super Scrawl on the shared stage (CCP.Core/Super): pool, fog, bubbles, pictures ----
+
+    /// <summary>
+    /// One frame of the word against the shared stage. The pool bends it, catches it near the eye,
+    /// turns it and throws it back out (TextFling). Its box is swept (bubbles pop, pictures are
+    /// knocked) and it cuts a trail through the fog. Words are in DIPs, the stage in device pixels.
+    /// True while the pool holds the word: the caller skips its own move and wall bounces.
+    /// </summary>
+    private bool StepStage(Logo l, double dt)
+    {
+        var stage = Super.SuperStageHost.Stage;
+        double d = _scrawlDpi <= 0 ? 1 : _scrawlDpi;
+        double cx = (l.PosX + l.TextWidth / 2) * d, cy = (l.PosY + l.TextHeight / 2) * d;
+        double vx = l.VelX * d, vy = l.VelY * d;
+        SuperCore.TextFling.Step(ref l.Fling, stage, ref cx, ref cy, ref vx, ref vy, Math.Max(1, l.Cruise) * d, dt);
+        l.VelX = vx / d; l.VelY = vy / d;
+        bool held = l.Fling.Phase == 1;
+        if (held)
+        {
+            l.PosX = Math.Clamp(cx / d - l.TextWidth / 2, _minX, Math.Max(_minX, _maxX - l.TextWidth));
+            l.PosY = Math.Clamp(cy / d - l.TextHeight / 2, _minY, Math.Max(_minY, _maxY - l.TextHeight));
+        }
+        double left = l.PosX * d, top = l.PosY * d, w = l.TextWidth * d, h = l.TextHeight * d;
+        // A caught word is small and in the eye: it pops and knocks nothing on the way round.
+        if (!held) stage.Sweep(left, top, left + w, top + h);
+        if (stage.SteamOn)
+            for (int i = -1; i <= 1; i++)
+                stage.Wipe(left + w / 2 + i * w * 0.32, top + h / 2, Math.Max(h * 0.7, 26 * d), dt * 1.5, mark: false);
+        return held;
     }
 
     // ---- Super Scrawl: wall stamps, corner stamps and the click slam (Services/Super/ScrawlRules.cs) ----
