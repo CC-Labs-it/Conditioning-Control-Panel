@@ -183,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         public AvatarTubeWindow(Window? parentWindow)
         {
             AvaloniaXamlLoader.Load(this);
+            InitializeDescentFuseCandle();
 
             _parentWindow = parentWindow;
             // Don't set Owner - in WPF it caused black window artifacts during minimize, and the
