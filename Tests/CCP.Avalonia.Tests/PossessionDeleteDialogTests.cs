@@ -131,7 +131,37 @@ public class PossessionDeleteDialogTests
     });
 
     [Fact]
-    public void DirectorUndoAllClosesTheRegisteredFullDokiDialog() => AvaloniaTestDispatcher.Run(() =>
+    public Task DirectorWaitsForSixNameWalkBeforeHold() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var host = new Host();
+        var names = Enumerable.Range(1, 6).Select(i => "Session " + i).ToArray();
+        var effect = new DeleteDialogEffect(() => names);
+        using var lockdown = new LockdownService();
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead { Attribution = _ => new Attribution() });
+        host.PossessionWindow!.Show();
+        try
+        {
+            director.AttachHost(host);
+            typeof(PossessionDirector).GetField("_intensity", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(director, PossessionIntensity.FullDoki);
+            var hosts = (IList)typeof(PossessionDirector).GetField("_hosts", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(director)!;
+            var start = typeof(PossessionDirector).GetMethod("StartOneAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var starting = (Task)start.Invoke(director, new object[] { hosts[0]!, PossessionRung.ItKnows, TimeSpan.FromMinutes(1), 0.9 })!;
+            var dialog = (DeleteDialogWindow)typeof(DeleteDialogEffect).GetField("_dialog", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(effect)!;
+            Assert.False(starting.IsCompleted);
+            await starting.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(dialog.IsVisible);
+            Assert.Equal(100, dialog.FindControl<ProgressBar>("Progress")!.Value);
+            Assert.All(dialog.FindControl<StackPanel>("Names")!.Children.OfType<TextBlock>(), row => Assert.Equal(0.35, row.Opacity));
+            Assert.Equal("nothing was deleted. i just wanted to watch you read it.", dialog.FindControl<TextBlock>("Status")!.Text);
+            await Task.Delay(1100);
+            Assert.True(dialog.IsVisible);
+            Assert.Equal(1, director.LiveEffectCount);
+        }
+        finally { director.UndoAll(); host.PossessionWindow.Close(); }
+    });
+
+    [Fact]
+    public Task DirectorUndoAllClosesTheRegisteredFullDokiDialog() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var host = new Host();
         var effect = Assert.Single(PossessionAvaloniaHead.CreateEffects().OfType<DeleteDialogEffect>());
@@ -146,7 +176,7 @@ public class PossessionDeleteDialogTests
             typeof(PossessionDirector).GetField("_intensity", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(director, PossessionIntensity.FullDoki);
             var hosts = (IList)typeof(PossessionDirector).GetField("_hosts", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(director)!;
             var start = typeof(PossessionDirector).GetMethod("StartOneAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            ((Task)start.Invoke(director, new object[] { hosts[0]!, PossessionRung.ItKnows, TimeSpan.FromMinutes(1), 0.9 })!).GetAwaiter().GetResult();
+            var starting = (Task)start.Invoke(director, new object[] { hosts[0]!, PossessionRung.ItKnows, TimeSpan.FromMinutes(1), 0.9 })!;
             Assert.Equal(1, director.LiveEffectCount);
             var dialog = (DeleteDialogWindow)typeof(DeleteDialogEffect).GetField("_dialog", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(effect)!;
             Assert.True(dialog.IsVisible);
@@ -154,6 +184,7 @@ public class PossessionDeleteDialogTests
             Assert.False(dialog.IsVisible);
             Assert.False(effect.IsLive);
             Assert.Equal(0, director.LiveEffectCount);
+            await starting.WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally { director.UndoAll(); host.PossessionWindow.Close(); Dispatcher.UIThread.RunJobs(); }
     });

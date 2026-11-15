@@ -17,16 +17,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     public partial class DeleteDialogWindow : Window
     {
         internal static readonly string[] FakeNames = { "Velvet Reverie", "Crimson Daydream", "Ember Waltz", "Midnight Bloom" };
-        private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(1775) };
+        private readonly DispatcherTimer _timer = new();
+        private readonly TaskCompletionSource _walk = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TextBlock[] _rows;
         private int _index;
         private readonly string[] _names;
 
-        public DeleteDialogWindow() : this(FakeNames) { }
+        public DeleteDialogWindow() : this(FakeNames, TimeSpan.FromSeconds(8)) { }
 
-        internal DeleteDialogWindow(string[] names)
+        internal DeleteDialogWindow(string[] names, TimeSpan? hold = null)
         {
             _names = names;
+            _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(280, ((hold ?? TimeSpan.FromSeconds(8)).TotalMilliseconds - 900) / names.Length));
             InitializeComponent();
             var list = this.FindControl<StackPanel>("Names")!;
             _rows = new TextBlock[_names.Length];
@@ -39,8 +41,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<Button>("Cancel")!.Click += (_, _) => Close();
             _timer.Tick += (_, _) => Step();
             Opened += (_, _) => _timer.Start();
-            Closed += (_, _) => _timer.Stop();
+            Closed += (_, _) => { _timer.Stop(); _walk.TrySetResult(); };
         }
+
+        internal Task Walk => _walk.Task;
 
         internal void Step()
         {
@@ -52,7 +56,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<TextBlock>("Status")!.Text = _index == _rows.Length
                 ? "nothing was deleted. i just wanted to watch you read it."
                 : Loc.GetF("possession_delete_removing", _names[_index]);
-            if (_index == _rows.Length) _timer.Interval = TimeSpan.FromSeconds(3);
+            if (_index == _rows.Length)
+            {
+                _timer.Interval = TimeSpan.FromSeconds(3);
+                _walk.TrySetResult();
+            }
         }
     }
 }
@@ -62,6 +70,9 @@ namespace ConditioningControlPanel.Avalonia.Possession
     internal sealed class DeleteDialogEffect : PossessionEffectBase
     {
         private Views.Dialogs.DeleteDialogWindow? _dialog;
+        private readonly Func<string[]> _names;
+        public DeleteDialogEffect() : this(() => ReadSessionNames(SessionFileService.CustomSessionsFolder)) { }
+        internal DeleteDialogEffect(Func<string[]> names) => _names = names;
 
         internal static string[] ReadSessionNames(string folder)
         {
@@ -97,14 +108,14 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public override TimeSpan HoldFor => TimeSpan.FromSeconds(8);
         protected override bool CanApplyCore(PossessionContext ctx, PossessionTarget? target) =>
             _dialog == null && (ctx.Host as IAvaloniaPossessionHost)?.PossessionWindow is { IsVisible: true };
-        protected override Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
+        protected override async Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
         {
             var owner = (ctx.Host as IAvaloniaPossessionHost)?.PossessionWindow;
-            if (owner == null) return Task.CompletedTask;
-            var dialog = _dialog = new Views.Dialogs.DeleteDialogWindow(ReadSessionNames(SessionFileService.CustomSessionsFolder));
+            if (owner == null) return;
+            var dialog = _dialog = new Views.Dialogs.DeleteDialogWindow(_names(), HoldFor);
             dialog.Closed += (_, _) => { if (ReferenceEquals(_dialog, dialog)) _dialog = null; try { ctx.Name("deletedialog_closed", "your sessions"); } catch { } };
             dialog.Show(owner);
-            return Task.CompletedTask;
+            await dialog.Walk.WaitAsync(ct).ConfigureAwait(true);
         }
         protected override Task UndoCoreAsync(TimeSpan duration)
         {
