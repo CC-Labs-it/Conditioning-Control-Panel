@@ -37,10 +37,12 @@ public sealed class RemoteControlShellTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
-        var runner = new SessionRunner(new SessionLogService());
+        var oldSessionProviders = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
+        SessionRunner? runner = null;
         MainShellWindow? shell = null;
         try
         {
+            runner = new SessionRunner(new SessionLogService());
             global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
             shell = new MainShellWindow();
             var session = new Session { DurationMinutes = 1 };
@@ -55,10 +57,17 @@ public sealed class RemoteControlShellTests
         }
         finally
         {
-            shell?.Close();
-            runner.Stop();
-            CoreEngine.Stop();
-            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            try
+            {
+                shell?.Close();
+                runner?.Stop();
+                CoreEngine.Stop();
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            }
+            finally
+            {
+                (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = oldSessionProviders;
+            }
         }
     });
 
@@ -308,13 +317,16 @@ public sealed class RemoteControlShellTests
     {
         var oldRelay = RemoteControlTabView.Relay;
         var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var oldSessionProviders = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
         var fake = new FakeRelay();
         using var relay = new RemoteRelay(() => "tok", () => "uid", "1", RemoteControlTabView.ExecuteRemoteCommand, RemoteCommands.StopEffects, fake) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
-        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
-        var shell = new MainShellWindow();
+        SessionRunner? runner = null;
+        MainShellWindow? shell = null;
         try
         {
+            runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            shell = new MainShellWindow();
             var session = new Session { DurationMinutes = 30 };
             runner.Start(session); runner.Pause(); shell.NoteLocalPanicPause();
             Assert.Equal("ABC123", await relay.StartAsync("full"));
@@ -327,10 +339,17 @@ public sealed class RemoteControlShellTests
         }
         finally
         {
-            if (relay.IsActive) await relay.StopAsync();
-            runner.Stop(); CoreEngine.Stop(); shell.Close();
-            RemoteControlTabView.Relay = oldRelay;
-            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            try
+            {
+                if (relay.IsActive) await relay.StopAsync();
+                runner?.Stop(); CoreEngine.Stop(); shell?.Close();
+                RemoteControlTabView.Relay = oldRelay;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            }
+            finally
+            {
+                (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = oldSessionProviders;
+            }
         }
     });
 
@@ -346,6 +365,7 @@ public sealed class RemoteControlShellTests
     {
         var oldRelay = RemoteControlTabView.Relay;
         var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var oldSessionProviders = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
         var oldProvider = CoreSettings.ServiceProvider;
         var oldLeash = ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed;
         var settings = new SettingsService();
@@ -358,12 +378,14 @@ public sealed class RemoteControlShellTests
         var fake = new FakeRelay();
         using var relay = new RemoteRelay(() => "tok", () => "uid", "1", RemoteControlTabView.ExecuteRemoteCommand, RemoteCommands.StopEffects, fake) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
-        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
-        var shell = new MainShellWindow();
+        SessionRunner? runner = null;
+        MainShellWindow? shell = null;
         var known = new Session { Id = "known", Name = "Known", DurationMinutes = 30, IsAvailable = kind != "unavailable" };
-        relay.SessionsProvider = () => new[] { known };
         try
         {
+            runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            shell = new MainShellWindow();
+            relay.SessionsProvider = () => new[] { known };
             if (kind == "known") runner.Start(new Session { Id = "wearer", DurationMinutes = 30 });
             Assert.Equal("ABC123", await relay.StartAsync("full"));
             var id = kind == "known" || kind == "unavailable" ? "known" : "absent";
@@ -390,12 +412,19 @@ public sealed class RemoteControlShellTests
         }
         finally
         {
-            if (relay.IsActive) await relay.StopAsync();
-            runner.Stop(); CoreEngine.Stop(); shell.Close();
-            RemoteControlTabView.Relay = oldRelay;
-            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
-            CoreSettings.ServiceProvider = oldProvider;
-            ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed = oldLeash;
+            try
+            {
+                if (relay.IsActive) await relay.StopAsync();
+                runner?.Stop(); CoreEngine.Stop(); shell?.Close();
+                RemoteControlTabView.Relay = oldRelay;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+                CoreSettings.ServiceProvider = oldProvider;
+                ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed = oldLeash;
+            }
+            finally
+            {
+                (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = oldSessionProviders;
+            }
         }
     });
 
@@ -406,15 +435,18 @@ public sealed class RemoteControlShellTests
     {
         var oldRelay = RemoteControlTabView.Relay;
         var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var oldSessionProviders = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
         var oldPanic = CoreSettings.Current.PanicKeyEnabled;
         var fake = new FakeRelay();
         using var relay = new RemoteRelay(() => "tok", () => "uid", "1", RemoteControlTabView.ExecuteRemoteCommand, RemoteCommands.StopEffects, fake) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
-        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
-        var shell = new MainShellWindow();
+        SessionRunner? runner = null;
+        MainShellWindow? shell = null;
         var bind = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
+            runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            shell = new MainShellWindow();
             var session = new Session { DurationMinutes = 30 };
             runner.Start(session);
             CoreSettings.Current.PanicKeyEnabled = true;
@@ -433,16 +465,23 @@ public sealed class RemoteControlShellTests
         }
         finally
         {
-            bind.TrySetResult("F8");
-            global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.BindForTests = null;
-            if (relay.IsActive) await relay.StopAsync();
-            runner.Stop(); CoreEngine.Stop();
-            global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
-            MainShellWindow.ReleasePortalWhenUnused();
-            CoreSettings.Current.PanicKeyEnabled = oldPanic;
-            shell.Close();
-            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
-            RemoteControlTabView.Relay = oldRelay;
+            try
+            {
+                bind.TrySetResult("F8");
+                global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.BindForTests = null;
+                if (relay.IsActive) await relay.StopAsync();
+                runner?.Stop(); CoreEngine.Stop();
+                global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
+                MainShellWindow.ReleasePortalWhenUnused();
+                CoreSettings.Current.PanicKeyEnabled = oldPanic;
+                shell?.Close();
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+                RemoteControlTabView.Relay = oldRelay;
+            }
+            finally
+            {
+                (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = oldSessionProviders;
+            }
         }
     });
 
@@ -456,15 +495,18 @@ public sealed class RemoteControlShellTests
     {
         var oldRelay = RemoteControlTabView.Relay;
         var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var oldSessionProviders = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
         var oldStop = CoreSettings.Current.StopEffectsOnRemoteDisconnect;
         CoreSettings.Current.StopEffectsOnRemoteDisconnect = true;
         var fake = new FakeRelay();
         using var relay = new RemoteRelay(() => "tok", () => "uid", "1", RemoteControlTabView.ExecuteRemoteCommand, RemoteCommands.StopEffects, fake) { AutoPoll = false };
         RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
-        var runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
-        var shell = new MainShellWindow();
+        SessionRunner? runner = null;
+        MainShellWindow? shell = null;
         try
         {
+            runner = global::ConditioningControlPanel.Avalonia.App.Sessions = new SessionRunner(new SessionLogService());
+            shell = new MainShellWindow();
             Assert.Equal("ABC123", await relay.StartAsync("full"));
             fake.Poll = remote ? "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"start_session\"}]}" : "{\"controller_connected\":true}";
             await relay.PollOnceAsync();
@@ -482,11 +524,18 @@ public sealed class RemoteControlShellTests
         }
         finally
         {
-            if (relay.IsActive) await relay.StopAsync();
-            runner.Stop(); CoreEngine.Stop(); shell.Close();
-            CoreSettings.Current.StopEffectsOnRemoteDisconnect = oldStop;
-            RemoteControlTabView.Relay = oldRelay;
-            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            try
+            {
+                if (relay.IsActive) await relay.StopAsync();
+                runner?.Stop(); CoreEngine.Stop(); shell?.Close();
+                CoreSettings.Current.StopEffectsOnRemoteDisconnect = oldStop;
+                RemoteControlTabView.Relay = oldRelay;
+                global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            }
+            finally
+            {
+                (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = oldSessionProviders;
+            }
         }
     });
 
