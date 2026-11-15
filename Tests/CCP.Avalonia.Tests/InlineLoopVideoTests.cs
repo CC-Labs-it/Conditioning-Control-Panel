@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -139,7 +140,7 @@ public sealed class InlineLoopVideoTests
     }
 
     [Fact]
-    public async Task GazeRoundStopsOverlapWithoutBlockingDispatcherAndCloseIsSynchronous()
+    public async Task GazeRoundStopsOverlapWithoutBlockingDispatcherAndCloseStopsPlayer()
     {
         await WithClip(async clip =>
         {
@@ -183,10 +184,13 @@ public sealed class InlineLoopVideoTests
                 var closing = GazeMinigameWindow.CreateRoundVideo(clip);
                 left.Children.Add(closing);
                 Assert.True(await OnFrames(closing, () => closing.FrameCount > 0, 5000));
-                var stopped = false;
-                InlineLoopVideo.StopPlayer = player => { oldStop(player); stopped = true; };
+                var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                InlineLoopVideo.StopPlayer = player => { oldStop(player); stopped.TrySetResult(); };
                 win.Close();
-                Assert.True(stopped);
+                await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                deadline.Restart();
+                while (InlineLoopVideo.LivePlayers != baseline && deadline.ElapsedMilliseconds < 5000)
+                { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
                 Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
             }
             finally
@@ -199,7 +203,7 @@ public sealed class InlineLoopVideoTests
     }
 
     [Fact]
-    public async Task GazeCloseWaitsForEarlierRoundCleanupWithoutBlockingDispatcher()
+    public async Task GazeCloseIsBoundedAndShutdownWaitsForEarlierRoundCleanup()
     {
         await WithClip(async clip =>
         {
@@ -225,23 +229,28 @@ public sealed class InlineLoopVideoTests
                 InlineLoopVideo.StopPlayer = player => { entered.Signal(); release.Wait(); oldStop(player); };
                 win.DisposeCurrentRoundPlayers();
                 Assert.True(await Task.Run(() => entered.Wait(3000)), "stops did not overlap");
+                var elapsed = Stopwatch.StartNew();
                 win.Close();
+                Assert.True(closed);
+                Assert.True(elapsed.ElapsedMilliseconds < 500, "close exceeded the stop limit");
                 var turn = false;
                 Dispatcher.UIThread.Post(() => turn = true);
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(turn);
                 Assert.False(win.IsVisible);
-                Assert.False(closed);
                 Assert.Equal(baseline + 2, InlineLoopVideo.LivePlayers);
                 Assert.False(sinkA.Freed);
                 Assert.False(sinkB.Freed);
-                // A repeated close request cannot bypass the pending cleanup.
-                win.Close();
-                Assert.False(closed);
+                var shutdown = false;
+                var exit = global::ConditioningControlPanel.Avalonia.App.ShutdownAfterGazeCleanupAsync(() => shutdown = true);
+                await Task.Delay(550);
+                Assert.False(exit.IsCompleted);
+                Assert.False(shutdown);
+                Assert.False(sinkA.Freed);
+                Assert.False(sinkB.Freed);
                 release.Set();
-                var deadline = Stopwatch.StartNew();
-                while (!closed && deadline.ElapsedMilliseconds < 5000)
-                { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+                await exit.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.True(shutdown);
                 Assert.True(closed);
                 Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
                 Assert.True(sinkA.Freed && sinkB.Freed);
@@ -254,6 +263,60 @@ public sealed class InlineLoopVideoTests
                 { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
                 InlineLoopVideo.StopPlayer = oldStop;
                 if (!closed) win.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task GazePanicDoesNotDelayLaterSafetySurfacesDuringActiveVideo()
+    {
+        await WithClip(async clip =>
+        {
+            var baseline = InlineLoopVideo.LivePlayers;
+            var win = new GazeMinigameWindow();
+            win.Show();
+            var left = win.FindControl<Grid>("LeftPane")!;
+            var right = win.FindControl<Grid>("RightPane")!;
+            var a = GazeMinigameWindow.CreateRoundVideo(clip);
+            var b = GazeMinigameWindow.CreateRoundVideo(clip);
+            left.Children.Add(a); right.Children.Add(b);
+            Assert.True(await OnFrames(a, () => a.FrameCount > 0, 5000));
+            Assert.True(await OnFrames(b, () => b.FrameCount > 0, 5000));
+            var oldStop = InlineLoopVideo.StopPlayer;
+            var oldSurfaces = PanicSurfaces.All;
+            using var release = new ManualResetEventSlim();
+            using var entered = new CountdownEvent(2);
+            try
+            {
+                InlineLoopVideo.StopPlayer = player => { entered.Signal(); release.Wait(TimeSpan.FromSeconds(5)); oldStop(player); };
+                var haptics = false;
+                var camera = false;
+                PanicSurfaces.All = new[]
+                {
+                    oldSurfaces.Single(x => x.Id == "gaze-minigame"),
+                    new PanicSurfaces.Surface("haptics", _ => haptics = true),
+                    new PanicSurfaces.Surface("camera", _ => camera = true)
+                };
+                var elapsed = Stopwatch.StartNew();
+                PanicSurfaces.StopAll("gaze cleanup test");
+                Assert.True(elapsed.ElapsedMilliseconds < 500, "panic waited for native stop");
+                Assert.True(haptics && camera);
+                Assert.False(win.IsVisible);
+                Assert.True(await Task.Run(() => entered.Wait(3000)), "both stops did not start");
+                Assert.Equal(baseline + 2, InlineLoopVideo.LivePlayers);
+                release.Set();
+                await global::ConditioningControlPanel.Avalonia.App.ShutdownAfterGazeCleanupAsync(() => { }).WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+            }
+            finally
+            {
+                release.Set();
+                PanicSurfaces.All = oldSurfaces;
+                var deadline = Stopwatch.StartNew();
+                while (InlineLoopVideo.LivePlayers != baseline && deadline.ElapsedMilliseconds < 5000)
+                { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+                InlineLoopVideo.StopPlayer = oldStop;
+                win.Close();
             }
         });
     }

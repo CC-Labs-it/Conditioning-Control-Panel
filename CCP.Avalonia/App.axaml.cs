@@ -17,6 +17,25 @@ namespace ConditioningControlPanel.Avalonia
     {
         internal static Action? PostCodeInputsChanged;
 
+        private static bool _shutdownAfterGazePending;
+
+        // Keep LibVLC alive until round stop and sink cleanup finish. The UI stays responsive,
+        // including while a slow native stop outlives the game's 500 ms close limit.
+        internal static async Task ShutdownAfterGazeCleanupAsync(Action shutdown)
+        {
+            await Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync();
+            shutdown();
+        }
+
+        internal static async void RequestDesktopShutdown(IClassicDesktopStyleApplicationLifetime desktop, int exitCode = 0)
+        {
+            if (_shutdownAfterGazePending) return;
+            _shutdownAfterGazePending = true;
+            try { await ShutdownAfterGazeCleanupAsync(() => desktop.Shutdown(exitCode)); }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Desktop shutdown failed"); }
+            finally { _shutdownAfterGazePending = false; }
+        }
+
         // Shared by daily rotation and provider tier changes, as in WPF MainWindow.xaml.cs:465.
         internal static Action WireDailyRepaints(DailyFreeService dailyFree, Views.Windows.MainShellWindow shell)
         {
@@ -935,6 +954,15 @@ namespace ConditioningControlPanel.Avalonia
                 // while Core's unseeded providers remain the contract for renders and tests.
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
+                desktop.ShutdownRequested += (_, e) =>
+                {
+                    var cleanup = Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync();
+                    if (!cleanup.IsCompleted)
+                    {
+                        e.Cancel = true;
+                        RequestDesktopShutdown(desktop);
+                    }
+                };
                 desktop.Exit += OnDesktopExit;
                 RecoverEngineCrash(() => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("crashRecovered", null));
                 Platform.EntitlementRefresh.Install();

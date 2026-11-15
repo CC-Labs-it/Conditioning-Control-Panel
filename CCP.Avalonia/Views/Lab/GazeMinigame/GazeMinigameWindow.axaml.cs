@@ -1040,8 +1040,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             new(path, randomStart: true, loop: false) { Stretch = Stretch.Uniform };
 
         private readonly List<GazeRoundImage> _roundImages = new();
-        private readonly List<Task> _pendingRoundTeardowns = new();
-        private bool _waitingForRoundTeardowns;
+        // UI-thread owned: keep old rounds alive after their window closes, until the sink is free.
+        private static readonly HashSet<Task> PendingRoundTeardowns = new();
+
+        private static async void TrackRoundTeardown(Task task)
+        {
+            PendingRoundTeardowns.Add(task);
+            try { await task; }
+            catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+            finally { PendingRoundTeardowns.Remove(task); }
+        }
+
+        internal static async Task PrepareForShutdownAsync()
+        {
+            while (true)
+            {
+                CloseAllForPanic();
+                var pending = PendingRoundTeardowns.ToArray();
+                if (pending.Length == 0) return;
+                try { await Task.WhenAll(pending); }
+                catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+                foreach (var task in pending) PendingRoundTeardowns.Remove(task);
+            }
+        }
 
         private Image BuildImageView(string path)
         {
@@ -1055,11 +1076,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         internal void DisposeCurrentRoundPlayers(bool synchronous = false)
         {
             // Start both stops before removing the panes. Detach remains synchronous for other hosts.
-            _pendingRoundTeardowns.RemoveAll(task => task.IsCompleted);
             foreach (var video in _leftPane.Children.OfType<InlineLoopVideo>().Concat(_rightPane.Children.OfType<InlineLoopVideo>()))
             {
                 var teardown = video.Teardown(synchronous);
-                if (!teardown.IsCompleted) _pendingRoundTeardowns.Add(teardown);
+                if (!teardown.IsCompleted) TrackRoundTeardown(teardown);
             }
             _leftPane.Children.Clear();
             _rightPane.Children.Clear();
@@ -1586,13 +1606,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             catch (Exception ex) { Log.Warning(ex, "GazeMinigame: quit confirmation failed"); }
         }
 
-        private async void Window_Closing(object? sender, WindowClosingEventArgs e)
+        private void Window_Closing(object? sender, WindowClosingEventArgs e)
         {
-            if (_waitingForRoundTeardowns) { e.Cancel = true; return; }
             _closed = true;
             _gameRunning = false;
             StopRoundTicker();
-            DisposeCurrentRoundPlayers(synchronous: true);
+            DisposeCurrentRoundPlayers();
             UnsubscribeWebcam();
             Open.Remove(this);
 
@@ -1609,19 +1628,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 else Log.Information("GazeMinigame: skipped FlashService resume — engine is no longer running");
             }
 
-            if (_pendingRoundTeardowns.Count != 0)
-            {
-                // Keep the window alive until earlier rounds have finished native cleanup. Hiding
-                // it immediately also keeps panic responsive while the dispatcher remains free.
-                e.Cancel = true;
-                _waitingForRoundTeardowns = true;
-                Hide();
-                try { await Task.WhenAll(_pendingRoundTeardowns); }
-                catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
-                _pendingRoundTeardowns.Clear();
-                _waitingForRoundTeardowns = false;
-                Close();
-            }
         }
 
         // ─────────────────────────────────────────────────────────────────────

@@ -471,7 +471,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return false;
             }
             Log.Information("Exiting for silent update (helper will install + relaunch)");
-            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                App.RequestDesktopShutdown(desktop);
             return true;
         }
 

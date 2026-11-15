@@ -310,8 +310,10 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     ctx.Cancel = true;
                     global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        (global::Avalonia.Application.Current?.ApplicationLifetime
-                            as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
+                    {
+                        if (global::Avalonia.Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                            App.RequestDesktopShutdown(desktop);
+                    });
                 });
             // A cold WSLg / on-demand Xwayland first reports a 640x480 placeholder screen; Avalonia would keep it all run.
             Platform.X11ScreenSettle.WaitForRealMonitors();
