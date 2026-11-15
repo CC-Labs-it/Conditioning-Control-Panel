@@ -33,6 +33,20 @@ public class LauncherDoorCardRenderTests
         });
 
     [Fact]
+    public void Door_card_lays_out_with_title_count_and_chevron()
+        => WpfRenderHarness.OnStaThread(() =>
+        {
+            var card = Build("Games", 9, "{0} games", Pink, stamp: true);
+            Layout(card.Root, 760, 380);
+            Assert.True(card.Card.ActualHeight > 300);
+            Assert.True(card.Card.Focusable);
+            Assert.False(card.ReelRunning);
+            card.StopReel();
+            card.Rest();
+            Assert.Equal(1, card.Root.Opacity);
+        });
+
+    [Fact]
     public void Door_card_is_an_invokable_button_named_with_its_count()
         => WpfRenderHarness.OnStaThread(() =>
         {
@@ -80,6 +94,49 @@ public class LauncherDoorCardRenderTests
             try { return Find(child, match); } catch (InvalidOperationException) { }
         }
         throw new InvalidOperationException("no " + typeof(T).Name);
+    }
+
+    [Fact]
+    public void Shot_WhenAsked()
+    {
+        var dir = Environment.GetEnvironmentVariable("CCP_DOORS_SHOT_DIR");
+        if (string.IsNullOrEmpty(dir)) return;
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "font-probe.txt"), Probe());
+            Save(Column(null), 800, 880, Path.Combine(dir, "doors-rest.png"));
+            Save(Column(games => { games.HoldPose(true, 1, 1); }, tools => tools.HoldPose(false, 0.985, 0.78)), 800, 880, Path.Combine(dir, "doors-hover-games.png"));
+            Save(Column(games => games.HoldPose(true, 1.05, 0.6), tools => tools.HoldPose(false, 0.94, 0.35)), 800, 880, Path.Combine(dir, "doors-mid-open.png"));
+            var narrow = new UniformGrid { Columns = 1, Margin = new Thickness(16) };
+            foreach (var t in new[] { "Herramientas", "Ferramentas", "Инструменты" })
+                narrow.Children.Add(Build(t, 5, "{0} tools", Blue, stamp: true).Root);
+            Save(new Border { Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), Child = narrow },
+                 NarrowDoorWidth + 32, 900, Path.Combine(dir, "doors-narrow-long-titles.png"));
+        });
+    }
+
+    private static string Probe()
+    {
+        string Uri(FontFamily f)
+        {
+            var face = new Typeface(f, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+            return face.TryGetGlyphTypeface(out var g) ? g.FontUri.ToString() : "(none)";
+        }
+        return "display: " + Uri(LauncherDoorCard.DisplayFont) + Environment.NewLine
+             + "bare code string: " + Uri(new FontFamily("/Fonts/#Fredoka, Segoe UI")) + Environment.NewLine;
+    }
+
+    private static Border Column(Action<LauncherDoorCard>? games, Action<LauncherDoorCard>? tools = null)
+    {
+        var host = new UniformGrid { Columns = 1, Margin = new Thickness(16) };
+        var g = Build("Games", 9, "{0} games", Pink, stamp: true, extra: true);
+        var t = Build("Tools", 7, "{0} tools", Blue, stamp: false);
+        host.Children.Add(g.Root);
+        host.Children.Add(t.Root);
+        games?.Invoke(g);
+        tools?.Invoke(t);
+        return new Border { Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), Child = host };
     }
 
     private static LauncherDoorCard Build(string title, int count, string format, Color hue, bool stamp, bool extra = false)
@@ -142,5 +199,16 @@ public class LauncherDoorCardRenderTests
         e.Measure(new Size(w, h));
         e.Arrange(new Rect(0, 0, w, h));
         e.UpdateLayout();
+    }
+
+    private static void Save(FrameworkElement e, double w, double h, string path)
+    {
+        Layout(e, w, h);
+        var bmp = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(e);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(bmp));
+        using var fs = File.Create(path);
+        enc.Save(fs);
     }
 }
