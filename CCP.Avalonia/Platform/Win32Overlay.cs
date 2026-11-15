@@ -83,6 +83,9 @@ internal static class Win32Overlay
 
     /// <summary>The Windows half of <see cref="X11Overlay.RestackAbove"/>: z-order only, no activation, no
     /// geometry, no owner moves. Styles, click-through and focus are untouched.</summary>
+    internal static bool Sink(IntPtr hwnd, Func<IntPtr, IntPtr, int, int, int, int, uint, bool>? position = null)
+        => (position ?? SetWindowPos)(hwnd, new IntPtr(1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling)
     {
         if (!OperatingSystem.IsWindows() || !IsWindow(hwnd) || !IsWindow(sibling)) return false;

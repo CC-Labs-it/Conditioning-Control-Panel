@@ -51,6 +51,7 @@ internal static class X11Overlay
     // then silently addresses the wrong thing.
     private const int ShapeInput = 2;        // X11/extensions/shapeconst.h
     private const int ClientMessage = 33;    // X11/X.h
+    private const int Below = 1;
     private const int Above = 0;             // X11/X.h
     private const long SubstructureMask = 1572864;  // SubstructureRedirect|SubstructureNotify
     private const long SourcePager = 2;      // netwm_def.h RequestSource::FromTool
@@ -687,7 +688,14 @@ internal static class X11Overlay
         return RestackXid(xid, siblingXid);
     }
 
-    private static bool RestackXid(IntPtr xid, IntPtr siblingXid)
+    // WPF ChaosTunnelService.SinkToBottom: leave run chrome above the opaque background.
+    internal static bool Sink(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.Sink(hwnd);
+        return TryGetXid(window, out var xid) && RestackXid(xid, IntPtr.Zero, Below);
+    }
+
+    private static bool RestackXid(IntPtr xid, IntPtr siblingXid, int detail = Above)
     {
         lock (Gate)
         {
@@ -709,7 +717,7 @@ internal static class X11Overlay
                 Marshal.WriteInt32(e, 48, 32);                                            // format
                 Marshal.WriteIntPtr(e, 56, new IntPtr(SourcePager));                      // data.l[0] source
                 Marshal.WriteIntPtr(e, 64, siblingXid);                                   // data.l[1] sibling
-                Marshal.WriteIntPtr(e, 72, new IntPtr(Above));                            // data.l[2] detail
+                Marshal.WriteIntPtr(e, 72, new IntPtr(detail));                            // data.l[2] detail
 
                 // Addressed to the ROOT window, not to ours: the WM holds SubstructureRedirect
                 // there, and that is how the request reaches it.

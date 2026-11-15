@@ -802,11 +802,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             UnhookRunVideo();
             _runVideo = CoreEngine.Video;
-            if (_runVideo != null) _runVideo.VideoEnded += OnVideoEndedDuringRun;
+            if (_runVideo != null) { _runVideo.VideoStarted += OnVideoStartedDuringRun; _runVideo.VideoEnded += OnVideoEndedDuringRun; }
+        }
+
+        private static void OnVideoStartedDuringRun() => TunnelVideo(true);
+        internal static void TunnelVideo(bool on)
+        {
+            var tunnel = ChaosTunnelWindow.Active;
+            if (Dispatcher.UIThread.CheckAccess()) tunnel?.SetVideoPlaying(on);
+            else Dispatcher.UIThread.Post(() => { if (ChaosTunnelWindow.Active == tunnel) tunnel?.SetVideoPlaying(on); });
         }
 
         internal static void OnVideoEndedDuringRun()
         {
+            TunnelVideo(false);
             var until = BubbleOverlay.Field.Clock().AddSeconds(3);
             if (until > _heavyUntilUtc) _heavyUntilUtc = until;
         }
@@ -814,7 +823,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void UnhookRunVideo()
         {
             // Unsubscribe the captured publisher even if CoreEngine.Video has since changed.
-            if (_runVideo != null) _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            if (_runVideo != null) { _runVideo.VideoStarted -= OnVideoStartedDuringRun; _runVideo.VideoEnded -= OnVideoEndedDuringRun; }
             _runVideo = null;
         }
 
@@ -1319,7 +1328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void EndRun()
         {
             if (!_spawning || _state == null) return;
-            ChaosTunnelWindow.CloseActive();
+            ChaosTunnelWindow.EndActive();
             bool ranFullCourse = _state.ElapsedSec >= _state.RunDurationSec;
             if (ranFullCourse) AwardLoopTip();   // a quit forfeits it
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).

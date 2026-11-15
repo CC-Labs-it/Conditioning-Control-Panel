@@ -1,27 +1,37 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Services;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos;
 
-// WPF ChaosTunnelService.cs:19-137. Only pinned runs are supported until a native
-// stacking seam can keep the opaque tunnel below non-topmost game windows.
+// WPF ChaosTunnelService.cs:19-137: the opaque, non-topmost run background.
 internal sealed class ChaosTunnelWindow : Window
 {
     internal static ChaosTunnelWindow? Active { get; private set; }
-    internal static Func<bool> CanOpen = () => WebHost.IsAvailable && OperatingSystem.IsLinux();
+    internal static Func<bool> CanOpen = () => WebHost.IsAvailable;
+    internal static Func<Window, bool> Sink = X11Overlay.Sink;
+    internal static Action<string, float> PlaySound = ChaosOverlayWindow.ChaosSfx.Play;
+    internal static Func<string, double, LibVlcAudio.IPausableVoice?> PlayAmbient =
+        (path, volume) => LibVlcAudio.Instance?.PlayVoice(path, volume, true, () => { }) as LibVlcAudio.IPausableVoice;
+    internal static Func<string?> AmbientPath = () => CoreModArt.AudioOverridePath("chaos/tunnel_ambient.mp3")
+        ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", "chaos", "tunnel_ambient.mp3"));
     internal WebHost Web { get; } = new() { InjectCarrier = true, SuppressNewWindows = true };
     private readonly List<string> _pending = new();
     private readonly DispatcherTimer _timeout = new() { Interval = TimeSpan.FromSeconds(15) };
-    private bool _ready;
+    private readonly DispatcherTimer _bridgeProbe = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private readonly DispatcherTimer _exitWatchdog = new() { Interval = TimeSpan.FromMilliseconds(1200) };
+    private bool _ready, _runActive, _videoPlaying;
+    private LibVlcAudio.IPausableVoice? _ambient;
 
     private ChaosTunnelWindow()
     {
@@ -43,26 +53,54 @@ internal sealed class ChaosTunnelWindow : Window
             Height = screen.Bounds.Height / scale;
         }
         Web.WebMessage += OnMessage;
+        Web.NavigationFinished += (url, ok) =>
+        {
+            if (ok && !_ready && Active == this) { ProbeBridge(); _bridgeProbe.Start(); }
+        };
+        _bridgeProbe.Tick += (_, _) => ProbeBridge();
         _timeout.Tick += (_, _) => OnTimeout();
-        Closed += (_, _) => { _timeout.Stop(); _pending.Clear(); if (Active == this) Active = null; };
+        _exitWatchdog.Tick += (_, _) => OnExitTimeout();
+        Closed += (_, _) => { _timeout.Stop(); _bridgeProbe.Stop(); _exitWatchdog.Stop(); StopAmbient(); _pending.Clear(); if (Active == this) Active = null; };
     }
 
     internal static void Open()
     {
-        CloseActive();
-        if (!CoreSettings.Current.ChaosTunnelEnabled || !CoreSettings.Current.ChaosPinOnTop || !CanOpen()) return;
+        if (!CoreSettings.Current.ChaosTunnelEnabled || !CanOpen()) { CloseActive(); return; }
         try
         {
-            var w = new ChaosTunnelWindow();
-            Active = w;
-            var url = new Uri(WebAssetServer.Shared.Url("tunnel/index.html"));
-            w.Web.AllowNavigation = u => u.Scheme == url.Scheme && u.Host == url.Host && u.Port == url.Port;
-            w.Show();
-            w._timeout.Start();
-            w.Web.Navigate(url);
+            var w = Active;
+            if (w == null)
+            {
+                w = new ChaosTunnelWindow();
+                Active = w;
+                var url = new Uri(WebAssetServer.Shared.Url("tunnel/index.html"));
+                w.Web.AllowNavigation = u => u.Scheme == url.Scheme && u.Host == url.Host && u.Port == url.Port;
+                w.Show();
+                // Wayland offers no client-controlled stacking; do not cover unpinned game chrome.
+                if (!Sink(w) && !CoreSettings.Current.ChaosPinOnTop) { CloseActive(); return; }
+                w._timeout.Start();
+                w.Web.Navigate(url);
+            }
+            w._exitWatchdog.Stop();
+            w._runActive = true;
+            w._videoPlaying = false;
+            if (w._ready) w.StartAmbient();
             w.Post(new { type = "run-start" });
         }
         catch (Exception ex) { Log.Warning("Chaos tunnel: {E}", ex.Message); CloseActive(); }
+    }
+
+    // WPF closes on exit-done or after 1.2 seconds; a new run claims the window.
+    internal static void EndActive()
+    {
+        var w = Active;
+        if (w == null) return;
+        w._runActive = false;
+        w.StopAmbient();
+        if (!w._ready) { CloseActive(); return; }
+        w.Post(new { type = "run-end" });
+        w._exitWatchdog.Stop();
+        w._exitWatchdog.Start();
     }
 
     internal static void CloseActive()
@@ -72,13 +110,44 @@ internal sealed class ChaosTunnelWindow : Window
         if (w != null) { try { w.Close(); } catch (Exception ex) { Log.Debug("Chaos tunnel close: {E}", ex.Message); } }
     }
 
+    internal void ProbeBridge() => _ = Web.InvokeScriptAsync(WebHost.CarrierShim + ";window.dispatchEvent(new Event('ccp-tunnel-connect'));");
     internal void OnTimeout() { if (!_ready && Active == this) CloseActive(); }
+    internal void OnExitTimeout() { if (!_runActive && Active == this) CloseActive(); }
+
+    private void Send(string json) => _ = Web.InvokeScriptAsync(
+        "window.dispatchEvent(new MessageEvent('ccp-tunnel-message',{data:" + json + "}));");
 
     internal void Post(object message)
     {
         var json = JsonConvert.SerializeObject(message);
-        if (_ready) _ = Web.PostJsonAsync(json);
+        if (_ready) Send(json);
         else _pending.Add(json);
+    }
+
+    internal void SetVideoPlaying(bool on)
+    {
+        _videoPlaying = on;
+        Post(new { type = "video-playing", on });
+        try { _ambient?.SetPaused(on); } catch (Exception ex) { Log.Debug("Chaos tunnel ambient pause: {E}", ex.Message); }
+    }
+
+    private void StartAmbient()
+    {
+        if (_ambient != null) return;
+        try
+        {
+            var path = AmbientPath();
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            _ambient = PlayAmbient(path, Math.Clamp(CoreSettings.Current.MasterVolume / 100.0 * 0.26, 0, 1));
+            if (_videoPlaying) _ambient?.SetPaused(true);
+        }
+        catch (Exception ex) { Log.Debug("Chaos tunnel ambient: {E}", ex.Message); }
+    }
+
+    private void StopAmbient()
+    {
+        try { _ambient?.Dispose(); } catch (Exception ex) { Log.Debug("Chaos tunnel ambient stop: {E}", ex.Message); }
+        _ambient = null;
     }
 
     internal void OnMessage(string json)
@@ -86,11 +155,24 @@ internal sealed class ChaosTunnelWindow : Window
         try
         {
             var message = JObject.Parse(json);
-            if ((string?)message["type"] != "ready" || _ready) return;
-            _ready = true;
-            _timeout.Stop();
-            foreach (var pending in _pending) _ = Web.PostJsonAsync(pending);
-            _pending.Clear();
+            switch ((string?)message["type"])
+            {
+                case "ready" when !_ready:
+                    _ready = true;
+                    _timeout.Stop();
+                    _bridgeProbe.Stop();
+                    foreach (var pending in _pending) Send(pending);
+                    _pending.Clear();
+                    if (_runActive) StartAmbient();
+                    break;
+                case "sfx":
+                    var name = (string?)message["name"];
+                    if (!string.IsNullOrWhiteSpace(name)) PlaySound(name, (float?)message["scale"] ?? 0.6f);
+                    break;
+                case "exit-done" when !_runActive:
+                    if (Active == this) CloseActive();
+                    break;
+            }
         }
         catch (Exception ex) { Log.Debug("Chaos tunnel message: {E}", ex.Message); }
     }
