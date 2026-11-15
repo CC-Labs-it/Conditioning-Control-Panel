@@ -44,7 +44,7 @@ public sealed class ExclusivesFocusGazeDoorTests
             var slot = play.FindControl<Control>("SlotFocusGaze")!;
             ClickCard(shell, "focusgaze");
             Settle();
-            Assert.Equal("play", shell.CurrentTab);
+            Assert.Equal("playeyes", shell.CurrentTab);   // declutter wave 2: "play" is the launcher's Games door
             Assert.True(scroll.Offset.Y > 0);
             var top = slot.TranslatePoint(default, scroll)!.Value.Y;
             Assert.InRange(top, -slot.Bounds.Height, scroll.Bounds.Height);

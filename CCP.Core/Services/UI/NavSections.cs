@@ -159,7 +159,7 @@ namespace ConditioningControlPanel.Services.UI
         public static readonly IReadOnlyDictionary<string, string> LauncherDoors =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["play"] = "games",
+                ["play"] = PanelDoorLink.Games,
             };
 
         /// <summary>The launcher door a tab key opens ("games" | "tools"), or null for a panel key.</summary>
@@ -169,7 +169,7 @@ namespace ConditioningControlPanel.Services.UI
         /// <summary>Scroll target when the Play page shows a zone key: "sessions" or "eyes" scroll
         /// to that zone, "top" shows the page from its title, null leaves the scroll alone.
         /// Eyes is the landing, so only a click on its pill scrolls there; a rail door or a
-        /// default landing on it shows the top (title, subtitle and the Together zone).</summary>
+        /// default landing on it shows the top (subtitle and the Together zone).</summary>
         public static string? PlayLandingScroll(string? tab, bool fromPill) =>
             (tab ?? "").ToLowerInvariant() switch
             {

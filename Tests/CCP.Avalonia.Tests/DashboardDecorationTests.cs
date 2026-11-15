@@ -289,10 +289,21 @@ public sealed class DashboardDecorationTests
         Assert.Contains("features/dtrh.png", artRequests);
         Assert.DoesNotContain("features/takeover.png", artRequests);
         var box = tab.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardMystery")!;
-        box.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(
-            ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal("play", shell.CurrentTab);
+        // Declutter wave 2: a DtRH Drop day opens the launcher's Games door (Core PanelDoorLink),
+        // where the game's card lives now; the panel stays on Home.
+        var hook = ConditioningControlPanel.Services.UI.PanelDoorLink.OpenLauncherDoor;
+        var opened = new List<string>();
+        var before = shell.CurrentTab;
+        try
+        {
+            ConditioningControlPanel.Services.UI.PanelDoorLink.OpenLauncherDoor = opened.Add;
+            box.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(
+                ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, box));
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally { ConditioningControlPanel.Services.UI.PanelDoorLink.OpenLauncherDoor = hook; }
+        Assert.Equal(new[] { "games" }, opened);
+        Assert.Equal(before, shell.CurrentTab);
     });
 
     // WPF MainWindow.UiUpdates.cs:134: ApplyModFeatureNames repaints the ? box, so a mod switch reloads its reveal art.

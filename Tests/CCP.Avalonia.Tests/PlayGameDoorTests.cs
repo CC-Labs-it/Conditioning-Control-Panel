@@ -98,7 +98,7 @@ public sealed class PlayGameDoorTests
             try
             {
                 shell.Show();
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var button = shell.Named<Control>("PlayTab")!.FindControl<Button>(name)!;
                 Assert.True(button.IsEnabled);

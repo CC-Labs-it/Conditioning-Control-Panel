@@ -825,7 +825,10 @@ namespace ConditioningControlPanel.Services
             {
                 var e = list[i];
                 var old = e.Id.StartsWith("set.", StringComparison.Ordinal) ? Array.Empty<string>() : OldNamesFor(e.TabKey, e.SectionKey);
-                bool retired = !string.IsNullOrEmpty(e.TabKey) && UI.NavSections.Redirects.ContainsKey(e.TabKey);
+                // A key that opens a launcher door ("play", declutter wave 2) is filed under its old
+                // section for the chrome but still does something: it stays searchable.
+                bool retired = !string.IsNullOrEmpty(e.TabKey) && UI.NavSections.Redirects.ContainsKey(e.TabKey)
+                    && UI.NavSections.LauncherDoorFor(e.TabKey) == null;
                 if (old.Length == 0 && !retired) continue;
                 list[i] = new SettingsPaletteEntry
                 {

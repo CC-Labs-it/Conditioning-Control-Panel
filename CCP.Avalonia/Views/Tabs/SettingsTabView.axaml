@@ -585,7 +585,9 @@
            nameless tease tile. A DOOR, not a feature: no ToggleRequested handler (an editor has
            no on/off), no DimWhenInactive, no price tag. The click is ShowTab("deeper") and
            nothing else - navigate, never launch (WPF MainWindow.Presets.cs:1121). -->
-      <features:FeatureCard Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" DashboardDepth="True"
+      <!-- Declutter wave 2 (2026-11-15): collapsed, not deleted (the Deeper editor is a launcher
+           Tools door now); the daily gift plate below spans its slot. -->
+      <features:FeatureCard Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" DashboardDepth="True" IsVisible="False"
                             Title="{loc:Str dash_deeper_editor_title}"
                             Icon="/Resources/features/deeper_editor.png">
         <ToolTip.Tip>
@@ -813,7 +815,7 @@
            visibility mid-turn, so a handler on a face would see leaves the pointer never made),
            and the host stays untransformed: the flip lives on the inner MysteryPlate that both
            faces share, so an edge-on plate cannot manufacture a leave under a still pointer. -->
-      <Grid Grid.Row="2" Grid.Column="0" x:Name="MysteryFlipHost" Background="Transparent">
+      <Grid Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" x:Name="MysteryFlipHost" Background="Transparent">
        <Grid x:Name="MysteryPlate" RenderTransformOrigin="50%,50%">
         <Grid.RenderTransform>
           <TransformGroup>
@@ -837,7 +839,9 @@
           <Grid>
             <Border CornerRadius="11" RenderOptions.BitmapInterpolationMode="HighQuality">
               <Border.Background>
-                <ImageBrush Stretch="UniformToFill"/>
+                <!-- Uniform: the plate is two rows tall since the declutter strip-out, and a
+                     filled picture lost its sides there. Show it whole. -->
+                <ImageBrush Stretch="Uniform"/>
               </Border.Background>
             </Border>
             <Border CornerRadius="0,0,11,11" VerticalAlignment="Bottom" IsHitTestVisible="False">
@@ -883,7 +887,7 @@
       <!-- The badge sits OUTSIDE the flip host so it stays legible while the plate is edge-on
            mid-turn. Top-right because the FREE TODAY price tag owns the card's top-left. -->
       <Border x:Name="MysteryBadge"
-              Grid.Row="2" Grid.Column="0" ZIndex="12" IsHitTestVisible="False"
+              Grid.Row="1" Grid.Column="0" ZIndex="12" IsHitTestVisible="False"
               BoxShadow="0 0 10 0 #D9FFD54A"
               HorizontalAlignment="Right" VerticalAlignment="Top"
               Margin="0,2,2,0" Padding="8,3,8,4" CornerRadius="8"

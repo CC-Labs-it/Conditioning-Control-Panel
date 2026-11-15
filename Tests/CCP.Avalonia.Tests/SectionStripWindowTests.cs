@@ -37,15 +37,17 @@ public sealed class SectionStripWindowTests
     // The PR's WindowPillAsksAndOnlyYesRequestsTheWindow pinned its own fade/hover mechanics; this head keeps the base
     // card (beat-loop fade, face dims on hover), covered by WindowConfirmationParityTests and SyncSixTipAndWindowTests.
 
+    // Declutter wave 2 (2026-11-15): Just Drop, the only window pill, left the Studio strip for
+    // the launcher's Tools door, so no pill asks "Open it?" any more (the confirmation card stays
+    // in SectionTabStrip for a future window pill). ShowTab("justdrop") still opens the shop.
     [Fact]
-    public Task ConfirmationClosesOnEscapeRebuildSectionChangeDetachAndPanic() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task JustDropHasNoPillAndAPlainPillStillGoesAtOnce() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         SetUp();
         var service = new global::ConditioningControlPanel.Services.SettingsService();
         global::ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
         var st = global::ConditioningControlPanel.CoreSettings.Current;
         (st.Welcomed, st.HasAcceptedAgeVerification, st.WhatMovedCardShown) = (true, true, 1);   // P52/P76: no intro takes focus
-        // WPF draws the Just Drop door only while it is available (SectionChrome PillAllowed).
         global::ConditioningControlPanel.Services.JustDrop.JustDropService.SetServerEnabledForTests(true);
         var shell = new MainShellWindow();
         try
@@ -55,33 +57,11 @@ public sealed class SectionStripWindowTests
             shell.ShowTab("presets");
             Dispatcher.UIThread.RunJobs();
             var strip = shell.PageStrip!;
-            Assert.Contains("justdrop", strip.PillKeys);
-            Click(strip.PillFor("justdrop")!);
-            strip.ConfirmationCard!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Assert.DoesNotContain("justdrop", strip.PillKeys);
+            Assert.Equal(NavSections.Studio, NavSections.SectionForTab("justdrop"));
+            Click(strip.PillFor("ramp")!);
             Assert.Null(strip.ConfirmingKey);
-            Click(strip.PillFor("justdrop")!);
-            strip.Rebuild();
-            Assert.Null(strip.ConfirmingKey);
-            // Arrows focus a window without opening; Enter asks, as WPF OnStripKeyDown.
-            // (ramp, not haptics: haptics is a locked premium pill on a free account.)
-            Dispatcher.UIThread.RunJobs();
-            var ramp = strip.PillFor("ramp")!;
-            Assert.True(ramp.Focus(), $"ramp pill takes focus (visible {ramp.IsEffectivelyVisible}, enabled {ramp.IsEffectivelyEnabled}, shell enabled {shell.IsEnabled}, focused {shell.FocusManager?.GetFocusedElement()})");
-            strip.PillFor("ramp")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Left });
-            Assert.Null(strip.ConfirmingKey);
-            Assert.True(strip.PillFor("justdrop")!.IsFocused, "Left from ramp focuses the Just Drop pill");
-            strip.PillFor("justdrop")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
-            Assert.Equal("justdrop", strip.ConfirmingKey);
-            Assert.Equal("presets", shell.CurrentTab);
-            PanicSurfaces.All.Single(s => s.Id == "nav-window-confirm").Stop(shell);
-            Assert.Null(strip.ConfirmingKey);
-            Click(strip.PillFor("justdrop")!);
-            shell.ShowTab("play");
-            Assert.Null(strip.ConfirmingKey);
-            shell.ShowTab("presets");
-            Click(strip.PillFor("justdrop")!);
-            shell.Close();
-            Assert.Null(strip.ConfirmingKey);
+            Assert.Equal("ramp", shell.CurrentTab);
         }
         finally
         {

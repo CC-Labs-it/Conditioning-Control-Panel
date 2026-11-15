@@ -221,12 +221,14 @@
 
         <!-- WPF PlayTabView.xaml:339-607: eight native games and the Web App door.
              Breakout demo and Piece by Piece use the base hosts. Other native doors
-             remain disabled with the unavailable-build tooltip. -->
-        <Grid x:Name="ZoneGames" Margin="2,4,2,8" ColumnDefinitions="Auto,*">
+             remain disabled with the unavailable-build tooltip.
+             Declutter wave 2 (2026-11-15): the games zone is collapsed, not deleted. The games
+             live in the launcher (Games door); the names below stay for the code-behind. -->
+        <Grid x:Name="ZoneGames" Margin="2,4,2,8" ColumnDefinitions="Auto,*" IsVisible="False">
           <TextBlock Grid.Column="0" Text="{loc:Str rf_play_zone_games}" Theme="{StaticResource PlayZoneTag}"/>
           <Border Grid.Column="1" Theme="{StaticResource PlayZoneRule}"/>
         </Grid>
-        <UniformGrid x:Name="GamesGrid" Columns="3">
+        <UniformGrid x:Name="GamesGrid" Columns="3" IsVisible="False">
           <Grid x:Name="SlotBreakoutDemo">
             <Border Theme="{StaticResource PlayCard}">
               <Grid>

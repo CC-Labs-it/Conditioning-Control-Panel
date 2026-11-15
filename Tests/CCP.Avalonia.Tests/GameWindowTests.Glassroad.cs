@@ -86,7 +86,7 @@ public sealed partial class GameWindowTests
             CoreEntitlement.ShowDeniedHandler = v => denied.Add(v);
             try
             {
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
                     .FindControl<global::Avalonia.Controls.Button>("BtnPlayRacingThoughts")!
                     .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));

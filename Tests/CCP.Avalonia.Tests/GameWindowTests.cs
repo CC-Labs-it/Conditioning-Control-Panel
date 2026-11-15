@@ -1791,7 +1791,7 @@ public sealed partial class GameWindowTests
             // DtRH is a Basic door now (DtrhGate demands premium), so a lapse drops Basic too.
             CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
             CoreEntitlement.HasPremiumProvider = () => false;   // RunDtrh restores it
-            shell.ShowTab("play");
+            shell.ShowTab("playeyes");
             Dispatcher.UIThread.RunJobs();
             shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
                 .FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!
@@ -1813,7 +1813,7 @@ public sealed partial class GameWindowTests
         CoreEntitlement.HasPremiumProvider = () => premium;
         CoreEntitlement.IsFreeTodayProvider = key => key == freeKey;
         shell.Show();
-        shell.ShowTab("play");
+        shell.ShowTab("playeyes");
         Dispatcher.UIThread.RunJobs();
         var play = shell.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
         var band = play.FindControl<global::Avalonia.Controls.Border>("PlayLockDtrh")!;

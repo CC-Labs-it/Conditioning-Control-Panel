@@ -128,7 +128,7 @@ public sealed class SectionPaintShellTests
                 // The page wash and ink follow the section.
                 var wash = w.Named<Border>("SectionWashFill")!;
                 Assert.Equal(NavStripRules.WithAlpha(hue, 0x24 / 255.0), Solid(wash.Background));
-                w.ShowTab("play");
+                w.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = NavStripRules.Accent(NavSections.SectionForTab("play"));
                 Assert.NotEqual(hue, play);
