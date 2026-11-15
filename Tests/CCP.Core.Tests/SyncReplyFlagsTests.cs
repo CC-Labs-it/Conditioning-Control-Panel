@@ -12,6 +12,30 @@ public class SyncReplyFlagsTests
     private static void Apply(AppSettings s, string json) => ProfileAdopt.ApplySyncResponse(s, JObject.Parse(json), Now);
 
     [Theory]
+    [InlineData("{\"oopsie_used_season\":\"2026-08\",\"oopsie_credits\":2,\"is_season0_og\":true,\"bonus_daily_rerolls\":3,\"level_reset\":true}", 3, 0)]
+    [InlineData("{\"user\":null,\"oopsie_used_season\":\"2026-08\",\"oopsie_credits\":2,\"is_season0_og\":true,\"bonus_weekly_rerolls\":3,\"level_reset\":true}", 0, 3)]
+    public void TopLevelFieldsApplyWithoutUserWithoutResettingProgress(string json, int daily, int weekly)
+    {
+        var s = new AppSettings { CurrentSeason = "2026-08", StreakFixCharges = 5,
+            BonusDailyRerolls = 9, BonusWeeklyRerolls = 9, PlayerLevel = 42, PlayerXP = 10,
+            HighestLevelEver = 50, UserDisplayName = "kept" };
+        int notifications = 0;
+        s.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AppSettings.StreakFixCharges)) notifications++; };
+        ProfileAdopt.ApplySyncResponse(s, JObject.Parse(json), new DateTime(2026, 8, 15, 0, 0, 0, DateTimeKind.Utc));
+        Assert.Multiple(
+            () => Assert.True(s.SeasonalStreakRecoveryUsed),
+            () => Assert.Equal(2, s.StreakFixCharges),
+            () => Assert.Equal(1, notifications),
+            () => Assert.True(s.IsSeason0Og),
+            () => Assert.Equal(daily, s.BonusDailyRerolls),
+            () => Assert.Equal(weekly, s.BonusWeeklyRerolls),
+            () => Assert.Equal(42, s.PlayerLevel),
+            () => Assert.Equal(10, s.PlayerXP),
+            () => Assert.Equal(50, s.HighestLevelEver),
+            () => Assert.Equal("kept", s.UserDisplayName));
+    }
+
+    [Theory]
     [InlineData(1, 4)]
     [InlineData(4, 1)]
     public void CreditsAreAuthoritativeAndNotify(int initial, int server)
