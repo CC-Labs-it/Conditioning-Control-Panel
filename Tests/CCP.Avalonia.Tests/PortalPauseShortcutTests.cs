@@ -118,7 +118,7 @@ public class PortalPauseShortcutTests
             shell.ApplyPauseKeyPortal();
             Assert.True(registrations[1].Disposed);
             Assert.False(shell.PauseKeyArmed);
-            shell.OnPortalPauseKeyPressed();
+            shell.OnPortalPauseKeyPressed("F10");
             Assert.Equal(1, graces);
             s.PanicKey = "Escape";
             shell.ApplyPauseKeyPortal();
@@ -159,4 +159,59 @@ public class PortalPauseShortcutTests
         }
         await Task.CompletedTask;
     });
+    [Fact]
+    public Task StaleActivationCannotPauseAfterRebindOrVideoEnd() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var oldLockdown = LockdownService.Current;
+        bool playing = true;
+        int graces = 0;
+        Action? press = null;
+        var registrations = new System.Collections.Generic.List<Registration>();
+        var shell = new MainShellWindow
+        {
+            PauseKeyWayland = true,
+            PauseKeyVideoPlaying = () => playing,
+            PauseKeyGracePause = () => { graces++; return true; },
+        };
+        shell.RegisterWaylandPauseKey = (_, pressed, _, _) =>
+        {
+            press = pressed;
+            var r = new Registration();
+            registrations.Add(r);
+            return Task.FromResult<IDisposable?>(r);
+        };
+        try
+        {
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, "Escape", "F9");
+            LockdownService.Current = null;
+            shell.StartPauseKeyPortal();
+            var oldPress = press!;
+            s.PauseKey = "F10"; // no poll has run yet
+            oldPress();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, graces);
+            Assert.True(registrations[0].Disposed);
+            Assert.Equal(2, registrations.Count);
+            oldPress(); // callback queued from the old generation
+            press!();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, graces);
+            playing = false; // no poll has run yet
+            press!();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, graces);
+            Assert.True(registrations[1].Disposed);
+        }
+        finally
+        {
+            shell.StopPauseKeyPortal();
+            shell.Close();
+            LockdownService.Current = oldLockdown;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = old;
+        }
+        return Task.CompletedTask;
+    });
+
 }

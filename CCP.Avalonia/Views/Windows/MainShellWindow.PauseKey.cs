@@ -83,7 +83,7 @@ public partial class MainShellWindow
         try
         {
             registration = await RegisterWaylandPauseKey(key,
-                () => Dispatcher.UIThread.Post(() => { if (generation == _pauseKeyGeneration) OnPortalPauseKeyPressed(); }),
+                () => Dispatcher.UIThread.Post(() => { if (generation == _pauseKeyGeneration) OnPortalPauseKeyPressed(key); }),
                 () => Dispatcher.UIThread.Post(() => { if (generation == _pauseKeyGeneration) CancelPauseKeyRegistration(); }),
                 cancellation);
             if (generation != _pauseKeyGeneration || cancellation.IsCancellationRequested) registration?.Dispose();
@@ -93,9 +93,9 @@ public partial class MainShellWindow
     }
 
     /// <summary>UI thread. Rechecked here: settings or Lockdown may have changed since the last poll.</summary>
-    internal void OnPortalPauseKeyPressed()
+    internal void OnPortalPauseKeyPressed(string key)
     {
-        if (PauseKeyRefused(CoreSettings.Current)) { ApplyPauseKeyPortal(); return; }
+        if (!PauseKeyVideoPlaying() || !PanicPolicy.IsPauseKeyPress(CoreSettings.Current.PauseKey, key) || PauseKeyRefused(CoreSettings.Current)) { ApplyPauseKeyPortal(); return; }
         Log.Information("Pause key {Key} received through the portal - video grace pause", CoreSettings.Current.PauseKey);
         try { PauseKeyGracePause(); }
         catch (Exception ex) { Log.Warning(ex, "Pause key: grace pause failed"); }
