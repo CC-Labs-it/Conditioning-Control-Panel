@@ -198,7 +198,8 @@
 
                 <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
                 <ctl:SuperBox x:Name="SuperBoxMain" Effect="Afterglow">
-                    <ctl:AfterglowOptionsBox/>
+                    <!-- Take two: Afterglow has no options of its own. Kept folded, not removed. -->
+                    <ctl:AfterglowOptionsBox Visibility="Collapsed"/>
                 </ctl:SuperBox>
             </StackPanel>
 

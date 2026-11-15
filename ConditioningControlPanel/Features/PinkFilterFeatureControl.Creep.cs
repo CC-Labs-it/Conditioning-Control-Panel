@@ -36,7 +36,8 @@ namespace ConditioningControlPanel.Features
             _creepLoading = true;
             try
             {
-                CreepCard.Visibility = SuperAccess.IsSelected(SuperEffect.Creep) ? Visibility.Visible : Visibility.Collapsed;
+                // Take two: no options of its own. Steam reads the pink filter's colour and strength.
+                CreepCard.Visibility = Visibility.Collapsed;
                 if (CmbCreepSpeed.Items.Count == 0)
                 {
                     // DarkComboBoxStyle has a dark popup, so the items take the light brush.

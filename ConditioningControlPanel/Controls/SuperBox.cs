@@ -70,6 +70,18 @@ namespace ConditioningControlPanel.Controls
         private readonly TextBlock _twist = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Foreground = Brushes.White, Margin = new Thickness(0, 1, 0, 0) };
         private readonly TextBlock _baseOff = new() { FontSize = 11, FontStyle = FontStyles.Italic, Opacity = 0.6, Foreground = Brushes.White, Margin = new Thickness(0, 3, 0, 0) };
         private readonly StackPanel _superPart = new();
+        private readonly Grid _head;
+        // Take two (owner, 2026-11-15): ONE star, no picker. On = Super, off = the classic effect.
+        private readonly Button _star;
+        private readonly TextBlock _starGlyph = new()
+        {
+            Text = "\u2605", FontSize = 24, LineHeight = 24,
+            FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        private static readonly Brush StarOn = Frozen(Color.FromRgb(0xFF, 0xCF, 0x6B));
+        private static readonly Brush StarOff = Frozen(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF));
+        private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
         private readonly StackPanel _corner = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10, 0, 0, 0) };
         private readonly ContentPresenter _body = new() { Margin = new Thickness(0, 8, 0, 0) };
         private readonly Path _ringArc;
@@ -135,9 +147,18 @@ namespace ConditioningControlPanel.Controls
             signGrid.Children.Add(_sheen);
             _signHost.Child = signGrid;
 
-            var head = new Grid { Margin = new Thickness(0, 0, 0, 6), MinHeight = 22 };
-            head.Children.Add(_v2Tag);
-            head.Children.Add(_signHost);
+            _head = new Grid { Margin = new Thickness(0, 0, 0, 6), MinHeight = 22 };
+            _head.Children.Add(_v2Tag);
+            _head.Children.Add(_signHost);
+
+            _star = new Button
+            {
+                Cursor = Cursors.Hand, Focusable = true, Template = ChipTemplate(),
+                Background = Brushes.Transparent, BorderBrush = Brushes.Transparent,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-6, 0, 4, 0),
+                Content = _starGlyph,
+            };
+            _star.Click += (_, _) => OnStarPressed();
 
             _ringArc = new Path
             {
@@ -158,10 +179,13 @@ namespace ConditioningControlPanel.Controls
             text.Children.Add(_twist);
 
             var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(text, 0);
-            Grid.SetColumn(_corner, 1);
+            Grid.SetColumn(_star, 0);
+            Grid.SetColumn(text, 1);
+            Grid.SetColumn(_corner, 2);
+            row.Children.Add(_star);
             row.Children.Add(text);
             row.Children.Add(_corner);
 
@@ -170,8 +194,12 @@ namespace ConditioningControlPanel.Controls
 
             // The dim part: head, name row, the pick and its line. The corner (Try it) is a child of
             // the row but stays readable because the box only fades its text and the pick, see Paint.
-            _superPart.Children.Add(head);
+            _superPart.Children.Add(_head);
             _superPart.Children.Add(row);
+            // The three-way pick is retired: it stays in the tree, folded, so nothing that reads
+            // it breaks, and the star above is the only control.
+            _picker.Visibility = Visibility.Collapsed;
+            _modeLineHost.Visibility = Visibility.Collapsed;
             _superPart.Children.Add(_picker);
             _superPart.Children.Add(_modeLineHost);
             _superPart.Children.Add(_baseOff);
@@ -202,6 +230,24 @@ namespace ConditioningControlPanel.Controls
 
             OnBodyChanged(null);
             Paint(lit: false);
+        }
+
+        /// <summary>True when the star draws on: unlocked and switched on.</summary>
+        public bool StarLit { get; private set; }
+
+        /// <summary>The star was pressed. A free account gets the sign shaken and the normal tier
+        /// refusal; everyone else flips the effect on or off.</summary>
+        internal void OnStarPressed()
+        {
+            var effect = Effect;
+            if (!SuperAccess.IsUnlocked(effect))
+            {
+                SuperChrome.Shake(_signHost);
+                TierGate.DemandPremium(SuperNames.Name(effect));
+                return;
+            }
+            SuperAccess.Set(effect, !SuperAccess.IsSwitchedOn(effect));
+            Refresh();
         }
 
         /// <summary>The Classic / Both / Super only row inside the box (tests and hosts).</summary>
@@ -316,7 +362,7 @@ namespace ConditioningControlPanel.Controls
         {
             var effect = Effect;
             string name = SuperNames.Name(effect);
-            _title.Text = Loc.GetF("super_switch_name", name);
+            _title.Text = name;
             _twist.Text = Loc.Get("super_twist_" + effect.ToString().ToLowerInvariant());
 
             bool paid = TierGate.HasPremium;
@@ -326,6 +372,11 @@ namespace ConditioningControlPanel.Controls
             bool baseOn = SuperAccess.IsBaseOn(effect);
 
             Paint(lit: unlocked);
+            StarLit = unlocked && SuperAccess.IsSwitchedOn(effect);
+            _starGlyph.Foreground = StarLit ? StarOn : StarOff;
+            System.Windows.Automation.AutomationProperties.SetName(_star, name);
+            // A supporter needs no sign telling them who this is for: one row, nothing above it.
+            _head.Visibility = paid ? Visibility.Collapsed : Visibility.Visible;
             _baseOff.Text = Loc.Get("super_base_off");
             // Only worth saying when the add-on would otherwise run: a dim box has its own story.
             _baseOff.Visibility = !baseOn && (trying || (unlocked && SuperAccess.IsSwitchedOn(effect)))
