@@ -76,7 +76,10 @@ public class NavPillHelpTests
     public void OnlyWindowPillsAskBeforeOpening()
     {
         var asking = VisiblePills().Where(p => NavStripRules.AsksBeforeOpening(p.Tab)).Select(p => p.Tab.Key).ToArray();
-        Assert.Equal(new[] { "justdrop" }, asking);
+        // Declutter wave 2: Just Drop, the only window pill, left the strip for the launcher's
+        // Tools door, so no visible pill asks first. The rule itself still answers for it.
+        Assert.Empty(asking);
+        Assert.True(NavStripRules.AsksBeforeOpening(NavSections.AllTabs.Single(t => t.Key == "justdrop")));
     }
 
     private static SectionTabStrip Laid(string section, string tab, double width = 1480)
@@ -201,28 +204,20 @@ public class NavPillHelpTests
     }
 
     [Fact]
-    public void JustDropOpensOnlyAfterOpenIt()
+    public void JustDropHasNoPillAndAPlainPageStillGoesAtOnce()
     {
+        // Declutter wave 2: the Just Drop pill (the only one that asked "Open it?") left the
+        // Studio strip; ShowTab("justdrop") still opens the shop window (PanelDoorLinkTests).
         WpfRenderHarness.OnStaThread(() =>
         {
             var strip = Laid(NavSections.Studio, "studio");
+            Assert.DoesNotContain("justdrop", strip.PillKeys);
             var asked = new List<string>();
             strip.TabRequested += t => asked.Add(t.Key);
 
-            strip.ChooseForTests("justdrop");
-            Assert.Empty(asked);
-            Assert.Equal("justdrop", strip.ConfirmingKey);
-            strip.AnswerConfirmForTests(open: false);
-            Assert.Empty(asked);
-            Assert.Null(strip.ConfirmingKey);
-
-            strip.ChooseForTests("justdrop");
-            strip.AnswerConfirmForTests(open: true);
-            Assert.Equal(new[] { "justdrop" }, asked);
-
-            // A plain page still goes at once, and Just Drop never lights as the page on screen.
             strip.ChooseForTests("presets");
-            Assert.Equal(new[] { "justdrop", "presets" }, asked);
+            Assert.Equal(new[] { "presets" }, asked);
+            Assert.Null(strip.ConfirmingKey);
             Assert.Equal("presets", strip.ActivePillKey);
         });
     }

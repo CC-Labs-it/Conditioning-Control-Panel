@@ -156,7 +156,6 @@ public class SectionTabStripTests
 
     [Theory]
     [InlineData("lab", "play")]
-    [InlineData("play", "play")]
     [InlineData("playeyes", "playeyes")]
     [InlineData("gradedintake", "playsessions")]
     [InlineData("lockdown", "playsessions")]
@@ -231,7 +230,7 @@ public class SectionTabStripTests
         // A remembered tab the section no longer owns, or junk, falls back to the default.
         Assert.Equal("availablesubjects", NavStripRules.LastTabFor("{\"social\":\"quests\"}", NavSections.Social));
         Assert.Equal("assets", NavStripRules.LastTabFor("not json", NavSections.Library));
-        Assert.Equal("play", NavStripRules.LastTabFor("{\"play\":\"lab\"}", NavSections.Play));
+        Assert.Equal("playeyes", NavStripRules.LastTabFor("{\"play\":\"lab\"}", NavSections.Play));
     }
 
     [Fact]

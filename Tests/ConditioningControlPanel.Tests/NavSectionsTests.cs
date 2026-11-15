@@ -146,7 +146,8 @@ public class NavSectionsTests
         }
         Assert.Equal(("home", "premium"), NavSections.Redirects["exclusives"]);   // polish 12
         Assert.Equal(("settings", "account"), NavSections.Redirects["patreon"]);
-        Assert.Equal(("play", "play"), NavSections.Redirects["lab"]);
+        Assert.Equal(("play", "playeyes"), NavSections.Redirects["lab"]);          // declutter wave 2
+        Assert.Equal(("play", "playeyes"), NavSections.Redirects["play"]);         // ShowTab opens the launcher (LauncherDoors)
         Assert.Equal(("home", "settings"), NavSections.Redirects["progression"]);
         Assert.Equal(("social", "availablesubjects"), NavSections.Redirects["together"]);
     }
