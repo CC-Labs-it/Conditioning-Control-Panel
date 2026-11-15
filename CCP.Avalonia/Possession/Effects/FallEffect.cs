@@ -43,14 +43,14 @@ internal sealed class FallEffect : PossessionEffectBase
         _layer = layer;
         _chalk = new Rectangle { Width = bounds.Width, Height = bounds.Height, RadiusX = 6, RadiusY = 6,
             Stroke = new SolidColorBrush(Color.Parse("#FFFF7733")), StrokeThickness = 1.2,
-            StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { 4, 4 }, Opacity = .55, IsHitTestVisible = false };
+            StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { 4, 4 }, Opacity = 0, IsHitTestVisible = false };
         Canvas.SetLeft(_chalk, bounds.X); Canvas.SetTop(_chalk, bounds.Y); layer.Children.Add(_chalk);
         var amp = ctx.Photosafe ? .5 : 1;
-        await Animate(400, ct, t => lease.Rotate.Angle = 8 * amp * t);
+        await Animate(400, ct, t => TiltFrame(lease.Rotate, _chalk!, amp, t));
         Override(card, InputElement.IsHitTestVisibleProperty, false);
         var scaleY = bounds.Height / card.Bounds.Height;
         var drop = Math.Max(120, (layer.Bounds.Height - bounds.Bottom + 40) / (scaleY > 0 ? scaleY : 1));
-        await Animate(900, ct, t => { lease.Rotate.Angle = (8 + 6 * t * t) * amp; lease.Translate.Y = drop * t * t; });
+        await Animate(900, ct, t => { lease.Rotate.Angle = FallAngle(amp, t); lease.Translate.Y = drop * t * t; });
     }
 
     protected override async Task UndoCoreAsync(TimeSpan duration)
@@ -59,13 +59,13 @@ internal sealed class FallEffect : PossessionEffectBase
         var lease = _lease;
         if (lease != null && duration > TimeSpan.Zero)
         {
-            double angle = lease.Rotate.Angle, y = lease.Translate.Y;
+            double angle = lease.Rotate.Angle, y = lease.Translate.Y, opacity = _chalk?.Opacity ?? 0;
             await Animate(Math.Clamp(duration.TotalMilliseconds, 400, 900), CancellationToken.None, t =>
             {
                 if (generation != _generation) return;
                 var k = Math.Pow(1 - t, 3);
                 lease.Rotate.Angle = angle * k; lease.Translate.Y = y * k;
-                if (_chalk != null) _chalk.Opacity = .55 * k;
+                if (_chalk != null) _chalk.Opacity = ReturnChalkOpacity(opacity, t);
             });
         }
         if (generation != _generation) return;
@@ -73,6 +73,17 @@ internal sealed class FallEffect : PossessionEffectBase
         _chalk = null; _layer = null;
         lease?.ReleaseImmediate(); _lease = null;
     }
+
+    internal static void TiltFrame(RotateTransform rotate, Rectangle chalk, double amp, double t)
+    {
+        rotate.Angle = 8 * amp * HeadEffect.CubicInOut(t);
+        chalk.Opacity = .55 * HeadEffect.CubicOut(t);
+    }
+
+    internal static double FallAngle(double amp, double t) => (8 + 6 * t * t * t) * amp;
+
+    internal static double ReturnChalkOpacity(double opacity, double t) =>
+        opacity * (1 - HeadEffect.CubicInOut(Math.Min(t / .6, 1)));
 
     private static async Task Animate(double ms, CancellationToken ct, Action<double> frame)
     {
