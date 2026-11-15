@@ -136,6 +136,22 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void AskHelpOpensTheLeashedExplainer() =>
+        Run((_, page, _, _) =>
+        {
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-help:ask"));
+            var explain = Assert.Single(ask.OwnedWindows.OfType<LeashExplainWindow>());
+            try
+            {
+                Assert.True(explain.IsVisible);
+                Assert.Equal(4, explain.GetLogicalDescendants().OfType<Border>().Count(b => (b.Tag as string)?.StartsWith("leash-explain-panel:") == true));
+            }
+            finally { explain.Close(); }
+        });
+
+    [Fact]
     public void AnAnswerThatDidNotGoThroughKeepsTheCardOpenAndSaysWhy() =>
         Run((shell, page, wire, _) =>
         {
