@@ -58,11 +58,14 @@ public sealed class BubbleLayer : BaseLayer
     private readonly List<BubbleItem> _items = new();
 
     // Reused paints - no per-frame native churn. UI-thread single-writer (Render only).
-    private readonly SKPaint _img = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
+    private readonly SKPaint _img = new() { IsAntialias = true };
     private readonly SKPaint _fill = new() { IsAntialias = true };
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke };
     private readonly SKPaint _glow = new() { IsAntialias = true };
-    private readonly SKPaint _text = new() { IsAntialias = true, TextAlign = SKTextAlign.Center };
+    private readonly SKPaint _text = new() { IsAntialias = true };
+    // SkiaSharp 4: size/face live on SKFont (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html); centre align: DrawCentered.
+    // LinearMetrics: the legacy paint's font had it on (https://github.com/mono/skia/blob/v3.119.4/src/xamarin/SkCompatPaint.cpp), so widths stay identical.
+    private readonly SKFont _textFont = new(_bold) { LinearMetrics = true };
     // Primary label face. NOT necessarily the face we draw with: bug #615 - Skia does no font
     // fallback, and the variant labels are pointedly non-Latin (the clover/heart emoji, the
     // sparkle/cross dingbats), so anything Segoe UI lacks is routed through GlyphFallback per
@@ -197,7 +200,7 @@ public sealed class BubbleLayer : BaseLayer
                 float gy = cy + 14f * s;   // WPF Margin(0,14,0,0): peeks from under the burst
                 var dst = new SKRect(cx - gr, gy - gr, cx + gr, gy + gr);
                 _img.Color = SKColors.White.WithAlpha((byte)(item.PrismOpacity * item.Opacity * 255f));
-                canvas.DrawImage(item.PrismGhost, Fit(item.PrismGhost, dst), _img);
+                canvas.DrawImage(item.PrismGhost, Fit(item.PrismGhost, dst), SkSampling.Medium, _img);
             }
 
             // ---- Base sprite (scaled + rotated about center) ----
@@ -213,7 +216,7 @@ public sealed class BubbleLayer : BaseLayer
             if (item.Sprite != null)
             {
                 _img.Color = SKColors.White.WithAlpha(ga);
-                canvas.DrawImage(item.Sprite, Fit(item.Sprite, body), _img);
+                canvas.DrawImage(item.Sprite, Fit(item.Sprite, body), SkSampling.Medium, _img);
             }
             else
             {
@@ -277,7 +280,7 @@ public sealed class BubbleLayer : BaseLayer
                 if (frame != null)
                 {
                     _img.Color = SKColors.White.WithAlpha((byte)(0.92f * item.Opacity * 255f));
-                    canvas.DrawImage(frame, FillFit(frame, new SKRect(cx - ir, cy - ir, cx + ir, cy + ir)), _img);
+                    canvas.DrawImage(frame, FillFit(frame, new SKRect(cx - ir, cy - ir, cx + ir, cy + ir)), SkSampling.Medium, _img);
                 }
                 if (item.TeaseShineOpacity > 0.003f)
                 {
@@ -308,15 +311,15 @@ public sealed class BubbleLayer : BaseLayer
             if (!string.IsNullOrEmpty(item.Label))
             {
                 var runs = item.LabelRuns(_bold);   // #615/#717
-                _text.TextSize = item.LabelFontDip * s;
+                _textFont.Size = item.LabelFontDip * s;
                 // Soft shadow (BlurRadius 6 -> sigma 2) then the white glyph.
                 _text.Color = SKColors.Black.WithAlpha((byte)(0.8f * item.Opacity * 255f));
                 _text.MaskFilter = GetCachedBlur(ref item.LabelBlurCache, ref item.LabelBlurCacheSigma, 2f * s);
-                float baseline = cy + _text.TextSize * 0.35f;
-                GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _text);
+                float baseline = cy + _textFont.Size * 0.35f;
+                GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _textFont, _text);
                 _text.MaskFilter = null;
                 _text.Color = SKColors.White.WithAlpha(ga);
-                GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _text);
+                GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _textFont, _text);
             }
 
             // ---- Fuse ring (live): 3-phase colour, shrinking radius ----
@@ -394,11 +397,11 @@ public sealed class BubbleLayer : BaseLayer
         // one font and filled with another. English hints hit the ASCII fast path (a single Segoe
         // UI run, measured and drawn exactly as before).
         var runs = item.HintRuns(_bold);
-        _text.TextSize = 12.5f * s;
+        _textFont.Size = 12.5f * s;
         var runWidths = runs.Length > 1 ? new float[runs.Length] : null;
-        float tw = GlyphFallback.Measure(runs, _text, runWidths, out _, out _);
+        float tw = GlyphFallback.Measure(runs, _textFont, runWidths, out _, out _);
         float padX = 8f * s, padY = 3f * s;
-        float th = _text.TextSize;
+        float th = _textFont.Size;
         float py = cy + item.HintYOffDip * s;
         var pill = new SKRect(cx - tw / 2f - padX, py - th / 2f - padY, cx + tw / 2f + padX, py + th / 2f + padY);
         _fill.Color = new SKColor(0x12, 0x0A, 0x18, (byte)(0xA0 / 255f * alpha * 255f));
@@ -406,10 +409,10 @@ public sealed class BubbleLayer : BaseLayer
         _text.Color = SKColors.Black.WithAlpha((byte)(0.9f * alpha * 255f));
         _text.MaskFilter = GetCachedBlur(ref item.HintBlurCache, ref item.HintBlurCacheSigma, 1.7f * s);
         float baseline = py + th * 0.35f;
-        GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _text, runWidths, tw);
+        GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _textFont, _text, runWidths, tw);
         _text.MaskFilter = null;
         _text.Color = new SKColor(0xFF, 0xE2, 0xF2, (byte)(alpha * 255f));
-        GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _text, runWidths, tw);
+        GlyphFallback.DrawCentered(canvas, runs, cx, baseline, _textFont, _text, runWidths, tw);
     }
 
     /// <summary>Uniform (letterbox) fit of an image into a square dest - matches Stretch.Uniform.</summary>
