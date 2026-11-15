@@ -55,6 +55,7 @@ internal sealed class EmergencyExitWindow : Window
             var server = WebAssetServer.Shared;
             window._page = new Uri(server.Url("emergency-exit/index.html", "game=" + _last + "&avalonia=1"));
             if (owner?.IsVisible == true) window.Show(owner); else window.Show();
+            EmiDesk.EmiDeskService.Instance.Fire("emergencyExitOpened");
             window._web.Navigate(window._page);
             BarkHead.Engine?.Raise("EmergencyExitOpened", c => c.Set("game", _last).Set("attempt", (double)_attempt));
         }
@@ -92,7 +93,11 @@ internal sealed class EmergencyExitWindow : Window
             _closed = true;
             _deadline?.Dispose();
             _lockdown.LockdownDeactivated -= OnEnded;
-            if (ReferenceEquals(Current, this)) Current = null;
+            if (ReferenceEquals(Current, this))
+            {
+                EmiDesk.EmiDeskService.Instance.LineEngine.ReleaseHold("emergencyExitOpened");
+                Current = null;
+            }
         };
     }
     private void OnEnded()
