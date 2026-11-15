@@ -527,17 +527,17 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); }
                 void Started()
                 {
-                    // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
-                    if (!_playing || generation != _retryGeneration) return;
-                    LastVideoPath = path;
-                    try { VideoStarted?.Invoke(); }
-                    catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
-                    if (!_playing || generation != _retryGeneration) return;
-                    // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
-                    _ = CoreHaptics.Service?.StartVideoBackgroundVibeAsync();
-                    if (!_playing || generation != _retryGeneration) return;
-                    try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
-                    catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
+                // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
+                if (!_playing || generation != _retryGeneration) return;
+                LastVideoPath = path;
+                try { VideoStarted?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoStarted handler failed: {Error}", ex.Message); }
+                if (!_playing || generation != _retryGeneration) return;
+                // WPF VideoService.cs:3372: background vibe and the clip's funscript, once on screen.
+                _ = CoreHaptics.Service?.StartVideoBackgroundVibeAsync();
+                if (!_playing || generation != _retryGeneration) return;
+                try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
+                catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
                 }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _preroll = created;

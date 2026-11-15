@@ -224,9 +224,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (_disposed || _newest != after) return;
                     Media media;
-                    // A failed engine rebuild ends this pass; the copy still playing retries at its end.
+                    // Retry acquisition even when no copy remains to signal an end.
                     try { media = new Media(_engine(), _path, FromType.FromPath); }
-                    catch (Exception ex) { Log.Debug(ex, "LayeredAudio: next pass"); return; }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "LayeredAudio: next pass"); _timerFor = after;
+                        (_next ??= _time.CreateTimer(_ => { Copy? f; lock (_gate) f = _timerFor; StartCopy(f); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan)).Change(TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+                        return;
+                    }
                     media.AddOption(LibVlcAudio.NoVideo);
                     c = new Copy(new MediaPlayer(media), media);
                     // As in LibVlcAudio: volume set before Playing, or on libvlc's own thread, is lost.
@@ -288,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (due > 0)
                     {
                         _timerFor = c;
-                        (_next ??= _time.CreateTimer(_ => { Copy? f; lock (_gate) f = _timerFor; if (f != null) StartCopy(f); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan))
+                        (_next ??= _time.CreateTimer(_ => { Copy? f; lock (_gate) f = _timerFor; StartCopy(f); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan))
                             .Change(TimeSpan.FromMilliseconds(due), Timeout.InfiniteTimeSpan);
                         return;
                     }
