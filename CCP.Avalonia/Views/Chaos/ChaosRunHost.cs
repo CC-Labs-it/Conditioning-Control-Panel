@@ -549,7 +549,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
         private static bool CanChannelDefuse(AmbientBubble b) =>
-            _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+            _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosFieldMath.DefuseCostFor(b.Spec));
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
         /// Chain window, Playing with Fire's brink gold and the Pendulum's scoring window.</summary>
