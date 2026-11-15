@@ -313,7 +313,7 @@ internal static class X11PanicKey
         down = true;
         var s = CoreSettings.Current;
         if (Services.Safety.PanicPolicy.PauseKeyIsShadowedByPanicKey(s.PanicKey, s.PanicKeyEnabled, s.PauseKey)
-            || (s.PanicKeyEnabled && pauseCode == panicCode)
+            || (pauseCode == panicCode && (s.PanicKeyEnabled || Leashed()))
             || Views.Windows.MainShellWindow.CapturingPanicKey || Views.Windows.MainShellWindow.LockdownActive
             || Views.Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey) return;
         queue();
