@@ -211,6 +211,21 @@ public sealed class LeashAskTests
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
     [Fact]
+    public void EscapeAfterServiceRebindDoesNotReopenTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // The two-second service retry can run while the manual ask is open.
+            Assert.Same(ask, LeashAskWindow.Current);
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
+    [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((_, page, wire, _) =>
         {
