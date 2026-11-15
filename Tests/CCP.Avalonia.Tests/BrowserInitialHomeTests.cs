@@ -77,6 +77,8 @@ public sealed class BrowserInitialHomeTests
             Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/video", true, user));
             host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
             var script = scripts.FindLast(x => x.Contains("const cutRequest ="))!;
+            if (user) Assert.Equal(WebHostTakeover.VideoAutoPlayScript, script);
+            else Assert.StartsWith(WebHost.CarrierShim, script);
             return script.Split("const cutRequest = '")[1].Split("'")[0];
         }
         void Report(string token) => host.OnWebMessage("{\"type\":\"ccpCutMetadata\",\"request\":\"" + token + "\",\"dur\":120}");

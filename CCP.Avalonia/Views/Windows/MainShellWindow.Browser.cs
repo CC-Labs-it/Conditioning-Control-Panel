@@ -164,6 +164,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
+            // User-requested watch links do not need the cut metadata channel.
+            if (!appDriven)
+            {
+                await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
+                return;
+            }
             var token = Guid.NewGuid().ToString("N");
             if (appDriven && BrowserPlaybackCapEnforced)
             {
