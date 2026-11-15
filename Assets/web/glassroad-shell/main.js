@@ -71,7 +71,10 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
   };
   const fromPage = e => win && !win.isDestroyed() && e.sender === win.webContents &&
     e.senderFrame === win.webContents.mainFrame;
-  ipcMain.on('ccp:message', (e, message) => { if (fromPage(e)) send(message); });
+  // The page cannot impersonate the shell's safety and window control frames.
+  ipcMain.on('ccp:message', (e, message) => {
+    if (fromPage(e) && typeof message?.type === 'string' && !message.type.startsWith('shell-')) send(message);
+  });
   ipcMain.on('ccp:bridge-ready', e => {
     if (!fromPage(e) || bridgeReady) return;
     bridgeReady = true;
@@ -96,6 +99,7 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
     ses.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) =>
       callback({ cancel: !allowedRequest(details.url, origin) }));
     win = new BrowserWindow(windowOptions(ses));
+    win.removeMenu();
     const web = win.webContents;
     web.setWindowOpenHandler(() => ({ action: 'deny' }));
     for (const event of ['will-navigate', 'will-frame-navigate', 'will-redirect'])

@@ -54,6 +54,7 @@ function fixture({ ready = Promise.resolve(), failLoad = false } = {}) {
       this.webContents.getURL = () => url;
       windows.push(this);
     }
+    removeMenu() { this.menuRemoved = true; }
     show() { this.shown = true; }
     focus() { this.focused = true; }
     isDestroyed() { return this.dead; }
@@ -70,6 +71,7 @@ test('one window, locked navigation, IPC, focus and Escape follow the real handl
   f.input({ type: 'launch', url }); f.input({ type: 'init', v: 2 }); await turn();
   assert.equal(f.windows.length, 1);
   const w = f.windows[0], web = w.webContents, event = { sender: web, senderFrame: web.mainFrame };
+  assert.equal(w.menuRemoved, true);
   assert.equal(w.url, url); assert.deepEqual(f.app.switch, ['autoplay-policy', 'no-user-gesture-required']);
   assert.deepEqual(f.output(), [{ type: 'shell-loaded', displayBackend: 'x11' }]);
   f.input({ type: 'focus' }); assert.equal(w.focused, true);
@@ -105,6 +107,21 @@ test('one window, locked navigation, IPC, focus and Escape follow the real handl
   assert.deepEqual(f.output().at(-1), { type: 'shell-escape', sequence: 2, displayBackend: 'x11' });
   f.input({ type: 'launch', url }); assert.equal(f.windows.length, 1);
   f.input({ type: 'shell-close' }); assert.equal(w.dead, true); assert.equal(f.app.quits, 1);
+});
+
+test('page cannot forge shell control frames or suppress real Escape', async () => {
+  const f = fixture(); f.input({ type: 'launch', url }); await turn();
+  const web = f.windows[0].webContents, event = { sender: web, senderFrame: web.mainFrame };
+  const before = f.output();
+  for (const message of [{ type: 'shell-escape', sequence: 99 },
+    { type: 'shell-loaded', displayBackend: 'wayland' }, { type: 'shell-focus', active: false },
+    { type: 'shell-escape-up' }, { type: 'shell-future-control' }])
+    f.ipcMain.emit('ccp:message', event, message);
+  assert.deepEqual(f.output(), before);
+  f.ipcMain.emit('ccp:message', event, { type: 'ready' });
+  web.emit('before-input-event', { preventDefault() {} }, { key: 'Escape', type: 'keyDown', isAutoRepeat: false });
+  assert.deepEqual(f.output().slice(-2), [{ type: 'ready' },
+    { type: 'shell-escape', sequence: 1, displayBackend: 'x11' }]);
 });
 
 test('invalid launch, lost host, renderer failure and oversized input stop the shell', async () => {
