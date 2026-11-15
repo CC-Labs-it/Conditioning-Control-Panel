@@ -59,6 +59,7 @@ public partial class LauncherWindow
             if (_door is { } door)
             {
                 DoorBack.Content = "‹ " + Loc.Get("btn_back");
+                System.Windows.Automation.AutomationProperties.SetName(DoorBack, Loc.Get("btn_back"));
                 DoorBack.FontFamily = LauncherDoorCard.DisplayFont;
                 DoorBack.FontSize = 15;
                 GamesEyebrow.Text = DoorTitle(door);
@@ -241,7 +242,8 @@ public partial class LauncherWindow
             GlowAllowed));
         var card = view.Card;
         card.Tag = door;
-        System.Windows.Automation.AutomationProperties.SetName(card, DoorTitle(door));
+        // UI Automation's Invoke runs the same open as a click (the card names itself).
+        view.Invoked = () => OpenDoorPage(door);
 
         // The whole card is the door; Continue handles its own press, so it never opens the page.
         bool armed = false;
@@ -276,9 +278,10 @@ public partial class LauncherWindow
             Text = "", FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
             FontSize = 13, Margin = new Thickness(0, 1, 9, 0), VerticalAlignment = VerticalAlignment.Center,
         });
+        var text = Loc.GetF("launcher_door_continue", last.Title);
         label.Children.Add(new TextBlock
         {
-            Text = Loc.GetF("launcher_door_continue", last.Title),
+            Text = text,
             FontFamily = LauncherDoorCard.DisplayFont, FontSize = 16, FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         });
@@ -294,6 +297,8 @@ public partial class LauncherWindow
             Foreground = new SolidColorBrush(Lighten(hue, 0.6)),
             RenderTransformOrigin = new Point(0.5, 0.5),
         };
+        // The content is a glyph plus a trimmed label: name it with the whole line.
+        System.Windows.Automation.AutomationProperties.SetName(go, text);
         go.PreviewMouseLeftButtonDown += Press_Down;
         go.PreviewMouseLeftButtonUp += Press_Up;
         go.MouseLeave += (_, _) => MotionFx.PressSquish(go, false);

@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using ConditioningControlPanel.Launcher;
 using Xunit;
 
@@ -44,6 +47,56 @@ public class LauncherDoorCardRenderTests
         });
 
     [Fact]
+    public void Door_card_is_an_invokable_button_named_with_its_count()
+        => WpfRenderHarness.OnStaThread(() =>
+        {
+            var card = Build("Games", 9, "{0} games", Pink, stamp: true);
+            Layout(card.Root, 760, 380);
+            int opened = 0;
+            card.Invoked = () => opened++;
+            var peer = UIElementAutomationPeer.CreatePeerForElement(card.Card);
+            Assert.Equal(AutomationControlType.Button, peer.GetAutomationControlType());
+            Assert.Equal("Games, 9 games", peer.GetName());
+            var invoke = Assert.IsAssignableFrom<IInvokeProvider>(peer.GetPattern(PatternInterface.Invoke));
+            invoke.Invoke();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Background);   // flush the queued open
+            Assert.Equal(1, opened);
+        });
+
+    [Theory]
+    [InlineData("Herramientas")]
+    [InlineData("Ferramentas")]
+    [InlineData("Инструменты")]
+    public void A_long_title_shrinks_to_fit_a_narrow_door_and_never_runs_under_the_chevron(string title)
+        => WpfRenderHarness.OnStaThread(() =>
+        {
+            var card = Build(title, 5, "{0} tools", Blue, stamp: true);
+            Layout(card.Root, NarrowDoorWidth, 300);
+            var box = Find<Viewbox>(card.Card);
+            var stamp = Find<Border>(box.Parent as FrameworkElement ?? card.Card, b => b.CornerRadius.TopLeft == 10);
+            var titleRect = box.TransformToAncestor(card.Card).TransformBounds(new Rect(box.RenderSize));
+            var stampRect = stamp.TransformToAncestor(card.Card).TransformBounds(new Rect(stamp.RenderSize));
+            double chevronLeft = card.Card.ActualWidth - 28 - 50;
+            Assert.True(box.ActualWidth < ((FrameworkElement)box.Child).DesiredSize.Width, "the title did not shrink");
+            Assert.True(titleRect.Right <= stampRect.Left + 0.5, $"title {titleRect} runs under the stamp {stampRect}");
+            Assert.True(stampRect.Right <= chevronLeft, $"stamp {stampRect} runs under the chevron at {chevronLeft}");
+        });
+
+    /// <summary>A door at the launcher's minimum width leaves about 350 px for the title.</summary>
+    private const double NarrowDoorWidth = 480;
+
+    private static T Find<T>(DependencyObject root, Func<T, bool>? match = null) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T hit && (match == null || match(hit))) return hit;
+            try { return Find(child, match); } catch (InvalidOperationException) { }
+        }
+        throw new InvalidOperationException("no " + typeof(T).Name);
+    }
+
+    [Fact]
     public void Shot_WhenAsked()
     {
         var dir = Environment.GetEnvironmentVariable("CCP_DOORS_SHOT_DIR");
@@ -55,6 +108,11 @@ public class LauncherDoorCardRenderTests
             Save(Column(null), 800, 880, Path.Combine(dir, "doors-rest.png"));
             Save(Column(games => { games.HoldPose(true, 1, 1); }, tools => tools.HoldPose(false, 0.985, 0.78)), 800, 880, Path.Combine(dir, "doors-hover-games.png"));
             Save(Column(games => games.HoldPose(true, 1.05, 0.6), tools => tools.HoldPose(false, 0.94, 0.35)), 800, 880, Path.Combine(dir, "doors-mid-open.png"));
+            var narrow = new UniformGrid { Columns = 1, Margin = new Thickness(16) };
+            foreach (var t in new[] { "Herramientas", "Ferramentas", "Инструменты" })
+                narrow.Children.Add(Build(t, 5, "{0} tools", Blue, stamp: true).Root);
+            Save(new Border { Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)), Child = narrow },
+                 NarrowDoorWidth + 32, 900, Path.Combine(dir, "doors-narrow-long-titles.png"));
         });
     }
 
