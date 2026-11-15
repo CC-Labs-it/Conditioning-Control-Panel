@@ -139,7 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("super-stage", _ => global::ConditioningControlPanel.Services.Super.SuperStageHost.Stop(), After: ["engine"]),
             new("bouncing-text", _ => Overlays.BouncingTextOverlay.Stop()), // WPF BouncingTextService.cs:169-171; also standalone runs
             new("bank-fx", sh => sh?.StopBankFx()), // WPF BankFx.cs:635 abort contract; P06
-            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
+            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.EndChaos(); Overlays.BubbleOverlay.Stop();
                 Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.SpiralOverlay.CloseAll(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),

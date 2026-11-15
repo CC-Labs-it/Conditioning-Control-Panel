@@ -286,6 +286,38 @@ public sealed class BubbleOverlayTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Panic_bubble_surface_closes_windows_even_during_chaos(bool ambient) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            host.Show();
+            if (ambient) BubbleOverlay.Start(host);
+            BubbleOverlay.BeginChaos(host, _ => { });
+            Assert.True(BubbleOverlay.WindowCount > 0);
+            global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "bubble-host").Stop(null);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.False(BubbleOverlay.IsRunning);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            host.Close();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void End_chaos_retires_parked_one_shot_windows_unless_ambient_owns_them(bool ambient) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
