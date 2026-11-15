@@ -9,6 +9,30 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public class PersonalityWpfMigrationTests
 {
+    [Fact]
+    public void WpfStillSavesUnchangedDefaultsWhileTheOptOutDoesNot()
+    {
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = 60000 };
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.ActivePersonalityPresetId = PersonalityPresets.NeutralDefaultId;
+            service.Current.SlutModeEnabled = false;
+            service.Current.CompanionPrompt.UseCustomPrompt = false;
+            var personality = new PersonalityService();
+            personality.MigrateFromLegacy(service.Current, saveUnchanged: false);
+            Assert.False(service.HasPendingSave);
+            personality.MigrateFromLegacy(service.Current);
+            Assert.True(service.HasPendingSave);
+        }
+        finally
+        {
+            service.SealForReset();
+            CoreSettings.ServiceProvider = previous;
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

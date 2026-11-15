@@ -2612,8 +2612,8 @@ namespace ConditioningControlPanel.Models
         }
 
         private bool _personalityLegacyMigrated;
-        /// <summary>Avalonia startup guard for the legacy personality migration. WPF retains its original
-        /// migration behavior and does not consult this flag.</summary>
+        /// <summary>Retained for compatibility with earlier Avalonia settings. Neither head uses this
+        /// marker to gate the legacy personality migration.</summary>
         [JsonProperty]
         public bool PersonalityLegacyMigrated
         {
