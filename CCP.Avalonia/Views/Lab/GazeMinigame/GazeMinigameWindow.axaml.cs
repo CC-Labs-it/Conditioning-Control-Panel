@@ -1050,9 +1050,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             return img;
         }
 
-        private void DisposeCurrentRoundPlayers()
+        internal void DisposeCurrentRoundPlayers(bool synchronous = false)
         {
-            // InlineLoopVideo detaches synchronously: stop decoder, dispose player, free sink.
+            // Start both stops before removing the panes. Detach remains synchronous for other hosts.
+            foreach (var video in _leftPane.Children.OfType<InlineLoopVideo>().Concat(_rightPane.Children.OfType<InlineLoopVideo>()))
+                video.Teardown(synchronous);
             _leftPane.Children.Clear();
             _rightPane.Children.Clear();
             foreach (var image in _roundImages) image.Dispose();
@@ -1583,7 +1585,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             _closed = true;
             _gameRunning = false;
             StopRoundTicker();
-            DisposeCurrentRoundPlayers();
+            DisposeCurrentRoundPlayers(synchronous: true);
             UnsubscribeWebcam();
             Open.Remove(this);
 

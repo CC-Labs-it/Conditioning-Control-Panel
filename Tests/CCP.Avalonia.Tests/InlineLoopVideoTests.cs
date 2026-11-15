@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
+using ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -133,6 +135,66 @@ public sealed class InlineLoopVideoTests
                 Assert.NotNull(video.Source);
             }
             finally { host.Close(); Dispatcher.UIThread.RunJobs(); }
+        });
+    }
+
+    [Fact]
+    public async Task GazeRoundStopsOverlapWithoutBlockingDispatcherAndCloseIsSynchronous()
+    {
+        await WithClip(async clip =>
+        {
+            var baseline = InlineLoopVideo.LivePlayers;
+            var win = new GazeMinigameWindow();
+            win.Show();
+            var left = win.FindControl<Grid>("LeftPane")!;
+            var right = win.FindControl<Grid>("RightPane")!;
+            var a = GazeMinigameWindow.CreateRoundVideo(clip);
+            var b = GazeMinigameWindow.CreateRoundVideo(clip);
+            left.Children.Add(a); right.Children.Add(b);
+            Assert.True(await OnFrames(a, () => a.FrameCount > 0, 5000));
+            Assert.True(await OnFrames(b, () => b.FrameCount > 0, 5000));
+            var sinkA = a.SinkForTest!;
+            var sinkB = b.SinkForTest!;
+            var oldStop = InlineLoopVideo.StopPlayer;
+            using var release = new ManualResetEventSlim();
+            using var entered = new CountdownEvent(2);
+            try
+            {
+                InlineLoopVideo.StopPlayer = player => { entered.Signal(); release.Wait(); oldStop(player); };
+                win.DisposeCurrentRoundPlayers();
+                // A dispatcher turn runs while both native stops are held open.
+                var turn = false;
+                Dispatcher.UIThread.Post(() => turn = true);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(turn);
+                Assert.True(await Task.Run(() => entered.Wait(3000)), "stops did not overlap");
+                await Task.Delay(550); // Even past WPF's 500 ms limit, a running Stop owns its sink.
+                Assert.Equal(baseline + 2, InlineLoopVideo.LivePlayers);
+                Assert.False(sinkA.Freed);
+                Assert.False(sinkB.Freed);
+                release.Set();
+                var deadline = Stopwatch.StartNew();
+                while ((InlineLoopVideo.LivePlayers != baseline || !sinkA.Freed || !sinkB.Freed) && deadline.ElapsedMilliseconds < 5000)
+                { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+                Assert.True(sinkA.Freed && sinkB.Freed);
+
+                InlineLoopVideo.StopPlayer = oldStop;
+                var closing = GazeMinigameWindow.CreateRoundVideo(clip);
+                left.Children.Add(closing);
+                Assert.True(await OnFrames(closing, () => closing.FrameCount > 0, 5000));
+                var stopped = false;
+                InlineLoopVideo.StopPlayer = player => { oldStop(player); stopped = true; };
+                win.Close();
+                Assert.True(stopped);
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+            }
+            finally
+            {
+                release.Set();
+                InlineLoopVideo.StopPlayer = oldStop;
+                win.Close();
+            }
         });
     }
 
