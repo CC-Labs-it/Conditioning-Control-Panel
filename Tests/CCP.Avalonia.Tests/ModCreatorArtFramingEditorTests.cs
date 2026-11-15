@@ -11,6 +11,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using ConditioningControlPanel.Localization;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -129,5 +131,83 @@ public class ModCreatorArtFramingEditorTests
             Assert.Null(w.BuildManifestFromForm().ArtFraming);
         }
         finally { w.Close(); File.Delete(path); }
+    });
+    [Theory]
+    [InlineData(1800, 1200, 900, 600)]
+    [InlineData(1200, 1800, 600, 900)]
+    [InlineData(120, 80, 120, 80)]
+    public void PreviewDecodeCapsTheLongerEdge(int width, int height, int expectedWidth, int expectedHeight) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".png");
+        try
+        {
+            using (var bitmap = new SkiaSharp.SKBitmap(width, height))
+            {
+                bitmap.Erase(new SkiaSharp.SKColor(230, 60, 15, 255));
+                using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+                using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+                File.WriteAllBytes(path, data.ToArray());
+            }
+            using var preview = ModCreatorWindow.DecodeFramingPreview(path);
+            Assert.Equal(new PixelSize(expectedWidth, expectedHeight), preview.PixelSize);
+            var pixel = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+            try
+            {
+                preview.CopyPixels(new PixelRect(expectedWidth / 2, expectedHeight / 2, 1, 1), pixel, 4, 4);
+                Assert.Equal(new byte[] { 15, 60, 230, 255 }, Enumerable.Range(0, 4).Select(i => System.Runtime.InteropServices.Marshal.ReadByte(pixel, i)));
+            }
+            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(pixel); }
+        }
+        finally { File.Delete(path); }
+    });
+
+    [Fact]
+    public void SurfaceTitlesUseLocalizedRegistryIds() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        var w = new ModCreatorWindow();
+        try
+        {
+            loc.SetLanguage("fr");
+            using var bitmap = new WriteableBitmap(new PixelSize(20, 20), new Vector(96, 96));
+            var working = ModArtFramingRegistry.Surfaces.ToDictionary(s => s.Id, _ => new ModArtFraming());
+            var dialog = w.CreateFramingDialog(Slot, bitmap, working);
+            var cards = dialog.GetLogicalDescendants().OfType<StackPanel>().Where(c => c.Tag is string id && working.ContainsKey(id)).ToArray();
+            Assert.Equal(working.Count, cards.Length);
+            foreach (var card in cards)
+                Assert.Equal(Loc.Get("mod_art_frame_surface_" + card.Tag), card.Children.OfType<TextBlock>().First().Text);
+            Assert.Equal("Vignette latérale", cards.Single(c => Equals(c.Tag, Rail)).Children.OfType<TextBlock>().First().Text);
+            Assert.Equal("En-tête de carte", cards.Single(c => Equals(c.Tag, Play)).Children.OfType<TextBlock>().First().Text);
+        }
+        finally { loc.SetLanguage(previous); w.Close(); }
+    });
+
+    [Fact]
+    public void ScrimsMatchWpfStopsAcrossTheFullPreview() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var w = new ModCreatorWindow();
+        try
+        {
+            using var bitmap = new WriteableBitmap(new PixelSize(20, 20), new Vector(96, 96));
+            var working = new Dictionary<string, ModArtFraming> { [Rail] = new(), [ModArtFramingRegistry.SurfaceRailCard] = new(), [ModArtFramingRegistry.SurfaceLoomStrip] = new() };
+            var dialog = w.CreateFramingDialog(Slot, bitmap, working);
+            Grid Preview(string id) => dialog.GetLogicalDescendants().OfType<StackPanel>().Single(c => Equals(c.Tag, id)).Children.OfType<Grid>().Single();
+            void Check(string id, double[] offsets, byte[] alphas)
+            {
+                var holder = Preview(id);
+                var scrim = holder.Children.OfType<Border>().Skip(1).First();
+                Assert.True(double.IsNaN(scrim.Height));
+                var gradient = Assert.IsType<LinearGradientBrush>(scrim.Background);
+                Assert.Equal(new RelativePoint(0, 0, RelativeUnit.Relative), gradient.StartPoint);
+                Assert.Equal(new RelativePoint(0, 1, RelativeUnit.Relative), gradient.EndPoint);
+                Assert.Equal(offsets, gradient.GradientStops.Select(s => s.Offset));
+                Assert.Equal(alphas, gradient.GradientStops.Select(s => s.Color.A));
+            }
+            Check(Rail, new[] { .28, .62, 1d }, new byte[] { 0, 0x73, 0xDE });
+            Check(ModArtFramingRegistry.SurfaceRailCard, new[] { 0d, .42, 1d }, new byte[] { 0x59, 0xB8, 0xE6 });
+            Assert.Equal(2, Preview(ModArtFramingRegistry.SurfaceLoomStrip).Children.OfType<Border>().Count());
+        }
+        finally { w.Close(); }
     });
 }

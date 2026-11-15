@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
+using System.Buffers.Binary;
+using System.Runtime.InteropServices;
+using SkiaSharp;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -46,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_imageSlots.TryGetValue(slot, out var path) || string.IsNullOrEmpty(path)) return;
             Bitmap bitmap;
-            try { bitmap = new Bitmap(path); }
+            try { bitmap = DecodeFramingPreview(path); }
             catch
             {
                 await MessageDialog.ShowAsync(this, Loc.Get("mod_art_frame_title"), Loc.Get("mod_art_frame_decode"));
@@ -67,6 +72,133 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        // Decode directly at a supported size, or sample scanlines when the codec cannot scale.
+        // Avalonia's DecodeToWidth can otherwise decode a full PNG before resizing it.
+        internal static Bitmap DecodeFramingPreview(string path)
+        {
+            using var codec = SKCodec.Create(path) ?? throw new InvalidDataException("Invalid image");
+            int width = codec.Info.Width, height = codec.Info.Height;
+            if (width <= 0 || height <= 0 || width > 65536 || height > 65536)
+                throw new InvalidDataException("Invalid image size");
+            double scale = Math.Min(1, 900d / Math.Max(width, height));
+            int targetWidth = Math.Max(1, (int)Math.Round(width * scale));
+            int targetHeight = Math.Max(1, (int)Math.Round(height * scale));
+            var nearest = codec.GetScaledDimensions((float)scale);
+            var targetInfo = new SKImageInfo(targetWidth, targetHeight, SKColorType.Bgra8888, SKAlphaType.Premul);
+            using var target = new SKBitmap(targetInfo);
+            if (nearest.Width <= 900 && nearest.Height <= 900)
+            {
+                using var decoded = new SKBitmap(new SKImageInfo(nearest.Width, nearest.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
+                if (codec.GetPixels(decoded.Info, decoded.GetPixels()) != SKCodecResult.Success)
+                    throw new InvalidDataException("Cannot decode image");
+                if (!decoded.ScalePixels(target, new SKSamplingOptions(SKFilterMode.Linear)))
+                    throw new InvalidDataException("Cannot scale image");
+            }
+            else
+            {
+                var sourceInfo = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                if (codec.StartScanlineDecode(sourceInfo) != SKCodecResult.Success || (codec.ScanlineOrder != SKCodecScanlineOrder.TopDown && codec.ScanlineOrder != SKCodecScanlineOrder.BottomUp))
+                    return DecodeFramingPng(path, width, height, targetWidth, targetHeight);
+                using var row = new SKBitmap(width, 1, SKColorType.Bgra8888, SKAlphaType.Premul);
+                var line = new byte[width * 4];
+                var pixels = new byte[targetWidth * targetHeight * 4];
+                var rows = new Dictionary<int, int>();
+                for (int y = 0; y < targetHeight; y++) rows[(int)((long)y * height / targetHeight)] = y;
+                for (int i = 0; i < height; i++)
+                {
+                    int sourceY = codec.NextScanline;
+                    if (!rows.TryGetValue(sourceY, out var destY))
+                    {
+                        if (!codec.SkipScanlines(1)) throw new InvalidDataException("Incomplete image");
+                        continue;
+                    }
+                    if (codec.GetScanlines(row.GetPixels(), 1, row.RowBytes) != 1) throw new InvalidDataException("Incomplete image");
+                    Marshal.Copy(row.GetPixels(), line, 0, line.Length);
+                    for (int x = 0; x < targetWidth; x++)
+                        Buffer.BlockCopy(line, (int)((long)x * width / targetWidth) * 4, pixels, (destY * targetWidth + x) * 4, 4);
+                }
+                Marshal.Copy(pixels, 0, target.GetPixels(), pixels.Length);
+            }
+            return new Bitmap(global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul,
+                target.GetPixels(), new PixelSize(targetWidth, targetHeight), new Vector(96, 96), target.RowBytes);
+        }
+
+        // Skia does not offer scanline decoding for PNG. Inflate one row at a time so a
+        // compressed poster never allocates its full pixel buffer. Interlaced PNG is rejected.
+        private static Bitmap DecodeFramingPng(string path, int width, int height, int tw, int th)
+        {
+            if (new FileInfo(path).Length > 32 * 1024 * 1024) throw new InvalidDataException("Image is too large");
+            var data = File.ReadAllBytes(path);
+            if (data.Length < 33 || !data.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })) throw new InvalidDataException("Unsupported image");
+            int depth = data[24], color = data[25], channels = color switch { 0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4, _ => 0 };
+            if (channels == 0 || data[28] != 0 || !(depth == 8 || depth == 16 || ((color == 0 || color == 3) && (depth == 1 || depth == 2 || depth == 4))) || (color == 3 && depth == 16))
+                throw new InvalidDataException("Unsupported PNG");
+            byte[]? palette = null, transparency = null;
+            using var compressed = new MemoryStream();
+            for (int offset = 8; offset + 12 <= data.Length;)
+            {
+                uint length = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
+                if (length > data.Length - offset - 12) throw new InvalidDataException("Invalid PNG chunk");
+                var type = System.Text.Encoding.ASCII.GetString(data, offset + 4, 4);
+                int size = (int)length, start = offset + 8;
+                if (type == "IDAT") compressed.Write(data, start, size);
+                else if (type == "PLTE") palette = data.AsSpan(start, size).ToArray();
+                else if (type == "tRNS") transparency = data.AsSpan(start, size).ToArray();
+                offset += size + 12;
+                if (type == "IEND") break;
+            }
+            if (color == 3 && (palette == null || palette.Length % 3 != 0)) throw new InvalidDataException("Invalid PNG palette");
+            compressed.Position = 0;
+            using var zlib = new ZLibStream(compressed, CompressionMode.Decompress);
+            int rowBytes = checked((width * channels * depth + 7) / 8), bpp = Math.Max(1, (channels * depth + 7) / 8);
+            var current = new byte[rowBytes]; var previous = new byte[rowBytes]; var pixels = new byte[tw * th * 4];
+            int Sample(byte[] row, int index) => depth == 16 ? BinaryPrimitives.ReadUInt16BigEndian(row.AsSpan(index * 2, 2)) : depth == 8 ? row[index] : (row[index * depth / 8] >> (8 - depth - index * depth % 8)) & ((1 << depth) - 1);
+            int ToByte(int value) => depth == 16 ? value >> 8 : depth == 8 ? value : value * 255 / ((1 << depth) - 1);
+            int ty = 0;
+            for (int y = 0; y < height; y++)
+            {
+                int filter = zlib.ReadByte(); if (filter < 0 || filter > 4) throw new InvalidDataException("Invalid PNG filter");
+                zlib.ReadExactly(current);
+                for (int i = 0; i < rowBytes; i++)
+                {
+                    int a = i >= bpp ? current[i - bpp] : 0, b = previous[i], c = i >= bpp ? previous[i - bpp] : 0;
+                    int p = a + b - c, pa = Math.Abs(p - a), pb = Math.Abs(p - b), pc = Math.Abs(p - c);
+                    int predictor = filter switch { 0 => 0, 1 => a, 2 => b, 3 => (a + b) / 2, _ => pa <= pb && pa <= pc ? a : pb <= pc ? b : c };
+                    current[i] = unchecked((byte)(current[i] + predictor));
+                }
+                if (ty < th && y == (int)((long)ty * height / th))
+                {
+                    for (int x = 0; x < tw; x++)
+                    {
+                        int src = (int)((long)x * width / tw) * channels, r, g, b, alpha = 255, first = Sample(current, src);
+                        if (color == 3)
+                        {
+                            if (first * 3 + 2 >= palette!.Length) throw new InvalidDataException("Invalid PNG palette index");
+                            r = palette[first * 3]; g = palette[first * 3 + 1]; b = palette[first * 3 + 2];
+                            if (transparency != null && first < transparency.Length) alpha = transparency[first];
+                        }
+                        else if (color == 0 || color == 4) { r = g = b = ToByte(first); if (color == 4) alpha = ToByte(Sample(current, src + 1)); else if (transparency?.Length >= 2 && first == BinaryPrimitives.ReadUInt16BigEndian(transparency)) alpha = 0; }
+                        else { int green = Sample(current, src + 1), blue = Sample(current, src + 2); r = ToByte(first); g = ToByte(green); b = ToByte(blue); if (color == 6) alpha = ToByte(Sample(current, src + 3)); else if (transparency?.Length >= 6 && first == BinaryPrimitives.ReadUInt16BigEndian(transparency) && green == BinaryPrimitives.ReadUInt16BigEndian(transparency.AsSpan(2)) && blue == BinaryPrimitives.ReadUInt16BigEndian(transparency.AsSpan(4))) alpha = 0; }
+                        int dst = (ty * tw + x) * 4; pixels[dst] = (byte)((b * alpha + 127) / 255); pixels[dst + 1] = (byte)((g * alpha + 127) / 255); pixels[dst + 2] = (byte)((r * alpha + 127) / 255); pixels[dst + 3] = (byte)alpha;
+                    }
+                    ty++;
+                }
+                (current, previous) = (previous, current);
+            }
+            using var bitmap = new SKBitmap(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul);
+            Marshal.Copy(pixels, 0, bitmap.GetPixels(), pixels.Length);
+            return new Bitmap(global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul, bitmap.GetPixels(), new PixelSize(tw, th), new Vector(96, 96), bitmap.RowBytes);
+        }
+
+        private static LinearGradientBrush FramingScrim(ArtScrim scrim) => new()
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops = scrim == ArtScrim.FullFace
+                ? new GradientStops { new(Color.FromArgb(0x59, 0, 0, 0), 0), new(Color.FromArgb(0xB8, 0, 0, 0), .42), new(Color.FromArgb(0xE6, 0, 0, 0), 1) }
+                : new GradientStops { new(Color.FromArgb(0x00, 0, 0, 0), .28), new(Color.FromArgb(0x73, 0, 0, 0), .62), new(Color.FromArgb(0xDE, 0, 0, 0), 1) },
+        };
+
         internal Window CreateFramingDialog(string slot, Bitmap bitmap, Dictionary<string, ModArtFraming> working)
         {
             var aspect = (double)bitmap.PixelSize.Width / bitmap.PixelSize.Height;
@@ -84,15 +216,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var width = Math.Min(300, 160 * surface.AspectRatio);
                 var height = width / surface.AspectRatio;
                 var card = new StackPanel { Margin = new Thickness(0, 0, 14, 14), Width = width, Spacing = 4, Tag = id };
-                card.Children.Add(new TextBlock { Text = surface.DisplayName });
+                card.Children.Add(new TextBlock { Text = Loc.Get("mod_art_frame_surface_" + surface.Id) });
                 var brush = new ImageBrush(bitmap) { Stretch = Stretch.Fill };
                 var holder = new Grid { Width = width, Height = height, Background = Brushes.Transparent, ClipToBounds = true };
                 holder.Children.Add(new Border { Background = brush, CornerRadius = new CornerRadius(surface.CornerRadius), IsHitTestVisible = false });
                 if (surface.Scrim != ArtScrim.None)
                 {
-                    holder.Children.Add(new Border { Background = Brush.Parse("#99000000"),
-                        CornerRadius = new CornerRadius(surface.CornerRadius), VerticalAlignment = surface.Scrim == ArtScrim.FootBand ? global::Avalonia.Layout.VerticalAlignment.Bottom : global::Avalonia.Layout.VerticalAlignment.Stretch,
-                        Height = surface.Scrim == ArtScrim.FootBand ? height * .3 : double.NaN, IsHitTestVisible = false });
+                    holder.Children.Add(new Border { Background = FramingScrim(surface.Scrim),
+                        CornerRadius = new CornerRadius(surface.CornerRadius), IsHitTestVisible = false });
                     holder.Children.Add(new TextBlock { Text = surface.Scrim == ArtScrim.FullFace ? caption + "\n−   15m   +" : caption,
                         Foreground = Brushes.White, TextAlignment = TextAlignment.Center, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                         VerticalAlignment = surface.Scrim == ArtScrim.FullFace ? global::Avalonia.Layout.VerticalAlignment.Top : global::Avalonia.Layout.VerticalAlignment.Bottom, IsHitTestVisible = false });

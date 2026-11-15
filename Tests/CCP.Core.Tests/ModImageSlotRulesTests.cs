@@ -20,7 +20,7 @@ public class ModImageSlotRulesTests
         var files = Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Localization", "Languages"), "*.json");
         Assert.Equal(10, files.Length);
         var keys = JObject.Parse(File.ReadAllText(files.Single(f => Path.GetFileName(f) == "en.json"))).Properties().Where(p => p.Name.StartsWith("mod_art_")).Select(p => p.Name).ToArray();
-        Assert.Equal(58, keys.Length);
+        Assert.Equal(66, keys.Length);
         foreach (var file in files) foreach (var key in keys) Assert.False(string.IsNullOrWhiteSpace((string?)JObject.Parse(File.ReadAllText(file))[key]), file + ": " + key);
     }
 }
