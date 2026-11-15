@@ -1,13 +1,14 @@
 // PORTED from WPF 7.1.5 Services/Leash/AppLeashTaskHost.cs + App.xaml.cs:3010-3013 and MainWindow.Leash.cs
 // LeashOnPanicPress/EndLeashTask: lock cards (never strict), a leash session, bubbles and a caged video under the Core
 // LeashTaskRunner. Head differences: completed cards are counted from LockCardWindow.Completed; the video clock is a
-// 1 s script poll; the Deeper player raises no completion event, so a catalogue watch there never finishes by itself.
+// 1 s script poll; catalogue watches in Deeper use the player completion event.
 // WPF LeashPanicKeyWhilePanicOff (panic key off / Lockdown while leashed): HandlePanicKeyPress -> PanicKeyLeashOnly -> OnPanicPress(panicRuns: false).
 using System;
 using System.Globalization;
 using System.IO;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -95,6 +96,7 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     // ---- the host -----------------------------------------------------------------------------
     private bool _windowed;
     private LeashWatch? _watching;
+    private string? _watchPath;
     private int _lockCardsCompleted;
     private LeashWatchSample? _sample;
     private DispatcherTimer? _sampler;
@@ -105,12 +107,18 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     internal LeashTaskHost()
     {
         LeashPunishWindow.VideoEnded += OnWindowVideoEnded;
+        EnhancementPlayerWindow.PlaybackFinished += OnDeeperFinished;
         LeashPunishWindow.PlaybackFailed += OnWindowPlaybackFailed;
         LockCardWindow.Completed += OnLockCardCompleted;
         Views.Overlays.BubbleOverlay.Popped += OnPopped;
     }
     private void OnWindowPlaybackFailed() { if (_watching is { } w && WatchCaged) WatchFailed?.Invoke(w); }
     private void OnWindowVideoEnded() { if (_watching is { } w) WatchFinished?.Invoke(w); }
+    private void OnDeeperFinished(string? path)
+    {
+        if (!_windowed && _watching is { Kind: "catalogue" } w && _watchPath != null
+            && string.Equals(path, _watchPath, StringComparison.OrdinalIgnoreCase)) WatchFinished?.Invoke(w);
+    }
     private void OnLockCardCompleted() => _lockCardsCompleted++;
     private void OnPopped() => BubblePopped?.Invoke();
     // ---- lock cards ----
@@ -211,6 +219,7 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
                 return LandingRules.HtUrl(watch.Id) is { } url && LeashPunishWindow.OpenUrl(url, holder, locked) && StartSampler();
             var path = CataloguePath(watch.Id);
             if (path == null) return false;
+            _watchPath = path;
             if (LocalMediaFor(path) is { } media)
             {
                 _windowed = true;
@@ -309,7 +318,7 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     }
     public LeashWatchSample? SampleWatch(LeashWatch watch)
     {
-        if (watch.Kind != "ht" && !_windowed) return null;   // a Deeper-player watch (no completion event here)
+        if (watch.Kind != "ht" && !_windowed) return null;   // a Deeper-player watch reports completion directly
         if (LeashPunishWindow.Current == null) return null;
         return _sample is { } s ? s with { Visible = LeashPunishWindow.Watchable } : null;
     }
@@ -318,7 +327,7 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     public bool WatchCaged => _watching is { } w && (w.Kind == "ht" || _windowed);
     public void EndWatch()
     {
-        (_watching, _windowed, _sample) = (null, false, null);
+        (_watching, _windowed, _sample, _watchPath) = (null, false, null, null);
         _sampler?.Stop();
         _sampler = null;
         try { LeashPunishWindow.CloseNow(); } catch { }
@@ -327,6 +336,7 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     {
         EndWatch();
         LeashPunishWindow.VideoEnded -= OnWindowVideoEnded;
+        EnhancementPlayerWindow.PlaybackFinished -= OnDeeperFinished;
         LeashPunishWindow.PlaybackFailed -= OnWindowPlaybackFailed;
         LockCardWindow.Completed -= OnLockCardCompleted;
         Views.Overlays.BubbleOverlay.Popped -= OnPopped;

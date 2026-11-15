@@ -244,6 +244,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// loaded from disk, so the hub's ▶ on the same row only brings it forward.</summary>
         public string? LoadedFilePath { get; private set; }
 
+        internal static event Action<string?>? PlaybackFinished;
+        private bool _videoFinished;
+        internal void NotifyPlaybackFinished() => PlaybackFinished?.Invoke(LoadedFilePath);
+
         /// <summary>
         /// The WPF window took (EnhancementAudioPlayer, EnhancementHostService) and a second ctor
         /// added (Enhancement, sourceTag) for the editor's Preview button. Both services live in the
@@ -769,6 +773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     {
                         BtnStop_Click();
                         _txtStatus.Text = Loc.Get("deeper_player_status_ended");
+                        NotifyPlaybackFinished();
                     }
                 });
                 _audioFailed = () => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(_localAudio, audio)) AudioFailed(); });
@@ -896,7 +901,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         private void LoadLocalVideo(string path)
         {
-            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false;
+            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false; _videoFinished = false;
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -941,7 +946,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void LoadVideoUrl(string url)
         {
-            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false;
+            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false; _videoFinished = false;
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -1198,10 +1203,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // the navigation finishing WAS the video appearing. Here the page can be a site
                 // whose player mounts later, and the element answering is the honest signal.
                 _txtVideoStatus.IsVisible = false;
-                if (double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var cur))
+                var validCurrent = double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var cur) && double.IsFinite(cur);
+                if (validCurrent)
                     _currentSec = cur;
-                if (double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
-                    && dur > 0 && !double.IsInfinity(dur))
+                var validDuration = double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
+                    && dur > 0 && double.IsFinite(dur);
+                if (validDuration)
                     _durationSec = dur;
 
                 // The page can start or stop playing without us — an autoplay, an ad, the user
@@ -1212,6 +1219,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _isPlaying = playing;
                     _txtPlayPauseGlyph.Kind = playing ? IconKind.Pause : IconKind.Play;
                 }
+                var finished = !playing && validCurrent && validDuration && cur >= dur;
+                if (finished && !_videoFinished)
+                {
+                    _videoFinished = true;
+                    NotifyPlaybackFinished();
+                }
+                else if (!finished) _videoFinished = false;
                 TickDeeper();
             }
             catch (Exception ex)

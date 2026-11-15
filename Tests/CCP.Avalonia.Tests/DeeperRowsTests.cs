@@ -1358,4 +1358,33 @@ public sealed class DeeperRowsTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task VideoPollPublishesOneCompletionAtTheEnd() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var value = "50|100|0";
+        web.ScriptInvoker = _ => Task.FromResult<string?>(value);
+        var count = 0;
+        void OnFinished(string? _) => count++;
+        EnhancementPlayerWindow.PlaybackFinished += OnFinished;
+        try
+        {
+            player.Show();
+            typeof(EnhancementPlayerWindow).GetField("_videoNavigated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, true);
+            var poll = typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(0, count);
+            value = "100|100|1";
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(0, count);
+            value = "100|100|0";
+            await (Task)poll.Invoke(player, null)!;
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(1, count);
+        }
+        finally { EnhancementPlayerWindow.PlaybackFinished -= OnFinished; player.Close(); }
+    });
+
 }

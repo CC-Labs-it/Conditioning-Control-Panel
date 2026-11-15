@@ -2,6 +2,10 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -175,4 +179,56 @@ public sealed class LeashPunishTests
             Directory.Delete(dir, true);
         }
     });
+    [Fact]
+    public void CatalogueDeeperCompletionMatchesOnlyTheOpenWatch() => LeashGateCardTests.Run(false, (shell, _, svc) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("leash-deeper-").FullName;
+        var path = Path.Combine(dir, "watch.ccpenh.json");
+        var other = Path.Combine(dir, "other.ccpenh.json");
+        var enh = new Enhancement { MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1" };
+        enh.Metadata.Name = "Watch";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        File.WriteAllText(other, EnhancementSerializer.Save(enh));
+        CoreSettings.Current.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "watch-id" };
+        var oldTimer = LeashTaskRunner.TimerFactory;
+        LeashTaskRunner.TimerFactory = () => null;
+        using var host = new LeashTaskHost();
+        var runner = new LeashTaskRunner(host);
+        var completed = 0;
+        runner.Completed += _ => completed++;
+        var now = DateTimeOffset.UtcNow;
+        var watch = new LeashWatch("catalogue", "watch-id", null);
+        var punishment = new Punishment("p", PunishKind.Video, 1, watch, new LeashPerson("u", "Holder", null), now, now.AddDays(1));
+        var different = new EnhancementPlayerWindow(null, null);
+        EnhancementPlayerWindow? player = null;
+        try
+        {
+            Assert.True(runner.Start(punishment));
+            player = shell.ShowOrActivateDeeperPlayer();
+            player.LoadEnhancementFile(path); // headless lifetime has no MainWindow
+            Assert.Equal(path, player.LoadedFilePath);
+            different.Show();
+            different.LoadEnhancementFile(other);
+            different.NotifyPlaybackFinished();
+            Assert.Equal(0, completed);
+            host.EndWatch();
+            player.NotifyPlaybackFinished();
+            Assert.Equal(0, completed);
+            runner.Cancel();
+            Assert.True(runner.Start(punishment));
+            player.NotifyPlaybackFinished();
+            Assert.Equal(1, completed);
+            Assert.False(runner.IsRunning);
+        }
+        finally
+        {
+            runner.Cancel();
+            different.Close();
+            player?.Close();
+            CoreSettings.Current.DeeperSubmissions.Remove(path);
+            LeashTaskRunner.TimerFactory = oldTimer;
+            Directory.Delete(dir, true);
+        }
+    });
+
 }
