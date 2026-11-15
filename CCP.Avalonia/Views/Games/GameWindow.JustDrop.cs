@@ -49,9 +49,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void CenterJustDrop(Visual source)
         {
             var screens = ScreenList.Enumerate(source);
-            var position = source is Window window ? window.Position : Position;
-            var screen = screens.FirstOrDefault(s => s.Bounds.Contains(position))
-                ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+            var window = source as Window ?? this;
+            var position = window.Position;
+            global::Avalonia.Platform.Screen? screen = null;
+            // WPF TargetScreen :447-464 uses the monitor containing most of the HWND.
+            // Use the native window query when available; injected screens use the same overlap rule.
+            if (ScreenList.QueryOverride == null && window.IsVisible)
+            {
+                try { screen = window.Screens.ScreenFromWindow(window); }
+                catch (Exception ex) { Log.Debug(ex, "[Game] justdrop: screen lookup failed"); }
+            }
+            if (screen == null || !screens.Contains(screen))
+            {
+                var size = window.FrameSize ?? window.ClientSize;
+                var scaling = window.RenderScaling > 0 ? window.RenderScaling : 1;
+                double right = position.X + Math.Max(0, size.Width * scaling);
+                double bottom = position.Y + Math.Max(0, size.Height * scaling);
+                screen = screens.Select(s =>
+                {
+                    var b = s.Bounds;
+                    double overlap = Math.Max(0, Math.Min(right, b.Right) - Math.Max(position.X, b.X))
+                        * Math.Max(0, Math.Min(bottom, b.Bottom) - Math.Max(position.Y, b.Y));
+                    double dx = Math.Max(0, Math.Max(b.X - right, position.X - b.Right));
+                    double dy = Math.Max(0, Math.Max(b.Y - bottom, position.Y - b.Bottom));
+                    return (Screen: s, Overlap: overlap, Distance: dx * dx + dy * dy);
+                }).OrderByDescending(x => x.Overlap).ThenBy(x => x.Distance)
+                  .ThenByDescending(x => x.Screen.IsPrimary).Select(x => x.Screen).FirstOrDefault();
+            }
             if (screen == null) return;
             var scale = screen.Scaling > 0 ? screen.Scaling : 1;
             if (_justDropWindowedWidth <= 0 || _justDropWindowedHeight <= 0)

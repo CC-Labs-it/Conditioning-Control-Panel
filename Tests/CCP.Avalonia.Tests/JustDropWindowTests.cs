@@ -196,6 +196,30 @@ public sealed class JustDropWindowTests
         finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StraddlingPanelUsesScreenContainingMostOfWindow(bool replay) => Run(shell =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] {
+            FrameScreen(new PixelRect(0, 0, 1600, 900), true), FrameScreen(new PixelRect(1600, 0, 1600, 900), false) };
+        try
+        {
+            shell.Position = new PixelPoint(1500, 100);
+            shell.Width = 800; shell.Height = 600;
+            Dispatcher.UIThread.RunJobs();
+            JustDropService.SetServerEnabledForTests(true);
+            GameWindow w;
+            if (replay) w = GameWindow.LaunchJustDropReplay("order", shell)!;
+            else { shell.ShowTab("justdrop"); w = Open()!; }
+            Assert.True(w.Position.X >= 1600);
+            if (replay) Fullscreen(w, false);
+            Assert.Equal(new PixelPoint(1720, 67), w.Position);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
     [Fact]
     public void ShopAndReplayStayIndependentWhenThePanelIsMinimizedOrHidden() => Run(shell =>
     {
