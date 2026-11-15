@@ -83,9 +83,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 var result = await fetch.FetchAsync(progress, cancel.Token);
                 if (_raceFetch != cancel || cancel.IsCancellationRequested || _closing) return;
+                if (result == RaceEngineFetchResult.Installed)
+                {
+                    var session = new GameWindow(Spec);
+                    var room = _raceRooms.TryPeek(out var pending) ? pending : null;
+                    if (session.StartRaceShell(room) == true)
+                    {
+                        if (room != null) _raceRooms.Dequeue();
+                        while (_raceRooms.TryDequeue(out var next)) session.HandoffRaceRoom(next);
+                        Close();
+                        return;
+                    }
+                    RaceStatus.Text = Loc.Get("rt_engine_start_failed");
+                    return;
+                }
                 RaceStatus.Text = Loc.Get(result switch
                 {
-                    RaceEngineFetchResult.Installed => "rt_engine_start_failed", // owned host is a separate lane
                     RaceEngineFetchResult.Network => "rt_engine_network",
                     RaceEngineFetchResult.Checksum => "rt_engine_checksum",
                     RaceEngineFetchResult.Storage => "rt_engine_storage",
