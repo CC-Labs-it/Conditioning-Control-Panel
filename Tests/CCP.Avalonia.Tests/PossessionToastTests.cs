@@ -1,5 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
+using System.Reflection;
+using Pointer = Avalonia.Input.Pointer;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -57,7 +62,7 @@ public class PossessionToastTests
             Assert.Contains(PossessionAvaloniaHead.CreateEffects(), e => e.Id == "toast");
             Assert.Equal(TimeSpan.FromSeconds(4), effect.HoldFor);
             Assert.True(effect.CanApply(ctx, null));
-            await effect.ApplyAsync(ctx, null, CancellationToken.None);
+            var applying = effect.ApplyAsync(ctx, null, CancellationToken.None);
             var toast = Assert.IsType<Border>(Assert.Single(layer.Children));
             var row = Assert.IsType<Grid>(toast.Child);
             var text = Assert.IsType<TextBlock>(row.Children[1]);
@@ -66,6 +71,7 @@ public class PossessionToastTests
             Assert.Equal(318, slide.X); Assert.Equal(0, toast.Opacity);
             host.Frames.Frame(TimeSpan.Zero); host.Frames.Frame(TimeSpan.FromMilliseconds(280));
             Assert.Equal(0, slide.X); Assert.Equal(1, toast.Opacity);
+            await applying;
             bool received = false;
             button.PointerPressed += (_, _) => received = true;
             button.RaiseEvent(new PointerPressedEventArgs(button, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), layer,
@@ -78,11 +84,149 @@ public class PossessionToastTests
             Assert.Empty(layer.Children);
             for (int i = 0; effect.IsLive && i < 50; i++) await Task.Delay(10);
             Assert.False(effect.IsLive);
-            await effect.ApplyAsync(ctx, null, CancellationToken.None);
+            var applyingAgain = effect.ApplyAsync(ctx, null, CancellationToken.None);
             Assert.Single(layer.Children);
             await effect.UndoAsync(TimeSpan.Zero);
+            await applyingAgain;
             Assert.Empty(layer.Children); Assert.Equal(0, host.Frames.Count);
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PressInsideDismissesAndOnlyRightPressIsHandled(bool right) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var below = new Border { Background = Brushes.Transparent };
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 600, Height = 400, Content = new Grid { Children = { below, layer } } };
+        window.Show(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var host = new Host(window, layer);
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var effect = new ToastEffect();
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, null, CancellationToken.None);
+            var toast = Assert.IsType<Border>(Assert.Single(layer.Children));
+            host.Frames.Frame(TimeSpan.Zero); host.Frames.Frame(TimeSpan.FromMilliseconds(280));
+            await apply;
+            bool received = false;
+            below.PointerPressed += (_, _) => received = true;
+            var press = new PointerPressedEventArgs(below, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), layer,
+                new Point(Canvas.GetLeft(toast) + 5, Canvas.GetTop(toast) + 5), 0,
+                new PointerPointProperties(right ? RawInputModifiers.RightMouseButton : RawInputModifiers.LeftMouseButton,
+                    right ? PointerUpdateKind.RightButtonPressed : PointerUpdateKind.LeftButtonPressed), KeyModifiers.None);
+            below.RaiseEvent(press);
+            Assert.Equal(!right, received); Assert.Equal(right, press.Handled);
+            host.Frames.Frame(TimeSpan.FromMilliseconds(300)); host.Frames.Frame(TimeSpan.FromMilliseconds(460));
+            Assert.Empty(layer.Children);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Fact]
+    public Task DirectorStartsHoldOnlyAfterEntrance() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 600, Height = 400, Content = new Grid { Children = { layer } } };
+        window.Show(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var host = new Host(window, layer);
+        var effect = new ToastEffect();
+        using var lockdown = new LockdownService();
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead
+        {
+            Settings = () => new AppSettings { LockdownPossessionEnabled = true }, Attribution = _ => new Attribution()
+        });
+        director.AttachHost(host);
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        try
+        {
+            typeof(PossessionDirector).GetMethod("OnLockdownActivated", flags)!.Invoke(director, null);
+            var entries = (IList)typeof(PossessionDirector).GetField("_hosts", flags)!.GetValue(director)!;
+            var start = (Task)typeof(PossessionDirector).GetMethod("StartOneAsync", flags)!
+                .Invoke(director, new[] { entries[0], (object)PossessionRung.Drift, TimeSpan.FromMinutes(1), .1 })!;
+            Assert.Single(layer.Children);
+            host.Frames.Frame(TimeSpan.Zero); host.Frames.Frame(TimeSpan.FromMilliseconds(280));
+            await Task.Delay(150);
+            Assert.False(start.IsCompleted);
+            await start;
+            await Task.Delay(3800);
+            Assert.True(effect.IsLive); Assert.Single(layer.Children);
+            await Task.Delay(400);
+            host.Frames.Frame(TimeSpan.FromMilliseconds(300)); host.Frames.Frame(TimeSpan.FromMilliseconds(580));
+            await Task.Delay(30);
+            Assert.Empty(layer.Children);
+        }
+        finally { director.UndoAll(); await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task CancelOrStalledEntranceCleansUp(bool cancel) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 600, Height = 400, Content = new Grid { Children = { layer } } };
+        window.Show(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var host = new Host(window, layer);
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var effect = new ToastEffect();
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, null, cts.Token);
+            Assert.Single(layer.Children); Assert.False(apply.IsCompleted);
+            if (cancel) cts.Cancel();
+            await apply.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Empty(layer.Children); Assert.False(effect.IsLive); Assert.Equal(0, host.Frames.Count);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task EntranceWaitsForFramesAndCanBeDismissedWhileMoving(bool dismiss) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var below = new Border { Background = Brushes.Transparent };
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 600, Height = 400, Content = new Grid { Children = { below, layer } } };
+        window.Show(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var host = new Host(window, layer);
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var effect = new ToastEffect();
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, null, CancellationToken.None);
+            var toast = Assert.IsType<Border>(Assert.Single(layer.Children));
+            host.Frames.Frame(TimeSpan.Zero); host.Frames.Frame(TimeSpan.FromMilliseconds(140));
+            if (dismiss)
+            {
+                below.RaiseEvent(new PointerPressedEventArgs(below, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), layer,
+                    new Point(Canvas.GetLeft(toast) + 5, Canvas.GetTop(toast) + 5), 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+                await Task.Delay(20);
+                Assert.Single(layer.Children);
+                host.Frames.Frame(TimeSpan.FromMilliseconds(200)); host.Frames.Frame(TimeSpan.FromMilliseconds(360));
+                await apply.WaitAsync(TimeSpan.FromSeconds(2));
+                Assert.Empty(layer.Children);
+            }
+            else
+            {
+                await Task.Delay(350);
+                Assert.False(apply.IsCompleted);
+                host.Frames.Frame(TimeSpan.FromMilliseconds(280));
+                await apply.WaitAsync(TimeSpan.FromSeconds(2));
+                Assert.Single(layer.Children);
+            }
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
 }

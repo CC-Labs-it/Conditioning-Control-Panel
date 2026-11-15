@@ -26,7 +26,7 @@ internal sealed class ToastEffect : PossessionEffectBase
     private TimeSpan? _start;
     private bool _returning;
     private double _duration, _fromX, _fromOpacity;
-    private TaskCompletionSource? _finished;
+    private TaskCompletionSource? _finished, _entered;
     public override string Id => "toast";
     public override PossessionRung MinRung => PossessionRung.Drift;
     public override double Weight => 3;
@@ -35,9 +35,9 @@ internal sealed class ToastEffect : PossessionEffectBase
     protected override bool CanApplyCore(PossessionContext ctx, PossessionTarget? target) =>
         ctx.Host is IAvaloniaPossessionHost { GhostLayer: not null };
 
-    protected override Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
+    protected override async Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
     {
-        if (ctx.Host is not IAvaloniaPossessionHost host || host.GhostLayer is not { } layer) return Task.CompletedTask;
+        if (ctx.Host is not IAvaloniaPossessionHost host || host.GhostLayer is not { } layer) return;
         var line = ToastLines.Pick(ctx.Rng, _lastLine); _lastLine = line;
         var face = Views.AvatarTube.AvatarTubeWindow.Live?.FindControl<Image>("ImgAvatar")?.Source;
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -55,7 +55,7 @@ internal sealed class ToastEffect : PossessionEffectBase
         toast.Measure(new Size(Width, double.PositiveInfinity));
         double height = Math.Max(44, toast.DesiredSize.Height);
         double w = layer.Bounds.Width, h = layer.Bounds.Height;
-        if (w <= 0 || h <= 0) return Task.CompletedTask;
+        if (w <= 0 || h <= 0) return;
         double left = Math.Max(Margin, w - Width - Margin), top = Math.Max(Margin, h - height - Margin);
         _rect = new Rect(left, top, Width, height);
         Canvas.SetLeft(toast, left); Canvas.SetTop(toast, top);
@@ -63,13 +63,23 @@ internal sealed class ToastEffect : PossessionEffectBase
         _slide = new TranslateTransform(Width + Margin, 0); toast.RenderTransform = _slide; toast.Opacity = 0;
         layer.Children.Add(toast);
         _window?.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);
+        var entered = _entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _frames.Subscribe(Frame);
-        return Task.CompletedTask;
+        try
+        {
+            // WPF waits 280 ms plus 20 ms before the director starts its hold.
+            await Task.WhenAll(entered.Task, Task.Delay(300, ct)).WaitAsync(TimeSpan.FromSeconds(1), ct);
+        }
+        catch (TimeoutException) { await UndoAsync(TimeSpan.Zero); }
     }
     private void Press(object? sender, PointerPressedEventArgs e)
     {
         if (_layer != null && _toast != null && _rect.Contains(e.GetPosition(_layer)))
+        {
+            if (e.GetCurrentPoint(_layer).Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed)
+                e.Handled = true;
             _ = UndoAsync(TimeSpan.FromMilliseconds(160));
+        }
     }
     private void Frame(TimeSpan now)
     {
@@ -79,7 +89,7 @@ internal sealed class ToastEffect : PossessionEffectBase
         double k = _returning ? t * t * t : 1 - Math.Pow(1 - t, 3);
         _slide.X = _returning ? _fromX + (Width + Margin - _fromX) * k : (Width + Margin) * (1 - k);
         _toast.Opacity = _returning ? _fromOpacity * (1 - k) : k;
-        if (_returning && t >= 1) Finish();
+        if (t >= 1) { if (_returning) Finish(); else _entered?.TrySetResult(); }
     }
     protected override async Task UndoCoreAsync(TimeSpan duration)
     {
@@ -97,6 +107,6 @@ internal sealed class ToastEffect : PossessionEffectBase
         _frames?.Unsubscribe(Frame);
         if (_toast != null) _layer?.Children.Remove(_toast);
         _toast = null; _slide = null; _layer = null; _window = null; _frames = null;
-        _start = null; _returning = false; _finished?.TrySetResult(); _finished = null;
+        _start = null; _returning = false; _entered = null; _finished?.TrySetResult(); _finished = null;
     }
 }
