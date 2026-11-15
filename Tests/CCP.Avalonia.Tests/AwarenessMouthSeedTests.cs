@@ -36,6 +36,7 @@ public sealed class AwarenessMouthSeedTests
             AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho, BrainAwarenessLineSource.BrainProvider,
             BrainAwarenessLineSource.AiProvider, WindowAwarenessService.V2OwnsReactionsProvider);
         var (oldEntitlement, oldTube, oldEcho) = (AwarenessObserver.EntitlementProvider, BarkHead.TubeProvider, BarkHead.EchoTarget);
+        var (wasRunning, oldArbiter) = (AvApp.WindowAwareness.IsRunning, AwarenessV2Routing.Arbiter);
         var tube = new AvatarTubeWindow(null);
         tube.SpeechAudioPlayer = (_, _, _, done) => done?.Invoke();
         try
@@ -45,6 +46,7 @@ public sealed class AwarenessMouthSeedTests
             AwarenessObserver.EntitlementProvider = () => true;
             tube.Show();
             AvApp.WindowAwareness.Stop();
+            AwarenessV2Routing.Detach();
             BarkHead.TubeProvider = () => tube;
             var echoes = 0;
             BarkHead.EchoTarget = () => { echoes++; return KeywordTriggerHead.Engine; };
@@ -73,7 +75,7 @@ public sealed class AwarenessMouthSeedTests
             Assert.False(WindowAwarenessService.V2OwnsReactionsProvider!());
             AwarenessV2Routing.Attach(new NullArbiter());
             try { Assert.True(WindowAwarenessService.V2OwnsReactionsProvider()); }
-            finally { AwarenessV2Routing.Detach(); }
+            finally { AwarenessV2Routing.Attach(oldArbiter); }
         }
         finally
         {
@@ -83,9 +85,60 @@ public sealed class AwarenessMouthSeedTests
                 AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho, BrainAwarenessLineSource.BrainProvider,
                 BrainAwarenessLineSource.AiProvider, WindowAwarenessService.V2OwnsReactionsProvider) = seams;
             (AwarenessObserver.EntitlementProvider, BarkHead.TubeProvider, BarkHead.EchoTarget) = (oldEntitlement, oldTube, oldEcho);
+            AwarenessV2Routing.Attach(oldArbiter);
+            if (wasRunning) AvApp.WindowAwareness.Start(); else AvApp.WindowAwareness.Stop();
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public async Task SeedTestRestoresTheSharedAwarenessServiceAndArbiter()
+    {
+        var arbiter = new NullArbiter();
+        Func<SettingsService?>? oldSettings = null;
+        Func<bool>? oldPremium = null;
+        Action<bool>? oldLifecycle = null;
+        IReactionArbiter? oldArbiter = null;
+        bool wasRunning = false;
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            (oldSettings, oldPremium, oldLifecycle, oldArbiter, wasRunning) = (CoreSettings.ServiceProvider,
+                CoreEntitlement.HasPremiumProvider, WindowAwarenessService.V2Lifecycle, AwarenessV2Routing.Arbiter, AvApp.WindowAwareness.IsRunning);
+            var service = new SettingsService();
+            (service.Current.AwarenessModeEnabled, service.Current.AwarenessConsentGiven) = (true, true);
+            CoreSettings.ServiceProvider = () => service;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            WindowAwarenessService.V2Lifecycle = null;
+            AwarenessV2Routing.Attach(arbiter);
+            AvApp.WindowAwareness.Stop();
+            AvApp.WindowAwareness.Start();
+            return Task.CompletedTask;
+        });
+        try
+        {
+            await SeededMouthSpeaksThroughTheTubeAndTheBarkEngine();
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                Assert.True(AvApp.WindowAwareness.IsRunning);
+                Assert.Same(arbiter, AwarenessV2Routing.Arbiter);
+                return Task.CompletedTask;
+            });
+        }
+        finally
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                AvApp.WindowAwareness.Stop();
+                (CoreSettings.ServiceProvider, CoreEntitlement.HasPremiumProvider, WindowAwarenessService.V2Lifecycle) = (oldSettings, oldPremium, oldLifecycle);
+                AwarenessV2Routing.Attach(oldArbiter);
+                if (wasRunning) AvApp.WindowAwareness.Start();
+                return Task.CompletedTask;
+            });
+        }
+    }
 
     private sealed class NullArbiter : IReactionArbiter
     {
