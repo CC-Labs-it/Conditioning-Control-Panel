@@ -33,8 +33,9 @@ namespace ConditioningControlPanel.Services.UI
 
         /// <summary>
         /// The pill a tab key lights. A pill key lights itself; the permanent alias "lab" lights
-        /// Games; pages that live inside a Play zone light that zone (Graded Intake and Lockdown
-        /// sit in Sessions, Blink Trainer in Eyes). Null when no pill owns the page (Spiral Room).
+        /// Eyes, where ShowTab lands it (declutter wave 2); pages that live inside a Play zone light
+        /// that zone (Graded Intake and Lockdown sit in Sessions, Blink Trainer in Eyes). Null when
+        /// no pill owns the page (Spiral Room).
         /// </summary>
         public static string? ActivePill(string? tab)
         {
@@ -42,7 +43,7 @@ namespace ConditioningControlPanel.Services.UI
             var key = tab.ToLowerInvariant();
             switch (key)
             {
-                case "lab": return "play";
+                case "lab": return "playeyes";
                 case "gradedintake":
                 case "lockdown": return "playsessions";
                 case "blinktrainer": return "playeyes";

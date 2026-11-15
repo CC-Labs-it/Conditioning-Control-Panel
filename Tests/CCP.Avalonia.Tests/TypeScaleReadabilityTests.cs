@@ -74,7 +74,7 @@ public sealed class TypeScaleReadabilityTests
                 Assert.Equal(11, eyebrow.FontSize);
                 Assert.Equal(FontWeight.Bold, eyebrow.FontWeight);
 
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>().First();
                 var zone = ByText(play, "rf_play_zone_games");           // PlayZoneTag on Type.SectionHeader

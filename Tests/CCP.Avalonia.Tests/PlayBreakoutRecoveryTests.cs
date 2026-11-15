@@ -36,7 +36,7 @@ public class PlayBreakoutRecoveryTests
         try
         {
             shell.Show();
-            shell.ShowTab("play");
+            shell.ShowTab("playeyes");
             Dispatcher.UIThread.RunJobs();
             var button = shell.Named<Control>("PlayTab")!.FindControl<Button>("BtnPlayBreakout")!;
             Assert.True(button.IsEnabled);

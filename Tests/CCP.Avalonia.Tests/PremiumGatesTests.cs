@@ -61,7 +61,7 @@ public sealed class PremiumGatesTests
                 var before = System.IO.File.ReadAllText(path);
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (() => false, null);
 
-                shell.ShowTab("play");   // navigation: in memory only
+                shell.ShowTab("playeyes");   // navigation: in memory only
                 System.Threading.Thread.Sleep(900);   // past the 500 ms save debounce
                 Assert.False(service.Current.AutonomyModeEnabled);
                 Assert.Equal(before, System.IO.File.ReadAllText(path));
