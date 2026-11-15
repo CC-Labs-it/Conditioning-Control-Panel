@@ -178,6 +178,33 @@ public class FloatingVideoRevealTests
         });
     }
 
+    [Fact]
+    public async Task Test_trigger_during_grace_keeps_the_floating_clip_and_card()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var (overlay, window, reveal) = FloatingSurface();
+            try
+            {
+                reveal.Present();
+                var surface = overlay.Surfaces[0];
+                MandatoryVideoOverlay.ShowGraceHost(surface);
+                var card = surface.GraceHost!;
+                typeof(MandatoryVideoOverlay).GetField("_gracePaused",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(overlay, true);
+
+                Assert.True(overlay.TryFloatingTrigger(userInitiated: true));
+                Assert.True(overlay.Scheduler.IsPlaying);
+                Assert.True(overlay.GracePaused);
+                Assert.True(window.IsVisible);
+                Assert.True(card.IsVisible);
+                Assert.Same(surface, Assert.Single(overlay.Surfaces));
+            }
+            finally { overlay.CloseAll(); reveal.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF GracePauseOverlayWindow: a floating clip's card is its own 360x200 window, so a small clip never clips Resume.
     [Fact]
     public async Task A_floating_grace_card_opens_in_its_own_window_and_closes_with_the_clip()
