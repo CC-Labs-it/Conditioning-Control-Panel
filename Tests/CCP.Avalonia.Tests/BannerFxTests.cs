@@ -190,6 +190,15 @@ public sealed class BannerFxTests
         shell.Activate();
         Dispatcher.UIThread.RunJobs();
         Assert.True(shell.BannerBreathing);
+        // Declutter wave 1: off Home the banner is collapsed and its breath parks; Home starts it again.
+        shell.ShowTab("studio");
+        Assert.False(shell.Named<Border>("HeaderBannerHost")!.IsVisible);
+        Assert.False(glow.IsVisible);
+        Assert.False(shell.BannerBreathing);
+        Assert.Equal(MainShellWindow.BannerGlowRest, glow.Opacity, 3);
+        shell.ShowTab("settings");
+        Assert.True(glow.IsVisible);
+        Assert.True(shell.BannerBreathing);
         shell.Close();
         Assert.False(shell.BannerBreathing);
     });
