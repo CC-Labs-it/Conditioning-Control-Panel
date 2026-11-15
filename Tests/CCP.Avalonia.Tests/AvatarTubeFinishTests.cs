@@ -516,6 +516,38 @@ public sealed class AvatarTubeFinishTests
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); Directory.Delete(root, true); }
     });
 
+    [Fact]   // WPF Speech.cs:114,646-661: a preset line's expression leads its bubble and voice by 0.6 s.
+    public Task PortraitPresetExpressionLeadsBubbleAndVoice() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            change(mod);
+            var leads = new List<(TimeSpan Delay, Action Fire)>(); var voiced = 0;
+            tube.PortraitStepScheduler = tube.PortraitFadeScheduler = (_, _) => () => { };
+            tube.SpeechDelayScheduler = (delay, fire) => { leads.Add((delay, fire)); return () => { }; };
+            tube.SpeechAudioPlayer = (_, _, _, _) => voiced++; // the clip keeps playing
+            var bubble = tube.FindControl<Border>("SpeechBubble")!;
+            Action Lead()
+            {
+                tube.PanicSilence(); leads.Clear(); voiced = 0;
+                tube.Giggle("preset", mood: "happy");
+                foreach (var gap in leads.ToList()) if (gap.Delay != TimeSpan.FromSeconds(0.6)) gap.Fire(); // a queued line's gap
+                Assert.Equal("happy.png", Path.GetFileName(tube.PortraitPath)); Assert.True(tube.IsSpeaking);
+                Assert.False(bubble.IsVisible); Assert.Equal(0, voiced); Assert.False(tube.SpokenAudioDone.IsCompleted);
+                return Assert.Single(leads, l => l.Delay == TimeSpan.FromSeconds(0.6)).Fire;
+            }
+            var fire = Lead(); var done = tube.SpokenAudioDone;
+            tube.GigglePriority("newer", aiGenerated: false); Assert.True(done.IsCompleted); Assert.Equal(1, voiced);
+            fire(); Assert.Equal(1, voiced); // the superseded line never speaks
+            fire = Lead(); done = tube.SpokenAudioDone;
+            tube.PanicSilence(); Assert.True(done.IsCompleted);
+            fire(); Assert.Equal(0, voiced); Assert.False(bubble.IsVisible);
+            Lead()(); Assert.Equal(1, voiced); Assert.True(bubble.IsVisible); // not superseded: speaks after the lead-in
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
     [Fact]
     public Task AttachedTubeMakesRoomAndDetachRestoresTheShell() => Run((shell, tube, _) =>
     {

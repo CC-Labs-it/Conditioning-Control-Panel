@@ -1200,7 +1200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
         ///         dropping it shortens the window rather than truncating the line. The reading
         ///         floor below is kept, which is the half that protects a long reply.</item>
-        ///   <item>The voice lead-in timer. Portrait expressions start when the bubble is shown.</item>
+        ///   <item>The voice lead-in timer, except a preset portrait line, whose expression leads by 0.6 s.</item>
         ///   <item>Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
@@ -1369,6 +1369,29 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
 
+                    if (preset && !trigger && IsPortraitMode)
+                    {
+                        // WPF Speech.cs:114,646-661: the expression leads the bubble and voice by 0.6 s.
+                        _isGiggling = true;
+                        spokenHandled = true;
+                        var generation = _triggerAnimationGeneration;
+                        var stop = SpeechDelayScheduler(TimeSpan.FromSeconds(0.6), () =>
+                        {
+                            if (generation != _triggerAnimationGeneration) return;
+                            _cancelTriggerAnimation = static () => { };
+                            var handled = false;
+                            try { handled = Speak(); }
+                            catch (Exception ex) { Log.Warning(ex, "AvatarTube preset lead-in failed"); }
+                            finally { if (!handled) spoken(); }
+                        });
+                        _cancelTriggerAnimation = () => { stop(); spoken(); };   // superseded or panicked: never speaks
+                        return;
+                    }
+                    spokenHandled = Speak();
+
+                bool Speak()
+                {
+                    var handled = false;
                     // The chat log owns the bubble while it is up - take it back before rendering.
                     // WPF ShowTriggerBubbleImmediate (Speech.cs:2163-2203) never touches the log, so a
                     // trigger leaves an open history view, and its width, in place.
@@ -1390,7 +1413,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         // WPF Speech.cs:546-552: a non-AI bubble without its own sound takes the fallback cue.
                         if (SpeechAudioPlayer is { } player) player(playSound, phraseAudioPath, barkVoice, spoken);
                         else PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, spoken, fallbackCue: preset && !trigger, soundCaller: soundCaller);
-                        spokenHandled = true;
+                        handled = true;
                     }
 
                     SyncAskButtonsFor(text);
@@ -1409,6 +1432,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : preset ? PresetDisplaySeconds(text) : null);
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
+                    return handled;
+                }
                 }
                 catch (Exception ex) { Log.Warning(ex, "AvatarTube GigglePriority failed"); }
                 finally { if (!spokenHandled) spoken(); }
