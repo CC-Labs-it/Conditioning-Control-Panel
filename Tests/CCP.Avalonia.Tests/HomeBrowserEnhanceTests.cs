@@ -121,6 +121,66 @@ public class HomeBrowserEnhanceTests
         }
     });
     [Fact]
+    public Task HomeSpeakBandBindsAndStopsOnExitAndUnbind() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previous = CoreSettings.Current.BrowserEnhanceIfPossible;
+        CoreSettings.Current.BrowserEnhanceIfPossible = false;
+        var shell = new MainShellWindow();
+        string? path = null;
+        var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int created = 0;
+        double time = 0;
+        try
+        {
+            shell.Show();
+            var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var web = tab.FindControl<WebHost>("BrowserWebHost")!;
+            web.ScriptInvoker = _ => Task.FromResult<string?>($"{{\"t\":{time},\"d\":20,\"paused\":false,\"rx\":0,\"ry\":0,\"rw\":1,\"rh\":1}}");
+            tab.BrowserSpeakSessionFactory = (effect, source) =>
+            {
+                Assert.Same(tab.BrowserEnhanceSource, source);
+                created++;
+                return new SpeakPromptSession(effect, source, () => true, () => Task.FromResult(true), () => false, () => { },
+                    async (_, ct) => { await Task.Delay(System.Threading.Timeout.Infinite, ct); return ConditioningControlPanel.Services.Speech.PhraseResult.NotAvailable; },
+                    _ => shown.TrySetResult(), () => { }, stopCapture: () => stopped.TrySetResult());
+            };
+            const string url = "https://hypnotube.com/watch/ccp-speak-unique";
+            path = Path.Combine(shell.BrowserEnhancementLibrary!.LibraryFolder, "home-browser-speak-unique.ccpenh.json");
+            var enhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = url,
+                Metadata = new EnhancementMetadata { Name = "Speak test", Creator = "test" }, TimelineItems = {
+                    new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3,
+                        EffectType = EffectTypes.Speak, EffectActivation = EffectActivation.Region,
+                        EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Persistent } } };
+            File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            tab.FindControl<CheckBox>("ToggleEnhanceIfPossible")!.IsChecked = true;
+            web.OnNavigationCompleted(new Uri(url));
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            Assert.Equal(string.Format(Loc.Get("browser_enhance_match_fmt"), "Speak test"), tab.FindControl<TextBlock>("TxtEnhanceMatchStatus")!.Text);
+            await tab.BrowserEnhanceSource!.PollAsync();
+            time = 1.2; await tab.BrowserEnhanceSource.PollAsync();
+            await shown.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            time = 5; await tab.BrowserEnhanceSource.PollAsync();
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            shown = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            time = 0; await tab.BrowserEnhanceSource.PollAsync();
+            time = 1.2; await tab.BrowserEnhanceSource.PollAsync();
+            await shown.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            tab.StopBrowserEnhancement();
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2, created);
+        }
+        finally
+        {
+            shell.Close();
+            if (path != null) File.Delete(path);
+            CoreSettings.Current.BrowserEnhanceIfPossible = previous;
+        }
+    });
+
+    [Fact]
     public void RuntimeDispatchesPause() => AvaloniaTestDispatcher.Run(() =>
     {
         var scripts = new List<string>();
