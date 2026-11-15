@@ -27,9 +27,14 @@ internal sealed class FriendLeashOffer : StackPanel
     private bool _sending;
     private BeatLoop? _pop;
     private ScaleTransform? _popScale;
+    internal ScaleTransform? PopScale => _popScale;
     private double _popAmount;
-    private void StopPop() { _pop?.Stop(); _pop = null; }
-    private void Pop(Button chip)
+    private void StopPop()
+    {
+        _pop?.Stop(); _pop = null;
+        if (_popScale != null) _popScale.ScaleX = _popScale.ScaleY = 1;
+    }
+    internal void Pop(Button chip)
     {
         StopPop();
         _popAmount = FriendsDrawer.FeedMotionAmount;

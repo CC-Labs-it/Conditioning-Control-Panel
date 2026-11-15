@@ -148,6 +148,30 @@ public sealed class FriendLeashOfferTests
         finally { settings.MotionLevel = old; }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ParkedOfferPopResetsScale(bool minimize) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var settings = CoreSettings.Current; var old = settings.MotionLevel;
+        settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        var card = new FriendLeashOffer(Friend(), new LeashService(new Wire(), () => "me"), new HashSet<string>());
+        var window = new Window { Content = card };
+        try
+        {
+            window.Show(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var chip = Button(card, "leash-offer"); card.Pop(chip);
+            card.AdvancePop(100);
+            var scale = Assert.IsType<ScaleTransform>(card.PopScale);
+            Assert.True(scale.ScaleX > 1); Assert.True(scale.ScaleY > 1);
+            if (minimize) window.WindowState = WindowState.Minimized; else chip.IsVisible = false;
+            Assert.Equal(1, scale.ScaleX); Assert.Equal(1, scale.ScaleY);
+            if (minimize) window.WindowState = WindowState.Normal; else chip.IsVisible = true;
+            Assert.Equal(1, scale.ScaleX); Assert.Equal(1, scale.ScaleY);
+        }
+        finally { card.Intro?.Close(); window.Close(); settings.MotionLevel = old; }
+    });
+
     [Fact]
     public void OfferAppearanceAndHelpFollowState() => AvaloniaTestDispatcher.Run(() =>
     {
