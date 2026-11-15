@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.IO;
 using System.Net;
@@ -8,6 +9,7 @@ using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Web;
 using ConditioningControlPanel.Models;
 
@@ -24,6 +26,11 @@ namespace ConditioningControlPanel.Services
         private readonly int _port;
         private readonly HttpListener? _http;
         private readonly List<TcpListener> _tcp = new();
+        private readonly Channel<(NameValueCollection, Func<string, Task>)> _callbacks =
+            Channel.CreateBounded<(NameValueCollection, Func<string, Task>)>(32);
+        private readonly ConcurrentDictionary<TcpClient, byte> _clients = new();
+        private int _accepting;
+        private volatile bool _disposed;
 
         public string CallbackUrl { get; }
 
@@ -72,8 +79,11 @@ namespace ConditioningControlPanel.Services
 
         public void Dispose()
         {
+            _disposed = true;
+            _callbacks.Writer.TryComplete();
             try { _http?.Stop(); _http?.Close(); } catch { }
             foreach (var l in _tcp) try { l.Stop(); } catch { }
+            foreach (var client in _clients.Keys) Release(client);
         }
 
         /// <summary>
@@ -100,7 +110,7 @@ namespace ConditioningControlPanel.Services
             return query;
         }
 
-        private async Task<(NameValueCollection, Func<string, Task>)> NextCallbackAsync()
+        internal async Task<(NameValueCollection, Func<string, Task>)> NextCallbackAsync()
         {
             if (_http != null)
             {
@@ -116,27 +126,40 @@ namespace ConditioningControlPanel.Services
                 });
             }
 
-            var callback = new TaskCompletionSource<(NameValueCollection, Func<string, Task>)>(TaskCreationOptions.RunContinuationsAsynchronously);
-            foreach (var listener in _tcp)
-                _ = AcceptLoopAsync(listener, callback);
-            return await callback.Task;
+            if (Interlocked.Exchange(ref _accepting, 1) == 0)
+                foreach (var listener in _tcp) _ = AcceptLoopAsync(listener);
+            return await _callbacks.Reader.ReadAsync();
         }
 
-        private async Task AcceptLoopAsync(TcpListener listener, TaskCompletionSource<(NameValueCollection, Func<string, Task>)> callback)
+        private async Task AcceptLoopAsync(TcpListener listener)
         {
             try
             {
-                while (!callback.Task.IsCompleted)
-                    _ = HandleAsync(await listener.AcceptTcpClientAsync(), callback); // concurrent: a silent pre-connect must not block
+                while (!_disposed)
+                {
+                    var client = await listener.AcceptTcpClientAsync();
+                    _clients.TryAdd(client, 0);
+                    if (_disposed) { Release(client); break; }
+                    _ = HandleAsync(client); // a silent pre-connect must not block another browser
+                }
             }
-            catch (Exception ex) { callback.TrySetException(ex); } // listener stopped
+            catch (Exception ex)
+            {
+                if (!_disposed) _callbacks.Writer.TryComplete(ex);
+            }
+        }
+
+        private void Release(TcpClient client)
+        {
+            _clients.TryRemove(client, out _);
+            client.Dispose();
         }
 
         /// <summary>
         /// Minimal HTTP/1.1 GET, matching what HttpListener did for this prefix: wrong Host is 400,
         /// a path outside /callback/ is 404, and neither ends the wait.
         /// </summary>
-        private async Task HandleAsync(TcpClient client, TaskCompletionSource<(NameValueCollection, Func<string, Task>)> callback)
+        private async Task HandleAsync(TcpClient client)
         {
             try
             {
@@ -157,22 +180,22 @@ namespace ConditioningControlPanel.Services
                     && !path.StartsWith("/callback/", StringComparison.OrdinalIgnoreCase)) status = "404 Not Found";
                 if (status != null)
                 {
-                    try { await WriteAsync(stream, status, ""); } finally { client.Dispose(); }
+                    try { await WriteAsync(stream, status, ""); } finally { Release(client); }
                     return;
                 }
 
                 var query = HttpUtility.ParseQueryString(new Uri("http://localhost" + target).Query);
-                if (!callback.TrySetResult((query, async html => { try { await WriteAsync(stream, "200 OK", html); } finally { client.Dispose(); } })))
-                    client.Dispose();
+                if (!_callbacks.Writer.TryWrite((query, async html => { try { await WriteAsync(stream, "200 OK", html); } finally { Release(client); } })))
+                    Release(client);
             }
-            catch (Exception) { client.Dispose(); } // a broken connection is not the callback; keep waiting
+            catch (Exception) { Release(client); } // a broken connection is not the callback; keep waiting
         }
 
         private static async Task WriteAsync(Stream stream, string status, string html)
         {
             var body = Encoding.UTF8.GetBytes(html);
             await stream.WriteAsync(Encoding.ASCII.GetBytes(
-                $"HTTP/1.1 {status}\r\nContent-Type: text/html\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n"));
+                $"HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n"));
             await stream.WriteAsync(body);
         }
 

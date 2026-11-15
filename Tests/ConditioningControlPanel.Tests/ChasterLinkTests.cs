@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Chaster;
@@ -107,6 +108,26 @@ public class ChasterLinkTests : IDisposable
         Assert.Empty(_broker.Bodies);
 
         await _browser.GetStringAsync(Callback + "?code=the-code&state=" + state);
+        Assert.Equal(LinkOutcome.Linked, await flow);
+    }
+
+    [Fact]
+    public async Task Concurrent_stray_callbacks_do_not_steal_the_real_callback()
+    {
+        var (flow, state) = Start();
+        // An idle browser pre-connect must not block other connections on the same loopback.
+        using var silent = new TcpClient();
+        await silent.ConnectAsync(IPAddress.Loopback, ChasterService.LoopbackPort);
+        var requests = new Task<string>[8];
+        for (int i = 0; i < requests.Length; i++)
+            requests[i] = _browser.GetStringAsync(Callback + "?code=stolen&state=" + new string('0', 32));
+        var pages = await Task.WhenAll(requests).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.All(pages, page => Assert.Contains("Not linked", page));
+        Assert.False(flow.IsCompleted);
+        Assert.Empty(_broker.Bodies);
+
+        var linked = await _browser.GetStringAsync(Callback + "?code=the-code&state=" + state);
+        Assert.Contains("Linked", linked);
         Assert.Equal(LinkOutcome.Linked, await flow);
     }
 
