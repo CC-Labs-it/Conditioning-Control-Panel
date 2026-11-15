@@ -15,6 +15,7 @@ public partial class ChaosHubWindow
         public readonly Control Target = target;
         public readonly double Begin = begin;
         public bool Chimed;
+        public bool Superseded;
     }
 
     internal static Action<string, float> PlayRevealSfx = ChaosOverlayWindow.ChaosSfx.Play;
@@ -55,6 +56,10 @@ public partial class ChaosHubWindow
                 if (map.TryGetValue(id, out var target) && target is { IsVisible: true })
                 {
                     firstFlashed ??= id;
+                    // WPF replaces the target animation, but its delayed chime timer survives.
+                    foreach (var old in _revealPulses)
+                        if (ReferenceEquals(old.Target, target)) old.Superseded = true;
+                    _revealPulses.RemoveAll(old => old.Superseded && old.Chimed);
                     _revealPulses.Add(new(id, target, batchStart + batchCount++ * 0.6));
                 }
                 else RevealService.MarkSeen(id);
@@ -85,6 +90,11 @@ public partial class ChaosHubWindow
                 pulse.Chimed = true;
                 PlayRevealSfx("reveal_chime", 0.5f);
             }
+            if (pulse.Superseded)
+            {
+                _revealPulses.Remove(pulse);
+                continue;
+            }
             if (t >= 3)
             {
                 pulse.Target.Opacity = 1;
@@ -104,6 +114,7 @@ public partial class ChaosHubWindow
         // Teardown settles already-started reveals without leaving timers or delayed sounds.
         foreach (var pulse in _revealPulses)
         {
+            if (pulse.Superseded) continue;
             pulse.Target.Opacity = 1;
             RevealService.MarkSeen(pulse.Id);
         }
