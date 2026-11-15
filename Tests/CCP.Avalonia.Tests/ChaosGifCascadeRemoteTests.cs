@@ -20,8 +20,14 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class ChaosGifCascadeRemoteTests
 {
+    private sealed class FixedRandom(int value) : Random
+    {
+        public override int Next(int maxValue) => value % maxValue;
+    }
+
     [Fact]
     public Task ShowStartsPrefetchOnlyForConsentedRemoteSources() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -76,6 +82,7 @@ public sealed class ChaosGifCascadeRemoteTests
         var s = CoreSettings.Current;
         var (source, consent, fypConsent, ratio) = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.RemoteMediaRatio);
         var (root, pick, beforeDecode) = (CorePaths.EffectiveAssetsProvider, ChaosGifCascadeOverlay.PickForTests, ChaosGifCascadeOverlay.BeforeDecodeForTests);
+        var oldRng = FlashOverlay.Rng;
         bool decodedOffUi = false;
         var packs = new PackMediaPool(ContentPackStore.ImageType, store: () => null);
         ChaosGifCascadeOverlay? rain = null;
@@ -103,10 +110,20 @@ public sealed class ChaosGifCascadeRemoteTests
             Assert.Equal(2, remote.Count);
             Assert.Equal(2, remote.Distinct().Count());
 
+            // AppSettings clamps 0/100 to 5/95, as WPF does. Exercise both sides of each cutoff.
             s.MediaSource = "mixed"; s.RemoteMediaRatio = 0;
+            Assert.Equal(5, s.RemoteMediaRatio);
+            FlashOverlay.Rng = new FixedRandom(5);
             Assert.Equal(poster, Assert.Single(ChaosGifCascadeOverlay.PickFiles(1, new[] { poster }, packs, s)));
-            s.RemoteMediaRatio = 100;
+            FlashOverlay.Rng = new FixedRandom(4);
             Assert.NotEqual(poster, Assert.Single(ChaosGifCascadeOverlay.PickFiles(1, new[] { poster }, packs, s)));
+            s.RemoteMediaRatio = 100;
+            Assert.Equal(95, s.RemoteMediaRatio);
+            FlashOverlay.Rng = new FixedRandom(94);
+            Assert.NotEqual(poster, Assert.Single(ChaosGifCascadeOverlay.PickFiles(1, new[] { poster }, packs, s)));
+            FlashOverlay.Rng = new FixedRandom(95);
+            Assert.Equal(poster, Assert.Single(ChaosGifCascadeOverlay.PickFiles(1, new[] { poster }, packs, s)));
+            FlashOverlay.Rng = oldRng;
             s.MediaSource = "local";
             Assert.Equal(poster, Assert.Single(ChaosGifCascadeOverlay.PickFiles(1, new[] { poster }, packs, s)));
             s.MediaSource = "online"; s.RemoteMediaConsented = false;
@@ -156,6 +173,7 @@ public sealed class ChaosGifCascadeRemoteTests
             ChaosGifCascadeOverlay.CloseActive();
             if (rain != null) await rain.PendingDecodes;
             RemoteFlashSource.CleanupCache();
+            FlashOverlay.Rng = oldRng;
             (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download, RemoteFlashSource.ClipConsumer) = (settings, fetch, download, consumer);
             (ChaosGifCascadeOverlay.SkipPlatformChecksForTests, ChaosGifCascadeOverlay.ManualFramesForTests, ChaosFlashOverlay.SkipPlatformChecksForTests) = (skip, manual, creditSkip);
             (CorePaths.EffectiveAssetsProvider, ChaosGifCascadeOverlay.PickForTests, ChaosGifCascadeOverlay.BeforeDecodeForTests) = (root, pick, beforeDecode);
