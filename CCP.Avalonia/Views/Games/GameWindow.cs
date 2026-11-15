@@ -168,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     window.ShowRaceCard(room, failed: raceShell == false);
                 }
                 else window.Load(Server(), room);
+                if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
                 if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
@@ -235,6 +236,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
                 };
                 Closed += (_, _) => ExitFypGhost();
+            }
+            if (spec.Id == JustDropId)
+            {
+                Opened += (_, _) => CaptureJustDropFrame();
+                PositionChanged += (_, _) => CaptureJustDropFrame();
+                SizeChanged += (_, _) => CaptureJustDropFrame();
             }
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {

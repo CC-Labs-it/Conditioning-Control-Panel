@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -7,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.JustDrop;
 using Newtonsoft.Json;
@@ -30,6 +32,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string JustDropId = "justdrop";
         private WindowState _justDropWindowedState = WindowState.Normal;
+        private PixelPoint _justDropPosition;
+        private double _justDropWidth, _justDropHeight;
+        private bool _justDropHasFrame, _justDropChangingFrame;
+
+        private void CaptureJustDropFrame()
+        {
+            if (_justDropChangingFrame || !IsVisible || WindowState != WindowState.Normal || Width <= 0 || Height <= 0) return;
+            _justDropPosition = Position;
+            _justDropWidth = Width;
+            _justDropHeight = Height;
+            _justDropHasFrame = true;
+        }
+
+        private void CenterJustDrop(Visual source)
+        {
+            var screens = ScreenList.Enumerate(source);
+            var position = source is Window window ? window.Position : Position;
+            var screen = screens.FirstOrDefault(s => s.Bounds.Contains(position))
+                ?? screens.FirstOrDefault(s => s.IsPrimary) ?? screens.FirstOrDefault();
+            if (screen == null) return;
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            Width = screen.Bounds.Width * .85 / scale;
+            Height = screen.Bounds.Height * .85 / scale;
+            Position = new PixelPoint(screen.Bounds.X + (int)((screen.Bounds.Width - Width * scale) / 2),
+                screen.Bounds.Y + (int)((screen.Bounds.Height - Height * scale) / 2));
+            WindowStartupLocation = WindowStartupLocation.Manual;
+        }
 
         // WPF JustDropHostService.cs:132-135: audio starts and the live clock survives occlusion.
         internal const string JustDropBrowserArguments = "--autoplay-policy=no-user-gesture-required "
@@ -155,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             window.LoadJustDrop();
             var state = shell.WindowState;
             bool duck = shell.IsVisible && state != global::Avalonia.Controls.WindowState.Minimized;
+            window.CenterJustDrop(shell);
             window.SetJustDropFullscreen(true);
             window.Closed += (_, _) =>
             {
@@ -169,18 +199,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return window;
         }
 
-        // WPF ChaosWebViewHost.cs:746-756,768-776: capture on each entry, restore on every exit.
-        // Native bounds restoration remains the window platform's job; replay starts from Normal.
+        // WPF ChaosWebViewHost.cs:713-785: preserve the last normal frame, including maximized state.
         private void SetJustDropFullscreen(bool fullscreen)
         {
             if (fullscreen)
             {
                 if (WindowState == WindowState.FullScreen) return;
-                _justDropWindowedState = WindowState == WindowState.Maximized
-                    ? WindowState.Maximized : WindowState.Normal;
+                _justDropWindowedState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                CaptureJustDropFrame();
                 WindowState = WindowState.FullScreen;
             }
-            else if (WindowState == WindowState.FullScreen) WindowState = _justDropWindowedState;
+            else if (WindowState == WindowState.FullScreen)
+            {
+                var screens = ScreenList.Enumerate(this);
+                bool reachable = _justDropHasFrame && screens.Any(s =>
+                    _justDropPosition.X < s.Bounds.Right && _justDropPosition.Y < s.Bounds.Bottom &&
+                    _justDropPosition.X + _justDropWidth * s.Scaling > s.Bounds.X &&
+                    _justDropPosition.Y + _justDropHeight * s.Scaling > s.Bounds.Y);
+                _justDropChangingFrame = true;
+                try
+                {
+                    WindowState = WindowState.Normal;
+                    if (reachable)
+                    {
+                        Width = _justDropWidth; Height = _justDropHeight; Position = _justDropPosition;
+                        if (_justDropWindowedState == WindowState.Maximized) WindowState = WindowState.Maximized;
+                    }
+                    else CenterJustDrop(this);
+                }
+                finally { _justDropChangingFrame = false; }
+                CaptureJustDropFrame();
+            }
         }
 
         /// <summary>WPF OnPageMessage (:227): the raw envelope to Core, so the source/version checks stay in one place.</summary>
