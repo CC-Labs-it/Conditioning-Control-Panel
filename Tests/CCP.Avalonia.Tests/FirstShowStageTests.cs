@@ -673,8 +673,10 @@ public sealed partial class FirstShowStageTests
         using var tile = tileSurface.Snapshot();
         using var first = SkiaSharp.SKBitmap.Decode(FirstShowCapture.RenderFrame(raw, tile, .10f));
         // The fractional map edge blends here: nearest sampling leaves the pixel near black (4).
-        // SkiaSharp 3.119.4 blended it to 32, 4.156.1 to 100: same code, newer Skia engine (m156) displacement
-        // + small-sigma blur (https://mono.github.io/SkiaSharp/docs/releases/4.150.0.html, blur fix #4269).
+        // SkiaSharp 3.119.4 blended it to 32, 4.156.1 to 100: same code, newer Skia engine. The blur here is
+        // sigma 0.82, the range of 4.150.0's "small-radius raster blur regression fixed" (#4269,
+        // https://mono.github.io/SkiaSharp/docs/releases/4.150.0.html); the displacement alone also moved (0 -> 45
+        // without the blur), which no release note names.
         Assert.InRange(first.GetPixel(58, 48).Red, (byte)20, (byte)140);
     }
 

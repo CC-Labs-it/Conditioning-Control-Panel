@@ -130,7 +130,8 @@ public sealed class FlashLayer : BaseLayer
     private readonly SKPaint _creditPaint = new() { IsAntialias = true };
     // SkiaSharp 4: size/face live on SKFont, align on DrawText (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html).
     // LinearMetrics: the legacy paint's font had it on (https://github.com/mono/skia/blob/v3.119.4/src/xamarin/SkCompatPaint.cpp), so widths stay identical.
-    private readonly SKFont _creditFont = new(SKTypeface.FromFamilyName("Segoe UI") ?? SKTypeface.Default) { LinearMetrics = true };
+    // FromFamilyName never returns null in 4.x: it falls back to SKTypeface.Default (4.148.0 breaking changes).
+    private readonly SKFont _creditFont = new(SKTypeface.FromFamilyName("Segoe UI")) { LinearMetrics = true };
 
     public FlashLayer(CompositorEngine engine) : base(engine.Wake) { }
 
