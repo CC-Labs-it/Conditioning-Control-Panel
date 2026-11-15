@@ -150,6 +150,8 @@ namespace ConditioningControlPanel.Services.Super
         public static void RaiseChanged(SuperEffect effect) => Changed?.Invoke(effect);
 
         private static bool _tierHooked;
+        // The head restores this with its subscriptions when its account sources are replaced.
+        internal static bool TierEventsHooked { get => _tierHooked; set => _tierHooked = value; }
 
         /// <summary>
         /// Fire <see cref="Changed"/> for every effect when the tier or the account changes, so a
