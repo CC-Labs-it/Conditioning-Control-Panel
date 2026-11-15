@@ -87,6 +87,25 @@ public sealed class LoopbackOAuthTests
     }
 
     [Fact]
+    public async Task PreconnectedCallback_SurvivesRejectedState()
+    {
+        var port = FreePort();
+        using var oauth = new LoopbackOAuth(port, useHttpListener: false);
+        var first = Wait(oauth);
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, port);
+        var stream = client.GetStream();
+        // A partial request ensures the server has accepted this connection before the other callback.
+        await stream.WriteAsync(Encoding.ASCII.GetBytes("GET /callback/?code=good&state="));
+        await Task.Delay(200);
+        await BrowserGet("127.0.0.1", port, "code=bad&state=wrong");
+        await Assert.ThrowsAsync<SecurityException>(() => first);
+        var second = Wait(oauth, 2000);
+        await stream.WriteAsync(Encoding.ASCII.GetBytes($"{oauth.State} HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n"));
+        Assert.Equal("good", (await second)["code"]);
+    }
+
+    [Fact]
     public async Task ErrorCallback_ServesFailurePage_AndReturnsError()
     {
         var port = FreePort();

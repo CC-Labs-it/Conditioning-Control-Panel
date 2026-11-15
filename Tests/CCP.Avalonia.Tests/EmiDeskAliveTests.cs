@@ -20,7 +20,7 @@ public class EmiDeskAliveTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var desk = new EmiDeskWindow();
+        var desk = new EmiDeskWindow { AliveWaylandOverride = false };
         try
         {
             desk.Show(); Dispatcher.UIThread.RunJobs();
