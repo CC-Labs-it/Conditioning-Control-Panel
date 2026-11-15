@@ -90,8 +90,11 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Grid Background="Transparent" MinHeight="38">
+                            <!-- Selected = the detail pane's own surface (StudioRackRules), so the
+                                 row and the pane beside it read as one object. Not a hue tint:
+                                 the hue is spent on the bar and on the dots. -->
                             <Border x:Name="RowFill" CornerRadius="8" Opacity="0"
-                                    Background="{DynamicResource TransparentPink20Brush}"/>
+                                    Background="{DynamicResource SurfaceBgBrush}"/>
                             <!-- The tier rim. A stroke, never a fill, and hit-test invisible so
                                  it is pure livery: selection (RowFill/RowBar) and hover keep
                                  their existing grammar underneath it. -->
@@ -100,7 +103,7 @@
                                     IsHitTestVisible="False"/>
                             <Border x:Name="RowBar" Width="3" CornerRadius="2" Margin="0,5"
                                     HorizontalAlignment="Left" Visibility="Collapsed"
-                                    Background="{DynamicResource PinkBrush}"/>
+                                    Background="{DynamicResource SectionHueStudioBrush}"/>
                             <ContentPresenter Margin="12,0,10,0" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -177,7 +180,7 @@
                  code from the single RackEntries table so the key, the icon, the label, the
                  state dot, the panel and the NotifyFeatureOpened key can never drift apart. -->
             <Border Grid.Column="0" Width="230" Margin="0,0,14,0"
-                    Background="{DynamicResource SurfaceBgBrush}" BorderBrush="#2A2A46"
+                    Background="{DynamicResource DarkerBgBrush}" BorderBrush="#2A2A46"
                     BorderThickness="1" CornerRadius="12" Padding="8,10">
                 <Grid>
                     <Grid.RowDefinitions>
