@@ -148,6 +148,7 @@ internal sealed partial class MandatoryVideoOverlay
             if (_playbackFactory != null)
             {
                 f.Playback = _playbackFactory();
+                f.Playback.SetAudioOff(true);   // WPF FloatingInstances.cs:534-535: veiled, it takes no sound until the reveal
                 f.FrameSeen = true;
                 RevealInstance(f);
             }
@@ -157,6 +158,7 @@ internal sealed partial class MandatoryVideoOverlay
                 var s = CoreSettings.Current;
                 var player = f.Player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
                 f.Playback = new NativeMandatoryPlayback(player);
+                f.Playback.SetAudioOff(true);   // WPF :534-535 (WatchInstance re-applies once the track exists)
                 ApplyInstanceVolume(f);
                 f.Sink = new VlcFrameSink(player, () => f.Media, bmp => f.Surface.Video.Source = bmp, () =>
                 {
@@ -198,6 +200,8 @@ internal sealed partial class MandatoryVideoOverlay
     {
         if (f.Closed || f.Playback is not { } p) { f.Watch?.Stop(); return; }
         if (_gracePaused) return;   // SetFloatingPaused holds its clocks
+        // Veiled or not the holder: silent, also for an audio track LibVLC selects after the last focus pass.
+        p.SetAudioOff(!_audioFocus.HasSound(f.Window));
         if (!f.Revealed)
             switch (MandatoryVideoPresentation.DecideFirstFrame(f.SinceReady.Elapsed.TotalSeconds, f.FrameSeen, p.IsPlaying))
             {
@@ -226,9 +230,10 @@ internal sealed partial class MandatoryVideoOverlay
     {
         if (f.Closed || f.Revealed) return;
         f.Revealed = true;
-        f.Surface.Reveal?.Present();
+        // WPF :613: focus first, so a window that does not take the sound is never heard when the reveal lifts its hold.
         _audioFocus.Join(f.Window, CoreSettings.Current.MandatoryVideoFloatingKeepSound);
         ApplyAudioFocus();
+        f.Surface.Reveal?.Present();
         var w = f.Window;
         f.Fade = new VideoReveal(_videoFadeSeconds, tick => w.RequestAnimationFrame(_ => tick()),
             opacity => f.Surface.Picture.Opacity = opacity, () => ShowInstanceControls(f));
@@ -277,6 +282,19 @@ internal sealed partial class MandatoryVideoOverlay
             catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
         }
         _refreshFloating?.Invoke();
+    }
+
+    /// <summary>WPF VideoService.cs:6444-6456: one Resume card per screen holding a floating window. A card is
+    /// hosted by a window on that screen; WPF's cards outlive the windows, so a closed host hands it on.</summary>
+    private void ShowGraceCards()
+    {
+        foreach (var screen in AllSurfaces.GroupBy(x => x.Screen?.Bounds).Where(g => g.All(x => x.GraceHost == null)))
+        {
+            var x = screen.First();
+            x.Layer.IsHitTestVisible = false;
+            x.Grace.IsVisible = true;
+            ShowGraceHost(x);
+        }
     }
 
     /// <summary>WPF SetFloatingPaused (:366-376): the grace pause holds every joined window.</summary>
@@ -337,6 +355,7 @@ internal sealed partial class MandatoryVideoOverlay
         {
             _audioFocus.Remove(x.Window);
             CloseGraceHost(x);
+            if (_gracePaused && endRun) ShowGraceCards();   // its screen's Resume card moves to a window still up
             x.Video.Source = null;
             x.Reveal?.Cancel();
             x.Window.Close();
