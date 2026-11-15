@@ -144,11 +144,7 @@
 
                  IT DRAWS OVER THE GARMENT, and that is not a breach of THE SKIN LAW. The law says
                  no face art may bury a skin; a held object is not face art and it is not a skin -
-                 it is nearer the camera than she is. The chrome below still draws over it.
-
-                 WPF gave it a private PropTilt / PropRise transform pair. Dropped here with the
-                 layout code that drove them: LayoutProp lives in EmiDeskWindow.Props.cs, which is
-                 not part of this port. -->
+                 it is nearer the camera than she is. The chrome below still draws over it. -->
             <Image x:Name="DeskHatOverImage" Stretch="Fill" IsHitTestVisible="False" IsVisible="False" RenderOptions.BitmapInterpolationMode="None"/>
             <Image x:Name="DeskToyOverImage" Stretch="Fill" IsHitTestVisible="False" IsVisible="False" RenderOptions.BitmapInterpolationMode="None"/>
             <Image x:Name="PropImage"
@@ -157,7 +153,14 @@
                    IsVisible="False"
                    IsHitTestVisible="False"
                    RenderTransformOrigin="100%,100%"
-                   RenderOptions.BitmapInterpolationMode="None"/>
+                   RenderOptions.BitmapInterpolationMode="None">
+                <Image.RenderTransform>
+                    <TransformGroup>
+                        <RotateTransform/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </Image.RenderTransform>
+            </Image>
 
             <!-- THE THREE CHIPS, and why each one is a chip inside a bigger button.
 
