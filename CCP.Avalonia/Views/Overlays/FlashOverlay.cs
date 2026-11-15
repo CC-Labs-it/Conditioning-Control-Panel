@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 var s = CoreSettings.Current;
-                if (await TryShowRemix(s, screens, durationMs, ambient && amount == null, generation)) return;
+                if (await TryShowRemix(s, screens, durationMs, ambient && amount == null, generation, suppressHaptic)) return;
                 if (generation != _generation || _closed) return;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
