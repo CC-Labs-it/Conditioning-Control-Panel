@@ -178,4 +178,24 @@ public class ScreenFrameSourceTests
         for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
         Assert.False(File.Exists(path));
     }
+
+    [Fact]
+    public async Task AFailedCloseWithNoResponseDoesNotBlockTheNextScanAfterARestart()
+    {
+        PortalScreenFrames.Refused = false;
+        var never = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var path = WritePng();
+        var calls = 0;
+        var source = new PortalScreenFrames(ct => ++calls == 1
+            ? PortalPanicShortcut.AwaitOrCloseAsync(never.Task, ct, () => Task.FromException(new InvalidOperationException("close failed")))
+            : Task.FromResult((0u, Uri(path))), TwoMonitors);
+        using var stop = new CancellationTokenSource();
+        var scan = source.CaptureAsync(stop.Token);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        var restarted = await source.CaptureAsync(CancellationToken.None);
+        Assert.Equal(2, calls);
+        Assert.Equal(ScreenFrameStatus.Available, restarted.Status);
+        Assert.False(File.Exists(path));
+    }
 }
