@@ -129,6 +129,37 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer()
+        => LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+            LeashHead.Service = replacement;
+            shell.Show();
+            try
+            {
+                var offer = replacement.Snapshot.Offers.Single(o => o.From.Id == "vex");
+                var manual = LeashAskWindow.Open(offer, () => replacement, shell)!;
+                shell.RebindLeashAsks(); // The timer finds the new service after Look opened.
+                Assert.Same(manual, LeashAskWindow.Current);
+                manual.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+                Dispatcher.UIThread.RunJobs();
+                var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", next.Card.Tag);
+                next.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current); // Look's offer was already shown.
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void LookConsumesItsQueuedOfferAndEscapeAdvancesToTheOtherOffer() =>
         LeashGateCardTests.Run(false, (shell, _, service) =>
         {
