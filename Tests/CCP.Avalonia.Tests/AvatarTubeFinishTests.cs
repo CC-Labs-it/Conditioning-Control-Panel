@@ -311,6 +311,51 @@ public sealed class AvatarTubeFinishTests
     }, savedSet: 4);
 
     [Fact]
+    public Task DiskPortraitSkinsReplacePosesAndEmotesTakePrecedence() => Run((_, tube, change) =>
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ccp-portraits-" + Guid.NewGuid().ToString("N"));
+        var audio = Path.Combine(root, "resources", "sounds", "companion_audio");
+        Directory.CreateDirectory(audio);
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a","title":"First"},{"id":"b","dir":"b","title":"Second"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]}}}
+            """);
+        var mod = new ModPackage(new ModManifest { Id = "portrait-test" }, root, false);
+        try
+        {
+            change(mod);
+            Assert.False(tube.IsPortraitMode); // manifest without images keeps the ordinary avatar
+            Assert.Equal(7, tube.PickableAvatarSets().Length);
+            foreach (var skin in new[] { "a", "b" })
+            {
+                Directory.CreateDirectory(Path.Combine(audio, skin));
+                File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "avatar_pose1.png"), Path.Combine(audio, skin, "idle.png"));
+            }
+            change(mod);
+            Assert.True(tube.IsPortraitMode);
+            Assert.False(tube.IsPoseRotating);
+            Assert.True(tube.RefreshRainPlayback().IsCompletedSuccessfully);
+            Assert.False(tube.IsPoseRotating);
+            Assert.Equal(new[] { 1, 2 }, tube.PickableAvatarSets());
+            Assert.Equal("First", tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            Action? finish = null;
+            tube.AvatarSwitchScheduler = (_, fire) => { finish = fire; return () => { }; };
+            Assert.True(tube.SelectAvatarSet(2));
+            finish!();
+            Assert.Equal("Second", tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            Assert.False(tube.IsPoseRotating);
+            var emotes = Path.Combine(root, "resources", "emotes", "set1");
+            Directory.CreateDirectory(emotes);
+            File.WriteAllText(Path.Combine(emotes, "emotes.json"), "{}");
+            change(mod);
+            Assert.False(tube.IsPortraitMode);
+            Assert.Equal(new[] { 1 }, tube.PickableAvatarSets());
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false));
+            Assert.False(tube.IsPortraitMode);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
     public Task AttachedTubeMakesRoomAndDetachRestoresTheShell() => Run((shell, tube, _) =>
     {
         tube.Detach();

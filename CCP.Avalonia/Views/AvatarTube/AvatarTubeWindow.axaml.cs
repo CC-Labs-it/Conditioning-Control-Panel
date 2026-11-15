@@ -266,6 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             SetTubeStyle(!_isAttached);
             InitWindowing();
             WireQuickMenu();   // the right-click menu's handlers (AvatarTubeWindow.QuickMenu.cs)
+            LoadPortrait();
             _currentAvatarSet = ResolveStartAvatarSet();
             ApplyAvatarSet();
             WatchRainSettings();
@@ -338,6 +339,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _avatarSetsClosed = true;
             if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;
             StopRainPlayback();
+            _imgAvatar.Source = null;
+            ClearPortraitImage();
             CoreMods.ModChanged -= OnTubeModChanged;
             CancelAvatarSwitch();
             StopFloatingAnimation(); // WPF Windowing.cs:1507
@@ -533,7 +536,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         //  Pose animation
         // =========================================================================================
 
-        public void StartPoseAnimation() => RunOnAvatar(() => _poseTimer.Start());
+        public void StartPoseAnimation() => RunOnAvatar(() => { if (_portraitImage == null) _poseTimer.Start(); });
         public void StopPoseAnimation() => RunOnAvatar(() => _poseTimer.Stop());
         public void SetPoseInterval(TimeSpan interval) => _poseTimer.Interval = interval;
 
@@ -1032,6 +1035,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ApplyAvatarSet()
         {
             _poseTimer.Stop();
+            if (PaintPortrait()) return;
+            ClearPortraitImage();
             _avatarPoses = LoadAvatarPoses(_currentAvatarSet);
             _currentPoseIndex = 0;
             for (int i = 0; i < _avatarPoses.Length; i++)
@@ -1098,6 +1103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         private void UpdateTitleDisplay()
         {
+            if (_portraitImage != null && PaintPortrait()) return;
             var companionId = CompanionForAvatarSet(_currentAvatarSet);
             if (companionId.HasValue)
             {
