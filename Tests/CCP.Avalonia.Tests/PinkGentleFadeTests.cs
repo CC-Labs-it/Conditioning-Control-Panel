@@ -1,5 +1,8 @@
 using System;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using Avalonia.Headless;
+using Avalonia.Threading;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -51,7 +54,18 @@ public class PinkGentleFadeTests
             Assert.Equal(fades ? 0 : 1, tint.Opacity);
             if (fades)
             {
-                await Task.Delay(350);
+                var transition = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(tint.Transitions!));
+                Assert.Equal(TimeSpan.FromSeconds(0.5), transition.Duration);
+                // The compositor can hold its first frame on a busy runner. Pump frames and
+                // sample throughout the fade instead of assuming a 350 ms delay rendered one.
+                var timeout = Stopwatch.StartNew();
+                do
+                {
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                    if (tint.Opacity is >= 0.01 and <= 0.99) break;
+                    await Task.Delay(10);
+                } while (timeout.Elapsed < TimeSpan.FromSeconds(3));
                 Assert.InRange(tint.Opacity, 0.01, 0.99);
             }
             var beforeHide = tint.Opacity;
@@ -61,12 +75,23 @@ public class PinkGentleFadeTests
             Assert.Equal(fades, tint.IsVisible);
             if (fades)
             {
-                await Task.Delay(200);
+                var transition = Assert.IsType<global::Avalonia.Animation.DoubleTransition>(Assert.Single(tint.Transitions!));
+                Assert.Equal(TimeSpan.FromSeconds(0.5), transition.Duration);
+                var timeout = Stopwatch.StartNew();
+                do
+                {
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    Dispatcher.UIThread.RunJobs();
+                    if (tint.Opacity < beforeHide) break;
+                    await Task.Delay(10);
+                } while (timeout.Elapsed < TimeSpan.FromSeconds(3));
                 Assert.True(tint.IsVisible);
                 Assert.True(tint.Opacity < beforeHide);
                 PinkFilterOverlay.Refresh(host); // repeated polling must not cut the fade short
                 Assert.True(tint.IsVisible);
-                await Task.Delay(450);
+                var closeTimeout = Stopwatch.StartNew();
+                while (tint.IsVisible && closeTimeout.Elapsed < TimeSpan.FromSeconds(3))
+                    await Task.Delay(10);
                 Assert.False(tint.IsVisible);
             }
         }

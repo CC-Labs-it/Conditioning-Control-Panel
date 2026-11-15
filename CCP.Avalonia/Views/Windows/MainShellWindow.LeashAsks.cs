@@ -76,6 +76,9 @@ public partial class MainShellWindow
         {
             if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
+            // A rebind can read the same offer while its manually opened ask is already visible.
+            var shown = LeashAskWindow.Current?.Offer;
+            if (shown != null && shown.From.Id == offer.From.Id && shown.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds()) continue;
             _waitingLeashAsks.Add(offer);
         }
         _waitingLeashAsks.RemoveAll(w => !snap.Offers.Any(o => o.From.Id == w.From.Id));

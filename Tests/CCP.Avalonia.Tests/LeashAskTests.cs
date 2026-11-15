@@ -194,6 +194,32 @@ public sealed class LeashAskTests
             finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RebindingWhileAnOfferIsVisibleDoesNotQueueTheSameOfferAgain(bool noReceiptId) =>
+        Run((shell, page, _, _) =>
+        {
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            var existing = LeashHead.Service!.Snapshot.Offers.Single();
+            var replacement = new LeashService(new Wire(), () => "u_me");
+            replacement.ApplyBlock(new JObject
+            {
+                ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray { new JObject
+                {
+                    ["id"] = noReceiptId ? null : existing.Id, ["from"] = new JObject { ["id"] = existing.From.Id, ["name"] = existing.From.Name },
+                    ["at"] = existing.At.ToString("o"), ["expires_at"] = existing.At.AddDays(7).ToString("o"),
+                } },
+            });
+            LeashHead.Service = replacement;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
     [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
