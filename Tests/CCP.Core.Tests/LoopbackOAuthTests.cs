@@ -61,6 +61,22 @@ public sealed class LoopbackOAuthTests
     }
 
     [Fact]
+    public async Task RepeatedCallbacks_OnAlternatingLoopbacks_AreNotLost()
+    {
+        var port = FreePort();
+        using var oauth = new LoopbackOAuth(port, useHttpListener: false);
+        foreach (var host in new[] { "127.0.0.1", "[::1]", "127.0.0.1", "[::1]" })
+        {
+            var next = oauth.NextCallbackAsync();
+            var browser = BrowserGet(host, port, "code=abc");
+            var (query, respond) = await next.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("abc", query["code"]);
+            await respond("done");
+            Assert.Equal("done", (await browser).Body);
+        }
+    }
+
+    [Fact]
     public async Task HttpListenerPath_GoodState_ServesSuccessPage()
     {
         // The Windows (http.sys) path; on Linux the managed HttpListener binds one loopback, so go by name.

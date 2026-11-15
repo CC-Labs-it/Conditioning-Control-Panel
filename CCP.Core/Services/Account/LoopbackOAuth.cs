@@ -24,6 +24,8 @@ namespace ConditioningControlPanel.Services
         private readonly int _port;
         private readonly HttpListener? _http;
         private readonly List<TcpListener> _tcp = new();
+        private TaskCompletionSource<(NameValueCollection, Func<string, Task>)>? _callback;
+        private bool _accepting;
 
         public string CallbackUrl { get; }
 
@@ -100,7 +102,7 @@ namespace ConditioningControlPanel.Services
             return query;
         }
 
-        private async Task<(NameValueCollection, Func<string, Task>)> NextCallbackAsync()
+        internal async Task<(NameValueCollection, Func<string, Task>)> NextCallbackAsync()
         {
             if (_http != null)
             {
@@ -117,26 +119,30 @@ namespace ConditioningControlPanel.Services
             }
 
             var callback = new TaskCompletionSource<(NameValueCollection, Func<string, Task>)>(TaskCreationOptions.RunContinuationsAsynchronously);
-            foreach (var listener in _tcp)
-                _ = AcceptLoopAsync(listener, callback);
+            Volatile.Write(ref _callback, callback);
+            if (!_accepting)
+            {
+                _accepting = true;
+                foreach (var listener in _tcp) _ = AcceptLoopAsync(listener);
+            }
             return await callback.Task;
         }
 
-        private async Task AcceptLoopAsync(TcpListener listener, TaskCompletionSource<(NameValueCollection, Func<string, Task>)> callback)
+        private async Task AcceptLoopAsync(TcpListener listener)
         {
             try
             {
-                while (!callback.Task.IsCompleted)
-                    _ = HandleAsync(await listener.AcceptTcpClientAsync(), callback); // concurrent: a silent pre-connect must not block
+                while (true)
+                    _ = HandleAsync(await listener.AcceptTcpClientAsync()); // concurrent: a silent pre-connect must not block
             }
-            catch (Exception ex) { callback.TrySetException(ex); } // listener stopped
+            catch (Exception ex) { Volatile.Read(ref _callback)?.TrySetException(ex); } // listener stopped
         }
 
         /// <summary>
         /// Minimal HTTP/1.1 GET, matching what HttpListener did for this prefix: wrong Host is 400,
         /// a path outside /callback/ is 404, and neither ends the wait.
         /// </summary>
-        private async Task HandleAsync(TcpClient client, TaskCompletionSource<(NameValueCollection, Func<string, Task>)> callback)
+        private async Task HandleAsync(TcpClient client)
         {
             try
             {
@@ -162,7 +168,8 @@ namespace ConditioningControlPanel.Services
                 }
 
                 var query = HttpUtility.ParseQueryString(new Uri("http://localhost" + target).Query);
-                if (!callback.TrySetResult((query, async html => { try { await WriteAsync(stream, "200 OK", html); } finally { client.Dispose(); } })))
+                var callback = Volatile.Read(ref _callback);
+                if (callback == null || !callback.TrySetResult((query, async html => { try { await WriteAsync(stream, "200 OK", html); } finally { client.Dispose(); } })))
                     client.Dispose();
             }
             catch (Exception) { client.Dispose(); } // a broken connection is not the callback; keep waiting
