@@ -6,7 +6,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// WebKitGTK's document-start counterpart to WebView2's built-in chrome.webview bridge.
+// WebKitGTK and WPE document-start scripts, installed on the GLib thread.
 internal static class WebViewCarrier
 {
     private delegate int Idle(IntPtr data);
@@ -21,15 +21,28 @@ internal static class WebViewCarrier
     private sealed record Request(IntPtr View, string Script, GetManager Manager, NewScript New, AddScript Add,
         Unref ScriptUnref, Unref ViewUnref, TaskCompletionSource<bool> Done, bool AllFrames);
 
-    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script, bool allFrames = false)
+    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script, bool allFrames = false) =>
+        OperatingSystem.IsLinux()
+            ? InstallLinuxAsync(handle, script, allFrames, InstallNativeAsync)
+            : Task.FromResult(false);
+
+    // Select the library belonging to the actual view. Loading the other WebKit can mix libsoup versions.
+    internal static Task<bool> InstallLinuxAsync(IPlatformHandle? handle, string script, bool allFrames,
+        Func<IntPtr, string[], string, bool, Task<bool>> install)
     {
-        if (!OperatingSystem.IsLinux() || handle is not IGtkWebViewPlatformHandle gtk || gtk.WebKitWebView == IntPtr.Zero)
-            return Task.FromResult(false);
+        var (view, wpe) = WebViewZoom.LinuxView(handle);
+        if (view == IntPtr.Zero) return Task.FromResult(false);
+        var libraries = wpe ? new[] { "libWPEWebKit-2.0.so.1" } : ScrolllerWebKitFilter.Libraries;
+        return install(view, libraries, script, allFrames);
+    }
+
+    private static Task<bool> InstallNativeAsync(IntPtr view, string[] libraries, string script, bool allFrames)
+    {
         try
         {
             // Only use the WebKit already loaded by Avalonia, to avoid loading a second libsoup.
             IntPtr webkit = IntPtr.Zero;
-            foreach (var name in ScrolllerWebKitFilter.Libraries)
+            foreach (var name in libraries)
                 if ((webkit = ScrolllerWebKitFilter.LoadedLibrary(name)) != IntPtr.Zero) break;
             var glib = ScrolllerWebKitFilter.LoadedLibrary("libglib-2.0.so.0");
             var objects = ScrolllerWebKitFilter.LoadedLibrary("libgobject-2.0.so.0");
@@ -38,7 +51,7 @@ internal static class WebViewCarrier
                 Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(lib, name));
             var release = Get<Unref>(objects, "g_object_unref");
             var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var request = new Request(gtk.WebKitWebView, script,
+            var request = new Request(view, script,
                 Get<GetManager>(webkit, "webkit_web_view_get_user_content_manager"),
                 Get<NewScript>(webkit, "webkit_user_script_new"),
                 Get<AddScript>(webkit, "webkit_user_content_manager_add_script"),

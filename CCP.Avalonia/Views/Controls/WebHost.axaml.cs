@@ -249,9 +249,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
         /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
         /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
-        /// With <see cref="InjectCarrier"/> WebKitGTK installs it at document start, before the first navigation
+        /// With <see cref="InjectCarrier"/> WebKitGTK and WPE install it at document start, before the first navigation
         /// of each engine (<see cref="Platform.WebViewCarrier"/>); it also runs after every completed navigation
-        /// as the fallback on engines without that seam (WPE) or when the native install fails.
+        /// as the fallback when the native install fails.
         /// </summary>
         internal const string CarrierShim =
             "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
@@ -731,7 +731,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // Headless tests supply an engine without loading a native web view.
         internal Func<Uri, bool>? NavigationInvoker { get; set; }
 
-        // Set before attachment. WebView2 and WebKitGTK install before the held first navigation.
+        // Set before attachment. WebView2, WebKitGTK and WPE install before the held first navigation.
         internal string? AllFramesDocumentStartScript { get; set; }
         internal Func<string, Task<bool>>? AllFramesDocumentStartInstaller { get; set; }
         private Task<bool>? _allFramesInstall;
@@ -750,7 +750,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 await BoundedNativeStep(SetEngineMutedAsync(muted), "native mute");
                 if (Stale()) return;
             }
-            // WebKitGTK: the opt-in carrier before the page's own scripts, once per engine.
+            // WebKitGTK and WPE: the opt-in carrier before the page's own scripts, once per engine.
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
