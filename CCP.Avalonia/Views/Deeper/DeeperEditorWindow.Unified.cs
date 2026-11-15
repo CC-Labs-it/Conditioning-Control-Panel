@@ -1021,6 +1021,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private readonly List<Control> _ruleVisuals = new();
         private static readonly Color RulePinColor = Color.FromRgb(0xFF, 0x8C, 0x00);
+        private static readonly Color StrayRulePinColor = Color.FromRgb(0xC0, 0x6A, 0x2A);
 
         private void RebuildRuleVisuals()
         {
@@ -1034,14 +1035,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
                 var w = TimelineCanvas.Bounds.Width;
                 var h = TimelineCanvas.Bounds.Height;
-                if (w <= 0 || h <= 0 || _totalSeconds <= 0) return;
+                if (w <= 0 || h <= 0) return;
 
-                int idx = 0;
+                int idx = 0, pastEnd = 0, detached = 0;
                 foreach (var rule in _enhancement.Rules)
                 {
                     idx++;
-                    if (rule?.Trigger is not TimeReachedTrigger tr) continue;
-                    BuildRulePin(rule, tr, idx, w, h);
+                    if (rule == null) continue;
+                    var tr = rule.Trigger as TimeReachedTrigger;
+                    bool hasBand = !string.IsNullOrEmpty(rule.RegionConstraint)
+                        && _enhancement.Regions.Any(r => r != null && r.Id == rule.RegionConstraint);
+                    var kind = ClassifyRulePin(hasBand ? null : tr?.Time, hasBand, _totalSeconds);
+                    if (kind is RulePinKind.OnItsBand or RulePinKind.None) continue;
+                    int strayIndex = kind == RulePinKind.PastEnd ? pastEnd++ : detached++;
+                    double x = RulePinX(kind, tr?.Time ?? 0, _totalSeconds, w, strayIndex);
+                    BuildRulePin(rule, tr, kind, x, idx, w, h);
                 }
                 EnsurePlayheadOnTop();
             }
@@ -1051,13 +1059,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        private void BuildRulePin(EnhancementRule rule, TimeReachedTrigger tr, int oneBasedIndex,
-            double canvasWidth, double canvasHeight)
+        private void BuildRulePin(EnhancementRule rule, TimeReachedTrigger? tr, RulePinKind kind,
+            double x, int oneBasedIndex, double canvasWidth, double canvasHeight)
         {
-            double x = (Math.Max(0, tr.Time) / _totalSeconds) * canvasWidth;
+            bool stray = IsStrayPin(kind);
             bool isSelected = rule == _selectedRule;
 
-            var brush = new SolidColorBrush(RulePinColor);
+            var brush = new SolidColorBrush(stray ? StrayRulePinColor : RulePinColor);
             var selStroke = isSelected ? Brushes.White : null;
 
             // Vertical pin line
@@ -1067,7 +1075,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 EndPoint = new Point(x, canvasHeight),
                 Stroke = brush,
                 StrokeThickness = isSelected ? 2.5 : 1.5,
-                StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double> { 4, 3 },
+                StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double>(stray ? new double[] { 1, 3 } : new double[] { 4, 3 }),
                 IsHitTestVisible = false,
                 ZIndex = 9
             };
@@ -1081,7 +1089,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Points = new global::Avalonia.Collections.AvaloniaList<Point>
                 {
                     new Point(x, 2),
-                    new Point(x + 12, 6),
+                    new Point(kind == RulePinKind.PastEnd ? x - 12 : x + 12, 6),
                     new Point(x, 10)
                 },
                 Fill = brush,
@@ -1097,15 +1105,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // aiming.
             var hit = new Rectangle
             {
-                Width = 14,
-                Height = canvasHeight,
+                Width = RulePinHitWidth,
+                Height = stray ? 16 : canvasHeight,
                 Fill = Brushes.Transparent,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Tag = rule,
                 ZIndex = 11
             };
-            ToolTip.SetTip(hit, $"Rule #{oneBasedIndex} · time {tr.Time:0.##}s");
-            Canvas.SetLeft(hit, x - 7);
+            ToolTip.SetTip(hit, RulePinTooltip(rule, tr, kind, oneBasedIndex));
+            Canvas.SetLeft(hit, RulePinHitLeft(x, canvasWidth));
             Canvas.SetTop(hit, 0);
             hit.PointerPressed += (s, e) =>
             {
@@ -1115,6 +1123,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             };
             TimelineCanvas.Children.Add(hit);
             _ruleVisuals.Add(hit);
+        }
+
+        private static string RulePinTooltip(EnhancementRule rule, TimeReachedTrigger? tr,
+            RulePinKind kind, int oneBasedIndex)
+        {
+            var head = $"Rule #{oneBasedIndex}";
+            return kind switch
+            {
+                RulePinKind.PastEnd => $"{head} · time {tr?.Time ?? 0:0.##}s, past the end of the media",
+                RulePinKind.Detached when tr != null => $"{head} · {DescribeRule(rule)} · its time is not a number",
+                RulePinKind.Detached when !string.IsNullOrEmpty(rule.RegionConstraint) =>
+                    $"{head} · {DescribeRule(rule)} · its region is gone",
+                RulePinKind.Detached => $"{head} · {DescribeRule(rule)} · fires anywhere, no place on the ruler",
+                _ => $"{head} · time {tr?.Time ?? 0:0.##}s",
+            };
         }
 
         // -- Helpers --------------------------------------------------------------

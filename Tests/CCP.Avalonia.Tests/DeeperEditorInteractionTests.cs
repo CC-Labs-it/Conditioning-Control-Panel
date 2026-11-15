@@ -94,6 +94,29 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task ParkedRulesShowExplanatoryPinsAndBandRulesDoNot() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var past = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 40 } };
+        var gone = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = "deleted" };
+        var band = new Region { Id = "band", Start = 1, End = 5 };
+        var onBand = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 }, RegionConstraint = band.Id };
+        model.Regions.Add(band);
+        model.Rules.Add(past);
+        model.Rules.Add(gone);
+        model.Rules.Add(onBand);
+        Call(w, "RebuildRuleVisuals");
+        var pins = w.TimelineCanvas.Children.OfType<Control>().Where(c => c.Tag is EnhancementRule).ToArray();
+        Assert.Equal(2, pins.Length);
+        var pastPin = Assert.Single(pins, c => ReferenceEquals(c.Tag, past));
+        var gonePin = Assert.Single(pins, c => ReferenceEquals(c.Tag, gone));
+        Assert.Equal(16, pastPin.Height);
+        Assert.Contains("past the end of the media", (string)ToolTip.GetTip(pastPin)!);
+        Assert.Contains("its region is gone", (string)ToolTip.GetTip(gonePin)!);
+        Assert.DoesNotContain(pins, c => ReferenceEquals(c.Tag, onBand));
+    });
+
+    [Fact]
     public Task HistoryPinsReferenceRestoredRules() => Run((w, model) =>
     {
         Set(w, "_totalSeconds", 30d);
