@@ -195,6 +195,24 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // The periodic service bind can happen after Look.
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
+    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
