@@ -44,6 +44,19 @@ public sealed class Whirlpool
     public double Eased => Ease(Size);
     /// <summary>Reach in pixels: nothing outside it feels the pool.</summary>
     public double Radius => (MinReach + (MaxReach - MinReach) * Eased) * ShortSide;
+    /// <summary>
+    /// How far an arm strays from the perfect spiral, in radians, at <paramref name="share"/> of the
+    /// reach (0 = the eye, 1 = the rim) and in the direction <paramref name="phi"/>. It drifts with
+    /// <paramref name="angle"/>, so the arms keep morphing, and it differs by direction, so the
+    /// three arms are never copies of each other. The drawn arms and the fog arms both use it, so they stay on top of each other.
+    /// </summary>
+    public static double Wobble(double share, double phi, double angle)
+    {
+        double s = Math.Clamp(share, 0, 1);
+        return Math.Pow(s, 0.6) * (0.4 * Math.Sin(s * 6.5 + angle * 0.13) + 0.13 * Math.Sin(s * 11 - angle * 0.19 + 1.7)
+                    + 0.34 * Math.Sin(2 * phi + s * 4 - angle * 0.09) + 0.22 * Math.Sin(phi - s * 3 + angle * 0.14 + 2));
+    }
+
     /// <summary>Turns of each arm from the eye to the rim. Few on purpose: a tight spiral reads as rings.</summary>
     public double Turns => 0.9 + 1.2 * Eased;
     /// <summary>Radians per second the drawn spiral (and the fog under it) turns.</summary>

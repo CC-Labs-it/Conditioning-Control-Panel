@@ -151,8 +151,10 @@ public static class SuperStageHost
             // (where it was, where it is) and works out the speed.
             if (!(resting && Stage.PoolLive))
             {
-                if (hadCursor) Stage.Push(fromX, fromY, _lastX, _lastY, 58 * dip, dt, mark: true);
-                else Stage.Wipe(_lastX, _lastY, 58 * dip, dt, mark: true);
+                // 68 at 100%: the ragged rim sits inside the radius, so this reads like the old 58.
+                double reach = 68 * dip * Models.AppSettings.ClampSteamWipeSize(App.Settings?.Current?.SteamWipeSize ?? 100) / 100.0;
+                if (hadCursor) Stage.Push(fromX, fromY, _lastX, _lastY, reach, dt, mark: true);
+                else Stage.Wipe(_lastX, _lastY, reach, dt, mark: true);
             }
         }
     }

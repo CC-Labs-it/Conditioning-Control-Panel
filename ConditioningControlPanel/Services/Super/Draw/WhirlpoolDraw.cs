@@ -49,7 +49,7 @@ public sealed class WhirlpoolDraw : IDisposable
         // Each arm is ONE stroked path (no joints to show), and one radial shader fades all three
         // from full strength at 45% of the reach to nothing at the rim: a soft edge, no circle.
         double turns = p.Turns, pitch = r / (turns * 2 * Math.PI), end = turns * 2 * Math.PI;
-        const double step = 0.12;
+        const double step = 0.05;
         _path.Rewind();
         for (int arm = 0; arm < Arms; arm++)
         {
@@ -57,8 +57,10 @@ public sealed class WhirlpoolDraw : IDisposable
             bool first = true;
             for (double th = 0.3; th < end; th += step)
             {
-                double rr = pitch * th;
-                float qx = (float)(Math.Cos(th + off) * rr), qy = (float)(Math.Sin(th + off) * rr);
+                // Not a ruler-drawn spiral: each arm strays a little and keeps morphing.
+                double rr = pitch * th, a = th + off + Whirlpool.Wobble(rr / r, th + off, p.Angle);
+                rr *= 1 + 0.07 * (rr / r) * Math.Sin(2 * a + p.Angle * 0.29);   // and breathes in and out a little
+                float qx = (float)(Math.Cos(a) * rr), qy = (float)(Math.Sin(a) * rr);
                 if (first) { _path.MoveTo(qx, qy); first = false; } else _path.LineTo(qx, qy);
             }
         }
@@ -72,7 +74,13 @@ public sealed class WhirlpoolDraw : IDisposable
         }
         _arm.Shader = _armShader;
         _arm.Color = SKColors.White.WithAlpha((byte)(255 * master));
-        _arm.StrokeWidth = (float)(5 + 13 * e) * dip;
+        // A wide faint pass first, so the line has a soft shoulder instead of a hard edge.
+        float width = (float)(5 + 13 * e) * dip;
+        _arm.Color = SKColors.White.WithAlpha((byte)(255 * master * 0.28f));
+        _arm.StrokeWidth = width * 2.6f;
+        canvas.DrawPath(_path, _arm);
+        _arm.Color = SKColors.White.WithAlpha((byte)(255 * master));
+        _arm.StrokeWidth = width;
         canvas.DrawPath(_path, _arm);
         canvas.Restore();
     }

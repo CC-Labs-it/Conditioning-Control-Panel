@@ -155,6 +155,21 @@
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkSteamWords_Changed" Unchecked="ChkSteamWords_Changed"/>
                     </Grid>
+                    <!-- Steam: the size of the spot around the cursor that moves the fog. -->
+                    <Grid x:Name="SteamSizeRow" Height="36" Background="Transparent" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_steam_size}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="SliderSteamSize" Minimum="40" Maximum="300" Value="100"
+                                VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderSteamSize_Changed"/>
+                        <TextBlock Grid.Column="2" x:Name="TxtSteamSize" Text="100%" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                   FontSize="13" FontWeight="Bold"/>
+                    </Grid>
                     <!-- Creep's own options. Shown while the Creep switch is on and unlocked
                          (Features/PinkFilterFeatureControl.Creep.cs). -->
                     <Border x:Name="CreepCard" Visibility="Collapsed"

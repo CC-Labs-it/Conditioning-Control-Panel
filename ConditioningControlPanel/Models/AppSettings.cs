@@ -5478,6 +5478,15 @@ namespace ConditioningControlPanel.Models
             set { _steamWordsInFog = value; OnPropertyChanged(); }
         }
 
+        // Steam: how big the spot around the cursor that moves the fog is, in percent of the stock size.
+        public static int ClampSteamWipeSize(int v) => Math.Clamp(v, 40, 300);
+        private int _steamWipeSize = 100;
+        public int SteamWipeSize
+        {
+            get => _steamWipeSize;
+            set { _steamWipeSize = ClampSteamWipeSize(value); OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Attention Game

@@ -41,6 +41,9 @@ namespace ConditioningControlPanel.Features
                 CreepCard.Visibility = Visibility.Collapsed;
                 SteamWordsRow.Visibility = SuperAccess.IsSelected(SuperEffect.Creep) ? Visibility.Visible : Visibility.Collapsed;
                 ChkSteamWords.IsChecked = s.SteamWordsInFog;
+                SteamSizeRow.Visibility = SteamWordsRow.Visibility;
+                SliderSteamSize.Value = s.SteamWipeSize;
+                TxtSteamSize.Text = $"{s.SteamWipeSize}%";
                 if (CmbCreepSpeed.Items.Count == 0)
                 {
                     // DarkComboBoxStyle has a dark popup, so the items take the light brush.
@@ -73,6 +76,17 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             s.SteamWordsInFog = ChkSteamWords.IsChecked ?? true;
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost reads the size each frame.
+        private void SliderSteamSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_creepLoading || TxtSteamSize == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.SteamWipeSize = (int)(Math.Round(e.NewValue / 5) * 5);
+            TxtSteamSize.Text = $"{s.SteamWipeSize}%";
             App.Settings?.Save();
         }
 

@@ -292,6 +292,17 @@ public sealed class SteamField
 
     /// <summary>A soft wipe that takes time (the cursor, the bouncing word). <paramref name="mark"/>
     /// = remember the spot so words come back in the fog there.</summary>
+    /// <summary>
+    /// The wipe is not a circle: its rim comes in and out by direction and keeps shifting, the way
+    /// a hand through steam leaves a ragged edge. 0.6 to 1 of the radius.
+    /// </summary>
+    private double Rag(double dx, double dy)
+    {
+        double a = Math.Atan2(dy, dx);
+        return 0.8 + 0.11 * Math.Sin(3 * a + _time * 0.9) + 0.06 * Math.Sin(5 * a - _time * 1.4 + 1.3)
+                   + 0.03 * Math.Sin(9 * a + _time * 2.1 + 0.4);
+    }
+
     public void Wipe(double xPx, double yPx, double radiusPx, double dt, bool mark)
     {
         double cx = Cx(xPx), cy = Cy(yPx), r = Math.Max(1, Cells(radiusPx));
@@ -301,8 +312,9 @@ public sealed class SteamField
             for (int gx = x0; gx <= x1; gx++)
             {
                 double d = Math.Sqrt((gx - cx) * (gx - cx) + (gy - cy) * (gy - cy));
-                if (d >= r) continue;
-                double w = 1 - d / r; int i = gy * W + gx;
+                double rr = r * Rag(gx - cx, gy - cy);
+                if (d >= rr) continue;
+                double w = 1 - d / rr; int i = gy * W + gx;
                 Fog[i] *= (float)(1 - Math.Clamp(dt * WipeRate * w, 0, 1));
                 if (mark) Mem[i] = Math.Max(Mem[i], (float)Math.Min(1, w * 4));
             }
@@ -358,8 +370,9 @@ public sealed class SteamField
             for (int gx = x0; gx <= x1; gx++)
             {
                 double d = Math.Sqrt((gx - cx) * (gx - cx) + (gy - cy) * (gy - cy));
-                if (d >= r) continue;
-                double w = 1 - d / r; int i = gy * W + gx;
+                double rr = r * Rag(gx - cx, gy - cy);
+                if (d >= rr) continue;
+                double w = 1 - d / rr; int i = gy * W + gx;
                 float f = Fog[i], cut = f * (float)Math.Clamp(dt * WipeRate * w, 0, 1);
                 Fog[i] = f - cut; taken += cut;
                 if (mark) Mem[i] = Math.Max(Mem[i], (float)Math.Min(1, w * 4));
@@ -469,8 +482,13 @@ public sealed class SteamField
                 double dx = gx - cx, dy = gy - cy, d = Math.Sqrt(dx * dx + dy * dy);
                 if (d >= r) continue;
                 int i = gy * W + gx;
-                double edge = 1 - d / r;                      // 0 at the rim, 1 at the centre
-                double soft = Math.Min(1, edge * 4);          // the reach fades in over its outer quarter
+                // The reach is not a ruled circle: its rim wanders by direction and with time.
+                double phi = Math.Atan2(dy, dx);
+                double rim = 0.9 + 0.07 * Math.Sin(3 * phi + angle * 0.4) + 0.03 * Math.Sin(7 * phi - angle * 0.6 + 1.1);
+                double edge = 1 - d / (r * rim);              // 0 at the rim, 1 at the centre
+                if (edge <= 0) continue;
+                double soft = Math.Min(1, edge * 2.5);        // the reach fades in over its outer 40%
+                soft = soft * soft * (3 - 2 * soft);          // with no corner at either end
                 // Carry: look back along the turn and a little further out.
                 // The fog turns WITH the arms (same way, same rate), so what the arms carve stays
                 // carved instead of smearing: that is what makes them read as a fog spiral.
@@ -481,10 +499,11 @@ public sealed class SteamField
                 double f = Fog[i] + (carried - Fog[i]) * soft;
                 // Arms: thicker on the band, thinner between, turning with the drawn spiral.
                 double band = Math.Sin(Math.PI * Math.Min(1, d / r)) * eased;
-                double arm = 0.5 - 0.5 * Math.Cos(arms * Math.Atan2(dy, dx) - arms * d / Math.Max(0.5, pitch) + arms * angle);
-                f += (arm - 0.5) * band * 3.2 * dt * cap;
+                double arm = 0.5 - 0.5 * Math.Cos(arms * (phi - Whirlpool.Wobble(d / r, phi, angle)) - arms * d / Math.Max(0.5, pitch) + arms * angle);
+                f += (arm - 0.5) * band * soft * 3.2 * dt * cap;
                 if (d < eye) f *= Math.Clamp(1 - (1 - d / eye) * 6 * dt * (0.4 + eased), 0, 1);
-                Fog[i] = (float)Math.Clamp(f, 0, 1);
+                // Fog a push piled up above 1 is left as it is, or the rim would cut a line in it.
+                Fog[i] = (float)Math.Clamp(f, 0, Math.Max(1, Fog[i]));
                 // Momentum: the same turn as the carry above, as a velocity the fog keeps. While
                 // the pool is here it does the carrying itself, so the velocity is held back.
                 float gk = (float)(vgain * soft);

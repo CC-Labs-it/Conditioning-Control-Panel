@@ -6384,6 +6384,7 @@
   "super_twist_undertow": "A soft lens in the blur shrinks on its own until everything is blur. Click to widen it.",
   "super_steam_words": "Words in the fog",
   "tooltip_super_steam_words": "Words show where the fog was wiped and came back, then fade. Off: fog only.",
+  "super_steam_size": "Wipe size",
   "super_corner_title": "V2: {0}",
   "super_for_supporters": "For supporters",
   "dash_card_tip": "Click opens the settings. Right-click switches it on or off.",
