@@ -113,3 +113,12 @@ test('a rejected resume reports an error to the host', async () => {
   await Promise.resolve();
   assert.deepEqual(p.messages.at(-1), { type: 'error', code: 0, session: 'test' });
 });
+
+test('time messages include position, played ranges and pause state', () => {
+  const p = page();
+  p.video.currentTime = 8.25;
+  p.video.paused = true;
+  p.video.played = { length: 2, start: i => [1, 7][i], end: i => [3, 8.25][i] };
+  p.video.ontimeupdate();
+  assert.deepEqual(p.messages.at(-1), { type: 'time', ms: 8250, playedMs: 3250, paused: true, session: 'test' });
+});
