@@ -118,7 +118,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string OllamaHost
         {
             get => _ollamaHost;
-            set { if (Set(ref _ollamaHost, value ?? "") && !_suppressWrite) Write(p => p.AiOllamaHost = _ollamaHost.Trim()); }
+            set
+            {
+                if (!Set(ref _ollamaHost, value ?? "") || _suppressWrite) return;
+                if (string.IsNullOrWhiteSpace(_ollamaHost) || Services.AIService.LocalAiHost.TryNormalize(_ollamaHost, out _))
+                    Write(p => p.AiOllamaHost = _ollamaHost.Trim());
+                else SetStatus(Loc.Get("label_status_failed"), false);
+            }
         }
 
         public string CustomEndpoint
@@ -211,7 +217,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 case Mode.LocalOllama:
                     var host = CoreSettings.Current?.CompanionPrompt?.AiOllamaHost;
                     if (!string.IsNullOrWhiteSpace(host)) SetStatus(Loc.Get("label_status_testing"), false);
-                    var (t1, h1) = await Providers.TestOllamaAsync(host);
+                    var probeHost = Services.AIService.LocalAiHost.TryNormalize(host, out var normalized) ? normalized : host;
+                    var (t1, h1) = await Providers.TestOllamaAsync(probeHost);
                     SetStatus(t1, h1);
                     break;
                 case Mode.Custom:

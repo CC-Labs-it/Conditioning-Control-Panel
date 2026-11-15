@@ -328,8 +328,15 @@ public sealed class LocalProvidersTests
             Assert.Equal(AiProviderType.Local, CoreSettings.Current.CompanionPrompt.AiProvider);
             Assert.True(CoreSettings.Current.AiChatEnabled);
 
-            vm.OllamaHost = baseUrl + "/";
-            Assert.Equal(baseUrl + "/", CoreSettings.Current.CompanionPrompt.AiOllamaHost);
+            vm.OllamaHost = "localhost:11434";
+            Assert.Equal("localhost:11434", CoreSettings.Current.CompanionPrompt.AiOllamaHost);
+            vm.OllamaHost = "http://[garbage";
+            Assert.Equal("localhost:11434", CoreSettings.Current.CompanionPrompt.AiOllamaHost);
+            Assert.False(vm.IsHealthy);
+            vm.OllamaHost = "  ";
+            Assert.Equal("", CoreSettings.Current.CompanionPrompt.AiOllamaHost);
+            vm.OllamaHost = baseUrl.Replace("http://", "") + "/";
+            Assert.Equal(baseUrl.Replace("http://", "") + "/", CoreSettings.Current.CompanionPrompt.AiOllamaHost);
             await vm.TestConnectionAsync();
             Assert.True(vm.IsHealthy, vm.StatusLine);
             Assert.StartsWith(Loc.Get("label_status_connected"), vm.StatusLine);

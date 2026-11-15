@@ -66,7 +66,7 @@ internal static class KeywordAvatarComment
                 () => TryShowLine(line, aiGenerated, generation, attempt + 1));
             return;
         }
-        tube.GigglePriority(line, playSound: true, aiGenerated: aiGenerated);
+        tube.GigglePriority(line, playSound: true, aiGenerated: aiGenerated, unprompted: true);
         // ponytail: v2's arbiter/ledger is not ported, so no external-line ledger write yet.
     }
 }
