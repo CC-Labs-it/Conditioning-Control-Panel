@@ -41,6 +41,7 @@
   "deeper_open_editor_failed_title": "エディターを開けませんでした",
   "deeper_open_editor_failed_fmt": "Deeper エディターを開けませんでした:\n\n{0}: {1}",
   "webcam_unnamed_device": "（名前のないデバイス）",
+  "race_origin_unavailable": "保存されたローカルアドレスを使用できないため、レースを開けません。他のアプリを閉じて CCP を再起動してください。改善しない場合は CCP の保存先を確認してください。",
   "rt_engine_intro": "Racing Thoughtsにはレースエンジンが必要です。初回のみ124 MB。",
   "rt_engine_download": "ダウンロード",
   "rt_engine_cancel": "キャンセル",

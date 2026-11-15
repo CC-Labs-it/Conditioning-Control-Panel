@@ -71,6 +71,9 @@ public sealed class WebAssetServer : IDisposable
 
     public int Port { get; }
 
+    /// <summary>True when a race can use the same origin again on a later launch.</summary>
+    internal bool HasStableOrigin { get; private set; }
+
     /// <summary>
     /// The Scrolller relay's OWN port. A web engine caps HTTP/1.1 connections per scheme+host+port (Chromium and libsoup:
     /// 6), every web view shares one profile, and a relay request holds its socket until the whole fetch lands; on the
@@ -89,20 +92,25 @@ public sealed class WebAssetServer : IDisposable
     {
         _root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         int preferred = 0;
+        bool preferenceReadable = true;
         if (portFile != null)
         {
             try { int.TryParse(File.ReadAllText(portFile), out preferred); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+            catch (IOException) { preferenceReadable = false; }
+            catch (UnauthorizedAccessException) { preferenceReadable = false; }
         }
         Port = Bind(ref _listener, preferred);
+        HasStableOrigin = portFile == null || (preferenceReadable && preferred is > 0 and <= 65535 && Port == preferred);
         // A temporary collision must not strand the browser storage at the original origin.
-        if (portFile != null && preferred is not (> 0 and <= 65535))
+        if (portFile != null && preferenceReadable && preferred is not (> 0 and <= 65535))
         {
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(portFile))!);
                 File.WriteAllText(portFile, Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                HasStableOrigin = true;
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
