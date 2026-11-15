@@ -17,6 +17,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class RemoteMoreSignalTests
 {
     private sealed class FakeRelay : HttpMessageHandler
@@ -47,11 +48,13 @@ public sealed class RemoteMoreSignalTests
         var oldAttention = MainShellWindow.RemoteJoinAttention;
         var oldSink = global::ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink;
         var pending = new List<(TimeSpan Duration, CancellationToken Token, TaskCompletionSource<bool> Completion)>();
+        TaskCompletionSource<bool>? confirmationStarted = null;
         RemoteControlTabView.MoreConfirmationDelay = (duration, token) =>
         {
             var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             token.Register(() => completion.TrySetCanceled(token));
             pending.Add((duration, token, completion));
+            confirmationStarted?.TrySetResult(true);
             return completion.Task;
         };
         var fake = new FakeRelay();
@@ -82,8 +85,9 @@ public sealed class RemoteMoreSignalTests
 
             async Task Click(Button button, int count)
             {
+                confirmationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                for (var i = 0; i < 200 && pending.Count < count; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+                await confirmationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.Equal(count, pending.Count);
                 Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[count - 1].Duration);
             }
@@ -102,8 +106,9 @@ public sealed class RemoteMoreSignalTests
             Assert.Equal(2, fake.Signals.Count);
             Assert.Equal(expected, tabStatus.Text); // the first confirmation stays until the next response
             Assert.False(pending[0].Token.IsCancellationRequested);
+            confirmationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
             gate.SetResult(true);
-            for (var i = 0; i < 200 && pending.Count < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            await confirmationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(2, pending.Count);
             Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[1].Duration);
             Assert.True(pending[0].Token.IsCancellationRequested);
