@@ -77,6 +77,46 @@ public sealed class ExclusivesEntranceTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    public Task MinimizeCompletesEntranceBeforeRestore(MotionLevel level) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var clock = new Clock();
+        var settings = CoreSettings.Current;
+        var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode);
+        BeatLoop.Time = clock;
+        MainShellWindow? shell = null;
+        try
+        {
+            (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode) = (level, false, false);
+            shell = new MainShellWindow { Width = 1400, Height = 900 };
+            shell.Show(); Settle();
+            shell.ShowTab("premium"); Settle();
+            var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
+            var items = view.GetVisualDescendants().OfType<Border>()
+                .Where(b => b.Name == "ExCard" || b.Name == "GroupHead").ToArray();
+            Assert.True(items.Length > 2);
+            Assert.Contains(items, item => item.Opacity == 0);
+            shell.WindowState = WindowState.Minimized; Settle();
+            shell.WindowState = WindowState.Normal; Settle();
+            Assert.All(items, item =>
+            {
+                Assert.Equal(1, item.Opacity, 6);
+                var slide = item.RenderTransform is TransformGroup group
+                    ? group.Children.OfType<TranslateTransform>().Single()
+                    : Assert.IsType<TranslateTransform>(item.RenderTransform);
+                Assert.Equal(0, slide.Y, 6);
+            });
+        }
+        finally
+        {
+            shell?.Close(); BeatLoop.Time = TimeProvider.System;
+            (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode) = old;
+        }
+        return Task.CompletedTask;
+    });
+
     private static void Settle() { Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
     private sealed class Clock : TimeProvider
     {

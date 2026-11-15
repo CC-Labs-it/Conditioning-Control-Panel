@@ -62,7 +62,7 @@ public partial class ExclusivesTabView
                 Frame(t);
                 if (t >= end) { _entrance?.Stop(); _entrance = null; }
             });
-            _entrance.OnParked = () => { _entrance?.Stop(); _entrance = null; };
+            _entrance.OnParked = () => { Frame(end); _entrance?.Stop(); _entrance = null; };
             _entrance.Start();
         }, DispatcherPriority.Loaded);
     }
