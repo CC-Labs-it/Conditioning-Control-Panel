@@ -19,7 +19,7 @@ public class ChaosRabbitTrailFeedTests
     public void Trails_draw_pop_expire_and_clear() => AvaloniaTestDispatcher.Run(() =>
     {
         var stateField = typeof(ChaosRunHost).GetField("_state", BindingFlags.Static | BindingFlags.NonPublic)!;
-        var (saved, clock, nowMs, skip) = (stateField.GetValue(null), BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests);
+        var (saved, clock, nowMs, skip) = (stateField.GetValue(null), BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests); var popText = ChaosRunHost.PopText; var labels = new List<string>();
         var settings = ConditioningControlPanel.CoreSettings.Current; var (skia, composited) = (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited);
         var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         try
@@ -31,7 +31,10 @@ public class ChaosRabbitTrailFeedTests
             int treats = 0, snaps = 0;
             BubbleOverlay.BeginChaos(new Border(), _ => treats++, _ => snaps++);
             var rabbit = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsDarter = true, SizePx = 20, LifetimeMs = 8000, DarterSpeed = 9 }, new Random(7));
-            rabbit.X = 30; rabbit.Y = -10; BubbleOverlay.TickChaosTrails();
+            ChaosRunHost.PopText = (_, _, label, _) => labels.Add(label); rabbit.X = rabbit.Y = 500; var origin = BubbleOverlay.CenterPx(rabbit); BubbleOverlay.TriggerPlayerRipple(new Point(origin.X - 40, origin.Y), 100, 128); BubbleOverlay.StepPlayerRipples(); Assert.False(rabbit.Spanked); BubbleOverlay.StepPlayerRipples(); Assert.True(rabbit.Spanked); Assert.False(rabbit.Popping); Assert.Equal(1, rabbit.SpankGrowth); Assert.Single(labels, "FLUNG");
+            var victim = new AmbientBubble { X = rabbit.X, Y = rabbit.Y, Size = 10, Spec = new EffectBubbleSpec() }; BubbleOverlay.Field.Bubbles.Add(victim); BubbleOverlay.TickDarterSweeps(); Assert.True(victim.Popping); Assert.Equal(1, treats); BubbleOverlay.Field.Bubbles.Remove(victim); treats = 0;
+            BubbleOverlay.TriggerPlayerRipple(new Point(origin.X + 40, origin.Y), 100, 128); BubbleOverlay.StepPlayerRipples(); BubbleOverlay.StepPlayerRipples(); double oldX = rabbit.X; rabbit.Step(); Assert.Equal(oldX - 9 * ChaosTuning.RIPPLE_FLING_SPEED_MULT, rabbit.X, 6); Assert.Single(labels, "FLUNG");
+            ChaosFieldFxOverlay.CloseActive(); rabbit.X = 30; rabbit.Y = -10; BubbleOverlay.TickChaosTrails();
             var dots = new List<FieldFxPrim>(); var fx = Assert.IsType<ChaosFieldFxOverlay>(ChaosFieldFxOverlay.Active);
             fx.Model.Frame(0, dots); Assert.Single(dots, p => p.Kind == FieldFxKind.TrailDot && !p.Warm);
             rabbit.X = 69; BubbleOverlay.TickChaosTrails(); fx.Model.Frame(0, dots); Assert.Single(dots);
@@ -40,11 +43,8 @@ public class ChaosRabbitTrailFeedTests
                 var b = new AmbientBubble { X = x - 10, Y = -10, Size = 20, Spec = spec, FuseRemainingMs = 5000, FuseTotalMs = 5000 };
                 BubbleOverlay.Field.Bubbles.Add(b); return b;
             }
-            var treat = Add(126, new EffectBubbleSpec());
-            var live = Add(125, new EffectBubbleSpec { IsLive = true });
-            var far = Add(127, new EffectBubbleSpec());
-            var otherRabbit = Add(80, new EffectBubbleSpec { IsDarter = true });
-            var freeze = Add(80, new EffectBubbleSpec { IsFreeze = true });
+            var treat = Add(126, new EffectBubbleSpec()); var live = Add(125, new EffectBubbleSpec { IsLive = true }); var far = Add(127, new EffectBubbleSpec());
+            var otherRabbit = Add(80, new EffectBubbleSpec { IsDarter = true }); var freeze = Add(80, new EffectBubbleSpec { IsFreeze = true });
             BubbleOverlay.Field.FreezeChaos = true; BubbleOverlay.TickChaosTrails(); Assert.False(treat.Popping);
             BubbleOverlay.Field.FreezeChaos = false; BubbleOverlay.TickChaosTrails();
             Assert.True(treat.Popping); Assert.True(live.Popping); Assert.False(far.Popping);
@@ -79,7 +79,7 @@ public class ChaosRabbitTrailFeedTests
         {
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.FreezeChaos = false; BubbleOverlay.Field.Bubbles.Clear(); ChaosFieldFxOverlay.CloseActive();
             (BubbleOverlay.Field.Clock, ChaosFieldFxOverlay.NowMs, ChaosFieldFxOverlay.SkipPlatformChecksForTests) = (clock, nowMs, skip);
-            (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited) = (skia, composited); stateField.SetValue(null, saved);
+            (settings.ChaosSkiaFxEnabled, ChaosSkiaFxOverlay.Composited) = (skia, composited); stateField.SetValue(null, saved); ChaosRunHost.PopText = popText;
         }
     });
     [Fact]

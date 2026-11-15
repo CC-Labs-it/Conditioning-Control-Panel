@@ -121,17 +121,13 @@ namespace ConditioningControlPanel.Services
         public double SpankGrowth { get; private set; } = 1;
         public bool QuickCatch => !DarterTelegraphing && _darterActiveMs <= (Spec?.QuickWindowMs ?? 0);
         public double TelegraphFraction => DarterTelegraphing ? Math.Clamp(_darterTelegraphMs / Math.Max(1, Spec?.TelegraphMs ?? 1), 0, 1) : 0;
-        public void Spank(Random random, double growth)
+        public void Spank(Random random, double growth, double? flingDx = null, double flingDy = 0)
         {
-            if (Popping || _spankCooldown > 0 || Spec?.IsDarter != true) return;
-            _spankCooldown = 250;
-            double speed = Math.Sqrt(_vx * _vx + _vy * _vy);
-            if (speed < 0.01) speed = Spec.DarterSpeed;
-            speed = Math.Min(speed * 1.18, Spec.DarterSpeed * 2.2);
-            double angle = random.NextDouble() * Math.PI * 2;
-            _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed;
-            _darterEscaping = false; _darterBounces = 0; _darterPunch = 0.35;
-            if (!Spanked) { Spanked = true; SpankGrowth = Math.Max(1, growth); }
+            if (Popping || Spec?.IsDarter != true || (flingDx == null && _spankCooldown > 0)) return; _spankCooldown = 250;
+            double speed = Math.Sqrt(_vx * _vx + _vy * _vy); if (speed < 0.01) speed = Spec.DarterSpeed; speed = flingDx != null ? Spec.DarterSpeed * Chaos.ChaosTuning.RIPPLE_FLING_SPEED_MULT : Math.Min(speed * 1.18, Spec.DarterSpeed * 2.2);
+            double angle = flingDx is double dx && dx * dx + flingDy * flingDy >= 1 ? Math.Atan2(flingDy, dx) : random.NextDouble() * Math.PI * 2;
+            _vx = Math.Cos(angle) * speed; _vy = Math.Sin(angle) * speed; _darterEscaping = false;
+            _darterBounces = 0; _darterPunch = flingDx != null ? 0.45 : 0.35; if (!Spanked) { Spanked = true; SpankGrowth = flingDx != null ? 1 : Math.Max(1, growth); }
         }
         public bool DarterTelegraphing => _darterTelegraphMs > 0;
         /// <summary>WPF BubbleService.cs:3877-3893 (The Pull): turn toward a point, at most 0.065 rad per frame.</summary>

@@ -480,7 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var b in Field.Bubbles.ToArray())
                 {
                     if (b.Popping || b.AmbientTrigger || b.Spec is not { } spec || wave.Hit.Contains(b)) continue;
-                    if (spec.IsFreeze || spec.IsTease || spec.IsBrittle || spec.IsDarter) continue;
+                    if (spec.IsFreeze || spec.IsTease || spec.IsBrittle) continue;
                     var point = CenterPx(b);
                     double dx = point.X - wave.Center.X, dy = point.Y - wave.Center.Y;
                     if (dx * dx + dy * dy > reach * reach) continue;
@@ -489,7 +489,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         if (b.Snap()) Field.ChaosDefused?.Invoke(b);
                     }
-                    else PopChaos(b);
+                    else if (spec.IsDarter) { bool first = !b.Spanked; b.Spank(Field.Random, 1, dx, dy); if (first && b.Spanked) ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, "FLUNG", Color.FromRgb(0x7A, 0xE0, 0xFF)); } else PopChaos(b);
                     // A pop callback may end the run and clear the field reentrantly.
                     if (i >= PlayerRipples.Count || !ReferenceEquals(PlayerRipples[i], wave)) return;
                 }
