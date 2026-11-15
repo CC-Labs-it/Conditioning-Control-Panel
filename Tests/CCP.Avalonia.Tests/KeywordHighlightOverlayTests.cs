@@ -84,12 +84,12 @@ public class KeywordHighlightOverlayTests
         var execute = WindowsOcrSource.ExecuteForTests;
         try
         {
-            WindowsOcrSource.ExecuteForTests = _ => Task.FromResult("[{\"Text\":\"good\",\"X\":900,\"Y\":10,\"Width\":40,\"Height\":20,\"Screen\":0}," +
-                "{\"Text\":\"boy\",\"X\":1010,\"Y\":300,\"Width\":30,\"Height\":20,\"Screen\":1}]");
+            WindowsOcrSource.ExecuteForTests = _ => Task.FromResult("[{\"Text\":\"good\",\"X\":900,\"Y\":10,\"Width\":40,\"Height\":20,\"Screen\":\"DISPLAY1\"}," +
+                "{\"Text\":\"boy\",\"X\":1010,\"Y\":300,\"Width\":30,\"Height\":20,\"Screen\":\"DISPLAY2\"}]");
             var words = await WindowsOcrSource.Scan(default);
-            Assert.Equal(new[] { 0, 1 }, words.Select(w => w.Screen));
+            Assert.Equal(new[] { "DISPLAY1", "DISPLAY2" }, words.Select(w => w.Screen));
             var hit = Assert.Single(KeywordAudioRuntime.FindOcrMatches(new KeywordTrigger { Keyword = "good\\s+boy", MatchType = KeywordMatchType.Regex }, words));
-            Assert.Equal((new System.Drawing.Rectangle(900, 10, 40, 20), 0), (hit.Bounds, hit.Screen));
+            Assert.Equal((new System.Drawing.Rectangle(900, 10, 40, 20), "DISPLAY1"), (hit.Bounds, hit.Screen));
         }
         finally { WindowsOcrSource.ExecuteForTests = execute; }
     }

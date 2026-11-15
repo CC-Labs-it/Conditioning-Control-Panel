@@ -472,7 +472,7 @@ internal sealed class KeywordAudioRuntime
             {
                 if (match.Length == 0) continue;
                 System.Drawing.Rectangle? bounds = null;
-                var screen = 0;
+                string? screen = null;
                 for (var i = 0; i < words.Count; i++)
                 {
                     if (starts[i] + words[i].Text.Length <= match.Index || starts[i] >= match.Index + match.Length) continue;
