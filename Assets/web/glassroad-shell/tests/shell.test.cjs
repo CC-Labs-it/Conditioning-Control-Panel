@@ -37,7 +37,7 @@ test('only the race page gets gamepad and fullscreen permission', () => {
     assert.equal(allowedPermission(permission, origin, url), false);
 });
 
-function fixture({ ready = Promise.resolve(), failLoad = false } = {}) {
+function fixture({ ready = Promise.resolve(), failLoad = false, autoDom = true, load = Promise.resolve() } = {}) {
   const app = new EventEmitter(); app.commandLine = { getSwitchValue: () => 'x11', appendSwitch: (...args) => { app.switch = args; } }; app.whenReady = () => ready; app.quit = () => { app.quits++; }; app.quits = 0;
   const ipcMain = new EventEmitter(), stdin = new PassThrough(), stdout = new PassThrough();
   let output = ''; stdout.on('data', chunk => { output += chunk; });
@@ -59,7 +59,7 @@ function fixture({ ready = Promise.resolve(), failLoad = false } = {}) {
     focus() { this.focused = true; }
     isDestroyed() { return this.dead; }
     destroy() { this.dead = true; this.emit('closed'); }
-    async loadURL(value) { this.url = value; if (failLoad) throw new Error("load failed"); }
+    async loadURL(value) { this.url = value; if (autoDom) this.webContents.emit('dom-ready'); await load; if (failLoad) throw new Error("load failed"); }
   }
   start({ app, BrowserWindow: Window, ipcMain, session: { fromPartition: () => ses } }, { stdin, stdout });
   return { app, ipcMain, stdin, stdout, ses, windows, output: () => output.trim().split('\n').filter(Boolean).map(JSON.parse),
@@ -170,10 +170,14 @@ test('host loss before startup, failed load, output failure and a full queue can
 test('init reaches the real bridge before its timeout even when document load is delayed', async () => {
   const vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
   const { createBridge } = await import('../../glassroad/host/bridge.js');
-  const f = fixture();
-  f.input({ type: 'launch', url });
-  f.input({ type: 'init', caps: { net: true }, identity: { unifiedId: 'player' } });
-  await turn();
+  let finishLoad; const load = new Promise(resolve => { finishLoad = resolve; });
+  const f = fixture({ autoDom: false, load });
+  // LinuxRaceHost sends init only after shell-loaded; it does not pre-seed stdin.
+  f.stdout.on('data', chunk => {
+    if (JSON.parse(String(chunk)).type === 'shell-loaded')
+      f.input({ type: 'init', caps: { net: true }, identity: { unifiedId: 'player' } });
+  });
+  f.input({ type: 'launch', url }); await turn();
   const w = f.windows[0], web = w.webContents, event = { sender: web, senderFrame: web.mainFrame };
   const ipc = new EventEmitter();
   ipc.send = (channel, message) => setImmediate(() => f.ipcMain.emit(channel, event, message));
@@ -187,7 +191,9 @@ test('init reaches the real bridge before its timeout even when document load is
     setTimeout: fn => { timeout = fn; return 1; }, clearTimeout: () => { timeout = null; } };
   const bridge = createBridge({ win });
   await turn();
-  // No did-finish-load: a pending image can outlast the page's 3 s init deadline.
+  // DOM is ready, but a pending image keeps loadURL unresolved past the init deadline.
+  web.emit('dom-ready'); await turn();
+  assert.deepEqual(f.output(), [{ type: 'shell-loaded', displayBackend: 'x11' }]);
   if (timeout) timeout();
   const init = await bridge.init;
   assert.equal(init.caps.net, true);
@@ -195,7 +201,9 @@ test('init reaches the real bridge before its timeout even when document load is
   let reply; bridge.on('net-reply', message => { reply = message; });
   f.input({ type: 'net-reply', id: '1' });
   assert.equal(reply.id, '1');
-  bridge.dispose(); f.input({ type: 'shell-close' });
+  bridge.dispose(); finishLoad(); await turn();
+  assert.equal(f.output().filter(frame => frame.type === 'shell-loaded').length, 1);
+  f.input({ type: 'shell-close' });
 });
 
 test('a failed queued delivery closes the shell', async () => {

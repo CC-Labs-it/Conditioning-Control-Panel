@@ -116,7 +116,8 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
     win.on('focus', () => send({ type: 'shell-focus', active: true }));
     win.on('blur', () => { held = false; send({ type: 'shell-focus', active: false }); });
     win.on('closed', stop);
-    try { await win.loadURL(url.href); if (!ended) send({ type: 'shell-loaded', displayBackend: backend }); } catch { stop(); }
+    web.once('dom-ready', () => send({ type: 'shell-loaded', displayBackend: backend }));
+    try { await win.loadURL(url.href); } catch { stop(); }
   }
 
   function line(raw) {
