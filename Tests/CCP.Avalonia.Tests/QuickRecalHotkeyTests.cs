@@ -470,6 +470,47 @@ public sealed class QuickRecalHotkeyTests
     });
 
     [Fact]
+    public void QuickRecalHint_WaylandRequiresBothPortalBindings() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Init();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, s.CompanionPrompt.CameraShortcutGlobal);
+        var oldDisplay = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+        var tracker = WebcamTracker.Instance;
+        var oldCal = tracker.Calibration;
+        var camera = new PortalCameraHotkey(() => { });
+        var shell = new MainShellWindow { QuickRecalWayland = true, QuickRecalPlatformSupported = true };
+        shell.RegisterWaylandQuickRecal = (_, _, _) => Task.FromResult<IDisposable?>(new Registration());
+        shell.RegisterPortalCamera = (_, _, _) => camera;
+        try
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-0");
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, s.CompanionPrompt.CameraShortcutGlobal) =
+                (true, true, "Escape", "", true, WebcamConsent.ConsentVersion, true);
+            tracker.Calibration = new WebcamCalibrationData();
+            shell.StartQuickRecalHotkey();
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+            camera.SetSessionForTests("/session", "Meta+Shift+P");
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("webcam_quick_recal_hotkey_hint", "Ctrl+Alt+G", "Meta+Shift+P"), WebcamQuickRecalWindow.HotkeyHint());
+            s.WebcamQuickRecalHotkeyEnabled = false;
+            shell.ApplyQuickRecalHotkey();
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+            s.WebcamQuickRecalHotkeyEnabled = true;
+            shell.ApplyQuickRecalHotkey();
+            Assert.NotNull(WebcamQuickRecalWindow.HotkeyHint());
+            camera.Dispose();
+            Assert.Null(WebcamQuickRecalWindow.HotkeyHint());
+        }
+        finally
+        {
+            shell.StopQuickRecalHotkey(); shell.Close(); camera.Dispose();
+            tracker.Calibration = oldCal;
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", oldDisplay);
+            (s.WebcamQuickRecalHotkeyEnabled, s.PanicKeyEnabled, s.PanicKey, s.PauseKey, s.WebcamConsentGiven, s.WebcamConsentVersion, s.CompanionPrompt.CameraShortcutGlobal) = old;
+        }
+    });
+
+    [Fact]
     public Task CameraHotkey_InWindowFallback_RestoresShell_AndDoesNotStackConsent() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Init();

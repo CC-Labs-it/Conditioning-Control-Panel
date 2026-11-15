@@ -26,9 +26,9 @@ internal sealed class PortalCameraHotkey : IDisposable
 
     internal PortalCameraHotkey(Action pressed) => _pressed = pressed;
     internal static Func<DBusConnection> OpenConnection = () => new DBusConnection(DBusAddress.Session!);
-    internal void SetSessionForTests(string session)
+    internal void SetSessionForTests(string session, string trigger = "")
     {
-        lock (_gate) { _session = session; _bound = true; }
+        lock (_gate) { _session = session; Trigger = trigger; _bound = true; }
     }
 
     internal static string PreferredTrigger(ChordMods mods, string key)
