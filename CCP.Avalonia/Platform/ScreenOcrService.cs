@@ -24,22 +24,38 @@ internal sealed class ScreenOcrService : IDisposable
     private int _scanning;
     internal int IntervalMs { get; private set; }
 
-    /// <summary>The live <see cref="KeywordTriggerHead.OcrSource"/>: null when this desktop cannot be captured
-    /// (native Wayland, sandbox) or the OCR models are missing, so the scanner never starts there.</summary>
-    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>>? CreateSource()
+    /// <summary>The live <see cref="KeywordTriggerHead.OcrSource"/>: X11/GDI or, on Wayland and Flatpak, the
+    /// Screenshot portal, through the Core engine. Null only where nothing can capture (not Windows or Linux)
+    /// or the OCR models are missing; <see cref="UnavailableReasonKey"/> then says which.</summary>
+    internal static Func<CancellationToken, Task<IReadOnlyList<Word>>>? CreateSource(IScreenFrameSource? frames = null, IScreenOcrEngine? engine = null)
     {
-        var frames = ScreenFrameSourceFactory.Create();
-        if (frames is UnavailableScreenFrames) return null;
-        var engine = new RapidScreenOcrEngine(); // one per process; its ORT sessions live until exit
-        return engine.IsAvailable ? Scan(frames, engine) : null;
+        frames ??= ScreenFrameSourceFactory.Create();
+        if (frames is UnavailableScreenFrames) { _reasonKey = "ocr_unavailable_capture"; return null; }
+        engine ??= new RapidScreenOcrEngine(); // one per process; its ORT sessions live until exit
+        if (!engine.IsAvailable) { _reasonKey = "ocr_unavailable_models"; return null; }
+        _reasonKey = null;
+        return Scan(frames, engine);
     }
+
+    private static volatile string? _reasonKey;
+    /// <summary>Raised off the UI thread when a scan finds capture refused (the portal answer ends it for the session).</summary>
+    internal static event Action? UnavailableChanged;
+
+    /// <summary>Localization key for why Screen OCR reads nothing, or null when it can run. WPF has no such line:
+    /// its ScreenOcrService.cs:41-43 only logs a missing OCR language pack and Start (:55) silently does nothing.</summary>
+    internal static string? UnavailableReasonKey() =>
+        PortalScreenFrames.Refused ? "ocr_unavailable_refused" : KeywordTriggerHead.OcrSource == null ? _reasonKey : null;
 
     // Every monitor's frame through the engine, mapped to desktop pixels. Recognition is CPU-bound: off the UI thread.
     internal static Func<CancellationToken, Task<IReadOnlyList<Word>>> Scan(IScreenFrameSource frames, IScreenOcrEngine engine) =>
         async token =>
         {
             var result = await frames.CaptureAsync(token).ConfigureAwait(false);
-            if (result.Status != ScreenFrameStatus.Available) return [];
+            if (result.Status != ScreenFrameStatus.Available)
+            {
+                if (PortalScreenFrames.Refused) UnavailableChanged?.Invoke();
+                return [];
+            }
             return await Task.Run<IReadOnlyList<Word>>(() => result.Frames.SelectMany(f => engine.Recognize(f, token)
                 .Select(w => new Word(w.Text, f.ToScreen(w.Bounds), f.Screen))).ToArray(), token).ConfigureAwait(false);
         };

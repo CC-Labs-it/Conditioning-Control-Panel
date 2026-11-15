@@ -142,6 +142,10 @@
                                Foreground="{DynamicResource TextDimBrush}" FontSize="10" FontStyle="Italic"
                                TextWrapping="Wrap" IsVisible="False"/>
 
+                    <!-- Why the scanner reads nothing (capture refused or unavailable, models missing); code-behind fills it. -->
+                    <TextBlock x:Name="TxtScreenOcrUnavailable" Foreground="{DynamicResource TextDimBrush}" FontSize="10"
+                               FontStyle="Italic" TextWrapping="Wrap" Margin="0,0,0,4" IsVisible="False"/>
+
                     <StackPanel x:Name="ScreenOcrIntervalPanel" IsVisible="False">
                         <TextBlock Text="{loc:Str label_scan_interval}" Foreground="#A0A0A0" FontSize="10"/>
                         <Grid ToolTip.Tip="{loc:Str tooltip_how_often_to_scan_your_screen_for_trigger_key}">

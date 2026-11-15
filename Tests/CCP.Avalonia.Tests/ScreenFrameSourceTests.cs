@@ -59,6 +59,37 @@ public class ScreenFrameSourceTests
         Assert.Empty(await ScreenOcrService.Scan(new UnavailableScreenFrames(), new FakeEngine())(CancellationToken.None));
     }
 
+    private sealed class NoModels : IScreenOcrEngine
+    {
+        public bool IsAvailable => false;
+        public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default) => [];
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void WaylandGetsThePortalSourceAndOnlyMissingCaptureOrModelsLeaveItNull()
+    {
+        var saved = (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"), KeywordTriggerHead.OcrSource);
+        try
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", "wayland-0");
+            var frames = ScreenFrameSourceFactory.Create();
+            if (OperatingSystem.IsLinux()) Assert.IsType<PortalScreenFrames>(frames); // also under the test sandbox (Flatpak-like)
+            Assert.NotNull(ScreenOcrService.CreateSource(new PortalScreenFrames(), new FakeEngine()));
+            Assert.Null(ScreenOcrService.CreateSource(new PortalScreenFrames(), new NoModels()));
+            KeywordTriggerHead.OcrSource = null;
+            Assert.Equal("ocr_unavailable_models", ScreenOcrService.UnavailableReasonKey());
+            Assert.Null(ScreenOcrService.CreateSource(new UnavailableScreenFrames(), new FakeEngine()));
+            Assert.Equal("ocr_unavailable_capture", ScreenOcrService.UnavailableReasonKey());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", saved.Item1);
+            KeywordTriggerHead.OcrSource = saved.OcrSource;
+            ScreenOcrService.CreateSource(new PortalScreenFrames(), new FakeEngine()); // clears the static reason
+        }
+    }
+
     // Portal tests share the session-wide PortalScreenFrames.Refused flag; xunit runs one class's tests in sequence.
     private static Task<IReadOnlyList<CaptureMonitor>> TwoMonitors() => Task.FromResult<IReadOnlyList<CaptureMonitor>>(
         [new("left", new Rectangle(0, 0, 2, 2), 1), new("right", new Rectangle(2, 1, 1, 1), 2)]);

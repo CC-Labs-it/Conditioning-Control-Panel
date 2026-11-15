@@ -14,13 +14,12 @@ using Tmds.DBus.Protocol;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// Created only when an OCR engine is available and the user enables scanning. Native Wayland must
-// not fall back to X11: the XWayland root contains only XWayland windows.
+// Native Wayland must not fall back to X11: the XWayland root contains only XWayland windows.
+// Flatpak reaches the Screenshot portal by default, so it gets the portal source like any Wayland session.
 internal static class ScreenFrameSourceFactory
 {
     internal static IScreenFrameSource Create()
     {
-        if (SandboxNet.Active) return new UnavailableScreenFrames();
         if (OperatingSystem.IsWindows()) return new DesktopScreenFrames(Win32ScreenCapture.Read);
         if (!OperatingSystem.IsLinux()) return new UnavailableScreenFrames();
         // The app always runs through XWayland, and on KWin 6 (live 2026-11-15) an XWayland root grab is all

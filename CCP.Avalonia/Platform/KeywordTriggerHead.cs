@@ -91,8 +91,8 @@ internal static class KeywordTriggerHead
     }
 
     /// <summary>Screen capture plus recognition: MainShellWindow assigns <see cref="ScreenOcrService.CreateSource"/>
-    /// (X11/GDI capture + the Core RapidOcrNet engine). Null where that is unavailable (native Wayland, sandbox,
-    /// models missing); while null the scanner never starts.</summary>
+    /// (X11/GDI or Screenshot portal capture + the Core RapidOcrNet engine). Null where nothing can capture or the
+    /// models are missing; while null the scanner never starts.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
     private static readonly object _ocrGate = new();
