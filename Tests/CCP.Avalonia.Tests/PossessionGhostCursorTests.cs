@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
@@ -76,7 +77,7 @@ public class PossessionGhostCursorTests
             frames.Frame(TimeSpan.FromMilliseconds(press ? 1500 : 1200));
             Assert.InRange(Canvas.GetLeft(arrow), 135, 165);
             Assert.InRange(Canvas.GetTop(arrow), 114, 126);
-            frames.Frame(TimeSpan.FromMilliseconds(press ? 1901 : 1601));
+            frames.Frame(TimeSpan.FromMilliseconds(press ? 1990 : 1601));
             Assert.Equal(press, PossessionLease.IsLeased(toggle));
             if (press) { var lease = PossessionLease.Take(toggle)!; Assert.Equal(.96, lease.Scale.ScaleX, 2); lease.ReleaseImmediate(); }
             Assert.Equal(press ? 2 : 1, host.GhostLayer.Children.Count);
@@ -115,6 +116,98 @@ public class PossessionGhostCursorTests
             Assert.Empty(host.GhostLayer.Children); Assert.Equal(0, frames.Count);
         }
         finally { director.UndoAll(); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("en", "the ghost cursor")]
+    [InlineData("de", "der Geisterzeiger")]
+    [InlineData("es", "el cursor fantasma")]
+    [InlineData("fr", "le curseur fantôme")]
+    [InlineData("it", "il cursore fantasma")]
+    [InlineData("ja", "幽霊カーソル")]
+    [InlineData("ko", "유령 커서")]
+    [InlineData("pt-BR", "o cursor fantasma")]
+    [InlineData("ru", "призрачный курсор")]
+    [InlineData("zh-CN", "幽灵光标")]
+    public void NamesCursorInSelectedLanguage(string language, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        var frames = new FakeFrames(); var host = new Host(frames);
+        host.GhostLayer!.Measure(new Size(400, 300)); host.GhostLayer.Arrange(new Rect(0, 0, 400, 300));
+        var button = new Button { Width = 100, Height = 40 };
+        var window = new Window { Content = button }; window.Show();
+        try
+        {
+            loc.SetLanguage(language); window.UpdateLayout();
+            var target = new PossessionTarget { Visual = button, Role = PossessionRole.Button, Key = "button" };
+            string? named = null;
+            var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+                Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+                Remaining = TimeSpan.Zero, Name = (_, name) => named = name };
+            var effect = new GhostCursorEffect();
+            _ = effect.ApplyAsync(context, target, CancellationToken.None);
+            Assert.Equal(expected, named);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+        }
+        finally { window.Close(); loc.SetLanguage(previous); }
+    });
+
+    [Fact]
+    public void ArrowHasEmberShadow() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var frames = new FakeFrames(); var host = new Host(frames);
+        host.GhostLayer!.Measure(new Size(400, 300)); host.GhostLayer.Arrange(new Rect(0, 0, 400, 300));
+        var button = new Button { Width = 100, Height = 40 };
+        var window = new Window { Content = button }; window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var target = new PossessionTarget { Visual = button, Role = PossessionRole.Button, Key = "button" };
+            var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Melt,
+                Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+                Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+            var effect = new GhostCursorEffect(); _ = effect.ApplyAsync(context, target, CancellationToken.None);
+            var arrow = Assert.IsType<Path>(Assert.Single(host.GhostLayer.Children));
+            var shadow = Assert.IsType<DropShadowEffect>(arrow.Effect);
+            Assert.Equal(EmberAttribution.Ember, shadow.Color); Assert.Equal(16, shadow.BlurRadius);
+            Assert.Equal(0, shadow.OffsetX); Assert.Equal(0, shadow.OffsetY); Assert.Equal(.9, shadow.Opacity);
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 1.35)]
+    public void PressEasesDownAndBack(bool photosafe, double slow) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var frames = new FakeFrames(); var host = new Host(frames);
+        host.GhostLayer!.Measure(new Size(400, 300)); host.GhostLayer.Arrange(new Rect(0, 0, 400, 300));
+        var button = new Button { Width = 100, Height = 40 };
+        var window = new Window { Content = button }; window.Show();
+        try
+        {
+            window.UpdateLayout();
+            var target = new PossessionTarget { Visual = button, Role = PossessionRole.Button, Key = "button" };
+            var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Melt,
+                Intensity = PossessionIntensity.Eerie, Photosafe = photosafe, Rng = new Random(1), ElapsedFraction = 0,
+                Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+            var effect = new GhostCursorEffect(); _ = effect.ApplyAsync(context, target, CancellationToken.None);
+            frames.Frame(TimeSpan.Zero);
+            frames.Frame(TimeSpan.FromMilliseconds(1900 * slow));
+            var lease = PossessionLease.Take(button)!;
+            Assert.Equal(1, lease.Scale.ScaleX, 5);
+            frames.Frame(TimeSpan.FromMilliseconds((1900 + 45) * slow));
+            Assert.Equal(.965, lease.Scale.ScaleX, 5); Assert.Equal(.965, lease.Scale.ScaleY, 5);
+            frames.Frame(TimeSpan.FromMilliseconds((1900 + 90) * slow)); Assert.Equal(.96, lease.Scale.ScaleX, 5);
+            frames.Frame(TimeSpan.FromMilliseconds((1900 + 120) * slow)); Assert.Equal(.96, lease.Scale.ScaleX, 5);
+            frames.Frame(TimeSpan.FromMilliseconds((1900 + 215) * slow)); Assert.Equal(.995, lease.Scale.ScaleX, 5);
+            frames.Frame(TimeSpan.FromMilliseconds((1900 + 310) * slow)); Assert.Equal(1, lease.Scale.ScaleX, 5);
+            lease.ReleaseImmediate(); effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.False(PossessionLease.IsLeased(button));
+        }
+        finally { window.Close(); }
     });
 
 }

@@ -33,7 +33,7 @@ internal sealed class GhostCursorEffect : PossessionEffectBase
     public override double Weight => 3;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(6);
     public override IReadOnlyList<PossessionRole> Roles => TargetRoles;
-    protected override string? NameOverride => "the ghost cursor";
+    protected override string? NameOverride => ConditioningControlPanel.Localization.Loc.Get("possession_target_ghost_cursor");
 
     protected override bool CanApplyCore(PossessionContext ctx, PossessionTarget? target)
     {
@@ -59,7 +59,8 @@ internal sealed class GhostCursorEffect : PossessionEffectBase
         _glide = (_press ? 1500 : 1200) * _slow;
         _arrow = new Path { Data = Geometry.Parse("M 0,0 L 0,17.5 L 4.4,13.2 L 7.3,19.2 L 10.1,17.9 L 7.2,12.1 L 12.4,12.1 Z"),
             Fill = new SolidColorBrush(EmberAttribution.Ember), Stroke = new SolidColorBrush(EmberAttribution.Ember), StrokeThickness = .8,
-            Opacity = 0, IsHitTestVisible = false, RenderTransform = new ScaleTransform(1.45, 1.45) };
+            Opacity = 0, IsHitTestVisible = false, RenderTransform = new ScaleTransform(1.45, 1.45),
+            Effect = new DropShadowEffect { Color = EmberAttribution.Ember, BlurRadius = 16, OffsetX = 0, OffsetY = 0, Opacity = .9 } };
         layer.Children.Add(_arrow);
         _frames = host.PossessionFrames;
         _completion = new TaskCompletionSource();
@@ -104,7 +105,13 @@ internal sealed class GhostCursorEffect : PossessionEffectBase
             var scale = (ScaleTransform)_ripple.RenderTransform!;
             scale.ScaleX = scale.ScaleY = .2 + .8 * (1 - Math.Pow(1 - t, 3));
             _ripple.Opacity = (Context?.Photosafe == true ? .5 : .8) * (t < .25 ? t / .25 : (1 - t) / .75);
-            if (_lease != null) _lease.Scale.ScaleX = _lease.Scale.ScaleY = elapsed < 120 ? .96 : 1 - .04 * (1 - Math.Clamp((elapsed - 120) / 190, 0, 1));
+            if (_lease != null)
+            {
+                double squeeze = elapsed < 120
+                    ? 1 - .04 * HeadEffect.CubicOut(Math.Clamp(elapsed / 90, 0, 1))
+                    : .96 + .04 * HeadEffect.CubicOut(Math.Clamp((elapsed - 120) / 190, 0, 1));
+                _lease.Scale.ScaleX = _lease.Scale.ScaleY = squeeze;
+            }
         }
         if (ms >= pressAt + (_press ? 540 * _slow : 0)) _completion?.TrySetResult();
     }
