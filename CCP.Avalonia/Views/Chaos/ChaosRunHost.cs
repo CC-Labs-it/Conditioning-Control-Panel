@@ -307,16 +307,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var cfg = _state.Config;
             double intensity = _state.RunIntensity;
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
-            // WPF ChaosModeService.cs:1203-1213: rabbits roll independently of the bubble cap.
-            if (cfg.DartersEnabled)
-            {
-                var rabbit = ChaosBubbleVariants.RollDarter(effIntensity, _state.RabbitRateMult);
-                if (rabbit != null)
-                {
-                    ChaosMeta.MarkDiscovered("bubble:darter");
-                    BubbleOverlay.SpawnChaos(rabbit);
-                }
-            }
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
@@ -331,45 +321,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     && Rng.NextDouble() < ChaosTuning.CHAPERONE_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
                 {
                     SpawnChaperone(effIntensity);
-                    if (_spawnTimer != null)
-                        _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
-                    return;
                 }
                 // WPF :1301 (after the Chaperone roll at :1264): a Tease replaces the ordinary slot, never the scripted first run.
-                if (TrySpawnTease(cfg, effIntensity))
+                else if (!TrySpawnTease(cfg, effIntensity))
                 {
-                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
-                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
-                    return;
-                }
+                    EffectBubbleSpec spec;
+                    if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
+                        spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
+                    else
+                    {
+                        double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
+                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                            enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
+                            cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                    }
+                    if (spec.IsFreeze && BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true && !b.Popping) >= ChaosTuning.FREEZE_MAX_ON_SCREEN)
+                    {
+                        var noFreeze = enabled.Where(id => id != "bambifreeze").ToList();
+                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                            noFreeze.Count > 0 ? noFreeze : new[] { ChaosBubbleVariants.All[0].Id },
+                            cfg.EffectIntensity, _state.BubbleScale, 0);
+                    }
+                    _ordinarySpawns++;
+                    ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
+                    // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
+                    BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
-                EffectBubbleSpec spec;
-                if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
-                    spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
-                else
-                {
-                    double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
-                    spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
-                        enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
-                        cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                    if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
+                    {
+                        ChaosMeta.MarkDiscovered("bubble:prism");
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
+                            treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
+                    }
                 }
-                if (spec.IsFreeze && BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true && !b.Popping) >= ChaosTuning.FREEZE_MAX_ON_SCREEN)
+            }
+            // WPF ChaosModeService.cs:1203-1213: rabbits roll independently of the bubble cap.
+            if (cfg.DartersEnabled)
+            {
+                var rabbit = ChaosBubbleVariants.RollDarter(effIntensity, _state.RabbitRateMult);
+                if (rabbit != null)
                 {
-                    var noFreeze = enabled.Where(id => id != "bambifreeze").ToList();
-                    spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
-                        noFreeze.Count > 0 ? noFreeze : new[] { ChaosBubbleVariants.All[0].Id },
-                        cfg.EffectIntensity, _state.BubbleScale, 0);
-                }
-                _ordinarySpawns++;
-                ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
-                // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
-                BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
-
-                if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
-                {
-                    ChaosMeta.MarkDiscovered("bubble:prism");
-                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
-                        treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
+                    ChaosMeta.MarkDiscovered("bubble:darter");
+                    BubbleOverlay.SpawnChaos(rabbit);
                 }
             }
             if (_spawnTimer != null)
