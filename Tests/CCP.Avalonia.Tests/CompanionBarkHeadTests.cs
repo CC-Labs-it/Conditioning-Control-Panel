@@ -22,6 +22,61 @@ namespace CCP.Avalonia.Tests;
 public sealed class CompanionBarkHeadTests
 {
     [Fact]
+    public void LevelUpReachesEmiAndStopUnseedsBridge() => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var oldVideo = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe;
+        try
+        {
+            BarkHead.Start();
+            Assert.NotNull(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+            var fire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire!()!;
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance, fire.Target);
+            Assert.Equal("Fire", fire.Method.Name);
+            string? moment = null;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = () => (name, ctx) => { moment = name; fire(name, ctx); };
+            var field = typeof(ProgressionBank).GetField("LevelUp", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            ((System.Action<int>)field.GetValue(null)!)(7);
+            Assert.Equal("levelUp", moment);
+            BarkHead.Stop();
+            Assert.Null(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire);
+            Assert.Null(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = oldFire;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = oldVideo;
+        }
+    });
+
+    [Fact]
+    public void AwarenessBarkArmsEmiVoiceHold() => WithSeamsRestored(_ =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var lines = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var oldVideo = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe;
+        try
+        {
+            lines.ResetForTests();
+            var e = new BarkEngine(() => BarkRuleSet.Empty);
+            BarkHead.Seed(e);
+            e.Start();
+            e.RaiseAwarenessBark(new ConditioningControlPanel.Services.Awareness.ContextFrame());
+            Assert.Equal("awarenessReaction", lines.HeldBy);
+        }
+        finally
+        {
+            desk.CheckAvatarVoiceHold();
+            lines.ResetForTests();
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = oldFire;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = oldVideo;
+        }
+    });
+
+    [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
     {
         var src = Regex.Replace(File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs")),

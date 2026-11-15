@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.Awareness;
+using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -32,6 +35,81 @@ public sealed class BarkEngineTests : IDisposable
         var e = new BarkEngine(() => new BarkRuleSet(rules), new Random(7)) { Speak = _said.Add };
         e.Start();
         return e;
+    }
+
+    [Fact]
+    public void MirrorRunsBeforeRuleLookupAndSurvivesDeskFailure()
+    {
+        var old = EmiBarkBridge.DeskFire;
+        var fired = new List<(string, object?)>();
+        try
+        {
+            EmiBarkBridge.DeskFire = () => (name, payload) => fired.Add((name, payload));
+            var e = Engine();
+            Assert.False(e.Raise("TabNavigated", c => c.Set("tab", "mirror-test-tab")));
+            Assert.False(e.Raise("TabNavigated", c => c.Set("tab", "mirror-test-tab")));
+            Assert.Equal("featureOpened", fired[0].Item1);
+            Assert.Equal("featureOpenedRepeat", fired[1].Item1);
+            Assert.Equal(2, EmiLineEngine.ToCtx(fired[1].Item2)["n"]);
+            Assert.False(e.Raise("LevelUp", c => c.Set("level", 7), guaranteed: true));
+            Assert.Equal("levelUp", fired[2].Item1);
+            Assert.Equal(7, EmiLineEngine.ToCtx(fired[2].Item2)["level"]);
+            EmiBarkBridge.DeskFire = () => (_, _) => throw new InvalidOperationException();
+            Assert.True(Engine(Rule("LevelUp", "still speaks")).Raise("LevelUp", guaranteed: true));
+        }
+        finally { EmiBarkBridge.DeskFire = old; }
+    }
+
+    [Fact]
+    public void AwarenessFramesCarryTheirWpfContextAndArmTheHold()
+    {
+        int holds = 0;
+        var milestone = Engine(Rule("StillOnActivity", "{activity}|{still_minutes}|{app_cluster}|{app}"));
+        milestone.NoteAwarenessReaction = () => holds++;
+        Assert.True(milestone.RaiseAwarenessBark(new ContextFrame { Transition = TransitionKind.Milestone,
+            DwellSeconds = 179, ServiceName = "Video", AppCluster = "media", AppId = "browser" }));
+        Assert.Equal("Video|2|media|browser", _said.Last().Text);
+        var changed = Engine(Rule("ActivityChanged", "{activity}|{category}|{app_cluster}|{app}"));
+        changed.NoteAwarenessReaction = () => holds++;
+        Assert.True(changed.RaiseAwarenessBark(new ContextFrame { ServiceName = "Video", Category = ActivityCategory.Unknown,
+            AppCluster = "media", AppId = "browser" }));
+        Assert.Equal("Video|Unknown|media|browser", _said.Last().Text);
+        Assert.Equal(2, holds);
+    }
+
+    private sealed class RecordingArbiter : IReactionArbiter
+    {
+        public readonly List<ReactionSource> Lines = new();
+        public System.Threading.Tasks.Task<ArbiterDecision> SubmitAsync(ContextFrame frame, System.Threading.CancellationToken cancellationToken = default) =>
+            System.Threading.Tasks.Task.FromResult(ArbiterDecision.Silent("test"));
+        public void RecordExternalLine(ReactionSource source, string? appId = null) => Lines.Add(source);
+        public bool CanSpeak(ReactionSource source, string? appId = null) => true;
+    }
+
+    [Fact]
+    public void ArbiterOnlyRecordsOrdinaryNonAwarenessLinesWhenV2Active()
+    {
+        var old = WindowAwarenessService.V2OwnsReactionsProvider;
+        var arbiter = new RecordingArbiter();
+        try
+        {
+            WindowAwarenessService.V2OwnsReactionsProvider = () => true;
+            var e = Engine(Rule("Normal", "line")); e.AwarenessArbiter = arbiter;
+            Assert.True(e.Raise("Normal", guaranteed: true));
+            Assert.Equal(new[] { ReactionSource.Bark }, arbiter.Lines);
+            var safety = Rule("Safety", "line"); safety.ClassRaw = "safety";
+            e = Engine(safety); e.AwarenessArbiter = arbiter;
+            Assert.True(e.Raise("Safety", guaranteed: true));
+            e = Engine(Rule("Dry", "line")); e.AwarenessArbiter = arbiter; e.DryRun = true;
+            Assert.False(e.Raise("Dry", guaranteed: true));
+            e = Engine(Rule("ActivityChanged", "line")); e.AwarenessArbiter = arbiter;
+            Assert.True(e.RaiseAwarenessBark(new ContextFrame()));
+            WindowAwarenessService.V2OwnsReactionsProvider = () => false;
+            e = Engine(Rule("Inactive", "line")); e.AwarenessArbiter = arbiter;
+            Assert.True(e.Raise("Inactive", guaranteed: true));
+            Assert.Equal(new[] { ReactionSource.Bark }, arbiter.Lines);
+        }
+        finally { WindowAwarenessService.V2OwnsReactionsProvider = old; }
     }
 
     private sealed class DecisionSink : Serilog.Core.ILogEventSink
