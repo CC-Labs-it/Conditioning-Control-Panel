@@ -952,6 +952,7 @@ not correctness or a test pass; wildcards and checkbox inventories do not count.
 <li>Render-only: <code>win-emi-codex</code>. WPF EmiCodex.Open has no caller; the live codex door opens EmiBook instead. Inspect the plain reader render only.</li>
 <li>Render-only: <code>win-quiz</code>, <code>win-quiz-category-editor</code>, <code>win-quiz-report</code>. WPF hides the old Quiz start; its category editor and past-quizzes report depend on that hidden path (the history list also bails while the start is hidden). Inspect renders only; saved history does not restore a live opener.</li>
 <li>Render-only: <code>views-companion-room-preview</code>. WPF's developer page-state/narrow-wide preview has no normal tester entry; compare preview renders side by side, not the live Companion door.</li>
+<li>Render-only: <code>super-mode-picker</code>. WPF 7.3.0 folds the three-way picker away inside SuperBox (<code>ConditioningControlPanel/Controls/SuperBox.cs:224-227</code>), so the star is the only control; nothing to render or test on Avalonia.</li>
 </ul>
 <h2 id="16-main-sync-7-main-sync-7-releases-716-7114">16. Main sync 7 (<code>main-sync-7</code>, releases 7.1.6-7.1.14)</h2>
 <p>The ledger area is a per-commit list (<a href="avalonia-main-sync-20261015.html"><code>avalonia-main-sync-20261015.html</code></a>, 309 rows,
