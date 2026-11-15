@@ -577,7 +577,7 @@ public sealed class SessionRunnerTests : IDisposable
             svc.SaveImmediate();
             svc.SealForReset();
             CoreSettings.ServiceProvider = old;
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData)) File.Delete(f);
         }
     }
 

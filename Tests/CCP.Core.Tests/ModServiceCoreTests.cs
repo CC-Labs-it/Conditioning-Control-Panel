@@ -52,7 +52,7 @@ public sealed class ModServiceCoreTests
     {
         Assert.Equal(RoadmapTestProfile.DirectoryPath, Root);
         Directory.CreateDirectory(Root);
-        foreach (var f in Directory.GetFiles(Root, "settings*")) File.Delete(f);
+        foreach (var f in RoadmapTestProfile.SettingsFiles(Root)) File.Delete(f);
         foreach (var dir in new[] { "mods", "builtin_mods", "content" })
             if (Directory.Exists(Path.Combine(Root, dir))) Directory.Delete(Path.Combine(Root, dir), recursive: true);
     }

@@ -21,7 +21,7 @@ public sealed class DescentCoreSeamTests
         try
         {
             Directory.CreateDirectory(CorePaths.UserData);
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData)) File.Delete(f);
             svc = new SettingsService();
             CoreSettings.ServiceProvider = () => svc;
             body(svc);
@@ -30,7 +30,7 @@ public sealed class DescentCoreSeamTests
         {
             if (svc != null) { svc.SaveImmediate(); svc.SealForReset(); }
             CoreSettings.ServiceProvider = oldProvider;
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData)) File.Delete(f);
         }
     }
 
