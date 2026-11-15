@@ -22,7 +22,8 @@ public class VortexPanicTests
         int brace = src.IndexOf('{', stop);
         int firstStatement = src.IndexOf(';', brace);
         Assert.Contains("_vortexLayer?.Stop()", src.Substring(brace, firstStatement - brace + 1));
-        Assert.Contains("SuperAccess.IsOn(Super.SuperEffect.Vortex)", src);
+        // Take two: the Whirlpool on the shared stage stands in for the Vortex, and the engine stop takes it down.
+        Assert.Contains("Super.SuperStageHost.Stop", src);
     }
 
     [Fact]

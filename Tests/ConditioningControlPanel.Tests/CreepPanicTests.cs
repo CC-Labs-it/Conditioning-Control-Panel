@@ -23,8 +23,9 @@ public class CreepPanicTests
             var stop = new[] { end, end8 }.Where(x => x > i).DefaultIfEmpty(text.Length).Min();
             return text.Substring(i, stop - i);
         }
-        Assert.Contains("CreepController.Stop", Body("Services/Notifications/OverlayService.cs", "public void Stop()"));
-        Assert.Contains("CreepController.Stop", Body("MainWindow/MainWindow.xaml.cs", "private void StopAdHocEffects()"));
+        // Take two: the fog lives on the shared stage (Steam), stopped in the same two places.
+        Assert.Contains("SuperStageHost.Stop", Body("Services/Notifications/OverlayService.cs", "public void Stop()"));
+        Assert.Contains("SuperStageHost.Stop", Body("MainWindow/MainWindow.xaml.cs", "private void StopAdHocEffects()"));
     }
 
     /// <summary>Click anywhere is notification only: the hook callback must never swallow, or the

@@ -9,11 +9,16 @@ namespace ConditioningControlPanel.Tests;
 public class SuperModeRuleTests
 {
     [Fact]
-    public void Nothing_stored_means_Both_for_every_effect()
+    public void Nothing_stored_means_the_star_is_on_for_every_effect()
     {
+        // Take two: one star. On stacks for six effects and swaps for the spiral and the pink filter.
         foreach (SuperEffect e in System.Enum.GetValues(typeof(SuperEffect)))
-            Assert.Equal(SuperMode.Both, SuperModeRule.Resolve(e, null));
-        Assert.Equal(SuperMode.Both, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int>()));
+        {
+            var on = e is SuperEffect.Vortex or SuperEffect.Creep ? SuperMode.SuperOnly : SuperMode.Both;
+            Assert.Equal(on, SuperModeRule.StarOn(e));
+            Assert.Equal(on, SuperModeRule.Resolve(e, null));
+        }
+        Assert.Equal(SuperMode.SuperOnly, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int>()));
     }
 
     [Fact]
@@ -21,8 +26,7 @@ public class SuperModeRuleTests
     {
         Assert.Equal(new[] { SuperMode.Classic, SuperMode.Both, SuperMode.SuperOnly }, SuperModeRule.Offered(SuperEffect.Vortex));
         Assert.Equal(new[] { SuperMode.Classic, SuperMode.Both, SuperMode.SuperOnly }, SuperModeRule.Offered(SuperEffect.Creep));
-        Assert.Equal(new[] { SuperMode.Classic, SuperMode.Both, SuperMode.SuperOnly }, SuperModeRule.Offered(SuperEffect.Afterglow));
-        foreach (var e in new[] { SuperEffect.FlickerDeck, SuperEffect.Scrawl, SuperEffect.Undertow, SuperEffect.LightsDown, SuperEffect.InnerBloom })
+        foreach (var e in new[] { SuperEffect.FlickerDeck, SuperEffect.Scrawl, SuperEffect.Undertow, SuperEffect.LightsDown, SuperEffect.InnerBloom, SuperEffect.Afterglow })
             Assert.Equal(new[] { SuperMode.Classic, SuperMode.Both }, SuperModeRule.Offered(e));
     }
 
@@ -32,7 +36,9 @@ public class SuperModeRuleTests
         Assert.Equal(SuperMode.Classic, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int> { ["Vortex"] = 0 }));
         Assert.Equal(SuperMode.SuperOnly, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int> { ["Vortex"] = 2 }));
         Assert.Equal(SuperMode.Both, SuperModeRule.Resolve(SuperEffect.Scrawl, new Dictionary<string, int> { ["Scrawl"] = 2 }));
-        Assert.Equal(SuperMode.Both, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int> { ["Vortex"] = 99 }));
+        // An unknown number, and the old "Both", both read as the star being on.
+        Assert.Equal(SuperMode.SuperOnly, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int> { ["Vortex"] = 99 }));
+        Assert.Equal(SuperMode.SuperOnly, SuperModeRule.Resolve(SuperEffect.Vortex, new Dictionary<string, int> { ["Vortex"] = 1 }));
     }
 
     [Fact]

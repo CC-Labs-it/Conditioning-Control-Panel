@@ -22,7 +22,7 @@ public class SuperLocTests
             Assert.Contains("super_twist_" + e.ToString().ToLowerInvariant(), keys);
         }
         var files = Directory.GetFiles(dir, "*.json");
-        Assert.Equal(9, files.Length);
+        Assert.Equal(10, files.Length);
         foreach (var f in files)
         {
             var o = JObject.Parse(File.ReadAllText(f));

@@ -17,7 +17,10 @@ public class AfterglowWiringTests
     public void Service_StartsAndStopsTheDriverWithTheAmbientScheduler()
     {
         var src = Src("ConditioningControlPanel", "Services", "Subliminal", "SubliminalService.cs");
-        Assert.Contains("(_afterglow ??= new Super.AfterglowDriver()).Start();", Body(src, "public void Start()"));
+        // Take two: the ghost line is fed where a subliminal is shown and cleared where the service stops.
+        Assert.DoesNotContain("new Super.AfterglowDriver()", Body(src, "public void Start()"));
+        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "public void FlashSubliminal()"));
+        Assert.Contains("AfterglowLineLayer.StopAll", Body(src, "public void Stop()"));
         Assert.Contains("_afterglow?.Stop();", Body(src, "public void Stop()"));
         Assert.Contains("_afterglow?.Dispose();", Body(src, "public void Dispose()"));
         Assert.Contains("glow.GetActiveTextRectsPx()", Body(src, "public System.Drawing.Rectangle[] GetActiveTextScreenRects()"));

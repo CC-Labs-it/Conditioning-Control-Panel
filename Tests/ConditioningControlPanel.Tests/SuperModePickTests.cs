@@ -76,7 +76,7 @@ public class SuperModePickTests
             dir = dir.Parent;
         Assert.NotNull(dir);
         var files = Directory.GetFiles(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages"), "*.json");
-        Assert.Equal(9, files.Length);
+        Assert.Equal(10, files.Length);
         var keys = Enum.GetValues<SuperMode>().SelectMany(m => new[] { SuperModePick.LabelKey(m), SuperModePick.LineKey(m) }).ToArray();
         foreach (var f in files)
         {

@@ -281,6 +281,7 @@ public class AfterglowOptionsBoxRenderTests
             dir = dir.Parent;
         Assert.NotNull(dir);
         var xaml = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Features", "SubliminalFeatureControl.xaml"));
-        Assert.Contains("<ctl:AfterglowOptionsBox/>", xaml);
+        // Take two: Afterglow has no options of its own; the box stays in the panel, folded.
+        Assert.Contains("<ctl:AfterglowOptionsBox Visibility=\"Collapsed\"/>", xaml);
     }
 }
