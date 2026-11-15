@@ -2710,10 +2710,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // React.cs and Fx.cs are no longer among them: both are real, above.
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - the 100 ms gaze/idle poll. Starts with her.</summary>
-        private void StartAlive() { _patPokes.Reset(); }
+        private void StartAlive() { _patPokes.Reset(); StartGaze(); }
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - stops the poll when she goes.</summary>
-        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); }
+        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); StopGaze(); }
 
         /// <summary>WPF React.cs:119: the click pat shares the hover cooldown and books each poke.</summary>
         internal void PetFromClick()
