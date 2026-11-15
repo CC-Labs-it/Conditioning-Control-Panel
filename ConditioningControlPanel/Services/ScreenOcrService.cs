@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.IO;
+using System.Runtime.InteropServices;
+using ConditioningControlPanel.Services.Ocr;
+using ConditioningControlPanel.Services.ScreenCapture;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using Windows.Graphics.Imaging;
-using Windows.Media.Ocr;
 using WinForms = System.Windows.Forms;
 
 namespace ConditioningControlPanel.Services
@@ -28,31 +28,26 @@ namespace ConditioningControlPanel.Services
         private bool _disposed;
         private bool _isRunning;
         private bool _scanInProgress;
-        private OcrEngine? _ocrEngine;
+        private readonly IScreenOcrEngine _ocrEngine;
         private readonly object _lock = new();
 
-        /// <summary>True when an OCR language pack was found and the engine is usable.</summary>
-        internal bool IsOcrAvailable => _ocrEngine != null;
+        /// <summary>True when the OCR models are available and the engine is usable.</summary>
+        internal bool IsOcrAvailable => _ocrEngine.IsAvailable;
 
-        public ScreenOcrService()
+        public ScreenOcrService() : this(new RapidScreenOcrEngine()) { }
+
+        internal ScreenOcrService(IScreenOcrEngine engine)
         {
-            try
-            {
-                _ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
-                if (_ocrEngine == null)
-                    App.Logger?.Warning("ScreenOcrService: No OCR language pack available");
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Error("ScreenOcrService: Failed to create OCR engine: {Error}", ex.Message);
-            }
+            _ocrEngine = engine;
+            if (!engine.IsAvailable)
+                App.Logger?.Warning("ScreenOcrService: OCR models unavailable");
         }
 
         public void Start()
         {
             lock (_lock)
             {
-                if (_isRunning || _ocrEngine == null) return;
+                if (_isRunning || !_ocrEngine.IsAvailable) return;
 
                 var intervalMs = App.Settings?.Current?.ScreenOcrIntervalMs ?? 3000;
                 _timer = new Timer(OnTimerTick, null, intervalMs, intervalMs);
@@ -84,7 +79,7 @@ namespace ConditioningControlPanel.Services
 
         private async void OnTimerTick(object? state)
         {
-            if (_disposed || !_isRunning || _ocrEngine == null) return;
+            if (_disposed || !_isRunning || !_ocrEngine.IsAvailable) return;
             if (_scanInProgress) return;
             _scanInProgress = true;
 
@@ -199,131 +194,62 @@ namespace ConditioningControlPanel.Services
             });
         }
 
-        private async System.Threading.Tasks.Task<(string? text, List<OcrWordHit>? words)> CaptureAndRecognizeAsync(WinForms.Screen screen)
+        private Task<(string? text, List<OcrWordHit>? words)> CaptureAndRecognizeAsync(WinForms.Screen screen)
         {
             var bounds = screen.Bounds;
-            Bitmap? bitmap = null;
             try
             {
-                bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-
-                using (var g = Graphics.FromImage(bitmap))
+                // GDI writes directly into the array consumed by Core, without a bitmap conversion.
+                var pixels = new byte[checked(bounds.Width * bounds.Height * 4)];
+                var pin = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+                try
                 {
-                    g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+                    using var bitmap = new Bitmap(bounds.Width, bounds.Height, bounds.Width * 4,
+                        PixelFormat.Format32bppArgb, pin.AddrOfPinnedObject());
+                    using (var g = Graphics.FromImage(bitmap))
+                        g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+                    // GDI does not populate alpha; the captured pixels are opaque.
+                    for (int i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
+                    return Task.FromResult(Recognize(pixels, bounds, screen));
                 }
+                finally { pin.Free(); }
             }
             catch (Exception ex)
             {
-                // Capture fails when the desktop is locked, DRM content is visible, a UAC prompt is
-                // up, etc. Match the original: dispose, log, and skip just this screen (the caller's
-                // loop moves on to the next one) rather than aborting the whole scan.
-                bitmap?.Dispose();
-                App.Logger?.Debug("ScreenOcrService: Capture failed for {Screen}: {Error}",
-                    screen.DeviceName, ex.Message);
-                return (null, null);
+                App.Logger?.Debug("ScreenOcrService: Capture failed for {Screen}: {Error}", screen.DeviceName, ex.Message);
+                return Task.FromResult<(string?, List<OcrWordHit>?)>((null, null));
             }
-
-            // Decode + OCR (takes ownership of the bitmap and disposes it).
-            return await DecodeAndRecognizeAsync(bitmap, bounds, screen);
         }
 
-        /// <summary>
-        /// Converts a captured <see cref="Bitmap"/> into a WinRT SoftwareBitmap, runs OCR, and
-        /// extracts word-level bounding rects offset by <paramref name="bounds"/>. Split out from
-        /// screen capture so the decode pipeline is testable without CopyFromScreen.
-        ///
-        /// #634: the WinRT random-access-stream RCW returned by <c>ms.AsRandomAccessStream()</c>
-        /// must be disposed each call — otherwise the COM adapter pins the full BMP buffer (~8MB per
-        /// 1080p scan) until finalization, driving RAM to 100% over hours of unattended scanning.
-        /// Note: <c>BitmapDecoder</c> is NOT IDisposable in the CsWinRT projection, so disposing the
-        /// stream (not the decoder) is the fix. Takes ownership of <paramref name="bitmap"/>.
-        /// </summary>
-        internal async System.Threading.Tasks.Task<(string? text, List<OcrWordHit>? words)> DecodeAndRecognizeAsync(
+        // Kept for existing callers that exercise recognition with synthetic bitmaps.
+        internal Task<(string? text, List<OcrWordHit>? words)> DecodeAndRecognizeAsync(
             Bitmap bitmap, Rectangle bounds, WinForms.Screen? screen)
         {
             try
             {
-                // Convert System.Drawing.Bitmap → WinRT SoftwareBitmap via MemoryStream.
-                // Sized up-front: a default MemoryStream doubles its way to ~8MB per 1080p scan,
-                // so every scan burned a chain of large-object allocations instead of one.
-                var prealloc = EstimateBmpByteCount(bitmap);
-                using var ms = prealloc > 0 ? new MemoryStream(prealloc) : new MemoryStream();
-                bitmap.Save(ms, ImageFormat.Bmp);
-                ms.Position = 0;
-
-                using var rasStream = ms.AsRandomAccessStream();
-                var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(rasStream);
-                var softwareBitmap = await decoder.GetSoftwareBitmapAsync(
-                    BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-
+                var pixels = new byte[checked(bitmap.Width * bitmap.Height * 4)];
+                var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                    ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
                 try
                 {
-                    var result = await _ocrEngine!.RecognizeAsync(softwareBitmap);
-                    if (result == null)
-                        return (null, null);
-
-                    // Extract word-level bounding rects
-                    var words = new List<OcrWordHit>();
-                    foreach (var line in result.Lines)
-                    {
-                        foreach (var word in line.Words)
-                        {
-                            var br = word.BoundingRect;
-                            words.Add(new OcrWordHit
-                            {
-                                Text = word.Text,
-                                ScreenRect = new Rectangle(
-                                    bounds.Left + (int)br.X,
-                                    bounds.Top + (int)br.Y,
-                                    (int)br.Width,
-                                    (int)br.Height),
-                                Screen = screen!
-                            });
-                        }
-                    }
-
-                    return (result.Text, words);
+                    for (int y = 0; y < bitmap.Height; y++)
+                        Marshal.Copy(data.Scan0 + y * data.Stride, pixels, y * bitmap.Width * 4, bitmap.Width * 4);
                 }
-                finally
-                {
-                    softwareBitmap.Dispose();
-                }
+                finally { bitmap.UnlockBits(data); }
+                return Task.FromResult(Recognize(pixels, bounds, screen));
             }
-            catch (Exception ex)
-            {
-                // Fails when desktop locked, DRM content visible, UAC prompt, etc.
-                App.Logger?.Debug("ScreenOcrService: Capture failed for {Screen}: {Error}",
-                    screen?.DeviceName ?? "(none)", ex.Message);
-                return (null, null);
-            }
-            finally
-            {
-                bitmap?.Dispose();
-            }
+            finally { bitmap.Dispose(); }
         }
 
-        /// <summary>Ceiling on the pre-allocation below. Comfortably above an 8K screen grab.</summary>
-        private const int MaxBmpPrealloc = 64 * 1024 * 1024;
-
-        /// <summary>
-        /// 32bpp BMP payload plus generous room for the file/info headers. Returns 0 for anything
-        /// above <see cref="MaxBmpPrealloc"/> so the caller falls back to the default growth path:
-        /// pre-allocating an absurd capacity (int.MaxValue, from a bogus bitmap size) throws
-        /// OutOfMemory outright, which is far worse than the doubling this avoids.
-        /// </summary>
-        private static int EstimateBmpByteCount(Bitmap bitmap)
+        private (string? text, List<OcrWordHit>? words) Recognize(byte[] pixels, Rectangle bounds, WinForms.Screen? screen)
         {
-            try
-            {
-                long bytes = (long)bitmap.Width * bitmap.Height * 4L + 1024L;
-                if (bytes < 1024) return 1024;
-                if (bytes > MaxBmpPrealloc) return 0;
-                return (int)bytes;
-            }
-            catch
-            {
-                return 1024;
-            }
+            if (!_ocrEngine.IsAvailable) return (null, null);
+            var frame = new ScreenFrame(screen?.DeviceName ?? "", bounds, 1, bounds.Width, bounds.Height,
+                bounds.Width * 4, ScreenPixelFormat.Bgra32, pixels);
+            var hits = new List<OcrWordHit>();
+            foreach (var word in _ocrEngine.Recognize(frame))
+                hits.Add(new OcrWordHit { Text = word.Text, ScreenRect = frame.ToScreen(word.Bounds), Screen = screen! });
+            return (string.Join(" ", hits.ConvertAll(w => w.Text)), hits);
         }
 
         public void Dispose()
@@ -331,6 +257,7 @@ namespace ConditioningControlPanel.Services
             if (_disposed) return;
             _disposed = true;
             Stop();
+            _ocrEngine.Dispose();
         }
     }
 }
