@@ -155,7 +155,7 @@ public class SectionTabStripTests
     }
 
     [Theory]
-    [InlineData("lab", "play")]
+    [InlineData("lab", "playeyes")]        // declutter wave 2: the Games pill left, "lab" lands on Eyes
     [InlineData("playeyes", "playeyes")]
     [InlineData("gradedintake", "playsessions")]
     [InlineData("lockdown", "playsessions")]
