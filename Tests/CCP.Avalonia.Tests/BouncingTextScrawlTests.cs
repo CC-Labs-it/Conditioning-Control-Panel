@@ -48,15 +48,41 @@ public sealed class BouncingTextScrawlTests
     [Fact]
     public void Pool_catches_and_throws_the_word()
     {
-        var stage = new SuperStage { PoolOn = true };
-        stage.Pool.Step(14, 500, 500, 0, 1, 1000);
-        BouncingTextOverlay.Engine.SetBounds(0, 0, 1000, 1000);
-        var l = new BouncingTextEngine.Logo { PosX = 450, PosY = 480, TextWidth = 100, TextHeight = 40, VelX = 100, Cruise = 100 };
-        Assert.True(BouncingTextOverlay.StepStage(l, stage, 1, 0.01));
-        Assert.Equal(1, l.Fling.Phase);
-        Assert.False(BouncingTextOverlay.StepStage(l, stage, 1, 1.6));
-        Assert.Equal(2, l.Fling.Phase);
-        Assert.True(System.Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY) > l.Cruise * 2);
+        var engine = BouncingTextOverlay.Engine;
+        var bounds = (engine.MinX, engine.MinY, engine.MaxX, engine.MaxY);
+        try
+        {
+            var stage = new SuperStage { PoolOn = true };
+            stage.Pool.Step(14, 500, 500, 0, 1, 1000);
+            engine.SetBounds(0, 0, 1000, 1000);
+            var l = new BouncingTextEngine.Logo { PosX = 450, PosY = 480, TextWidth = 100, TextHeight = 40, VelX = 100, Cruise = 100 };
+            Assert.True(BouncingTextOverlay.StepStage(l, stage, 1, 0.01));
+            Assert.Equal(1, l.Fling.Phase);
+            Assert.False(BouncingTextOverlay.StepStage(l, stage, 1, 1.6));
+            Assert.Equal(2, l.Fling.Phase);
+            Assert.True(System.Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY) > l.Cruise * 2);
+        }
+        finally
+        {
+            engine.SetBounds(bounds.MinX, bounds.MinY, bounds.MaxX, bounds.MaxY);
+        }
+    }
+
+    [Fact]
+    public void Pool_test_restores_shared_engine_bounds()
+    {
+        var engine = BouncingTextOverlay.Engine;
+        var bounds = (engine.MinX, engine.MinY, engine.MaxX, engine.MaxY);
+        try
+        {
+            engine.SetBounds(-50, -40, 700, 800);
+            Pool_catches_and_throws_the_word();
+            Assert.Equal((-50d, -40d, 700d, 800d), (engine.MinX, engine.MinY, engine.MaxX, engine.MaxY));
+        }
+        finally
+        {
+            engine.SetBounds(bounds.MinX, bounds.MinY, bounds.MaxX, bounds.MaxY);
+        }
     }
 
     [Fact]
