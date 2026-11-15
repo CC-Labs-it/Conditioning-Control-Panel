@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Features
 
         private Controls.SuperCorner? _cornerA, _cornerB;
         /// <summary>How far a title pill steps in from its corner when the half wears a V2 corner.</summary>
-        private const double CornerInset = Controls.SuperCorner.Leg - 4;
+        private const double CornerInset = Controls.SuperCorner.Leg + 2;
 
         /// <summary>The cut corners that switch each half's V2: top-left for A, bottom-right for B.
         /// The title pills step in so no name sits under a corner.</summary>

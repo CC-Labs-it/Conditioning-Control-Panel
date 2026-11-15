@@ -138,7 +138,7 @@ namespace ConditioningControlPanel.Features
                 // Under the rim, the active ring and the lock veil: the ring runs over the corner.
                 ContentRoot.Children.Insert(ContentRoot.Children.IndexOf(RimLight), _superCorner);
             }
-            BadgeColumn.Margin = new Thickness(_superCorner != null ? Controls.SuperCorner.Leg - 4 : 8, 8, 0, 0);
+            BadgeColumn.Margin = new Thickness(_superCorner != null ? Controls.SuperCorner.Leg + 2 : 8, 8, 0, 0);
         }
 
         public static readonly DependencyProperty ShowV2BadgeProperty =

@@ -18,7 +18,9 @@ namespace ConditioningControlPanel.Controls
     public sealed class SuperCorner : FrameworkElement
     {
         /// <summary>Length of the two short sides, DIPs.</summary>
-        public const double Leg = 34;
+        public const double Leg = 30;
+        /// <summary>How far the corner sits in from the tile edge: just inside the tile's ring, never under it.</summary>
+        public const double Inset = 5;
 
         private static readonly Color Gold = Color.FromRgb(0xFF, 0xCF, 0x6B);
         private static readonly Brush GoldBrush = Frozen(Gold);
@@ -51,6 +53,7 @@ namespace ConditioningControlPanel.Controls
             HorizontalAlignment = bottomRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
             VerticalAlignment = bottomRight ? VerticalAlignment.Bottom : VerticalAlignment.Top;
             Cursor = Cursors.Hand;
+            Margin = bottomRight ? new Thickness(0, 0, Inset, Inset) : new Thickness(Inset, Inset, 0, 0);
             ToolTip = new ToolTip();
             ToolTipService.SetInitialShowDelay(this, 350);
             ToolTipService.SetShowDuration(this, 20000);
@@ -100,10 +103,10 @@ namespace ConditioningControlPanel.Controls
                 }
             }
             g.Freeze();
-            // Round the outer tip like the tile (content radius 11), so nothing pokes past the
-            // rounded frame when the tile is off and has no ring to hide it.
+            // Round the outer tip like the INSIDE of the tile's ring, so the corner tucks into the
+            // ring's inner arc and nothing of it shows on the ring's outer side.
             var card = BottomRight ? new Rect(Leg - 200, Leg - 200, 200, 200) : new Rect(0, 0, 200, 200);
-            var cut = new CombinedGeometry(GeometryCombineMode.Intersect, g, new RectangleGeometry(card, 11, 11));
+            var cut = new CombinedGeometry(GeometryCombineMode.Intersect, g, new RectangleGeometry(card, 6, 6));
             cut.Freeze();
             return cut;
         }
@@ -127,9 +130,9 @@ namespace ConditioningControlPanel.Controls
             // The cut edge: the long side, so an off corner still reads as a gold dog-ear.
             dc.DrawLine(Edge, BottomRight ? new Point(0, Leg) : new Point(Leg, 0), BottomRight ? new Point(Leg, 0) : new Point(0, Leg));
 
-            var star = new FormattedText("★", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 14,
+            var star = new FormattedText("★", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 13,
                 lit ? Ink : DimStar, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            double c = BottomRight ? Leg * 0.62 : Leg * 0.38;
+            double c = BottomRight ? Leg * 0.64 : Leg * 0.36;
             dc.DrawText(star, new Point(c - star.Width / 2, c - star.Height / 2));
         }
 
