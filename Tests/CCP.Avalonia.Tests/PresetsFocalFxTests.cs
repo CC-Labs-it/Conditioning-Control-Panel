@@ -89,6 +89,23 @@ public sealed class PresetsFocalFxTests
     });
 
     [Fact]
+    public Task MotionOffStopsAnEntranceBeforePointerLift() => WithPresets((host, view) =>
+    {
+        // Start a fresh entrance and switch motion off before its first frame.
+        view.IsVisible = false;
+        view.IsVisible = true;
+        var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Settle();
+        Assert.Equal(1, row.Opacity);
+        var slide = Assert.IsType<TransformGroup>(row.RenderTransform).Children.OfType<TranslateTransform>().Single();
+        Assert.Equal(0, slide.Y);
+        host.MouseMove(Center(host, row)); Settle();
+        Assert.Equal(-2, slide.Y);
+    });
+
+    [Fact]
     public Task ArrivalStaggersBothZonesAndSelectionDoesNotReplayTheRail() => WithPresets((host, view) =>
     {
         view.IsVisible = false; Settle();
