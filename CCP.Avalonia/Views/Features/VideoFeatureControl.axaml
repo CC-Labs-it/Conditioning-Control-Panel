@@ -158,6 +158,25 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <StackPanel x:Name="FloatingExtraRows" IsVisible="False">
+                                <Grid Height="36" ToolTip.Tip="{loc:Str tooltip_video_appearance_speed}" ColumnDefinitions="Auto,*,Auto">
+                                    <TextBlock Grid.Column="0" MinWidth="120" Margin="14,0,0,0" VerticalAlignment="Center" Text="{loc:Str setting_video_appearance_speed}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                    <Slider Grid.Column="1" x:Name="SliderFloatingSpeed" Minimum="10" Maximum="100" Margin="14,0" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="2" x:Name="TxtFloatingSpeed" MinWidth="56" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                </Grid>
+                                <Grid Height="36" ToolTip.Tip="{loc:Str tooltip_video_appearance_count}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Margin="14,0,0,0" VerticalAlignment="Center" Text="{loc:Str setting_video_appearance_count}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                    <ComboBox Grid.Column="1" x:Name="CmbFloatingCount" Width="180" VerticalAlignment="Center" Theme="{DynamicResource DarkComboBoxStyle}"/>
+                                </Grid>
+                                <Grid Height="34" ToolTip.Tip="{loc:Str tooltip_video_float_together}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Margin="14,0,0,0" VerticalAlignment="Center" Text="{loc:Str setting_video_float_together}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkFloatingTogether" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                                </Grid>
+                                <Grid Height="34" ToolTip.Tip="{loc:Str tooltip_video_float_keep_sound}" ColumnDefinitions="*,Auto">
+                                    <TextBlock Margin="14,0,0,0" VerticalAlignment="Center" Text="{loc:Str setting_video_float_keep_sound}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkFloatingKeepSound" Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
                             <!-- WPF VideoFeatureControl.xaml:230: floating windows skip the attention checks. -->
                             <TextBlock x:Name="TxtFloatingNoChecks" Text="{loc:Str video_appearance_no_checks_note}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="14,0,0,2"
