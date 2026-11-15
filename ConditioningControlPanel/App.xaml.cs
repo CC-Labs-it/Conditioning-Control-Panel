@@ -555,6 +555,16 @@ namespace ConditioningControlPanel
             CoreSubliminal.ShowProvider = text => Subliminal?.FlashPhrase(text);
             CoreSubliminal.RunStateChanged = running => Subliminal?.OnRunStateChanged(running);
             Services.Super.SuperStepAside.LevelProvider = () => MotionFx.Level;
+            // Super access is Core's: this head says which weekly try runs and wires the tier events.
+            Services.Super.SuperAccess.TryingProvider = () => Services.Super.SuperPreview.Trying;
+            Services.Super.SuperAccess.TierEventsHook = raiseAll =>
+            {
+                if (Patreon == null) return false;
+                Patreon.TierChanged += (_, _) => raiseAll();
+                if (SubscribeStar != null) SubscribeStar.TierChanged += (_, _) => raiseAll();
+                UnifiedIdentityChanged += (_, _) => raiseAll();
+                return true;
+            };
 
             // The engine-running flag, for the feature cards that only live-apply while a session
             // is up. The engine stays here; the flag is the whole seam.

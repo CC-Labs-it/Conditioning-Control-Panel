@@ -7,15 +7,31 @@ namespace ConditioningControlPanel.Services.Super
     /// The one answer to "may Super X run right now, and has the player switched it on".
     /// Effect lanes call <see cref="IsOn"/> at their spawn points and nothing else; the tier
     /// bar, the weekly free preview and the switch UI all live behind it.
+    /// Lives in Core: each head seeds <see cref="TryingProvider"/> and <see cref="TierEventsHook"/>.
     /// </summary>
     public static class SuperAccess
     {
         /// <summary>Raised when a switch flips, the tier changes or the weekly preview starts or ends.</summary>
         public static event Action<SuperEffect>? Changed;
 
+        /// <summary>The effect whose weekly free try is running, or null. The head's preview
+        /// service (WPF: SuperPreview.Trying) seeds it; unseeded = no try.</summary>
+        public static Func<SuperEffect?> TryingProvider { get; set; } = () => null;
+
+        private static SuperEffect? Trying
+        {
+            get { try { return TryingProvider(); } catch { return null; } }
+        }
+
+        /// <summary>
+        /// The head subscribes the given callback to its own tier and account events and answers
+        /// true once that is done (false = the tier services are not up yet, ask again later).
+        /// </summary>
+        public static Func<Action, bool>? TierEventsHook { get; set; }
+
         /// <summary>
         /// Basic (tier 1) or higher, or this week's free preview while its 10 s try runs
-        /// (<see cref="SuperPreview"/>). DEBUG honours CCP_SUPER_ALL=1 so a lane can run an effect
+        /// (the head's SuperPreview). DEBUG honours CCP_SUPER_ALL=1 so a lane can run an effect
         /// without an account.
         /// </summary>
         public static bool IsUnlocked(SuperEffect effect)
@@ -23,7 +39,7 @@ namespace ConditioningControlPanel.Services.Super
 #if DEBUG
             if (Environment.GetEnvironmentVariable("CCP_SUPER_ALL") == "1") return true;
 #endif
-            return SuperPreviewRule.IsUnlocked(TierGate.HasPremium, effect, SuperPreview.Trying);
+            return SuperPreviewRule.IsUnlocked(TierGate.HasPremium, effect, Trying);
         }
 
         /// <summary>
@@ -48,11 +64,11 @@ namespace ConditioningControlPanel.Services.Super
             // Unlocks the gate only: the player's own switch still decides.
             if (Environment.GetEnvironmentVariable("CCP_SUPER_ALL") == "1") return IsSwitchedOn(effect);
 #endif
-            return SuperPreviewRule.IsOn(TierGate.HasPremium, IsSwitchedOn(effect), effect, SuperPreview.Trying);
+            return SuperPreviewRule.IsOn(TierGate.HasPremium, IsSwitchedOn(effect), effect, Trying);
         }
 
         /// <summary>Is the effect's base feature main toggle on right now.</summary>
-        public static bool IsBaseOn(SuperEffect effect) => SuperBase.IsBaseOn(effect, App.Settings?.Current);
+        public static bool IsBaseOn(SuperEffect effect) => SuperBase.IsBaseOn(effect, CoreSettings.Service?.Current);
 
         private static readonly object BaseGate = new();
         private static bool _baseHooked;
@@ -73,7 +89,7 @@ namespace ConditioningControlPanel.Services.Super
         /// </summary>
         public static void HookBaseEvents()
         {
-            var svc = App.Settings;
+            var svc = CoreSettings.Service;
             if (svc == null) return;
             if (_baseHooked && ReferenceEquals(_baseSettings, svc.Current)) return;
             bool swapped;
@@ -83,7 +99,7 @@ namespace ConditioningControlPanel.Services.Super
                 {
                     _baseHooked = true;
                     try { svc.CurrentReplaced += OnSettingsReplaced; }
-                    catch (Exception ex) { App.Logger?.Debug("SuperAccess.HookBaseEvents: {E}", ex.Message); }
+                    catch (Exception ex) { Serilog.Log.Debug("SuperAccess.HookBaseEvents: {E}", ex.Message); }
                 }
                 swapped = RebindBase();
             }
@@ -101,7 +117,7 @@ namespace ConditioningControlPanel.Services.Super
         /// True when it moved from one object to another (every base may have changed).</summary>
         private static bool RebindBase()
         {
-            var current = App.Settings?.Current;
+            var current = CoreSettings.Service?.Current;
             if (ReferenceEquals(_baseSettings, current)) return false;
             bool hadOne = _baseSettings != null;
             if (_baseSettings != null) _baseSettings.PropertyChanged -= OnBasePropertyChanged;
@@ -117,7 +133,7 @@ namespace ConditioningControlPanel.Services.Super
 
         /// <summary>The player's own pick, ignoring the gate (the box draws it). Both when nothing is stored.</summary>
         public static SuperMode GetMode(SuperEffect effect)
-            => SuperModeRule.Resolve(effect, App.Settings?.Current?.SuperModes);
+            => SuperModeRule.Resolve(effect, CoreSettings.Service?.Current?.SuperModes);
 
         /// <summary>Super runs in the player's pick (Both or Super only), ignoring the gate and the base.</summary>
         public static bool IsSwitchedOn(SuperEffect effect) => SuperModeRule.RunsSuper(GetMode(effect));
@@ -128,10 +144,10 @@ namespace ConditioningControlPanel.Services.Super
         /// Base layers ask this where they draw.
         /// </summary>
         public static bool ReplacesBase(SuperEffect effect)
-            => SuperModeRule.HidesBase(effect, GetMode(effect), IsOn(effect), SuperPreview.Trying == effect);
+            => SuperModeRule.HidesBase(effect, GetMode(effect), IsOn(effect), Trying == effect);
 
-        /// <summary>For <see cref="SuperPreview"/>: a try started or ended.</summary>
-        internal static void RaiseChanged(SuperEffect effect) => Changed?.Invoke(effect);
+        /// <summary>For the head's SuperPreview: a try started or ended.</summary>
+        public static void RaiseChanged(SuperEffect effect) => Changed?.Invoke(effect);
 
         private static bool _tierHooked;
 
@@ -142,17 +158,12 @@ namespace ConditioningControlPanel.Services.Super
         public static void HookTierEvents()
         {
             if (_tierHooked) return;
-            // Latch only once the tier services exist: a switch loaded before App wires them must
-            // not leave the lapse teardown unhooked for the whole session.
-            if (App.Patreon == null) return;
-            _tierHooked = true;
-            try
-            {
-                App.Patreon.TierChanged += (_, _) => RaiseAll();
-                if (App.SubscribeStar != null) App.SubscribeStar.TierChanged += (_, _) => RaiseAll();
-                App.UnifiedIdentityChanged += (_, _) => RaiseAll();
-            }
-            catch (Exception ex) { App.Logger?.Debug("SuperAccess.HookTierEvents: {E}", ex.Message); }
+            // Latch only once the head says its tier services exist: a switch loaded before the
+            // app wires them must not leave the lapse teardown unhooked for the whole session.
+            var hook = TierEventsHook;
+            if (hook == null) return;
+            try { _tierHooked = hook(RaiseAll); }
+            catch (Exception ex) { Serilog.Log.Debug("SuperAccess.HookTierEvents: {E}", ex.Message); }
         }
 
         private static void RaiseAll()
@@ -163,7 +174,7 @@ namespace ConditioningControlPanel.Services.Super
         /// <summary>The player's pick. Does not check the gate; the box refuses before calling this.</summary>
         public static void SetMode(SuperEffect effect, SuperMode mode)
         {
-            var s = App.Settings?.Current;
+            var s = CoreSettings.Service?.Current;
             if (s == null) return;
             var next = SuperModeRule.With(s.SuperModes, effect, mode);
             if (s.SuperModes.TryGetValue(effect.ToString(), out var old) && old == next[effect.ToString()]) return;
