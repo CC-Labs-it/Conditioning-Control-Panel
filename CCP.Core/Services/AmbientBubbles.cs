@@ -116,6 +116,10 @@ namespace ConditioningControlPanel.Services
         // Ambient trigger bubbles fly their spec's chaos motion row; plain ambient bubbles use Motion (Bubbles v2).
         public Chaos.ChaosMotion TriggerMotion { get; private set; }
         private double _vx, _vy, _startY, _left, _right;
+        private double _darterTelegraphMs, _darterLifeMs;
+        public bool DarterTelegraphing => _darterTelegraphMs > 0;
+        private int _darterBounces;
+        private bool _darterEscaping;
 
         public enum Result { Alive, Missed, Done, Detonated, Defused, Shattered, TeaseDenied, TreatExpired }
 
@@ -313,6 +317,15 @@ namespace ConditioningControlPanel.Services
                 b._vx = Math.Cos(a) * b._speed * 1.4;
                 b._vy = Math.Sin(a) * b._speed * 1.4;
             }
+            if (spec.IsDarter && motion == Chaos.ChaosMotion.RoamBounce)
+            {
+                b._darterTelegraphMs = Math.Max(0, spec.TelegraphMs);
+                b._darterLifeMs = Math.Max(1, spec.LifetimeMs);
+                double mag = Math.Sqrt(b._vx * b._vx + b._vy * b._vy);
+                if (mag < 0.001) { double a = r.NextDouble() * Math.PI * 2; b._vx = Math.Cos(a); b._vy = Math.Sin(a); mag = 1; }
+                b._vx = b._vx / mag * spec.DarterSpeed;
+                b._vy = b._vy / mag * spec.DarterSpeed;
+            }
             return b;
         }
 
@@ -436,6 +449,33 @@ namespace ConditioningControlPanel.Services
                 Fade -= _dissolving ? 0.05 : Lucky ? 0.044 : 0.066;
                 if (!_dissolving) Angle += 2;
                 return Fade <= 0 ? Result.Done : Result.Alive;
+            }
+            // WPF BubbleService.cs:3842-3918, 3957-3961: a rabbit holds for its
+            // telegraph, reflects three times, then escapes or expires harmlessly.
+            if (Spec is { IsDarter: true } && TriggerMotion == Chaos.ChaosMotion.RoamBounce)
+            {
+                if (_darterTelegraphMs > 0) _darterTelegraphMs -= FuseStepMs;
+                else
+                {
+                    X += _vx * ts; Y += _vy * ts;
+                    double top = _top + Size + 50, bottom = _bottom - Size - 50;
+                    if (!_darterEscaping)
+                    {
+                        bool hit = false;
+                        if (X < _left) { X = _left; _vx = Math.Abs(_vx); hit = true; }
+                        else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); hit = true; }
+                        if (Y < top) { Y = top; _vy = Math.Abs(_vy); hit = true; }
+                        else if (Y > bottom) { Y = bottom; _vy = -Math.Abs(_vy); hit = true; }
+                        if (hit && ++_darterBounces >= Chaos.ChaosBubbleVariants.DARTER_MAX_BOUNCES) _darterEscaping = true;
+                    }
+                    else
+                    {
+                        double pad = Size + 80;
+                        if (X < _left - pad || X > _right + pad || Y < top - pad || Y > bottom + pad) return Result.Done;
+                    }
+                }
+                _darterLifeMs -= FuseStepMs * Math.Max(ts, 0.15);
+                return _darterLifeMs <= 0 ? Result.Done : Result.Alive;
             }
             if (Spec is { IsEscort: true })
             {

@@ -74,6 +74,40 @@ public sealed class AmbientBubblesTests
         Assert.Equal(640, b.Y);
     }
 
+    [Fact]
+    public void Darter_holds_then_moves_at_its_fixed_speed_and_expires()
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec {
+            IsDarter = true, SizePx = 72, TelegraphMs = 64, LifetimeMs = 160, DarterSpeed = 9 };
+        var b = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, spec,
+            ConditioningControlPanel.Services.Chaos.ChaosMotion.RoamBounce);
+        double x = b.X, y = b.Y;
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.Equal(x, b.X); Assert.Equal(y, b.Y);
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.Equal(9, Math.Sqrt(Math.Pow(b.X - x, 2) + Math.Pow(b.Y - y, 2)), 8);
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.Equal(AmbientBubble.Result.Done, b.Step());
+    }
+
+    [Fact]
+    public void Darter_reflects_three_times_then_leaves_without_a_miss()
+    {
+        var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec {
+            IsDarter = true, SizePx = 72, LifetimeMs = 8000, DarterSpeed = 9 };
+        var b = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, spec,
+            ConditioningControlPanel.Services.Chaos.ChaosMotion.RoamBounce);
+        for (int i = 0; i < 3; i++)
+        {
+            b.X = 2000;
+            Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+            Assert.Equal(1920 - 72, b.X);
+        }
+        b.X = 2200;
+        Assert.Equal(AmbientBubble.Result.Done, b.Step());
+    }
+
     [Theory]
     [InlineData(false, false, false, false, 0)]
     [InlineData(true, false, true, false, 8)]

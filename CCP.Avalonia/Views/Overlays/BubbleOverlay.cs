@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
-    internal static class BubbleOverlay
+    internal static partial class BubbleOverlay
     {
         internal static readonly AmbientBubbleField Field = new()
         {
@@ -249,6 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosOpenedWindows = false;
             ChaosRipples.Clear();
             ChaosResidues.Clear();
+            ChaosTrails.Clear();
             _oneShotWindows = false;
             _running = false;
             _pending = false;
@@ -516,6 +517,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static void Press(AmbientBubble b, double x, double y)
         {
+            // Darter catch and sweeper redirection belong to the remaining host slice.
+            if (b.Spec?.IsDarter == true) return;
             if (b.Spec?.IsTease == true)
             {
                 if (Field.HoldChaos || b.Popping) return;
@@ -611,6 +614,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Bubbles.Clear();
             ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
             ChaosResidues.Clear();
+            ChaosTrails.Clear();
             _hoverScreen = -1;
             foreach (var w in Windows) w.Sync();
             RequestFrame();
@@ -626,6 +630,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosResidues.Clear();   // WPF EndChaosMode :2069
+            ChaosTrails.Clear();
             ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -739,6 +744,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null,
             Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp, double hitboxScale = 1, bool liveMagnet = false)
         {
+            if (spec.IsDarter) motion = Services.Chaos.ChaosMotion.RoamBounce;
             AmbientBubble b;
             if (Targets.Count == 0)
                 b = AmbientBubble.SpawnChaos((random ?? Field.Random), 0, 0, 0, 1920, 1080, 1, spec, motion);
@@ -916,6 +922,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.Step();
             if (Field.HoldChaos) return;
+            TickChaosTrails();
             foreach (var b in Field.Bubbles)
             {
                 if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;

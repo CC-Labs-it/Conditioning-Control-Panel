@@ -307,6 +307,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var cfg = _state.Config;
             double intensity = _state.RunIntensity;
             double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
+            // WPF ChaosModeService.cs:1203-1213: rabbits roll independently of the bubble cap.
+            if (cfg.DartersEnabled)
+            {
+                var rabbit = ChaosBubbleVariants.RollDarter(effIntensity, _state.RabbitRateMult);
+                if (rabbit != null)
+                {
+                    ChaosMeta.MarkDiscovered("bubble:darter");
+                    BubbleOverlay.SpawnChaos(rabbit);
+                }
+            }
             if (BubbleOverlay.ChaosCount < ChaosFieldMath.MaxConcurrent(intensity, cfg.DifficultyMult))
             {
                 IReadOnlyCollection<string> enabled = (cfg.EnabledVariants ?? ChaosBubbleVariants.AllIds())
@@ -508,6 +518,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
             BodyBuzz(b);
+            // WPF ChaosModeService.cs:1880-1888: GG makes three sweepers at the treat.
+            if (_state.GgRabbitChance > 0 && Rng.NextDouble() < _state.GgRabbitChance)
+            {
+                var center = BubbleOverlay.CenterPx(b);
+                for (int i = 0; i < 3; i++)
+                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(_state.RunIntensity, false,
+                        center.X + Rng.Next(-40, 41), center.Y + Rng.Next(-40, 41), sweeper: true));
+            }
             CheckComboMilestone();
         }
 
