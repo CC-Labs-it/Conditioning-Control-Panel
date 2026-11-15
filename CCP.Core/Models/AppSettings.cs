@@ -2612,8 +2612,8 @@ namespace ConditioningControlPanel.Models
         }
 
         private bool _personalityLegacyMigrated;
-        /// <summary>One-shot guard for PersonalityService.MigrateFromLegacy, so a preset picked after the
-        /// migration is never reset at a later launch while spice (SlutModeEnabled) is on.</summary>
+        /// <summary>Avalonia startup guard for the legacy personality migration. WPF retains its original
+        /// migration behavior and does not consult this flag.</summary>
         [JsonProperty]
         public bool PersonalityLegacyMigrated
         {

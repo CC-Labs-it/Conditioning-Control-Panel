@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -174,14 +175,16 @@ public sealed class LeashAskTests
         {
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+            var oldTime = BeatLoop.Time;
             try
             {
+                BeatLoop.Time = new SteppedTime(); // The WPF thud overshoots 1; inspect its start before time advances.
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
                 settings.PerformanceMode = false;
                 LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
-                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
+                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it with the clock held at zero
                 Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
@@ -191,7 +194,11 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+            finally
+            {
+                BeatLoop.Time = oldTime;
+                (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old;
+            }
         });
 
     [Fact]
