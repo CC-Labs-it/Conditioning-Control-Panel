@@ -742,15 +742,9 @@ namespace ConditioningControlPanel.Services
             if (_queue.Count == 0)
             {
                 var enabled = _library();
-                var settings = CoreSettings.Current;
-                var min = settings.VideoMinDurationSeconds;
-                var kept = KeepByLength(enabled, min, settings.VideoMaxDurationSeconds, DurationOf == null ? null : f =>
-                {
-                    var duration = DurationOf(f);
-                    var loopOrFill = settings.MandatoryVideoLoopShortClips || settings.MandatoryVideoFillShortWithOthers;
-                    return duration.HasValue && loopOrFill && !Video.VideoMinLoop.FilterDropsShortClip(true, min, _host.IsFloating(IsStrict), duration.Value)
-                        ? null : duration;
-                });
+                // Keep the minimum filter until the Avalonia host can loop or fill short clips.
+                var kept = KeepByLength(enabled, CoreSettings.Current.VideoMinDurationSeconds,
+                    CoreSettings.Current.VideoMaxDurationSeconds, DurationOf);
                 LastFunnelEnabled = enabled.Count;   // WPF _lastFunnelEnabled / _lastFunnelDuration (#1352)
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
