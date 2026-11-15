@@ -143,6 +143,9 @@ public sealed class LeashIncomingAskTests
                 LeashGateCardTests.Click(look);
                 var manual = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
                 Assert.Equal("leash-ask:vex", manual.Card.Tag);
+                // Rebinding while the manual ask is visible must still preserve the other offer.
+                LeashHead.Service = null; shell.RebindLeashAsks();
+                LeashHead.Service = service; shell.RebindLeashAsks();
                 manual.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
                 Dispatcher.UIThread.RunJobs();
                 var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);

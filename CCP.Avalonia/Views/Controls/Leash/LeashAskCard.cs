@@ -28,6 +28,7 @@ public sealed class LeashAskCard : Border
     internal static readonly IBrush Glass = Gradient(0x241742, 0x1C1233);
     private static readonly IBrush Chip = Rgb(0x24, 0x18, 0x38);
     private readonly LeashOffer _offer;
+    internal LeashOffer Offer => _offer;
     private readonly Func<ILeashService?> _svc;
     private readonly StackPanel _body = new();
     private readonly Border _switchHost = new();
