@@ -80,7 +80,7 @@ public class NavStripPolishTests
     [Fact]
     public void PlayPillsFollowThePageOrder()
     {
-        Assert.Equal(new[] { "play", "playeyes", "playsessions" },
+        Assert.Equal(new[] { "playeyes", "playsessions", "deeper" },   // declutter wave 2: Games left for the launcher
             NavStripRules.Pills(NavSections.Play).Select(t => t.Key).Take(3).ToArray());
     }
 

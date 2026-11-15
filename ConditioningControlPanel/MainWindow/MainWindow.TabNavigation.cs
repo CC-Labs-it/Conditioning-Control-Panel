@@ -88,6 +88,9 @@ namespace ConditioningControlPanel
             // the new key still announces itself with the old one. ShowTab("lab") keeps working as
             // a permanent alias and fires "lab" directly - it never round-trips through here.
             ["play"] = "lab",
+            // Declutter wave 2: Play lands on Eyes now ("play" opens the launcher's Games door and
+            // "lab" is rewritten to this key), so the door's landing keeps announcing as "lab".
+            ["playeyes"] = "lab",
             // Polish 12 (2026-10-07): the Velvet Vault is back as the Premium page. A rule keyed
             // `tab_eq: "exclusives"` (a .ccpmod on disk) still hears the vault opening.
             ["premium"] = "exclusives",
@@ -105,6 +108,23 @@ namespace ConditioningControlPanel
         /// </summary>
         private static string CanonicalTabKey(string tab) =>
             string.Equals(tab, "lab", StringComparison.OrdinalIgnoreCase) ? "play" : tab;
+
+        /// <summary>Declutter wave 2: the Games pill left Play for the launcher's Games door. The
+        /// strip's "Moved" note says so on arrival ("Moved: CC Labs › Games"), sharing the
+        /// redirect note's three-hit budget so it never nags. Existing keys only.</summary>
+        private void ShowGamesMovedNote()
+        {
+            try
+            {
+                var s = App.Settings?.Current;
+                if (s == null || s.NavMovedToastHits >= NavMovedNoteLimit) return;
+                s.NavMovedToastHits++;
+                App.Settings?.Save();
+                SectionStrip?.ShowMovedNote(string.Format(Loc.Get("nav_moved_toast"),
+                    Loc.Get("launcher_window_title"), Loc.Get("nav_tab_games")));
+            }
+            catch (Exception ex) { App.Logger?.Debug("Games moved note failed: {E}", ex.Message); }
+        }
 
         // ============================== lane tab registry ==============================
         // Nav rework 2026-10-06 (BRIEF contract 1). New section pages (Friends, Leash,
@@ -227,6 +247,19 @@ namespace ConditioningControlPanel
             // "together" -> Social > Lobby) land there and say "Moved" the first three times.
             if (TryRedirectSilentTab(tab)) return;
             if (TryRedirectMovedTab(tab)) return;
+
+            // Declutter wave 2 (2026-11-15): the games left the Play page for the launcher. A key
+            // whose page moved there ("play", the old Games pill) opens that launcher door through
+            // the one seam and leaves the tab on screen alone, like the window keys below.
+            if (Services.UI.NavSections.LauncherDoorFor(tab) is { } launcherDoor)
+            {
+                Services.UI.PanelDoorLink.Open(launcherDoor);
+                return;
+            }
+            // "lab" (bark rules, tutorial steps, third-party deep links) was the Lab page: gaze,
+            // blink, lockdown. Those live on Play > Eyes and Sessions, so it lands on Play's first
+            // pill. The `case "lab": case "play":` arms below are kept but no longer reached.
+            if (tab == "lab") tab = "playeyes";
 
             // The dashboard's RECENT rail. At the door, before the three intercepts below, so a
             // window key (fyp, justdrop) counts as an open like any tab; the rule itself skips
@@ -556,6 +589,10 @@ namespace ConditioningControlPanel
                         if (zone != null)
                             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => ScrollPlayZone(zone)));
                     }
+                    // Declutter wave 2: arriving on Play from elsewhere, the strip says where the
+                    // Games pill went ("Moved: CC Labs › Games"), on the shared three-hit budget.
+                    if (_navCurrentTab is not ("playeyes" or "playsessions" or "deeper"))
+                        Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowGamesMovedNote));
                     break;
 
                 // Note: "patreon" case is handled at the top of ShowTab as a

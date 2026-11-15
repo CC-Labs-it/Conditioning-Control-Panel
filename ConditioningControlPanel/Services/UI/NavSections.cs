@@ -66,8 +66,10 @@ namespace ConditioningControlPanel.Services.UI
                 T("studio", "st4_nav_studio"),
                 T("presets", "tab_presets"),
                 Z("haptics", "tab_haptics", tier: 1),        // StudioTab.FocusRackEntry("haptics")
-                W("justdrop", "jd_door_title"),
                 Z("ramp", "nav_tab_ramp"),                   // StudioTab.FocusRackEntry("scheduler")
+                // Declutter wave 2 (2026-11-15): Just Drop left the strip for the launcher's Tools
+                // door. Still owned here and ShowTab("justdrop") still opens its window; no pill.
+                new NavTab("justdrop", "jd_door_title", NavTabKind.Window, Hidden: true),
             }),
             new NavSection(Companion, "nav_door_companion", "companion", new[]
             {
@@ -80,9 +82,10 @@ namespace ConditioningControlPanel.Services.UI
                 T("shelistening", "tab_shelistening", tier: 1),
                 T("awareness", "tab_awareness", tier: 1),
             }),
-            new NavSection(Play, "nav_door_play", "play", new[]
+            // Declutter wave 2 (2026-11-15): the Games pill ("play") left for the launcher's Games
+            // door (LauncherDoors below). Play is Eyes, Sessions and Deeper and lands on Eyes.
+            new NavSection(Play, "nav_door_play", "playeyes", new[]
             {
-                T("play", "nav_tab_games"),
                 Z("playeyes", "nav_tab_eyes"),               // PlayTab scrolled to EYES (page order wins)
                 Z("playsessions", "nav_tab_sessions"),       // PlayTab scrolled to SESSIONS
                 T("deeper", "tab_deeper"),
@@ -140,11 +143,28 @@ namespace ConditioningControlPanel.Services.UI
             new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
             {
                 ["exclusives"] = (Home, "premium"),
-                ["lab"] = (Play, "play"),
+                // "lab" was the old Lab page (gaze, blink, lockdown): it lands on Play > Eyes.
+                // "play" was the Games pill: the chrome files it under Play > Eyes (rail memory,
+                // search), but ShowTab asks LauncherDoors first and opens the launcher instead.
+                ["lab"] = (Play, "playeyes"),
+                ["play"] = (Play, "playeyes"),
                 ["progression"] = (Home, "settings"),
                 ["patreon"] = (Settings, "account"),
                 ["together"] = (Social, "availablesubjects"),
             };
+
+        /// <summary>ShowTab keys whose page left the panel for the launcher: key -> door
+        /// ("games" | "tools", see PanelDoorLink). ShowTab opens that door and leaves the tab on
+        /// screen alone. Never dead: with the launcher side unwired the door is the launcher itself.</summary>
+        public static readonly IReadOnlyDictionary<string, string> LauncherDoors =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["play"] = "games",
+            };
+
+        /// <summary>The launcher door a tab key opens ("games" | "tools"), or null for a panel key.</summary>
+        public static string? LauncherDoorFor(string? tabKey) =>
+            !string.IsNullOrEmpty(tabKey) && LauncherDoors.TryGetValue(tabKey!, out var door) ? door : null;
 
         /// <summary>Old and alternate names per destination, for search ("(was X)" hints).
         /// Keyed by tab key; the Settings account section is "account", the full vault "premium".</summary>
