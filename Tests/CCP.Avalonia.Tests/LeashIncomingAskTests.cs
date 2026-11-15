@@ -73,6 +73,19 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void QueuedOffersFromTheOldServiceDoNotOpenAfterUnbind() =>
+        LeashGateCardTests.Run(false, (shell, launcher, service) =>
+        {
+            service.ApplyBlock(Block((First, "juno")));
+            Assert.Null(LeashAskWindow.Current);
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            launcher.Show();
+            shell.RebindLeashAsks();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {

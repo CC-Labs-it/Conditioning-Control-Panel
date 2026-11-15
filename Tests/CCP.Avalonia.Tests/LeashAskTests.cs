@@ -195,6 +195,25 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void ManualAskIsNotQueuedAgainWhenServiceBindsWhileOpen() =>
+        Run((shell, page, wire, _) =>
+        {
+            // Force the interval before the gate's next two-second service bind.
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
+    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
