@@ -73,6 +73,38 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheOpenOfferAgain() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+            LeashHead.Service = replacement;
+            shell.Show();
+            try
+            {
+                var first = LeashAskWindow.Open(replacement.Snapshot.Offers.Single(o => o.From.Id == "juno"),
+                    () => replacement, shell)!;
+                shell.RebindLeashAsks(); // Simulate the gate timer firing after Look.
+                Assert.Same(first, LeashAskWindow.Current);
+                first.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                var second = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:vex", second.Card.Tag);
+                second.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                shell.RebindLeashAsks();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {

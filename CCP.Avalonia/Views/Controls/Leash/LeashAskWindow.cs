@@ -25,6 +25,8 @@ public sealed class LeashAskWindow : Window
     internal LeashAskCard Card => (LeashAskCard)Body;
     internal LeashSnapCard? SnapCard => Body as LeashSnapCard;
     private readonly ScaleTransform _thudScale = new(1, 1);
+    private LeashOffer? _offer;
+    private ILeashService? _offerService;
     private BeatLoop? _thud;
     private double _thudAmount;
     /// <summary>True while the landing thud is still running (tests).</summary>
@@ -56,7 +58,8 @@ public sealed class LeashAskWindow : Window
     /// the offer seen once it is up. An accept swaps the ask for the snap (holder left, this account right).</summary>
     internal static LeashAskWindow? Open(LeashOffer offer, Func<ILeashService?> service, Window? owner)
     {
-        var w = new LeashAskWindow(new LeashAskCard(offer, service));
+        var w = new LeashAskWindow(new LeashAskCard(offer, service)) { _offer = offer };
+        try { w._offerService = service(); } catch { }
         w.Card.Answered += (o, accepted, _) =>
         {
             if (accepted) OpenSnap(o.From, Me(), owner);   // closes this ask in the same step
@@ -70,6 +73,11 @@ public sealed class LeashAskWindow : Window
         catch (Exception ex) { Serilog.Log.Debug("[Leash] ask seen note failed: {E}", ex.Message); }
         return w;
     }
+    // A manual Look can precede the shell's periodic service rebind. Do not queue the
+    // same offer again when that rebind reads the snapshot while this card is open.
+    internal bool ShowsOffer(LeashOffer offer, ILeashService service)
+        => _offer != null && ReferenceEquals(_offerService, service)
+            && _offer.From.Id == offer.From.Id && _offer.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds();
     /// <summary>WPF LeashSurfaces.ShowSnap: the holder and leashed recap in the same overlay; Got it and Escape
     /// close it. The holder side opens it from an accepted answer (MainShellWindow.LeashAsks).</summary>
     internal static LeashAskWindow? OpenSnap(LeashPerson holder, LeashPerson leashed, Window? owner)
