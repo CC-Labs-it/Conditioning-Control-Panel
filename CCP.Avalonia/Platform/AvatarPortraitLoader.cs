@@ -54,7 +54,7 @@ internal sealed class AvatarPortraitLoader
                     .Select(p => Resolve(Manifest.Skins[index], p.File)).Where(p => p != null && IsReadable(p)).Cast<string>().ToArray()
                 : Array.Empty<string>();
             var files = Load(skinIndex, emotion);
-            if (files.Length == 0 && skinIndex != 0) files = Load(0, emotion);
+            if (files.Length == 0 && skinIndex != 0) files = Bucket(0, emotion);
             if (files.Length == 0 && !string.Equals(emotion, Manifest.IdleEmotion, StringComparison.OrdinalIgnoreCase))
                 return Bucket(skinIndex, Manifest.IdleEmotion);
             return files;

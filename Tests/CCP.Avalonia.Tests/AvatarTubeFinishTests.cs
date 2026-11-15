@@ -473,14 +473,14 @@ public sealed class AvatarTubeFinishTests
         try
         {
             foreach (var name in new[] { "idle.png", "happy.png" }) File.WriteAllText(Path.Combine(audio, "b", name), "corrupt");
-            change(mod);
-            SelectNow(tube, 2);
-            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
-            tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            change(mod); SelectNow(tube, 2);
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath); tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
             Assert.Equal(Path.Combine(audio, "a", "happy.png"), tube.PortraitPath);
-            File.WriteAllText(Path.Combine(audio, "a", "happy.png"), "corrupt");
-            change(mod); // reload the manifest and its verified image cache
+            File.WriteAllText(Path.Combine(audio, "a", "happy.png"), "corrupt"); change(mod); // reload the verified image cache
             tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
+            File.Copy(Path.Combine(audio, "a", "idle.png"), Path.Combine(audio, "b", "idle.png"), true); change(mod);
+            Assert.Equal(Path.Combine(audio, "b", "idle.png"), tube.PortraitPath); tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
             Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
         }
         finally { Directory.Delete(root, true); }
