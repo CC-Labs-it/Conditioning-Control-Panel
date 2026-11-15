@@ -56,6 +56,15 @@ internal static class AccountSeed
             return false;
         }
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
+        // WPF App.xaml.cs:560: a tier or identity change refreshes every Super lane.
+        Services.Super.SuperAccess.TierEventsHook = raiseAll =>
+        {
+            patreon.TierChanged += (_, _) => raiseAll();
+            substar.TierChanged += (_, _) => raiseAll();
+            CoreAccount.UnifiedIdentityChanged += (_, _) => raiseAll();
+            return true;
+        };
+        Services.Super.SuperAccess.HookTierEvents();
         // New providers, new reading state: no lower reading waiting for its second look, no focus read throttled.
         (Readings, FocusRefresh, _lastLowerLogged) = (new EntitlementReadings(), new EntitlementTierMonitor(), null);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService

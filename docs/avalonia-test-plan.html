@@ -1097,6 +1097,9 @@ changes served unchanged from <code>Assets/web/dtrh</code> (automated-only: byte
 <li>Mandatory Video, Lock Card and Wallpaper side cards play their live preview. Compare with WPF 7.4.1 side by side. WPF <code>Controls/Preview/Scenes/{MandatoryVideo,LockCard,Wallpaper}PreviewScene.cs</code>. Rows: <code>s20-preview-scenes-c</code>.</li>
 <li>Takeover, Haptics and Voice show their own live preview; Haptics never reaches the toy and Voice never opens the microphone; parked cards keep their authored art. Compare with WPF 7.4.1 side by side. WPF <code>Controls/Preview/Scenes/{Takeover,Voice,Haptics}PreviewScene.cs</code>. Rows: <code>s20-preview-tabs</code>.</li>
 </ol>
+<ol>
+<li>On WPF, try the weekly Super effect, then use panic and the emergency exit; the try stops immediately. Change tier or account and check Super access refreshes. WPF <code>ConditioningControlPanel/Services/Super/SuperPreview.cs:60</code>, <code>ConditioningControlPanel/App.xaml.cs:557</code>, <code>ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:1635</code>. Avalonia: weekly try is part B. Rows: <code>super-preview-seed</code>.</li>
+</ol>
 <h2 id="rows-with-no-manual-check">Rows with no manual check</h2>
 <ul>
 <li>Bambi mod, flash audio on, companion on: fire a flash burst from Studio. Expect, about a second after the press, one recorded voice line, the pictures staying about as long as the line, other audio ducked until shortly after it, and the clip's name in the companion bubble when no bubble was up; no bark talks over it. Mute voice lines: the pictures still show, silently. Stop flashes mid-line: the voice stops at once. WPF <code>Services/Flash/FlashService.cs:1527</code>. Rows: <code>barks-wpf-b</code>.</li>
