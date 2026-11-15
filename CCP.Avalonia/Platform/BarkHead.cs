@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Awareness;
 using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Services.EmiDesk;
 
@@ -96,6 +97,10 @@ internal static class BarkHead
     {
         EmiBarkBridge.DeskFire = null;
         EmiBarkBridge.VideoTitleProbe = null;
+        WindowAwarenessService.V2OwnsReactionsProvider = null;
+        (AvatarAwarenessSpeaker.RaiseBark, AvatarAwarenessSpeaker.DeliverLine, AvatarAwarenessSpeaker.CompanionBusy) = (null, null, null);
+        (AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho) = (null, null);
+        (BrainAwarenessLineSource.BrainProvider, BrainAwarenessLineSource.AiProvider) = (null, null);
         if (Engine != null) Engine.BarkSpoken -= OnBarkSpoken;
         foreach (var detach in _unsubscribe) detach();
         _unsubscribe.Clear();
@@ -110,6 +115,7 @@ internal static class BarkHead
         EmiBarkBridge.DeskFire = () => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire;
         EmiBarkBridge.VideoTitleProbe = () => CoreEngine.Video?.LastVideoPath;
         e.NoteAwarenessReaction = () => Views.Windows.EmiDesk.EmiDeskService.Instance.NoteAwarenessReaction();
+        SeedAwarenessMouth(e);
         e.Speak = Speak;
         e.IsWhisperStarting = () => Views.Overlays.FlashOverlay.VoiceStarting;
         // WPF App.xaml.cs:3006: a held idle line is not recorded as spoken (#1468), same policy as the tube.
@@ -147,6 +153,26 @@ internal static class BarkHead
         CoreBark.AllLinesProvider = e.GetAllBarkLines;
         CoreModsHooks.ReloadBarkRules = e.ReloadRules;
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
+    }
+
+    /// <summary>WPF App.xaml.cs:3086 and the App.* reads of the moved AwarenessRouting.cs. The observer lane
+    /// attaches the arbiter; until then IsActive is false and nothing here speaks. The speaker's foreground
+    /// title stays unseeded: the observer hands it currentAppId, as WPF App.xaml.cs:3124.</summary>
+    internal static void SeedAwarenessMouth(BarkEngine e)
+    {
+        WindowAwarenessService.V2OwnsReactionsProvider = () => AwarenessV2Routing.IsActive;
+        AvatarAwarenessSpeaker.RaiseBark = e.RaiseAwarenessBark;
+        AvatarAwarenessSpeaker.DeliverLine = (line, doubleBounce) =>
+        {
+            if (TubeProvider() is not { } tube) return false;
+            tube.SpeakAwarenessLine(line, doubleBounce);
+            return true;
+        };
+        AvatarAwarenessSpeaker.CompanionBusy = ms => TubeProvider()?.IsCompanionBusy(ms) == true;
+        AvatarAwarenessSpeaker.LineSpoken = e.NotifyExternalLineSpoken;
+        AvatarAwarenessSpeaker.MuteKeywordEcho = (line, ms) => EchoTarget().MuteKeywordEcho(line, ms);
+        BrainAwarenessLineSource.BrainProvider = () => App.Brain;
+        BrainAwarenessLineSource.AiProvider = () => App.Ai;
     }
 
     // The desktop lifetime owns the live tube; headless tests supply their shown tube.

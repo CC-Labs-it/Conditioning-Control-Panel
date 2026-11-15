@@ -128,5 +128,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
             catch (Exception ex) { Log.Warning(ex, "OnStillOnActivity handler failed"); }
         }
+
+        /// <summary>WPF Reactions.cs:287 SpeakAwarenessLine: Awareness v2's delivery, called by the arbiter through
+        /// <c>AvatarAwarenessSpeaker</c> after every gate said yes, so it holds none. Rare and up double bounce.</summary>
+        public void SpeakAwarenessLine(string text, bool doubleBounce)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            RunOnAvatar(() =>
+            {
+                try
+                {
+                    if (doubleBounce) PlayDoubleBounce();
+                    GigglePriority(text, aiGenerated: true, unprompted: true);
+                    Log.Debug("Awareness v2 line delivered (rare={Rare}, {Chars} chars)", doubleBounce, text.Length);
+                }
+                catch (Exception ex) { Log.Warning(ex, "SpeakAwarenessLine failed"); }
+            });
+        }
     }
 }
