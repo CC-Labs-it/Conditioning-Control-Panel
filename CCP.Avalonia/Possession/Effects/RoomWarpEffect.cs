@@ -14,6 +14,8 @@ namespace ConditioningControlPanel.Avalonia.Possession;
 /// <summary>The reversible room lean and initial wash. The window toll is a later slice.</summary>
 internal sealed class RoomWarpEffect : PossessionEffectBase
 {
+    private static int _liveCount;
+    private bool _ownsRoom;
     private PossessionLease? _lease;
     private Canvas? _layer;
     private Border? _wash;
@@ -27,6 +29,7 @@ internal sealed class RoomWarpEffect : PossessionEffectBase
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.Zero;
     protected override bool ChargeOnApply => false;
+    protected override string? NameOverride => "the room";
 
     private static Control? CanvasOf(IAvaloniaPossessionHost host)
     {
@@ -36,12 +39,15 @@ internal sealed class RoomWarpEffect : PossessionEffectBase
     }
 
     protected override bool CanApplyCore(PossessionContext ctx, PossessionTarget? target) =>
-        ctx.Host is IAvaloniaPossessionHost host && host.GhostLayer != null
+        Volatile.Read(ref _liveCount) == 0 && ctx.Host is IAvaloniaPossessionHost host && host.GhostLayer != null
         && CanvasOf(host) is { IsEffectivelyVisible: true } canvas && !PossessionLease.IsLeased(canvas);
 
     protected override async Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
     {
         if (ctx.Host is not IAvaloniaPossessionHost host || CanvasOf(host) is not { } canvas || host.GhostLayer is not { } layer) return;
+        if (Interlocked.CompareExchange(ref _liveCount, 1, 0) != 0)
+            throw new InvalidOperationException("The room is already warped.");
+        _ownsRoom = true;
         await ChargeAndPossessAsync(canvas, ct).ConfigureAwait(true);
         ct.ThrowIfCancellationRequested();
         _lease = PossessionLease.Take(canvas);
@@ -79,6 +85,7 @@ internal sealed class RoomWarpEffect : PossessionEffectBase
         _layer = null;
         _lease?.ReleaseImmediate();
         _lease = null;
+        if (_ownsRoom) { _ownsRoom = false; Interlocked.Exchange(ref _liveCount, 0); }
         return Task.CompletedTask;
     }
 }
