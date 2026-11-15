@@ -63,7 +63,8 @@ public sealed class BrowserInitialHomeTests
         });
 
     [Fact]
-    public Task AppAutoplayCutUsesOneMetadataAndInvalidatesOldRequests() => Run((shell, page, host, mod) =>
+    public Task AppAutoplayCutIsDeferredWithoutPlaybackCap() => Run((shell, page, host, mod) =>
+        WithVideoSettings(() =>
     {
         var scripts = new System.Collections.Generic.List<string>();
         host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
@@ -82,23 +83,56 @@ public sealed class BrowserInitialHomeTests
         int Seeks() => scripts.FindAll(x => x.Contains("if(window.__ccpCutRequest===")).Count;
         var first = Start(false);
         Report(first); Report(first);
-        Assert.Equal(1, Seeks());
+        Assert.Equal(0, Seeks());
         var user = Start(true);
         Report(user);
-        Assert.Equal(1, Seeks());
+        Assert.Equal(0, Seeks());
         CoreSettings.Current.VideoCutRandomStart = false;
         var disabled = Start(false);
         Report(disabled);
-        Assert.Equal(1, Seeks());
+        Assert.Equal(0, Seeks());
         CoreSettings.Current.VideoCutRandomStart = true;
         var stale = Start(false);
         Start(false);
         Report(stale);
-        Assert.Equal(1, Seeks());
+        Assert.Equal(0, Seeks());
         var panic = Start(false);
         shell.PanicPauseBrowserMedia();
         Report(panic);
-        Assert.Equal(1, Seeks());
+        Assert.Equal(0, Seeks());
+    }));
+
+    private static void WithVideoSettings(Action check)
+    {
+        var settings = CoreSettings.Current;
+        var oldLimit = settings.VideoMaxDurationSeconds;
+        var oldRandom = settings.VideoCutRandomStart;
+        try { check(); }
+        finally
+        {
+            settings.VideoMaxDurationSeconds = oldLimit;
+            settings.VideoCutRandomStart = oldRandom;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VideoCutSettingsAreRestoredEvenOnFailure(bool fail) => Run((shell, page, host, mod) =>
+    {
+        var settings = CoreSettings.Current;
+        var originalLimit = settings.VideoMaxDurationSeconds;
+        var originalRandom = settings.VideoCutRandomStart;
+        void Change()
+        {
+            settings.VideoMaxDurationSeconds = originalLimit == 30 ? 60 : 30;
+            settings.VideoCutRandomStart = !originalRandom;
+            if (fail) throw new InvalidOperationException("test cleanup");
+        }
+        if (fail) Assert.Throws<InvalidOperationException>(() => WithVideoSettings(Change));
+        else WithVideoSettings(Change);
+        Assert.Equal(originalLimit, settings.VideoMaxDurationSeconds);
+        Assert.Equal(originalRandom, settings.VideoCutRandomStart);
     });
 
     [Fact]

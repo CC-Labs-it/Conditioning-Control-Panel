@@ -156,12 +156,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             host.NavigationFinished += OnFinished;
         }
 
+        // A random offset is only useful when the app can stop the capped slice.
+        // WPF BrowserMediaService.cs:304-321 force-ends it; that service is not ported yet.
+        private static bool BrowserPlaybackCapEnforced => false;
+
         private async Task PlayVideoAfterLoadAsync(WebHost host, int request, bool appDriven)
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
             var token = Guid.NewGuid().ToString("N");
-            if (appDriven)
+            if (appDriven && BrowserPlaybackCapEnforced)
             {
                 void OnMessage(string body)
                 {
