@@ -31,7 +31,13 @@
     <Description>A professional visual conditioning application with gamification features.</Description>
     <Copyright>Copyright © 2024-2026 CodeBambi</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Which releases the Linux updater may offer (AppUpdater.BetaInstall, ccp-bugs #1627): "beta" also
+         takes pre-releases. Every Linux build is a beta today; cut the first stable one with -p:CcpReleaseChannel=stable. -->
+    <CcpReleaseChannel Condition="'$(CcpReleaseChannel)' == ''">beta</CcpReleaseChannel>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="CcpReleaseChannel" Value="$(CcpReleaseChannel)" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
