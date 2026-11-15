@@ -62,6 +62,7 @@ public sealed class LeashAskTests
                     } },
                 });
                 LeashHead.Service = svc;
+                shell.RebindLeashAsks(); // The shell was built with the gate test's service.
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
                 var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
                 var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
