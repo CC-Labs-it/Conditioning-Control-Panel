@@ -413,21 +413,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// deliberately paused output is never mistaken for a stalled decoder.</summary>
         internal void PausePrimary()
         {
-            if (_player == null || _closing || PrimaryPaused) return;
+            if (_playback == null || _closing || PrimaryPaused) return;
             PrimaryPaused = true;
-            _player.SetPause(true);
+            _playback.SetPause(true);
             _sinceShow.Stop();
             _sinceFrame.Stop();
         }
 
         internal void PlayPrimary()
         {
-            if (_gracePaused || !PrimaryPaused || _player == null || _closing) return;
+            if (_gracePaused || !PrimaryPaused || _playback == null || _closing) return;
             PrimaryPaused = false;
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
-            _player.SetPause(false);
+            _playback.SetPause(false);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video

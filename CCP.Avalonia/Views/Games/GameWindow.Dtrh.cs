@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 // Down the Rabbit Hole on the shared GameWindow: WPF Services/Chaos/DtrhHostService.cs, slice A - the
 // host half the first descent needs. Launch's Basic door (LauncherCatalogue.cs:241), boot (:271 init with
 // motionLevel + runSetup, then the manifest :83), request-run -> run-config (:523, rules in Core
@@ -10,7 +11,7 @@
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
-// fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
+// vn-speaking, haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
@@ -142,6 +143,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     try { DtrhMergeAssetStats(o); }
                     catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
                     return true;
+                case "fire-payload":
+                    FireDtrhPayload(o);
+                    return true;
+                case "freeze-state":
+                    ApplyDtrhFreeze((bool?)o["on"] ?? false);
+                    return true;
+                case "mute-state":
+                    MandatoryVideoOverlay.Instance.SetExternalMute((bool?)o["on"] ?? false);
+                    return true;
                 case "request-run":
                     OnDtrhRequestRun(o);
                     return true;
@@ -150,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (_dtrhRunActive) _dtrhLastProgress = o;
                     return true;
                 case "run-started":
+                    ReleaseDtrhVideo();
                     SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Dtrh, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
@@ -157,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Log.Information("DtrhHost: run started (diff={D}, mode={M})", (string?)o["difficulty"] ?? "Gentle", (string?)o["mode"]);
                     return true;
                 case "run-ended":
+                    ReleaseDtrhVideo();
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
                 case "exit":
@@ -468,6 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void DisposeDtrh()
         {
             if (!IsDtrh) return;
+            ReleaseDtrhVideo();
             _dtrhExitWatchdog?.Dispose();
             _dtrhExitWatchdog = null;
             _dtrhHeartbeatWatch?.Stop();
