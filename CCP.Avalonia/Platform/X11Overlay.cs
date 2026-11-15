@@ -158,17 +158,19 @@ internal static class X11Overlay
         {
             if (!EnsureDisplay()) return false;
 
+            _xErrored = false;
             var region = IntPtr.Zero;             // None
             if (clickThrough)
                 region = XFixesCreateRegion(_display, IntPtr.Zero, 0);
 
+            if (clickThrough && region == IntPtr.Zero) return false;
             XFixesSetWindowShapeRegion(_display, xid, ShapeInput, 0, 0, region);
 
             if (region != IntPtr.Zero)
                 XFixesDestroyRegion(_display, region);
 
             XSync(_display, false); // apply the input shape before Avalonia can map the window
-            return true;
+            return !_xErrored;
         }
     }
 
