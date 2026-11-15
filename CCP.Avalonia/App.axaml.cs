@@ -479,7 +479,8 @@ namespace ConditioningControlPanel.Avalonia
 
         // WPF Services/Chaos/EffectPayloadFiring.cs:225-237. Only the global multiplier
         // applies to rain, including on a prism pop (DurationMult is deliberately ignored).
-        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash = Views.Overlays.FlashOverlay.TriggerOnce;
+        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash =
+            (host, amount, duration, size, ambient) => Views.Overlays.FlashOverlay.TriggerOnce(host, amount, duration, size, ambient);
         internal static void FireChaosPayload(Services.Chaos.EffectPayload payload)
         {
             var host = Views.Chaos.ChaosRunHost.Overlay;

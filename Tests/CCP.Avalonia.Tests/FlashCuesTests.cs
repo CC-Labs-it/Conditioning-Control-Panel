@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
@@ -9,6 +11,8 @@ using Avalonia.Platform;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -66,4 +70,58 @@ public class FlashCuesTests
         }
         return Task.CompletedTask;
     });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task BurstSuppressionReachesScheduledFlashes(bool suppress) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-flash-suppression-").FullName;
+        var images = Directory.CreateDirectory(Path.Combine(root, "images")).FullName;
+        using (var picture = Picture(255)) picture.Save(Path.Combine(images, "white.png"));
+        var settings = new HapticSettings { Enabled = true, FlashDisplayEnabled = true,
+            LuminanceSyncEnabled = true, LuminanceSyncIntensity = 0.6 };
+        settings.EnsureV2Migrated();
+        settings.V2.Provider("lovense").Enabled = false;
+        settings.V2.Provider("mock").Enabled = true;
+        settings.V2.Rule(HapticEventKind.FlashDecay).Enabled = true;
+        using var service = new HapticService(settings);
+        var luminance = new List<double>();
+        var haptics = new List<string>();
+        service.HapticTriggered += (_, label) => haptics.Add(label);
+        var saved = (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present,
+            FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,
+            CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride, CoreSettings.Current.FlashAudioEnabled);
+        var host = new Window();
+        var scheduled = new List<Action>();
+        try
+        {
+            CoreHaptics.Service = service;
+            FlashOverlay.SetLuminance = (value, _) => luminance.Add(value);
+            FlashOverlay.Present = (_, _, _) => true;
+            FlashOverlay.OverlaysAvailable = () => true;
+            FlashOverlay.After = (action, _) => scheduled.Add(action);
+            FlashOverlay.VoiceLead = () => Task.CompletedTask;
+            CorePaths.EffectiveAssetsProvider = () => root;
+            ScreenList.QueryOverride = _ => host.Screens.All.ToArray();
+            CoreSettings.Current.FlashAudioEnabled = false;
+            FlashOverlay.TriggerOnce(host, amount: 1, durationMs: 1600, suppressHaptic: suppress);
+            for (int i = 0; i < 250 && scheduled.Count == 0; i++) await Task.Delay(20);
+            Assert.Single(scheduled);
+            scheduled[0]();
+            Assert.Single(FlashOverlay.Active);
+            Assert.Equal(suppress ? 0 : 1, luminance.Count);
+            Assert.Equal(suppress ? 0 : 1, haptics.Count(label => label.StartsWith("Flash", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            FlashOverlay.CloseAll(final: false);
+            host.Close();
+            (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present,
+                FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,
+                CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride, CoreSettings.Current.FlashAudioEnabled) = saved;
+            Directory.Delete(root, recursive: true);
+        }
+    });
+
 }
