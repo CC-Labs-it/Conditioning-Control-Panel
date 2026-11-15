@@ -710,4 +710,36 @@ public sealed class PossessionShellTests
         Frame();
         Assert.Equal(1, starts);
     });
+    [Fact]
+    public Task CatalogSwapFindsAndMovesRealShellButtons() => RunAsync(async rig =>
+    {
+        rig.Shell.ShowTab("settings");
+        Frame(); rig.Shell.CompleteTabTransition(); Frame();
+        rig.Shell.InvalidatePossessionTargets();
+        var host = (IAvaloniaPossessionHost)rig.Shell;
+        var effect = Assert.IsType<SwapEffect>(PossessionAvaloniaHead.CreateEffects().Single(e => e.Id == "swap"));
+        var ctx = new PossessionContext { Host = rig.Shell, Attribution = new DodgeAttribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var target = ((IPossessionHost)rig.Shell).Targets.FirstOrDefault(t => effect.CanApply(ctx, t));
+        Assert.NotNull(target);
+        var partner = SwapEffect.FindPartner(ctx, target!);
+        Assert.NotNull(partner);
+        var a = (Control)target!.Visual; var b = (Control)partner!.Visual;
+        var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeB = host.BoundsOnGhostLayer(b)!.Value;
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
+            Assert.True(PossessionLease.IsLeased(a) && PossessionLease.IsLeased(b));
+            rig.Frames.Frame(TimeSpan.Zero); rig.Frames.Frame(TimeSpan.FromMilliseconds(550)); await apply;
+            Assert.Equal(homeB.X, host.BoundsOnGhostLayer(a)!.Value.X, 1);
+            PointerTestFrame.Render(rig.Shell);
+            var point = host.GhostLayer!.TranslatePoint(host.BoundsOnGhostLayer(a)!.Value.Center, rig.Shell)!.Value;
+            var hit = rig.Shell.InputHitTest(point) as Visual;
+            Assert.True(ReferenceEquals(hit, a) || (hit != null && a.IsVisualAncestorOf(hit)));
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+        Assert.Equal(homeA.X, host.BoundsOnGhostLayer(a)!.Value.X, 1);
+    });
+
 }
