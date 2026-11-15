@@ -52,6 +52,7 @@ public partial class MainShellWindow
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = next;
             _seenLeashOffers.Clear();
+            _waitingLeashAsks.Clear();
             _heldLeashNotices.Clear();
             if (next != null)
             {
@@ -84,10 +85,20 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
-    private void OnLeashOfferShown(LeashOffer offer) =>
+    private void OnLeashOfferShown(LeashOffer offer)
+    {
+        // Look can open an offer before the gate timer has bound the current service.
+        // Bind while the card is up, then consume it from that service's queue.
+        if (!ReferenceEquals(_askService, LeashHead.Service)) RebindLeashAsks();
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
+    }
 
-    private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
+    private void OnLeashAskClosed() => Dispatcher.UIThread.Post(() =>
+    {
+        // A service switch can happen before the next gate tick. Never drain the old queue.
+        if (!ReferenceEquals(_askService, LeashHead.Service)) { _waitingLeashAsks.Clear(); return; }
+        TryShowLeashAsk();
+    });
 
     private Window? LeashOwner() => IsVisible && WindowState != WindowState.Minimized ? this : LauncherWindow.Instance;
 

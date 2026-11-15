@@ -73,6 +73,51 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void RemovingTheServiceDiscardsOffersWaitingFromTheOldService() =>
+        LeashGateCardTests.Run(false, (shell, _, oldService) =>
+        {
+            oldService.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            shell.Show();
+            shell.RebindLeashAsks();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ClosingAnAskAfterServiceRemovalDoesNotOpenAnOldWaitingOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, service) =>
+        {
+            service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+            shell.Show();
+            shell.RebindLeashAsks();
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+            LeashHead.Service = null;
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualLookBeforeTheGateTimerDoesNotRequeueTheSameOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno")));
+            shell.Show();
+            shell.ShowTab("leash");
+            var page = shell.Named<LeashTabView>("LeashTab")!;
+            LeashHead.Service = replacement; // The page updates now; the gate timer has not rebound yet.
+            var look = page.GetLogicalDescendants().OfType<Button>().Single(c => c.Tag as string == "leash-offer-look");
+            look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
