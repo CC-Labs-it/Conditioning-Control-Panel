@@ -194,8 +194,12 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
 
     // Own connection (UniqueName throws on the shared autoconnect one); one call at a time, so lazy init is safe.
     private static DBusConnection? _bus;
+    // Waits for the Response however late (the shared 30 s helper timeout lost late files); after 2 minutes
+    // the request is closed instead, so no Response and no file can follow.
     private static async Task<(uint, Dictionary<string, VariantValue>)> ScreenshotAsync(CancellationToken cancellation)
     {
+        using var bound = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        bound.CancelAfter(TimeSpan.FromMinutes(2));
         var bus = _bus;
         if (bus == null)
         {
@@ -208,7 +212,7 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
         {
             w.WriteString(""); // parent_window: none
             w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token, ["interactive"] = false });
-        }, cancellation, "org.freedesktop.portal.Screenshot").ConfigureAwait(false);
+        }, bound.Token, "org.freedesktop.portal.Screenshot", untilAnswered: true).ConfigureAwait(false);
     }
 }
 
