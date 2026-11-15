@@ -71,6 +71,7 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern IntPtr XDefaultRootWindow(IntPtr display);
     [DllImport(LibX11)] private static extern IntPtr XInternAtom(IntPtr display, string name, bool onlyIfExists);
     [DllImport(LibX11)] private static extern int XChangeProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr type, int format, int mode, IntPtr[] data, int count);
+    [DllImport(LibX11)] private static extern int XChangeProperty(IntPtr display, IntPtr window, IntPtr property, IntPtr type, int format, int mode, byte[] data, int count);
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
     [DllImport(LibX11)] private static extern int XSetInputFocus(IntPtr display, IntPtr window, int revertTo, nuint time);
@@ -305,14 +306,34 @@ internal static class X11Overlay
             {
                 for (var i = 0; i < XSetWindowAttributesSize; i += IntPtr.Size) Marshal.WriteIntPtr(attrs, i, IntPtr.Zero);
                 Marshal.WriteInt32(attrs, 88, 1);
+                var type = OverlayWindowType(WindowManagerName);   // before the error flag: its reads are not this request
                 _xErrored = false;
                 XChangeWindowAttributes(_display, xid, CWOverrideRedirect, attrs);
+                var cls = System.Text.Encoding.ASCII.GetBytes(OverlayWmClass + "\0" + OverlayWmClass + "\0");
+                XChangeProperty(_display, xid, (IntPtr)67 /* XA_WM_CLASS */, (IntPtr)31 /* XA_STRING */, 8, 0 /* PropModeReplace */, cls, cls.Length);
+                if (type != null)
+                    XChangeProperty(_display, xid, XInternAtom(_display, "_NET_WM_WINDOW_TYPE", false), (IntPtr)4 /* XA_ATOM */, 32, 0,
+                        new[] { XInternAtom(_display, type, false) }, 1);
                 XSync(_display, false);
                 return !_xErrored; // e.g. BadWindow: the server refused the request
             }
             finally { Marshal.FreeHGlobal(attrs); }
         }
     }
+
+    /// <summary>WM_CLASS (name and class) of every override-redirect overlay, so blur / rounded-corner
+    /// effects' window-class exclude lists can name the overlays without the app's main window.</summary>
+    internal const string OverlayWmClass = "ccp-overlay";
+
+    /// <summary>The <c>_NET_WM_WINDOW_TYPE</c> an override-redirect overlay gets under <paramref name="wmName"/>,
+    /// null = keep Avalonia's NORMAL (ccp-bugs#1609). KWin takes an unmanaged window's type straight from
+    /// this property (x11window.cpp X11Window::windowType), and third-party KWin effects decorate every
+    /// NORMAL window: KDE-Rounded-Corners outlines Normal/Dialog (Window.cpp hasEffect), Better Blur DX's
+    /// force blur skips only desktop, dock and popup types (window.cpp neverForceBlur). A tooltip is a
+    /// popup to both, and stock KWin effects already treat unmanaged windows as popups (fadingpopups).
+    /// KWin only: picom's sample config dims tooltips, and no other WM runs these effects.</summary>
+    internal static string? OverlayWindowType(string? wmName)
+        => wmName == "KWin" ? "_NET_WM_WINDOW_TYPE_TOOLTIP" : null;
 
     /// <summary>X11 ownership, the form of Win32 GWL_HWNDPARENT that window managers keep: a
     /// window with WM_TRANSIENT_FOR set is stacked directly above its owner, raised and lowered
