@@ -2851,6 +2851,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 DisarmPet();
                 StopChromeGrace();
                 TearDownReactions();
+                CancelAsk();
                 TearDownVox();
                 CancelChain(); CancelHold();
                 CancelFxTimers();
