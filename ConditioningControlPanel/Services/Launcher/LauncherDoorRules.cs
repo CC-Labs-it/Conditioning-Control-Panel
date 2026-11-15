@@ -14,9 +14,11 @@ public enum LauncherDoor
 /// <summary>
 /// What the door rules need to know about a catalogue entry, and nothing a UI type could carry.
 /// <paramref name="Listed"/> false keeps the id out of every page while it stays resolvable by
-/// <c>Find</c>, <c>--game</c> and old shortcuts.
+/// <c>Find</c>, <c>--game</c> and old shortcuts. <paramref name="Locked"/> is the tier gate's
+/// answer today: a locked card stays on its page (padlocked) but is never offered by Continue.
 /// </summary>
-public readonly record struct LauncherDoorCard(string Id, LauncherDoor Door, bool Listed, bool Available, bool IsNew);
+public readonly record struct LauncherDoorCard(string Id, LauncherDoor Door, bool Listed, bool Available, bool IsNew,
+                                               bool Locked = false);
 
 /// <summary>
 /// The decisions behind the launcher's doors: which cards a door's page shows, the two numbers a
@@ -90,7 +92,8 @@ public static class LauncherDoorRules
 
     /// <summary>
     /// The game "Continue" starts, or null for no button: the last played id, when it is still a
-    /// listed, available card behind the Games door. A tool is never continued.
+    /// listed, available, unlocked card behind the Games door. A tool is never continued, and a
+    /// game the player has lost access to gets no button (its padlocked tile still explains why).
     /// </summary>
     public static string? ContinuePick(IEnumerable<LauncherDoorCard> cards, string? lastPlayedId)
     {
@@ -99,7 +102,7 @@ public static class LauncherDoorRules
         foreach (var c in cards ?? Enumerable.Empty<LauncherDoorCard>())
         {
             if (!string.Equals(c.Id, want, StringComparison.OrdinalIgnoreCase)) continue;
-            return c.Door == LauncherDoor.Games && c.Listed && c.Available ? c.Id : null;
+            return c.Door == LauncherDoor.Games && c.Listed && c.Available && !c.Locked ? c.Id : null;
         }
         return null;
     }

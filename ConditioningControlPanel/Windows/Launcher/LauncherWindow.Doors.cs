@@ -300,7 +300,10 @@ public partial class LauncherWindow
         go.Click += (_, _) =>
         {
             if (last.NeedsAccount) { LauncherSfx.Denied(); OpenSignIn(); return; }
-            LauncherSfx.Click();
+            // Access can drop while the doors are up (ContinuePick hides the button on the next
+            // paint): no happy click before the host's refusal.
+            if (last.Locked || !last.Available) LauncherSfx.Denied();
+            else LauncherSfx.Click();
             LauncherHost.LaunchGame(last.Id);
         };
         return go;
