@@ -215,6 +215,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                _refreshAfterWakeCal = CalibratingWake; // a borrower returning mid-unwind re-arms once calibration ends
                 var entitled = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("voice");
                 var (wake, ptt) = _windowClosed || CalibratingWake ? (false, false)
                     : VoiceInputRules.ModesToRun(CoreSettings.Current, entitled, CoreSpeech.IsAvailable);

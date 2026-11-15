@@ -335,10 +335,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal bool CalibratingWake;
         private System.Threading.CancellationTokenSource? _wakeCalCts;
+        /// <summary>A reconcile arrived while calibration held the mic; cleared by Stop / panic.</summary>
+        private bool _refreshAfterWakeCal;
 
         /// <summary>Stop, consent revoke, window close (all via StopVoiceInput) and panic ("wake-calibration")
         /// end a calibration capture at once rather than after its 40 s cap.</summary>
-        internal void CancelWakeCalibration() { try { _wakeCalCts?.Cancel(); } catch (ObjectDisposedException) { } }
+        internal void CancelWakeCalibration() { _refreshAfterWakeCal = false; try { _wakeCalCts?.Cancel(); } catch (ObjectDisposedException) { } }
 
         /// <summary>WPF SL_Calibrate_Click (MainWindow.SheListening.cs:84-140): free the mic, record a few
         /// "Hey Bambi"s, store the chosen sensitivity, then re-arm. Progress and the result use the status line.</summary>
@@ -383,9 +385,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 cts.Dispose();
                 CalibratingWake = false;
                 tab.BtnSL_Calibrate.IsEnabled = true;
-                // Re-arm (the spotter rebuilds at the new sensitivity) unless Stop, panic or a mic borrower
-                // cancelled: those own the mic now, and a borrower re-arms when it releases it.
-                if (!cts.IsCancellationRequested) RefreshVoiceInputModes();
+                // Re-arm (the spotter rebuilds at the new sensitivity, WPF SheListening.cs:140) unless Stop, panic or
+                // a mic borrower cancelled - except a borrower that already handed the mic back during the unwind.
+                if (!cts.IsCancellationRequested || _refreshAfterWakeCal) RefreshVoiceInputModes();
                 UpdateMicPill();
             }
         }

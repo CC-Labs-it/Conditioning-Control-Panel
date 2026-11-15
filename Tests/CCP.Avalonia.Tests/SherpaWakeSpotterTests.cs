@@ -352,4 +352,36 @@ public sealed class SherpaWakeCaptureTests
             shell.StopVoiceInput(); shell.RequestExit(); Directory.Delete(root, true);
         }
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public System.Threading.Tasks.Task BorrowerReturningBeforeCalibrationUnwindsReArmsUnlessStopped(bool stopAfter) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(), (_, _, _) => false);
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { WakeSpotterOverride = kws, WakeMicOverride = mic };
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var (consent, ptt) = (s.MicConsentGiven, s.SpeechPushToTalkEnabled);
+        var (premium, speech) = (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider);
+        s.MicConsentGiven = true;
+        try
+        {
+            shell.Show();
+            shell.SL_Calibrate_Click();
+            await Until(() => mic.Feed != null);
+            (s.SpeechPushToTalkEnabled, ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (true, () => true, () => true);
+            shell.StopVoiceInput(); // the borrower takes the mic...
+            shell.RefreshVoiceInputModes(); // ...and hands it back while calibration is still unwinding
+            Assert.True(shell.CalibratingWake);
+            if (stopAfter) shell.StopVoiceInput(); // an explicit stop after the return wins
+            await Until(() => !shell.CalibratingWake);
+            Assert.Equal(!stopAfter, shell.PushToTalkArmed);
+        }
+        finally
+        {
+            (s.MicConsentGiven, s.SpeechPushToTalkEnabled) = (consent, ptt);
+            (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (premium, speech);
+            shell.StopVoiceInput(); shell.RequestExit(); Directory.Delete(root, true);
+        }
+    });
 }
