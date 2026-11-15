@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -39,9 +40,11 @@ public sealed class MandatoryVideoFloatingHostTests
         public bool IsSeekable => true;
         public bool HasVideo => true;
         public bool Paused, Stopped;
+        public bool? AudioOff;
         public void SetPause(bool paused) => Paused = paused;
         public void Stop() => Stopped = true;
         public void Dispose() { }
+        public void SetAudioOff(bool off) => AudioOff = off;
     }
 
     /// <summary>Always the same spot: only the "taken" rule keeps windows apart.</summary>
@@ -112,6 +115,26 @@ public sealed class MandatoryVideoFloatingHostTests
     });
 
     [Fact]
+    public Task Automatic_triggers_join_up_to_the_limit_and_a_fourth_is_skipped() => Run((o, decoders) =>
+    {
+        Assert.True(o.FloatingRunOpen);
+        Assert.True(o.Scheduler.Trigger());
+        Assert.True(o.Scheduler.Trigger());
+        Assert.Equal(3, Up(o).Count);
+        Assert.True(o.Scheduler.Trigger());   // automatic at the limit: a quiet skip
+        Assert.Equal(3, Up(o).Count);
+        Assert.Equal(3, decoders.Count);
+        Assert.False(decoders.Any(d => d.Stopped));
+    });
+
+    [Fact]
+    public Task Pop_up_together_opens_every_free_slot_at_once() => Run((o, _) =>
+    {
+        Assert.Equal(3, Up(o).Count);
+        Assert.Equal(2, o.Floaters.Select(f => f.Clip).Distinct().Count());
+    }, together: true);
+
+    [Fact]
     public Task No_window_lands_exactly_on_another() => Run((o, _) =>
         {
             typeof(MandatoryVideoOverlay).GetField("_random", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(o, new SameSpot());
@@ -139,6 +162,7 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.True(decoders[0].Stopped);
         Assert.False(decoders[1].Stopped || decoders[2].Stopped);
         Assert.True(o.FloatingUp > 0);
+        Assert.True(o.FloatingRunOpen);
         Assert.True(o.Scheduler.IsPlaying);
 
         var second = o.Floaters[0];
@@ -149,6 +173,7 @@ public sealed class MandatoryVideoFloatingHostTests
         o.Floaters[0].Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Empty(Up(o));
         Assert.Equal(0, o.FloatingUp);
+        Assert.False(o.FloatingRunOpen);
         Assert.False(o.Scheduler.IsPlaying, "the last window ends the run");
     });
 
@@ -169,5 +194,27 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.False(card!.IsVisible);
         Assert.All(decoders, d => Assert.True(d.Stopped));
         Assert.Equal(0, o.FloatingUp);
+        Assert.False(o.FloatingRunOpen);
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Exactly_one_window_has_the_sound_and_a_click_takes_it(bool keepSound) => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger();
+        o.Scheduler.Trigger();
+        Assert.Single(decoders, d => d.AudioOff != true);
+        // The newest takes the sound; with Keep sound the first window keeps it.
+        Assert.Same(keepSound ? decoders[0] : decoders[2], decoders.Single(d => d.AudioOff != true));
+
+        var middle = o.Floaters[0].Window;
+        middle.MouseDown(new Point(5, 5), MouseButton.Left);
+        middle.MouseUp(new Point(5, 5), MouseButton.Left);
+        Assert.Same(decoders[1], decoders.Single(d => d.AudioOff != true));
+        Assert.True(o.HasFloatingSound(middle));
+
+        o.Floaters[0].Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // the holder goes
+        Assert.Single(decoders.Where(d => !d.Stopped), d => d.AudioOff != true);
+    }, keepSound: keepSound);
 }

@@ -204,6 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF VideoService.cs:3082-3085: a cached remote clip keeps its URL identity (credit, remote guards).
             _source = Scheduler.ShowingPath ?? path;
             Play(path, strict);
+            if (Floating) SpawnTogetherExtras();   // WPF VideoService.FloatingInstances.cs:213
         });
 
         private void Play(string path, bool strict)
@@ -482,9 +483,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.ShowActivated = false;
                 PlaceFloating(w, screen, _random, AllSurfaces.Select(x => x.Window).ToList());
                 var frame = DecorateFloating(w);
+                // WPF FloatingInstances.cs:258: a press on a window takes the sound.
+                w.AddHandler(InputElement.PointerPressedEvent, (_, _) => TouchFloating(w),
+                    global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
                 Func<bool> audible = inst == null
-                    ? () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0
-                    : () => inst.Playback?.IsPlaying == true && !inst.UserMuted && !inst.Held;
+                    ? () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0 && HasFloatingSound(w)
+                    : () => inst.Playback?.IsPlaying == true && !inst.UserMuted && !inst.Held && HasFloatingSound(w);
                 w.Opened += (_, _) =>
                 {
                     ApplyFloatingPassive(w);
@@ -872,6 +876,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var surface in _surfaces) surface.Reveal?.Present();
             _floatingOnScreen = _surfaces.Count > 0;
+            // WPF FloatingInstances.cs:633: shown, it joins the sound rotation (behind the holder with Keep sound).
+            if (Floating && _surfaces.Count > 0 && !_audioFocus.Items.Contains(_surfaces[0].Window))
+            {
+                _audioFocus.Join(_surfaces[0].Window, CoreSettings.Current.MandatoryVideoFloatingKeepSound);
+                ApplyAudioFocus();
+            }
             if (_videoReveal != null || _surfaces.Count == 0) return;
             var window = _surfaces[0].Window;
             _videoReveal = new Services.Video.VideoReveal(_videoFadeSeconds,
@@ -1323,6 +1333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <param name="retire">The run goes on (other floating windows, or the heal's replay): keep the duck and the paused text.</param>
         private double ClosePrimary(bool retire)
         {
+            foreach (var x in _surfaces) _audioFocus.Remove(x.Window);
             EndEnhancement();
             System.Threading.Interlocked.Increment(ref _escapeGeneration);
             _floatingOnScreen = false;
