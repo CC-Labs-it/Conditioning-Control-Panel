@@ -100,7 +100,12 @@ internal static class BrainDrainOverlay
         if (_clear != s.BrainDrainKeepPicturesClear)
             foreach (var w in Hosts) Raise(w);
         _clear = s.BrainDrainKeepPicturesClear;
-        if (_clear != true || Hosts.Count == 0) return;
+        SinkKeepClear();
+    }
+    // WPF OverlayService.cs:3199-3215: sink after the rest of the z-order sweep.
+    internal static void SinkKeepClear()
+    {
+        if (CoreSettings.Current.BrainDrainKeepPicturesClear != true || Hosts.Count == 0) return;
         var windows = OwnWindows().Where(w => w.IsVisible && w.Topmost).ToList();
         windows.AddRange(Hosts.Where(w => !windows.Contains(w)));
         var byHandle = windows.Where(w => Handle(w) != IntPtr.Zero).ToDictionary(Handle);
