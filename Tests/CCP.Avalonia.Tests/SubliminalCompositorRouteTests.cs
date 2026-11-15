@@ -157,4 +157,57 @@ public sealed class SubliminalCompositorRouteTests
         Assert.Same(current, Assert.Single(canvas.Children));
         Assert.True(stage.IsVisible);
     });
+
+    // CompositorLayers (WPF draws them on one stage): Flash 30 < Subliminal 40 < Spiral 60 < PinkTint 70, or
+    // the tint at PinkTintUnder 35. Each family is its own window here, so the stage restacks them in that order.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Hosted_card_keeps_the_compositor_order_with_tint_spiral_and_flashes(bool tintUnder) => With(env =>
+    {
+        var s = env.Service.Current;
+        (s.UnifiedOverlayHost, s.PinkFilterEnabled, s.PinkFilterUnderEffects) = (true, true, tintUnder);
+        var (effects, raiseWindow, skip, present, stageRaise) = (PinkFilterOverlay.EffectWindows, PinkFilterOverlay.RaiseWindow,
+            PinkFilterOverlay.SkipPlatformChecksForTests, FlashOverlay.Present, SharedOverlayHost.Raise);
+        var spiral = new SpiralOverlayWindow();
+        var raised = new List<Window>();
+        try
+        {
+            PinkFilterOverlay.SkipPlatformChecksForTests = true;
+            PinkFilterOverlay.Refresh(env.Owner);
+            var tint = Assert.Single(PinkFilterOverlay.Shown);
+            PinkFilterOverlay.EffectWindows = () => new Window[] { tint, spiral };
+            PinkFilterOverlay.RaiseWindow = w => { raised.Add(w); return true; };
+            SharedOverlayHost.Raise = w => { raised.Add(w); return true; };
+            FlashOverlay.Present = (_, _, _) => true;
+            var expected = (Window stage) => tintUnder ? new Window[] { stage, spiral } : new Window[] { stage, spiral, tint };
+
+            SubliminalOverlay.Show(env.Owner, "CARD");
+            var stage = Assert.Single(env.Stages);
+            Assert.Equal(expected(stage), raised);
+
+            raised.Clear(); // a flash maps on top; the card and everything over it go back above
+            Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
+                    new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
+                new PixelRect(10, 10, 50, 50), "flash.png", env.Owner.Screens.All[0], 1, TimeSpan.Zero,
+                TimeSpan.FromSeconds(6), false, false, 0));
+            Assert.Equal(expected(stage), raised);
+
+            SubliminalOverlay.CloseAll(); // no hosted card: a flash restacks nothing
+            raised.Clear();
+            Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
+                    new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
+                new PixelRect(10, 10, 50, 50), "flash2.png", env.Owner.Screens.All[0], 1, TimeSpan.Zero,
+                TimeSpan.FromSeconds(6), false, false, 0));
+            Assert.Empty(raised);
+        }
+        finally
+        {
+            FlashOverlay.CloseAll(final: false);
+            PinkFilterOverlay.CloseAll();
+            spiral.Close();
+            (PinkFilterOverlay.EffectWindows, PinkFilterOverlay.RaiseWindow, PinkFilterOverlay.SkipPlatformChecksForTests,
+                FlashOverlay.Present, SharedOverlayHost.Raise) = (effects, raiseWindow, skip, present, stageRaise);
+        }
+    });
 }

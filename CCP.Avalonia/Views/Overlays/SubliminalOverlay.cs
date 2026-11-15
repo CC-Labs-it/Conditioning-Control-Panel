@@ -72,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             card.ZIndex = global::ConditioningControlPanel.Services.Compositor.CompositorLayers.Subliminal;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
-            lease.Raise();
+            RestackStages();
             var retired = false;
             Action retire = () =>
             {
@@ -116,6 +116,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             catch { Finish(); return false; }
             return true;
+        }
+
+        /// <summary>WPF draws every effect family on one compositor in <see cref="global::ConditioningControlPanel.Services.Compositor.CompositorLayers"/>
+        /// order (Flash 30 &lt; Subliminal 40 &lt; Bubbles 45 &lt; BouncingText 50 &lt; Spiral 60 &lt; PinkTint 70). Here each family
+        /// owns its topmost windows, so the card's ZIndex orders nothing outside the stage: raise the stage, then
+        /// re-raise every later family in that order. Flashes call this after they map (they sit under the card).</summary>
+        internal static void RestackStages()
+        {
+            if (HostedCards.Count == 0) return;
+            foreach (var lease in Hosts.Values) lease.Raise();
+            IEnumerable<Window> above = PinkFilterOverlay.EffectWindows()
+                .Where(w => w is BubbleOverlayWindow or BouncingTextOverlayWindow or SpiralOverlayWindow)
+                .OrderBy(w => w is BubbleOverlayWindow ? 0 : w is BouncingTextOverlayWindow ? 1 : 2);
+            // PinkFilterUnderEffects puts the tint at PinkTintUnder (35), already under the stage.
+            if (!CoreSettings.Current.PinkFilterUnderEffects) above = above.Concat(PinkFilterOverlay.Shown);
+            foreach (var w in above.ToArray())
+            {
+                try { PinkFilterOverlay.RaiseWindow(w); }
+                catch (Exception ex) { Log.Debug("Subliminal: compositor-order raise failed: {E}", ex.Message); }
+            }
         }
 
         private static void ClearCards()
