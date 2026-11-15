@@ -67,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia
                     fileSizeLimitBytes: 10_000_000, rollOnFileSizeLimit: true,
                     flushToDiskInterval: TimeSpan.FromSeconds(1), hooks: reportLog)
                 .CreateLogger();
+            ConditioningControlPanel.Services.Audio.RecentSounds.Shared.TraceSink = line => Serilog.Log.Information("[AUDIO] {Line}", line);
             // The session's hold on the phrase pools (#906); WPF seeds the same three in App.xaml.cs:324.
             ConditioningControlPanel.Services.PhrasePoolCustody.Seed();
 
