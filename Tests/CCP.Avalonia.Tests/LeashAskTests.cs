@@ -211,6 +211,26 @@ public sealed class LeashAskTests
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
     [Fact]
+    public void RebindingWhileAnOfferIsOpenDoesNotReopenItAfterEscape() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            page.OnShown();
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ask.IsVisible);
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
+    [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((_, page, wire, _) =>
         {
