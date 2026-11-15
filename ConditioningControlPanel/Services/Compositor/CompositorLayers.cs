@@ -7,6 +7,9 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// </summary>
 public static class CompositorLayers
 {
+    // Super Creep's pink fog: under every video and flash, above the desktop. WPF-only for now
+    // (Creep has no Avalonia twin yet); 5 is free in both tables.
+    public const int Creep = 5;
     public const int Video = 10;
     public const int MandatoryVideo = 15;
     public const int LockCard = 20;
@@ -32,5 +35,7 @@ public static class CompositorLayers
     // DIFFERENT edge-vignette effect). The WPF ChaosFxLayer still merges bursts/trails/bolts/
     // ripples/cursor glow into ONE layer, so it takes a single free slot inside the band;
     // split into the granular siblings when converging further.
+    // The Whirlpool (Super spiral): over the pink slot so its arms read through the fog.
+    public const int Whirlpool = 72;
     public const int Fx = 120;
 }

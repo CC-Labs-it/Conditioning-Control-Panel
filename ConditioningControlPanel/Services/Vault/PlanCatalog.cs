@@ -45,6 +45,11 @@ public sealed record PlanSet(string Currency, PlanInfo Basic, PlanInfo Prime, Va
 public static class PlanCatalog
 {
     public const string Path = "/config/plans";
+
+    /// <summary>The site's crypto pass page (cclabs-web <c>/crypto</c>): Basic or Prime for 1, 2, 3
+    /// or 12 months, paid once in Bitcoin, delivered as a code. Nothing renews. It reads no query,
+    /// so no plan rides on the address.</summary>
+    public const string CryptoPassUrl = "https://app.cclabs.app/crypto";
     public static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(10);
 
     /// <summary>The compiled copy. Must stay equal to contract C1's defaults.</summary>

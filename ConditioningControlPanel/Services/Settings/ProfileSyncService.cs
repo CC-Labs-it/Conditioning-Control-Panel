@@ -4802,6 +4802,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
+            // The weekly free Super try is machine-wide: a restore must not hand back a spent week.
+            nameof(AppSettings.SuperPreviewUsedWeek),
         };
 
         /// <summary>
@@ -4872,6 +4874,7 @@ namespace ConditioningControlPanel.Services
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             restored.WalletNetSeen = current.WalletNetSeen;
+            restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

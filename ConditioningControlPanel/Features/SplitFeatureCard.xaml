@@ -104,7 +104,7 @@
                      the fixed region clip and bares the dark socket along the top edge. The ring stays
                      put on the card edge and covers that strip, like FeatureCard's ring does. -->
                 <Path x:Name="ActiveRingA" Stroke="{DynamicResource FxGlowBrush}"
-                      StrokeThickness="3" Fill="#12FF69B4"
+                      StrokeThickness="5" Fill="#12FF69B4"
                       Visibility="Collapsed" IsHitTestVisible="False"/>
             </Grid>
             <Grid x:Name="HalfRegionB">
@@ -144,7 +144,7 @@
                      the fixed region clip and bares the dark socket along the top edge. The ring stays
                      put on the card edge and covers that strip, like FeatureCard's ring does. -->
                 <Path x:Name="ActiveRingB" Stroke="{DynamicResource FxGlowBrush}"
-                      StrokeThickness="3" Fill="#12FF69B4"
+                      StrokeThickness="5" Fill="#12FF69B4"
                       Visibility="Collapsed" IsHitTestVisible="False"/>
             </Grid>
             <!-- The seam. Drawn over the art so the split is legible even when the
