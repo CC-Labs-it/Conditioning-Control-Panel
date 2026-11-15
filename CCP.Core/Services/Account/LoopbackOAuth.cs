@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Services
             return query;
         }
 
-        private async Task<(NameValueCollection, Func<string, Task>)> NextCallbackAsync()
+        internal async Task<(NameValueCollection, Func<string, Task>)> NextCallbackAsync()
         {
             if (_http != null)
             {
@@ -117,18 +117,29 @@ namespace ConditioningControlPanel.Services
             }
 
             var callback = new TaskCompletionSource<(NameValueCollection, Func<string, Task>)>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var stopAccept = new CancellationTokenSource();
+            var accepts = new List<Task>(_tcp.Count);
             foreach (var listener in _tcp)
-                _ = AcceptLoopAsync(listener, callback);
-            return await callback.Task;
+                accepts.Add(AcceptLoopAsync(listener, callback, stopAccept.Token));
+            try { return await callback.Task; }
+            finally
+            {
+                // Retire both pending accepts before another callback is awaited. Otherwise the
+                // losing IPv4/IPv6 accept can consume the next callback after a rejected state.
+                stopAccept.Cancel();
+                await Task.WhenAll(accepts);
+            }
         }
 
-        private async Task AcceptLoopAsync(TcpListener listener, TaskCompletionSource<(NameValueCollection, Func<string, Task>)> callback)
+        private async Task AcceptLoopAsync(TcpListener listener, TaskCompletionSource<(NameValueCollection, Func<string, Task>)> callback,
+            CancellationToken stopAccept)
         {
             try
             {
                 while (!callback.Task.IsCompleted)
-                    _ = HandleAsync(await listener.AcceptTcpClientAsync(), callback); // concurrent: a silent pre-connect must not block
+                    _ = HandleAsync(await listener.AcceptTcpClientAsync(stopAccept), callback); // a silent pre-connect must not block
             }
+            catch (OperationCanceledException) when (stopAccept.IsCancellationRequested) { }
             catch (Exception ex) { callback.TrySetException(ex); } // listener stopped
         }
 
