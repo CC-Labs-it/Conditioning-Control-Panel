@@ -70,6 +70,7 @@ public class ScreenFrameSourceTests
     private sealed class CountingEngine : IScreenOcrEngine
     {
         public readonly List<string> Calls = [];
+        public string Recognizers { get; set; } = "latin";
         public bool IsAvailable => true;
         public IReadOnlyList<OcrWord> Recognize(ScreenFrame frame, CancellationToken cancellationToken = default)
         {
@@ -96,6 +97,8 @@ public class ScreenFrameSourceTests
         Assert.Equal(["left", "right", "left"], engine.Calls);
         await scan(second.Token);
         Assert.Equal(5, engine.Calls.Count); // a restarted scanner drops the cache: both monitors are read again
+        engine.Recognizers = "latin|ch"; // a language change: unchanged monitors are read with the new recognizers
+        Assert.Equal(["left-6", "right-7"], (await scan(second.Token)).Select(w => w.Text));
     }
 
     private sealed class NoModels : IScreenOcrEngine

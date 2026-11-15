@@ -58,16 +58,17 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         Assert.True(words.Select(w => w.Bounds.Left).SequenceEqual(words.Select(w => w.Bounds.Left).Order()));
     }
 
-    // One engine across the cases, so each one also switches the loaded recognizer to its UI language.
+    // One engine across the cases, so each one also switches the loaded recognizers to its languages.
     private static string? _language;
-    private static readonly RapidScreenOcrEngine ScriptEngine = new(language: () => _language);
+    private static readonly RapidScreenOcrEngine ScriptEngine = new(languages: () => ["en", _language]);
 
-    [Theory] // the Latin recognizer reads none of these
-    [InlineData("zh-CN", "服从命令")]
-    [InlineData("ja", "いい子だね")]
+    [Theory] // the Latin recognizer reads none of these; an English UI must not stop the OS language's script
+    [InlineData("zh_CN.UTF-8", "服从命令")]
+    [InlineData("ja-JP", "いい子だね")]
     [InlineData("ko", "착한 소녀")]
     [InlineData("ru", "Хорошая девочка")]
-    public void EachUiLanguageReadsItsScript(string language, string text)
+    [InlineData("ja", "Good girl obey")] // two recognizers read the line once
+    public void EachLanguageReadsItsScriptBesideAnEnglishUi(string language, string text)
     {
         using var face = SKFontManager.Default.MatchCharacter(char.ConvertToUtf32(text, 0));
         if (face == null) Assert.Skip($"No font with '{text[0]}' on this runner (fc-list :lang={language} is empty)");
@@ -75,6 +76,15 @@ public class RapidScreenOcrEngineTests(ITestOutputHelper output)
         var words = ScriptEngine.Recognize(Frame(text, face: face).Frame);
         output.WriteLine(string.Join(" | ", words.Select(w => $"{w.Text} {w.Bounds}")));
         Assert.Equal(text.Replace(" ", ""), string.Concat(words.Select(w => w.Text)).Replace(" ", ""));
+    }
+
+    [Fact]
+    public void OsLanguagesPickLatinAndAtMostOneOtherScript()
+    {
+        var languages = RapidScreenOcrEngine.OsLanguages(n => n switch { "LANGUAGE" => "en_GB:ko:uk", "LANG" => "ja_JP.UTF-8", _ => null }).ToArray();
+        Assert.Equal("en_GB|ko|uk|ja_JP.UTF-8", string.Join("|", languages[^5..^1]));
+        Assert.Equal(["latin", "korean"], RapidScreenOcrEngine.RecognizerSet(languages).Select(r => r.Rec.Split('_')[0]));
+        Assert.Equal(["latin"], RapidScreenOcrEngine.RecognizerSet(["en", "de-DE", null]).Select(r => r.Rec.Split('_')[0]));
     }
 
     [Fact]

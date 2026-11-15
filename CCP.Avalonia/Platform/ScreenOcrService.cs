@@ -54,6 +54,7 @@ internal sealed class ScreenOcrService : IDisposable
         var changes = new ScreenFrameChanges();
         var cache = new Dictionary<string, Word[]>();
         var run = CancellationToken.None; // each start of the scanner has a new token: a new run drops the cache
+        var readers = ""; // so do new recognizers (a language change): unchanged screens must be read with them
         return async token =>
         {
             var result = await frames.CaptureAsync(token).ConfigureAwait(false);
@@ -66,7 +67,8 @@ internal sealed class ScreenOcrService : IDisposable
             {
                 lock (cache)
                 {
-                    if (token != run) { changes.Reset(); cache.Clear(); run = token; }
+                    var now = engine.Recognizers;
+                    if (token != run || now != readers) { changes.Reset(); cache.Clear(); run = token; readers = now; }
                     return result.Frames.SelectMany(f =>
                     {
                         if (!changes.Changed(f) && cache.TryGetValue(f.Screen, out var last)) return last;
