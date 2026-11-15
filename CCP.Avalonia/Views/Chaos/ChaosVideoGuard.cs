@@ -24,9 +24,7 @@ internal sealed class ChaosVideoGuard(MandatoryVideoScheduler video, Func<DateTi
     internal void Ended()
     {
         if (_token == 0 || video.FinishedChaosToken != _token) return;
-        bool credit = _started && video.NaturalEnding;
-        _token = 0;
-        if (credit) endured();
+        _token = 0; _started = false; // WPF OnVideoEndedDuringRun: clear the cap without credit.
     }
 
     // Returns true only when an on-screen chaos tape was cut.

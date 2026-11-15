@@ -47,7 +47,7 @@ public class ChaosVideoGuardTests
         finally { guard.Stop(); video.ForceCleanup(); }
     });
     [Theory]
-    [InlineData("cap", 1)] [InlineData("closing", 0)] [InlineData("natural", 1)] [InlineData("dismiss", 0)]
+    [InlineData("cap", 1)] [InlineData("closing", 0)] [InlineData("natural", 0)] [InlineData("natural-at-cap", 0)] [InlineData("natural-after-cap", 0)] [InlineData("dismiss", 0)]
     public void GuardCutsAndCreditsOnlyEnduredTapes(string ending, int expectedCredit) => AvaloniaTestDispatcher.Run(() =>
     {
         var oldPost = CoreDispatch.PostProvider; var oldFreeze = CoreSubliminal.BambiFreezeProvider;
@@ -60,7 +60,7 @@ public class ChaosVideoGuardTests
             int token = guard.Arm(); video.ArmRandomSegment(token, 15);
             Assert.True(video.Trigger(userEarned: true, chaosToken: token)); clock.Fire();
             Assert.Equal(1, host.Shows);
-            if (ending == "natural") video.Ended();
+            if (ending.StartsWith("natural")) { now = now.AddSeconds(ending == "natural" ? 3 : ending == "natural-at-cap" ? 15 : 16); video.Ended(); Assert.False(guard.Armed); now = now.AddSeconds(20); Assert.False(guard.Tick(false)); }
             else if (ending == "dismiss") video.End();
             else
             {
@@ -98,7 +98,7 @@ public class ChaosVideoGuardTests
                     if (mode == "natural") video.Ended();
                     else if (mode == "mercy") { video.NoteSpawn(); video.Ended(); host.Then!(); }
                     else if (mode == "twice") { video.NoteSpawn(); video.Ended(); Assert.True(guard.Armed); Assert.Equal(0, credit); host.Then!(); clock.Fire(); Assert.Equal(3, host.Shows); Assert.Equal(token, video.PlayingChaosToken); video.Ended(); }
-                    else { now = now.AddSeconds(15); guard.Tick(false); } Assert.Equal(1, credit); }
+                    else { now = now.AddSeconds(15); guard.Tick(false); } Assert.Equal(mode == "playing" ? 1 : 0, credit); }
             }
             else if (mode == "empty") { empty = true; typeof(MandatoryVideoScheduler).GetProperty(nameof(MandatoryVideoScheduler.LastVideoPath))!.SetValue(video, null); host.Then!(); Assert.Equal(1, resumes); guard.Stop(); Assert.Equal(1, resumes); Assert.Equal(0, credit); }
             else if (mode == "user")
@@ -120,10 +120,10 @@ public class ChaosVideoGuardTests
             CoreDispatch.PostProvider = oldPost; CoreSubliminal.BambiFreezeProvider = oldFreeze; CoreBubbles.PauseAction = oldPause; CoreBubbles.ResumeAction = oldResume;
         }
     });
-    [Theory] [InlineData(false)] [InlineData(true)]
-    public void DetonationRunTickCutsAndCreditsTheLesson(bool closing) => AvaloniaTestDispatcher.Run(() =>
+    [Theory] [InlineData(false, false)] [InlineData(true, false)] [InlineData(false, true)]
+    public void DetonationRunTickCutsAndCreditsTheLesson(bool closing, bool natural) => AvaloniaTestDispatcher.Run(() =>
     {
-        var oldVideo = CoreEngine.Video; var oldFirer = EffectPayload.Firer;
+        var oldVideo = CoreEngine.Video; var oldFirer = EffectPayload.Firer; var oldAttention = CoreSettings.Current.AttentionChecksEnabled;
         var oldPost = CoreDispatch.PostProvider; var oldFreeze = CoreSubliminal.BambiFreezeProvider; var oldClock = BubbleOverlay.Field.Clock;
         var heavy = typeof(ChaosRunHost).GetField("_heavyUntilUtc", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
         var oldHeavy = heavy.GetValue(null);
@@ -134,18 +134,18 @@ public class ChaosVideoGuardTests
         var clock = new Clock(); var host = new Host(); var now = DateTime.UtcNow.AddDays(1);
         var video = new MandatoryVideoScheduler(host, clock, () => new[] { "/chaos.mp4" });
         try {
-            meta.LessonProgress["porn_dvd"] = 0;
+            meta.LessonProgress["porn_dvd"] = 0; CoreSettings.Current.AttentionChecksEnabled = false;
             CoreDispatch.PostProvider = a => a(); CoreSubliminal.BambiFreezeProvider = null;
             CoreEngine.Video = video; EffectPayload.Firer = App.FireChaosPayload; BubbleOverlay.Field.Clock = () => now;
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
             ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new VideoPayload() }); clock.Fire();
             Assert.Equal(1, host.Shows);
-            if (closing) ChaosRunHost.State!.ElapsedSec = ChaosRunHost.State.RunDurationSec - 3.25;
+            if (natural) { now = now.AddSeconds(3); video.Ended(); } else if (closing) ChaosRunHost.State!.ElapsedSec = ChaosRunHost.State.RunDurationSec - 3.25;
             now = now.AddSeconds(closing ? 1 : 15); ChaosRunHost.Tick();
             Assert.False(video.IsPlaying);
-            Assert.Equal(1, host.Closes); Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_tape_snaps"), ChaosRunHost.State!.RecentEvents);
-            Assert.Equal(closing ? 0 : 1, ChaosLessons.Progress("porn_dvd")); ChaosRunHost.ForceShutdown();
+            Assert.Equal(1, host.Closes); if (!natural) Assert.Contains(ConditioningControlPanel.Localization.Loc.Get("chaos_tape_snaps"), ChaosRunHost.State!.RecentEvents);
+            Assert.Equal(closing || natural ? 0 : 1, ChaosLessons.Progress("porn_dvd")); if (natural) return; ChaosRunHost.ForceShutdown();
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
             ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests(); now = now.AddSeconds(1);
             ChaosRunHost.FirePayloadForDetonation(new EffectBubbleSpec { Payload = new VideoPayload() });
@@ -154,7 +154,7 @@ public class ChaosVideoGuardTests
             Assert.True(video.IsPlaying);
         }
         finally {
-            ChaosRunHost.ForceShutdown(); video.ForceCleanup(); CoreEngine.Video = oldVideo;
+            ChaosRunHost.ForceShutdown(); video.ForceCleanup(); CoreEngine.Video = oldVideo; CoreSettings.Current.AttentionChecksEnabled = oldAttention;
             EffectPayload.Firer = oldFirer; CoreDispatch.PostProvider = oldPost;
             CoreSubliminal.BambiFreezeProvider = oldFreeze; BubbleOverlay.Field.Clock = oldClock;
             heavy.SetValue(null, oldHeavy); quarantine.SetValue(null, oldQuarantine);
