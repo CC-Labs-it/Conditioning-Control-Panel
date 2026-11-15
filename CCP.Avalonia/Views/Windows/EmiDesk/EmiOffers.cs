@@ -1,5 +1,8 @@
 using System;
 using System.Linq;
+using System.IO;
+using ConditioningControlPanel;
+using Serilog;
 using ConditioningControlPanel.Services.EmiDesk;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -7,6 +10,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 // WPF Services/EmiDesk/EmiOffers.cs:42,267,536. Unsupported effects stay infeasible.
 internal static class EmiOffers
 {
+    // WPF EmiOffers.cs:346-370. Scan again at the tick so newly installed media counts.
+    internal static bool LibraryIsEmpty()
+    {
+        try
+        {
+            if (!string.Equals(CoreSettings.Current?.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return false;
+            bool Has(string folder, string[] extensions)
+            {
+                var dir = Path.Combine(CorePaths.EffectiveAssets, folder);
+                return Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Any(f => extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+            }
+            return !Has("images", new[] { ".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp" })
+                && !Has("videos", new[] { ".mp4", ".webm", ".mkv", ".avi", ".mov", ".wmv", ".m4v" });
+        }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] empty-library probe failed"); return false; }
+    }
+
+    internal static void AnnounceEmptyLibrary(EmiDeskService? desk = null)
+    {
+        if (LibraryIsEmpty()) (desk ?? EmiDeskService.Instance).EmptyLibraryMoment("noMediaYet");
+    }
+
     internal static bool EffectFeasible(string? effect)
     {
         if (string.IsNullOrWhiteSpace(effect)) return false;

@@ -125,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // Invalidate a summon parked behind the mute prompt before anything else.
                 _summonGen++;
                 CancelGreeting();
+                CancelEmptyLibraryBeat();
                 _window?.StopDeskEquipment();
                 // WPF EmiDeskService.cs:422: sending her away ends the welcome show she is presenting.
                 if (_window?.PresentationActive == true) _window.StopPresentation();
@@ -177,6 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (!ReferenceEquals(_window, win)) return;
                     _window = null;
                     CancelGreeting();
+                CancelEmptyLibraryBeat();
                     IsOut = false;
                     RaiseOutChanged();
                 };

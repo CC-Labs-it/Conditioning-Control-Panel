@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     _warnedEmpty = true;
                     // Outside the warn-once flag: the offer keeps its own once-per-launch budget (WPF FlashService.cs:971).
                     Platform.RemoteMediaOffer.Offer("flashes");
+                    Windows.EmiDesk.EmiOffers.AnnounceEmptyLibrary();
                     return;
                 }
 
