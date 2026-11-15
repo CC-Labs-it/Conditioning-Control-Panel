@@ -1101,6 +1101,24 @@ public sealed class MandatoryVideoSchedulerTests
         finally { (s.VideoMinDurationSeconds, s.VideoMaxDurationSeconds) = (min, max); }
     }
 
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, false, true, false)]
+    public void PickNext_filters_short_clips_unless_loop_or_fill_applies(bool loop, bool fill, bool floating, bool kept)
+    {
+        var s = CoreSettings.Current;
+        var old = (s.VideoMinDurationSeconds, s.MandatoryVideoLoopShortClips, s.MandatoryVideoFillShortWithOthers);
+        try
+        {
+            (s.VideoMinDurationSeconds, s.MandatoryVideoLoopShortClips, s.MandatoryVideoFillShortWithOthers) = (60, loop, fill);
+            var v = new MandatoryVideoScheduler(new Host { Floating = floating }, new FakeClock(), () => new[] { "short.mp4" }) { DurationOf = _ => 20 };
+            Assert.Equal(kept ? "short.mp4" : null, v.PickNext());
+        }
+        finally { (s.VideoMinDurationSeconds, s.MandatoryVideoLoopShortClips, s.MandatoryVideoFillShortWithOthers) = old; }
+    }
+
     [Fact]
     public void Watch_credit_goes_to_progression_from_one_second()
     {
