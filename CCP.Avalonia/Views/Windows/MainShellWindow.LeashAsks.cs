@@ -76,11 +76,6 @@ public partial class MainShellWindow
         {
             if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
-            // A manual Look may have opened this offer before the timer rebound the service.
-            // Count it as seen, but do not queue it again when that window closes.
-            if (LeashAskWindow.Current?.Body is LeashAskCard shown &&
-                shown.Offer.From.Id == offer.From.Id && shown.Offer.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds())
-                continue;
             _waitingLeashAsks.Add(offer);
         }
         _waitingLeashAsks.RemoveAll(w => !snap.Offers.Any(o => o.From.Id == w.From.Id));

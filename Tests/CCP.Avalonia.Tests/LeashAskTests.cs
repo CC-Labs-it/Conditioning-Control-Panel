@@ -198,6 +198,8 @@ public sealed class LeashAskTests
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
+            // Bind before Look so the timer cannot enqueue this offer after the card opens.
+            shell.RebindLeashAsks();
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var previous = LeashAskWindow.Current!;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
@@ -211,7 +213,7 @@ public sealed class LeashAskTests
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
     [Fact]
-    public void RebindingWhileAnOfferIsOpenDoesNotReopenItAfterEscape() =>
+    public void RebindingWhileAnOfferIsOpenQueuesItUntilEscape() =>
         Run((shell, page, wire, _) =>
         {
             var service = LeashHead.Service;
@@ -219,14 +221,22 @@ public sealed class LeashAskTests
             shell.RebindLeashAsks();
             LeashHead.Service = service;
             page.OnShown();
-            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var look = Tagged<Button>(page, "leash-offer-look");
+            Assert.True(look.IsEffectivelyEnabled);
+            // Do not pump the timer before forcing the WPF rebind ordering.
+            look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             var ask = LeashAskWindow.Current!;
             shell.RebindLeashAsks();
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
             Assert.False(ask.IsVisible);
-            Assert.Null(LeashAskWindow.Current);
+            var reopened = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+            Assert.NotSame(ask, reopened);
+            Assert.Equal("leash-ask:u_juno", reopened.Card.Tag);
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            reopened.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
 
