@@ -51,6 +51,12 @@ public sealed class WebAssetServer : IDisposable
         }
     }
 
+    // Do not start a server merely because a browser asks about its current page.
+    internal static bool SuppressSharedContextMenu(Uri? uri, bool homeBrowser)
+    {
+        lock (_sharedLock) return _shared != null && LocalPagePolicy.SuppressContextMenu(uri, _shared, homeBrowser);
+    }
+
     readonly SemaphoreSlim _inFlight = new(16);
 
     static readonly Dictionary<string, string> Types = new(StringComparer.OrdinalIgnoreCase)
