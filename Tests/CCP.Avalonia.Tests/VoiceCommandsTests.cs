@@ -177,13 +177,17 @@ public sealed class VoiceCommandsTests
     public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
         // This test injects commands directly; no replaying microphone should race its tripwire.
-        CoreEntitlement.HasPremiumProvider = () => true;
         var s = CoreSettings.Current;
-        s.AutonomyConsentGiven = true;
-        s.PanicKeyEnabled = true;
-        using var ld = LockdownService.Current = new LockdownService();
+        var premium = CoreEntitlement.HasPremiumProvider;
+        var panicEnabled = s.PanicKeyEnabled;
+        var previousLockdown = LockdownService.Current;
+        var ld = new LockdownService();
         try
         {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.AutonomyConsentGiven = true;
+            s.PanicKeyEnabled = true;
+            LockdownService.Current = ld;
             Assert.True(shell.SetAutonomyEnabled(true));
             ld.Activate(TimeSpan.FromMinutes(30));
             var escapes = new System.Collections.Generic.List<string>();
@@ -210,9 +214,14 @@ public sealed class VoiceCommandsTests
         }
         finally
         {
-            shell.Autonomy.Stop();
-            LockdownService.Current = null;
-            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+            try { ld.Dispose(); shell.Autonomy.Stop(); }
+            finally
+            {
+                LockdownService.Current = previousLockdown;
+                (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+                s.PanicKeyEnabled = panicEnabled;
+                CoreEntitlement.HasPremiumProvider = premium;
+            }
         }
         await Task.CompletedTask;
     });
