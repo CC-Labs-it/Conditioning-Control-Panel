@@ -16,6 +16,30 @@ namespace CCP.Avalonia.Tests;
 
 public class ChaosHudGraceTests
 {
+    // Stepping the clock runs every due one-shot recheck on the UI thread.
+    private sealed class CollapseClock : ChaosHudWindow.ICollapseTimer
+    {
+        private readonly Action _tick;
+        private DateTime _now = new(2020, 1, 1);
+        private DateTime _due;
+        public CollapseClock(Action tick) => _tick = tick;
+        public DateTime Now => _now;
+        public TimeSpan Interval { get; set; }
+        public bool IsEnabled { get; private set; }
+        public void Start() { IsEnabled = true; _due = _now + Interval; }
+        public void Stop() => IsEnabled = false;
+        public void Advance(int ms)
+        {
+            var end = _now.AddMilliseconds(ms);
+            while (IsEnabled && _due <= end)
+            {
+                _now = _due;
+                _tick();
+            }
+            _now = end;
+        }
+    }
+
     private static void Setup()
     {
         var builder = AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -77,7 +101,7 @@ public class ChaosHudGraceTests
     [Fact]
     public async Task CollapseTimerKeepsPopupOverlapAndHaloThenClosesBeyondIt()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
             var hud = new ChaosHudWindow(new ChaosRunState(new ChaosRunConfig()));
@@ -87,6 +111,9 @@ public class ChaosHudGraceTests
             var recheck = typeof(ChaosHudWindow).GetField("_collapseRecheck", flags)!;
             var expand = typeof(ChaosHudWindow).GetMethod("Expand", flags)!;
             var leave = typeof(ChaosHudWindow).GetMethod("ScheduleCollapseRecheck", flags)!;
+            CollapseClock? clock = null;
+            hud.CreateCollapseTimer = tick => clock = new CollapseClock(tick);
+            hud.CollapseNow = () => clock?.Now ?? new DateTime(2020, 1, 1);
             PixelPoint current = default;
             int reads = 0;
             try
@@ -95,7 +122,7 @@ public class ChaosHudGraceTests
                 hud.Show();
                 hud.UpdateLayout();
                 expand.Invoke(hud, null);
-                await Task.Delay(300);
+                typeof(ChaosHudWindow).GetMethod("StepTweens", flags)!.Invoke(hud, new object[] { 300d });
                 hud.UpdateLayout();
                 var panel = hud.FindControl<Border>("Panel")!;
                 var origin = panel.TranslatePoint(new Point(0, 0), hud)!.Value;
@@ -105,34 +132,37 @@ public class ChaosHudGraceTests
                 popup.MouseMove(new Point(10, 10));
                 Assert.False(panel.IsPointerOver);
                 leave.Invoke(hud, null);
-                await Task.Delay(1500);
+                clock!.Advance(999);
+                Assert.Equal(0, reads);
+                clock.Advance(1);
                 Assert.True(reads > 0);
                 Assert.True((bool)expanded.GetValue(hud)!);
-                Assert.True(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.True(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
                 current = hud.PointToScreen(new Point(origin.X - 20, origin.Y + 50));
-                await Task.Delay(700);
+                clock!.Advance(220);
                 Assert.True((bool)expanded.GetValue(hud)!);
                 current = hud.PointToScreen(new Point(origin.X + panel.Bounds.Width + 20, origin.Y + 50));
-                await Task.Delay(700);
+                clock!.Advance(220);
                 Assert.True((bool)expanded.GetValue(hud)!);
                 current = hud.PointToScreen(new Point(origin.X + panel.Bounds.Width + 60, origin.Y + 50));
-                await Task.Delay(700);
+                clock!.Advance(220);
                 Assert.False((bool)expanded.GetValue(hud)!);
-                Assert.False(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.False(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
                 expand.Invoke(hud, null);
                 leave.Invoke(hud, null);
-                Assert.True(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.True(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
                 hud.Close();
-                Assert.False(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.False(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
             }
             finally { popup.Close(); hud.Close(); }
+            return Task.CompletedTask;
         });
     }
 
     [Fact]
     public async Task CollapseTimerWaitsForUnavailablePointerAndUsesRecoveredPosition()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
             var hud = new ChaosHudWindow(new ChaosRunState(new ChaosRunConfig()));
@@ -142,6 +172,9 @@ public class ChaosHudGraceTests
             var recheck = typeof(ChaosHudWindow).GetField("_collapseRecheck", flags)!;
             var expand = typeof(ChaosHudWindow).GetMethod("Expand", flags)!;
             var leave = typeof(ChaosHudWindow).GetMethod("ScheduleCollapseRecheck", flags)!;
+            CollapseClock? clock = null;
+            hud.CreateCollapseTimer = tick => clock = new CollapseClock(tick);
+            hud.CollapseNow = () => clock?.Now ?? new DateTime(2020, 1, 1);
             PixelPoint? current = null;
             int reads = 0;
             try
@@ -150,7 +183,7 @@ public class ChaosHudGraceTests
                 hud.Show();
                 hud.UpdateLayout();
                 expand.Invoke(hud, null);
-                await Task.Delay(300);
+                typeof(ChaosHudWindow).GetMethod("StepTweens", flags)!.Invoke(hud, new object[] { 300d });
                 hud.UpdateLayout();
                 var panel = hud.FindControl<Border>("Panel")!;
                 var origin = panel.TranslatePoint(new Point(0, 0), hud)!.Value;
@@ -160,24 +193,27 @@ public class ChaosHudGraceTests
                 popup.MouseMove(new Point(10, 10));
                 Assert.False(panel.IsPointerOver);
                 leave.Invoke(hud, null);
-                await Task.Delay(1500);
+                clock!.Advance(999);
+                Assert.Equal(0, reads);
+                clock.Advance(1);
                 Assert.True(reads > 0);
                 Assert.True((bool)expanded.GetValue(hud)!);
-                Assert.True(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.True(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
                 current = hud.PointToScreen(new Point(origin.X + panel.Bounds.Width + 20, origin.Y + 50));
-                await Task.Delay(700);
+                clock!.Advance(220);
                 Assert.True((bool)expanded.GetValue(hud)!);
                 current = hud.PointToScreen(new Point(origin.X + panel.Bounds.Width + 60, origin.Y + 50));
-                await Task.Delay(700);
+                clock!.Advance(220);
                 Assert.False((bool)expanded.GetValue(hud)!);
-                Assert.False(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.False(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
                 expand.Invoke(hud, null);
                 current = null;
                 leave.Invoke(hud, null);
                 hud.Close();
-                Assert.False(((DispatcherTimer)recheck.GetValue(hud)!).IsEnabled);
+                Assert.False(((ChaosHudWindow.ICollapseTimer)recheck.GetValue(hud)!).IsEnabled);
             }
             finally { popup.Close(); hud.Close(); }
+            return Task.CompletedTask;
         });
     }
 

@@ -424,7 +424,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private const double EXPAND_GRACE_MS = 1000;
         private const double LEAVE_RECHECK_MS = 220;
         private DateTime _expandedAt;
-        private DispatcherTimer? _collapseRecheck;
+        internal interface ICollapseTimer
+        {
+            TimeSpan Interval { get; set; }
+            bool IsEnabled { get; }
+            void Start();
+            void Stop();
+        }
+        private sealed class CollapseDispatcherTimer : ICollapseTimer
+        {
+            private readonly DispatcherTimer _timer = new();
+            internal CollapseDispatcherTimer(Action tick) => _timer.Tick += (_, _) => tick();
+            public TimeSpan Interval { get => _timer.Interval; set => _timer.Interval = value; }
+            public bool IsEnabled => _timer.IsEnabled;
+            public void Start() => _timer.Start();
+            public void Stop() => _timer.Stop();
+        }
+        internal Func<Action, ICollapseTimer> CreateCollapseTimer = tick => new CollapseDispatcherTimer(tick);
+        internal Func<DateTime> CollapseNow = () => DateTime.UtcNow;
+        private ICollapseTimer? _collapseRecheck;
         private DispatcherTimer? _openDwell;
         private Point _lastPointer;
         /// <summary>Tests replace the desktop pointer probe; null = the platform probe.</summary>
@@ -484,7 +502,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _collapseRecheck?.Stop();
             if (_expanded) return;
             _expanded = true;
-            _expandedAt = DateTime.UtcNow;
+            _expandedAt = CollapseNow();
             _panel.IsVisible = true;
             _strip.IsVisible = false;   // the panel is translucent — don't let the strip bleed through
             Animate(0);
@@ -499,12 +517,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void ScheduleCollapseRecheck()
         {
             if (_pinnedOpen || !_expanded) return;
-            double sinceOpen = (DateTime.UtcNow - _expandedAt).TotalMilliseconds;
+            double sinceOpen = (CollapseNow() - _expandedAt).TotalMilliseconds;
             double wait = Math.Max(LEAVE_RECHECK_MS, EXPAND_GRACE_MS - sinceOpen);
             if (_collapseRecheck == null)
             {
-                _collapseRecheck = new DispatcherTimer();
-                _collapseRecheck.Tick += (_, _) =>
+                _collapseRecheck = CreateCollapseTimer(() =>
                 {
                     try
                     {
@@ -530,7 +547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         Collapse();
                     }
                     catch (Exception ex) { Log.Debug("ChaosHud collapse re-check failed: {E}", ex.Message); }
-                };
+                });
             }
             _collapseRecheck.Stop();
             _collapseRecheck.Interval = TimeSpan.FromMilliseconds(wait);
