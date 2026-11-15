@@ -38,7 +38,8 @@ namespace CCP.Avalonia.Tests
             var savedWait = SingleInstance.StaleTakeoverWait;
             int kills = 0;
             SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 1; };
-            SingleInstance.ShowAckTimeoutMs = 500;
+            // A healthy listener gets the production timeout even on a loaded CI runner.
+            SingleInstance.ShowAckTimeoutMs = 10000;
             SingleInstance.StaleTakeoverWait = TimeSpan.FromMilliseconds(100);
             using var wedge = new ManualResetEventSlim();
             try
@@ -55,6 +56,7 @@ namespace CCP.Avalonia.Tests
                 Assert.Equal(0, Volatile.Read(ref kills));
 
                 // Wedged: the show never returns, so no ack; the second launch kills and runs (unowned).
+                SingleInstance.ShowAckTimeoutMs = 500;
                 suffix = "_test_" + Guid.NewGuid().ToString("N")[..8];
                 using var primary = SingleInstance.Claim(suffix, _ => Task.Run(() => wedge.Wait()));
                 primary!.EndStartupPhase();
