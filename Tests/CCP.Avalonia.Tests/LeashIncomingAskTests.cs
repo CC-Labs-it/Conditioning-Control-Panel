@@ -129,6 +129,33 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = replacement;
+            shell.Show();
+            try
+            {
+                var offer = Assert.Single(replacement.Snapshot.Offers);
+                var ask = LeashAskWindow.Open(offer, () => replacement, shell)!;
+                shell.RebindLeashAsks();
+                Assert.Same(ask, LeashAskWindow.Current);
+                ask.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void LookConsumesItsQueuedOfferAndEscapeAdvancesToTheOtherOffer() =>
         LeashGateCardTests.Run(false, (shell, _, service) =>
         {
