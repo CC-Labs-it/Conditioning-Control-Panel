@@ -21,8 +21,12 @@ public partial class MainShellWindow
     private (bool Wanted, string Key)? _pauseKeyBinding;
     private CancellationTokenSource? _pauseKeyPending;
     private int _pauseKeyGeneration;
+    internal TimeSpan PauseKeyBindTimeout = TimeSpan.FromSeconds(30);
+    private Task? _pauseKeyBind;
+    private MandatoryVideoScheduler? _pauseKeyScheduler;
 
     internal bool PauseKeyWayland = OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+    internal Func<MandatoryVideoScheduler> PauseKeyScheduler = () => MandatoryVideoOverlay.Instance.Scheduler;
     internal Func<bool> PauseKeyVideoPlaying = () => MandatoryVideoOverlay.Instance.Scheduler.IsPlaying;
     internal Func<bool> PauseKeyGracePause = () => MandatoryVideoOverlay.Instance.TryGracePause(fromPanicKey: false);
     internal Func<string, Action, Action, CancellationToken, Task<IDisposable?>> RegisterWaylandPauseKey = PortalPauseShortcut.BindAsync;
@@ -32,8 +36,11 @@ public partial class MainShellWindow
     internal void StartPauseKeyPortal()
     {
         if (!PauseKeyWayland || _pauseKeyWatch != null) return;
+        _pauseKeyScheduler = PauseKeyScheduler();
+        _pauseKeyScheduler.PreparePlayback = PreparePauseKeyPortalAsync;
+        _pauseKeyScheduler.VideoEnded += PauseVideoEnded;
         ApplyPauseKeyPortal();
-        // Same slow poll as Quick Recal: video start/end, settings replacement and Lockdown all land here.
+        // Observe settings replacement and Lockdown; video start and end use the scheduler hooks.
         _pauseKeyWatch = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => ApplyPauseKeyPortal());
         _pauseKeyWatch.Start();
         Closed += (_, _) => StopPauseKeyPortal();
@@ -43,8 +50,43 @@ public partial class MainShellWindow
     {
         _pauseKeyWatch?.Stop();
         _pauseKeyWatch = null;
+        if (_pauseKeyScheduler != null)
+        {
+            _pauseKeyScheduler.VideoEnded -= PauseVideoEnded;
+            if (_pauseKeyScheduler.PreparePlayback == PreparePauseKeyPortalAsync) _pauseKeyScheduler.PreparePlayback = null;
+            _pauseKeyScheduler = null;
+        }
         _pauseKeyBinding = null;
         CancelPauseKeyRegistration();
+    }
+
+    private void PauseVideoEnded() => ApplyPauseKeyPortal();
+
+    // The portal can show a permission dialog. Do not display the clip until it answers, but
+    // never hold video forever if the compositor is absent or the request is abandoned.
+    private async Task PreparePauseKeyPortalAsync()
+    {
+        Task? timeout = null;
+        while (_pauseKeyScheduler != null && PauseKeyVideoPlaying())
+        {
+            ApplyPauseKeyPortal();
+            var pending = _pauseKeyBind;
+            if (pending == null || pending.IsCompleted) return;
+            timeout ??= Task.Delay(PauseKeyBindTimeout);
+            var cancelled = Task.Delay(Timeout.InfiniteTimeSpan, _pauseKeyPending!.Token);
+            var completed = await Task.WhenAny(pending, timeout, cancelled);
+            if (completed == timeout)
+            {
+                if (ReferenceEquals(_pauseKeyBind, pending))
+                {
+                    Log.Warning("Pause key: portal binding timed out before video");
+                    CancelPauseKeyRegistration();
+                }
+                return;
+            }
+            // Cancellation can fire inside ApplyPauseKeyPortal, before it starts the replacement.
+            if (completed == cancelled) await Task.Yield();
+        }
     }
 
     /// <summary>WPF OnGlobalKeyPressed: the panic key wins a shared binding (by keysym, as the portal
@@ -64,12 +106,13 @@ public partial class MainShellWindow
         CancelPauseKeyRegistration();
         if (!binding.Item1) return;
         _pauseKeyPending = new CancellationTokenSource();
-        _ = BindWaylandPauseKeyAsync(binding.Item2, _pauseKeyGeneration, _pauseKeyPending.Token);
+        _pauseKeyBind = BindWaylandPauseKeyAsync(binding.Item2, _pauseKeyGeneration, _pauseKeyPending.Token);
     }
 
     private void CancelPauseKeyRegistration()
     {
         _pauseKeyGeneration++;
+        _pauseKeyBind = null;
         _pauseKeyPending?.Cancel();
         _pauseKeyPending?.Dispose();
         _pauseKeyPending = null;

@@ -224,4 +224,198 @@ public class PortalPauseShortcutTests
         return Task.CompletedTask;
     });
 
+    private sealed class VideoHost : IMandatoryVideoHost
+    {
+        internal int Shows;
+        internal Action? OnShow;
+        public void Show(string path, bool strict) { Shows++; OnShow?.Invoke(); }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    private sealed class VideoClock : TimeProvider
+    {
+        private ManualTimer? _timer;
+        public void Fire() => _timer!.Fire();
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period)
+            => _timer = new ManualTimer(() => callback(state));
+        private sealed class ManualTimer(Action fire) : ITimer
+        {
+            public void Fire() => fire();
+            public bool Change(TimeSpan due, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => default;
+        }
+    }
+
+    [Fact]
+    public Task PortalBindsBeforeFirstVisibleFrameAndHandlesTheFirstPress() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var oldLockdown = LockdownService.Current;
+        var oldPost = CoreDispatch.PostProvider;
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var clock = new VideoClock();
+        var host = new VideoHost();
+        var scheduler = new MandatoryVideoScheduler(host, clock, () => new[] { "/test/start.mp4" });
+        var shell = new MainShellWindow { PauseKeyWayland = true, PauseKeyScheduler = () => scheduler, PauseKeyVideoPlaying = () => scheduler.IsPlaying };
+        var pending = new TaskCompletionSource<IDisposable?>();
+        var registration = new Registration();
+        Action? press = null;
+        int binds = 0, graces = 0;
+        shell.RegisterWaylandPauseKey = (_, p, _, _) => { binds++; press = p; return pending.Task; };
+        shell.PauseKeyGracePause = () => { graces++; return true; };
+        try
+        {
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, "Escape", "F9");
+            LockdownService.Current = null;
+            CoreDispatch.PostProvider = a => a();
+            CoreSubliminal.BambiFreezeProvider = null;
+            shell.StartPauseKeyPortal();
+            Assert.True(scheduler.Trigger());
+            Assert.Equal(1, binds); // before pre-roll or any poll
+            clock.Fire();
+            Assert.Equal(0, host.Shows); // permission is still pending
+            host.OnShow = () => press!(); // a press at the first visible frame
+            pending.SetResult(registration);
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, host.Shows);
+            Assert.Equal(1, graces);
+            scheduler.ForceCleanup();
+            Assert.True(registration.Disposed);
+        }
+        finally
+        {
+            shell.StopPauseKeyPortal(); scheduler.ForceCleanup(); shell.Close();
+            CoreDispatch.PostProvider = oldPost; CoreSubliminal.BambiFreezeProvider = freeze;
+            LockdownService.Current = oldLockdown;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = saved;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PendingVideoStartCanBeStoppedOrTimeOut(bool timeout) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var oldLockdown = LockdownService.Current;
+        var oldPost = CoreDispatch.PostProvider;
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var clock = new VideoClock(); var host = new VideoHost();
+        var scheduler = new MandatoryVideoScheduler(host, clock, () => new[] { "/test/start.mp4" });
+        var shell = new MainShellWindow { PauseKeyWayland = true, PauseKeyScheduler = () => scheduler, PauseKeyVideoPlaying = () => scheduler.IsPlaying };
+        if (timeout) shell.PauseKeyBindTimeout = TimeSpan.Zero;
+        var pending = new TaskCompletionSource<IDisposable?>(); var late = new Registration();
+        CancellationToken token = default;
+        shell.RegisterWaylandPauseKey = (_, _, _, t) => { token = t; return pending.Task; };
+        try
+        {
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, "Escape", "F9");
+            LockdownService.Current = null; CoreDispatch.PostProvider = a => a(); CoreSubliminal.BambiFreezeProvider = null;
+            shell.StartPauseKeyPortal();
+            Assert.True(scheduler.Trigger());
+            clock.Fire();
+            if (!timeout) { Assert.Equal(0, host.Shows); scheduler.ForceCleanup(); }
+            Assert.True(token.IsCancellationRequested);
+            pending.SetResult(late);
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(late.Disposed);
+            Assert.Equal(timeout ? 1 : 0, host.Shows);
+        }
+        finally
+        {
+            shell.StopPauseKeyPortal(); scheduler.ForceCleanup(); shell.Close();
+            CoreDispatch.PostProvider = oldPost; CoreSubliminal.BambiFreezeProvider = freeze;
+            LockdownService.Current = oldLockdown;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = saved;
+        }
+    });
+
+    [Fact]
+    public Task RebindDuringPreRollWaitsForTheNewRegistration() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var oldLockdown = LockdownService.Current;
+        var oldPost = CoreDispatch.PostProvider;
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var clock = new VideoClock(); var host = new VideoHost();
+        var scheduler = new MandatoryVideoScheduler(host, clock, () => new[] { "/test/start.mp4" });
+        var shell = new MainShellWindow { PauseKeyWayland = true, PauseKeyScheduler = () => scheduler, PauseKeyVideoPlaying = () => scheduler.IsPlaying };
+        var first = new TaskCompletionSource<IDisposable?>(); var second = new TaskCompletionSource<IDisposable?>();
+        var oldRegistration = new Registration(); var newRegistration = new Registration();
+        CancellationToken oldToken = default; int calls = 0;
+        shell.RegisterWaylandPauseKey = (_, _, _, token) => { calls++; if (calls == 1) { oldToken = token; return first.Task; } return second.Task; };
+        try
+        {
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, "Escape", "F9");
+            LockdownService.Current = null; CoreDispatch.PostProvider = a => a(); CoreSubliminal.BambiFreezeProvider = null;
+            shell.StartPauseKeyPortal(); Assert.True(scheduler.Trigger()); clock.Fire();
+            Assert.Equal(0, host.Shows);
+            s.PauseKey = "F10"; shell.ApplyPauseKeyPortal();
+            Assert.True(oldToken.IsCancellationRequested); Assert.Equal(2, calls);
+            second.SetResult(newRegistration);
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, host.Shows);
+            first.SetResult(oldRegistration);
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.True(oldRegistration.Disposed);
+            scheduler.ForceCleanup(); Assert.True(newRegistration.Disposed);
+        }
+        finally
+        {
+            shell.StopPauseKeyPortal(); scheduler.ForceCleanup(); shell.Close();
+            CoreDispatch.PostProvider = oldPost; CoreSubliminal.BambiFreezeProvider = freeze;
+            LockdownService.Current = oldLockdown;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = saved;
+        }
+    });
+
+    [Fact]
+    public Task RebindAfterPreparationBeforeShowWaitsForTheNewKey() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.PanicKeyEnabled, s.PanicKey, s.PauseKey);
+        var oldLockdown = LockdownService.Current; var oldPost = CoreDispatch.PostProvider;
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var clock = new VideoClock(); var host = new VideoHost();
+        var scheduler = new MandatoryVideoScheduler(host, clock, () => new[] { "/test/start.mp4" });
+        var shell = new MainShellWindow { PauseKeyWayland = true, PauseKeyScheduler = () => scheduler, PauseKeyVideoPlaying = () => scheduler.IsPlaying };
+        var first = new TaskCompletionSource<IDisposable?>(); var second = new TaskCompletionSource<IDisposable?>();
+        var firstRegistration = new Registration(); var secondRegistration = new Registration();
+        var posted = new System.Collections.Concurrent.ConcurrentQueue<Action>();
+        using var postedReady = new SemaphoreSlim(0);
+        bool hold = false; int calls = 0;
+        shell.RegisterWaylandPauseKey = (_, _, _, _) => ++calls == 1 ? first.Task : second.Task;
+        try
+        {
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = (true, "Escape", "F9");
+            LockdownService.Current = null; CoreSubliminal.BambiFreezeProvider = null;
+            CoreDispatch.PostProvider = a => { if (hold) { posted.Enqueue(a); postedReady.Release(); } else a(); };
+            shell.StartPauseKeyPortal(); Assert.True(scheduler.Trigger()); clock.Fire();
+            hold = true; first.SetResult(firstRegistration);
+            Assert.True(await postedReady.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(posted.TryDequeue(out var show));
+            s.PauseKey = "F10"; // no poll before the queued show callback
+            show!();
+            Assert.Equal(0, host.Shows); Assert.Equal(2, calls); Assert.True(firstRegistration.Disposed);
+            second.SetResult(secondRegistration);
+            Assert.True(await postedReady.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(posted.TryDequeue(out var resume)); resume!();
+            Assert.Equal(1, host.Shows);
+        }
+        finally
+        {
+            shell.StopPauseKeyPortal(); scheduler.ForceCleanup(); shell.Close();
+            CoreDispatch.PostProvider = oldPost; CoreSubliminal.BambiFreezeProvider = freeze;
+            LockdownService.Current = oldLockdown;
+            (s.PanicKeyEnabled, s.PanicKey, s.PauseKey) = saved;
+        }
+    });
+
 }
