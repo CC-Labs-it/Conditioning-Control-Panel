@@ -32,8 +32,12 @@ public sealed class CompanionBrainHostTests
         var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
         try
         {
-            property.SetValue(null, engine);
+            property.SetValue(null, null);
             AvApp.SeedCompanionRecall();
+            // Reproduce a recall posted by an earlier test before this engine is installed.
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
+            Dispatcher.UIThread.RunJobs(); // finish prior work before changing the process-wide engine
+            property.SetValue(null, engine);
             AvApp.SeedCompanionRecall(); // repeated composition must not add listeners
             var entitlementChecks = 0;
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => { entitlementChecks++; return false; };
