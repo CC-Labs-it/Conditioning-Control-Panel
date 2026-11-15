@@ -145,13 +145,14 @@ namespace ConditioningControlPanel.Services
         public void CancelChaosVideo(int token)
         {
             if (token == 0 || token != _chaosToken) return;
-            _chaosToken = 0;
+            _chaosToken = 0; bool retry = _retryChaosToken == token; _retryChaosToken = 0;
             if (_cascadeChaosToken == token) DropDefer();
-            if (_bubbleChaosToken == token) { Dispose(ref _bubbleWait); _bubbleChaosToken = 0; }
+            if (_bubbleChaosToken == token) { Dispose(ref _bubbleWait); _bubbleChaosToken = 0; _waitEndsRun = false; }
             if (_playingChaosToken == token) ForceCleanup();
+            else if (retry && !_playing) { _retryGeneration++; Penalties = 0; if (!Services.Safety.PanicAftermath.TriggersSilenced()) { CoreBubbles.Resume(); if (_running) ScheduleNext(); } }
         }
 
-        private int _segmentToken;
+        private int _segmentToken, _retryChaosToken;
         private int _segmentSeconds;
         public int PlayingChaosToken => _playingChaosToken;
         public int FinishedChaosToken { get; private set; }
@@ -525,7 +526,7 @@ namespace ConditioningControlPanel.Services
                 (specific || !(CoreEngine.BubbleCount?.IsBusy ?? false));
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
-            _playingChaosToken = chaosToken;
+            _playingChaosToken = chaosToken; _retryChaosToken = 0;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             // WPF VideoService.cs:2587-2630: Freeze, 800 ms, then PlayVideo's 1.3 s pre-roll.
@@ -652,17 +653,18 @@ namespace ConditioningControlPanel.Services
 
             Penalties++;
             var mercy = Penalties >= s.MercyAfterFails && s.MercySystemEnabled;   // #1145: 2..10, default 3
-            var strict = IsStrict;
+            var strict = IsStrict; var retryToken = _playingChaosToken;
             var gen = ++_retryGeneration;
+            if (!mercy && retryToken != 0) { _retryChaosToken = retryToken; _playingChaosToken = 0; } // The verdict close is not the end of this run.
             Finish();
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
-                if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
+                if (gen != _retryGeneration || (retryToken != 0 && retryToken != _chaosToken)) return;   // stopped or replaced while the message was up
                 if (mercy) { AfterEnd(); return; }
                 // WPF VideoService.cs:5964-5965: retry directly, retaining strictness and the prior clip fallback.
                 // An attention retry is part of the current run, so it must not enter the feed hold.
                 var retryPath = PickNext() ?? LastVideoPath;
-                if (retryPath == null || !Trigger(strict, retryPath)) AfterEnd();
+                if (retryPath == null || !Trigger(strict, retryPath, chaosToken: retryToken)) { _retryChaosToken = 0; AfterEnd(); }
                 else if (_cascadeDefer != null && !_playing) _deferIsReplay = true;   // held behind GIF rain
                 // WPF VideoService.cs:7930-7968: a failed replay must finish the run, even after queueing.
                 else if (_bubbleWait != null && !_playing) _waitEndsRun = true;
@@ -713,7 +715,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
-            _chaosToken = 0;
+            _chaosToken = 0; _retryChaosToken = 0;
             _feedDefer.Reset(); // A panic cannot leave a held trigger behind.
             Dispose(ref _bubbleWait);
             _waitEndsRun = false;
