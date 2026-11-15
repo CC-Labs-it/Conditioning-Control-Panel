@@ -173,9 +173,40 @@ public sealed class VoiceCommandsTests
         await Until(() => mic.Starts > starts && engine.IsListening, 10);   // the wake loop listens again
     });
 
+    // Inline commands are injected directly; keep the wake listener active without replaying a command.
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task InlineCommandFixtureDoesNotProduceBackgroundStops() => Run(Array.Empty<byte>(), async (shell, mic, engine) =>
     {
+        var s = CoreSettings.Current;
+        s.AutonomyConsentGiven = true;
+        s.PanicKeyEnabled = true;
+        using var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            Assert.True(shell.SetAutonomyEnabled(true));
+            ld.Activate(TimeSpan.FromMinutes(30));
+            var escapes = new System.Collections.Generic.List<string>();
+            ld.EscapeAttempted += a => escapes.Add(a.Kind);
+            await Until(() => engine.IsListening, 10);
+            Assert.True(shell.WakeLoopArmed);
+            await Task.Delay(8000);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(escapes);
+        }
+        finally
+        {
+            ld.Deactivate();
+            shell.Autonomy.Stop();
+            LockdownService.Current = null;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
+        }
+    });
+
+    [Fact]
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(Array.Empty<byte>(), async (shell, mic, engine) =>
+    {
+        await Until(() => engine.IsListening, 10);
+        Assert.True(shell.WakeLoopArmed);
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
