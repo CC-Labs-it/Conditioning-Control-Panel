@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Avalonia.Platform.Super;
 /// <summary>Owns the shared Super stage and follows the engine and Super switches.</summary>
 internal static class SuperStageHost
 {
-    internal static SuperStage Stage { get; } = new();
+    internal static SuperStage Stage { get; private set; } = new();
     internal static Func<bool> EngineRunning = () => CoreEngine.IsVisualRun;
     internal static Func<SuperEffect, bool> EffectOn = SuperAccess.IsOn;
     private static bool _subscribed;
@@ -33,6 +33,21 @@ internal static class SuperStageHost
     }
 
     private static void ResetCursor() { _haveCursor = false; _speed = 0; }
+
+    // Tests must not leave the shared pool or its cursor history changed for the next test.
+    internal static void WithIsolatedStageForTests(Action action)
+    {
+        var stage = Stage;
+        var cursor = (_haveCursor, _cursorX, _cursorY, _speed);
+        Stage = new SuperStage();
+        ResetCursor();
+        try { action(); }
+        finally
+        {
+            Stage = stage;
+            (_haveCursor, _cursorX, _cursorY, _speed) = cursor;
+        }
+    }
 
 
     internal static void Sync()

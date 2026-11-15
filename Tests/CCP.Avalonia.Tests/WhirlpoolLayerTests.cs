@@ -10,9 +10,13 @@ public class WhirlpoolLayerTests
     [Fact]
     public void PoolStepsOnlyWhenOnAndUsesSizeAndGentleSpeed() => AvaloniaTestDispatcher.Run(() =>
     {
-        var stage = SuperStageHost.Stage;
-        try
+        var shared = SuperStageHost.Stage;
+        var pool = shared.Pool;
+        var beforeState = (shared.PoolOn, shared.SteamOn, pool.X, pool.Y, pool.Size,
+            pool.Angle, pool.Dip, pool.ShortSide, pool.ReachScale);
+        SuperStageHost.WithIsolatedStageForTests(() =>
         {
+            var stage = SuperStageHost.Stage;
             SuperStageHost.Stop();
             SuperStageHost.StepPool(0.1, 100, 100, 1, 1000, 150, false);
             Assert.Equal(0, stage.Pool.Size);
@@ -33,7 +37,11 @@ public class WhirlpoolLayerTests
             SuperStageHost.Stop();
             Assert.False(stage.PoolOn);
             Assert.Equal(0, stage.Pool.Size);
-        }
-        finally { SuperStageHost.Stop(); }
+        });
+        Assert.Throws<System.InvalidOperationException>(() =>
+            SuperStageHost.WithIsolatedStageForTests(() => throw new System.InvalidOperationException()));
+        Assert.Same(shared, SuperStageHost.Stage);
+        Assert.Equal(beforeState, (shared.PoolOn, shared.SteamOn, pool.X, pool.Y, pool.Size,
+            pool.Angle, pool.Dip, pool.ShortSide, pool.ReachScale));
     });
 }
