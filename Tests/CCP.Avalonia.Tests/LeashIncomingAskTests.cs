@@ -147,24 +147,38 @@ public sealed class LeashIncomingAskTests
             }
         });
 
-    [Fact]
-    public void GateTimerPicksUpAReplacementServiceAndItsWaitingOffer() =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GateTimerPicksUpAReplacementServiceAndItsWaitingOffer(bool closeHidden) =>
         LeashGateCardTests.Run(false, (shell, _, _) =>
         {
             var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
             replacement.ApplyBlock(Block((First, "juno")));
             LeashHead.Service = replacement;
+            var hidden = new MainShellWindow();
+            hidden.RebindLeashAsks(); // Another shell sees the offer while no owner is visible.
+            if (closeHidden) hidden.Close();
+            LeashHead.Service = null;
             shell.Show();
             try
             {
                 Assert.Null(LeashAskWindow.Current);
-                // The WPF gate timer also rebinds the surfaces every two seconds.
-                System.Threading.Thread.Sleep(TimeSpan.FromMilliseconds(2200));
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal("leash-ask:juno", LeashAskWindow.Current!.Card.Tag);
+                LeashHead.Service = replacement;
+                // Pump the real two-second timer until it presents the offer, including a delayed tick.
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (LeashAskWindow.Current == null && deadline.Elapsed < TimeSpan.FromSeconds(10))
+                {
+                    System.Threading.Thread.Sleep(10);
+                    Dispatcher.UIThread.RunJobs();
+                }
+                var shown = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:juno", shown.Card.Tag);
+                Assert.Same(shell, shown.Owner);
             }
             finally
             {
+                hidden.Close();
                 LeashHead.Service = null;
                 shell.RebindLeashAsks();
                 LeashAskWindow.CloseCurrent();

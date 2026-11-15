@@ -26,8 +26,9 @@ public partial class MainShellWindow
     // WPF LeashSurfaces.cs:26 keeps one process-wide SeenOffers per bound service; every shell shares it so a
     // shell that rebinds later (its two-second tick) never re-queues an offer another shell already asked.
     private static readonly ConditionalWeakTable<ILeashService, HashSet<string>> SeenLeashOffers = new();
+    private static readonly ConditionalWeakTable<ILeashService, List<LeashOffer>> WaitingLeashAsks = new();
     private HashSet<string> _seenLeashOffers = new();
-    private readonly List<LeashOffer> _waitingLeashAsks = new();
+    private List<LeashOffer> _waitingLeashAsks = new();
     private readonly List<LeashEvent> _heldLeashNotices = new();
 
     private void InitializeLeashAsks()
@@ -57,6 +58,7 @@ public partial class MainShellWindow
             _askService = next;
             ReleaseWaitingLeashAsks();
             _seenLeashOffers = next == null ? new() : SeenLeashOffers.GetValue(next, _ => new());
+            _waitingLeashAsks = next == null ? new() : WaitingLeashAsks.GetValue(next, _ => new());
             _heldLeashNotices.Clear();
             if (next != null)
             {
@@ -96,12 +98,8 @@ public partial class MainShellWindow
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
     }
 
-    // Asks this shell still held go back to the shared set, so another shell's next snapshot asks them.
-    private void ReleaseWaitingLeashAsks()
-    {
-        foreach (var w in _waitingLeashAsks) _seenLeashOffers.Remove(OfferKey(w));
-        _waitingLeashAsks.Clear();
-    }
+    // Drop this shell's reference; other shells can still present the service's pending offers.
+    private void ReleaseWaitingLeashAsks() => _waitingLeashAsks = new();
 
     private static string OfferKey(LeashOffer offer) => offer.From.Id + "@" + offer.At.ToUnixTimeSeconds();
 
