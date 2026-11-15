@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Online pictures live in GameWindow.Pbp.Media.cs. Not here yet (game-pbp-b):
-// Lobby intents (.Friends.cs), MergedAccountRecovery.
+// Lobby intents (.Friends.cs).
 
 using System;
 using System.Collections.Generic;
@@ -348,6 +348,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PbpPending = Task.Run(async () =>
             {
                 var (status, body) = await PbpHostRules.SendAsync(http, baseUrl, call, token, CoreReleaseContent.AppVersion).ConfigureAwait(false);
+                try { MergedAccountRecovery.TryHandle(status, body); }
+                catch (Exception ex)
+                {
+                    Log.Debug("PieceByPiece: merged recovery failed: {E}", ex.Message);
+                    (status, body) = (0, "");
+                }
                 Dispatcher.UIThread.Post(() => { if (!_closing) Post(PbpHostRules.NetResult(call.Id, status, body)); });
             });
         }

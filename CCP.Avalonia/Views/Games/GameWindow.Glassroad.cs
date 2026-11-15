@@ -5,7 +5,6 @@
 // DOMContentLoaded), on the first message and on ready (a repeat is harmless). The relay signs as the player, so it
 // forwards ONLY /v2/race/, judged on the built Uri (HostNetPathRule). Escape pauses (GameWindow.Escape.cs), a second
 // Escape inside 2 s panics, and panic closes it with every other game (PanicSurfaces "games").
-// Not here yet: MergedAccountRecovery on a merged-account answer (the board host lacks it too).
 using System;
 using System.Net.Http;
 using System.Text;
@@ -274,6 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     using var response = await http.SendAsync(request).ConfigureAwait(false);
                     status = (int)response.StatusCode;
                     reply = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    MergedAccountRecovery.TryHandle(status, reply);
                 }
                 catch (Exception ex)
                 {
