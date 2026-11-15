@@ -450,18 +450,8 @@ public sealed class AvatarTubeFinishTests
             Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
             SelectNow(tube, 2);
             Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
-            // WPF Windowing.cs:753-799: breath, wobble and mist; a playing clip adds shimmer and thicker mist.
-            var tick = Assert.IsType<Action<double>>(tube.FloatingFrame);
-            var motion = (global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)b.RenderTransform!).Children[0];
-            var breath = (global::Avalonia.Media.ScaleTransform)motion.Children[1]; var wobble = (global::Avalonia.Media.RotateTransform)motion.Children[2];
-            tick(100 * 0.016);
-            Assert.Equal(1 + Math.Sin(1.3) * 0.01, breath.ScaleX, 8); Assert.Equal(Math.Sin(1.7) * 0.4, wobble.Angle, 8); Assert.Equal(0.15 + (Math.Sin(0.9) + 1) * 0.03, mist.Opacity, 8);
-            tube.SpeechAudioPlayer = (_, _, _, _) => { }; // the clip keeps playing
-            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true); tick(40 * 0.016);
-            Assert.Equal(Math.Sin(0.68) * 0.4 + Math.Sin(18) * Math.Pow(Math.Sin(1.4), 3) * 0.175, wobble.Angle, 8); Assert.Equal(0.26 + (Math.Sin(0.36) + 1) * 0.05, mist.Opacity, 8);
             change(new ModPackage(new ModManifest { Id = "other" }, null, false));
             Assert.Same(effectA, a.Effect); Assert.Same(effectB, b.Effect); Assert.False(mist.IsVisible);
-            Assert.Equal(1, breath.ScaleX); Assert.Equal(0, wobble.Angle); // WPF Avatar.cs:1117-1119
         }
         finally { Directory.Delete(root, true); }
     });

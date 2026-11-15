@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         // WPF Windowing.cs:733-755,804-808: legacy avatar bob. Keep this on the image,
         // separate from AvatarBounceHost so a reply's double bounce cannot replace it.
-        // Portrait breathing, wobble and mist ride the same frame (Portrait.cs PortraitMotion).
+        // Portrait breathing, wobble and mist need the portrait-mode renderer (part B).
         private void StartFloatingAnimation()
         {
             StopFloatingAnimation();
@@ -29,7 +29,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 // WPF Windowing.cs:740-751: +0.05 radians per 16 ms. Sample the same
                 // nominal speed on the existing shared 30 Hz beat, without a private timer.
                 _avatarFloat.Y = Math.Sin(seconds * (0.05 / 0.016)) * 4;
-                if (IsPortraitMode) PortraitMotion(seconds);
             };
             _floatLoop = loop = new BeatLoop(this, FloatingFrame);
             loop.Start();
@@ -42,7 +41,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _floatLoop = null;
             FloatingFrame = null;
             _avatarFloat.Y = 0;
-            ResetPortraitMotion(); // WPF Windowing.cs:809-817
         }
 
         /// <summary>The bob was asked for (shown and attached), whether or not it is moving right now.</summary>
@@ -71,7 +69,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _floatLoop = null;
                 FloatingFrame = null;
                 _avatarFloat.Y = 0;
-                ResetPortraitMotion();
             }
             else if (!hold && _floatLoop == null) StartFloatingAnimation();
         }

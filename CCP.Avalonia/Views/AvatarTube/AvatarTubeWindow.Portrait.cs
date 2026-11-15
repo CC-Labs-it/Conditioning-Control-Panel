@@ -15,8 +15,6 @@ public partial class AvatarTubeWindow
     private AvatarPortraitLoader? _portrait, _paintedPortrait;
     private Bitmap? _portraitImage, _portraitOld;
     private Image? _portraitActive;
-    private IEffect? _portraitEffectA, _portraitEffectB;
-    private bool _portraitEffectsSaved;
     private Action _cancelPortraitStep = static () => { }, _cancelPortraitFade = static () => { };
     private int _portraitStepVersion, _portraitFadeVersion, _portraitStep, _portraitPose;
     private int[] _portraitOrder = Array.Empty<int>(); private string? _portraitEmotion;
@@ -61,8 +59,7 @@ public partial class AvatarTubeWindow
         PortraitPath = path;
         var second = this.FindControl<Image>("ImgAvatarB")!;
         second.IsVisible = true;
-        _portraitEffectA = _imgAvatar.Effect; _portraitEffectB = second.Effect; _portraitEffectsSaved = true;
-        _imgAvatar.Effect = second.Effect = null;
+        _imgAvatar.Classes.Set("portrait-mode", true); second.Classes.Set("portrait-mode", true);
         this.FindControl<Control>("MistOverlay")!.IsVisible = true;
         (_imgAvatar.MaxHeight, second.MaxHeight, _imgAvatar.MaxWidth, second.MaxWidth) = (306 * 0.88, 306 * 0.88, 198 * 0.88, 198 * 0.88);
         _avatarBorder.RenderTransform = new TranslateTransform(10, -30);
@@ -184,38 +181,13 @@ public partial class AvatarTubeWindow
         _portraitOld?.Dispose(); _portraitOld = null;
     }
 
-    private readonly ScaleTransform _portraitBreath = new(), _mistScale = new();
-    private readonly RotateTransform _portraitWobble = new();
-
-    // WPF Windowing.cs:753-799 at its 16 ms step: breathing, wobble, a speaking shimmer and mist drift.
-    private void PortraitMotion(double seconds)
-    {
-        double t = seconds / 0.016, angle = Math.Sin(t * 0.017) * 0.4, mist = t * 0.009;
-        bool speaking = !SpokenAudioDone.IsCompleted;
-        double vib = speaking ? Math.Sin(t * 0.45) * Math.Pow(Math.Max(0, Math.Sin(t * 0.035)), 3) : 0;
-        _portraitBreath.ScaleX = _portraitBreath.ScaleY = 1 + Math.Sin(t * 0.013) * 0.01;
-        _portraitWobble.Angle = angle + vib * 0.175;
-        _avatarFloat.X = vib * 0.25;
-        var overlay = this.FindControl<Control>("MistOverlay")!;
-        overlay.RenderTransform = _mistScale;
-        overlay.Opacity = (speaking ? 0.26 : 0.15) + (Math.Sin(mist) + 1) * 0.5 * (speaking ? 0.10 : 0.06);
-        _mistScale.ScaleX = _mistScale.ScaleY = 1 + (Math.Sin(mist * (speaking ? 1.0 : 0.7)) + 1) * 0.5 * (speaking ? 0.06 : 0.04);
-    }
-
-    private void ResetPortraitMotion() { _portraitBreath.ScaleX = _portraitBreath.ScaleY = 1; _portraitWobble.Angle = 0; _avatarFloat.X = 0; }
-
     private void ClearPortraitImage()
     {
         CancelPortraitStep();
-        ResetPortraitMotion(); // WPF Avatar.cs:1117-1119
         FinishPortraitFade();
         var second = this.FindControl<Image>("ImgAvatarB")!;
         this.FindControl<Control>("MistOverlay")!.IsVisible = false;
-        if (_portraitEffectsSaved)
-        {
-            _imgAvatar.Effect = _portraitEffectA; second.Effect = _portraitEffectB;
-            _portraitEffectsSaved = false;
-        }
+        _imgAvatar.Classes.Set("portrait-mode", false); second.Classes.Set("portrait-mode", false);
         _imgAvatar.Source = null; _imgAvatar.Opacity = 1;
         second.Source = null; second.Opacity = 0; second.IsVisible = false;
         _portraitActive = null; _paintedPortrait = null; _portraitEmotion = null; _portraitPose = 0;
