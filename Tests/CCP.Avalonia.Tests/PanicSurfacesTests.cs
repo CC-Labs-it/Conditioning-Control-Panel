@@ -68,7 +68,9 @@ public sealed class PanicSurfacesTests
             var countAtEngine = -1;
             PanicSurfaces.All = new[] { lights, new PanicSurfaces.Surface("engine", _ =>
                 countAtEngine = ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count) };
-            PanicSurfaces.StopAll("test");
+            var panicCount = ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount;
+            PanicSurfaces.StopAll("test", aftermathArmed: true);
+            Assert.Equal(panicCount, ConditioningControlPanel.Services.Safety.PanicAftermath.PanicCount);
             Assert.Equal(0, countAtEngine);
             Assert.Equal(0, ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count);
         }
