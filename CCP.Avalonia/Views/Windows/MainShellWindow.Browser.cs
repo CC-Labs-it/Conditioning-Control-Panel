@@ -274,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelVideoAutoPlay();
             if (!PrepareBrowserNavigation(url, true, true)) return false;
+            if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
             var host = BrowserView;
             if (host == null) return false;
             // A companion link is a link (WPF NavigateToUrlInBrowser :729): 50% once the browser exists.

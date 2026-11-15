@@ -435,19 +435,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!RetryFailedConstruction || _adapterReady || _startupFailed || _startupWatchPending) return;
             _startupWatchPending = true;
             var generation = ++_startupWatchGeneration;
-            void Expired()
-            {
-                if (!ReferenceEquals(_web, native) || generation != _startupWatchGeneration || !_startupWatchPending || _adapterReady || _startupFailed) return;
-                _startupWatchPending = false;
-                if (_adapterCreated && StartupReady(native)) { _adapterReady = true; return; }
-                _startupFailed = true;
-                FailureStatusKey = "label_error_2";
-                CancelPendingNavigation();
-                NewScrolllerEngine();
-                BrowserStartupFailed?.Invoke();
-            }
+            void Expired() => ExpireStartup(native, generation);
             if (StartupWatchScheduler is { } schedule) schedule(Expired);
             else global::Avalonia.Threading.DispatcherTimer.RunOnce(Expired, TimeSpan.FromSeconds(15));
+        }
+
+        private void ExpireStartup(NativeWebView native, int generation)
+        {
+            if (!ReferenceEquals(_web, native) || generation != _startupWatchGeneration || !_startupWatchPending || _adapterReady || _startupFailed) return;
+            _startupWatchPending = false;
+            if (_adapterCreated && StartupReady(native)) { _adapterReady = true; return; }
+            _startupFailed = true;
+            FailureStatusKey = "label_error_2";
+            CancelPendingNavigation();
+            NewScrolllerEngine();
+            BrowserStartupFailed?.Invoke();
         }
 
         public WebHost()
@@ -594,6 +596,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // the predicate and the Source in that order would otherwise race the engine.
                 native.EnvironmentRequested += (_, e) => OnEnvironmentRequested(e);
                 native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { _adapterCreated = false; _adapterReady = false; _startupWatchPending = false; ++_startupWatchGeneration; BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
+                // A reattached native view may never raise AdapterCreated. Only watch a browser that
+                // already has work, leaving the initial load prompt and offline state alone.
+                native.AttachedToVisualTree += (_, _) =>
+                {
+                    if (ReferenceEquals(_web, native) && (Source != null || _pendingNavigation != null)
+                        && !(BlockWhenOffline && CoreSettings.Current.OfflineMode)) WatchStartup(native);
+                };
                 native.AdapterCreated += (_, e) =>
                 {
                     var onUiThread = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
@@ -611,6 +620,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         AttachFailureWatch(native, false);
                         if (onUiThread) ZoomAdapterCreated(native, () => e.TryGetPlatformHandle());
                         else TryBrowserZoomAdapterReady();
+                        if ((Source != null || _pendingNavigation != null)
+                            && !(BlockWhenOffline && CoreSettings.Current.OfflineMode)) WatchStartup(native);
                     }
                     if (onUiThread) Ready();
                     else global::Avalonia.Threading.Dispatcher.UIThread.Post(Ready);
@@ -746,14 +757,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             CancelPendingNavigation();
             if (_web is null && NavigationInvoker is null) return false;
+            if (_web is { } startupView) WatchStartup(startupView);
+            if (_startupFailed) return null;
             while (_scrolllerGate is null)
             {
                 var pending = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _pendingNavigation = pending;
                 var completed = await Task.WhenAny(pending.Task, Task.Delay(TimeSpan.FromSeconds(15)));
                 if (_pendingNavigation != pending) return null;
+                if (completed != pending.Task)
+                {
+                    // The gate and startup deadlines can expire together. Resolve startup first so
+                    // a dead engine shows the retry prompt instead of opening a link externally.
+                    if (_web is { } native && _startupWatchPending) ExpireStartup(native, _startupWatchGeneration);
+                    if (_startupFailed) return null;
+                    _pendingNavigation = null;
+                    return false;
+                }
                 _pendingNavigation = null;
-                if (completed != pending.Task) return false;
                 var ready = await pending.Task;
                 if (ready is null) return null;
             }
