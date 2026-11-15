@@ -18,6 +18,7 @@ internal sealed partial class GameWindow
     private void StartGoonWatch()
     {
         _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
+        GoonCacheBridge.Attach(PostGoonCache);
         _goonWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(GoonHostRules.WatchIntervalSeconds) };
         _goonWatch.Tick += (_, _) => CheckGoonWatch(GoonUtcNow());
         _goonWatch.Start();
@@ -27,6 +28,12 @@ internal sealed partial class GameWindow
     {
         switch ((string?)message["type"])
         {
+            case "cache-req":
+            case "cache-put":
+            case "encode-done":
+                if (!_closing) GoonCacheBridge.OnMessage(message);
+                handled = true;
+                break;
             case "ready":
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
@@ -73,8 +80,14 @@ internal sealed partial class GameWindow
         if (next != null) _goonRetried = next._goonRetried = true;
     }
 
+    private void PostGoonCache(object frame) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!_closing) Post(frame);
+    });
+
     private void StopGoonWatch()
     {
+        GoonCacheBridge.Detach();
         _goonWatch?.Stop();
         _goonWatch = null;
     }
