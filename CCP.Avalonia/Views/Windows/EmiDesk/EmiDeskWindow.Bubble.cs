@@ -78,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _ask = ask;
             _askEngine = engine;
             engine.Ack(ask.Id);
+            EmiDeskService.Instance.NoteEmiSpoke();
             _askStage = 0;
             DrawFace(EmiChains.RestFace);
             ShowBubble(".");

@@ -124,6 +124,52 @@ public sealed class EmiDeskSettingsSpeechTests
         }
     });
 
+    private sealed class AskBarkClock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]
+    public Task StartingAskHoldsTheAvatarBarkGap() => InDesk(desk =>
+    {
+        var oldBark = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
+        var settings = CoreSettings.Current;
+        var oldSettings = (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs);
+        var clock = new AskBarkClock();
+        var rule = new ConditioningControlPanel.Services.Bark.BarkRule
+        {
+            Id = "ask-gap-test", Trigger = "AskGapTest",
+            VariantPool = new() { new ConditioningControlPanel.Services.Bark.BarkVariant("hello") }
+        };
+        var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(
+            () => new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { rule }))
+            { Clock = clock, Speak = _ => { } };
+        try
+        {
+            (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs) = (true, 50, 0);
+            bark.Start();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = bark;
+            Assert.True(bark.Raise("AskGapTest"));
+            clock.Now = clock.Now.AddMinutes(2);
+            var reply = new LineDraw("reply", "", "yes", "^_^", null, 1, false, 0);
+            var ask = new AskDraw("gap", "test", "hello?", "^_^", new[] { "yes", "no" }, reply, reply, "", null);
+            desk.Window!.ShowAsk(ask, EmiLineEngine.FromJson(Lines));
+            Assert.Equal(".", desk.Window.BubbleText);
+            Assert.False(bark.Raise("AskGapTest"));
+            clock.Now = clock.Now.AddMilliseconds(60000);
+            Assert.True(bark.Raise("AskGapTest"));
+            desk.Window.CancelAsk();
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = oldBark;
+            settings.BarkVariantRotation.Remove(rule.Id);
+            (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs) = oldSettings;
+        }
+        return Task.CompletedTask;
+    });
+
     private sealed class AskVoice : IEmiVox
     {
         public int Ticks, Stops, Disposals;
