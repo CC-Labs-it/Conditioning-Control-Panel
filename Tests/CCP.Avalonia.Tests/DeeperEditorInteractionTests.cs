@@ -154,6 +154,50 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task SingleRegionDeleteDetachesRuleAndRefreshesPin() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var region = new Region { Id = "band", Start = 1, End = 5 };
+        var rule = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = region.Id };
+        var otherRule = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = "other" };
+        model.Regions.Add(region);
+        model.Regions.Add(new Region { Id = "other", Start = 6, End = 8 });
+        model.Rules.Add(rule);
+        model.Rules.Add(otherRule);
+        Call(w, "SelectRegion", region);
+        w.BtnDeleteRegion.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.DoesNotContain(region, model.Regions);
+        Assert.Null(rule.RegionConstraint);
+        Assert.Equal("other", otherRule.RegionConstraint);
+        var pin = Assert.Single(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        Assert.Contains("fires anywhere, no place on the ruler", (string)ToolTip.GetTip(pin)!);
+        w.Undo();
+        var restored = (Enhancement)Field(w, "_enhancement")!;
+        Assert.Contains(restored.Regions, r => r.Id == "band");
+        Assert.Contains(restored.Rules, r => r.RegionConstraint == "band");
+    });
+
+    [Fact]
+    public Task SingleRegionDeleteRemovesOnlyItsProjectedRuleItem() => Run((w, model) =>
+    {
+        var region = new Region { Id = "band", Start = 1, End = 5 };
+        var projected = new TimelineItem { Id = "band", Kind = TimelineItemKind.Rule };
+        var effect = new TimelineItem { Id = "band", Kind = TimelineItemKind.Effect };
+        var other = new TimelineItem { Id = "other", Kind = TimelineItemKind.Rule };
+        model.Regions.Add(region);
+        model.TimelineItems.Add(projected);
+        model.TimelineItems.Add(effect);
+        model.TimelineItems.Add(other);
+        Call(w, "SelectRegion", region);
+        w.BtnDeleteRegion.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.DoesNotContain(projected, model.TimelineItems);
+        Assert.Contains(effect, model.TimelineItems);
+        Assert.Contains(other, model.TimelineItems);
+        w.Undo();
+        Assert.Contains(((Enhancement)Field(w, "_enhancement")!).TimelineItems, t => t.Id == "band" && t.Kind == TimelineItemKind.Rule);
+    });
+
+    [Fact]
     public Task ParkedRuleTooltipUsesSelectedLanguage() => Run((w, model) =>
     {
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;

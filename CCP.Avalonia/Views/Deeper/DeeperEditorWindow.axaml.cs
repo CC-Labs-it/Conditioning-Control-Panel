@@ -2091,7 +2091,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (_selectedRegion == null) return;
             PushUndoSnapshot();
-            _enhancement.Regions.Remove(_selectedRegion);
+            RemoveRegionFromModel(_selectedRegion);
             SelectNothing();
             MarkDirty();
             RebuildRegionVisuals();
