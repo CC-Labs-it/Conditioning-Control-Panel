@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal static bool RemixBrowserVideoBusy => RemixBrowserMediaBusy || (_remixWatchActive
             && System.Diagnostics.Stopwatch.GetElapsedTime(System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds > 3);
         private string? _remixMediaId;
-        internal long RemixAudioTick;
+        internal long RemixAudioTick, InterruptionAudioTick;
 
         // WPF BrowserService.cs:337: watch user-started media, not only takeover playback.
         // Cross-origin frames are flagged unknown and fall back to the engine's audible-playback state.
@@ -82,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BeginRemixMediaWatch()
         {
             _remixMediaId = null;
+            InterruptionAudioTick = 0;
             var hasEngine = BrowserWebHost.HasEngine;
             RemixBrowserMediaBusy = InterruptingBrowserMedia = hasEngine;
             System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
@@ -90,7 +91,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void InstallRemixMediaWatch(Uri uri, bool success)
         {
-            if (!BrowserWebHost.HasEngine) { _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; return; }
+            Views.Windows.LockCardWindow.CompleteWebVideoNavigation(success);
+            if (!BrowserWebHost.HasEngine) { Views.Windows.LockCardWindow.EndWebVideo(); _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; return; }
             BeginRemixMediaWatch();
             if (!success) return; // Unknown playback fails closed until the next navigation.
             _remixMediaId = Guid.NewGuid().ToString("N");
@@ -110,10 +112,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // An unreadable frame is idle only while the engine reports no audio, held two seconds like WPF's pause debounce.
                 if (root.TryGetProperty("unknown", out var unknown) && unknown.ValueKind == System.Text.Json.JsonValueKind.True)
                 {
-                    if (BrowserWebHost.IsPlayingAudio() != false) RemixAudioTick = System.Diagnostics.Stopwatch.GetTimestamp();
-                    var audible = RemixAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(RemixAudioTick).TotalSeconds < 2;
-                    active |= audible; interrupting |= audible;
+                    var audio = BrowserWebHost.IsPlayingAudio();
+                    if (audio != false) RemixAudioTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                    if (audio == true) InterruptionAudioTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                    active |= RemixAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(RemixAudioTick).TotalSeconds < 2;
+                    interrupting |= InterruptionAudioTick != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(InterruptionAudioTick).TotalSeconds < 2;
                 }
+                Views.Windows.LockCardWindow.NoteWebVideo(interrupting);
                 InterruptingBrowserMedia = interrupting;
                 if (active) RemixBrowserMediaBusy = true;
                 System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
@@ -131,7 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
-            BrowserWebHost.NavigationBeginning += BeginRemixMediaWatch;
+            BrowserWebHost.NavigationBeginning += () => { Views.Windows.LockCardWindow.NavigateWebVideo(); BeginRemixMediaWatch(); };
             BrowserWebHost.NavigationFinished += InstallRemixMediaWatch;
             BrowserWebHost.WebMessage += OnRemixMediaMessage;
             BrowserWebHost.AttachedToVisualTree += (_, _) =>
@@ -141,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             BrowserWebHost.DetachedFromVisualTree += (_, _) => Dispatcher.UIThread.Post(() =>
             {
-                if (!BrowserWebHost.IsAttachedToVisualTree()) { _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; }
+                if (!BrowserWebHost.IsAttachedToVisualTree()) { Views.Windows.LockCardWindow.EndWebVideo(); _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; }
             });
             BrowserWebHost.NavigationFinished += (url, success) =>
                 _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);

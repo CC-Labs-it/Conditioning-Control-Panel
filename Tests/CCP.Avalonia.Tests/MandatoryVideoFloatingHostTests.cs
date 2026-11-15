@@ -129,15 +129,14 @@ public sealed class MandatoryVideoFloatingHostTests
             (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
                 s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled)
                 = (true, 20, true, 3, together, false, false, false, false, 0, false);
-            var post = CoreDispatch.PostProvider;
-            var clock = new Clock();
-            var decoders = new List<Decoder>();
+            var post = CoreDispatch.PostProvider; var previousVideo = CoreEngine.Video;
+            var clock = new Clock(); var decoders = new List<Decoder>();
             var o = new MandatoryVideoOverlay(() => { var d = new Decoder(); decoders.Add(d); return d; });
             o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4" });
             try
             {
-                CoreDispatch.PostProvider = a => a();
-                o.Scheduler.Start();
+                CoreDispatch.PostProvider = a => a(); CoreEngine.Video = o.Scheduler;
+                o.Scheduler.DeferTrigger = ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.DeferVideo; o.Scheduler.Start();
                 clock.FireLast();   // the schedule fires: pre-roll
                 clock.FireLast();   // pre-roll ends: the run's first window
                 Assert.True(o.FloatingRunOpen);
@@ -151,24 +150,22 @@ public sealed class MandatoryVideoFloatingHostTests
                 }
                 else
                 {
-                    Assert.Single(Up(o));
+                    Assert.Single(Up(o)); ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.BeginWebVideoTakeover();
+                    Assert.False(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.WebVideoClaimed);
+                    ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
                     clock.FireLast();   // join tick
-                    Assert.Equal(2, Up(o).Count);
-                    clock.FireLast();
-                    Assert.Equal(3, Up(o).Count);
+                    Assert.Equal(2, Up(o).Count); clock.FireLast(); Assert.Equal(3, Up(o).Count);
                     clock.FireLast();   // at the limit: skipped
-                    Assert.Equal(3, Up(o).Count);
-                    Assert.Equal(3, decoders.Count);
+                    Assert.Equal(3, Up(o).Count); Assert.Equal(3, decoders.Count);
                 }
                 o.Scheduler.ForceCleanup();   // the engine stop a panic runs
-                Assert.Empty(Up(o));
-                Assert.Equal(0, o.FloatingUp);
-                Assert.Empty(clock.Armed);
+                Assert.Empty(Up(o)); Assert.Equal(0, o.FloatingUp); Assert.Empty(clock.Armed);
             }
             finally
             {
-                o.Scheduler.Stop();
-                o.CloseAll();
+                o.Scheduler.Stop(); o.CloseAll();
+                ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.RetryPendingCard();
+                CoreEngine.Video = previousVideo;
                 CoreDispatch.PostProvider = post;
                 (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
                     s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled) = saved;
@@ -186,6 +183,7 @@ public sealed class MandatoryVideoFloatingHostTests
         var busy = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia;
         var stamp = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick;
         var post = CoreDispatch.PostProvider;
+        var previousVideo = CoreEngine.Video;
         var clock = new Clock();
         var o = new MandatoryVideoOverlay(() => new Decoder());
         o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4" });
@@ -193,11 +191,18 @@ public sealed class MandatoryVideoFloatingHostTests
         {
             (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
                 s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback)
-                = (true, 20, true, 3, false, false, false, false, false, true);
-            CoreDispatch.PostProvider = a => a();
+                = (true, 20, true, 3, false, false, false, false, false, false);
+            CoreDispatch.PostProvider = a => a(); CoreEngine.Video = o.Scheduler;
+            o.Scheduler.DeferTrigger = ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.DeferVideo;
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = System.Diagnostics.Stopwatch.GetTimestamp();
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = false;
-            o.Scheduler.Start(); clock.FireLast(); clock.FireLast();
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.BeginWebVideoTakeover();
+            o.Scheduler.Start(); clock.FireLast();
+            Assert.False(o.Scheduler.IsPlaying);
+            Assert.Equal(TimeSpan.FromSeconds(30), clock.Armed[^1].Due);
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+            s.ProtectBrowserVideoPlayback = true;
+            clock.FireLast(); clock.FireLast();
             Assert.Single(Up(o));
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = true;
             clock.FireLast();
@@ -209,7 +214,10 @@ public sealed class MandatoryVideoFloatingHostTests
         }
         finally
         {
-            o.Scheduler.Stop(); o.CloseAll(); CoreDispatch.PostProvider = post;
+            o.Scheduler.Stop(); o.CloseAll();
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.RetryPendingCard();
+            CoreEngine.Video = previousVideo; CoreDispatch.PostProvider = post;
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = busy;
             ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = stamp;
             (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,

@@ -142,6 +142,8 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
+        /// <summary>True while a trigger asks the head's queue to ignore this run's own video claim.</summary>
+        public bool IsRequestingFloatingJoin { get; private set; }
         public bool IsStrict { get; private set; }
 
         /// <summary>WPF ScheduleNext: 3600/perHour jittered 0.8-1.2x, never under 60 s.</summary>
@@ -411,12 +413,17 @@ namespace ConditioningControlPanel.Services
         {
             var joinRun = scheduled && _playing && _floatingRun;
             var joinGeneration = _retryGeneration;
-            if (DeferTrigger?.Invoke(() =>
+            IsRequestingFloatingJoin = _playing && _floatingRun && _host.FloatingRunOpen && _host.IsFloating(IsStrict)
+                && _host.IsFloating(strictOverride ?? CoreSettings.Current.StrictLockEnabled);
+            bool deferred;
+            try { deferred = DeferTrigger?.Invoke(() =>
             {
                 if (scheduled && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)) return;
                 if (joinRun && (!_playing || !_floatingRun || joinGeneration != _retryGeneration)) return;
                 Trigger(strictOverride, path, userInitiated, userEarned, scheduled, silentIfEmpty, freezeBeforePreroll);
-            }) == true) return true;
+            }) == true; }
+            finally { IsRequestingFloatingJoin = false; }
+            if (deferred) return true;
             // WPF VideoService.cs:2226: the cascade guard comes before the feed guard.
             if (_cascadeDefer != null) return true; // WPF: coalesce, retain the first request
             if (CascadeIsRaining?.Invoke() == true)

@@ -99,23 +99,36 @@ public class JackpotRemixVideoTests
                 new { type = "ccpRemixMedia", id, active, interrupting }));
             Report(true, true);
             Assert.True(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
+            LockCardWindow.NavigateWebVideo(); Assert.False(LockCardWindow.WebVideoClaimed); Report(true, true);
             SettingsTabView.RemixMediaTick -= 61 * System.Diagnostics.Stopwatch.Frequency;
             Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
             Report(true, true);
             s.ProtectBrowserVideoPlayback = false;
+            Assert.True(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo); // The WebVideo claim is independent.
+            LockCardWindow.EndWebVideo();
             Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
             s.ProtectBrowserVideoPlayback = true;
             Report(true, false); // a muted video can still stop the visual remix
             Assert.True(FlashOverlay.RemixVideoBusy());
             Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
             Report(false, false);
+            Assert.False(LockCardWindow.WebVideoClaimed);
             Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
+            bool? audio = null;
+            web.AudioProbe = () => audio;
+            void UnknownFrame() => web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, active = false, interrupting = false, unknown = true }));
+            UnknownFrame(); Assert.True(FlashOverlay.RemixVideoBusy()); Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
+            audio = true; UnknownFrame(); Assert.True(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
+            audio = null; page.InterruptionAudioTick -= 3 * System.Diagnostics.Stopwatch.Frequency;
+            UnknownFrame(); Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
+            audio = false; UnknownFrame(); Assert.False(MandatoryVideoOverlay.Instance.BrowserMediaBlocksScheduledVideo);
         }
         finally
         {
             window.Close();
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             s.ProtectBrowserVideoPlayback = protect;
+            LockCardWindow.EndWebVideo();
             (SettingsTabView.RemixBrowserMediaBusy, SettingsTabView.InterruptingBrowserMedia, SettingsTabView.RemixMediaTick) = previous;
         }
     });

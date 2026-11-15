@@ -42,8 +42,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
-        public bool BrowserMediaBlocksScheduledVideo => CoreSettings.Current.ProtectBrowserVideoPlayback
-            && Views.Tabs.SettingsTabView.InterruptingBrowserMediaBusy;
+        public bool BrowserMediaBlocksScheduledVideo => Views.Windows.LockCardWindow.WebVideoClaimed
+            || (CoreSettings.Current.ProtectBrowserVideoPlayback && Views.Tabs.SettingsTabView.InterruptingBrowserMediaBusy);
 
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
 

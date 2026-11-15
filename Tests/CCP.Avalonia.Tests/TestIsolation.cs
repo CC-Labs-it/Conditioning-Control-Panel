@@ -308,6 +308,8 @@ internal sealed class ProcessStateSnapshot
         var found = new HashSet<MemberInfo>();
         foreach (var field in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic).Where(f => !f.IsInitOnly && !f.IsLiteral))
             found.Add(field);
+        foreach (var field in typeof(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow).GetFields(AnyStatic)
+                     .Where(f => f.Name.StartsWith("_web", StringComparison.Ordinal))) found.Add(field);
         // Native refusal is cached internally, without a Type.Member assignment for the scanner.
         // DWM is available on Windows headless CI, but its windows have no native input shape.
         found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay)

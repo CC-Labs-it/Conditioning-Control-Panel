@@ -46,6 +46,21 @@ public class TestIsolationTests
     });
 
     [Fact]
+    public void SnapshotRestoresTheBrowserVideoClaim() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.BeginWebVideoTakeover();
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.WebVideoClaimed);
+            snapshot.Restore();
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.WebVideoClaimed);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo(); }
+    });
+
+    [Fact]
     public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })
