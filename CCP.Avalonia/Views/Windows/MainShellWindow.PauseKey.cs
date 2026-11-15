@@ -68,7 +68,9 @@ public partial class MainShellWindow
     private void PauseVideoEnded() => ApplyPauseKeyPortal();
 
     // Start at clip acceptance and spend the existing pre-roll on the portal. A slow or
-    // unavailable portal may delay the clip by at most 100 ms beyond the normal pre-roll.
+    // unavailable portal may delay the clip by at most 100 ms beyond the normal pre-roll;
+    // after that the clip starts and the request (maybe a permission dialog) keeps running
+    // until it answers or the video ends.
     private async Task PreparePauseKeyPortalAsync()
     {
         var scheduler = _pauseKeyScheduler;
@@ -92,10 +94,7 @@ public partial class MainShellWindow
             if (completed == timeout)
             {
                 if (_pauseKeyBind is { IsCompleted: false })
-                {
-                    Log.Warning("Pause key: portal binding timed out before video");
-                    CancelPauseKeyRegistration();
-                }
+                    Log.Information("Pause key: portal still answering, video starts while binding continues");
                 return;
             }
             // Cancellation can fire inside ApplyPauseKeyPortal, before it starts the replacement.

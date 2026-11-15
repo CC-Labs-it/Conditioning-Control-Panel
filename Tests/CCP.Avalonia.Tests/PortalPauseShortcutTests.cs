@@ -321,12 +321,15 @@ public class PortalPauseShortcutTests
             Assert.True(scheduler.Trigger());
             clock.Fire();
             if (!timeout) { Assert.Equal(0, host.Shows); scheduler.ForceCleanup(); }
-            Assert.True(token.IsCancellationRequested);
+            // The deadline starts the clip but leaves the portal request (a permission dialog) running.
+            Assert.Equal(!timeout, token.IsCancellationRequested);
             pending.SetResult(late);
             await Task.Yield();
             Dispatcher.UIThread.RunJobs();
-            Assert.True(late.Disposed);
+            Assert.Equal(!timeout, late.Disposed);
+            Assert.Equal(timeout, shell.PauseKeyArmed);
             Assert.Equal(timeout ? 1 : 0, host.Shows);
+            scheduler.ForceCleanup(); Assert.True(late.Disposed);
         }
         finally
         {
@@ -432,7 +435,9 @@ public class PortalPauseShortcutTests
         var scheduler = new MandatoryVideoScheduler(host, clock, () => new[] { "/test/start.mp4" });
         var shell = new MainShellWindow { PauseKeyWayland = true, PauseKeyScheduler = () => scheduler, PauseKeyVideoPlaying = () => scheduler.IsPlaying };
         var deadline = new TaskCompletionSource(); var pending = new TaskCompletionSource<IDisposable?>();
-        TimeSpan requested = default; int delays = 0; CancellationToken token = default;
+        TimeSpan requested = default; int delays = 0, graces = 0; CancellationToken token = default;
+        var registration = new Registration();
+        shell.PauseKeyGracePause = () => { graces++; return true; };
         shell.PauseKeyDelay = delay => { requested = delay; delays++; return deadline.Task; };
         shell.RegisterWaylandPauseKey = (_, _, _, t) => { token = t; return pending.Task; };
         try
@@ -447,10 +452,14 @@ public class PortalPauseShortcutTests
             clock.Fire(); Assert.Equal(0, host.Shows);
             deadline.SetResult();
             await Task.Yield(); Dispatcher.UIThread.RunJobs();
-            Assert.True(token.IsCancellationRequested);
+            Assert.False(token.IsCancellationRequested); // a slow permission dialog keeps its request
             Assert.Equal(1, host.Shows);
             Assert.Equal(1, delays); // rechecks do not restart the deadline
-            pending.SetResult(null);
+            pending.SetResult(registration); // the user answers after the clip started
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.PauseKeyArmed);
+            shell.OnPortalPauseKeyPressed("F9"); Assert.Equal(1, graces);
+            scheduler.ForceCleanup(); Assert.True(registration.Disposed); Assert.True(token.IsCancellationRequested);
         }
         finally
         {
@@ -523,7 +532,8 @@ public class PortalPauseShortcutTests
             Assert.Equal(1, binds); Assert.Equal(0, host.Shows);
             deadline.SetResult();
             await Task.Yield(); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, deadlines); Assert.True(token.IsCancellationRequested); Assert.Equal(1, host.Shows);
+            Assert.Equal(1, deadlines); Assert.False(token.IsCancellationRequested); Assert.Equal(1, host.Shows);
+            scheduler.ForceCleanup(); Assert.True(token.IsCancellationRequested);
             pending.SetResult(null);
         }
         finally
