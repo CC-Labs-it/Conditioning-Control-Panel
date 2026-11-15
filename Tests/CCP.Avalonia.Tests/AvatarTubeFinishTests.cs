@@ -356,6 +356,90 @@ public sealed class AvatarTubeFinishTests
     });
 
     [Fact]
+    public Task PortraitAllowsSelectedSkinWhenFirstSkinHasNoIdle() => Run((_, tube, change) =>
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ccp-portrait-missing-" + Guid.NewGuid().ToString("N"));
+        var audio = Path.Combine(root, "resources", "sounds", "companion_audio");
+        var skin = Path.Combine(audio, "b");
+        Directory.CreateDirectory(skin);
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b","title":"Second"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"},{"file":"two.png"},{"file":"three.png"},{"file":"four.png"}]}}}
+            """);
+        try
+        {
+            foreach (var name in new[] { "idle.png", "two.png", "three.png", "four.png" })
+                File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "avatar_pose1.png"), Path.Combine(skin, name));
+            change(new ModPackage(new ModManifest { Id = "missing-first" }, root, false));
+            Assert.Equal(new[] { 1, 2 }, tube.PickableAvatarSets());
+            Assert.False(tube.IsPortraitMode);
+            Action? finish = null;
+            tube.AvatarSwitchScheduler = (_, fire) => { finish = fire; return () => { }; };
+            Assert.True(tube.SelectAvatarSet(2));
+            finish!();
+            Assert.True(tube.IsPortraitMode);
+            Assert.Equal("Second", tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            Assert.Equal(Path.Combine(skin, "idle.png"), tube.PortraitPath);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitSpeechUsesLineAndMoodCrossfadesAndReturnsToIdle() => Run((_, tube, change) =>
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ccp-portrait-speech-" + Guid.NewGuid().ToString("N"));
+        var audio = Path.Combine(root, "resources", "sounds", "companion_audio");
+        var skin = Path.Combine(audio, "a");
+        Directory.CreateDirectory(skin);
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
+            {"idleEmotion":"neutral","director":{"crossfadeFrames":4},"skins":[{"id":"a","dir":"a"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy1.png"},{"file":"happy2.png"}]},"tender":{"portraits":[{"file":"tender.png"}]}},"lines":{"mapped":{"emotion":"happy"}}}
+            """);
+        try
+        {
+            foreach (var name in new[] { "idle.png", "happy1.png", "happy2.png", "tender.png" })
+                File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "avatar_pose1.png"), Path.Combine(skin, name));
+            using (var wave = new NAudio.Wave.WaveFileWriter(Path.Combine(audio, "mapped.wav"), new NAudio.Wave.WaveFormat(8000, 16, 1)))
+                wave.Write(new byte[64000], 0, 64000); // four seconds
+            change(new ModPackage(new ModManifest { Id = "portrait-speech" }, root, false));
+            var steps = new List<(TimeSpan Delay, Action Fire)>();
+            var fades = new List<(TimeSpan Delay, Action Fire)>();
+            tube.PortraitStepScheduler = (delay, fire) => { steps.Add((delay, fire)); return () => { }; };
+            tube.PortraitFadeScheduler = (delay, fire) => { fades.Add((delay, fire)); return () => { }; };
+            tube.SpeechAudioPlayer = (_, _, _, done) => done?.Invoke();
+            tube.GigglePriority("voiced line", phraseAudioPath: Path.Combine(audio, "mapped.wav"), barkVoice: true, mood: "soft");
+            Assert.Contains(Path.GetFileName(tube.PortraitPath), new[] { "happy1.png", "happy2.png" });
+            Assert.Equal(TimeSpan.FromMilliseconds(152), Assert.Single(fades).Delay);
+            Assert.NotNull(tube.FindControl<Image>("ImgAvatar")!.Source);
+            Assert.NotNull(tube.FindControl<Image>("ImgAvatarB")!.Source);
+            var first = tube.PortraitPath;
+            Assert.Equal(TimeSpan.FromSeconds(1), Assert.Single(steps).Delay);
+            steps[0].Fire();
+            Assert.NotEqual(first, tube.PortraitPath);
+            Assert.Equal(TimeSpan.FromSeconds(1), steps[1].Delay);
+            steps[1].Fire();
+            Assert.Equal(first, tube.PortraitPath);
+            Assert.Equal(TimeSpan.FromSeconds(2), steps[2].Delay);
+            steps[2].Fire();
+            Assert.Equal("idle.png", Path.GetFileName(tube.PortraitPath));
+            tube.EndSpeechBubble();
+            Action? queued = null;
+            tube.SpeechDelayScheduler = (_, fire) => { queued = fire; return () => { }; };
+            tube.Giggle("queued", phraseAudioPath: Path.Combine(audio, "mapped.mp3"), barkVoice: true, mood: "soft");
+            Assert.NotNull(queued);
+            queued!();
+            Assert.Contains(Path.GetFileName(tube.PortraitPath), new[] { "happy1.png", "happy2.png" });
+            tube.GigglePriority("mood", playSound: false, aiGenerated: false, mood: "unknown, soft");
+            Assert.Equal("tender.png", Path.GetFileName(tube.PortraitPath));
+            var staleStep = steps[^1].Fire;
+            var staleFade = fades[^1].Fire;
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false));
+            staleStep(); staleFade();
+            Assert.False(tube.IsPortraitMode);
+            Assert.Null(tube.FindControl<Image>("ImgAvatarB")!.Source);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
     public Task AttachedTubeMakesRoomAndDetachRestoresTheShell() => Run((shell, tube, _) =>
     {
         tube.Detach();

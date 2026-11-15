@@ -835,19 +835,19 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // same visual for a bottom-aligned avatar; only the parent's measured size differs, and
             // AvatarBorder's size is margin-driven anyway.
             var scale = EffAvatarScale();
-            foreach (var name in new[] { "ImgAvatar", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
+            foreach (var name in new[] { "ImgAvatar", "ImgAvatarB", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
             {
                 var img = this.FindControl<Image>(name);
                 if (img == null) continue;
                 img.RenderTransformOrigin = new RelativePoint(0.5, 1.0, RelativeUnit.Relative);
                 // Rain clips carry a per-clip scale in the pack map; the still avatar keeps 1.
-                var clipScale = name == "ImgAvatar" ? 1 : (double?)_rainMap?["clipScale"]?[img.Tag as string ?? ""] ?? 1;
+                var clipScale = (name == "ImgAvatar" || name == "ImgAvatarB") ? 1 : (double?)_rainMap?["clipScale"]?[img.Tag as string ?? ""] ?? 1;
                 var effectiveScale = scale * clipScale;
                 var transform = Math.Abs(effectiveScale - 1.0) > 0.001 ? new ScaleTransform(effectiveScale, effectiveScale) : null;
                 // WPF Avatar.cs:765-771 sets LayoutTransform; xaml:512-517 bobs RenderTransform.
                 // .NET 10 WPF FrameworkElement.SetLayoutOffset appends layout first, render second
                 // (FrameworkElement.cs:5224,5256), so the bob displacement stays unscaled.
-                img.RenderTransform = name == "ImgAvatar"
+                img.RenderTransform = name == "ImgAvatar" || name == "ImgAvatarB"
                     ? new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _avatarFloat } }
                     : transform;
             }
@@ -1103,7 +1103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         private void UpdateTitleDisplay()
         {
-            if (_portraitImage != null && PaintPortrait()) return;
+            if (_portraitImage != null && _portrait != null) { UpdatePortraitTitle(); return; }
             var companionId = CompanionForAvatarSet(_currentAvatarSet);
             if (companionId.HasValue)
             {
@@ -1200,9 +1200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         ///   <item>The typewriter. Cosmetic, and WPF adds its runtime to the display duration - so
         ///         dropping it shortens the window rather than truncating the line. The reading
         ///         floor below is kept, which is the half that protects a long reply.</item>
-        ///   <item>The lead-in timer and <paramref name="mood"/>. Both exist to time the avatar's
-        ///         emotive-portrait pose swap against the voice; that system did not port, so a
-        ///         lead-in would be a pause with nothing happening in it.</item>
+        ///   <item>The voice lead-in timer. Portrait expressions start when the bubble is shown.</item>
         ///   <item>Her <c>AvatarMuted</c> IS honoured below, as WPF
         ///         ShowGiggle (Speech.cs:461): the line still reaches the chat log, no bubble, no voice.</item>
         /// </list>
@@ -1225,7 +1223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 Log.Debug("Priority speech, queue cleared ({Chars} chars, from {Caller}, unprompted={Unprompted})", (text ?? "").Length, who, unprompted);
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted, soundCaller: who);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted, soundCaller: who, mood: mood);
             });
         }
 
@@ -1313,21 +1311,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false)
+        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset)); return; }
+                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood)); return; }
                 if (!IsSpeechReady())
                 {
-                    _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset));
+                    _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood));
                     _isGiggling = true;
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood);
             });
         }
 
@@ -1335,7 +1333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null)
         {
             ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
@@ -1365,6 +1363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     // Publish this line BEFORE cutting the last: the cut fires the old clip's onSpoken on the
                     // thread pool, and a voice waiter woken by it must already see this line in the air.
+                    PlayPortraitLine(emotionLineId ?? (phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath)), phraseAudioPath, text, mood);
                     SpokenAudioDone = clipDone.Task;
                     _stopSpoken();   // WPF ShowGiggle StopSpokenAudio (Speech.cs:474): every new line cuts the last
                     _stopSpoken = static () => { };
