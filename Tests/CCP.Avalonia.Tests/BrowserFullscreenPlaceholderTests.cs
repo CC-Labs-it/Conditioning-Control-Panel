@@ -36,6 +36,8 @@ public class BrowserFullscreenPlaceholderTests
             browser.OnWebMessage("ccp_fullscreen_on");
             Assert.True(label.IsVisible);
             Assert.Equal(IconText.BareLoc("label_browser_in_fullscreen"), label.Text);
+            page.OnBrowserPromptClick();
+            Assert.Equal(new Uri("https://example.com/"), browser.Source);
             if (closeHost) shell.BrowserFullscreenWindow!.Close();
             else browser.OnWebMessage("ccp_fullscreen_off");
             Assert.False(label.IsVisible);
