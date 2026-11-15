@@ -144,7 +144,7 @@ public sealed partial class FriendsDrawerTests
         finally { other.Close(); owner.Close(); svc.Dispose(); }
     });
 
-    // WPF FriendsRailChip.cs:501-508: leaving folds the drawer; returning permits code input.
+    // WPF FriendsRailChip.cs:468-508: focused input survives leaving and restores focus on press.
     [Fact]
     public Task RailCodeInputAfterOwnerReturns() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -162,17 +162,13 @@ public sealed partial class FriendsDrawerTests
             Dispatcher.UIThread.RunJobs();
             var box = Tagged<TextBox>(chip.Drawer, "friends-code-box")!;
             Assert.NotNull(box);
+            box.Focus();
+            Assert.True(chip.Drawer.IsKeyboardFocusWithin);
             other.Show(); other.Activate();
             OwnerActive(owner, false);
             Dispatcher.UIThread.RunJobs();
-            Assert.False(chip.IsOpen);
-            OwnerActive(owner, true);
-            await Task.Delay(260);
-            chip.Toggle();
-            Click(chip.Drawer, "friends-add-open");
-            Dispatcher.UIThread.RunJobs();
-            box = Tagged<TextBox>(chip.Drawer, "friends-code-box")!;
-            Assert.NotNull(box);
+            Assert.True(chip.IsOpen);
+            Assert.False(owner.IsActive);
             Click(TopLevel.GetTopLevel(box)!, box);
             Dispatcher.UIThread.RunJobs();
             Assert.True(owner.IsActive);
