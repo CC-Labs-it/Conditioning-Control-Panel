@@ -203,6 +203,7 @@ public sealed class PanicSurfacesTests
         "program-session",
         "browser-media",
         "deeper-player",
+        "mandatory-video",
         "scheduler",
         "engine",
         "bubble-host",
