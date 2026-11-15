@@ -192,7 +192,7 @@ public partial class LauncherWindow
         {
             Text = revealed ? entry.Title : Loc.Get("launcher_mystery_title"),
             FontSize = 19, FontWeight = FontWeights.SemiBold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = titleBrush, TextTrimming = TextTrimming.CharacterEllipsis,
             Height = LauncherGridLayout.TitleHeight, VerticalAlignment = VerticalAlignment.Center,
         });
@@ -317,7 +317,7 @@ public partial class LauncherWindow
         row.Children.Add(new TextBlock
         {
             Text = Loc.Get(textKey), FontSize = 11, FontWeight = FontWeights.Bold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
         });
         pill.Child = row;
@@ -381,7 +381,7 @@ public partial class LauncherWindow
         var mark = new TextBlock
         {
             Text = "?", FontSize = 96, FontWeight = FontWeights.Bold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = new SolidColorBrush(Lighten(hue, 0.55)), Opacity = 0.95,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 12),
