@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 /// Network bits ride the invites proxy (<see cref="InviteApi.DefaultBaseUrl"/>): a sandbox without a
 /// loopback url reads nothing and the card shows normal prices and no supporter line.
 /// </summary>
-public sealed class VaultGateDialog : Window
+public sealed partial class VaultGateDialog : Window
 {
     public const string PatreonUrl = "https://www.patreon.com/CodeBambi";
 
@@ -58,6 +58,7 @@ public sealed class VaultGateDialog : Window
     internal static VaultGateDialog? Open { get; private set; }
 
     private readonly StackPanel _body = new();
+    private readonly Border _card;
     private readonly ExclusiveFeature? _feature;
     private readonly int _tier;
     private readonly Action _signIn;
@@ -86,7 +87,7 @@ public sealed class VaultGateDialog : Window
         ShowInTaskbar = false;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = new Border
+        Content = _card = new Border
         {
             Background = CardBg, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1.5), BorderBrush = Pink,
             Margin = new Thickness(12), Padding = new Thickness(22, 20, 22, 18),
@@ -137,6 +138,7 @@ public sealed class VaultGateDialog : Window
 
     private void BuildOffer()
     {
+        FaceChrome(false);
         _body.Children.Clear();
         _priceSlots.Clear();
         var lab = _tier >= 2;
@@ -265,51 +267,6 @@ public sealed class VaultGateDialog : Window
             _proofSlot.Children.Add(Para(Loc.GetF("vaultgate_proof", floor), Text, 12.5, new Thickness(0, 10, 0, 0)));
     }
 
-    // ============================== compare ==============================
-
-    private void BuildCompare()
-    {
-        _body.Children.Clear();
-        _priceSlots.Clear();
-        _body.Children.Add(Heading(Loc.Get("vaultgate_compare_title")));
-        _body.Children.Add(BillingSwitch());
-        var grid = new Grid { Margin = new Thickness(0, 12, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,10,*") };
-        grid.Children.Add(TierColumn(1));
-        var lab = TierColumn(2);
-        Grid.SetColumn(lab, 2);
-        grid.Children.Add(lab);
-        _body.Children.Add(grid);
-        if (_yearly) _body.Children.Add(Para(Loc.Get("vaultgate_yearly_note"), Gold, 12, new Thickness(0, 10, 0, 0)));
-        var back = Link(Loc.Get("vaultgate_back"));
-        back.HorizontalAlignment = HorizontalAlignment.Left;
-        back.Margin = new Thickness(0, 12, 0, 0);
-        back.Click += (_, _) => { BuildOffer(); _ = FillAsyncBits(); };
-        _body.Children.Add(back);
-        _body.Children.Add(Fine(Loc.Get("vaultgate_fine")));
-    }
-
-    private Control TierColumn(int tier)
-    {
-        var lab = tier >= 2;
-        var tierName = Loc.Get(lab ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name");
-        var col = new StackPanel();
-        col.Children.Add(Chip(tierName, lab ? Gold : null));
-        col.Children.Add(new TextBlock
-        {
-            Text = Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), FontFamily = FriendsDrawer.Display,
-            FontWeight = FontWeight.SemiBold, FontSize = 16, Foreground = Brushes.White, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap,
-        });
-        col.Children.Add(Price(tier, compact: true, yearly: _yearly));
-        col.Children.Add(Perks(lab, 12));
-        var choose = SmallButton(Loc.GetF("vaultgate_choose", tierName));
-        choose.Margin = new Thickness(0, 12, 0, 0);
-        choose.HorizontalAlignment = HorizontalAlignment.Stretch;
-        choose.Click += (_, _) => { OpenPlan(tier, lab ? "compare-lab" : "compare-vault"); Close(); };
-        col.Children.Add(choose);
-        col.Children.Add(PayWays(tier, lab ? "compare-lab" : "compare-vault", stacked: true));
-        return new Border { Background = RowBg, BorderBrush = lab ? Gold : Edge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14), Child = col };
-    }
-
     // ============================== ending ==============================
 
     private void BuildEnding(DateTime grantUntilUtc)
@@ -350,17 +307,19 @@ public sealed class VaultGateDialog : Window
     /// <summary>Card and Bitcoin links under each Patreon button (WPF PayWays).</summary>
     private Control CardLink(bool lab, string from) => PayWays(lab ? 2 : 1, from, stacked: false);
 
-    private Control PayWays(int tier, string from, bool stacked)
+    private Control PayWays(int tier, string from, bool stacked, IBrush? ink = null)
     {
         Panel row = stacked ? new StackPanel() : new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
-        row.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_pay_with"), Foreground = Muted, FontSize = stacked ? 11.5 : 12,
+        row.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_pay_with"), Foreground = ink ?? Muted, FontSize = stacked ? 11.5 : 12,
             Margin = stacked ? new Thickness(0, 0, 0, 3) : new Thickness(0, 0, 4, 0) });
         var card = Link(Loc.Get("vaultgate_or_card"));
+        if (ink != null && card.Content is TextBlock cardText) cardText.Foreground = ink;
         if (card.Content is TextBlock text) text.TextAlignment = TextAlignment.Center;
         card.Click += (_, _) => { OpenCard(tier, from); Close(); };
         row.Children.Add(card);
         if (!stacked) row.Children.Add(new TextBlock { Text = "·", Foreground = Muted, FontSize = 12, Margin = new Thickness(6, 0, 6, 0) });
         var coin = Link(Loc.Get("vaultgate_or_crypto"));
+        if (ink != null && coin.Content is TextBlock coinText) coinText.Foreground = ink;
         ToolTip.SetTip(coin, Loc.Get("vaultgate_crypto_tip"));
         if (stacked) coin.Margin = new Thickness(0, 4, 0, 0);
         coin.Click += (_, _) => { OpenCrypto(tier, from); Close(); };
@@ -456,18 +415,19 @@ public sealed class VaultGateDialog : Window
         var price = VaultOffer.PriceFor(tier, _currency, _plans);
         var sale = VaultSale.AppliesTo(Sale, tier, DateTime.UtcNow, yearly) ? Sale : null;
         var line = new WrapPanel();
+        var ticketInk = slot.Tag as IBrush;
         line.Children.Add(new TextBlock
         {
             Text = VaultOffer.Money(sale != null ? VaultSale.FirstMonthCents(price.MonthlyCents, sale.Percent)
                 : yearly ? price.YearlyCents : price.MonthlyCents, _currency),
-            FontFamily = FriendsDrawer.Display, FontWeight = FontWeight.SemiBold, FontSize = compact ? 22 : 28, Foreground = Brushes.White,
+            FontFamily = FriendsDrawer.Display, FontWeight = FontWeight.SemiBold, FontSize = compact ? 22 : 28, Foreground = ticketInk ?? Brushes.White,
             Margin = new Thickness(0, 0, 8, 0),
         });
         if (sale != null)
             line.Children.Add(new TextBlock
             {
                 Text = VaultOffer.Money(price.MonthlyCents, _currency), TextDecorations = TextDecorations.Strikethrough, Tag = "struck",
-                FontFamily = FriendsDrawer.Display, Foreground = Dim, FontSize = compact ? 14 : 17, VerticalAlignment = VerticalAlignment.Bottom,
+                FontFamily = FriendsDrawer.Display, Foreground = ticketInk ?? Dim, FontSize = compact ? 14 : 17, VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 8, compact ? 3 : 4),
             });
         line.Children.Add(new TextBlock
@@ -475,7 +435,7 @@ public sealed class VaultGateDialog : Window
             Text = sale != null ? Loc.Get("vaultgate_sale_first")
                 : yearly ? Loc.GetF("vaultgate_price_year", VaultOffer.YearlyPerMonth(price))
                 : Loc.GetF("vaultgate_price", VaultOffer.PerDay(price)),
-            Foreground = Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5), TextWrapping = TextWrapping.Wrap,
+            Foreground = ticketInk ?? Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5), TextWrapping = TextWrapping.Wrap,
         });
         slot.Children.Add(line);
         if (sale == null)
@@ -501,28 +461,6 @@ public sealed class VaultGateDialog : Window
         if (off > 0)
             slot.Children.Add(Para(Loc.GetF("vaultgate_yearly_hint", VaultOffer.Money(price.YearlyCents, _currency), off),
                 Gold, 12, new Thickness(0, 2, 0, 6)));
-    }
-
-    /// <summary>Monthly / Yearly pills on the compare face. Rebuilds the face on a switch.</summary>
-    private Control BillingSwitch()
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
-        foreach (var yearly in new[] { false, true })
-        {
-            var on = yearly == _yearly;
-            var pill = Bare(new Border
-            {
-                CornerRadius = new CornerRadius(99), Padding = new Thickness(12, 5, 12, 5),
-                Background = on ? RowBg : Brushes.Transparent, BorderBrush = on ? Gold : Edge, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = yearly ? Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(_plans.Basic))
-                    : Loc.Get("vaultgate_billing_monthly"), Foreground = on ? Gold : Muted, FontSize = 12, FontWeight = FontWeight.SemiBold },
-            });
-            pill.Margin = new Thickness(0, 0, 6, 0);
-            var choice = yearly;
-            pill.Click += (_, _) => { if (_yearly != choice) { _yearly = choice; BuildCompare(); } };
-            row.Children.Add(pill);
-        }
-        return row;
     }
 
     private static Button PrimaryButton(string text)
