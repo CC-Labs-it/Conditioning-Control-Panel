@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.Media.Immutable;
 using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
@@ -28,17 +29,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private AskDraw? _ask;
         private EmiLineEngine? _askEngine;
         internal bool AskLive => _ask != null;
+        private DispatcherTimer? _askTimer;
+        private Action? _askTimerStep;
+        private int _askStage;
+        // The same one-shot timer is stepped by the headless tests.
+        internal int AskDelayMs => _askTimer == null ? 0 : (int)_askTimer.Interval.TotalMilliseconds;
+        internal void AdvanceAskTimer()
+        {
+            var step = _askTimerStep;
+            StopAskTimer();
+            step?.Invoke();
+        }
+        private void StartAskTimer(int ms, Action step)
+        {
+            StopAskTimer();
+            _askTimerStep = step;
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+            _askTimer = timer;
+            timer.Tick += (_, _) => { if (ReferenceEquals(_askTimer, timer)) AdvanceAskTimer(); };
+            timer.Start();
+        }
+        private void StopAskTimer()
+        {
+            _askTimer?.Stop();
+            _askTimer = null;
+            _askTimerStep = null;
+        }
 
         internal void ShowAsk(AskDraw ask, EmiLineEngine engine)
         {
             if (!IsVisible || PresentationActive) return;
+            StopAskTimer();
             CancelChain();
             CancelHold();
+            CloseGlass();
+            StopIdleBeats();
             EnsureBubble();
             _ask = ask;
             _askEngine = engine;
             engine.Ack(ask.Id);
-            DrawFace(ask.Face);
+            EmiDeskService.Instance.NoteEmiSpoke();
+            _askStage = 0;
+            DrawFace(EmiChains.RestFace);
+            ShowBubble(".");
+            StartAskTimer(420, AskCadenceStep);
+        }
+        private void AskCadenceStep()
+        {
+            var ask = _ask;
+            if (ask == null) return;
+            switch (++_askStage)
+            {
+                case 1: ShowBubble(".."); StartAskTimer(420, AskCadenceStep); return;
+                case 2: ShowBubble("..."); StartAskTimer(520, AskCadenceStep); return;
+            }
+            DrawFace(string.IsNullOrEmpty(ask.Face) ? "^_^" : ask.Face);
             ShowBubble(ask.Question);
             _askChips!.Children.Clear();
             for (int i = 0; i < 2; i++)
@@ -58,21 +103,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             var ask = _ask;
             var engine = _askEngine;
-            if (ask == null || engine == null) return;
+            if (ask == null || engine == null || _askStage < 3) return;
             ClearAsk();
             engine.NoteAskAnswered();
             EmiDeskService.Instance.Fire("askAnswered", new { answer = index == 0 ? "yes" : "no" });
             SpeakLine(index == 0 ? ask.Yes : ask.No, engine);
             EmiOffers.Run(index == 0 ? ask.Effect : ask.EffectNo, fromAsk: true);
         }
-        internal void CancelAsk()
+        internal void CancelAsk(bool visual = true)
         {
-            if (_ask == null) return;
-            _askEngine?.NoteAskIgnored();
+            if (_ask == null)
+            {
+                if (!visual) { StopAskTimer(); HideBubble(); }
+                return;
+            }
+            var engine = _askEngine;
             ClearAsk();
+            engine?.NoteAskIgnored();
+            EmiDeskService.Instance.Fire("askIgnored", new { });
+            if (!visual) return;
+            CancelChain();
+            CancelHold();
+            StopIdleBeats();
+            DrawFace("-_-");
+            StartAskTimer(1400, () =>
+            {
+                ShowBubble("...");
+                StartAskTimer(700, () =>
+                {
+                    HideBubble();
+                    DrawFace(EmiChains.RestFace);
+                    RestartIdleBeats();
+                });
+            });
         }
         private void ClearAsk()
         {
+            StopAskTimer();
             _ask = null;
             _askEngine = null;
             if (_askChips != null) { _askChips.Children.Clear(); _askChips.IsVisible = false; }
