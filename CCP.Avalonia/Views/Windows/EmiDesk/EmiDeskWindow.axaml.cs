@@ -315,6 +315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _bodyRoot.LayoutUpdated += (_, _) => ApplyInputRegion();
             _faceView.RenderTransform = _gazeShift;
 
+            WireGazePointer();
             _bodyRoot.PointerPressed += OnBodyPointerPressed;
             _bodyRoot.PointerMoved += OnBodyPointerMoved;
             _bodyRoot.PointerReleased += OnBodyPointerReleased;
