@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.IO;
 using System.Net;
@@ -10,6 +11,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -17,6 +19,12 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    private static void WaitGoonReplies(List<JObject> replies, int count)
+    {
+        for (var i = 0; i < 1000 && replies.Count < count; i++) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
+        Assert.Equal(count, replies.Count);
+    }
+
     [Fact]
     public void GoonInbox_UsesCarrierBeforeNavigation() => Run((_, _) =>
     {
@@ -30,6 +38,7 @@ public sealed partial class GameWindowTests
         Assert.Empty(replies);
         w.Web.OnNavigationCompleted(w.PageUrl);
         w.Web.OnWebMessage(frame);
+        WaitGoonReplies(replies, 1);
         Assert.Equal("goon-recv-result", (string?)Assert.Single(replies)["type"]);
         Assert.False((bool)replies[0]["ok"]!);
     });
@@ -53,10 +62,10 @@ public sealed partial class GameWindowTests
         Send(new { type = "goon-recv-begin", id, sha256 = sha, mime = "image/png", bytes = data.Length });
         Send(new { type = "goon-recv-chunk", id, seq = 0, b64 = Convert.ToBase64String(data[..20]) });
         Send(new { type = "goon-recv-chunk", id, seq = 1, b64 = Convert.ToBase64String(data[20..]) });
+        WaitGoonReplies(replies, 3);
         Assert.All(replies, x => Assert.True((bool)x["ok"]!));
         Send(new { type = "goon-recv-commit", id });
-        for (var i = 0; i < 500 && replies.Count < 4; i++) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
-        Assert.Equal(4, replies.Count);
+        WaitGoonReplies(replies, 4);
         Assert.True((bool)replies.Last()["ok"]!);
         Assert.Equal(data.Length, (long)replies.Last()["bytes"]!);
         var url = (string)replies.Last()["url"]!;
@@ -74,22 +83,26 @@ public sealed partial class GameWindowTests
             Assert.Null(server.ResolveFile("/__goon_recv__/../recv_index.json"));
         }
         Send(new { type = "goon-recv-commit", id });
-        for (var i = 0; i < 500 && replies.Count < 5; i++) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
+        WaitGoonReplies(replies, 5);
         Assert.Equal("unknown-job", (string?)replies.Last()["error"]);
         var other = Guid.NewGuid().ToString("N");
         Send(new { type = "goon-recv-begin", id = other, sha256 = sha, mime = "image/png", bytes = 64L * 1024 * 1024 + 1 });
+        WaitGoonReplies(replies, 6);
         Assert.Equal("too-big", (string?)replies.Last()["error"]);
         Send(new { type = "goon-recv-begin", id = other, sha256 = sha, mime = "image/png", bytes = data.Length });
         Send(new { type = "goon-recv-abort", id = other });
         Send(new { type = "goon-recv-chunk", id = other, seq = 0, b64 = "AA==" });
+        WaitGoonReplies(replies, 9);
         Assert.Equal("unknown-job", (string?)replies.Last()["error"]);
         Send(new { type = "goon-recv-drop", sha256 = sha });
+        WaitGoonReplies(replies, 10);
         Assert.True((bool)replies.Last()["ok"]!);
     });
 
     [Fact]
     public void GoonInbox_BootCloseAndPanicPurgeEvenDuringCommit() => Run((_, _) =>
     {
+        Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
         var store = TransferInboxStore.Instance;
         var data = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a3sAAAAASUVORK5CYII=");
         var sha = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
@@ -101,35 +114,77 @@ public sealed partial class GameWindowTests
         }
         void Commit(string id) { Prepare(id); Assert.True(store.Commit(id).Ok); Assert.True(File.Exists(file)); }
         var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
+        GameWindow? replacement = null;
         w.Load(GameWindow.Server()); w.Show();
         try
         {
             Commit("boot-" + Guid.NewGuid());
             w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
             Assert.False(File.Exists(file));
             Commit("close-" + Guid.NewGuid());
             w.Close();
+            Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
             Assert.False(File.Exists(file));
 
             var next = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
             next.Load(GameWindow.Server()); next.Show();
             using var entered = new ManualResetEventSlim();
             using var release = new ManualResetEventSlim();
-            GameWindow.GoonInboxBeforeCommit = () => { entered.Set(); release.Wait(); };
+            int commitStarts = 0;
+            GameWindow.GoonInboxBeforeCommit = () => { Interlocked.Increment(ref commitStarts); entered.Set(); release.Wait(); };
             var id = "race-" + Guid.NewGuid();
             Prepare(id);
             next.HandleMessage(Newtonsoft.Json.JsonConvert.SerializeObject(new { type = "goon-recv-commit", id }));
             Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
-            var unblock = Task.Run(() => { Thread.Sleep(150); release.Set(); });
-            GameWindow.CloseAllForPanic();
-            unblock.GetAwaiter().GetResult();
+            Assert.Null(store.Begin("queued-old", new string('0', 64), "image/png", data.Length));
+            Assert.Null(store.AppendChunk("queued-old", 0, Convert.ToBase64String(data)));
+            next.HandleMessage("{\"type\":\"goon-recv-commit\",\"id\":\"queued-old\"}");
+            var previous = PanicSurfaces.All;
+            bool laterSurfaceStopped = false;
+            PanicSurfaces.All = new[]
+            {
+                new PanicSurfaces.Surface("games", _ => GameWindow.CloseAllForPanic()),
+                new PanicSurfaces.Surface("later", _ => laterSurfaceStopped = true),
+            };
+            // A timeout releases the worker even with the old blocking close, so the fail-proof cannot hang.
+            var unblock = Task.Run(() => { if (!release.Wait(TimeSpan.FromSeconds(3))) release.Set(); });
+            try
+            {
+                var clock = Stopwatch.StartNew();
+                PanicSurfaces.StopAll("inbox panic test", aftermathArmed: true);
+                clock.Stop();
+                Assert.True(laterSurfaceStopped);
+                Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"Panic took {clock.Elapsed}");
+                Assert.False(GameWindow.GoonInboxIdle.IsCompleted);
+                // A new session may start before the old worker finishes. Its media must follow
+                // both purges in the queue and survive them.
+                replacement = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
+                replacement.Load(GameWindow.Server()); replacement.Show();
+                replacement.HandleMessage("{\"type\":\"ready\"}");
+                var newId = "new-" + Guid.NewGuid();
+                void Send(object frame) => replacement.HandleMessage(Newtonsoft.Json.JsonConvert.SerializeObject(frame));
+                Send(new { type = "goon-recv-begin", id = newId, sha256 = sha, mime = "image/png", bytes = data.Length });
+                Send(new { type = "goon-recv-chunk", id = newId, seq = 0, b64 = Convert.ToBase64String(data) });
+                Send(new { type = "goon-recv-commit", id = newId });
+            }
+            finally { release.Set(); unblock.GetAwaiter().GetResult(); PanicSurfaces.All = previous; }
+            Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
+            Assert.True(File.Exists(file));
+            Assert.Single(store.ListForManifest());
+            Assert.Equal(2, Volatile.Read(ref commitStarts)); // in-flight old and new, never the queued old commit
+            Assert.Equal("unknown-job", store.AppendChunk("queued-old", 1, "AA=="));
+            replacement!.Close();
+            Assert.True(GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10)));
             Assert.False(File.Exists(file));
             Assert.Empty(store.ListForManifest());
         }
         finally
         {
             GameWindow.GoonInboxBeforeCommit = null;
+            replacement?.Close();
             w.Close();
+            GameWindow.GoonInboxIdle.Wait(TimeSpan.FromSeconds(10));
             store.PurgeCommittedSafe("test cleanup");
         }
     });
