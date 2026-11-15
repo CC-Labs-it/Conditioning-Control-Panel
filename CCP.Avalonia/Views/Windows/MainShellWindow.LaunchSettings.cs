@@ -1,4 +1,5 @@
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -6,12 +7,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private bool _launchSettingsApplied;
 
-        internal void ApplyLaunchSettings()
+        internal static MainShellWindow CreateForLaunch(SessionManager? sessions = null)
         {
-            _launchSettingsApplied = true;
+            // General settings reads the registration during XAML construction.
             var enabled = CoreSettings.Current.RunOnStartup;
             if (SessionAutostart.IsRegistered() != enabled)
                 SessionAutostart.SetStartupState(enabled);
+            var shell = sessions is null ? new MainShellWindow() : new MainShellWindow(sessions);
+            shell._launchSettingsApplied = true;
+            return shell;
         }
 
         private void StartLaunchEngine()

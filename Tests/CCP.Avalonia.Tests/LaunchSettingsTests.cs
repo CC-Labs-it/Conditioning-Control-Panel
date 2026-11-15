@@ -29,10 +29,9 @@ public class LaunchSettingsTests
         settings.AutoStartEngine = enabled;
         settings.RunOnStartup = false;
         settings.AudioOnlySession = true;
-        var shell = new MainShellWindow();
+        var shell = MainShellWindow.CreateForLaunch();
         try
         {
-            shell.ApplyLaunchSettings();
             shell.Show();
             Assert.Equal(enabled, CoreEngine.IsRunning);
             Assert.Equal(enabled ? 1 : 0, starts);
@@ -61,12 +60,12 @@ public class LaunchSettingsTests
         WindowsStartupShortcut.DirectoryOverride = dir;
         var settings = CoreSettings.Current;
         var old = settings.RunOnStartup;
-        var shell = new MainShellWindow();
+        Assert.True(SessionAutostart.SetStartupState(!enabled));
+        settings.RunOnStartup = enabled;
+        var shell = MainShellWindow.CreateForLaunch();
         try
         {
-            Assert.True(SessionAutostart.SetStartupState(!enabled));
-            settings.RunOnStartup = enabled;
-            shell.ApplyLaunchSettings();
+            Assert.Equal(enabled, settings.RunOnStartup);
             Assert.Equal(enabled, SessionAutostart.IsRegistered());
         }
         finally
