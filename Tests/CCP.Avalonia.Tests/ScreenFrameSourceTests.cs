@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.ScreenCapture;
+using SkiaSharp;
+using Tmds.DBus.Protocol;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -34,5 +37,76 @@ public class ScreenFrameSourceTests
         var result = await source.CaptureAsync(CancellationToken.None);
         Assert.Equal(ScreenFrameStatus.Unavailable, result.Status);
         Assert.Empty(result.Frames);
+    }
+
+    // Portal tests share the session-wide PortalScreenFrames.Refused flag; xunit runs one class's tests in sequence.
+    private static Task<IReadOnlyList<CaptureMonitor>> TwoMonitors() => Task.FromResult<IReadOnlyList<CaptureMonitor>>(
+        [new("left", new Rectangle(0, 0, 2, 2), 1), new("right", new Rectangle(2, 1, 1, 1), 2)]);
+
+    private static string WritePng()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ccp-portal-{Guid.NewGuid():N}.png");
+        using var bmp = new SKBitmap(new SKImageInfo(3, 2, SKColorType.Bgra8888, SKAlphaType.Premul));
+        for (int x = 0; x < 3; x++) for (int y = 0; y < 2; y++) bmp.SetPixel(x, y, new SKColor((byte)(x * 100), (byte)(y * 100), 7));
+        using (var file = File.Create(path)) bmp.Encode(file, SKEncodedImageFormat.Png, 100);
+        return path;
+    }
+
+    private static Dictionary<string, VariantValue> Uri(string path) => new() { ["uri"] = new System.Uri(path).AbsoluteUri };
+
+    [Fact]
+    public async Task PortalAnswerIsSplitPerMonitorAndTheScreenshotDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var path = WritePng();
+        var source = new PortalScreenFrames(_ => Task.FromResult((0u, Uri(path))), TwoMonitors);
+        var result = await source.CaptureAsync(CancellationToken.None);
+        Assert.False(File.Exists(path));
+        Assert.Equal(ScreenFrameStatus.Available, result.Status);
+        Assert.Equal((2, 2), (result.Frames[0].Width, result.Frames[0].Height));
+        Assert.Equal((1, 1, new Rectangle(2, 1, 1, 1), 2.0), (result.Frames[1].Width, result.Frames[1].Height, result.Frames[1].ScreenBounds, result.Frames[1].Scale));
+        // Pixel (2,1) of the shot is B=7 G=100 R=200 in BGRA order.
+        Assert.Equal(new byte[] { 7, 100, 200, 255 }, result.Frames[1].Pixels.ToArray());
+        Assert.Null(PortalScreenFrames.FilePath(new() { ["uri"] = "https://example.com/x.png" }));
+        Assert.Null(PortalScreenFrames.FilePath(new()));
+    }
+
+    [Theory]
+    [InlineData(1u)]
+    [InlineData(2u)]
+    public async Task APortalRefusalIsUnavailableForTheSessionAndNeverAsksAgain(uint code)
+    {
+        PortalScreenFrames.Refused = false;
+        var calls = 0;
+        var source = new PortalScreenFrames(_ => { calls++; return Task.FromResult((code, new Dictionary<string, VariantValue>())); }, TwoMonitors);
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status);
+        Assert.True(PortalScreenFrames.Refused);
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await new PortalScreenFrames(_ => { calls++; return Task.FromResult((0u, new Dictionary<string, VariantValue>())); }, TwoMonitors)
+            .CaptureAsync(CancellationToken.None)).Status);
+        Assert.Equal(1, calls);
+        PortalScreenFrames.Refused = false;
+    }
+
+    [Fact]
+    public async Task APendingPortalCallTimesOutThenSkipsScansAndALateFileIsStillDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var calls = 0;
+        var source = new PortalScreenFrames(_ => { calls++; return answer.Task; }, TwoMonitors, TimeSpan.FromMilliseconds(50));
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status); // timed out
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status); // skipped
+        Assert.Equal(1, calls);
+        Assert.False(PortalScreenFrames.Refused);
+        var path = WritePng();
+        answer.SetResult((0u, Uri(path)));
+        for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
+        Assert.False(File.Exists(path));
+        var next = WritePng();
+        answer = new();
+        answer.SetResult((0u, Uri(next)));
+        var again = await source.CaptureAsync(CancellationToken.None);
+        Assert.Equal(2, calls);
+        Assert.Equal(ScreenFrameStatus.Available, again.Status); // the timeout cost one scan, not the session
     }
 }
