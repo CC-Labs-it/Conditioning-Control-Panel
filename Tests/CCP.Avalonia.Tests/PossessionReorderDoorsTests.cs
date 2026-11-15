@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Possession;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Localization;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -136,6 +137,98 @@ public class PossessionReorderDoorsTests
             Assert.Equal(NavSections.Studio, NavSections.SectionForTab(shell.CurrentTab));
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); shell.RequestExit(); shell.Close(); }
+    });
+
+    [Fact] public Task SettingsPairsAcrossParentsAndRetainsInput() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var main = new StackPanel { Name = "NavSectionRows", Width = 120 };
+        var home = new Button { Width = 120, Height = 40, Tag = "home", Content = "home" };
+        var busy = new Button { Width = 120, Height = 40, Tag = "busy", Content = "busy" };
+        main.Children.Add(home); main.Children.Add(busy);
+        var settings = new Button { Name = "DoorSettings", Tag = "appsettings", Width = 120, Height = 20, Content = "settings" };
+        var foot = new StackPanel { Width = 120, RenderTransformOrigin = RelativePoint.TopLeft, RenderTransform = new ScaleTransform(1, 2) };
+        foot.Children.Add(settings);
+        var canvas = new Canvas();
+        Canvas.SetTop(main, 10); Canvas.SetTop(foot, 180);
+        canvas.Children.Add(main); canvas.Children.Add(foot);
+        var window = new Window { Width = 180, Height = 260, Content = canvas };
+        var targets = new[] { home, busy, settings }.Select((d, i) => new PossessionTarget { Visual = d, Role = PossessionRole.TabHeader, Key = i.ToString() }).ToArray();
+        var host = new Host { PossessionWindow = window, Targets = targets };
+        string? name = null;
+        var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(7), ElapsedFraction = 0,
+            Remaining = TimeSpan.Zero, Name = (_, text) => name = text };
+        var effect = new ReorderDoorsEffect();
+        var loc = LocalizationManager.Instance; var language = loc.CurrentLanguage;
+        window.Show(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var busyLease = PossessionLease.Take(busy)!;
+        try
+        {
+            loc.SetLanguage("fr");
+            var homeAt = home.TranslatePoint(new Point(60, 20), window)!.Value;
+            var settingsAt = settings.TranslatePoint(new Point(60, 10), window)!.Value;
+            int pressed = 0; settings.Click += (_, _) => pressed++;
+            Assert.True(effect.CanApply(context, targets[2]));
+            var apply = effect.ApplyAsync(context, targets[2], CancellationToken.None);
+            host.Frames.Frame(TimeSpan.Zero); host.Frames.Frame(TimeSpan.FromMilliseconds(800));
+            await apply;
+            Assert.Equal("les portes", name);
+            Assert.Equal(settingsAt.Y, home.TranslatePoint(new Point(60, 20), window)!.Value.Y, 1);
+            Assert.Equal(homeAt.Y, settings.TranslatePoint(new Point(60, 10), window)!.Value.Y, 1);
+            window.MouseMove(homeAt); window.MouseDown(homeAt, MouseButton.Left); window.MouseUp(homeAt, MouseButton.Left);
+            Assert.Equal(1, pressed);
+            await effect.UndoAsync(TimeSpan.Zero);
+            Assert.False(PossessionLease.IsLeased(settings));
+            Assert.True(PossessionLease.IsLeased(busy));
+            Assert.Equal(settingsAt.Y, settings.TranslatePoint(new Point(60, 10), window)!.Value.Y, 1);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); busyLease.ReleaseImmediate(); loc.SetLanguage(language); window.Close(); }
+    });
+
+    [Fact] public Task ShellSettingsPairsWhenOtherDoorsAreLeased() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var frames = new FakeFrames();
+        var shell = new MainShellWindow { PossessionFramesOverride = frames };
+        var effect = new ReorderDoorsEffect();
+        var leases = new List<PossessionLease>();
+        shell.Show(); Dispatcher.UIThread.RunJobs(); shell.UpdateLayout();
+        try
+        {
+            var host = (IAvaloniaPossessionHost)shell;
+            var home = shell.Named<Button>("DoorHome")!;
+            var settings = shell.Named<Button>("DoorSettings")!;
+            foreach (var name in new[] { "DoorStudio", "DoorCompanion", "DoorPlay", "DoorSocial", "DoorYou", "DoorLibrary" })
+                leases.Add(PossessionLease.Take(shell.Named<Button>(name))!);
+            var target = host.Targets.Single(t => ReferenceEquals(t.Visual, settings));
+            var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+                Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(7), ElapsedFraction = 0,
+                Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+            var homeAt = home.TranslatePoint(new Point(home.Bounds.Width / 2, home.Bounds.Height / 2), shell)!.Value;
+            var settingsAt = settings.TranslatePoint(new Point(settings.Bounds.Width / 2, settings.Bounds.Height / 2), shell)!.Value;
+            int pressed = 0, homePressed = 0; settings.Click += (_, _) => pressed++; home.Click += (_, _) => homePressed++;
+            Assert.True(effect.CanApply(context, target));
+            var apply = effect.ApplyAsync(context, target, CancellationToken.None);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(800));
+            await apply;
+            Assert.True(PossessionLease.IsLeased(settings));
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
+            shell.MouseMove(settingsAt); shell.MouseDown(settingsAt, MouseButton.Left); shell.MouseUp(settingsAt, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, homePressed);
+            Assert.Equal(0, pressed);
+            shell.MouseMove(homeAt); shell.MouseDown(homeAt, MouseButton.Left); shell.MouseUp(homeAt, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, pressed);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); foreach (var lease in leases) lease.ReleaseImmediate(); shell.RequestExit(); shell.Close(); }
+    });
+
+    [Fact] public void DoorsNameHasTranslationsInEveryLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var names = new Dictionary<string, string> { ["en"] = "the doors", ["de"] = "die Türen", ["es"] = "las puertas", ["fr"] = "les portes", ["it"] = "le porte", ["ja"] = "その扉", ["ko"] = "그 문들", ["pt-BR"] = "as portas", ["ru"] = "двери", ["zh-CN"] = "这些门" };
+        var loc = LocalizationManager.Instance; var language = loc.CurrentLanguage;
+        try { foreach (var (code, expected) in names) { loc.SetLanguage(code); Assert.Equal(expected, Loc.Get("possession_target_doors")); } }
+        finally { loc.SetLanguage(language); }
     });
 
     [Fact] public void CatalogOffersReorderDoors() => Assert.Contains(PossessionAvaloniaHead.CreateEffects(), e => e.Id == "reorderdoors");

@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Possession;
 
 namespace ConditioningControlPanel.Avalonia.Possession;
@@ -30,23 +31,27 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(10);
     public override IReadOnlyList<PossessionRole> Roles => DoorRoles;
-    protected override string? NameOverride => "the doors";
+    protected override string? NameOverride => Loc.Get("possession_target_doors");
 
-    // Only the main rail: other TabHeader controls and the separately pinned Settings door
-    // do not share its coordinate space. Lockdown is never a candidate.
-    private static List<(Control Door, double Top)> Doors(PossessionContext ctx, PossessionTarget? selected = null)
+    // Main rail and pinned Settings share window coordinates, but not a layout parent.
+    private static List<(Control Door, double Top, double Scale)> Doors(PossessionContext ctx, PossessionTarget? selected = null)
     {
-        var result = new List<(Control, double)>();
+        var result = new List<(Control, double, double)>();
+        if (ctx.Host is not IAvaloniaPossessionHost { PossessionWindow: { } window }) return result;
         foreach (var target in ctx.Host.Targets)
         {
             if (target.Role != PossessionRole.TabHeader || target.Visual is not Control door || target.IsLive && !ReferenceEquals(target, selected)) continue;
-            if (door.GetVisualParent() is not StackPanel { Name: "NavSectionRows" } rail ||
+            if (door.GetVisualParent() is not StackPanel parent ||
+                (parent.Name != "NavSectionRows" && door.Name != "DoorSettings") ||
                 !door.IsEffectivelyVisible || !door.IsEffectivelyEnabled || !door.IsHitTestVisible ||
                 PossessionTree.IsOffLimits(door) || PossessionLease.IsLeased(door) ||
                 door.Tag is not string tag || tag.Equals("lockdown", StringComparison.OrdinalIgnoreCase) ||
-                door.Bounds.Width <= 0 || door.Bounds.Height <= 0 || door.TransformToVisual(rail) is not { } matrix) continue;
+                door.Bounds.Width <= 0 || door.Bounds.Height <= 0 || door.TransformToVisual(window) is not { } matrix ||
+                parent.TransformToVisual(window) is not { } parentMatrix ||
+                Math.Abs(parentMatrix.M12) > 0.0001 || Math.Abs(parentMatrix.M21) > 0.0001 ||
+                !double.IsFinite(parentMatrix.M22) || parentMatrix.M22 <= 0.0001) continue;
             var bounds = new Rect(door.Bounds.Size).TransformToAABB(matrix);
-            if (double.IsFinite(bounds.Y)) result.Add((door, bounds.Y));
+            if (double.IsFinite(bounds.Y)) result.Add((door, bounds.Y, parentMatrix.M22));
         }
         result.Sort((a, b) => a.Item2.CompareTo(b.Item2));
         return result;
@@ -69,7 +74,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             if (la == null) continue;
             var lb = PossessionLease.Take(b.Door);
             if (lb == null) { la.ReleaseImmediate(); continue; }
-            _movers.Add((la, gap)); _movers.Add((lb, -gap));
+            _movers.Add((la, gap / a.Scale)); _movers.Add((lb, -gap / b.Scale));
             foreach (var door in new[] { a.Door, b.Door })
                 if (!ReferenceEquals(door, target?.Visual))
                     try { _outlines.Add(ctx.Attribution.Possess(door)); } catch { }
