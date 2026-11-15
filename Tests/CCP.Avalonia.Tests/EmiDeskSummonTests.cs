@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -295,7 +296,12 @@ public sealed class EmiDeskSummonTests
             Assert.True(win.ChainLive);
             if (panic) win.StopChainForPanic(); else win.Say("x");
             Assert.Equal(1, completed);
-            win.PlayChain("shock");
+            // Keep the real shock chain's first frame on screen while the synthetic pointer is
+            // dispatched. Its normal 160 ms hold can expire on a busy CI runner during MouseDown.
+            var shock = EmiChains.Get("shock")!;
+            var heldShock = shock with { Seq = new[] { new EmiFrame("o_o", 30000) } };
+            win.PlayChain(heldShock);
+            int pets = EmiState.Current.PetsTotal;
             var body = (Control)typeof(EmiDeskWindow).GetField("_bodyRoot",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(win)!;
             var point = body.TranslatePoint(new Point(body.Bounds.Width / 2, body.Bounds.Height / 2), win)!.Value;
@@ -303,6 +309,8 @@ public sealed class EmiDeskSummonTests
             win.MouseUp(point, global::Avalonia.Input.MouseButton.Left);
             Assert.Equal("o_o", win.Face);
             Assert.True(win.ChainLive);
+            Assert.Same(heldShock, win.ChainPlayer.Current);
+            Assert.Equal(pets, EmiState.Current.PetsTotal);
             await Pump(2000);
             Assert.Equal(1, completed);
         }

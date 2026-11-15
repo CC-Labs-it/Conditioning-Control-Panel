@@ -1,5 +1,11 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
@@ -26,6 +32,14 @@ namespace CCP.Avalonia.Tests;
 /// (GlowNavTarget / NavGlow) and the window-title crumb. Driven from the shell constructor.</summary>
 public sealed class NavRailPaintTests
 {
+    private sealed class QuietTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public event EventHandler? Tick { add { } remove { } }
+        public void Start() { }
+        public void Stop() { }
+        public void OnUiThread(Action action) => action();
+    }
     private static void Run(MotionLevel motion, Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -38,7 +52,13 @@ public sealed class NavRailPaintTests
         s.NavLastTabBySection = null;
         s.MotionLevel = motion;
         NavBadges.ResetForTests();
-        var w = new MainShellWindow();
+        // Keep the real shared feed quiet while this fixture drives NavBadges directly.
+        var pending = new TaskCompletionSource<PbpLobbyReply>();
+        using var poll = new LobbyPoll(new QuietTimer(), () => true, () => Array.Empty<Friend>(),
+            () => pending.Task, () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)));
+        var w = new MainShellWindow { LobbyBadgeForTest = poll };
+        w.FindControl<AvailableSubjectsTabView>("AvailableSubjectsTab")!.SharedLobby = poll;
         try
         {
             w.Show();

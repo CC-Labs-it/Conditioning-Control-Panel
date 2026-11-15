@@ -8,8 +8,8 @@
 // wire-shell-nav-rail-b added the coin depth (BuildNavCoin, press travel + spring, tilt, specular)
 // in MainShellWindow.NavCoin.cs. Rail shadow is covered separately by PR #3337.
 // The guarded possession reroute press seam is here (#4419); it has no effect writer on this head yet
-// (WPF Services/Possession/Effects/MisrouteEffect.cs). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
-// Social pill stays down until the Lobby service lands.
+// (WPF Services/Possession/Effects/MisrouteEffect.cs). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d.
+// The Social badge follows the shared Lobby feed in MainShellWindow.LobbyBadge.cs.
 
 using System;
 using System.Collections.Generic;
@@ -95,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (_navRailReady) return;
+                HookLobbyBadge();
                 CacheNavSectionRows();
                 if (Named<Rectangle>("NavRailShadow") is { } shadow) shadow.Width = DepthLaw.RailShadowPx;
                 RegisterSectionShortcuts();
