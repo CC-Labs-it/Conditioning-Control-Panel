@@ -391,6 +391,39 @@ public static partial class LauncherHost
         return true;
     }
 
+    private static LauncherDoor? _pendingDoor;
+
+    /// <summary>Set by the launcher window while it exists: puts the right column on a door's page.</summary>
+    public static Action<LauncherDoor>? OpenDoorPage { get; set; }
+
+    /// <summary>The door a coming show should open on, read once by the window as it shows.</summary>
+    internal static LauncherDoor? TakePendingDoor()
+    {
+        var door = _pendingDoor;
+        _pendingDoor = null;
+        return door;
+    }
+
+    /// <summary>
+    /// The panel's way to a door: the launcher comes up (the panel tucks away exactly as its
+    /// "back to client" button does) already opened on <paramref name="door"/>'s page. False when
+    /// Lockdown refuses the trip; the panel then stays where it is.
+    /// </summary>
+    public static bool ShowDoor(LauncherDoor door)
+    {
+        if (IsShown)
+        {
+            Show();
+            try { OpenDoorPage?.Invoke(door); }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] opening door {Door} failed", door); }
+            return true;
+        }
+        _pendingDoor = door;
+        if (BackToLauncher()) return true;
+        _pendingDoor = null;
+        return false;
+    }
+
     // The game came up while the launcher was still on screen; the hide that follows can pass
     // activation to whatever is next in the z-order (often nothing of ours, the panel sits in the
     // tray). Hand the foreground back to the game once the launcher is gone.
