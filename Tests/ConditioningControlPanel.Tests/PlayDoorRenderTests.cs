@@ -119,10 +119,14 @@ public class PlayDoorRenderTests
             var page = new PlayTabView();
             Realize(page);
 
+            var checkedSlots = 0;
             foreach (var name in SlotNames)
             {
                 var slot = (FrameworkElement)page.FindName(name)!;
-                if (!slot.IsVisible) continue;   // the games zone is collapsed (declutter wave 2)
+                // The games zone is collapsed (declutter wave 2). IsVisible cannot say so here: the
+                // page has no window, so it is false everywhere and would skip every slot.
+                if (CollapsedOnPage(slot, page)) continue;
+                checkedSlots++;
 
                 var floor = name switch
                 {
@@ -135,7 +139,19 @@ public class PlayDoorRenderTests
                     $"{name} measured {slot.ActualWidth:F0}px, below its zone's {floor:F0}px floor "
                     + "— a column count changed and its card will crowd");
             }
+            Assert.True(checkedSlots > 0, "no slot was measured: the width floor asserted nothing");
         });
+    }
+
+    /// <summary>True when the element or any ancestor up to the page is not Visible.</summary>
+    private static bool CollapsedOnPage(DependencyObject element, DependencyObject page)
+    {
+        for (var node = element; node != null; node = VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node))
+        {
+            if (node is UIElement ui && ui.Visibility != Visibility.Visible) return true;
+            if (ReferenceEquals(node, page)) return false;
+        }
+        return false;
     }
 
     [Fact]
