@@ -104,6 +104,63 @@ public class PinkGentleFadeTests
         }
     });
 
+    [Fact]
+    public Task FadeCloseUsesTheConfiguredDeadline() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var settings = new ConditioningControlPanel.Services.SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var s = settings.Current;
+        var saved = (s.PinkFilterEnabled, s.GentleVisuals, s.GentleFadeSeconds, s.UnifiedOverlayHost);
+        var (skip, query, hold, schedule) = (PinkFilterOverlay.SkipPlatformChecksForTests, ScreenList.QueryOverride,
+            PinkFilterOverlay.PulseHold, PinkFilterOverlay.ScheduleFadeClose);
+        var host = new Window();
+        var now = TimeSpan.Zero;
+        var due = TimeSpan.MaxValue;
+        Action? scheduled = null;
+        void Advance(TimeSpan amount)
+        {
+            now += amount;
+            if (scheduled != null && now >= due) { var fire = scheduled; scheduled = null; fire(); }
+        }
+        try
+        {
+            PinkFilterOverlay.Stop();
+            PinkFilterOverlay.SkipPlatformChecksForTests = true;
+            PinkFilterOverlay.PulseHold = true;
+            PinkFilterOverlay.ScheduleFadeClose = (action, delay) =>
+            {
+                Assert.Null(scheduled);
+                due = now + delay;
+                scheduled = action;
+            };
+            ScreenList.QueryOverride = _ => new[] { Screen() };
+            (s.PinkFilterEnabled, s.GentleVisuals, s.GentleFadeSeconds, s.UnifiedOverlayHost) = (true, true, 0.5, false);
+            host.Show();
+            PinkFilterOverlay.Refresh(host);
+            var tint = Assert.Single(PinkFilterOverlay.Shown);
+            s.PinkFilterEnabled = false;
+            PinkFilterOverlay.Refresh(host);
+            Assert.NotNull(scheduled);
+            Assert.True(tint.IsVisible);
+            Advance(TimeSpan.FromMilliseconds(499));
+            Assert.True(tint.IsVisible);
+            PinkFilterOverlay.Refresh(host); // polling cannot rearm or shorten the close
+            Advance(TimeSpan.FromMilliseconds(1));
+            Assert.False(tint.IsVisible);
+            Assert.Null(scheduled);
+        }
+        finally
+        {
+            PinkFilterOverlay.Stop(); host.Close();
+            (s.PinkFilterEnabled, s.GentleVisuals, s.GentleFadeSeconds, s.UnifiedOverlayHost) = saved;
+            (PinkFilterOverlay.SkipPlatformChecksForTests, ScreenList.QueryOverride, PinkFilterOverlay.PulseHold,
+                PinkFilterOverlay.ScheduleFadeClose) = (skip, query, hold, schedule);
+            CoreSettings.ServiceProvider = provider;
+        }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

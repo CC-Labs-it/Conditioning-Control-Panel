@@ -112,6 +112,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static readonly List<TintOverlayWindow> Windows = new();
         private static readonly List<TintOverlayWindow> FadingWindows = new();
+        // Test seam for the fade close deadline; production schedules on the UI dispatcher.
+        internal static Action<Action, TimeSpan> ScheduleFadeClose = (action, delay) => DispatcherTimer.RunOnce(action, delay);
 
         private static bool GentleWindows => GentleVisuals.On && !CoreSettings.Current.UnifiedOverlayHost;
         private static Transitions FadeTransition(double seconds) => new()
@@ -262,7 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Opacity = opacity;
                 w.Transitions = FadeTransition(duration.TotalSeconds);
                 w.Opacity = 0;
-                DispatcherTimer.RunOnce(() => { FadingWindows.Remove(w); Close(w); }, duration);
+                ScheduleFadeClose(() => { FadingWindows.Remove(w); Close(w); }, duration);
             }
         }
 
