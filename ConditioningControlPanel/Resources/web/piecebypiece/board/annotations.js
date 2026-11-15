@@ -12,6 +12,12 @@
  * only a right press that lands on a square is taken, and the camera never
  * sees it.
  *
+ * A right release the board never hears (alt-tab or an overlay while held, let
+ * go outside the window) must not leave the arrow open: any other press, lost
+ * capture, a window blur or a move with the right button up ends it unplaced,
+ * and only a right release places one (ccp-bugs #1625: the next LEFT click
+ * used to close the old press and draw an arrow nobody meant).
+ *
  * This file has no three.js in it, so the smoke tests drive it with a plain
  * EventTarget. board/annotate.js draws the shapes and finds the square.
  * ==========================================================================*/
@@ -42,8 +48,10 @@ export function createAnnotations() {
  * The hand for it. `target` is the canvas, `squareAt(ev)` names the square under
  * a pointer event (or null off the board), `onChange(shapes, preview)` redraws,
  * `blocked()` says the board is busy (a menu, a picker) and the press is not ours.
+ * `win` hears the blur (the page's window; a plain EventTarget in the tests).
  */
-export function createAnnotator({ target, squareAt, onChange = () => {}, blocked = () => false }) {
+export function createAnnotator({ target, squareAt, onChange = () => {}, blocked = () => false,
+  win = globalThis.window }) {
   const shapes = createAnnotations();
   let press = null;      // { id, from, over } while a right press that started on a square is down
 
@@ -51,17 +59,29 @@ export function createAnnotator({ target, squareAt, onChange = () => {}, blocked
     ? { from: press.from, to: press.over, kind: 'arrow' }
     : press ? { from: press.from, to: press.from, kind: 'circle' } : null);
 
+  /** End an open press without placing anything (its release was lost). */
+  function drop() {
+    if (!press) return false;
+    const id = press.id;
+    press = null;
+    try { target.releasePointerCapture?.(id); } catch { /* never taken */ }
+    return true;
+  }
+
   function onDown(ev) {
     if (ev.pointerType === 'touch') return;
+    // A press of any button while one is still open means its release never
+    // reached us: that old press ends here and draws nothing.
+    const dropped = drop();
     if (ev.button === 0) {
       // A left click is a move, a pick-up or a click away: the sketch is wiped
       // and the click goes on to drag.js untouched.
-      if (shapes.clear()) redraw();
+      if (shapes.clear() || dropped) redraw();
       return;
     }
-    if (ev.button !== 2 || ev.shiftKey || press || blocked()) return;
+    if (ev.button !== 2 || ev.shiftKey || blocked()) { if (dropped) redraw(); return; }
     const from = squareAt(ev);
-    if (!from) return;                  // off the board: the camera orbits as before
+    if (!from) { if (dropped) redraw(); return; }   // off the board: the camera orbits as before
     press = { id: ev.pointerId, from, over: from };
     ev.stopImmediatePropagation();      // the camera's own listener never hears this press
     ev.preventDefault();
@@ -71,12 +91,16 @@ export function createAnnotator({ target, squareAt, onChange = () => {}, blocked
 
   function onMove(ev) {
     if (!press || ev.pointerId !== press.id) return;
+    // A mouse move that no longer holds the right button: it was let go unheard.
+    if (ev.pointerType === 'mouse' && typeof ev.buttons === 'number' && !(ev.buttons & 2)) {
+      drop(); redraw(); return;
+    }
     const over = squareAt(ev);
     if (over && over !== press.over) { press.over = over; redraw(); }
   }
 
   function onUp(ev) {
-    if (!press || ev.pointerId !== press.id) return;
+    if (!press || ev.pointerId !== press.id || ev.button !== 2) return;   // only a right release places it
     const end = squareAt(ev) || press.over;
     const from = press.from;
     press = null;
@@ -86,16 +110,20 @@ export function createAnnotator({ target, squareAt, onChange = () => {}, blocked
   }
 
   function onCancel(ev) {
-    if (!press || (ev && ev.pointerId !== press.id)) return;
-    press = null;
+    if (!press || (ev && ev.pointerId != null && ev.pointerId !== press.id)) return;
+    drop();
     redraw();
   }
+
+  const onBlur = () => { if (drop()) redraw(); };
 
   // Capture, so on the canvas itself this runs before the camera's bubble listener.
   target.addEventListener('pointerdown', onDown, { capture: true });
   target.addEventListener('pointermove', onMove);
   target.addEventListener('pointerup', onUp);
   target.addEventListener('pointercancel', onCancel);
+  target.addEventListener('lostpointercapture', onCancel);
+  win?.addEventListener?.('blur', onBlur);
 
   return {
     list: shapes.list,
@@ -108,6 +136,8 @@ export function createAnnotator({ target, squareAt, onChange = () => {}, blocked
       target.removeEventListener('pointermove', onMove);
       target.removeEventListener('pointerup', onUp);
       target.removeEventListener('pointercancel', onCancel);
+      target.removeEventListener('lostpointercapture', onCancel);
+      win?.removeEventListener?.('blur', onBlur);
     },
   };
 }
