@@ -349,6 +349,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Animate(gif.Frames, GifFrameDelay(gif.Delay, s.FlashGifSpeedMultiplier));
             }
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, MouseClickable(s, clickable))) return false;
+            ApplyLuminance(bmp, path, lifetime);
             timing?.Track(w.SetVoiceLifetime);
             _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
             if (notify) Displayed?.Invoke();
