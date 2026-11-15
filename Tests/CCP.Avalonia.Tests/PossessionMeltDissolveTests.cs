@@ -39,6 +39,86 @@ public sealed class PossessionMeltDissolveTests
         public void ReleaseAll() { }
     }
 
+    private sealed class DelayedAttribution : IPossessionAttribution
+    {
+        public readonly TaskCompletionSource Charged = new();
+        public int Charges;
+        public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400) { Charges++; return Charged.Task; }
+        public IDisposable Possess(object target) => new CancellationTokenSource();
+        public void EdgePulse(double strength) { }
+        public bool AnyPossessed => false;
+        public void ReleaseAll() { }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LeaveDuringChargeStillMelts(bool reenter) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var card = new Border { Width = 100, Height = 50, Background = Brushes.Red };
+        var window = new Window { Width = 300, Height = 200, Content = card };
+        var frames = new FakeFrames();
+        var attribution = new DelayedAttribution();
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        var target = new PossessionTarget { Visual = card, Role = PossessionRole.Card, Key = "card", DisplayName = "card" };
+        var context = new PossessionContext { Host = new Host(window, frames), Attribution = attribution,
+            Rung = PossessionRung.Melt, Intensity = PossessionIntensity.Gentle, Photosafe = false,
+            Rng = new Random(1), ElapsedFraction = 0, Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+        var effect = new MeltEffect();
+        try
+        {
+            await effect.ApplyAsync(context, target, CancellationToken.None);
+            window.MouseMove(new Point(150, 100)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, attribution.Charges);
+            window.MouseMove(new Point(5, 5)); Dispatcher.UIThread.RunJobs();
+            Assert.False(PossessionLease.IsLeased(card));
+            if (reenter)
+            {
+                window.MouseMove(new Point(150, 100)); Dispatcher.UIThread.RunJobs();
+                Assert.True(PossessionLease.IsLeased(card)); // WPF's second charge call returns immediately.
+                window.MouseMove(new Point(5, 5)); Dispatcher.UIThread.RunJobs();
+            }
+            attribution.Charged.SetResult();
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.True(PossessionLease.IsLeased(card));
+            frames.Frame(TimeSpan.FromMilliseconds(1000)); frames.Frame(TimeSpan.FromMilliseconds(1900));
+            var group = Assert.IsType<TransformGroup>(card.RenderTransform);
+            Assert.Equal(6, Assert.IsType<TranslateTransform>(group.Children.Last()).Y, 3);
+            Assert.Equal(2, Assert.IsType<BlurEffect>(card.Effect).Radius, 3);
+            Assert.Equal(1, attribution.Charges);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Fact]
+    public Task UndoDuringChargePreventsLateMelt() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var card = new Border { Width = 100, Height = 50, Background = Brushes.Red };
+        var window = new Window { Width = 300, Height = 200, Content = card };
+        var frames = new FakeFrames();
+        var attribution = new DelayedAttribution();
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        var target = new PossessionTarget { Visual = card, Role = PossessionRole.Card, Key = "card", DisplayName = "card" };
+        var context = new PossessionContext { Host = new Host(window, frames), Attribution = attribution,
+            Rung = PossessionRung.Melt, Intensity = PossessionIntensity.Gentle, Photosafe = false,
+            Rng = new Random(1), ElapsedFraction = 0, Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+        var effect = new MeltEffect();
+        try
+        {
+            await effect.ApplyAsync(context, target, CancellationToken.None);
+            window.MouseMove(new Point(150, 100)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, attribution.Charges);
+            await effect.UndoAsync(TimeSpan.Zero);
+            attribution.Charged.SetResult();
+            await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.False(PossessionLease.IsLeased(card));
+            Assert.Null(card.Effect);
+            Assert.Equal(0, frames.Count);
+            Assert.False(target.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

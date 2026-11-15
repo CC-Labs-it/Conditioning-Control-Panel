@@ -22,10 +22,9 @@ internal sealed class MeltEffect : PossessionEffectBase
     private BlurEffect? _blur;
     private IDisposable? _effectValue;
     private CancellationToken _token;
-    private Task? _charge;
     private TimeSpan? _start;
     private double _amount, _from, _to, _duration, _amplitude;
-    private bool _hover, _returning;
+    private bool _returning;
     private TaskCompletionSource? _returned;
     private int _generation;
 
@@ -53,13 +52,12 @@ internal sealed class MeltEffect : PossessionEffectBase
     {
         var element = _element;
         if (element == null) return;
-        _hover = true;
-        int generation = ++_generation;
+        int generation = _generation;
+        var token = _token;
         try
         {
-            _charge ??= ChargeAndPossessAsync(element, _token);
-            await _charge.ConfigureAwait(true);
-            if (_token.IsCancellationRequested || generation != _generation || !_hover || _element != element) return;
+            await ChargeAndPossessAsync(element, token).ConfigureAwait(true);
+            if (token.IsCancellationRequested || generation != _generation || _element != element) return;
             if (_lease == null)
             {
                 _lease = PossessionLease.Take(element);
@@ -79,8 +77,6 @@ internal sealed class MeltEffect : PossessionEffectBase
 
     private void Leave(object? sender, PointerEventArgs e)
     {
-        _hover = false;
-        ++_generation;
         if (_lease != null) AnimateTo(0, 600);
     }
 
@@ -125,7 +121,7 @@ internal sealed class MeltEffect : PossessionEffectBase
         _frames?.Unsubscribe(Frame);
         _effectValue?.Dispose(); _effectValue = null; _blur = null;
         _lease?.ReleaseImmediate(); _lease = null;
-        _element = null; _frames = null; _charge = null; _hover = false; _amount = 0; _start = null;
+        _element = null; _frames = null; _amount = 0; _start = null;
         _returning = false;
         _returned?.TrySetResult(); _returned = null;
     }
