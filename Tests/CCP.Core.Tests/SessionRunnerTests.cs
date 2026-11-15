@@ -554,12 +554,34 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
-    public void Ledger_IsPersistedBeforeTheSessionOverrides()
+    public void Ledger_IsPersistedBeforeTheSessionOverrides() => VerifyLedgerPersistence();
+
+    [Fact]
+    public void LedgerPersistenceDoesNotDeleteAnotherWritersTemporaryFile()
+    {
+        var otherFile = Path.Combine(CorePaths.UserData, "settings.json." + Guid.NewGuid().ToString("N") + ".tmp");
+        Directory.CreateDirectory(CorePaths.UserData);
+        using var held = new FileStream(otherFile, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        try
+        {
+            VerifyLedgerPersistence();
+            Assert.True(File.Exists(otherFile));
+        }
+        finally
+        {
+            held.Dispose();
+            if (File.Exists(otherFile)) File.Delete(otherFile);
+        }
+    }
+
+    private void VerifyLedgerPersistence()
     {
         var old = CoreSettings.ServiceProvider;
-        var svc = new SettingsService();
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-session-ledger-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        var svc = new SettingsService(path);
         CoreSettings.ServiceProvider = () => svc;
-        var path = Path.Combine(CorePaths.UserData, "settings.json");
         try
         {
             svc.Current.FlashFrequency = 20;
@@ -577,7 +599,7 @@ public sealed class SessionRunnerTests : IDisposable
             svc.SaveImmediate();
             svc.SealForReset();
             CoreSettings.ServiceProvider = old;
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            Directory.Delete(dir, recursive: true);
         }
     }
 
