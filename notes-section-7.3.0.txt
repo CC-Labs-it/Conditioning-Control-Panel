@@ -1,0 +1,45 @@
+BACK TO THE BASICS: 7.3.0
+
+most of you spend most of your time on the basics: flashes, bubbles, the spiral, subliminals. it has been almost a year since those arrived, so a V2 was owed. this one is their revamp.
+
+SUPER EFFECTS
+eight of the basics get a second version. look for the gold corner on a dashboard tile: click it and the V2 runs. each one has its own gold box of options in the feature's panel, and a "See V2" button in its help card shows what it does before you turn it on.
+
+- Deck (Flash Images): tap a flash and it flips. keep going and it cracks, then breaks, and a break knocks its neighbours.
+- Froth (Bubbles): bubbles merge, carry both pictures inside, and turn gold when ripe. pop one and the pop can chain. a merged bubble pays the sum of its parts.
+- Whirlpool (Spiral): a spiral under your cursor that grows while you rest and shrinks when you move. it drags pictures, bubbles and fog to the eye and pops them there.
+- Steam (Pink Filter): pink fog drifts in from the edges. wipe it with the mouse and it creeps back, with words in it.
+- Afterglow (Subliminals): words pop by the mouse and leave ghosts that build a line.
+- Scrawl (Bouncing Text): the bouncing word stamps itself on the screen and the stamps stay a while.
+- Lights Down (Mandatory Videos): the room dims around the video.
+- Undertow (Brain Drain): a clear lens in the blur that follows you and shrinks.
+
+they react to each other: the Whirlpool swallows flashes and bubbles, flings the bouncing word back out, and stirs the fog into a spiral.
+
+Super effects come with Basic and up. without a plan the corner and the options stay visible, with a lock. Gentle visuals calms them, and panic stops all of them.
+
+A QUIETER PANEL
+- the launcher is three doors now: the Panel, Games and Tools. each door opens its own page, and Continue takes you back to the last thing you played.
+- the games moved out of Play and into the Games door. Play keeps Eyes, Sessions and Deeper. Just Drop and the Deeper editor moved to the launcher too.
+- Studio: every row shows on, off or selected at a glance, each group shows how many are on, and the page wears one colour.
+- the tab strip is quieter: only the tab you are on is filled, and there is one help button instead of one per tab.
+- Start has its own bar, and the header banner shows on Home only.
+
+WE TAKE BITCOIN NOW
+for those of you who are extra careful about privacy, or just prefer it: you can pay with Bitcoin. it buys a pass for Basic or Prime, paid once, for the months you pick. it never renews and nothing gets billed again. you get a code, and Settings > Account > "Redeem a code" turns it on.
+
+the card that compares Basic and Prime is redone as two tickets, and the Bitcoin pass is linked right on it.
+
+NEW
+- Mandatory videos: "Fill the minimum with other videos", off by default. on, a clip shorter than the minimum is followed by other clips until the minimum has played.
+- Mod Creator: searching a skill by name shows its effect and flavour texts with it.
+- Piece by Piece: a castling hint on the board, and you can castle by dropping the king on the rook. the board stays readable under the spiral, and a Board motion switch calms it.
+
+FIXES
+- a local AI host typed without http:// no longer stops the panel from opening.
+- the companion no longer giggles about once a minute with the engine off.
+- cutting your own leash is never blocked by an open "Let go" question.
+- Deeper: fixed a crash while a library file was being read.
+- Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
+
+this is a pre-release. it carries everything in 7.2.4.

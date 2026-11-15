@@ -33,12 +33,30 @@ public class GameSurfacePanicTests : IDisposable
         // a game you cannot panic out of without quitting the app.
         var known = GameSurfaces.Ids();
 
-        foreach (var game in LauncherCatalogue.Games)
+        // Every catalogue entry, both doors. The one exemption: a Tools entry that only brings the
+        // panel up on one of its own tabs or modals opens no window of its own, so the panel's own
+        // stop takes it down. Those report IsActive false forever, pinned below.
+        foreach (var entry in LauncherCatalogue.All)
         {
-            Assert.True(known.Contains(game.Id, StringComparer.OrdinalIgnoreCase),
-                $"launcher game '{game.Id}' is not registered in GameSurfaces");
+            if (PanelOnlyTools.Contains(entry.Id))
+            {
+                Assert.Equal(LauncherDoor.Tools, entry.Door);
+                Assert.False(entry.Active, $"panel-only tool '{entry.Id}' reports a window of its own");
+                continue;
+            }
+            Assert.True(known.Contains(entry.Id, StringComparer.OrdinalIgnoreCase),
+                $"launcher entry '{entry.Id}' opens its own window but is not registered in GameSurfaces");
         }
     }
+
+    /// <summary>Tools that open a panel tab or the panel's Mod Manager, never a window of their own.</summary>
+    private static readonly HashSet<string> PanelOnlyTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "deepereditor", "sessioneditor", "modcreator",
+    };
+
+    [Fact]
+    public void TheLoomIsRegistered() => Assert.Contains("loom", GameSurfaces.Ids());
 
     [Fact]
     public void RacingThoughtsIsRegistered()

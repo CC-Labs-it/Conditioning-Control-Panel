@@ -132,6 +132,79 @@ public class HeaderBannerFxTests
         Assert.False(BannerFxRules.RepeatSparkles(ambientAllowed: false, supportOnScreen: true));
     }
 
+    // Declutter wave 1 (2026-11-15): the banner is Home's alone.
+    [Theory]
+    [InlineData("settings", true)]
+    [InlineData("Settings", true)]
+    [InlineData("progression", true)]   // permanent alias that lands on the dashboard
+    [InlineData(null, true)]            // nothing navigated yet = the dashboard the app lands on
+    [InlineData("", true)]
+    [InlineData("appsettings", false)]  // the Settings PAGE is not Home
+    [InlineData("studio", false)]
+    [InlineData("play", false)]
+    [InlineData("companion", false)]
+    [InlineData("quests", false)]
+    [InlineData("chaster", false)]
+    [InlineData("friends", false)]
+    public void TheBannerShowsOnHomeOnly(string? tab, bool shows)
+    {
+        Assert.Equal(shows, BannerFxRules.ShowsOnTab(tab));
+        Assert.Equal(shows, BannerFxRules.Shows(tab, announcementLive: false));
+    }
+
+    // Owner call 2026-11-15: a live server announcement shows on every page until it ends.
+    [Theory]
+    [InlineData("settings")]
+    [InlineData(null)]
+    [InlineData("appsettings")]
+    [InlineData("studio")]
+    [InlineData("play")]
+    [InlineData("companion")]
+    [InlineData("friends")]
+    public void ALiveAnnouncementShowsTheBannerOnEveryPage(string? tab) =>
+        Assert.True(BannerFxRules.Shows(tab, announcementLive: true));
+
+    [Fact]
+    public void ShowTabPaintsTheBannerRuleAndAHiddenBannerRunsNoLoop()
+    {
+        var nav = Source("MainWindow", "MainWindow.TabNavigation.cs");
+        Assert.Contains("ApplyHeaderBannerForTab(tab);", nav);
+        var fx = Source("MainWindow", "MainWindow.BannerFx.cs");
+        Assert.Contains("BannerFxRules.Shows(tabKey, _bannerAnnouncementLive) ? Visibility.Visible : Visibility.Collapsed", fx);
+        // An announcement starting or ending repaints the rule for the tab on screen.
+        Assert.Contains("_headerBannerTabKey = tabKey;", fx);
+        Assert.Contains("ApplyHeaderBannerForTab(_headerBannerTabKey);", fx);
+        var marquee = Source("MainWindow", "MainWindow.Marquee.cs");
+        Assert.Contains("SetBannerAnnouncementLive(true);", marquee);    // SetBannerAnnouncement
+        Assert.Contains("SetBannerAnnouncementLive(false);", marquee);   // the welcome line takes the slot back
+        Assert.Contains("public void ClearBannerAnnouncement() => UpdateBannerWelcomeMessage();", marquee);
+        Assert.Contains("HeaderBannerGlowHost.Visibility = vis;", fx);   // the halo never outlives the pill
+        Assert.Contains("ChromeAmbientAllowed && HeaderBannerHost?.Visibility == Visibility.Visible", fx);
+    }
+
+    // The banner is Home only, so a notice written straight into a beat would never be seen on
+    // the page that raised it. The language restart notice is raised on Settings: it goes through
+    // SetBannerAnnouncement, which makes the banner show off Home (Shows(tab, true)).
+    [Fact]
+    public void TheRestartNoticeIsAnAnnouncementSoItShowsOffHome()
+    {
+        var shell = Source("MainWindow", "MainWindow.AccountShell.cs");
+        Assert.Contains("SetBannerAnnouncement(Loc.Get(\"msg_restart_to_apply\"));", shell);
+        Assert.DoesNotContain("Text = Loc.Get(\"msg_restart_to_apply\")", shell);
+        Assert.True(BannerFxRules.Shows("appsettings", announcementLive: true));
+        Assert.False(BannerFxRules.Shows("appsettings", announcementLive: false));
+
+        // Only the Marquee partial writes beat text (welcome lines, the announcement, the pool).
+        var mainDir = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var writers = Directory.EnumerateFiles(mainDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
+                     && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"TxtBanner(Primary|Secondary|Web|Pool)\.Text\s*="))
+            .Select(Path.GetFileName)
+            .ToArray();
+        Assert.Equal(new[] { "MainWindow.Marquee.cs" }, writers);
+    }
+
     [Fact]
     public void TheSparkleRunBelongsToTheSupportBeatOnly()
     {

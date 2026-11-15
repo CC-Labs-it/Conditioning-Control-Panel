@@ -2754,6 +2754,7 @@ namespace ConditioningControlPanel
             Video = new VideoService();
             Services.Fyp.FypAssetManifest.DurationProvider = p => Video?.MetadataCache?.TryGetDuration(p);   // the manifest moved to Core
             Video.PreloadLibVLC(); // Pre-load LibVLC in background for faster first video
+            Services.Super.LightsDownService.Attach(Video); // Super add-on; idle until a video starts with it on
 
             // Same idea for the hybrid browser engine: building the shared WebView2 environment can
             // take seconds on a cold start, and a first video that pays for it spends that time

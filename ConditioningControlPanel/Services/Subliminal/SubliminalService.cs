@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Services
         // the shared per-monitor Skia host - no per-screen window OR host canvas churn at all.
         // Focus-steal still falls back to the classic windows (the host is NOACTIVATE).
         private Compositor.SubliminalLayer? _layer;
+        // SUPER AFTERGLOW: words popping near the mouse while the ambient scheduler runs (switch off = idle).
+        private Super.AfterglowDriver? _afterglow;
         private static bool UseCompositor => App.CompositorEnabled;
         // One ref-counted hold on the shared host while any card could be up — NOT per show
         // (host churn is exactly what solid mode exists to remove). Released on Stop/Dispose,
@@ -144,6 +146,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>Idempotent: take every subliminal surface off screen and stop the whisper.</summary>
         private void TearDownSurfaces()
         {
+            _afterglow?.Stop();
+            DispatcherHelper.RunOnUI(Compositor.AfterglowLineLayer.StopAll);
             _visibleOneShotGen = null;
 
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
@@ -264,6 +268,7 @@ namespace ConditioningControlPanel.Services
         internal void FlashPhrase(string text)
         {
             if (!_isRunning) _oneShotActive = true; // Allow display from remote control
+            Compositor.AfterglowLineLayer.WordShown(text);   // Super Afterglow: this word leaves a ghost
 
             // Check for linked audio
             string? audioPath = FindLinkedAudio(text);
@@ -1170,6 +1175,9 @@ namespace ConditioningControlPanel.Services
                 // metrics it measured at Flash time.
                 if (_layer?.IsActive == true)
                     rects.AddRange(_layer.GetActiveTextRectsPx());
+                // Super Afterglow words are drawn text too.
+                if (_afterglow?.Layer is { IsActive: true } glow)
+                    rects.AddRange(glow.GetActiveTextRectsPx());
             }
             catch (Exception ex)
             {
@@ -1420,6 +1428,7 @@ namespace ConditioningControlPanel.Services
             _disposed = true;
 
             Stop();
+            _afterglow?.Dispose();
             try { _layer?.Clear(); } catch { }
             // App shutdown: the only place the keep-alive windows actually close.
             foreach (var win in _screenWindows.Values)

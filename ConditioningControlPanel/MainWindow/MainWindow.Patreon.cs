@@ -416,25 +416,35 @@ namespace ConditioningControlPanel
             // attention gauge draws the same remaining-requests number as a meter. One difference
             // worth stating: the custom-provider error hint is kept, because "AI initializing"
             // forever is exactly the wrong thing to tell someone with a typo in their endpoint.
+            // #5197: this runs inside the MainWindow constructor. A broken AI setting must never stop
+            // the window from being built, so the whole status block is guarded.
             var engine = CompanionRoom?.EngineVm;
             if (engine != null)
             {
-                var provider = App.Settings?.Current?.CompanionPrompt?.AiProvider ?? Models.AiProviderType.Cloud;
-                if (App.Ai?.IsAvailable == true)
+                try
                 {
-                    var remaining = App.Ai.DailyRequestsRemaining;
-                    engine.SetStatus(remaining < 0
-                        ? Loc.Get("companion_engine_status_ready")
-                        : Loc.GetF("companion_engine_status_ready_fmt", remaining),
-                        healthy: true);
+                    var provider = App.Settings?.Current?.CompanionPrompt?.AiProvider ?? Models.AiProviderType.Cloud;
+                    if (App.Ai?.IsAvailable == true)
+                    {
+                        var remaining = App.Ai.DailyRequestsRemaining;
+                        engine.SetStatus(remaining < 0
+                            ? Loc.Get("companion_engine_status_ready")
+                            : Loc.GetF("companion_engine_status_ready_fmt", remaining),
+                            healthy: true);
+                    }
+                    else if (provider == Models.AiProviderType.OpenAiCompatible)
+                    {
+                        engine.SetStatus(Loc.Get("label_ai_custom_error"), healthy: false);
+                    }
+                    else
+                    {
+                        engine.SetStatus(Loc.Get("label_ai_initializing"), healthy: false);
+                    }
                 }
-                else if (provider == Models.AiProviderType.OpenAiCompatible)
+                catch (Exception ex)
                 {
-                    engine.SetStatus(Loc.Get("label_ai_custom_error"), healthy: false);
-                }
-                else
-                {
-                    engine.SetStatus(Loc.Get("label_ai_initializing"), healthy: false);
+                    App.Logger?.Warning(ex, "UpdatePatreonUI: AI status read failed");
+                    try { engine.SetStatus(Loc.Get("label_ai_initializing"), healthy: false); } catch { }
                 }
             }
 
@@ -1811,8 +1821,15 @@ namespace ConditioningControlPanel
             var engine = CompanionRoom?.EngineVm;
             if (engine == null) return;
 
-            var host = App.Settings?.Current?.CompanionPrompt?.AiOllamaHost;
-            if (!string.IsNullOrWhiteSpace(host)) engine.SetStatus(Loc.Get("label_status_testing"), healthy: false);
+            // Same host rule the local provider uses (#5197), so "127.0.0.1:11434" tests as it runs.
+            var saved = App.Settings?.Current?.CompanionPrompt?.AiOllamaHost;
+            if (!ConditioningControlPanel.Services.AIService.LocalAiHost.TryNormalize(saved, out var host))
+            {
+                engine.SetStatus(Loc.Get("label_status_failed"), healthy: false);
+                return;
+            }
+
+            engine.SetStatus(Loc.Get("label_status_testing"), healthy: false);
             var (text, healthy) = await Views.Controls.Companion.EngineRoomProviders.TestOllamaAsync(host);
             engine.SetStatus(text, healthy);
         }

@@ -119,10 +119,14 @@ public class PlayDoorRenderTests
             var page = new PlayTabView();
             Realize(page);
 
+            var checkedSlots = 0;
             foreach (var name in SlotNames)
             {
                 var slot = (FrameworkElement)page.FindName(name)!;
-                if (slot.Visibility != Visibility.Visible) continue;
+                // The games zone is collapsed (declutter wave 2). IsVisible cannot say so here: the
+                // page has no window, so it is false everywhere and would skip every slot.
+                if (CollapsedOnPage(slot, page)) continue;
+                checkedSlots++;
 
                 var floor = name switch
                 {
@@ -135,7 +139,19 @@ public class PlayDoorRenderTests
                     $"{name} measured {slot.ActualWidth:F0}px, below its zone's {floor:F0}px floor "
                     + "— a column count changed and its card will crowd");
             }
+            Assert.True(checkedSlots > 0, "no slot was measured: the width floor asserted nothing");
         });
+    }
+
+    /// <summary>True when the element or any ancestor up to the page is not Visible.</summary>
+    private static bool CollapsedOnPage(DependencyObject element, DependencyObject page)
+    {
+        for (var node = element; node != null; node = VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node))
+        {
+            if (node is UIElement ui && ui.Visibility != Visibility.Visible) return true;
+            if (ReferenceEquals(node, page)) return false;
+        }
+        return false;
     }
 
     [Fact]
@@ -459,7 +475,7 @@ public class PlayDoorRenderTests
         // entrance instead of its neighbours' horizontal slide.
         // Nav rework 2026-10-06: NavOrder is derived from NavSections; Play's first pill is 12.
         // Polish 12 (2026-10-07): Home gained its Premium pill, so Play's first pill is 13. 7.1.2: Companion > AI makes it 14.
-        Assert.Equal("play", ChromeFxNav.NavOrder[14]);
+        Assert.Equal("playeyes", ChromeFxNav.NavOrder[14]);   // declutter wave 2: Games left, Eyes is first
         Assert.DoesNotContain("lab", ChromeFxNav.NavOrder);
         Assert.Equal(14, ChromeFxNav.IndexOf("lab"));
         Assert.Equal(14, ChromeFxNav.IndexOf("play"));
@@ -505,14 +521,14 @@ public class PlayDoorRenderTests
         // The palette navigates by tab key. A row still pointing at "lab" would work (the alias
         // catches it) but names a view that no longer exists; more importantly the wall's cards
         // have to be findable by name, because the room they used to live in is gone.
-        var rows = SettingsPaletteIndex.All.Where(e => e.TabKey == "play").ToList();
+        var rows = SettingsPaletteIndex.All.Where(e => e.TabKey == "playeyes").ToList();   // declutter wave 2: "play" is the launcher Games door
         Assert.NotEmpty(rows);
         Assert.DoesNotContain(SettingsPaletteIndex.All, e => e.TabKey == "lab");
 
         // "rabbit hole" left this list with the games (2026-09-18): the palette must not send
         // a search for a game to a wall that no longer has it.
         foreach (var term in new[] { "lab", "gaze", "blink", "lockdown", "loom" })
-            Assert.True(SettingsPaletteIndex.Search(term).Any(e => e.TabKey == "play"),
+            Assert.True(SettingsPaletteIndex.Search(term).Any(e => e.TabKey == "playeyes"),
                 $"searching the palette for \"{term}\" no longer finds the Play door");
     }
 
