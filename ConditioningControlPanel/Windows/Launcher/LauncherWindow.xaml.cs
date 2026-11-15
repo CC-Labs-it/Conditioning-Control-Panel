@@ -106,6 +106,7 @@ public partial class LauncherWindow : Window
             FadeIn();
             // The panel asked for a door (LauncherHost.ShowDoor): open on its page, no swap.
             if (LauncherHost.TakePendingDoor() is { } asked) _door = asked;
+            _doorsEnter = true;
             BuildTiles();
             RefreshAccount();
             RefreshMod();

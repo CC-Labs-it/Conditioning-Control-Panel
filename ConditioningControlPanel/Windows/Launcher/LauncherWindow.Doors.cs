@@ -46,8 +46,10 @@ public partial class LauncherWindow
     private static Color DoorHue(LauncherDoor door) =>
         door == LauncherDoor.Tools ? Color.FromRgb(0x55, 0xB7, 0xFF) : Color.FromRgb(0xFF, 0x69, 0xB4);
 
-    /// <summary>Puts the column in the state <see cref="_door"/> names, no motion. Called after
-    /// every <see cref="BuildTiles"/>, so a mod switch or a sign-in repaints the doors too.</summary>
+    /// <summary>Puts the column in the state <see cref="_door"/> names. Called after every
+    /// <see cref="BuildTiles"/>, so a mod switch or a sign-in repaints the doors too; only a
+    /// rebuild flagged by <see cref="_doorsEnter"/> (the launcher shown, or Back) plays the
+    /// entrance, a data refresh repaints the doors at rest.</summary>
     private void ApplyDoorView()
     {
         try
@@ -68,9 +70,14 @@ public partial class LauncherWindow
                 GamesEyebrow.Foreground = new SolidColorBrush(Lighten(DoorHue(door), 0.55));
                 DropDoorCards();
                 MarkDoorSeen(door);
+                _doorsEnter = false;
             }
             else
             {
+                bool enter = _doorsEnter;
+                _doorsEnter = false;
+                // A refresh under a focused door keeps the focus on that door.
+                var focused = enter ? null : _doorCards.FirstOrDefault(v => v.Card.IsKeyboardFocusWithin)?.Card.Tag;
                 DropDoorCards();
                 foreach (var which in new[] { LauncherDoor.Games, LauncherDoor.Tools })
                 {
@@ -78,7 +85,13 @@ public partial class LauncherWindow
                     _doorCards.Add(view);
                     DoorsHost.Children.Add(view.Root);
                 }
-                PlayDoorsIn(_doorCameFrom);
+                if (enter) PlayDoorsIn(_doorCameFrom);
+                else
+                {
+                    foreach (var view in _doorCards) view.Rest();
+                    Dispatcher.BeginInvoke(DispatcherPriority.Background, StartDoorReels);
+                    if (focused is LauncherDoor d) FocusDoorLater(d);
+                }
                 _doorCameFrom = null;
             }
         }
@@ -113,6 +126,10 @@ public partial class LauncherWindow
     /// <summary>Set by Back for one rebuild: the door that was open comes down from forward.</summary>
     private LauncherDoor? _doorCameFrom;
 
+    /// <summary>Set when the doors view is actually shown (the launcher opens, or Back): the next
+    /// <see cref="ApplyDoorView"/> plays the entrance. Any other rebuild leaves it false.</summary>
+    private bool _doorsEnter;
+
     /// <summary>OUT: a door pushes forward while the other falls away (or the page fades). Then
     /// the column is rebuilt for <paramref name="to"/> and comes IN: the tiles on their usual
     /// stagger, the doors on their own settle (<see cref="PlayDoorsIn"/>).</summary>
@@ -122,17 +139,25 @@ public partial class LauncherWindow
         bool fromDoors = _door == null;
         FrameworkElement leaving = fromDoors ? DoorsHost : GamesScroller;
         var cameFrom = _door;
+        // Focus follows the swap only when the player is driving the launcher from the keyboard
+        // or was already focused in this column; never pulled from another window.
+        bool carryFocus = IsActive && (GamesColumn.IsKeyboardFocusWithin
+                                       || InputManager.Current.MostRecentInputDevice is KeyboardDevice);
         void Arrive()
         {
             _doorSwapping = false;
             ClearFade(leaving);
             _door = to;
             _doorCameFrom = to == null ? cameFrom : null;
+            if (to == null) _doorsEnter = true;
             BuildTiles();
             if (MotionFx.AllowTransitions)
                 foreach (var t in _tiles) t.Opacity = 0;
             MotionFx.StaggerIn(_tiles);
             ScheduleTileSettle("door");
+            if (!carryFocus) return;
+            if (to != null) FocusLater(DoorBack);
+            else if (cameFrom is { } was) FocusDoorLater(was);
         }
 
         if (to != null && fromDoors) LauncherSfx.Edge();
@@ -140,6 +165,23 @@ public partial class LauncherWindow
         _doorSwapping = true;
         if (to is { } door && fromDoors && _doorCards.Count > 0) PlayDoorOpen(door, Arrive);
         else FadeElement(leaving, leaving.Opacity, 0, Arrive);
+    }
+
+    /// <summary>Focus the door card for <paramref name="door"/> once the rebuilt column is laid out.</summary>
+    private void FocusDoorLater(LauncherDoor door)
+    {
+        var view = _doorCards.FirstOrDefault(v => Equals(v.Card.Tag, door));
+        if (view != null) FocusLater(view.Card);
+    }
+
+    /// <summary>Input priority runs after the layout pass, so the freshly built element can take focus.</summary>
+    private void FocusLater(IInputElement target)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            try { if (IsVisible) Keyboard.Focus(target); }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] door focus failed"); }
+        }));
     }
 
     private static void ClearFade(UIElement element)
