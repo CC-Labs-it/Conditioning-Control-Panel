@@ -14,6 +14,7 @@ Views/Overlays/GazeRefineOverlay.cs :: new Path { Stroke = Brushes.HotPink :: pa
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
 # --- content (c).2: user data examples ---
+Views/Windows/MainShellWindow.RemoteControl.cs :: Id = "remote_session", Name = "Remote Session", Icon = "🎮" :: WPF RemoteControlService.cs:1548 session metadata shown with its name and sent in remote status (content (c).2)
 Views/Windows/SessionCompleteWindow.axaml.cs :: SessionIcon = "🌀" :: render-sample SessionLog.SessionIcon, session data shown in a sentence (content (c).2, decision 4)
 Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a user-chosen preset icon inside prose (content (c).2)
 Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)

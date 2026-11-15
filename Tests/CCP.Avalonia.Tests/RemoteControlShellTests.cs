@@ -398,6 +398,7 @@ public sealed class RemoteControlShellTests
             else
             {
                 Assert.Equal("Remote Session", runner.CurrentSession!.Name);
+                Assert.Equal("🎮", runner.CurrentSession.Icon);
                 Assert.Equal(30, runner.CurrentSession.DurationMinutes);
                 Assert.Equal(17, runner.CurrentSession.Settings.FlashPerHour);
                 Assert.Equal(4, runner.CurrentSession.Settings.SubliminalPerMin);
