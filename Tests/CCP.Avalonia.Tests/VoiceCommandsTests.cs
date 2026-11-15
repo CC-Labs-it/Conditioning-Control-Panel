@@ -365,12 +365,80 @@ public sealed class VoiceCommandsTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
-            beforeShow?.Invoke();
-            var shell = new MainShellWindow();
-            shell.Show();
-            try { await body(shell); }
-            finally { shell.RequestExit(); }
+            var settings = CoreSettings.Current;
+            var saved = (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                settings.PanicKeyEnabled, settings.AutonomyModeEnabled, settings.AutonomyConsentGiven);
+            var premium = CoreEntitlement.HasPremiumProvider;
+            MainShellWindow? shell = null;
+            try
+            {
+                beforeShow?.Invoke();
+                shell = new MainShellWindow();
+                shell.Show();
+                await body(shell);
+            }
+            finally
+            {
+                try { shell?.RequestExit(); }
+                finally
+                {
+                    (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                        settings.PanicKeyEnabled, settings.AutonomyModeEnabled, settings.AutonomyConsentGiven) = saved;
+                    CoreEntitlement.HasPremiumProvider = premium;
+                }
+            }
         });
+
+    [Theory]
+    [InlineData(0)] // success
+    [InlineData(1)] // setup fails after changing state
+    [InlineData(2)] // body fails after opening the shell
+    public Task RunUiRestoresSettingsAndEntitlementOnEveryExit(int failure) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        AmbientBeatLoopsTests.Setup();
+        var settings = CoreSettings.Current;
+        var previous = (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+            settings.PanicKeyEnabled, settings.AutonomyModeEnabled, settings.AutonomyConsentGiven);
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        Func<bool> originalPremium = () => false;
+        try
+        {
+            (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                settings.PanicKeyEnabled, settings.AutonomyModeEnabled, settings.AutonomyConsentGiven) = (true, true, false, true, true);
+            CoreEntitlement.HasPremiumProvider = originalPremium;
+            Task Exercise() => RunUi(_ =>
+            {
+                settings.PanicKeyEnabled = true;
+                settings.AutonomyModeEnabled = false;
+                settings.AutonomyConsentGiven = false;
+                if (failure == 2) throw new InvalidOperationException("body");
+                return Task.CompletedTask;
+            }, () =>
+            {
+                settings.SpeechWakeWordEnabled = false;
+                settings.SpeechPushToTalkEnabled = false;
+                settings.PanicKeyEnabled = true;
+                settings.AutonomyModeEnabled = false;
+                settings.AutonomyConsentGiven = false;
+                CoreEntitlement.HasPremiumProvider = () => true;
+                if (failure == 1) throw new InvalidOperationException("setup");
+            });
+            if (failure == 0) await Exercise();
+            else await Assert.ThrowsAsync<InvalidOperationException>(Exercise);
+            Assert.True(settings.SpeechWakeWordEnabled);
+            Assert.True(settings.SpeechPushToTalkEnabled);
+            Assert.False(settings.PanicKeyEnabled);
+            Assert.True(settings.AutonomyModeEnabled);
+            Assert.True(settings.AutonomyConsentGiven);
+            Assert.Same(originalPremium, CoreEntitlement.HasPremiumProvider);
+        }
+        finally
+        {
+            (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled,
+                settings.PanicKeyEnabled, settings.AutonomyModeEnabled, settings.AutonomyConsentGiven) = previous;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+        }
+    });
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
 
