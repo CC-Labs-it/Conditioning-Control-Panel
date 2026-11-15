@@ -577,6 +577,7 @@ namespace ConditioningControlPanel.Services
             if (CoreSubliminal.IsRunning) list.Add("subliminal_loop");
             if (LockCardScheduler.Instance.IsRunning) list.Add("lock_card");
             if (CoreMindWipe.IsRunning) list.Add("mind_wipe");
+            if (RemoteCommands.Wallpaper?.IsActive == true) list.Add("wallpaper");
             return list;
         }
 
