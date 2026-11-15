@@ -26,7 +26,8 @@ internal sealed partial class IntakeHostWindow
             Dispatcher.UIThread.Post(() =>
             {
                 if (_closed || !IsVisible || (shell.IsVisible && shell.WindowState != WindowState.Minimized)) return;
-                NativeWindowOwner.RepairVisibility(this);
+                if (NativeWindowOwner.RepairVisibility(this))
+                    Web.RepairWindowsRenderVisibility();
             }, DispatcherPriority.Background);
         }
         void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
