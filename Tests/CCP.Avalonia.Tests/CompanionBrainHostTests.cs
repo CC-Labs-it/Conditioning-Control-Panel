@@ -477,8 +477,6 @@ public sealed class CompanionBrainHostTests
             shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
             lifetime.MainWindow = shell;
             shell.Show();
-            AvApp.Mantra.EndSession();
-            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             AvApp.SeedCompanionTubeSeams();
             var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
             var web = tab.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("BrowserWebHost")!;
