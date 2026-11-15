@@ -287,6 +287,27 @@ namespace CCP.Avalonia.Tests
             }
         }
 
+        [Fact]
+        public void ImmediateShowsDoNotLoseSuccessiveHandoffs()
+        {
+            var suffix = "_test_" + Guid.NewGuid().ToString("N");
+            var received = new System.Collections.Concurrent.ConcurrentBag<string?>();
+            using var primary = SingleInstance.Claim(suffix, p => { received.Add(p); return Task.CompletedTask; });
+            primary!.EndStartupPhase();
+            var payloads = Enumerable.Range(0, 12).Select(i => "handoff-" + i).ToArray();
+            var results = new SingleInstance?[payloads.Length];
+            var threads = payloads.Select((p, i) => new Thread(() =>
+            {
+                using var result = SingleInstance.Claim(suffix, _ => Task.CompletedTask, p);
+                results[i] = result;
+            })).ToArray();
+            foreach (var t in threads) t.Start();
+            foreach (var t in threads) Assert.True(t.Join(TimeSpan.FromSeconds(60)));
+            Assert.All(results, Assert.Null);
+            Assert.Equal(payloads.OrderBy(p => p, StringComparer.Ordinal),
+                received.OrderBy(p => p, StringComparer.Ordinal));
+        }
+
         /// <summary>During startup the listener acks first; each request still reaches the handoff queue before
         /// the next one is accepted, so a slow hand-over cannot let a later launch overtake it.</summary>
         [Fact]
