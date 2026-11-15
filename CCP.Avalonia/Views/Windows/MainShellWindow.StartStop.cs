@@ -86,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CoreEngine.Start();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
+                Platform.OverlayZOrder.Start();
                 SpiralOverlay.Refresh(this);
                 BrainDrainOverlay.Start(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
@@ -105,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            Platform.OverlayZOrder.Stop();
             Platform.ProgramEngineBridge.RaiseSessionChanged();   // any session end repaints the Programs row
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
