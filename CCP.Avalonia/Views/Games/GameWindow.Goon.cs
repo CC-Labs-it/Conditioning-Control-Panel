@@ -29,6 +29,7 @@ internal sealed partial class GameWindow
         switch ((string?)message["type"])
         {
             case "ready":
+                BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
                 break; // the shared ready handler owns init until the Goon init slice lands

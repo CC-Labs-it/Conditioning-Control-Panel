@@ -9,11 +9,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 
 internal sealed partial class GameWindow
 {
+    // The store is shared across windows. A purge must wait for a worker already hashing, and a
+    // worker queued before close must not commit after the purge.
+    private static readonly object GoonInboxGate = new();
+    private bool _goonInboxClosed;
+    private int _goonInboxGeneration;
+    internal static Action? GoonInboxBeforeCommit; // test seam for the close/commit race
+
+    private void BootGoonInbox()
+    {
+        lock (GoonInboxGate)
+        {
+            _goonInboxGeneration++;
+            if (!_goonInboxClosed) TransferInboxStore.Instance.PurgeCommittedSafe("page boot");
+        }
+    }
+
+    private void CloseGoonInbox()
+    {
+        lock (GoonInboxGate)
+        {
+            _goonInboxClosed = true;
+            _goonInboxGeneration++;
+            TransferInboxStore.Instance.PurgeCommittedSafe("window closed");
+        }
+    }
+
     // WPF GoonHostService.cs:868-963: the page's disk-backed received-artifact protocol.
     private bool HandleGoonInbox(JObject o)
     {
         var type = (string?)o["type"] ?? "";
         if (type is not ("goon-recv-begin" or "goon-recv-chunk" or "goon-recv-commit" or "goon-recv-abort" or "goon-recv-drop")) return false;
+        if (_closing) return true;
         var id = (string?)o["id"] ?? "";
         var store = TransferInboxStore.Instance;
         void Reply(bool ok, string? url = null, long bytes = 0, string? error = null) =>
@@ -31,14 +58,21 @@ internal sealed partial class GameWindow
                     Reply(chunk == null, error: chunk);
                     break;
                 case "goon-recv-commit":
+                    var generation = _goonInboxGeneration;
                     _ = Task.Run(() =>
                     {
                         try
                         {
-                            var r = store.Commit(id);
-                            long bytes = 0;
-                            if (r.Ok) { try { bytes = new FileInfo(Path.Combine(store.RecvDir, r.Sha + "." + r.Ext)).Length; } catch { } }
-                            Dispatcher.UIThread.Post(() => { if (!_closing) Reply(r.Ok, r.Url, bytes, r.Error); });
+                            lock (GoonInboxGate)
+                            {
+                                if (_goonInboxClosed || generation != _goonInboxGeneration) return;
+                                GoonInboxBeforeCommit?.Invoke();
+                                var r = store.Commit(id);
+                                long bytes = 0;
+                                if (r.Ok) { try { bytes = new FileInfo(Path.Combine(store.RecvDir, r.Sha + "." + r.Ext)).Length; } catch { } }
+                                var url = r.Ok ? "/__goon_recv__/" + r.Sha + "." + r.Ext : null;
+                                Dispatcher.UIThread.Post(() => { if (!_closing) Reply(r.Ok, url, bytes, r.Error); });
+                            }
                         }
                         catch { Dispatcher.UIThread.Post(() => { if (!_closing) Reply(false, error: "io-failed"); }); }
                     });

@@ -188,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
@@ -222,7 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
-            if (spec.Id == "goon") { Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => StopGoonWatch(); }
+            if (spec.Id == "goon") { Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => { StopGoonWatch(); CloseGoonInbox(); }; }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {
