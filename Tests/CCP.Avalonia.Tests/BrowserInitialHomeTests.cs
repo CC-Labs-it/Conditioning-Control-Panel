@@ -686,6 +686,128 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
     });
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task OfflineCancelsStartupWatchAndOnlineRearmsIt(bool deadlineBeforeUiSync, bool gateBlocksReload) => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        Assert.True(host.RecreateNativeView());
+        if (gateBlocksReload) host.NewScrolllerEngine()(false);
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        Assert.Single(timeouts);
+        var prompt = page.FindControl<TextBlock>("BrowserLoadingText")!;
+        var status = page.FindControl<TextBlock>("TxtBrowserStatus")!;
+        CoreSettings.Current.OfflineMode = true;
+        if (deadlineBeforeUiSync) timeouts[0]();
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts); // parking on about:blank must not start another watch
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.True(prompt.IsVisible);
+        Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), prompt.Text);
+        Assert.Equal("Offline", IconText.Bare(status.Text).Trim());
+
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Equal(2, timeouts.Count); // the restored page is still waiting for an engine
+        timeouts[0](); // a pre-offline deadline cannot fail the new attempt
+        Assert.True(host.HasEngine);
+        timeouts[1]();
+        Assert.False(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_start_failed_retry"), prompt.Text);
+        Assert.Equal(IconText.BareLoc("label_error_2"), IconText.Bare(status.Text));
+    });
+
+    [Fact]
+    public Task OfflineCancelsPendingCompanionStartupWithoutRearmingAnIdleBrowser() => RunAsync(async (shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        Assert.True(host.RecreateNativeView());
+        var pending = shell.NavigateCompanionUrlAsync("http://127.0.0.1:5555/first");
+        Assert.False(pending.IsCompleted);
+        Assert.Single(timeouts);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        Assert.Null(await pending);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+        Assert.Equal("Offline", IconText.Bare(page.FindControl<TextBlock>("TxtBrowserStatus")!.Text).Trim());
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts); // no page or companion request remains
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/retry"));
+        Assert.Equal(2, timeouts.Count);
+        timeouts[1]();
+        Assert.False(host.HasEngine);
+    });
+
+    [Fact]
+    public Task OfflineFlagAtCompanionGateDeadlineCancelsWait() => RunAsync(async (shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        host.StartupWatchScheduler = _ => { }; // let the companion gate deadline run first
+        Assert.True(host.RecreateNativeView());
+        var pending = shell.NavigateCompanionUrlAsync("http://127.0.0.1:5555/first");
+        CoreSettings.Current.OfflineMode = true; // shell has not applied the flag yet
+        Assert.Null(await pending.WaitAsync(TimeSpan.FromSeconds(25)));
+        shell.SyncOfflineModeState();
+        Assert.True(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_browser_disabled_in_offline_mode"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+        Assert.Equal("Offline", IconText.Bare(page.FindControl<TextBlock>("TxtBrowserStatus")!.Text).Trim());
+    });
+
+    [Fact]
+    public Task OfflineAdapterThatBecomesReadyDoesNotRestartTheWatch() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        host.StartupReadyProbe = _ => true;
+        host.FailureWatchFactory = (_, _) => new Watch(() => { });
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        Assert.Single(timeouts);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        var adapter = new WebHostPanicAdapterTests.Adapter();
+        WebHostPanicAdapterTests.BindControl(host.NativeView!, () => adapter.Proxy);
+        WebHostPanicAdapterTests.NativeEvent(host.NativeView!, "ControlHostImplOnAdapterCreated", adapter.Proxy);
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+    });
+
+    [Fact]
+    public Task OfflineCanceledPageDoesNotRestartTheWatch() => Run((shell, page, host, mod) =>
+    {
+        host.NativeViewFactory = () => new NativeWebView();
+        var timeouts = new System.Collections.Generic.List<Action>();
+        host.StartupWatchScheduler = callback => timeouts.Add(callback);
+        Assert.True(host.RecreateNativeView());
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:5555/first"));
+        Assert.Single(timeouts);
+        CoreSettings.Current.OfflineMode = true;
+        shell.SyncOfflineModeState();
+        host.CancelHeldNavigation(); // a gate report may cancel the held page while offline
+        Assert.Null(host.Source);
+        CoreSettings.Current.OfflineMode = false;
+        shell.SyncOfflineModeState();
+        Assert.Single(timeouts);
+        timeouts[0]();
+        Assert.True(host.HasEngine);
+        Assert.Equal(IconText.BareLoc("label_click_to_load_browser"), page.FindControl<TextBlock>("BrowserLoadingText")!.Text);
+    });
+
     private sealed class Watch(Action dispose) : IDisposable
     {
         public void Dispose() => dispose();

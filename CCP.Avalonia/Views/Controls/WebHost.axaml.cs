@@ -421,7 +421,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal Func<NativeWebView, Action, IDisposable>? FailureWatchFactory { get; set; }
         internal Action<Action>? StartupWatchScheduler { get; set; }
         internal Func<NativeWebView, bool>? StartupReadyProbe { get; set; }
-        private bool _adapterCreated, _adapterReady, _startupFailed, _startupWatchPending;
+        private bool _adapterCreated, _adapterReady, _startupFailed, _startupWatchPending, _startupWatchResumePage;
         private int _startupWatchGeneration;
 
         private bool StartupReady(NativeWebView native)
@@ -432,7 +432,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void WatchStartup(NativeWebView native)
         {
-            if (!RetryFailedConstruction || _adapterReady || _startupFailed || _startupWatchPending) return;
+            if (!RetryFailedConstruction || _adapterReady || _startupFailed || _startupWatchPending
+                || (BlockWhenOffline && CoreSettings.Current.OfflineMode)) return;
             _startupWatchPending = true;
             var generation = ++_startupWatchGeneration;
             void Expired() => ExpireStartup(native, generation);
@@ -440,9 +441,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             else global::Avalonia.Threading.DispatcherTimer.RunOnce(Expired, TimeSpan.FromSeconds(15));
         }
 
+        internal void SetStartupWatchOffline(bool offline)
+        {
+            if (!RetryFailedConstruction || !BlockWhenOffline) return;
+            if (offline)
+            {
+                if (_startupWatchPending && Source is { IsAbsoluteUri: true, Scheme: not "about" })
+                    _startupWatchResumePage = true;
+                _startupWatchPending = false;
+                ++_startupWatchGeneration;
+                CancelPendingNavigation();
+            }
+            else
+            {
+                var resume = _startupWatchResumePage;
+                _startupWatchResumePage = false;
+                if (resume && Source != null && _web is { } native) WatchStartup(native);
+            }
+        }
+
         private void ExpireStartup(NativeWebView native, int generation)
         {
             if (!ReferenceEquals(_web, native) || generation != _startupWatchGeneration || !_startupWatchPending || _adapterReady || _startupFailed) return;
+            // Offline may have been set before the shell has updated its controls.
+            if (BlockWhenOffline && CoreSettings.Current.OfflineMode) { SetStartupWatchOffline(true); return; }
             _startupWatchPending = false;
             if (_adapterCreated && StartupReady(native)) { _adapterReady = true; return; }
             _startupFailed = true;
@@ -770,7 +792,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // The gate and startup deadlines can expire together. Resolve startup first so
                     // a dead engine shows the retry prompt instead of opening a link externally.
                     if (_web is { } native && _startupWatchPending) ExpireStartup(native, _startupWatchGeneration);
-                    if (_startupFailed) return null;
+                    if (_pendingNavigation != pending || _startupFailed) return null;
                     _pendingNavigation = null;
                     return false;
                 }
