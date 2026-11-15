@@ -162,7 +162,7 @@ public class ChaosRabbitTrailFeedTests
     [Fact]
     public void Telegraph_ring_is_rendered_then_disappears() => AvaloniaTestDispatcher.Run(() =>
     {
-        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 240, 240), 1) { Width = 240, Height = 240 }; var oldImage = BubbleOverlay.Image; BubbleOverlay.Image = null;
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 240, 240), 1) { Width = 240, Height = 240 }; var oldImage = BubbleOverlay.Image; var oldRabbitImages = (BubbleOverlay.DarterImage, BubbleOverlay.SweeperImage); BubbleOverlay.Image = BubbleOverlay.DarterImage = BubbleOverlay.SweeperImage = null;
         try
         {
             var spec = new EffectBubbleSpec { IsDarter = true, SizePx = 100, TelegraphMs = 64, LifetimeMs = 8000, DarterSpeed = 9, Tint = 0xFFFF4DC4 };
@@ -179,7 +179,7 @@ public class ChaosRabbitTrailFeedTests
             Assert.False(flare.SequenceEqual(plain)); b.Spec = new EffectBubbleSpec { IsDarter = true, IsSweeper = true, Tint = spec.Tint }; using var sweeper = SkiaSharp.SKBitmap.Decode(Frame()); Assert.True(sweeper.GetPixel(70, 120).Green > sweeper.GetPixel(70, 120).Blue); b.Spec = spec;
             b.Spank(new Random(1), 1); b.Scale = 1; var allyFrame = Frame(); Assert.False(plain.SequenceEqual(allyFrame)); using var ally = SkiaSharp.SKBitmap.Decode(allyFrame); Assert.True(ally.GetPixel(70, 120).Blue > ally.GetPixel(70, 120).Green); // WPF :4759 ally glow
         }
-        finally { BubbleOverlay.Image = oldImage; BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+        finally { BubbleOverlay.Image = oldImage; (BubbleOverlay.DarterImage, BubbleOverlay.SweeperImage) = oldRabbitImages; BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
     });
 
     [Fact]

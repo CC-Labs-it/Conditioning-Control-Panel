@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
         internal static Bitmap? TeaseImage;
+        internal static Bitmap? DarterImage, SweeperImage;
         internal static Bitmap? BrainDrainImage;   // WPF the bundled molten-spiral bubble (braindrain_melt.png)
         internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, double Delay, long Start, bool Animated)> TeaseFaces = new();
         private static int _teaseAnimated;
@@ -198,6 +199,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LoadBubbleImage();
             TeaseImage = ChaosArt.Resolve("bubbles", "tease");
             BrainDrainImage = ChaosArt.Resolve("bubbles", Services.Chaos.BrainDrainBubble.VariantId);
+            DarterImage = ChaosArt.Resolve("bubbles", "darter");
+            SweeperImage = ChaosArt.Resolve("bubbles", "sweeper");
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
@@ -1222,7 +1225,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
                     var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    // WPF BubbleService.cs:3423-3434: sweepers fall back to the darter sprite.
+                    var variantImage = b.Spec is { IsDarter: true } rabbitSpec
+                        ? (rabbitSpec.IsSweeper ? BubbleOverlay.SweeperImage ?? BubbleOverlay.DarterImage : BubbleOverlay.DarterImage)
+                        : teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
                     var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
