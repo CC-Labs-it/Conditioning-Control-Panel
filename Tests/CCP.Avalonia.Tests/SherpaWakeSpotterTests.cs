@@ -283,6 +283,37 @@ public sealed class SherpaWakeCaptureTests
         finally { Directory.Delete(root, true); }
     }
 
+    private sealed class SlowMic : ConditioningControlPanel.Services.Speech.IMicSource
+    {
+        internal readonly System.Threading.ManualResetEventSlim Entered = new(), Opened = new();
+        internal int Stops;
+        public bool HasDevice => true;
+        public System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.SpeechInputDevice> ListDevices() => Array.Empty<ConditioningControlPanel.SpeechInputDevice>();
+        public IDisposable Start(Action<byte[], int> feed) { Entered.Set(); Opened.Wait(); return new Stop(this); }
+        private sealed class Stop(SlowMic mic) : IDisposable { public void Dispose() => System.Threading.Interlocked.Increment(ref mic.Stops); }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CancelWhileMicStartsClosesTheMicBeforeCancelReturns()
+    {
+        var root = Model(); var mic = new SlowMic();
+        using var cts = new System.Threading.CancellationTokenSource();
+        using var kws = LoudSaysFireAtPointTwenty(root);
+        try
+        {
+            var run = System.Threading.Tasks.Task.Run(() => kws.CalibrateAsync(mic, 2, false, null, cts.Token));
+            Assert.True(mic.Entered.Wait(5000));
+            var cancel = System.Threading.Tasks.Task.Run(() => { cts.Cancel(); return System.Threading.Volatile.Read(ref mic.Stops); });
+            await System.Threading.Tasks.Task.Delay(150); // cancel lands while Start is still opening the device
+            mic.Opened.Set();
+            Assert.Equal(1, await cancel); // the borrower may take the mic as soon as Cancel returns
+            var (threshold, _) = await run;
+            Assert.Null(threshold);
+            Assert.Equal(1, mic.Stops);
+        }
+        finally { mic.Opened.Set(); Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async System.Threading.Tasks.Task CalibrationFloorFollowsRisingRoomNoise()
     {

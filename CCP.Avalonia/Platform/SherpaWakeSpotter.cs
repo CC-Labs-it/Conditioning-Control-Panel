@@ -188,11 +188,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate) { was = _listening; _listening = false; }
                 if (was) try { ListeningChanged?.Invoke(this, false); } catch { }
             }
-            // A borrower's StopVoiceInput cancels on its own thread: the mic is free when Cancel returns.
-            using var registration = cap.Token.Register(() => { done.TrySetResult(false); Release(); });
+            // A borrower's StopVoiceInput cancels on its own thread: the mic is free when Cancel returns,
+            // so cancel waits out an in-flight mic.Start before releasing its handle.
+            var starting = new object();
+            using var registration = cap.Token.Register(() => { lock (starting) { done.TrySetResult(false); Release(); } });
             try
             {
-                if (!done.Task.IsCompleted) capture = mic.Start((bytes, count) => { lock (says) {
+                lock (starting) if (!done.Task.IsCompleted) capture = mic.Start((bytes, count) => { lock (says) {
                     if (done.Task.IsCompleted) return;
                     var buf = Pcm(bytes, count); filter?.ProcessInPlace(buf, buf.Length);
                     double sum = 0; foreach (var x in buf) sum += x * x;
