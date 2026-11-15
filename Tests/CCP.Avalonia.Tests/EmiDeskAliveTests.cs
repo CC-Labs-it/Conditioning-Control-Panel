@@ -32,7 +32,7 @@ public class EmiDeskAliveTests
             Assert.True(Math.Abs(lean) <= EmiAlive.GazeMaxDip * EmiAlive.GazeScale(desk.BodyWidth));
             desk.AlivePointer = () => null;
             desk.PollGaze();
-            Assert.Equal(lean, desk.AliveGazeX);
+            Assert.Equal(EmiAlive.Ease(lean, 0, EmiAlive.GazeEasePerPoll), desk.AliveGazeX, 8);
             desk.AlivePointer = () => new PixelPoint((int)(body.X - 200), (int)body.Y);
             desk.PlayChain("glance");
             desk.PollGaze();
@@ -64,7 +64,13 @@ public class EmiDeskAliveTests
             desk.MouseMove(new Point(-100, -100)); Dispatcher.UIThread.RunJobs();
             var before = desk.AliveGazeX;
             desk.PollGaze();
-            Assert.Equal(before, desk.AliveGazeX); // stale X position is refused after surface exit
+            // With no chain, accepting the stale X position would lean the other way.
+            Assert.Equal(EmiAlive.Ease(before, 0, EmiAlive.GazeEasePerPoll), desk.AliveGazeX, 8);
+            before = desk.AliveGazeX;
+            desk.PlayChain("glance");
+            Assert.True(desk.ChainLive);
+            desk.PollGaze();
+            Assert.Equal(EmiAlive.Ease(before, 0, EmiAlive.GazeEasePerPoll), desk.AliveGazeX, 8);
             desk.Hide(); desk.Show(); Dispatcher.UIThread.RunJobs();
             desk.PollGaze();
             Assert.Equal(0, desk.AliveGazeX); // a previous surface position cannot survive hide
