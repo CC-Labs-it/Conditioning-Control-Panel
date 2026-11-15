@@ -217,6 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _lastHeatTint = -1;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
+                RefreshSidebarLoadout();   // WPF ChaosModeService.cs:342, countdown loadout
                 _overlay = ChaosOverlayWindow.ForRun();
                 _overlay.OnRunAgain = RunAgain;
                 _overlay.OnDismissed = OnOverlayClosed;
@@ -264,6 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             ChaosRunEffects.ApplyLifetimeBoons(_state);
+            RefreshSidebarLoadout();   // WPF :445, lock in the loadout at SINK
             ChaosSkiaFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:412, idle run-start prewarm
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);

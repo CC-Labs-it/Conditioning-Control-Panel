@@ -37,14 +37,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             hud?.Close();
         }
 
-        // WPF ChaosModeService.cs:619-659: these commands belong to the Warren preview.
+        // WPF ChaosModeService.cs:591-627: pockets remain editable until SINK.
         internal static void SidebarPocketClicked(ChaosHudWindow hud, string? id)
         {
-            if (!ReferenceEquals(_preHud, hud)) return;
-            if (string.IsNullOrEmpty(id)) { _preHub?.NavigateTo("enhance"); return; }
+            bool preview = _preHud != null && ReferenceEquals(_preHud, hud);
+            bool countdown = _active && !_spawning && _hud != null && ReferenceEquals(_hud, hud);
+            if (!preview && !countdown) return;
+            if (string.IsNullOrEmpty(id)) { if (preview) _preHub?.NavigateTo("enhance"); return; }
             if (!ChaosMeta.IsBoonActive(id)) return;
             ChaosMeta.SetBoonActive(id, false);
-            _preState?.PushEvent(Loc.GetF("chaos_sidebar_left_behind", ChaosLifetimeBoons.ById(id)?.Name ?? id));
+            if (countdown) RefreshSidebarLoadout();
+            (_state ?? _preState)?.PushEvent(Loc.GetF("chaos_sidebar_left_behind", ChaosLifetimeBoons.ById(id)?.Name ?? id));
             _preHub?.RefreshAfterExternalLoadoutChange();
         }
 
@@ -64,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void RefreshSidebarLoadout()
         {
-            var st = _preState;
+            var st = _state ?? _preState;
             if (st == null) return;
             st.ActiveSidebarToys.Clear();
             st.ActiveSidebarAccessories.Clear();
@@ -80,7 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         Name = cat == ChaosBoonCategory.Utility ? $"{b.Name} · L{level}" : b.Name, Level = level,
                         Desc = b.Desc, Flavor = b.Flavor, Extra = level >= b.MaxLevel && !string.IsNullOrEmpty(b.CapstoneDesc) ? "max: " + b.CapstoneDesc : "", IsModifier = cat == ChaosBoonCategory.Utility });
                 }
-                if (cat != ChaosBoonCategory.Utility)
+                if (_preHud != null && cat != ChaosBoonCategory.Utility)
                     for (int i = group.Count; i < ChaosMeta.SlotsFor(cat); i++)
                         group.Add(new ChaosSidebarBoon { IsEmptySlot = true, Glyph = "+", Name = Loc.Get(cat == ChaosBoonCategory.Skill ? "chaos_sidebar_empty_toy" : "chaos_sidebar_empty_accessory"), Desc = Loc.Get("chaos_sidebar_empty_desc") });
             }

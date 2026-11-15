@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -93,6 +94,7 @@ public sealed class ChaosLoadoutSidebarTests
     });
     private static Task InPreview(Action<ChaosHubWindow, ChaosHudWindow, string> action) => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        var snapshot = ProcessStateSnapshot.Take(repairLateWrites: false);
         var render = ConditioningControlPanel.Avalonia.RenderProof.Rendering;
         var companion = ChaosHubWindow.SetCompanionActive;
         var oldState = ChaosMeta.State;
@@ -122,6 +124,7 @@ public sealed class ChaosLoadoutSidebarTests
             typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, oldState);
             ChaosHubWindow.SetCompanionActive = companion;
             ConditioningControlPanel.Avalonia.RenderProof.Rendering = render;
+            snapshot.Restore();
         }
         return Task.CompletedTask;
     });
@@ -190,6 +193,107 @@ public sealed class ChaosLoadoutSidebarTests
         Assert.Same(oldState, ChaosMeta.State);
         if (oldFile == null) Assert.False(File.Exists(path));
         else Assert.Equal(oldFile, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public Task Live_hud_shows_loadout_during_countdown_without_empty_slots() => InPreview((hub, hud, id) =>
+    {
+        var accessory = ChaosLifetimeBoons.InCategory(ChaosBoonCategory.Accessory).First();
+        var charm = ChaosLifetimeBoons.InCategory(ChaosBoonCategory.Utility).First();
+        var habit = ChaosUpgrades.All.First();
+        ChaosMeta.State.AccessoryPockets = 2;
+        ChaosMeta.State.LifetimeBoonLevels[accessory.Id] = 1;
+        ChaosMeta.State.LifetimeBoonLevels[charm.Id] = 1;
+        ChaosMeta.State.PurchasedUpgrades.Add(habit.Id);
+        ChaosMeta.SetBoonActive(accessory.Id, true);
+        ChaosMeta.SetBoonActive(charm.Id, true);
+        ClickHud(hud, "BtnHero");
+        Dispatcher.UIThread.RunJobs();
+        var state = Assert.IsType<ChaosRunState>(ChaosRunHost.State);
+        Assert.False(ChaosRunHost.IsDescending);
+        Assert.NotSame(hud, ChaosRunHost.Hud);
+        Assert.Contains(state.ActiveSidebarToys, b => b.Id == id);
+        Assert.Contains(state.ActiveSidebarAccessories, b => b.Id == accessory.Id);
+        Assert.DoesNotContain(state.ActiveSidebarToys.Concat(state.ActiveSidebarAccessories), b => b.IsEmptySlot);
+        Assert.Contains(state.RunModifiers, b => b.Id == charm.Id);
+        Assert.Contains(state.RunModifiers, b => b.Name == habit.Name);
+    });
+
+    [Fact]
+    public Task Live_pocket_unequips_during_countdown() => InPreview((hub, hud, id) =>
+    {
+        ClickHud(hud, "BtnHero");
+        Dispatcher.UIThread.RunJobs();
+        var live = ChaosRunHost.Hud!;
+        // The live HUD starts collapsed. Pin it in the headless view to realize its tiles.
+        live.SetPreRunExpanded(true);
+        PressPocket(live, id);
+        Assert.False(ChaosMeta.IsBoonActive(id));
+        Assert.DoesNotContain(ChaosRunHost.State!.ActiveSidebarToys, b => b.Id == id);
+        Assert.Contains(ChaosRunHost.State.RecentEvents, line => line.Contains(ChaosLifetimeBoons.ById(id)!.Name));
+    });
+
+    [Fact]
+    public Task Live_pocket_locks_at_sink() => InPreview((hub, hud, id) =>
+    {
+        ClickHud(hud, "BtnHero");
+        Dispatcher.UIThread.RunJobs();
+        var live = ChaosRunHost.Hud!;
+        ChaosRunHost.BeginRun();
+        Assert.True(ChaosRunHost.IsDescending);
+        live.SetPreRunExpanded(true);
+        PressPocket(live, id);
+        Assert.True(ChaosMeta.IsBoonActive(id));
+        Assert.Contains(ChaosRunHost.State!.ActiveSidebarToys, b => b.Id == id);
+    });
+
+    [Fact]
+    public Task Sink_refreshes_live_modifiers_from_final_loadout() => InPreview((hub, hud, id) =>
+    {
+        var habit = ChaosUpgrades.All.First();
+        ChaosMeta.State.PurchasedUpgrades.Add(habit.Id);
+        ClickHud(hud, "BtnHero");
+        Dispatcher.UIThread.RunJobs();
+        var state = ChaosRunHost.State!;
+        Assert.Contains(state.RunModifiers, b => b.Name == habit.Name);
+        ChaosMeta.SetUpgradeActive(habit.Id, false);
+        ChaosRunHost.BeginRun();
+        Assert.DoesNotContain(state.RunModifiers, b => b.Name == habit.Name);
+    });
+
+    [Fact]
+    public async Task Preview_restores_the_complete_saved_settings_after_fall_in()
+    {
+        var path = Path.Combine(TestUserDataProfile.Root, "chaos-sidebar-settings.json");
+        var previousProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService(path);
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.ChaosEffectIntensity = 0.4;
+            service.Current.ChaosPinOnTop = false;
+            service.SaveImmediate();
+            var bytes = File.ReadAllBytes(path);
+            await InPreview((hub, hud, id) =>
+            {
+                hub.FindControl<Slider>("SldEffect")!.Value = 1.2;
+                hub.FindControl<CheckBox>("ChkPinTop")!.IsChecked = true;
+                ClickHud(hud, "BtnHero");
+                Assert.Equal(1.2, service.Current.ChaosEffectIntensity);
+                Assert.True(service.Current.ChaosPinOnTop);
+                service.SaveImmediate();
+                Assert.NotEqual(bytes, File.ReadAllBytes(path));
+            });
+            Assert.Equal(0.4, service.Current.ChaosEffectIntensity);
+            Assert.False(service.Current.ChaosPinOnTop);
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+        }
+        finally
+        {
+            SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = previousProvider;
+            File.Delete(path);
+        }
     }
 
     [Theory]
