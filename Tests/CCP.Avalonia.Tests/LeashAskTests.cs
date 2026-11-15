@@ -85,6 +85,22 @@ public sealed class LeashAskTests
         root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
 
     [Fact]
+    public void AskHelpOpensLeashedExplainer() => Run((shell, page, wire, seen) =>
+    {
+        LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+        var ask = LeashAskWindow.Current!;
+        LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-help:ask"));
+        var explain = Assert.Single(ask.OwnedWindows.OfType<LeashExplainWindow>());
+        try
+        {
+            Assert.True(explain.IsVisible);
+            Tagged<StackPanel>(explain, "leash-explain-card:leashed");
+            Assert.False(ask.Card.PutItOnButton.IsEnabled);
+        }
+        finally { explain.Close(); }
+    });
+
+    [Fact]
     public void OfferRowLookOpensTheAskWhichWaitsForTheReadClockThenPutsItOn() =>
         Run((shell, page, wire, seen) =>
         {
