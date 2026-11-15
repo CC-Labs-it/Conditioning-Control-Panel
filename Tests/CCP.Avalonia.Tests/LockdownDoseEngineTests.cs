@@ -40,18 +40,21 @@ public class LockdownDoseEngineTests
             var ld = LockdownService.Current = new LockdownService();
             var shell = new MainShellWindow();
             shell.Show();
+            var oldStarted = CoreEngine.StartedHook;
+            var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            CoreEngine.StartedHook = () => { try { oldStarted?.Invoke(); } finally { started.TrySetResult(true); } };
             try
             {
                 Assert.Contains("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
                 ld.Activate(TimeSpan.FromMinutes(20));
                 Assert.False(CoreEngine.IsRunning);
-                await Task.Delay(TimeSpan.FromSeconds(3)); // the real 2 second kickoff
+                await started.Task.WaitAsync(TimeSpan.FromSeconds(15)); // the real 2 second kickoff
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(count, s.TotalSessions); // system starts are not user sessions
                 ld.Deactivate();
                 Assert.False(CoreEngine.IsRunning);
             }
-            finally { ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
+            finally { CoreEngine.StartedHook = oldStarted; ld.Dispose(); CoreEngine.Stop(); LockdownService.Current = null; shell.RequestExit(); }
         });
     }
 

@@ -182,8 +182,8 @@ public sealed class LeashAskTests
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
+                ask.AdvanceThud(0);   // sample the start, before the spring's later undershoot
                 Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
-                ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
                 ask.AdvanceThud(340);
