@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Services
         }
         private long _saveSequence;
         private long _lastWrittenSaveSequence;
+        internal long LastWrittenSaveSequence => Interlocked.Read(ref _lastWrittenSaveSequence);
 
         // Bounded wait for the UI-thread re-serialize retry; a busy (or wedged) UI thread must
         // never stall the save path indefinitely.

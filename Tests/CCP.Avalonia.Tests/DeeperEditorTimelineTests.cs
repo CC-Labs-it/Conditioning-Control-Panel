@@ -79,6 +79,8 @@ public sealed class DeeperEditorTimelineTests
         CoreSettings.ServiceProvider = () => service;
         service.Current.DeeperEditorTimelineHeight = 160;
         service.SaveImmediate();
+        var initialSave = service.LastWrittenSaveSequence;
+        Assert.True(initialSave > 0);
         var editor = new DeeperEditorWindow(new Enhancement(), null);
         DeeperEditorWindow? next = null;
         try
@@ -94,15 +96,9 @@ public sealed class DeeperEditorTimelineTests
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
             var deadline = System.Diagnostics.Stopwatch.StartNew();
-            // A SettingsService constructor cleans up abandoned temp files. Polling by creating
-            // services can delete the debounced save's temp file before it is published.
-            while (true)
+            // Wait for the debounced save to publish without holding the destination open on Windows.
+            while (service.LastWrittenSaveSequence <= initialSave)
             {
-                using var stream = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read,
-                    System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete);
-                using var reader = new System.IO.StreamReader(stream);
-                var json = Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd());
-                if ((int?)json["DeeperEditorTimelineHeight"] == saved) break;
                 Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
                 await Task.Delay(50);
             }
