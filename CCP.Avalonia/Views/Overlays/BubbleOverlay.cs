@@ -920,7 +920,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Field.HoldChaos) return;
             foreach (var b in Field.Bubbles)
             {
-                if (b.Spec is { IsDarter: true } spec)
+                if (!Field.FreezeChaos && b.Spec is { IsDarter: true } spec)
                 {
                     var trailCenter = CenterPx(b);
                     bool skia = ChaosSkiaFxOverlay.Enabled;
