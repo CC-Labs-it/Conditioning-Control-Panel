@@ -88,9 +88,12 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
 {
     internal delegate Task<(uint Code, Dictionary<string, VariantValue> Results)> Requester(CancellationToken cancellation);
 
-    // Response 1 (cancelled) or 2 (other) ends capture for the session: a scan loop must never re-prompt.
-    // The Awareness tab reads this to say why OCR sees nothing.
+    // Response 1 (the user cancelled) ends capture for the session: a scan loop must never re-prompt.
     internal static volatile bool Refused;
+    // Response 2 (other) is a generic failure, like a failed WPF capture (ScreenOcrService.cs:215-221) it costs scans,
+    // not the session. A denied permission also answers 2, but it is stored, so a retry answers 2 again without a dialog.
+    private readonly TimeSpan _retryAfter;
+    private long _retryAt;
 
     private readonly Requester _request;
     private readonly Func<Task<IReadOnlyList<CaptureMonitor>>> _monitors;
@@ -99,8 +102,9 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
     private Task<(int Width, int Height, byte[] Pixels)?>? _pending;
     private CancellationToken _pendingStop;
 
-    internal PortalScreenFrames(Requester? request = null, Func<Task<IReadOnlyList<CaptureMonitor>>>? monitors = null, TimeSpan? timeout = null)
+    internal PortalScreenFrames(Requester? request = null, Func<Task<IReadOnlyList<CaptureMonitor>>>? monitors = null, TimeSpan? timeout = null, TimeSpan? retryAfter = null)
     {
+        _retryAfter = retryAfter ?? TimeSpan.FromMinutes(1);
         _request = request ?? ScreenshotAsync;
         _monitors = monitors ?? DesktopScreenFrames.AvaloniaMonitors;
         _timeout = timeout ?? TimeSpan.FromSeconds(5);
@@ -108,7 +112,7 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
 
     public async Task<ScreenFrameResult> CaptureAsync(CancellationToken cancellationToken)
     {
-        if (Refused) return ScreenFrameResult.Unavailable;
+        if (Refused || Environment.TickCount64 < Interlocked.Read(ref _retryAt)) return ScreenFrameResult.Unavailable;
         Task<(int Width, int Height, byte[] Pixels)?> call;
         lock (_gate)
         {
@@ -142,10 +146,16 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
             var path = FilePath(results);
             try
             {
-                if (code != 0)
+                if (code == 1)
                 {
                     Refused = true;
-                    Serilog.Log.Warning("Screen OCR: the screenshot portal answered {Code}; screen capture stays off until restart", code);
+                    Serilog.Log.Warning("Screen OCR: the screenshot portal request was cancelled; screen capture stays off until restart");
+                    return null;
+                }
+                if (code != 0)
+                {
+                    Interlocked.Exchange(ref _retryAt, Environment.TickCount64 + (long)_retryAfter.TotalMilliseconds);
+                    Serilog.Log.Debug("Screen OCR: the screenshot portal answered {Code}; retrying after {Delay}", code, _retryAfter);
                     return null;
                 }
                 return path == null ? null : Decode(path);
