@@ -432,7 +432,7 @@ internal sealed class KeywordAudioRuntime
         return NeedsOcrConfirmation;
     }
 
-    private static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
+    internal static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
     {
         var results = new List<ScreenOcrService.Word>();
         if (trigger.MatchType != KeywordMatchType.Regex)
@@ -454,7 +454,7 @@ internal sealed class KeywordAudioRuntime
                 if (!matches) continue;
                 var bounds = words[i].Bounds;
                 for (var j = 1; j < parts.Length; j++) bounds = System.Drawing.Rectangle.Union(bounds, words[i + j].Bounds);
-                results.Add(parts.Length == 1 ? words[i] : new ScreenOcrService.Word(trigger.Keyword, bounds));
+                results.Add(parts.Length == 1 ? words[i] : new ScreenOcrService.Word(trigger.Keyword, bounds, words[i].Screen));
             }
             return results;
         }
@@ -472,12 +472,15 @@ internal sealed class KeywordAudioRuntime
             {
                 if (match.Length == 0) continue;
                 System.Drawing.Rectangle? bounds = null;
+                var screen = 0;
                 for (var i = 0; i < words.Count; i++)
                 {
                     if (starts[i] + words[i].Text.Length <= match.Index || starts[i] >= match.Index + match.Length) continue;
-                    bounds = bounds is { } r ? System.Drawing.Rectangle.Union(r, words[i].Bounds) : words[i].Bounds;
+                    // WPF KeywordTriggerService.cs:1126-1137: union only the words on the first word's screen.
+                    if (bounds is { } r) { if (words[i].Screen == screen) bounds = System.Drawing.Rectangle.Union(r, words[i].Bounds); }
+                    else { bounds = words[i].Bounds; screen = words[i].Screen; }
                 }
-                if (bounds is { } rect) results.Add(new ScreenOcrService.Word(match.Value, rect));
+                if (bounds is { } rect) results.Add(new ScreenOcrService.Word(match.Value, rect, screen));
             }
         }
         catch (ArgumentException) { return new(); }

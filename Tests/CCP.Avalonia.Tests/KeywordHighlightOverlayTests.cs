@@ -35,6 +35,10 @@ public class KeywordHighlightOverlayTests
         var screens = KeywordHighlightOverlay.Screens;
         var configure = KeywordHighlightOverlay.Configure;
         var credit = KeywordTriggerHead.Engine.QuestCredit;
+        // The shared engine's pulse ring is process-wide: put back exactly what earlier tests left.
+        var ring = (System.Collections.Generic.LinkedList<TriggerFireRecord>)typeof(KeywordFireLog)
+            .GetField("_fires", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(KeywordTriggerHead.Engine.Fires)!;
+        var fires = ring.ToList();
         var calls = 0;
         try
         {
@@ -64,13 +68,31 @@ public class KeywordHighlightOverlayTests
             KeywordTriggerHead.OcrSource = source; WindowsOcrSource.ExecuteForTests = execute;
             KeywordHighlightOverlay.Screens = screens; KeywordHighlightOverlay.Configure = configure;
             KeywordTriggerHead.Engine.QuestCredit = credit;
+            ring.Clear(); foreach (var fire in fires) ring.AddLast(fire);
             (settings.KeywordTriggers, settings.KeywordTriggersEnabled, settings.ScreenOcrEnabled,
                 settings.OcrConfirmationScans, settings.OcrHighlightAll, settings.ScreenOcrIntervalMs,
                 settings.AwarenessIgnoreOwnUi, settings.AwarenessLoopProtectionEnabled, settings.KeywordTriggerIgnoreOwnFocus,
                 settings.KeywordTriggerAppScope, settings.KeywordGlobalCooldownSeconds, settings.KeywordHighlightEnabled,
                 CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = saved;
         }
+        Assert.Equal(fires, KeywordTriggerHead.Engine.GetRecentFires());
     });
+
+    [Fact] // WPF KeywordTriggerService.cs:1117-1146: a regex match unions only the words on its first word's screen.
+    public async Task HelperKeepsMonitorIdentityForRegexUnions()
+    {
+        var execute = WindowsOcrSource.ExecuteForTests;
+        try
+        {
+            WindowsOcrSource.ExecuteForTests = _ => Task.FromResult("[{\"Text\":\"good\",\"X\":900,\"Y\":10,\"Width\":40,\"Height\":20,\"Screen\":0}," +
+                "{\"Text\":\"boy\",\"X\":1010,\"Y\":300,\"Width\":30,\"Height\":20,\"Screen\":1}]");
+            var words = await WindowsOcrSource.Scan(default);
+            Assert.Equal(new[] { 0, 1 }, words.Select(w => w.Screen));
+            var hit = Assert.Single(KeywordAudioRuntime.FindOcrMatches(new KeywordTrigger { Keyword = "good\\s+boy", MatchType = KeywordMatchType.Regex }, words));
+            Assert.Equal((new System.Drawing.Rectangle(900, 10, 40, 20), 0), (hit.Bounds, hit.Screen));
+        }
+        finally { WindowsOcrSource.ExecuteForTests = execute; }
+    }
 
     private sealed class Lease(Action release) : IDisposable
     {

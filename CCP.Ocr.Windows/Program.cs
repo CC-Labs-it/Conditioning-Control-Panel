@@ -8,7 +8,7 @@ using Windows.Media.Ocr;
 // stdout carries only the recognition result to the parent, never to a log or a temporary file.
 internal static class Program
 {
-    private sealed record Word(string Text, int X, int Y, int Width, int Height);
+    private sealed record Word(string Text, int X, int Y, int Width, int Height, int Screen);
     private static async Task<int> Main()
     {
         try
@@ -16,8 +16,10 @@ internal static class Program
             var engine = OcrEngine.TryCreateFromUserProfileLanguages();
             if (engine == null) return 1;
             var words = new List<Word>();
-            foreach (var screen in Screen.AllScreens)
+            var screens = Screen.AllScreens;
+            for (var index = 0; index < screens.Length; index++)
             {
+                var screen = screens[index];
                 try
                 {
                     var bounds = screen.Bounds;
@@ -35,7 +37,7 @@ internal static class Program
                     foreach (var word in line.Words)
                     {
                         var r = word.BoundingRect;
-                        words.Add(new Word(word.Text, bounds.Left + (int)r.X, bounds.Top + (int)r.Y, (int)r.Width, (int)r.Height));
+                        words.Add(new Word(word.Text, bounds.Left + (int)r.X, bounds.Top + (int)r.Y, (int)r.Width, (int)r.Height, index));
                     }
                 }
                 catch { /* WPF ScreenOcrService.cs:203-224: skip an inaccessible screen. */ }

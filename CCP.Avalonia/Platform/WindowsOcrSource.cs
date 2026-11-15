@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 // The helper is published beside the Windows app: WinRT OCR cannot be referenced by its plain net10.0 TFM.
 internal static class WindowsOcrSource
 {
-    private sealed record Hit(string Text, int X, int Y, int Width, int Height);
+    private sealed record Hit(string Text, int X, int Y, int Width, int Height, int Screen = 0);
     internal static Func<CancellationToken, Task<string>>? ExecuteForTests;
     internal static bool Available => ExecuteForTests != null || (OperatingSystem.IsWindows() && File.Exists(HelperPath));
     private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "CCP.Ocr.Windows.exe");
@@ -23,7 +23,7 @@ internal static class WindowsOcrSource
         token.ThrowIfCancellationRequested();
         var hits = JsonSerializer.Deserialize<Hit[]>(json) ?? throw new InvalidDataException("Invalid OCR response");
         return hits.Where(h => !string.IsNullOrEmpty(h.Text) && h.Width > 0 && h.Height > 0)
-            .Select(h => new ScreenOcrService.Word(h.Text, new System.Drawing.Rectangle(h.X, h.Y, h.Width, h.Height))).ToArray();
+            .Select(h => new ScreenOcrService.Word(h.Text, new System.Drawing.Rectangle(h.X, h.Y, h.Width, h.Height), h.Screen)).ToArray();
     }
     private static async Task<string> Execute(CancellationToken token)
     {
