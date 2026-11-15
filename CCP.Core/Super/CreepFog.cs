@@ -4,14 +4,6 @@ using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.Super;
 
-/// <summary>Creep speed: how long the fog takes to climb from nothing to the cap.</summary>
-public enum CreepSpeed
-{
-    Slow,     // 15 minutes
-    Normal,   // 10 minutes
-    Fast,     // 5 minutes
-}
-
 /// <summary>One soft fog blob. Its home sits on one screen edge; the offset is the click push.</summary>
 public sealed class CreepBlob
 {

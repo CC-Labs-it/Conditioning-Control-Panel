@@ -38,7 +38,7 @@ public static class LoomSpecJson
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("Loom sidecar: {E}", ex.Message);
+            Serilog.Log.Debug("Loom sidecar: {E}", ex.Message);
             return null;
         }
     }

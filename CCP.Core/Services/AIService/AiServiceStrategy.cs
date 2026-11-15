@@ -94,7 +94,7 @@ namespace ConditioningControlPanel.Services.AIService
                     if (!_localFailureLogged)
                     {
                         _localFailureLogged = true;
-                        App.Logger?.Warning(ex, "AiServiceStrategy: local AI provider failed to start; reading as not available");
+                        Log.Warning(ex, "AiServiceStrategy: local AI provider failed to start; reading as not available");
                     }
                     return null;
                 }

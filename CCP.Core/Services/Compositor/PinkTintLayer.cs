@@ -96,7 +96,7 @@ public class PinkTintLayer : BaseLayer
         double target = _stepAside ? 0 : 1;
         if (_veil == target) return;
         _veil = Super.SuperStepAside.Step(_veil, _stepAside, delta.TotalSeconds,
-            Super.SuperStepAside.FadeSecondsFor(MotionFx.Level));
+            Super.SuperStepAside.FadeSecondsFor(Super.SuperStepAside.LevelProvider()));
         _dirty = true;
     }
 

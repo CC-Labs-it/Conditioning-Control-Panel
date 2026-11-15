@@ -554,6 +554,7 @@ namespace ConditioningControlPanel
             // this ctor runs, and until then the scheduler simply draws nothing.
             CoreSubliminal.ShowProvider = text => Subliminal?.FlashPhrase(text);
             CoreSubliminal.RunStateChanged = running => Subliminal?.OnRunStateChanged(running);
+            Services.Super.SuperStepAside.LevelProvider = () => MotionFx.Level;
 
             // The engine-running flag, for the feature cards that only live-apply while a session
             // is up. The engine stays here; the flag is the whole seam.

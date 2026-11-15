@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Services.Super
         /// <summary>Motion Off: the house 120 ms fade, never a one-frame cut.</summary>
         public const double OffFadeSeconds = 0.12;
 
+        /// <summary>The head's motion level (WPF: MotionFx.Level). Core layers ask here; Full until a head seeds it.</summary>
+        public static Func<MotionLevel> LevelProvider { get; set; } = () => MotionLevel.Full;
+
         /// <summary>
         /// Should the base layer hide: Super really replaces it (<see cref="SuperAccess.ReplacesBase"/>)
         /// and nobody else is holding the overlay. A timed bubble pop, a voice "go pink", a remote

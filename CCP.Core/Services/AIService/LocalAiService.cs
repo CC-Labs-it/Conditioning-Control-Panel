@@ -327,7 +327,7 @@ namespace ConditioningControlPanel.Services.AIService
             if (fellBack && !_warnedBadHost)
             {
                 _warnedBadHost = true;
-                App.Logger?.Warning("LocalAiService: saved Ollama host is not a usable address, using {Default}",
+                Log.Warning("LocalAiService: saved Ollama host is not a usable address, using {Default}",
                     LocalAiHost.Default);
             }
             return normalized;
