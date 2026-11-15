@@ -67,31 +67,19 @@ public class PersonalityLegacyMigrationTests
             Assert.True(migrated.PersonalityLegacyMigrated);
             if (scenario == 4 || scenario == 5 || scenario == 6)
             {
-                // WPF runs migration at every startup, even after a user returns to a default.
+                // After migration the user picks a default with spice still on. In scenario 4 they
+                // also re-activate a community prompt. Later launches must keep those choices.
                 Assert.Equal("slutmode", migrated.ActivePersonalityPresetId);
                 var chosen = scenario == 6 ? PersonalityPresets.BambiSpriteId : PersonalityPresets.NeutralDefaultId;
                 migrated.ActivePersonalityPresetId = chosen;
                 migrated.CompanionPrompt.UseCustomPrompt = scenario == 4;
-                string? presetId = null;
                 for (var i = 0; i < 2; i++)
                 {
                     migrated = await Launch();
+                    Assert.Equal(chosen, migrated.ActivePersonalityPresetId);
                     Assert.True(migrated.SlutModeEnabled);
-                    Assert.False(migrated.CompanionPrompt.UseCustomPrompt);
-                    if (scenario == 4)
-                    {
-                        var preset = Assert.Single(migrated.UserPersonalityPresets);
-                        Assert.Equal("My Custom Personality", preset.Name);
-                        Assert.Equal("A saved personality", preset.PromptSettings.Personality);
-                        Assert.Equal(preset.Id, migrated.ActivePersonalityPresetId);
-                        if (i == 0) presetId = preset.Id;
-                        else Assert.Equal(presetId, preset.Id);
-                    }
-                    else
-                    {
-                        Assert.Equal(PersonalityPresets.SlutModeId, migrated.ActivePersonalityPresetId);
-                        Assert.Empty(migrated.UserPersonalityPresets);
-                    }
+                    Assert.Equal(scenario == 4, migrated.CompanionPrompt.UseCustomPrompt);
+                    Assert.Empty(migrated.UserPersonalityPresets);
                 }
             }
             if (scenario == 0 || scenario == 3) Assert.Equal("slutmode", migrated.ActivePersonalityPresetId);

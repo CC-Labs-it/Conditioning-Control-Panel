@@ -1764,5 +1764,12 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Restack b220 (#4299): the consumer (<code>KeywordAudioRuntime.CheckOcrWords</code>, one fire path with the keyboard) and the lifecycle (<code>ScreenOcrService</code>, <code>KeywordTriggerHead.SyncOcr</code> from the master and OCR switches and the interval slider) are in; #4267's parallel matcher was dropped for this one consumer.</li>
 <li>When an engine lands: <code>ScreenOcrService.Word</code> has no screen, so a regex match unions word rectangles across monitors; WPF <code>KeywordTriggerService.cs:1102</code> unions only words on the first word's screen. Add the screen to <code>Word</code> then. The panic fallback must also stop and restart the scanner (WPF PanicWatchdog; #4551).</li>
 </ul>
+<h2 id="2026-11-15-personality-migration-once">2026-11-15: legacy personality migration runs once on the Avalonia head</h2>
+<ul>
+<li>Decision: Avalonia startup runs <code>PersonalityService.MigrateFromLegacy</code> once, latched by <code>AppSettings.PersonalityLegacyMigrated</code> in <code>CCP.Avalonia/App.axaml.cs</code> (set with the migration so one save persists both). The latch is head-side only; Core <code>MigrateFromLegacy</code> stays unchanged, so WPF behaviour is unchanged.</li>
+<li>Why: WPF re-runs the migration on every launch (<code>ConditioningControlPanel/App.xaml.cs:2798</code>). With Spice on, a later CCP Default or BambiSprite pick reverts to Slut Mode, and an activated community prompt becomes a new &quot;My Custom Personality&quot; preset at the next launch. Running once is an intended improvement; reviews must not flag it as a WPF deviation or remove the latch.</li>
+<li>WPF reference: <code>ConditioningControlPanel/App.xaml.cs:2798</code>. Tests: <code>Tests/CCP.Avalonia.Tests/PersonalityLegacyMigrationTests.cs</code>, <code>Tests/CCP.Core.Tests/PersonalityWpfMigrationTests.cs</code>.</li>
+<li>Status: decided by owner.</li>
+</ul>
 </body>
 </html>

@@ -377,13 +377,9 @@ namespace ConditioningControlPanel.Services
         /// Migrates from legacy SlutModeEnabled setting to new preset system.
         /// Should be called once during app startup.
         /// </summary>
-        public void MigrateFromLegacy(AppSettings? settings) => MigrateFromLegacy(settings, saveUnchanged: true);
-
-        /// <summary>Migrate legacy settings, optionally avoiding a save when no legacy values are active.</summary>
-        public void MigrateFromLegacy(AppSettings? settings, bool saveUnchanged)
+        public void MigrateFromLegacy(AppSettings? settings)
         {
             if (settings == null) return;
-            if (!saveUnchanged && !settings.SlutModeEnabled && settings.CompanionPrompt?.UseCustomPrompt != true) return;
 
             // Only migrate if not already using new system (i.e. still on a default).
             // If they've already changed to something else, they're using new system.
