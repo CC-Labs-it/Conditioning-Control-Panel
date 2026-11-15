@@ -90,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Log.Information("VideoService: close button - dismissing the video (the Esc door)");
-            Scheduler.End();
+            EndPrimary("close button");
         }
 
         private void HideCloseButtons()
