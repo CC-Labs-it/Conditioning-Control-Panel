@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
     /// <para>ponytail: Bubbles v2 motions (Rain/Spiral In),
-    /// Brain Drain, Natasha's red bubble, the avatar egg
+    /// Brain Drain, Natasha's red bubble
     /// and the milestone popup remain unported. The lucky gold glow is wired (LuckyGlow).
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
@@ -51,6 +51,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_bubble"), multiplier),
         };
         internal static readonly AmbientPayloadRunner Payloads = new();
+        private static readonly BubbleAvatarEgg DefaultEgg = new(
+            () => BubbleAvatarEgg.Gates(CoreSettings.Current.BubbleAvatarEggEnabled, CoreSettings.Current.BubbleTriggersEnabled,
+                _chaosPopped != null, CoreEngine.Video?.IsPlaying == true),
+            () => Views.AvatarTube.AvatarTubeWindow.Live is { CanPerformBubbleEgg: true } avatar
+                ? new BubbleAvatarEgg.Avatar(avatar.GlideToBubbleAsync, avatar.ReturnFromBubbleAsync,
+                    (text, audio) => avatar.GigglePriority(text, playSound: audio != null, aiGenerated: false,
+                        phraseAudioPath: audio, barkVoice: audio != null, mood: "playful")) : null,
+            Field.Bubbles, Field.Random, () => DateTime.UtcNow,
+            id => BarkHead.Engine?.PickVoiceLine(id), BubbleAvatarEgg.ClipDuration,
+            (b, volume) => Pop(b, volume));
+        internal static BubbleAvatarEgg? EggOverride;
+        private static BubbleAvatarEgg Egg => EggOverride ?? DefaultEgg;
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();
         private static DispatcherTimer? _spawnTimer;
@@ -232,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public static void Stop()
         {
+            Egg.Cancel();
             BubblePayloadHost.Stop();
             // WPF Stop returns early when the ambient game is idle, so a chaos-only teardown keeps presence.
             var wasRunning = IsRunning;
@@ -607,6 +620,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF PopAllBubbles at a wave boundary, retaining the chaos callbacks.</summary>
         internal static void ClearChaos()
         {
+            Egg.Cancel();
             Field.Held = false;
             Field.Bubbles.Clear();
             ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
@@ -844,7 +858,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
-        internal static void Pop(AmbientBubble b)
+        internal static void Pop(AmbientBubble b) => Pop(b, 1f);
+
+        internal static void Pop(AmbientBubble b, float volumeMultiplier)
         {
             if (b.Popping || b.ClaimedByAvatar) return;   // WPF BubbleService.cs:4647-4659.
             if (b.Spec != null && !b.AmbientTrigger) { PopChaos(b); return; }
@@ -863,6 +879,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var vol = (float)Math.Pow(master * (s.BubblesVolume / 100f), 1.5);
             var (path, chime) = ResolvePopSound(b.Lucky, s.SuppressPerkNotifications, Field.Random);
             if (chime) vol *= 0.35f;
+            vol *= volumeMultiplier;
             if (File.Exists(path)) CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
             App.Achievements?.TrackBubblePopped();   // WPF BubbleService.cs:1117
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
@@ -894,6 +911,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 StepChaosField();
+                Egg.Scan();
                 PruneTeaseFaces();
                 TickChaosRipples();
                 StepPlayerRipples();

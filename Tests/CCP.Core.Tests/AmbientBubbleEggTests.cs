@@ -19,7 +19,7 @@ public sealed class AmbientBubbleEggTests
     private static AmbientBubble Bubble(string variant = "flash") => new()
     {
         AmbientTrigger = true, Clickable = true, Size = 100,
-        Spec = new EffectBubbleSpec { VariantId = variant, TreatLifeMs = 5000 }
+        Spec = new EffectBubbleSpec { VariantId = variant, TreatLifeMs = 5000, Payload = new SubliminalPayload { Ambient = true } }
     };
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class AmbientBubbleEggTests
     {
         var b = Bubble();
         for (int i = 0; i < 126; i++) b.Step();
-        Assert.True(b.TryClaimForAvatar(new Roll(0)));
+        Assert.True(b.TryClaimForAvatar(new Roll(0), DateTime.UtcNow.AddSeconds(5)));
         var field = new AmbientBubbleField(new Random(1));
         field.Bubbles.Add(b);
         double x = b.X, y = b.Y;
@@ -47,10 +47,10 @@ public sealed class AmbientBubbleEggTests
     {
         var b = Bubble(); var roll = new Roll(99);
         for (int i = 0; i < 125; i++) b.Step();
-        Assert.False(b.TryClaimForAvatar(roll)); Assert.Equal(0, roll.Calls);
+        Assert.False(b.TryClaimForAvatar(roll, DateTime.UtcNow.AddSeconds(3))); Assert.Equal(0, roll.Calls);
         b.Step();
-        Assert.False(b.TryClaimForAvatar(roll));
-        Assert.False(b.TryClaimForAvatar(roll)); Assert.Equal(1, roll.Calls);
+        Assert.False(b.TryClaimForAvatar(roll, DateTime.UtcNow.AddSeconds(5)));
+        Assert.False(b.TryClaimForAvatar(roll, DateTime.UtcNow.AddSeconds(5))); Assert.Equal(1, roll.Calls);
     }
 
     [Theory]
@@ -60,6 +60,6 @@ public sealed class AmbientBubbleEggTests
     {
         var b = Bubble(variant); var roll = new Roll(0);
         for (int i = 0; i < 126; i++) b.Step();
-        Assert.False(b.TryClaimForAvatar(roll)); Assert.Equal(0, roll.Calls);
+        Assert.False(b.TryClaimForAvatar(roll, DateTime.UtcNow.AddSeconds(5))); Assert.Equal(0, roll.Calls);
     }
 }

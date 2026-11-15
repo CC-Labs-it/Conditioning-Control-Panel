@@ -58,15 +58,15 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         public bool AmbientTrigger;
         private double _treatMs;
-        private double _eggAgeMs;
+        private readonly DateTime _eggBornUtc = DateTime.UtcNow;
         private bool _eggRolled;
         public bool ClaimedByAvatar { get; private set; }
 
         // WPF BubbleService.cs:705-739, 2967-2989. Call only when the head gates allow an egg.
-        public bool TryClaimForAvatar(Random random)
+        public bool TryClaimForAvatar(Random random, DateTime nowUtc = default)
         {
-            if (ClaimedByAvatar || Popping || !AmbientTrigger || Spec == null ||
-                Spec.VariantId is "video" or "htlink" || _eggRolled || _eggAgeMs <= 4000) return false;
+            if (ClaimedByAvatar || Popping || !AmbientTrigger || Spec is not { Payload: not null, IsLive: false, IsDarter: false, IsFreeze: false } ||
+                Spec.VariantId is "video" or "htlink" || _eggRolled || (nowUtc == default ? DateTime.UtcNow : nowUtc).Subtract(_eggBornUtc).TotalMilliseconds <= 4000) return false;
             _eggRolled = true;
             if (random.Next(100) >= 10) return false;
             ClaimedByAvatar = true;
@@ -436,7 +436,6 @@ namespace ConditioningControlPanel.Services
         public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, double timeScale = 1.0)
         {
             if (ClaimedByAvatar) return Result.Alive;
-            _eggAgeMs += FuseStepMs;
             double ts = Spec == null ? 1.0 : Math.Max(0, timeScale);
             if (Popping)
             {
