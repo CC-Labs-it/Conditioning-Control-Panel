@@ -69,23 +69,44 @@ public sealed class Sync7HistoryGentleTests
     {
         EnsureApp();
         var s = CoreSettings.Current;
-        s.GentleVisuals = enabled;
-        var section = new PerformanceSettingsSection();
-        section.OnSectionShown();
-        var toggle = section.FindControl<CheckBox>("ChkGentleVisuals")!;
-        var choices = section.FindControl<StackPanel>("PnlGentleChoices")!;
-        Assert.Equal(enabled, toggle.IsChecked);
-        Assert.Equal(enabled, choices.IsVisible);
-        var controls = new Control[] { toggle, section.FindControl<ComboBox>("CmbGentleFade")!,
-            section.FindControl<ComboBox>("CmbGentleSpeed")! };
-        foreach (var control in controls)
+        var original = s.GentleVisuals;
+        try
         {
-            Assert.True(control.IsVisible);
-            Assert.DoesNotContain(control.GetLogicalAncestors().OfType<Control>(),
-                ancestor => ancestor != choices && !ancestor.IsVisible);
+            s.GentleVisuals = enabled;
+            var section = new PerformanceSettingsSection();
+            section.OnSectionShown();
+            var toggle = section.FindControl<CheckBox>("ChkGentleVisuals")!;
+            var choices = section.FindControl<StackPanel>("PnlGentleChoices")!;
+            Assert.Equal(enabled, toggle.IsChecked);
+            Assert.Equal(enabled, choices.IsVisible);
+            var controls = new Control[] { toggle, section.FindControl<ComboBox>("CmbGentleFade")!,
+                section.FindControl<ComboBox>("CmbGentleSpeed")! };
+            foreach (var control in controls)
+            {
+                Assert.True(control.IsVisible);
+                Assert.DoesNotContain(control.GetLogicalAncestors().OfType<Control>(),
+                    ancestor => ancestor != choices && !ancestor.IsVisible);
+            }
+            Assert.Equal(enabled, s.GentleVisuals);
         }
-        Assert.Equal(enabled, s.GentleVisuals);
+        finally { s.GentleVisuals = original; }
         return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VisibilityTestRestoresGentleVisuals(bool enabled) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = CoreSettings.Current;
+        var original = settings.GentleVisuals;
+        try
+        {
+            settings.GentleVisuals = !enabled;
+            await GentleControlsAreVisibleInSettings(enabled);
+            Assert.Equal(!enabled, settings.GentleVisuals);
+        }
+        finally { settings.GentleVisuals = original; }
     });
 
     [Fact]
