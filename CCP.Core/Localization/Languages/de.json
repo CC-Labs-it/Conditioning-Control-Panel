@@ -8506,5 +8506,10 @@
   "possession_doki_ok": "ok",
   "remote_invalid_hypnotube_url": "keine gültige HypnoTube-Video-URL",
   "remote_browser_unavailable": "der Browser konnte es nicht öffnen",
-  "remote_browser_screen_busy": "{0} ist auf dem Bildschirm"
+  "remote_browser_screen_busy": "{0} ist auf dem Bildschirm",
+  "chaos_camgirl_tip": "Trinkgeld +{0} Gold",
+  "chaos_golden_gold": "Glücksblase +{0} Gold",
+  "chaos_droplet_gold": "Tropfen +{0} Gold",
+  "chaos_gold_digger_spill": "Goldgräber verstreut Gold",
+  "chaos_gold_amount": "+{0} Gold"
 }

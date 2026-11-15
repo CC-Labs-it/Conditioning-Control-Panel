@@ -355,6 +355,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
                 BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
+                // WPF ChaosModeService.cs:1166: Rabbit's Foot raises this bonus roll.
+                if (Rng.NextDouble() < _state.GoldenChance)
+                {
+                    ChaosMeta.MarkDiscovered("bubble:golden");
+                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildGolden());
+                    PlayBubbleChime(0.30f);
+                }
+
                 if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
                 {
                     ChaosMeta.MarkDiscovered("bubble:prism");
@@ -483,6 +491,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             CountRegenPop();   // WPF ChaosModeService :1768
+            if (spec.IsDroplet || spec.IsGolden)
+            {
+                bool golden = spec.IsGolden;
+                _state.Focus += golden ? ChaosTuning.FOCUS_PER_GOLDEN : ChaosTuning.FOCUS_PER_DROPLET;
+                int level = ChaosMeta.IsBoonActive("rabbits_foot") ? ChaosMeta.BoonLevel("rabbits_foot") : 0;
+                var (min, max) = golden ? ChaosLifetimeBoons.GoldenPayRange(level) : (3, 7);
+                int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(min, max + 1));
+                BankGold(gold, floatAtPop: true);
+                _state.PushEvent($"{ChaosGlyphs.Gold} {Loc.GetF(golden ? "chaos_golden_gold" : "chaos_droplet_gold", gold)}");
+                if (golden) ChaosAnnouncerOverlay.Announce($"{ChaosGlyphs.Gold} {Loc.GetF("chaos_gold_amount", gold)}", ChaosAnnounceKind.PowerUp);
+                Pulse(Color.FromRgb(255, 215, 0), golden ? 0.35 : 0.12);
+                ChaosOverlayWindow.ChaosSfx.Play("golden_pop", golden ? 0.6f : 0.35f);
+                if (golden && _state.GoldDiggerEnabled)
+                {
+                    double scale = BubbleOverlay.ScaleFor(b);
+                    for (int i = 0; i < 3; i++)
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildGoldDroplet(
+                            BubbleOverlay.ChaosLastPopX * scale + Rng.Next(-50, 51),
+                            BubbleOverlay.ChaosLastPopY * scale + Rng.Next(-20, 21)));
+                    _state.PushEvent(Loc.Get("chaos_gold_digger_spill"));
+                }
+                return;
+            }
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
@@ -492,6 +523,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
                 Pulse(Color.FromRgb(0xC8, 0xA8, 0xFF), 0.40);
                 CreditPop();   // WPF ChaosModeService.cs:1844
+                RollCamGirlTip();
                 CheckComboMilestone();
                 return;
             }
@@ -507,6 +539,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CreditPop();   // WPF ChaosModeService.cs:1873
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            RollCamGirlTip();
             BodyBuzz(b);
             CheckComboMilestone();
         }
@@ -575,12 +608,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
             CreditPop();   // WPF ChaosModeService.cs:2025
+            RollCamGirlTip();
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
                 int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(5, 10));
-                BankGold(gold);
-                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
-                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
+                BankGold(gold, floatAtPop: true);
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
                 Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
@@ -1157,15 +1189,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity, _state.FuseTimeMult,
                     ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale), motion: ChaosMotion.RainDown);
             }
+            PlayBubbleChime(0.25f);
+            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
+        }
+
+        private static void PlayBubbleChime(float strength)
+        {
             var chime = $"chime{Rng.Next(1, 4)}.mp3";
             var sound = CoreModArt.AudioOverridePath(chime) ?? ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", chime));
             if (System.IO.File.Exists(sound))
             {
                 var settings = CoreSettings.Current;
-                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * 0.25f;
+                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * strength;
                 CoreAudio.PlayOneShot(sound, volume, "bubble-chime");
             }
-            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
@@ -1287,13 +1324,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 : $"{ChaosGlyphs.Gold} loop done — she tips +{tip} gold");
         }
 
+        /// <summary>WPF RollCamGirlTip (:1756): chance per treat, prism or snap.</summary>
+        private static void RollCamGirlTip()
+        {
+            if (_state == null || _state.CamGirlTipChance <= 0 || Rng.NextDouble() >= _state.CamGirlTipChance) return;
+            int tip = ChaosRunEngine.GoldScaled(_state, Rng.Next(2, 5));
+            BankGold(tip, floatAtPop: true);
+            _state.PushEvent($"{ChaosGlyphs.Gold} {Loc.GetF("chaos_camgirl_tip", tip)}");
+        }
+
         /// <summary>WPF BankGold (:1709): persists at once; the very first gold gets its feed line.</summary>
-        private static void BankGold(int gold)
+        private static void BankGold(int gold, bool floatAtPop = false)
         {
             if (gold <= 0 || _state == null) return;
             bool first = !ChaosMeta.State.SeenGoldFirst;
             if (first) ChaosMeta.State.SeenGoldFirst = true;
             ChaosMeta.AddGold(gold);   // persists
+            if (floatAtPop)
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
+                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
             if (first) _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");
             // ponytail: NotifyChaosGoldFirst bark (WPF :1721) -> chaos-payout-barks.
         }

@@ -9247,5 +9247,10 @@
   "possession_doki_ok": "ok",
   "remote_invalid_hypnotube_url": "not an eligible HypnoTube URL",
   "remote_browser_unavailable": "the browser could not open it",
-  "remote_browser_screen_busy": "{0} is on screen"
+  "remote_browser_screen_busy": "{0} is on screen",
+  "chaos_camgirl_tip": "tipped +{0} gold",
+  "chaos_golden_gold": "lucky bubble +{0} gold",
+  "chaos_droplet_gold": "droplet +{0} gold",
+  "chaos_gold_digger_spill": "gold digger spills",
+  "chaos_gold_amount": "+{0} gold"
 }
