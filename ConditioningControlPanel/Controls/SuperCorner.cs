@@ -129,7 +129,7 @@ namespace ConditioningControlPanel.Controls
 
             var star = new FormattedText("★", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 14,
                 lit ? Ink : DimStar, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            double c = BottomRight ? Leg * 0.66 : Leg * 0.34;
+            double c = BottomRight ? Leg * 0.62 : Leg * 0.38;
             dc.DrawText(star, new Point(c - star.Width / 2, c - star.Height / 2));
         }
 
