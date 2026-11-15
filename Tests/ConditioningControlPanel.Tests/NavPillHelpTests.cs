@@ -89,28 +89,113 @@ public class NavPillHelpTests
         return strip;
     }
 
+    // Declutter wave 1 (2026-11-15): the per-pill "?" badges became ONE help button at the right
+    // end of the strip, showing the help line of the pill that is lit.
     [Fact]
-    public void EveryPillWearsABadgeThatDoesNotGrowIt()
+    public void OneHelpButtonShowsTheLitPillsHelp()
     {
         WpfRenderHarness.OnStaThread(() =>
         {
             foreach (var s in NavSections.Order.Where(x => NavStripRules.ShowsPills(x.Key)))
             {
                 var strip = Laid(s.Key, s.DefaultTab);
+                var help = strip.HelpButtonForTests;
                 foreach (var key in strip.PillKeys)
                 {
+                    // No pill carries a badge of its own: its host holds the pill and nothing else.
                     var pill = strip.PillFor(key)!;
-                    var badge = strip.HelpBadgeFor(key);
-                    Assert.True(badge != null, $"{s.Key}/{key} has no ? badge");
-                    var host = (FrameworkElement)pill.Parent;
+                    var host = (System.Windows.Controls.Panel)pill.Parent;
+                    Assert.Single(host.Children);
                     Assert.Equal(pill.ActualWidth, host.ActualWidth, 2);
-                    Assert.Equal(pill.ActualHeight, host.ActualHeight, 2);
-                    // The badge sits on the pill's top-right corner, outside the button.
-                    Assert.False(badge!.IsDescendantOf(pill));
-                    var at = badge.TranslatePoint(new Point(0, 0), pill);
-                    Assert.InRange(at.Y, -SectionTabStrip.HelpBadgeOverTop - 0.5, 0);
-                    Assert.InRange(at.X + badge.ActualWidth - pill.ActualWidth, 0, SectionTabStrip.HelpBadgeOverRight + 0.5);
+                    Assert.False(help.IsDescendantOf(pill));
                 }
+                // The one button sits right of the last pill, inside the strip.
+                Assert.Equal(Visibility.Visible, help.Visibility);
+                var last = strip.PillFor(strip.PillKeys[^1])!;
+                double lastRight = last.TranslatePoint(new Point(last.ActualWidth, 0), strip).X;
+                double at = help.TranslatePoint(new Point(0, 0), strip).X;
+                Assert.True(at >= lastRight, $"{s.Key}: the help button overlaps the pills");
+                Assert.True(at + help.ActualWidth <= strip.ActualWidth + 0.5, $"{s.Key}: the help button is clipped");
+                // At the default window's strip width (1469) the tray still ends before the button:
+                // Companion's bar is the full one, and nothing of it may be squeezed.
+                var tight = Laid(s.Key, s.DefaultTab, 1469);
+                var tray = tight.TrayHostForTests;
+                double trayRight = tray.TranslatePoint(new Point(tray.ActualWidth, 0), tight).X;
+                double helpLeft = tight.HelpButtonForTests.TranslatePoint(new Point(0, 0), tight).X;
+                Assert.True(trayRight <= helpLeft + 0.5, $"{s.Key}: the tray ({trayRight:0.#}) runs under the help button ({helpLeft:0.#})");
+                Assert.True(helpLeft + tight.HelpButtonForTests.ActualWidth <= 1469.5, $"{s.Key}: the help button leaves the strip");
+
+                // It follows the lit pill.
+                foreach (var tab in s.Tabs.Where(t => !t.Hidden && t.Kind is NavTabKind.Tab or NavTabKind.Zone))
+                {
+                    strip.Show(s.Key, tab.Key);
+                    if (strip.ActivePillKey != tab.Key) continue;
+                    Assert.Equal(tab.Key, strip.HelpShownFor);
+                    Assert.Equal(SectionTabStrip.HelpText(tab), strip.HelpLineShown);
+                    Assert.NotNull(help.ToolTip);
+                }
+            }
+            // Settings draws no pills, so there is nothing to explain: hidden, the row keeps its width.
+            var settings = Laid(NavSections.Settings, NavSections.Find(NavSections.Settings)!.DefaultTab);
+            Assert.Equal(Visibility.Hidden, settings.HelpButtonForTests.Visibility);
+            Assert.Null(settings.HelpShownFor);
+        });
+    }
+
+    [Fact]
+    public void RestingPillsShowNoFaceUntilThePointerAsks()
+    {
+        Assert.True(NavStripRules.ShowsFace(active: true, hovered: false, pressed: false));
+        Assert.True(NavStripRules.ShowsFace(active: false, hovered: true, pressed: false));
+        Assert.True(NavStripRules.ShowsFace(active: false, hovered: false, pressed: true));
+        Assert.False(NavStripRules.ShowsFace(active: false, hovered: false, pressed: false));
+    }
+
+    [Fact]
+    public void TheCountBadgeSeamFeedsAPillAndStaysQuietWithoutAProvider()
+    {
+        var before = NavStripRules.BadgeProvider;
+        try
+        {
+            NavStripRules.BadgeProvider = null;
+            Assert.Null(NavStripRules.BadgeText("studio"));
+            NavStripRules.BadgeProvider = k => k == "studio" ? "  5 on " : k == "presets" ? "   " : k == "library" ? "123456789012" : null;
+            Assert.Equal("5 on", NavStripRules.BadgeText("studio"));
+            Assert.Null(NavStripRules.BadgeText("presets"));
+            Assert.Null(NavStripRules.BadgeText("justdrop"));
+            Assert.Null(NavStripRules.BadgeText(null));
+            Assert.Equal(NavStripRules.BadgeTextMax, NavStripRules.BadgeText("library")!.Length);
+
+            WpfRenderHarness.OnStaThread(() =>
+            {
+                var strip = Laid(NavSections.Studio, "studio");
+                Assert.Equal("5 on", strip.PillBadge("studio"));
+                Assert.Null(strip.PillBadge("presets"));
+                // The number moves: the strip asks again, and the pill keeps its 38 px.
+                NavStripRules.BadgeProvider = k => k == "studio" ? "6 on" : null;
+                strip.RefreshBadges();
+                Assert.Equal("6 on", strip.PillBadge("studio"));
+                Assert.Equal(NavStripRules.PillHeight, strip.PillFor("studio")!.ActualHeight, 1);
+                NavStripRules.BadgeProvider = _ => throw new InvalidOperationException("page gone");
+                strip.RefreshBadges();
+                Assert.Null(strip.PillBadge("studio"));
+            });
+        }
+        finally { NavStripRules.BadgeProvider = before; }
+    }
+
+    [Fact]
+    public void TheSectionWordIsTheRoomTitle()
+    {
+        Assert.True(NavStripRules.CrumbTitleSize >= NavStripRules.CrumbPageSize + 4);
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            foreach (var s in NavSections.Order.Where(x => NavStripRules.ShowsHeader(x.Key)))
+            {
+                var strip = Laid(s.Key, s.DefaultTab);
+                var word = Assert.IsType<System.Windows.Media.SolidColorBrush>(strip.CrumbWordBrush);
+                Assert.Equal(NavStripRules.Accent(s.Key), word.Color);
+                Assert.Equal(NavStripRules.CrumbTitleSize, strip.CrumbTitleSizeForTests);
             }
         });
     }

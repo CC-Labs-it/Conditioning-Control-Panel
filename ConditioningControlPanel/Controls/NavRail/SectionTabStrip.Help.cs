@@ -15,22 +15,16 @@ namespace ConditioningControlPanel.Controls.NavRail
     /// before clicking to know what it does", and "a prompt on Just Drop that asks if they want
     /// to open it, since it opens in a new window".
     ///
-    /// <para>Each pill sits in a host Grid with a small "?" badge on its top-right corner. The
-    /// badge is a SIBLING of the pill button, never inside it, so hovering or clicking the badge
-    /// never presses, squishes or navigates the pill. Its negative margins keep the host exactly
-    /// the pill's size: the strip does not grow by a pixel.</para>
+    /// <para>Declutter wave 1 (2026-11-15): the per-pill "?" badges became ONE help button at the
+    /// strip's right end (HelpButton in the XAML). It shows the help card of the pill that is lit,
+    /// on hover, on click and on keyboard focus + Enter. Every pill still says the same line in
+    /// its own tooltip, so "hover before clicking" keeps working without a badge per pill.</para>
     ///
     /// <para>A pill whose kind is Window (NavStripRules.AsksBeforeOpening) shows a small card under
     /// itself instead of opening at once; only "Open it" raises TabRequested.</para>
     /// </summary>
     public partial class SectionTabStrip
     {
-        /// <summary>The badge's diameter, and how far it pokes past the pill's top and right edges.</summary>
-        internal const double HelpBadgeSize = 17;
-        internal const double HelpBadgeOverTop = 5;
-        internal const double HelpBadgeOverRight = 4;
-
-        private readonly Dictionary<string, FrameworkElement> _helpBadges = new(StringComparer.Ordinal);
         private Popup? _confirm;
         private NavTab? _confirmTab;
 
@@ -39,63 +33,51 @@ namespace ConditioningControlPanel.Controls.NavRail
         internal static string HelpText(NavTab tab) =>
             SafeLoc(NavStripRules.HelpKey(tab), SafeLoc(tab.LabelKey + "_tip", string.Empty));
 
-        /// <summary>The pill plus its "?" badge, in one host that is exactly the pill's size.</summary>
-        private FrameworkElement HostWithHelp(string section, NavTab tab, Button pill, string label, Color tint, Thickness gap)
+        /// <summary>Point the strip's one help button at the lit pill: its card, its name for
+        /// UIA. No lit pill, or a pill with no help line, hides the button (Hidden, so the row
+        /// keeps its width).</summary>
+        private void RefreshHelp()
         {
-            var host = new Grid { Margin = gap, VerticalAlignment = VerticalAlignment.Center };
-            host.Children.Add(pill);
-
-            var help = HelpText(tab);
-            if (string.IsNullOrEmpty(help)) return host;
-
-            var rest = Freeze(new SolidColorBrush(NavStripRules.WithAlpha(NavStripRules.DarkInk, 0.92)));
-            var lit = Freeze(new SolidColorBrush(NavStripRules.Mix(tint, Colors.White, 0.15)));
-            var ring = Freeze(new SolidColorBrush(NavStripRules.WithAlpha(NavStripRules.Mix(tint, Colors.White, 0.25), 0.95)));
-            var mark = new TextBlock
+            if (HelpButton.ToolTip is ToolTip old) old.IsOpen = false;
+            var part = _activePill == null ? null : Part(_activePill);
+            var help = part == null ? string.Empty : HelpText(part.Tab);
+            if (part == null || _section == null || string.IsNullOrEmpty(help))
             {
-                Text = "?",
-                FontSize = 11,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, -1, 0, 0),
-            };
-            var badge = new Border
-            {
-                Width = HelpBadgeSize,
-                Height = HelpBadgeSize,
-                CornerRadius = new CornerRadius(HelpBadgeSize / 2),
-                Background = rest,
-                BorderBrush = ring,
-                BorderThickness = new Thickness(1),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, -HelpBadgeOverTop, -HelpBadgeOverRight, 0),
-                Cursor = Cursors.Help,
-                Child = mark,
-                ToolTip = HelpCard(section, tab, label, help),
-            };
-            ToolTipService.SetInitialShowDelay(badge, 60);
-            ToolTipService.SetShowDuration(badge, 60000);
-            ToolTipService.SetPlacement(badge, PlacementMode.Bottom);
-            System.Windows.Automation.AutomationProperties.SetName(badge, "? " + label);
-            System.Windows.Automation.AutomationProperties.SetHelpText(badge, help);
-            System.Windows.Automation.AutomationProperties.SetAutomationId(badge, "NavPillHelp_" + tab.Key);
-
-            badge.MouseEnter += (_, _) => { badge.Background = lit; mark.Foreground = new SolidColorBrush(NavStripRules.DarkInk); };
-            badge.MouseLeave += (_, _) => { badge.Background = rest; mark.Foreground = Brushes.White; };
-            // A click on the badge is a request to read, not to go: open the card, swallow the click.
-            badge.MouseLeftButtonDown += (_, e) =>
-            {
-                e.Handled = true;
-                if (badge.ToolTip is ToolTip tip) { tip.PlacementTarget = badge; tip.IsOpen = true; }
-            };
-
-            host.Children.Add(badge);
-            _helpBadges[tab.Key] = badge;
-            return host;
+                HelpButton.ToolTip = null;
+                HelpButton.Visibility = Visibility.Hidden;
+                _helpKey = null;
+                return;
+            }
+            var label = part.Label.Text;
+            HelpButton.ToolTip = HelpCard(_section, part.Tab, label, help);
+            ToolTipService.SetInitialShowDelay(HelpButton, 60);
+            ToolTipService.SetShowDuration(HelpButton, 60000);
+            ToolTipService.SetPlacement(HelpButton, PlacementMode.Bottom);
+            System.Windows.Automation.AutomationProperties.SetName(HelpButton, "? " + label);
+            System.Windows.Automation.AutomationProperties.SetHelpText(HelpButton, help);
+            HelpButton.Visibility = Visibility.Visible;
+            _helpKey = part.Tab.Key;
+            _helpLine = help;
         }
+
+        private string? _helpKey;
+        private string _helpLine = string.Empty;
+
+        // A click (or Enter / Space) is a request to read: open the card now, it closes when the
+        // pointer or the focus leaves.
+        private void HelpButton_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (HelpButton.ToolTip is not ToolTip tip) return;
+            tip.PlacementTarget = HelpButton;
+            tip.IsOpen = true;
+            if (_helpCloseHooked) return;
+            _helpCloseHooked = true;
+            HelpButton.MouseLeave += (_, _) => { if (HelpButton.ToolTip is ToolTip t) t.IsOpen = false; };
+            HelpButton.LostKeyboardFocus += (_, _) => { if (HelpButton.ToolTip is ToolTip t) t.IsOpen = false; };
+        }
+
+        private bool _helpCloseHooked;
 
         /// <summary>The hover card: the page name, what it does, and the tier line for a locked page.</summary>
         private static ToolTip HelpCard(string section, NavTab tab, string label, string help)
@@ -239,8 +221,12 @@ namespace ConditioningControlPanel.Controls.NavRail
 
         // ---- test seams ---------------------------------------------------------------------
 
-        /// <summary>Test seam: the "?" badge drawn over a pill (null when the pill has no help line).</summary>
-        internal FrameworkElement? HelpBadgeFor(string key) => _helpBadges.TryGetValue(key, out var b) ? b : null;
+        /// <summary>Test seam: the strip's one help button.</summary>
+        internal Button HelpButtonForTests => HelpButton;
+
+        /// <summary>Test seam: the pill whose help the button shows now (null = hidden), and its line.</summary>
+        internal string? HelpShownFor => HelpButton.Visibility == Visibility.Visible ? _helpKey : null;
+        internal string HelpLineShown => HelpButton.Visibility == Visibility.Visible ? _helpLine : string.Empty;
 
         /// <summary>Test seam: is the "opens a window" card up, and for which pill.</summary>
         internal string? ConfirmingKey => _confirmTab?.Key;
