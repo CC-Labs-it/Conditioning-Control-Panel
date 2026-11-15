@@ -80,4 +80,120 @@ public class MandatoryVideoTeardownTests
             BubbleCountWindow.NativeClock = oldClock;
         }
     }
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var limit = Stopwatch.StartNew();
+        while (!condition() && limit.Elapsed < TimeSpan.FromSeconds(3)) await Task.Delay(10);
+        Assert.True(condition(), "Timed out waiting for playback");
+    }
+
+    [Fact]
+    public Task NextClipWaitsForStopWithoutBlockingDispatcher() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var first = new Decoder();
+        var second = new Decoder();
+        var count = 0;
+        var replaced = 0;
+        var overlay = new MandatoryVideoOverlay(() => ++count == 1 ? first : second)
+        { PendingStopWaitMs = 1500, ReplaceEngineForTests = () => { replaced++; return true; } };
+        try
+        {
+            overlay.Show("one.mp4", false);
+            overlay.CloseAll();
+            Assert.True(first.Started.Wait(TimeSpan.FromSeconds(1)));
+            overlay.Show("two.mp4", false);
+            await Task.Delay(100); // dispatcher remains responsive while the stop is blocked
+            Assert.Equal(1, count);
+            first.Release.Set();
+            await WaitUntil(() => count == 2);
+            Assert.Equal(0, replaced);
+        }
+        finally { first.Release.Set(); second.Release.Set(); overlay.CloseAll(); }
+    });
+
+    [Fact]
+    public Task TimedOutStopReplacesEngineBeforeConstructingPlayer() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var first = new Decoder();
+        var second = new Decoder();
+        var count = 0;
+        var replacements = 0;
+        var replacedWhenBuilt = -1;
+        var overlay = new MandatoryVideoOverlay(() =>
+        {
+            count++;
+            if (count == 2) replacedWhenBuilt = replacements;
+            return count == 1 ? first : second;
+        }) { PendingStopWaitMs = 100, ReplaceEngineForTests = () => { replacements++; return true; } };
+        try
+        {
+            overlay.Show("one.mp4", false);
+            overlay.CloseAll();
+            Assert.True(first.Started.Wait(TimeSpan.FromSeconds(1)));
+            overlay.Show("two.mp4", false);
+            Assert.Equal(1, count);
+            await WaitUntil(() => count == 2);
+            Assert.Equal(1, replacements);
+            Assert.Equal(1, replacedWhenBuilt);
+            Assert.False(first.Release.IsSet);
+        }
+        finally { first.Release.Set(); second.Release.Set(); overlay.CloseAll(); }
+    });
+
+    [Fact]
+    public Task PendingPlaybackIsCancelledByCloseAndCannotStartOnFailedReplacement() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var first = new Decoder();
+        var count = 0;
+        var attempts = 0;
+        var overlay = new MandatoryVideoOverlay(() => { count++; return first; })
+        { PendingStopWaitMs = 80, ReplaceEngineForTests = () => { attempts++; return false; } };
+        try
+        {
+            overlay.Show("one.mp4", false);
+            overlay.CloseAll();
+            overlay.Show("cancelled.mp4", false);
+            overlay.CloseAll();
+            await Task.Delay(150);
+            Assert.Equal(1, count);
+            Assert.Equal(0, attempts);
+            overlay.Show("blocked.mp4", false);
+            await WaitUntil(() => attempts == 1);
+            Assert.Equal(1, count);
+            first.Release.Set();
+            await Task.Delay(100);
+            overlay.Show("still-blocked.mp4", false);
+            await WaitUntil(() => attempts == 2);
+            Assert.Equal(1, count);
+        }
+        finally { first.Release.Set(); overlay.CloseAll(); }
+    });
+
+    [Fact]
+    public void RetiredPresentationCallbacksCannotTouchNewClip() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var decoder = new Decoder();
+        decoder.Release.Set();
+        var overlay = new MandatoryVideoOverlay(() => decoder);
+        try
+        {
+            overlay.Show("one.mp4", false);
+            var frames = 0;
+            var bitmaps = 0;
+            var oldFrame = overlay.GuardPresentation(() => frames++);
+            var oldBitmap = overlay.GuardPresentation<int>(value => bitmaps += value);
+            oldFrame(); oldBitmap(1);
+            Assert.Equal(1, frames);
+            Assert.Equal(1, bitmaps);
+            overlay.CloseAll();
+            overlay.Show("two.mp4", false);
+            oldFrame(); oldBitmap(1);
+            Assert.Equal(1, frames);
+            Assert.Equal(1, bitmaps);
+            overlay.GuardPresentation(() => frames++)();
+            Assert.Equal(2, frames);
+        }
+        finally { overlay.CloseAll(); }
+    });
+
 }

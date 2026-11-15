@@ -88,6 +88,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly List<object> _quarantinedPlayback = new();
         internal int StopGraceMs { get; set; } = 5000; // WPF: 1 s plus 4 s straggler grace
         private IMandatoryPlayback? _playback;
+        private Task? _pendingStop;
+        private LibVLC? _pendingStopOwner, _playingEngine, _videoEngine;
+        private bool _engineUnusable;
+        private static readonly List<LibVLC> _retiredVideoEngines = new();
+        internal int PendingStopWaitMs { get; set; } = 2000;
+        internal Func<bool>? ReplaceEngineForTests { get; set; }
         private readonly Func<IMandatoryPlayback>? _playbackFactory;
         internal Random CutRandom { get; set; } = Random.Shared;
         private bool _cutStartChosen;
@@ -190,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
         internal IReadOnlyList<Window> Messages => _messages;
         internal VlcFrameSink? Sink => _sink;
+        internal bool PlaybackActive => _playback != null;
         internal int LiveTargets => _targets.Count;
         internal IEnumerable<Target> GazeTargets => _gracePaused ? Enumerable.Empty<Target>() : _targets.AsEnumerable().Reverse();
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
@@ -215,6 +222,80 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _videoReveal = null;
             var muted = _userMuted;
             if (_playback != null || _surfaces.Count > 0) CloseAll();
+            var generation = Interlocked.Increment(ref _escapeGeneration);
+            var pending = _pendingStop;
+            if (pending != null && !pending.IsCompletedSuccessfully)
+            {
+                _ = AwaitStopAsync(pending, _pendingStopOwner, generation, path, strict, muted);
+                return;
+            }
+            if (_engineUnusable && !ReplaceVideoEngine(_pendingStopOwner))
+            {
+                Dispatcher.UIThread.Post(() => { if (generation == EscapeGeneration) Scheduler.End(); });
+                return;
+            }
+            _pendingStop = null;
+            PlayReady(path, strict, muted);
+        }
+
+        // WPF VideoService.cs:7848-7882: do not build a player over the preceding Stop.
+        // Await without blocking the dispatcher, and invalidate the continuation on any later close/play.
+        private async Task AwaitStopAsync(Task pending, LibVLC? owner, int generation, string path, bool strict, bool muted)
+        {
+            await Task.WhenAny(pending, Task.Delay(PendingStopWaitMs)).ConfigureAwait(false);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (generation != EscapeGeneration) return;
+                if ((!pending.IsCompletedSuccessfully || _engineUnusable) && !ReplaceVideoEngine(owner))
+                {
+                    Dispatcher.UIThread.Post(() => { if (generation == EscapeGeneration) Scheduler.End(); });
+                    return;
+                }
+                if (ReferenceEquals(_pendingStop, pending)) _pendingStop = null;
+                PlayReady(path, strict, muted);
+            });
+        }
+
+        private bool ReplaceVideoEngine(LibVLC? owner)
+        {
+            _engineUnusable = true;
+            if (ReplaceEngineForTests is { } replace)
+            {
+                if (!replace()) return false;
+                _engineUnusable = false;
+                return true;
+            }
+            if (_playbackFactory != null) { _engineUnusable = false; return true; }
+            if (owner != null)
+            {
+                lock (_retiredVideoEngines)
+                    if (!_retiredVideoEngines.Contains(owner)) _retiredVideoEngines.Add(owner);
+            }
+            try
+            {
+                var replacement = LibVlcAudio.CreateIsolatedVideo();
+                if (ReferenceEquals(replacement, owner) || ReferenceEquals(replacement, LibVlcAudio.Shared))
+                    throw new InvalidOperationException("A fresh video engine is required");
+                _videoEngine = replacement;
+                _engineUnusable = false;
+                return true;
+            }
+            catch (Exception ex) { Log.Warning(ex, "VideoService: replacement video engine failed"); return false; }
+        }
+
+        internal Action GuardPresentation(Action callback)
+        {
+            var generation = EscapeGeneration;
+            return () => { if (generation == EscapeGeneration) callback(); };
+        }
+        internal Action<T> GuardPresentation<T>(Action<T> callback)
+        {
+            var generation = EscapeGeneration;
+            return value => { if (generation == EscapeGeneration) callback(value); };
+        }
+
+        private void PlayReady(string path, bool strict, bool muted)
+        {
             _wedge?.Dispose();   // a Show that failed before any surface skipped CloseAll: never leak its 1 s timers
             _wedge = new VideoWedgeWatchdog();
             _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
@@ -254,7 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
 
-            var vlc = LibVlcAudio.Shared;
+            var vlc = _videoEngine ?? LibVlcAudio.Shared;
             if (vlc == null)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
@@ -268,12 +349,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
+            _playingEngine = vlc;
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             Media? sinkMedia = null;
-            _sink = new VlcFrameSink(_player, () => sinkMedia, bmp =>
+            _sink = new VlcFrameSink(_player, () => sinkMedia, GuardPresentation<WriteableBitmap>(bmp =>
             {
                 foreach (var x in _surfaces) x.Video.Source = bmp;
                 if (!blur) return;
@@ -290,7 +372,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     x.Fill.Source = on ? _fill : null;
                     x.Fill.IsVisible = x.Scrim.IsVisible = on;
                 }
-            }, () =>
+            }), GuardPresentation(() =>
             {
                 FrameTs = Stopwatch.GetTimestamp();
                 if (FirstFrameMs < 0)
@@ -315,7 +397,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     x.Video.InvalidateVisual();
                     if (fill) x.Fill.InvalidateVisual();
                 }
-            });
+            }));
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
@@ -347,7 +429,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     OnNaturalVideoEnd();
                 });
             };
-            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
+            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) Scheduler.End(); });
             _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
             sinkMedia = _media;
             foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
@@ -1342,16 +1424,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // child window to detach. Never join Stop on the dispatcher.
                 var playback = _playback;
                 var player = _player;
+                var owner = _playingEngine;
                 var media = _media;
                 var sink = _sink;
                 _playback = null;
                 _player = null;
+                _playingEngine = null;
                 _media = null;
                 _sink = null;
                 if (playback != null)
                 {
-                    var graph = (playback, player, media, sink);
+                    var graph = (playback, player, owner, media, sink);
                     var stop = Task.Run(() => playback.Stop());
+                    _pendingStop = stop;
+                    _pendingStopOwner = owner;
                     _ = FinishStopAsync();
                     async Task FinishStopAsync()
                     {
