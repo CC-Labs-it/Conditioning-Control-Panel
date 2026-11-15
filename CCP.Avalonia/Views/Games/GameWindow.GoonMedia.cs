@@ -30,9 +30,11 @@ internal sealed partial class GameWindow
 
     private bool HandleGoonMedia(JObject o)
     {
-        if (_closing || _shellExiting) return true;
+        var type = (string?)o["type"];
+        if (_closing || _shellExiting)
+            return type is "media-flavour" or "media-more" or "peer-niches" or "noise-want";
         var s = CoreSettings.Current;
-        switch ((string?)o["type"])
+        switch (type)
         {
             case "media-flavour":
                 _goonMediaGeneration++;

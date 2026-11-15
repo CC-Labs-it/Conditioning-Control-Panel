@@ -5,6 +5,9 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Services.GoonGame;
 using System.Linq;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using System.Threading;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel;
 using Newtonsoft.Json.Linq;
@@ -14,8 +17,67 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    private static void RunGoonMedia(Action<MainShellWindow, LauncherWindow> body)
+    {
+        var materialize = GoonOnlineMedia.Materialize;
+        var release = GoonOnlineMedia.ReleaseTempFile;
+        try { Run(body); }
+        finally
+        {
+            GoonOnlineMedia.Materialize = materialize;
+            GoonOnlineMedia.ReleaseTempFile = release;
+        }
+    }
+
     [Fact]
-    public void GoonMedia_RemembersPickWithoutSessionConsentAndCleansNiches() => Run((shell, launcher) =>
+    public void GoonMedia_ExitDoneClosesImmediatelyAndDropsMediaDuringExit() => RunGoonMedia((shell, launcher) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
+        w.Load(GameWindow.Server()); w.Show();
+        var starts = 0;
+        w.GoonStartForTests = (_, _) => starts++;
+        CoreSettings.Current.GoonMediaOnline = true;
+        w.HandleMessage("{\"type\":\"exit\"}");
+        Assert.Contains(w, GameWindow.OpenWindowsForTests());
+        w.HandleMessage("{\"type\":\"media-flavour\",\"flavour\":\"pink\",\"subs\":[\"good\"]}");
+        Assert.Equal(0, starts);
+        w.HandleMessage("{\"type\":\"exit-done\"}");
+        Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+    });
+
+    [Fact]
+    public void GoonMedia_RunnerRestoresProcessWideMediaDelegates()
+    {
+        var originalMaterialize = GoonOnlineMedia.Materialize;
+        var originalRelease = GoonOnlineMedia.ReleaseTempFile;
+        Func<string, CancellationToken, Task<string?>> sentinelMaterialize = (_, _) => Task.FromResult<string?>(null);
+        Action<string> sentinelRelease = _ => { };
+        try
+        {
+            GoonOnlineMedia.Materialize = sentinelMaterialize;
+            GoonOnlineMedia.ReleaseTempFile = sentinelRelease;
+            RunGoonMedia((shell, launcher) =>
+            {
+                var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
+                w.Load(GameWindow.Server()); w.Show();
+                CoreSettings.Current.GoonMediaOnline = false;
+                w.HandleMessage("{\"type\":\"peer-niches\",\"subs\":[\"good\"]}");
+                Assert.NotSame(sentinelMaterialize, GoonOnlineMedia.Materialize);
+                Assert.NotSame(sentinelRelease, GoonOnlineMedia.ReleaseTempFile);
+                w.Close();
+            });
+            Assert.Same(sentinelMaterialize, GoonOnlineMedia.Materialize);
+            Assert.Same(sentinelRelease, GoonOnlineMedia.ReleaseTempFile);
+        }
+        finally
+        {
+            GoonOnlineMedia.Materialize = originalMaterialize;
+            GoonOnlineMedia.ReleaseTempFile = originalRelease;
+        }
+    }
+
+    [Fact]
+    public void GoonMedia_RemembersPickWithoutSessionConsentAndCleansNiches() => RunGoonMedia((shell, launcher) =>
     {
         var s = CoreSettings.Current;
         s.GoonMediaFlavour = "pink";
@@ -34,7 +96,7 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void GoonMedia_RefillRequiresSessionPickAndUsesCurrentSettings() => Run((shell, launcher) =>
+    public void GoonMedia_RefillRequiresSessionPickAndUsesCurrentSettings() => RunGoonMedia((shell, launcher) =>
     {
         var s = CoreSettings.Current;
         s.GoonMediaOnline = true; s.GoonMediaFlavour = "pink"; s.GoonMediaSubs = "good";
@@ -55,7 +117,7 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void GoonMedia_PeerAndNoiseUseOnlySanitizedNamesAndKnownBoards() => Run((shell, launcher) =>
+    public void GoonMedia_PeerAndNoiseUseOnlySanitizedNamesAndKnownBoards() => RunGoonMedia((shell, launcher) =>
     {
         var s = CoreSettings.Current; s.GoonMediaOnline = true;
         var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
@@ -73,7 +135,7 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void GoonMedia_MapsAssetsAndDropsOutdatedSnapshots() => Run((shell, launcher) =>
+    public void GoonMedia_MapsAssetsAndDropsOutdatedSnapshots() => RunGoonMedia((shell, launcher) =>
     {
         var w = new GameWindow(new GameWindow.Game("goon", "launcher_game_goon_title", "goon/index.html"));
         w.Load(GameWindow.Server()); w.Show();
@@ -93,7 +155,7 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void GoonMedia_DeclinesPeerAndKnownNoiseWhenOnlineIsOff() => Run((shell, launcher) =>
+    public void GoonMedia_DeclinesPeerAndKnownNoiseWhenOnlineIsOff() => RunGoonMedia((shell, launcher) =>
     {
         var s = CoreSettings.Current;
         s.GoonMediaOnline = false;
