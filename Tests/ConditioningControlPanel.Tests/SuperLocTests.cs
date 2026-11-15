@@ -37,15 +37,5 @@ public class SuperLocTests
         }
     }
 
-    private static string FindLanguages()
-    {
-        var d = new DirectoryInfo(AppContext.BaseDirectory);
-        while (d != null)
-        {
-            var p = Path.Combine(d.FullName, "ConditioningControlPanel", "Localization", "Languages");
-            if (Directory.Exists(p)) return p;
-            d = d.Parent;
-        }
-        throw new DirectoryNotFoundException("Localization/Languages");
-    }
+    private static string FindLanguages() => SourceRoots.LanguagesDirectory;
 }

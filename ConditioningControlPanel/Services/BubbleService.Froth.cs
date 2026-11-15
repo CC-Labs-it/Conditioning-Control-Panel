@@ -223,7 +223,7 @@ public partial class BubbleService
                 if (part.Payload is FlashPayload flash && part.FacePath != null)
                 {
                     flash.ImagePath = part.FacePath;
-                    flash.OriginPx = b.CenterPx;
+                    flash.OriginPx = (b.CenterPx.X, b.CenterPx.Y);
                     flash.FaceDiameterPx = b.FrothRadiusPx;
                 }
                 FireAmbientPayload(part.Payload);

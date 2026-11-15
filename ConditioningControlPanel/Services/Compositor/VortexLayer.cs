@@ -53,7 +53,7 @@ public sealed class VortexLayer : BaseLayer
     private int _generation;
     private volatile bool _exiting, _exitRequested, _openRequested;
 
-    public VortexLayer(CompositorEngine engine) : base(engine) { }
+    public VortexLayer(CompositorEngine engine) : base(engine.Wake) { }
 
     /// <summary>Just above the spiral it rides.</summary>
     public override int ZIndex => CompositorLayers.Spiral + 1;

@@ -118,8 +118,7 @@ public class SuperPreviewRuleTests
         SuperPreview.End(panic: true);
         Assert.Null(SuperPreview.Trying);
 
-        var root = Directory.GetParent(FindLanguages())!.Parent!.FullName;
-        var main = File.ReadAllText(Path.Combine(root, "MainWindow", "MainWindow.xaml.cs"));
+        var main = SourceRoots.ReadProductFile("MainWindow", "MainWindow.xaml.cs");
         int panic = main.IndexOf("private void HandlePanicKeyPress()", StringComparison.Ordinal);
         int end = main.IndexOf("SuperPreview.End(panic: true)", panic, StringComparison.Ordinal);
         int firstReturn = main.IndexOf("if (TryRacePauseOnEscape()) return;", panic, StringComparison.Ordinal);
@@ -127,19 +126,9 @@ public class SuperPreviewRuleTests
         Assert.True(end > panic && end < lockCard, "panic must end the Super try before any rung can return");
         Assert.True(firstReturn < end, "only the race pause (not a panic) may come first");
 
-        var exit = File.ReadAllText(Path.Combine(root, "Services", "EmergencyExit", "EmergencyExitHostService.cs"));
+        var exit = SourceRoots.ReadProductFile("Services", "EmergencyExit", "EmergencyExitHostService.cs");
         Assert.Contains("SuperPreview.End(panic: true)", exit);
     }
 
-    private static string FindLanguages()
-    {
-        var d = new DirectoryInfo(AppContext.BaseDirectory);
-        while (d != null)
-        {
-            var p = Path.Combine(d.FullName, "ConditioningControlPanel", "Localization", "Languages");
-            if (Directory.Exists(p)) return p;
-            d = d.Parent;
-        }
-        throw new DirectoryNotFoundException("Localization/Languages");
-    }
+    private static string FindLanguages() => SourceRoots.LanguagesDirectory;
 }

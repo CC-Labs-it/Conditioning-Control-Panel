@@ -1246,8 +1246,8 @@
                             </ControlTheme>
                         </ComboBox.ItemContainerTheme>
                     </ComboBox>
-                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_2_4_is_out}"
-                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_2_4_free_toys}"
+                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_3_0_is_out}"
+                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_3_0_back_to_the_basics}"
                             FontSize="11" FontWeight="Bold" Cursor="Hand">
                         <Button.Theme>
                             <ControlTheme TargetType="Button">

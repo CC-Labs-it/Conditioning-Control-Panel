@@ -357,6 +357,7 @@ namespace ConditioningControlPanel
             Services.Bureau.BureauIndexService.OpenFileProvider = (packId, entry) => ContentPacks?.GetPackFileStream(packId, entry);
             // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
             Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
+            Services.Compositor.PinkTintLayer.MotionLevelSource = () => Services.MotionFx.Level;
             // The mod service's side effects on a switch, and what it asks the head.
             CoreModsHooks.ModSwitched = newCompanionName => Brain?.OnModSwitched(newCompanionName);
             CoreModsHooks.ReloadBarkRules = () => Bark?.ReloadRules();
@@ -552,7 +553,11 @@ namespace ConditioningControlPanel
             // pick and the enable toggle; this head owns the flash surface and the whisper. Both
             // are lambdas, not eager reads - Subliminal is constructed in OnStartup, long after
             // this ctor runs, and until then the scheduler simply draws nothing.
-            CoreSubliminal.ShowProvider = text => Subliminal?.FlashPhrase(text);
+            // Super Afterglow "Super only": the scheduled cards rest (asked per tick, WPF 7.3.0 Timer_Tick).
+            CoreSubliminal.ShowProvider = text =>
+            {
+                if (!Services.Super.SuperAccess.ReplacesBase(Services.Super.SuperEffect.Afterglow)) Subliminal?.FlashPhrase(text);
+            };
             CoreSubliminal.RunStateChanged = running => Subliminal?.OnRunStateChanged(running);
 
             // The engine-running flag, for the feature cards that only live-apply while a session

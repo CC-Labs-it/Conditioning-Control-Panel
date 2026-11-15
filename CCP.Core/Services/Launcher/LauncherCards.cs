@@ -14,8 +14,9 @@ namespace ConditioningControlPanel.Services.Launcher;
 /// <param name="Rgb">Tile hue as 0xRRGGBB.</param>
 /// <param name="RequiresAccount">False only for entries that explicitly allow signed-out play.</param>
 /// <param name="IsNew">Shows the NEW badge.</param>
+/// <param name="Listed">False keeps the card off every page; --game and a shortcut still reach it (WPF 7.3.0).</param>
 public sealed record LauncherCard(string Id, string? ArtPath, string Glyph, uint Rgb,
-    bool RequiresAccount = true, bool IsNew = false)
+    bool RequiresAccount = true, bool IsNew = false, bool Listed = true)
 {
     public string TitleKey => "launcher_game_" + Id + "_title";
     public string BlurbKey => "launcher_game_" + Id + "_blurb";
@@ -34,8 +35,10 @@ public static class LauncherCards
     public static readonly IReadOnlyList<LauncherCard> All = new LauncherCard[]
     {
         new("backroom", "features/backroom.png", "♦", 0xB95CD8),
-        new("breakoutdemo", null, "●", 0x8CF5C8, RequiresAccount: false, IsNew: true),
-        new("breakout", null, "●", 0x55B7FF, IsNew: true),
+        // Breakout is ONE card since WPF 7.3.0: full game for whoever holds it, the demo for everyone
+        // else, never a padlock or an account. The demo keeps its id for --game, off the page.
+        new("breakoutdemo", null, "●", 0x8CF5C8, RequiresAccount: false, IsNew: true, Listed: false),
+        new("breakout", null, "●", 0x55B7FF, RequiresAccount: false, IsNew: true),
         // Piece by Piece: free for everyone (owner, 2026-09-27); its lobby asks a signed-out player.
         new("piecebypiece", "features/piecebypiece.png", "♟", 0x7B5CFF, RequiresAccount: false, IsNew: true),
         new("race", "features/race.png", "☕", 0xFFB36B),

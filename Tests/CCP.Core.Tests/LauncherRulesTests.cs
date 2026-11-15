@@ -15,8 +15,10 @@ public class LauncherRulesTests
             LauncherCards.All.Select(c => c.Id));
         Assert.Equal("launcher_game_intake_title", LauncherCards.Find(" INTAKE ")!.TitleKey);
         Assert.Null(LauncherCards.Find("panel"));
-        // Only the free demo and Piece by Piece open signed out.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece" }, LauncherCards.All.Where(c => !c.RequiresAccount).Select(c => c.Id));
+        // The free demo, Breakout (one card since WPF 7.3.0: demo for anyone not holding the full game)
+        // and Piece by Piece open signed out; the demo itself stays off the page.
+        Assert.Equal(new[] { "breakoutdemo", "breakout", "piecebypiece" }, LauncherCards.All.Where(c => !c.RequiresAccount).Select(c => c.Id));
+        Assert.Equal(new[] { "breakoutdemo" }, LauncherCards.All.Where(c => !c.Listed).Select(c => c.Id));
         var race = LauncherCards.Find("race")!;
         Assert.Equal((0xFF, 0xB3, 0x6B), (race.R, race.G, race.B));
     }

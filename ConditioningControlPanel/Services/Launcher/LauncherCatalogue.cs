@@ -211,6 +211,7 @@ public static class LauncherCatalogue
         }
     }
 
+    private static Color Tile(byte r, byte g, byte b) => Color.FromRgb(r, g, b);
     private static bool Always() => true;
     private static bool Never() => false;
 

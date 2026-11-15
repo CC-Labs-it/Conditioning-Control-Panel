@@ -135,6 +135,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
+            // The weekly free Super try is machine-wide: a restore must not hand back a spent week (WPF 7.3.0).
+            nameof(AppSettings.SuperPreviewUsedWeek),
             // ---- not in WPF (no WPF reader): which privacy switches this install owns (SyncPush) ----
             nameof(AppSettings.ConsentOwnedAccount),
             nameof(AppSettings.ConsentOwnedFields),
@@ -212,6 +214,7 @@ namespace ConditioningControlPanel.Services
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             restored.WalletNetSeen = current.WalletNetSeen;
+            restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
             restored.ConsentOwnedAccount = current.ConsentOwnedAccount;
             restored.ConsentOwnedFields = current.ConsentOwnedFields;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so

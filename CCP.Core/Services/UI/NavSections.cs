@@ -181,7 +181,7 @@ namespace ConditioningControlPanel.Services.UI
         /// <summary>True when a remembered tab is a key whose page left for the launcher's Games
         /// door (the old Games pill): that arrival came for the games and earns the "Moved" note.</summary>
         public static bool CameForGames(string? rememberedTab) =>
-            LauncherDoorFor(rememberedTab) == PanelDoorLink.Games;
+            LauncherDoorFor(rememberedTab) == "games";
 
         /// <summary>Old and alternate names per destination, for search ("(was X)" hints).
         /// Keyed by tab key; the Settings account section is "account", the full vault "premium".</summary>

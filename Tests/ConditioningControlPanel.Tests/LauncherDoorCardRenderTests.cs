@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// The launcher's two door cards, built offscreen through the same class the window uses. Set
 /// CCP_DOORS_SHOT_DIR to also write PNGs (rest, hover, mid-open) for a look.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class LauncherDoorCardRenderTests
 {
     private static readonly Color Pink = Color.FromRgb(0xFF, 0x69, 0xB4);

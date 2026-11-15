@@ -1,3 +1,4 @@
+using System;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -79,6 +80,8 @@ public class PinkTintLayer : BaseLayer
 
     // Super Creep picked as "Super only": the tint steps aside behind a veil while the fog runs.
     // OverlayService pushes the decision (UI thread); the veil eases on the engine tick.
+    /// <summary>The head's effective motion level (WPF: MotionFx.Level, seeded in App). Unseeded = Full.</summary>
+    public static Func<Models.MotionLevel> MotionLevelSource { get; set; } = () => Models.MotionLevel.Full;
     private volatile bool _stepAside;
     private double _veil = 1;
 
@@ -96,7 +99,7 @@ public class PinkTintLayer : BaseLayer
         double target = _stepAside ? 0 : 1;
         if (_veil == target) return;
         _veil = Super.SuperStepAside.Step(_veil, _stepAside, delta.TotalSeconds,
-            Super.SuperStepAside.FadeSecondsFor(MotionFx.Level));
+            Super.SuperStepAside.FadeSecondsFor(MotionLevelSource()));
         _dirty = true;
     }
 

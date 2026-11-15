@@ -71,11 +71,7 @@ public class SuperModePickTests
     [Fact]
     public void Every_label_and_line_is_in_all_nine_languages_without_em_dashes()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-        var files = Directory.GetFiles(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(SourceRoots.LanguagesDirectory, "*.json");
         Assert.Equal(10, files.Length);
         var keys = Enum.GetValues<SuperMode>().SelectMany(m => new[] { SuperModePick.LabelKey(m), SuperModePick.LineKey(m) }).ToArray();
         foreach (var f in files)

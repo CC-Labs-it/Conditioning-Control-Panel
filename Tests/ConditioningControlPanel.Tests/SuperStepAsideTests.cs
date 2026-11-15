@@ -81,11 +81,12 @@ public class SuperStepAsideTests
     {
         foreach (var name in new[] { "PinkTintLayer.cs", "SpiralLayer.cs" })
         {
-            var src = Read("ConditioningControlPanel", "Services", "Compositor", name);
+            var src = SourceRoots.ReadProductFile("Services", "Compositor", name);   // PinkTintLayer lives in CCP.Core
             var render = src.Substring(src.IndexOf("public override void Render", StringComparison.Ordinal));
             Assert.Contains("SuperStepAside.Ease(_veil)", render);
             Assert.Contains("public void SetStepAside(bool on)", src);
-            Assert.Contains("SuperStepAside.FadeSecondsFor(MotionFx.Level)", src);
+            // CCP.Core's PinkTintLayer reads MotionFx.Level through the MotionLevelSource seam App seeds.
+            Assert.Contains(name == "PinkTintLayer.cs" ? "SuperStepAside.FadeSecondsFor(MotionLevelSource())" : "SuperStepAside.FadeSecondsFor(MotionFx.Level)", src);
         }
     }
 
