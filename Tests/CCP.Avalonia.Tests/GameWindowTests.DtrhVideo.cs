@@ -134,6 +134,40 @@ public sealed partial class GameWindowTests
         finally { w.Close(); AvatarTubeWindow.TestLive = null; tube.Close(); }
     });
 
+    // WPF DtrhHostService.cs:819-835,1073: both run end and close release a rapid freeze.
+    [Fact]
+    public void Dtrh_rapid_freeze_release_cannot_leave_the_voice_paused() => RunDtrh(true, (shell, _, _, _) =>
+    {
+        var oldTube = AvatarTubeWindow.TestLive;
+        var tube = new AvatarTubeWindow(shell);
+        AvatarTubeWindow.TestLive = tube;
+        var queued = new List<Action>();
+        var applied = new List<bool>();
+        var control = LibVlcAudio.LatestPauseControl(new object(), () => false, applied.Add, queued.Add);
+        Action stop = () => { };
+        LibVlcAudio.Pausers.AddOrUpdate(stop, control.Set);
+        typeof(AvatarTubeWindow).GetField("_stopSpoken", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(tube, stop);
+        var w = GameWindow.Launch("dtrh")!;
+        try
+        {
+            w.HandleMessage("{\"type\":\"freeze-state\",\"on\":true}");
+            w.HandleMessage("{\"type\":\"run-ended\"}");
+            Assert.Equal(2, queued.Count);
+            queued[1](); queued[0]();
+            Assert.Equal(new[] { false, false }, applied);
+            queued.Clear(); applied.Clear();
+            w.HandleMessage("{\"type\":\"freeze-state\",\"on\":true}");
+            w.Close();
+            Assert.Equal(2, queued.Count);
+            queued[1](); queued[0]();
+            Assert.Equal(new[] { false, false }, applied);
+        }
+        finally
+        {
+            w.Close(); LibVlcAudio.Pausers.Remove(stop); AvatarTubeWindow.TestLive = oldTube; tube.Close();
+        }
+    });
+
     [Fact]
     public void Dtrh_video_scheduler_posts_covering_state() => RunDtrh(true, (_, _, _, _) =>
     {
