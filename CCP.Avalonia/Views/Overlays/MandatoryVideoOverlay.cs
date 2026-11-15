@@ -1410,6 +1410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             EndEnhancement();
             System.Threading.Interlocked.Increment(ref _escapeGeneration);
             _floatingOnScreen = false;
+            FirstFrameMs = -1; // a pending replay has not presented a frame
             SampleCutPlayback();
             var watched = _cutClock?.PlayedMs;
             _closing = true;

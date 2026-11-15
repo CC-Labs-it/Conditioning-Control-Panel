@@ -36,7 +36,8 @@ public class MandatoryVideoTeardownTests
             var overlay = new MandatoryVideoOverlay(() => decoder);
             try
             {
-                overlay.Show("fake.mp4", false); var clock = Stopwatch.StartNew(); overlay.CloseAll();
+                overlay.Show("fake.mp4", false); Assert.Equal(0, overlay.FirstFrameMs);
+                var clock = Stopwatch.StartNew(); overlay.CloseAll(); Assert.Equal(-1, overlay.FirstFrameMs);
                 Assert.True(clock.ElapsedMilliseconds < 100, $"CloseAll took {clock.ElapsedMilliseconds} ms");
                 Assert.True(decoder.Started.Wait(TimeSpan.FromSeconds(1))); Assert.False(decoder.Disposed.IsSet);
                 decoder.Release.Set();
