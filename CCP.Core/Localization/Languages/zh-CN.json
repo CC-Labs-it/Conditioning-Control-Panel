@@ -1,4 +1,5 @@
 {
+  "mod_art_frame": "构图", "mod_art_framed": "已构图", "mod_art_frame_title": "图片构图", "mod_art_frame_help": "拖动以移动，滚轮缩放，双击重置。每个界面都有独立的裁剪。", "mod_art_frame_reset": "重置", "mod_art_frame_reset_all": "全部重置", "mod_art_frame_fluid": "宽度随窗口变化。请将主体保持在虚线区域内。", "mod_art_frame_decode": "无法读取图片。", "mod_art_frame_intro": "选择图片后点击构图，分别调整各界面的裁剪。拖动移动，滚轮缩放，双击重置。",
   "chaos_bonus_first_taste": "初次品尝",
   "chaos_bonus_first_snap": "初次弹响",
   "chaos_bonus_first_whisper": "初次低语",

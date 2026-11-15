@@ -1,4 +1,5 @@
 {
+  "mod_art_frame": "Encuadrar", "mod_art_framed": "Encuadrado", "mod_art_frame_title": "Encuadrar imagen", "mod_art_frame_help": "Arrastra para mover, usa la rueda para ampliar o haz doble clic para restablecer. Cada superficie tiene su propio recorte.", "mod_art_frame_reset": "Restablecer", "mod_art_frame_reset_all": "Restablecer todo", "mod_art_frame_fluid": "El ancho cambia con la ventana. Mantén el sujeto dentro de la zona punteada.", "mod_art_frame_decode": "No se pudo leer la imagen.", "mod_art_frame_intro": "Elige una imagen y selecciona Encuadrar para ajustar cada superficie. Arrastra para mover, usa la rueda para ampliar y haz doble clic para restablecer.",
   "chaos_bonus_first_taste": "primer sabor",
   "chaos_bonus_first_snap": "primer chasquido",
   "chaos_bonus_first_whisper": "primer susurro",

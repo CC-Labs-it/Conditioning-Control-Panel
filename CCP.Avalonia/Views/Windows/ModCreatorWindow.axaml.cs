@@ -1855,13 +1855,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             clearBtn.Click += (_, _) => ClearImageSlot(resourceKey);
             borderHolder.Children.Add(clearBtn);
 
-            // ponytail: the DECISION is already portable - WPF's SlotIsFramable is one line,
-            // ModArtFramingRegistry.FramableBindingsFor(resourceKey).Any(), and that registry is in
-            // Core (CCP.Core/Services/ModArtFraming.cs). What is missing is where the affordance
-            // LEADS: ConditioningControlPanel/Windows/ModCreatorWindow.ArtFraming.cs is a
-            // drag-a-preview cropping editor, ~400 lines of WPF, a redraw and not a move. A "Frame"
-            // button with nothing behind it is worse than no button, so nothing is added here until
-            // that panel is ported.
+            if (ModArtFramingRegistry.FramableBindingsFor(resourceKey).Any())
+                borderHolder.Children.Add(CreateFrameButton(resourceKey));
 
             var border = new Border
             {
@@ -1965,6 +1960,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     parts.Hint.Opacity = 0;
                 }
 
+                UpdateFrameButton(key);
                 UpdateStatusBar();
             }
             catch { /* invalid image file */ }
@@ -2007,6 +2003,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 parts.Hint.Opacity = 0.2;
             }
 
+            UpdateFrameButton(key);
             UpdateStatusBar();
         }
 
