@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -24,8 +25,7 @@ public class CrashLogTests
             await AvaloniaTestDispatcher.RunAsync(async () =>
             {
                 var log = new CrashLog(dir, "1", _ => dialogs++);
-                CrashLog.Current = log;
-                CrashLog.RegisterDispatcherLast();
+                Dispatcher.UIThread.UnhandledException += log.DispatcherFault;
                 try
                 {
                     for (var i = 0; i < 2; i++)
@@ -33,16 +33,19 @@ public class CrashLogTests
                         var done = new TaskCompletionSource<bool>();
                         void Check(object? _, DispatcherUnhandledExceptionEventArgs e) => done.TrySetResult(e.Handled);
                         Dispatcher.UIThread.UnhandledException += Check;
-                        Dispatcher.UIThread.Post(() => throw new InvalidOperationException("/home/alice/private"));
-                        Assert.True(await done.Task.WaitAsync(TimeSpan.FromSeconds(5)));
-                        Dispatcher.UIThread.UnhandledException -= Check;
+                        try
+                        {
+                            Dispatcher.UIThread.Post(() => throw new InvalidOperationException("/home/alice/private"));
+                            Assert.True(await done.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+                        }
+                        finally { Dispatcher.UIThread.UnhandledException -= Check; }
                     }
                     Assert.Equal(1, dialogs);
                     var text = File.ReadAllText(Path.Combine(dir, "crash.log"));
                     Assert.DoesNotContain("/home/alice", text);
                     Assert.Equal(2, text.Split("CRASH REPORT").Length - 1);
                 }
-                finally { CrashLog.Current = null; }
+                finally { Dispatcher.UIThread.UnhandledException -= log.DispatcherFault; }
             });
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
@@ -60,8 +63,7 @@ public class CrashLogTests
                 var log = new CrashLog(dir, "1", _ => dialogs++);
                 void Filter(object? _, DispatcherUnhandledExceptionEventArgs e) => e.Handled = true;
                 Dispatcher.UIThread.UnhandledException += Filter;
-                CrashLog.Current = log;
-                CrashLog.RegisterDispatcherLast();
+                Dispatcher.UIThread.UnhandledException += log.DispatcherFault;
                 var done = new TaskCompletionSource<bool>();
                 void Check(object? _, DispatcherUnhandledExceptionEventArgs e) => done.TrySetResult(e.Handled);
                 Dispatcher.UIThread.UnhandledException += Check;
@@ -76,11 +78,130 @@ public class CrashLogTests
                 {
                     Dispatcher.UIThread.UnhandledException -= Check;
                     Dispatcher.UIThread.UnhandledException -= Filter;
-                    CrashLog.Current = null;
+                    Dispatcher.UIThread.UnhandledException -= log.DispatcherFault;
                 }
             });
         }
         finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public async Task DispatcherTestsRestoreExistingCrashState()
+    {
+        var dir = NewDir();
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                var previous = CrashLog.Current;
+                var dialogs = 0;
+                var sentinel = new CrashLog(dir, "1", _ => dialogs++);
+                CrashLog.Current = sentinel;
+                try
+                {
+                    await DispatcherFaultIsHandledRedactedAndShowsOnlyOneDialog();
+                    await PreviouslyHandledFaultIsLeftAlone();
+                    Assert.Same(sentinel, CrashLog.Current);
+                    var done = new TaskCompletionSource<bool>();
+                    void Guard(object? _, DispatcherUnhandledExceptionEventArgs e)
+                    { var wasHandled = e.Handled; e.Handled = true; done.TrySetResult(wasHandled); }
+                    Dispatcher.UIThread.UnhandledException += Guard;
+                    try
+                    {
+                        Dispatcher.UIThread.Post(() => throw new InvalidOperationException("sentinel"));
+                        Assert.False(await done.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+                        Assert.Equal(0, dialogs);
+                        Assert.False(File.Exists(Path.Combine(dir, "crash.log")));
+                    }
+                    finally { Dispatcher.UIThread.UnhandledException -= Guard; }
+                }
+                finally { CrashLog.Current = previous; }
+            });
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    private sealed class RenderFailure : Exception
+    {
+        internal RenderFailure() { HResult = unchecked((int)0x88980406); }
+    }
+
+    [Fact]
+    public void RecognizesWpfRenderFailureSignatures()
+    {
+        Assert.True(CrashLog.IsRenderFailure(new OutOfMemoryException()));
+        Assert.True(CrashLog.IsRenderFailure(new RenderFailure()));
+        Assert.True(CrashLog.IsRenderFailure(new Exception("UCEERR_CHANNEL")));
+        Assert.True(CrashLog.IsRenderFailure(new Exception("error 0x88980406")));
+        Assert.False(CrashLog.IsRenderFailure(new Exception("render failed")));
+    }
+
+    [Fact]
+    public async Task FatalDispatcherFaultExitsOnceAndNeverShowsDialog()
+    {
+        var dir = NewDir();
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                var exits = 0;
+                var dialogs = 0;
+                var log = new CrashLog(dir, "1", _ => dialogs++, () => exits++);
+                Dispatcher.UIThread.UnhandledException += log.DispatcherFault;
+                try
+                {
+                    foreach (var error in new Exception[] { new OutOfMemoryException(), new Exception("ordinary"), new RenderFailure() })
+                    {
+                        var done = new TaskCompletionSource<bool>();
+                        void Check(object? _, DispatcherUnhandledExceptionEventArgs e) => done.TrySetResult(e.Handled);
+                        Dispatcher.UIThread.UnhandledException += Check;
+                        try
+                        {
+                            Dispatcher.UIThread.Post(() => throw error);
+                            Assert.True(await done.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+                        }
+                        finally { Dispatcher.UIThread.UnhandledException -= Check; }
+                    }
+                    Assert.Equal(1, exits);
+                    Assert.Equal(0, dialogs);
+                    Assert.Equal(3, File.ReadAllText(Path.Combine(dir, "crash.log")).Split("CRASH REPORT").Length - 1);
+                }
+                finally { Dispatcher.UIThread.UnhandledException -= log.DispatcherFault; }
+            });
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void FatalExitUsesBackgroundThreadsAndBackstopWhenExitHangs()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var exited = new ManualResetEventSlim();
+        using var terminated = new ManualResetEventSlim();
+        var callerThread = Environment.CurrentManagedThreadId;
+        var exitThread = 0;
+        var backstopThread = 0;
+        try
+        {
+            CrashLog.BeginExit(() =>
+            {
+                exitThread = Environment.CurrentManagedThreadId;
+                entered.Set();
+                release.Wait();
+                exited.Set();
+            }, () => { backstopThread = Environment.CurrentManagedThreadId; terminated.Set(); }, 100);
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            Assert.NotEqual(callerThread, exitThread);
+            Assert.True(terminated.Wait(TimeSpan.FromSeconds(5)));
+            Assert.NotEqual(callerThread, backstopThread);
+            Assert.NotEqual(exitThread, backstopThread);
+        }
+        finally
+        {
+            release.Set();
+            Assert.True(exited.Wait(TimeSpan.FromSeconds(5)));
+        }
     }
 
     [Fact]

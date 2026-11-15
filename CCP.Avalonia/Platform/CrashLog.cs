@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
@@ -18,12 +19,14 @@ internal sealed class CrashLog
     private readonly string _directory;
     private readonly string _version;
     private readonly Action<Exception> _showError;
+    private readonly Action _beginExit;
     private readonly Dictionary<string, int> _counts = new();
     private readonly object _gate = new();
     private bool _dialogShown;
+    private int _exitInProgress;
 
-    internal CrashLog(string directory, string version, Action<Exception> showError)
-    { _directory = directory; _version = version; _showError = showError; }
+    internal CrashLog(string directory, string version, Action<Exception> showError, Action? beginExit = null)
+    { _directory = directory; _version = version; _showError = showError; _beginExit = beginExit ?? BeginExit; }
 
     internal static CrashLog? Current;
 
@@ -42,16 +45,45 @@ internal sealed class CrashLog
         Dispatcher.UIThread.UnhandledException += OnDispatcher;
     }
 
-    private static void OnDispatcher(object? sender, DispatcherUnhandledExceptionEventArgs e) => Current?.DispatcherFault(e);
+    private static void OnDispatcher(object? sender, DispatcherUnhandledExceptionEventArgs e) => Current?.DispatcherFault(sender, e);
 
-    internal void DispatcherFault(DispatcherUnhandledExceptionEventArgs e)
+    internal void DispatcherFault(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
         if (e.Handled) return;
         e.Handled = true;
         Write("DISPATCHER", e.Exception);
-        if (_dialogShown) return;
+        if (IsRenderFailure(e.Exception))
+        {
+            if (Interlocked.Exchange(ref _exitInProgress, 1) == 0) _beginExit();
+            return;
+        }
+        if (Volatile.Read(ref _exitInProgress) != 0 || _dialogShown) return;
         _dialogShown = true;
         try { _showError(e.Exception); } catch { }
+    }
+
+    // WPF Services/Diagnostics/UiThreadExit.cs:35 and App.xaml.cs:2493.
+    internal static bool IsRenderFailure(Exception ex) => ex is OutOfMemoryException
+        || ex.HResult == unchecked((int)0x88980406)
+        || ex.Message.Contains("UCEERR_", StringComparison.Ordinal)
+        || ex.Message.Contains("0x88980406", StringComparison.Ordinal);
+
+    private static void BeginExit() => BeginExit(() =>
+    {
+        try { Serilog.Log.CloseAndFlush(); } catch { }
+        Environment.Exit(1);
+    }, () => Environment.FailFast("Unrecoverable render failure"), 5000);
+
+    // Never block the dispatcher: an exit handler can be waiting for it. The backstop
+    // runs independently of both log flushing and ProcessExit, on every platform.
+    internal static void BeginExit(Action exit, Action terminate, int graceMs)
+    {
+        var backstop = new Thread(() => { Thread.Sleep(Math.Max(0, graceMs)); terminate(); })
+        { IsBackground = true, Name = "CCP exit backstop" };
+        backstop.Start();
+        var worker = new Thread(() => { try { exit(); } catch { } })
+        { IsBackground = true, Name = "CCP exit" };
+        worker.Start();
     }
 
     private static void ShowError(Exception e)
