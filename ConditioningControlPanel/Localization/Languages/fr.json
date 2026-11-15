@@ -5822,6 +5822,8 @@
   "super_twist_lightsdown": "Plus tu regardes, plus la pièce disparaît. Détourne les yeux et la lumière revient en vacillant.",
   "super_twist_scrawl": "Les mots s'impriment sur les bords où ils frappent, jusqu'à les remplir du mantra. Clique sur un mot et il traverse l'écran.",
   "super_twist_undertow": "Une lentille douce dans le flou rétrécit d'elle-même jusqu'à ce que tout soit flou. Clique pour l'élargir.",
+  "super_steam_words": "Mots dans la brume",
+  "tooltip_super_steam_words": "Des mots apparaissent là où la brume a été essuyée puis est revenue, et s'effacent ensuite. Désactivé : brume seule.",
   "super_corner_title": "V2 : {0}",
   "super_for_supporters": "Pour les soutiens",
   "dash_card_tip": "Clic ouvre les réglages. Clic droit allume ou éteint.",

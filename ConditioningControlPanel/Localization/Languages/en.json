@@ -6382,6 +6382,8 @@
   "super_twist_lightsdown": "The longer you look, the more the room falls away. Look away and the lights stutter back on.",
   "super_twist_scrawl": "Words stamp the walls where they hit, so the edges slowly fill with the mantra. Click one and it slams across.",
   "super_twist_undertow": "A soft lens in the blur shrinks on its own until everything is blur. Click to widen it.",
+  "super_steam_words": "Words in the fog",
+  "tooltip_super_steam_words": "Words show where the fog was wiped and came back, then fade. Off: fog only.",
   "super_corner_title": "V2: {0}",
   "super_for_supporters": "For supporters",
   "dash_card_tip": "Click opens the settings. Right-click switches it on or off.",

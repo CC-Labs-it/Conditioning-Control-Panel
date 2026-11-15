@@ -5822,6 +5822,8 @@
   "super_twist_lightsdown": "Quanto mais você olha, mais o quarto some. Desvie o olhar e as luzes voltam piscando.",
   "super_twist_scrawl": "As palavras carimbam as bordas onde batem, até elas se encherem do mantra. Clique numa e ela atravessa a tela.",
   "super_twist_undertow": "Uma lente suave no desfoque encolhe sozinha até tudo ficar borrado. Clique para abrir.",
+  "super_steam_words": "Palavras na névoa",
+  "tooltip_super_steam_words": "Palavras aparecem onde a névoa foi limpa e voltou, depois somem. Desligado: só névoa.",
   "super_corner_title": "V2: {0}",
   "super_for_supporters": "Para quem apoia",
   "dash_card_tip": "Clique abre as configurações. Clique direito liga ou desliga.",
