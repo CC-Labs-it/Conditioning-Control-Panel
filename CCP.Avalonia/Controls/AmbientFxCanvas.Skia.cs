@@ -36,16 +36,21 @@ namespace ConditioningControlPanel.Avalonia.Controls
             context.Custom(new FogDrawOp(new Rect(0, 0, w, h), sprites.ToArray(), _mistColor, brush));
         }
 
-        internal static void PaintFog(SKCanvas canvas, FogSprite[] sprites, Color color)
+        internal static void PaintFog(SKCanvas canvas, FogSprite[] sprites, Color color, SKRect bounds)
         {
-            using var filter = SKColorFilter.CreateBlendMode(new SKColor(color.R, color.G, color.B), SKBlendMode.Modulate);
-            using var paint = new SKPaint { IsAntialias = true, BlendMode = SKBlendMode.Plus, ColorFilter = filter };
-            foreach (var sprite in sprites)
+            canvas.SaveLayer(bounds, null);
+            try
             {
-                paint.Color = SKColors.White.WithAlpha((byte)Math.Clamp(sprite.Alpha * 255f, 0, 255));
-                float r = sprite.Size / 2;
-                canvas.DrawImage(FogDot.Value, new SKRect(sprite.X - r, sprite.Y - r, sprite.X + r, sprite.Y + r), paint);
+                using var filter = SKColorFilter.CreateBlendMode(new SKColor(color.R, color.G, color.B), SKBlendMode.Modulate);
+                using var paint = new SKPaint { IsAntialias = true, BlendMode = SKBlendMode.Plus, ColorFilter = filter };
+                foreach (var sprite in sprites)
+                {
+                    paint.Color = SKColors.White.WithAlpha((byte)Math.Clamp(sprite.Alpha * 255f, 0, 255));
+                    float r = sprite.Size / 2;
+                    canvas.DrawImage(FogDot.Value, new SKRect(sprite.X - r, sprite.Y - r, sprite.X + r, sprite.Y + r), paint);
+                }
             }
+            finally { canvas.Restore(); }
         }
 
         private sealed class FogDrawOp : ICustomDrawOperation
@@ -65,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (feature != null)
                 {
                     using var lease = feature.Lease();
-                    PaintFog(lease.SkCanvas, _sprites, _color);
+                    PaintFog(lease.SkCanvas, _sprites, _color, new SKRect(0, 0, (float)Bounds.Width, (float)Bounds.Height));
                     return;
                 }
                 foreach (var sprite in _sprites)
