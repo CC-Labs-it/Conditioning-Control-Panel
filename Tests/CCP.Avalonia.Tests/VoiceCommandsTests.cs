@@ -174,8 +174,11 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(null, async (shell, mic, engine) =>
     {
+        // Commands below are injected directly. A replaying wake mic can dispatch a second command.
+        Assert.False(shell.WakeLoopArmed);
+        Assert.Equal(0, mic.Starts);
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
@@ -212,8 +215,9 @@ public sealed class VoiceCommandsTests
             LockdownService.Current = null;
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
+        Assert.Equal(0, mic.Starts);
         await Task.CompletedTask;
-    });
+    }, wakeEnabled: false);
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
     /// ships mantras; the WAV says the phrase, so it matches, credits 30 XP and paints the verdict.</summary>
@@ -365,7 +369,7 @@ public sealed class VoiceCommandsTests
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
 
-    private static Task Run(byte[]? pcm, Func<MainShellWindow, WavMic, SpeechEngine, Task> body) =>
+    private static Task Run(byte[]? pcm, Func<MainShellWindow, WavMic, SpeechEngine, Task> body, bool wakeEnabled = true) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
@@ -373,12 +377,12 @@ public sealed class VoiceCommandsTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var mic = new WavMic(pcm ?? LockCardVoiceTests.Wav());   // pcm: zeros = a silent room
-            using var engine = new SpeechEngine(mic, new[] { LockCardVoiceTests.Model() });
+            using var engine = new SpeechEngine(mic, wakeEnabled ? new[] { LockCardVoiceTests.Model() } : Array.Empty<string>());
             var s = CoreSettings.Current;
             var saved = (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.SpeechWakeWords,
                 s.AvatarEnabled, s.PanicKeyEnabled, s.PanicKey, s.SpokenMantrasEnabled, s.LockCardVoiceMode);
             (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.SpeechWakeWords, s.AvatarEnabled)
-                = (true, true, false, WavPhrase, true);
+                = (true, wakeEnabled, false, WavPhrase, true);
             CoreEntitlement.HasPremiumProvider = () => true;
             PulseMicSource.Use(engine, mic);
             var shell = new MainShellWindow();
