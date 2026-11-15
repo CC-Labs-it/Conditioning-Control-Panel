@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -62,8 +63,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_dtrhFrozen == on) return;
             _dtrhFrozen = on;
             DtrhHapticDirector.OnWorldFreeze(on);
+            // WPF DtrhHostService.cs:814-837: video and the companion's spoken line pause together.
             if (on) MandatoryVideoOverlay.Instance.PausePrimary();
             else MandatoryVideoOverlay.Instance.PlayPrimary();
+            AvatarTubeWindow.Live?.SetSpokenAudioPaused(on);
         }
 
         private void ReleaseDtrhVideo()

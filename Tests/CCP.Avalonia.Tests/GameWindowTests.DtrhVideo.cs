@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
@@ -88,6 +90,48 @@ public sealed partial class GameWindowTests
             Assert.Equal(0.1, seen[0].DurationMult);
         }
         finally { w.Close(); EffectPayload.Firer = old; }
+    });
+
+    // WPF EffectPayloadFiring.cs:163-168: through the production runner, the audio payload is a whisper.
+    [Fact]
+    public void Dtrh_audio_payload_whispers_through_the_production_runner() => RunDtrh(true, (_, _, _, _) =>
+    {
+        var (oldFirer, oldShow, oldPool) = (EffectPayload.Firer, CoreSubliminal.ShowProvider, CoreSettings.Current.SubliminalPool);
+        var shown = new List<string>();
+        EffectPayload.Firer = global::ConditioningControlPanel.Avalonia.App.FireChaosPayload;
+        CoreSubliminal.ShowProvider = shown.Add;
+        CoreSettings.Current.SubliminalPool = new() { ["dtrh whisper"] = true };
+        var w = GameWindow.Launch("dtrh")!;
+        try
+        {
+            w.HandleMessage("{\"type\":\"fire-payload\",\"kind\":\"audio\"}");
+            Assert.Equal(new[] { "dtrh whisper" }, shown);
+        }
+        finally { w.Close(); (EffectPayload.Firer, CoreSubliminal.ShowProvider, CoreSettings.Current.SubliminalPool) = (oldFirer, oldShow, oldPool); }
+    });
+
+    // WPF DtrhHostService.cs:814-837 + :607: a freeze pauses the companion's line; run end resumes it.
+    [Fact]
+    public void Dtrh_freeze_pauses_and_releases_the_spoken_line() => RunDtrh(true, (shell, _, _, _) =>
+    {
+        var tube = new AvatarTubeWindow(shell);
+        AvatarTubeWindow.TestLive = tube;
+        var pauses = new List<bool>();
+        Action stop = () => { };
+        LibVlcAudio.Pausers.AddOrUpdate(stop, pauses.Add);
+        typeof(AvatarTubeWindow).GetField("_stopSpoken", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(tube, stop);
+        var w = GameWindow.Launch("dtrh")!;
+        try
+        {
+            w.HandleMessage("{\"type\":\"freeze-state\",\"on\":true}");
+            Assert.Equal(new[] { true }, pauses);
+            w.HandleMessage("{\"type\":\"run-ended\"}");
+            Assert.Equal(new[] { true, false }, pauses);
+            w.HandleMessage("{\"type\":\"freeze-state\",\"on\":true}");
+            w.Close();   // teardown releases a live freeze too
+            Assert.Equal(new[] { true, false, true, false }, pauses);
+        }
+        finally { w.Close(); AvatarTubeWindow.TestLive = null; tube.Close(); }
     });
 
     [Fact]
