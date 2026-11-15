@@ -263,7 +263,7 @@ public sealed partial class AccountSeedTests
         Assert.True(await AccountSeed.LoadProfileAsync());
         var s = CoreSettings.Current;
         wire.Hold = new TaskCompletionSource();
-        wire.SyncReply = """{"success":true,"user":{"level":90,"xp":9000000,"current_season":"2026-08"}}""";
+        wire.SyncReply = """{"success":true,"oopsie_credits":7,"user":{"level":90,"xp":9000000,"current_season":"2026-08"}}""";
         sync.UtcNow = () => T0.AddSeconds(31);
         var push = sync.PushAsync("level-up");
         sync.Reset();                                             // a logout that did not wait (the 5 s bound ran out)
@@ -272,6 +272,24 @@ public sealed partial class AccountSeedTests
         wire.Hold.SetResult();
         Assert.False(await push);
         Assert.Equal(1, s.PlayerLevel);
+        Assert.Equal(0, s.StreakFixCharges);
+    });
+
+    [Fact]
+    public void AResponseFromAnEarlierSessionOfTheSameAccountIsIgnored() => WithFreshInstall(async () =>
+    {
+        var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
+        Assert.True(await AccountSeed.LoadProfileAsync());
+        var s = CoreSettings.Current;
+        wire.Hold = new TaskCompletionSource();
+        wire.SyncReply = """{"success":true,"oopsie_credits":7,"user":{}}""";
+        sync.UtcNow = () => T0.AddSeconds(31);
+        var push = sync.PushAsync("level-up");
+        sync.Reset();
+        sync.MarkLoaded(null);
+        wire.Hold.SetResult();
+        Assert.False(await push);
+        Assert.Equal(0, s.StreakFixCharges);
     });
 
     [Fact]

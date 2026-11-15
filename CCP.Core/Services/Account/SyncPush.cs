@@ -142,6 +142,7 @@ namespace ConditioningControlPanel.Services
                 wait.TotalSeconds, _backoffFailures, status?.ToString() ?? "none");
         }
 
+        private int _sessionGeneration;
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
@@ -163,6 +164,7 @@ namespace ConditioningControlPanel.Services
         public void MarkLoaded(IEnumerable<string>? serverAchievements)
         {
             _serverAchievements = serverAchievements?.ToArray();
+            Interlocked.Increment(ref _sessionGeneration);
             Loaded = true;
         }
 
@@ -172,6 +174,7 @@ namespace ConditioningControlPanel.Services
             StopHeartbeat();
             DescentReader?.Reset();
             Loaded = false;
+            Interlocked.Increment(ref _sessionGeneration);
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -247,6 +250,7 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
                 var id = s.UnifiedId!;
+                var session = Volatile.Read(ref _sessionGeneration);
                 if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
@@ -279,7 +283,7 @@ namespace ConditioningControlPanel.Services
                 }
                 using var _ = response;
                 // Signed out (or into another account) while this was in flight: the answer is not ours to apply.
-                if (!Loaded || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
+                if (!Loaded || session != Volatile.Read(ref _sessionGeneration) || !string.Equals(s.UnifiedId, id, StringComparison.Ordinal))
                 {
                     Log.Information("Profile sync response dropped - the account changed while it was in flight");
                     return false;

@@ -157,13 +157,17 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// The <c>/v2/user/sync</c> response rules a head that only knows level/xp/season acts on, in WPF's order
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
-        /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
+        /// Descent refusal) or the server-ahead adopt, then the scalar settings and agreed watermark.
         /// ponytail: no anti-cheat clamp (a downward write; skipping it errs safe), no skills union, recap or
         /// SeasonResetPending on level_reset - add each with its feature. Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
-            if (response["user"] is not JObject node) return;
+            if (response["user"] is not JObject node)
+            {
+                ApplySyncFlags(settings, response, nowUtc);
+                return;
+            }
             var user = node.ToObject<V2User>()!;
             ApplyCurveEpoch(settings, user.CurveEpoch);
             if (ShouldAdoptServerSeason(user.CurrentSeason, settings.CurrentSeason))
@@ -197,7 +201,28 @@ namespace ConditioningControlPanel.Services
                     settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, Epoch(settings));
                 }
             }
+            ApplySyncFlags(settings, response, nowUtc);
+            if (node["display_name"]?.Type == JTokenType.String && !string.IsNullOrEmpty(user.DisplayName))
+                settings.UserDisplayName = user.DisplayName;
+            if (node["highest_level_ever"]?.Type == JTokenType.Integer)
+                settings.HighestLevelEver = user.HighestLevelEver;
             RecordAgreedServerXp(settings, user.Xp, TotalXp(settings), "V2 sync");
+        }
+
+        // WPF ProfileSyncService.cs:2014-2068: top-level fields do not require a user object.
+        private static void ApplySyncFlags(AppSettings settings, JObject response, DateTime nowUtc)
+        {
+            if (response["oopsie_used_season"]?.Type == JTokenType.String)
+                settings.SeasonalStreakRecoveryUsed = response.Value<string>("oopsie_used_season") == EnhancementAnalytics.CurrentSeasonKey(settings, nowUtc);
+            if (response["oopsie_credits"]?.Type == JTokenType.Integer)
+                settings.StreakFixCharges = response.Value<int>("oopsie_credits");
+            if (response["is_season0_og"]?.Type == JTokenType.Boolean)
+                settings.IsSeason0Og = response.Value<bool>("is_season0_og");
+            if (response["bonus_daily_rerolls"]?.Type == JTokenType.Integer || response["bonus_weekly_rerolls"]?.Type == JTokenType.Integer)
+            {
+                settings.BonusDailyRerolls = response["bonus_daily_rerolls"]?.Type == JTokenType.Integer ? response.Value<int>("bonus_daily_rerolls") : 0;
+                settings.BonusWeeklyRerolls = response["bonus_weekly_rerolls"]?.Type == JTokenType.Integer ? response.Value<int>("bonus_weekly_rerolls") : 0;
+            }
         }
 
         /// <summary>
