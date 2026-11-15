@@ -190,6 +190,28 @@ public sealed class SherpaWakeCaptureTests
         finally { Directory.Delete(root, true); }
     }
 
+    private sealed record Th(float T) : IDisposable { public void Dispose() { } }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CalibrationPicksStrictestThresholdThatCatchesSaysAndClosesMic()
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, t, _) => new Th(t), _ => new Handle(),
+            (spk, _, samples) => ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f));
+        void Chunks(int n, byte hi) { for (int i = 0; i < n; i++) { var b = new byte[1600]; for (int j = 1; j < b.Length; j += 2) b[j] = hi; mic.Feed!(b, b.Length); } }
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, default);
+            Chunks(8, 0); // room tone seeds the floor
+            for (int say = 0; say < 5; say++) { Chunks(10, 0x40); Chunks(12, 0); }
+            var (threshold, message) = await run;
+            Assert.Equal(.20, threshold!.Value, 3);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("she_wake_cal_done", 5, 5, .20), message);
+            Assert.Equal(1, mic.Stops);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public void StatusAndTooltipFollowModelStateAndLanguage() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
@@ -217,10 +239,204 @@ public sealed class SherpaWakeCaptureTests
                     Assert.NotEqual(key, expected);
                     Assert.Equal(expected, tab.TxtSL_WakeEngineStatus.Text);
                     Assert.Equal(expected, global::Avalonia.Controls.ToolTip.GetTip(row));
+                    Assert.Equal(key == "she_wake_model_active" ? global::Avalonia.Media.Color.FromRgb(0x90, 0xEE, 0x90) : global::Avalonia.Media.Color.FromRgb(0x88, 0x88, 0x88),
+                        ((global::Avalonia.Media.ISolidColorBrush)tab.TxtSL_WakeEngineStatus.Foreground!).Color);
                 }
             }
         }
         finally { shell.RequestExit(); loc.SetLanguage(language); Directory.Delete(root, true); }
     });
 
+    private static void Feed(Mic mic, int n, short v)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            var b = new byte[1600];
+            for (int j = 0; j < b.Length; j += 2) (b[j], b[j + 1]) = ((byte)v, (byte)(v >> 8));
+            mic.Feed?.Invoke(b, b.Length);
+        }
+    }
+    private static SherpaWakeSpotter LoudSaysFireAtPointTwenty(string root) => new(root, (_, t, _) => new Th(t), _ => new Handle(),
+        (spk, _, samples) => ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f));
+
+    [Fact]
+    public async System.Threading.Tasks.Task CancelDuringSweepDiscardsTheResult()
+    {
+        var root = Model(); var mic = new Mic();
+        using var cts = new System.Threading.CancellationTokenSource();
+        int decodes = 0;
+        using var kws = new SherpaWakeSpotter(root, (_, t, _) => new Th(t), _ => new Handle(), (spk, _, samples) =>
+        {
+            if (++decodes == 1) cts.Cancel(); // Stop/panic lands while the sweep decodes
+            return ((Th)spk).T <= .2001f && System.Linq.Enumerable.Any(samples, x => x > .3f);
+        });
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, cts.Token);
+            Feed(mic, 8, 0);
+            for (int say = 0; say < 5; say++) { Feed(mic, 10, 0x4000); Feed(mic, 12, 0); }
+            var (threshold, message) = await run;
+            Assert.Null(threshold);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("she_wake_cal_cancelled"), message);
+            Assert.True(decodes < 4); // the sweep stopped instead of decoding every candidate
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private sealed class SlowMic : ConditioningControlPanel.Services.Speech.IMicSource
+    {
+        internal readonly System.Threading.ManualResetEventSlim Entered = new(), Opened = new();
+        internal int Stops;
+        public bool HasDevice => true;
+        public System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.SpeechInputDevice> ListDevices() => Array.Empty<ConditioningControlPanel.SpeechInputDevice>();
+        public IDisposable Start(Action<byte[], int> feed) { Entered.Set(); Opened.Wait(); return new Stop(this); }
+        private sealed class Stop(SlowMic mic) : IDisposable { public void Dispose() => System.Threading.Interlocked.Increment(ref mic.Stops); }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CancelWhileMicStartsClosesTheMicBeforeCancelReturns()
+    {
+        var root = Model(); var mic = new SlowMic();
+        using var cts = new System.Threading.CancellationTokenSource();
+        using var kws = LoudSaysFireAtPointTwenty(root);
+        try
+        {
+            var run = System.Threading.Tasks.Task.Run(() => kws.CalibrateAsync(mic, 2, false, null, cts.Token));
+            Assert.True(mic.Entered.Wait(5000));
+            var cancel = System.Threading.Tasks.Task.Run(() => { cts.Cancel(); return System.Threading.Volatile.Read(ref mic.Stops); });
+            await System.Threading.Tasks.Task.Delay(150); // cancel lands while Start is still opening the device
+            mic.Opened.Set();
+            Assert.Equal(1, await cancel); // the borrower may take the mic as soon as Cancel returns
+            var (threshold, _) = await run;
+            Assert.Null(threshold);
+            Assert.Equal(1, mic.Stops);
+        }
+        finally { mic.Opened.Set(); Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CalibrationFloorFollowsRisingRoomNoise()
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = LoudSaysFireAtPointTwenty(root);
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, default);
+            Feed(mic, 8, 200); // a quiet room seeds the floor
+            for (double v = 200; v < 1200; v *= 1.01) Feed(mic, 1, (short)v); // a fan spins up past the seeded onset gate
+            for (int say = 0; say < 5; say++) { Feed(mic, 10, 0x4000); Feed(mic, 12, 1200); }
+            var (threshold, message) = await run;
+            Assert.Equal(.20, threshold!.Value, 3);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("she_wake_cal_done", 5, 5, .20), message);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CalibrationCatchingUnderSeventyPercentReportsPartialFit()
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = LoudSaysFireAtPointTwenty(root);
+        try
+        {
+            var run = kws.CalibrateAsync(mic, 2, false, null, default);
+            Feed(mic, 8, 0);
+            foreach (var loud in new[] { true, true, true, false, false }) { Feed(mic, 10, (short)(loud ? 0x4000 : 0x2000)); Feed(mic, 12, 0); }
+            var (threshold, message) = await run;
+            Assert.Equal(.20, threshold!.Value, 3);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("she_wake_cal_partial", 3, 5, .20), message);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public System.Threading.Tasks.Task PanicDuringCalibrationClosesMicAtOnce() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(), (_, _, _) => false);
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { WakeSpotterOverride = kws, WakeMicOverride = mic };
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var consent = s.MicConsentGiven;
+        s.MicConsentGiven = true;
+        try
+        {
+            shell.Show();
+            shell.SL_Calibrate_Click();
+            await Until(() => mic.Feed != null);
+            Assert.True(kws.IsListening); // the mic pill reads this
+            System.Linq.Enumerable.Single(ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All, x => x.Id == "wake-calibration").Stop(shell);
+            var end = DateTime.UtcNow.AddMilliseconds(250);
+            while (mic.Feed != null && DateTime.UtcNow < end) await System.Threading.Tasks.Task.Delay(5);
+            Assert.Null(mic.Feed);
+            await Until(() => !shell.CalibratingWake);
+            Assert.False(kws.IsListening);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("she_wake_cal_cancelled"), shell.SheListeningPage!.TxtSL_WakeEngineStatus.Text);
+        }
+        finally { s.MicConsentGiven = consent; shell.RequestExit(); Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public System.Threading.Tasks.Task MicBorrowerSeesCalibrationTakesMicAtOnceAndOwnsReArm() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(), (_, _, _) => false);
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { WakeSpotterOverride = kws, WakeMicOverride = mic };
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var (consent, ptt) = (s.MicConsentGiven, s.SpeechPushToTalkEnabled);
+        var (premium, speech) = (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider);
+        s.MicConsentGiven = true;
+        try
+        {
+            shell.Show();
+            shell.SL_Calibrate_Click();
+            await Until(() => mic.Feed != null);
+            // Push-to-talk enabled mid-calibration: it would re-arm when calibration ends on its own.
+            (s.SpeechPushToTalkEnabled, ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (true, () => true, () => true);
+            Assert.True(shell.UserDrivenVoiceArmed); // lock card, intake and Deeper speak stand it down
+            shell.StopVoiceInput(); // the borrower's hand-off
+            Assert.Null(mic.Feed); // freed before the borrower opens its own capture
+            await Until(() => !shell.CalibratingWake);
+            Assert.False(shell.PushToTalkArmed); // the borrower still holds the mic
+            shell.RefreshVoiceInputModes(); // the borrower releases it
+            Assert.True(shell.PushToTalkArmed);
+        }
+        finally
+        {
+            (s.MicConsentGiven, s.SpeechPushToTalkEnabled) = (consent, ptt);
+            (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (premium, speech);
+            shell.StopVoiceInput(); shell.RequestExit(); Directory.Delete(root, true);
+        }
+    });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public System.Threading.Tasks.Task BorrowerReturningBeforeCalibrationUnwindsReArmsUnlessStopped(bool stopAfter) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var root = Model(); var mic = new Mic();
+        using var kws = new SherpaWakeSpotter(root, (_, _, _) => new Handle(), _ => new Handle(), (_, _, _) => false);
+        var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow { WakeSpotterOverride = kws, WakeMicOverride = mic };
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var (consent, ptt) = (s.MicConsentGiven, s.SpeechPushToTalkEnabled);
+        var (premium, speech) = (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider);
+        s.MicConsentGiven = true;
+        try
+        {
+            shell.Show();
+            shell.SL_Calibrate_Click();
+            await Until(() => mic.Feed != null);
+            (s.SpeechPushToTalkEnabled, ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (true, () => true, () => true);
+            shell.StopVoiceInput(); // the borrower takes the mic...
+            shell.RefreshVoiceInputModes(); // ...and hands it back while calibration is still unwinding
+            Assert.True(shell.CalibratingWake);
+            if (stopAfter) shell.StopVoiceInput(); // an explicit stop after the return wins
+            await Until(() => !shell.CalibratingWake);
+            Assert.Equal(!stopAfter, shell.PushToTalkArmed);
+        }
+        finally
+        {
+            (s.MicConsentGiven, s.SpeechPushToTalkEnabled) = (consent, ptt);
+            (ConditioningControlPanel.CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.CoreSpeech.IsAvailableProvider) = (premium, speech);
+            shell.StopVoiceInput(); shell.RequestExit(); Directory.Delete(root, true);
+        }
+    });
 }

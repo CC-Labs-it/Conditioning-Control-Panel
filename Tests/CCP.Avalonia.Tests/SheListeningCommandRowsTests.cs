@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -14,7 +13,6 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
-using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -57,55 +55,32 @@ public sealed class SheListeningCommandRowsTests
             loc.SetLanguage("en");
             var tab = new SheListeningTabView();
             var grid = Assert.IsAssignableFrom<Control>(tab.TxtSL_WakeEngineStatus.Parent!.Parent);
-            var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-            Directory.CreateDirectory(root);
-            foreach (var name in new[] { "encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt", "keywords.txt" })
-                File.WriteAllText(Path.Combine(root, name), "");
-            using var configured = new SherpaWakeSpotter(root);
-            using var missing = new SherpaWakeSpotter(Path.Combine(root, "missing"));
-            var shell = new MainShellWindow { WakeSpotterOverride = configured };
+            var shell = new MainShellWindow();
             shell.Show();
             try
             {
-                var english = new[] { Loc.Get("she_wake_unavailable_tooltip"),
-                    Loc.Get("she_wake_unavailable_status"), Loc.Get("she_wake_calibration_unavailable") };
-                Assert.Contains("not available", english[0]);
-                Assert.Equal("The optional wake engine is not available in this version. Using the built-in recognizer.", english[1]);
+                var english = Loc.Get("she_wake_cal_no_model");
+                shell.WakeSpotterOverride = new ConditioningControlPanel.Avalonia.Platform.SherpaWakeSpotter(System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString()));
                 foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
                 {
                     loc.SetLanguage(code);
                     Dispatcher.UIThread.RunJobs();
-                    var tooltip = Loc.Get("she_wake_unavailable_tooltip");
-                    var status = Loc.Get("she_wake_unavailable_status");
-                    var calibration = Loc.Get("she_wake_calibration_unavailable");
-                    Assert.NotEqual("she_wake_unavailable_tooltip", tooltip);
-                    Assert.NotEqual("she_wake_unavailable_status", status);
-                    Assert.NotEqual("she_wake_calibration_unavailable", calibration);
-                    if (code != "en")
-                    {
-                        Assert.NotEqual(english[0], tooltip);
-                        Assert.NotEqual(english[1], status);
-                        Assert.NotEqual(english[2], calibration);
-                    }
-                    Assert.Equal(tooltip, ToolTip.GetTip(grid));
+                    var status = Loc.Get("she_wake_model_missing");
+                    var calibration = Loc.Get("she_wake_cal_no_model");
+                    Assert.NotEqual("she_wake_cal_no_model", calibration);
+                    if (code != "en") Assert.NotEqual(english, calibration);
+                    Assert.Equal(status, ToolTip.GetTip(grid));
                     Assert.Equal(status, tab.TxtSL_WakeEngineStatus.Text);
                     shell.SL_Calibrate_Click();
                     var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
                     Assert.Equal(calibration, dialog.FindControl<TextBlock>("TxtMessage")!.Text);
                     dialog.Close();
-                    shell.WakeSpotterOverride = missing;
-                    shell.SL_Calibrate_Click();
-                    var missingDialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
-                    Assert.Equal(Loc.Get("she_wake_model_missing"), missingDialog.FindControl<TextBlock>("TxtMessage")!.Text);
-                    missingDialog.Close();
-                    shell.WakeSpotterOverride = configured;
                 }
             }
             finally
             {
                 foreach (var dialog in shell.OwnedWindows.ToList()) dialog.Close();
                 shell.RequestExit();
-                Directory.Delete(root, true);
                 loc.SetLanguage(saved);
             }
         });
