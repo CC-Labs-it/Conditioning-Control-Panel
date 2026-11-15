@@ -618,16 +618,8 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.AIService.LocalAiService.PersistentMemoryRecalled += OnCompanionMemoryRecalled;
         }
 
-        internal static Action<AchievementEngine> CreditCompanionRecall = target => target.TryUnlockExclusive("she_remembers");
-
-        private static void OnCompanionMemoryRecalled(object? sender, EventArgs e)
-        {
-            var target = Achievements;
-            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                if (target != null && ReferenceEquals(Achievements, target)) CreditCompanionRecall(target);
-            });
-        }
+        private static void OnCompanionMemoryRecalled(object? sender, EventArgs e) =>
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Achievements?.TryUnlockExclusive("she_remembers"));
 
         /// <summary>WPF FlashDisplayed / SubliminalDisplayed / OnBubblePopped, as a MemorySignalWriter feature id.</summary>
         internal static event Action<string>? FeatureUsed;

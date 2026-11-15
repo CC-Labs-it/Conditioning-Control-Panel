@@ -848,7 +848,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 // .NET 10 WPF FrameworkElement.SetLayoutOffset appends layout first, render second
                 // (FrameworkElement.cs:5224,5256), so the bob displacement stays unscaled.
                 img.RenderTransform = name == "ImgAvatar" || name == "ImgAvatarB"
-                    ? new TransformGroup { Children = { new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _portraitBreath, _portraitWobble } }, _avatarFloat } }
+                    ? new TransformGroup { Children = { transform ?? new ScaleTransform(1, 1), _avatarFloat } }
                     : transform;
             }
 

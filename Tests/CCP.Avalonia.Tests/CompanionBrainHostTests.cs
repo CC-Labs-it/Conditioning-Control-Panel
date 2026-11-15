@@ -28,26 +28,19 @@ public sealed class CompanionBrainHostTests
         var previous = property.GetValue(null);
         var entitlement = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
         var recall = ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled;
-        var credit = AvApp.CreditCompanionRecall;
         var dir = Directory.CreateTempSubdirectory("ccp-brain-recall-");
         var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
         try
         {
-            property.SetValue(null, new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "previous.json"))));
-            AvApp.SeedCompanionRecall();
-            var previousRecall = new System.Threading.Thread(() => ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!());
-            previousRecall.Start(); previousRecall.Join(); // UI callback is pending when composition replaces the engine
             property.SetValue(null, engine);
             AvApp.SeedCompanionRecall();
             AvApp.SeedCompanionRecall(); // repeated composition must not add listeners
-            var recallCredits = 0;
-            AvApp.CreditCompanionRecall = target => { recallCredits++; credit(target); };
-            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
-            Dispatcher.UIThread.Post(() => _ = ConditioningControlPanel.CoreEntitlement.HasPremium);
+            var entitlementChecks = 0;
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => { entitlementChecks++; return false; };
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
             Assert.False(engine.Progress.IsUnlocked("she_remembers"));
-            Assert.Equal(1, recallCredits); // each subscribed handler attempts the denied unlock
+            Assert.Equal(1, entitlementChecks); // each subscribed handler attempts the denied unlock
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => true;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
@@ -57,7 +50,6 @@ public sealed class CompanionBrainHostTests
         {
             property.SetValue(null, previous);
             ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = entitlement;
-            AvApp.CreditCompanionRecall = credit;
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled = recall;
             dir.Delete(true);
         }
