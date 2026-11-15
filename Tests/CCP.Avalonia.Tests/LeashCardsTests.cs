@@ -75,6 +75,20 @@ public sealed class LeashCardsTests
     });
     private static T Find<T>(Control root, string tag) where T : Control => root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
     private static IEnumerable<Control> Tagged(Control root, string tag) => root.GetLogicalDescendants().OfType<Control>().Where(c => c.Tag as string == tag);
+    [Fact] // WPF LeashHolderCard.cs:264-266: holder help opens the no-offer explainer.
+    public void HolderHelp_OpensExplainerWithGotIt() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(), () => new Service());
+        Click(card, "leash-holder-help");
+        var intro = Assert.IsType<LeashHolderIntro>(card.Intro);
+        try
+        {
+            Assert.Equal(Loc.Get("leash_explain_title"), intro.Title);
+            Assert.Equal(Loc.Get("leash_explain_got_it"), Assert.IsType<TextBlock>(Find<Button>(intro, "leash-explain-not-now").Content).Text);
+            Assert.Empty(Tagged(intro, "leash-explain-offer"));
+        }
+        finally { intro.Close(); }
+    });
     [Fact] // WPF LeashHolderCard.cs:307, 443-471, 566-645, LeashLook.cs:393: actions, rows and Let go carry a "?"; Today is an outlined ring.
     public void HolderHostsHelpOnActionsRowsAndLetGo_AndOutlinesToday() => Run(() =>
     {

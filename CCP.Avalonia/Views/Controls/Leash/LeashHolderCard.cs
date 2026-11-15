@@ -1,6 +1,6 @@
 // WPF LeashHolderCard.cs:83, 339, 423, 432, 542-769: holder report, sheets and sends.
 // Flat cards reuse FriendsDrawer chrome. The header "..." menu replays the snap and lets go (WPF :264-337).
-// Missing: the holder explainer "?" beside it, the offer explainer and the card FX.
+// Missing: avatar, heart tag and card FX.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,6 +75,7 @@ internal static class LeashCardUi
 /// <summary>One held friend. Open sheets and feedback survive polls; receipts repaint in place.</summary>
 public sealed class LeashHolderCard : Border
 {
+    internal LeashHolderIntro? Intro { get; private set; }
     private HeldLeash _held;
     private readonly Func<ILeashService?> _service;
     private readonly bool _readOnly;
@@ -96,6 +97,15 @@ public sealed class LeashHolderCard : Border
         DetachedFromVisualTree += (_, _) => { _resultTimer.Stop(); _result = null; Render(); };
         Render();
     }
+    private void ShowIntro()
+    {
+        if (Intro != null) { Intro.Activate(); return; }
+        Intro = new LeashHolderIntro(_held.Who.Name, null);
+        var intro = Intro;
+        intro.Closed += (_, _) => { if (ReferenceEquals(Intro, intro)) Intro = null; };
+        var owner = TopLevel.GetTopLevel(this) as Window;
+        if (owner?.IsVisible == true) intro.Show(owner); else intro.Show();
+    }
     internal void Update(HeldLeash held) { _held = held; Render(); }
     internal void Fold() { _sheet = _videoFor = null; Render(); }
     private void Render()
@@ -105,7 +115,15 @@ public sealed class LeashHolderCard : Border
         var dnd = R.DndOn(h.DndUntil, DateTimeOffset.UtcNow);
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Tag = "leash-holder-header" };
         header.Children.Add(LeashCardUi.Text(h.Who.Name, ink: F.Gold));
-        if (!_readOnly) { var more = MoreButton(h); Grid.SetColumn(more, 1); header.Children.Add(more); }
+        if (!_readOnly)
+        {
+            var tools = new StackPanel { Orientation = Orientation.Horizontal };
+            var help = F.Pill("?", F.Raised, F.Lilac, "leash-holder-help");
+            help.Width = 26; help.Padding = new Thickness(0);
+            help.Click += (_, _) => ShowIntro();
+            tools.Children.Add(help); tools.Children.Add(MoreButton(h));
+            Grid.SetColumn(tools, 1); header.Children.Add(tools);
+        }
         _body.Children.Add(header);
         _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_holder_day", h.Day)));
         _body.Children.Add(LeashCardUi.Text(Loc.Get(dnd ? "leash_state_quiet" : h.Online ? "leash_state_online" : "leash_state_offline"), "leash-holder-state"));
