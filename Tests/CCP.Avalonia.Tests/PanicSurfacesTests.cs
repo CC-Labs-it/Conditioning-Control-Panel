@@ -18,6 +18,23 @@ namespace CCP.Avalonia.Tests;
 public sealed class PanicSurfacesTests
 {
     [Fact]
+    public void Bubble_surface_clears_variant_bubbles_on_panic() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var field = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.Field;
+        field.Bubbles.Clear();
+        field.Bubbles.Add(new ConditioningControlPanel.Services.AmbientBubble
+        {
+            Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "pink" }
+        });
+        try
+        {
+            PanicSurfaces.All.Single(s => s.Id == "bubble-host").Stop(null!);
+            Assert.Empty(field.Bubbles);
+        }
+        finally { field.Bubbles.Clear(); }
+    });
+
+    [Fact]
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();

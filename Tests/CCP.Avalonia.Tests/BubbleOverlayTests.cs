@@ -18,6 +18,19 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Fact]
+    public void Variant_art_and_fallback_label_follow_wpf()
+    {
+        var pink = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "pink", Label = "PINK" };
+        var missing = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "no-such-variant", Label = "MISSING" };
+        var image = BubbleOverlay.VariantImage(pink);
+        Assert.NotNull(image);
+        Assert.False(BubbleOverlay.ShowVariantLabel(pink, image));
+        Assert.Null(BubbleOverlay.VariantImage(missing));
+        Assert.True(BubbleOverlay.ShowVariantLabel(missing, null));
+        Assert.Same(BubbleOverlay.Image, BubbleOverlay.VariantImage(new() { VariantId = "flash" }));
+    }
+
     [Theory]
     [InlineData(1.0, 0, false)]
     [InlineData(1.5, -1920, false)]
@@ -458,6 +471,8 @@ public sealed class BubbleOverlayTests
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.RootsOverride = () => Array.Empty<string>();
             var saved = BubbleOverlay.Field.Bubbles.ToArray();
             var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1) { Width = 1280, Height = 720 };
             ConditioningControlPanel.Services.Chaos.EffectBubbleSpec Spec(string label) => new()
@@ -494,6 +509,7 @@ public sealed class BubbleOverlayTests
             }
             finally
             {
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
                 w.Close();
                 BubbleOverlay.Field.Bubbles.Clear();
                 BubbleOverlay.Field.Bubbles.AddRange(saved);
