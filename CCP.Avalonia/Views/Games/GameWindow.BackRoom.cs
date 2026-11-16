@@ -70,8 +70,38 @@ internal sealed partial class GameWindow
     partial void HandleBackRoomMessage(JObject message, ref bool handled)
     {
         handled = true;
-        if ((string?)message["type"] == "ready") { IsReady = true; RoomBridge().OnReady(); }
+        var type = (string?)message["type"];
+        if (type == "ready") { IsReady = true; RoomBridge().OnReady(); }
+        else if (type == "game-open") OpenRoomRace(message);
         else RoomBridge().Handle(message);
+    }
+
+    // WPF BackRoomHostService.cs:520-535: the race portal opens Glassroad in its own window. Every answer is
+    // a not-ok game-open-result, which releases the page's held scene (race-portal.js refused): "prime"
+    // below tier 2 (with the Prime refusal), else "elsewhere" and the race launches.
+    private void OpenRoomRace(JObject message)
+    {
+        if ((string?)message["game"] != "race") return;
+        if (GlassroadLocked())
+        {
+            Post(new { type = "game-open-result", game = "race", ok = false, reason = "prime" });
+            GlassroadGate();   // the Prime refusal (WPF GlassroadHostService.DemandPrime)
+            return;
+        }
+        Post(new { type = "game-open-result", game = "race", ok = false, reason = "elsewhere" });
+        Launch(GlassroadId);
+    }
+
+    private bool _roomMinimised;
+
+    // WPF BackRoomHostService.cs:630-638 OnWindowStateChanged: minimise suspends (the page stops its music).
+    // A restore under a panic hold keeps the room held; the activate after the 2 s window resumes it.
+    private void BackRoomMinimizedChanged(bool minimised)
+    {
+        if (minimised == _roomMinimised) return;
+        _roomMinimised = minimised;
+        if (!minimised && _roomPanic) return;
+        _roomBridge?.Suspend(minimised, "minimise");
     }
 
     // WPF BackRoomHostService.cs:610: first press suspends, second within two seconds closes.
@@ -89,6 +119,6 @@ internal sealed partial class GameWindow
     {
         if (!_roomPanic || now - _roomPanicAt <= TimeSpan.FromSeconds(2)) return;
         _roomPanic = false;
-        RoomBridge().Suspend(false, "panic");
+        if (!_roomMinimised) RoomBridge().Suspend(false, "panic");
     }
 }

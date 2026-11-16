@@ -4,7 +4,8 @@
 // plays it once through its own host-escape.js. Here one GameWindow hosts every game, so the same three
 // answers live on the window, keyed by the game it runs. A second Escape inside 2 s stays a full panic
 // (PanicPolicy.GameClaimsEscapeAsPause), which closes it through PanicSurfaces "games".
-// Not on this head (no host yet): the full Breakout, the Arcademy, the Back Room room and Goon. FYP and
+// The Back Room room keeps it too (WPF BackRoomHostService.IsRoomInFront/IsRoomReady/PostKeptEscape): its
+// pause card is the room's only way out. Not on this head (no host yet): the full Breakout, the Arcademy and Goon. FYP and
 // Just Drop are not Escape-pause games on WPF either: a first Escape closes them.
 using System;
 using System.Linq;
@@ -27,13 +28,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             "breakoutdemo" or "breakout" => PanicPolicy.KeptEscapePage.Breakout,
             DtrhId => PanicPolicy.KeptEscapePage.Dtrh,
             GlassroadId => PanicPolicy.KeptEscapePage.Glassroad,
+            "backroom" => PanicPolicy.KeptEscapePage.Room,   // WPF MainWindow.xaml.cs:1527,1535
             PrizeCounterId => PanicPolicy.KeptEscapePage.Counter,   // its Esc ladder's back (Core PanicPolicy.cs:139)
             _ => PanicPolicy.KeptEscapePage.None,
         };
 
         /// <summary>WPF IsReady per host: the page said ready and is not on its way out. A booting or
         /// reloading page cannot pause, so it never keeps a press (251b60807, frontGameReady).</summary>
-        internal bool KeptEscapeReady => IsReady && !_closing && !_shellExiting && !_raceExiting && !_dtrhExiting;
+        internal bool KeptEscapeReady => IsReady && !_closing && !_shellExiting && !_raceExiting && !_dtrhExiting
+            && _roomBridge?.IsClosing != true;
 
         /// <summary>WPF IsInFront: the open Escape-pause game window that is the active window, else null.</summary>
         internal static GameWindow? EscapePauseInFront()

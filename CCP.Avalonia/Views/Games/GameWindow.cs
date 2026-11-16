@@ -205,8 +205,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             PropertyChanged += (_, e) =>
             {
-                if (!IsBreakout || e.Property != WindowStateProperty) return;
-                RoomMinimizedChanged(WindowState == WindowState.Minimized);
+                if (e.Property != WindowStateProperty) return;
+                if (IsBreakout) RoomMinimizedChanged(WindowState == WindowState.Minimized);
+                else if (Spec.Id == "backroom") BackRoomMinimizedChanged(WindowState == WindowState.Minimized);
             };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);

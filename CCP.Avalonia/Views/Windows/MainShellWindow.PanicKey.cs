@@ -230,7 +230,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is handed to the page as well (each page's host-escape.js), since its own keydown never comes
         /// while the web view is out of focus. The Remote HUD Stop passes fromPanicKey false, so a click never pauses
         /// the game under the non-activating pill (WPF MainWindow.xaml.cs:1548).
-        /// Not hosted on this head yet, so never in front: the full Breakout, the Arcademy, the Back Room room, Goon.</summary>
+        /// The Back Room room keeps it as its pause too (WPF MainWindow.xaml.cs:1527,1535,1589-1590).
+        /// Not hosted on this head yet, so never in front: the full Breakout, the Arcademy, Goon.</summary>
         internal bool TryGamePauseOnEscape(DateTime now, bool fromPanicKey = true)
         {
             try
@@ -245,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PanicPolicy.KeptEscapePage Route(bool claimed) => PanicPolicy.KeptEscapeGoesTo(claimed,
                     In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
                     In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
+                    roomInFront: In(PanicPolicy.KeptEscapePage.Room), roomReady: ready,
                     intakeInFront: intake != null, intakeReady: intakeReady,
                     counterInFront: In(PanicPolicy.KeptEscapePage.Counter), counterReady: ready,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
