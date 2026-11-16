@@ -28,12 +28,13 @@ public sealed class NewEnhancementTutorialTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var performance = CoreSettings.Current.PerformanceMode;
+        var seenHt = CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial; // the HypnoTube button sets it
         CoreSettings.Current.PerformanceMode = true; // RunJobs must not drain ambient clocks forever
         TutorialHead.Seed();
         TutorialHead.ResetForTests();
         CoreTutorialEvents.PendingPart2Tutorial = null;
         try { await body(); }
-        finally { TutorialHead.ResetForTests(); CoreTutorialEvents.PendingPart2Tutorial = null; CoreSettings.Current.PerformanceMode = performance; }
+        finally { TutorialHead.ResetForTests(); CoreTutorialEvents.PendingPart2Tutorial = null; CoreSettings.Current.PerformanceMode = performance; CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial = seenHt; }
     });
 
     [Theory]
