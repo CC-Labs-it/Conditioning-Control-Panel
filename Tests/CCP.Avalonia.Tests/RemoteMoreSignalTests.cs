@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -81,28 +80,17 @@ public sealed class RemoteMoreSignalTests
             var shellStatus = shell.Named<TextBlock>("TxtRemoteMoreStatus")!;
             var expected = string.Format(Loc.Get("remote_hud_sent"), Loc.Get("remote_hud_more"));
 
-            // Yield counts do not bound elapsed time: a fast UI loop can exhaust them before
-            // the HTTP continuation runs on a busy worker (notably on Windows CI).
-            async Task WaitUntil(Func<bool> condition)
-            {
-                var timeout = Stopwatch.StartNew();
-                while (!condition() && timeout.Elapsed < TimeSpan.FromSeconds(10))
-                {
-                    Dispatcher.UIThread.RunJobs();
-                    await Task.Delay(10);
-                }
-            }
             async Task Click(Button button, int count)
             {
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await WaitUntil(() => pending.Count >= count);
+                for (var i = 0; i < 200 && pending.Count < count; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
                 Assert.Equal(count, pending.Count);
                 Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[count - 1].Duration);
             }
             async Task Clear(TextBlock status, int index)
             {
                 pending[index].Completion.TrySetResult(true);
-                await WaitUntil(() => status.Text == "");
+                for (var i = 0; i < 200 && status.Text != ""; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
                 Assert.Equal("", status.Text);
             }
 
@@ -110,12 +98,12 @@ public sealed class RemoteMoreSignalTests
             Assert.Equal(expected, tabStatus.Text);
             var gate = fake.NextSignalGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             tabButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await WaitUntil(() => fake.Signals.Count >= 2);
+            for (var i = 0; i < 200 && fake.Signals.Count < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
             Assert.Equal(2, fake.Signals.Count);
             Assert.Equal(expected, tabStatus.Text); // the first confirmation stays until the next response
             Assert.False(pending[0].Token.IsCancellationRequested);
             gate.SetResult(true);
-            await WaitUntil(() => pending.Count >= 2);
+            for (var i = 0; i < 200 && pending.Count < 2; i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
             Assert.Equal(2, pending.Count);
             Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[1].Duration);
             Assert.True(pending[0].Token.IsCancellationRequested);
