@@ -341,8 +341,8 @@ public class FogPolish11Tests
     {
         var dst = SKSurface.Create(new SKImageInfo(r.Width * scale, r.Height * scale, SKColorType.Bgra8888, SKAlphaType.Premul));
         using var img = src.Snapshot(r);
-        using var p = new SKPaint { FilterQuality = SKFilterQuality.None };
-        dst.Canvas.DrawImage(img, new SKRect(0, 0, r.Width * scale, r.Height * scale), p);
+        // SkiaSharp 4 drops SKFilterQuality; None = nearest (https://github.com/mono/SkiaSharp/blob/main/binding/SkiaSharp/SKPaint.cs).
+        dst.Canvas.DrawImage(img, new SKRect(0, 0, r.Width * scale, r.Height * scale), new SKSamplingOptions(SKFilterMode.Nearest, SKMipmapMode.None));
         return dst;
     }
 

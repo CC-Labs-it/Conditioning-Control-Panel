@@ -182,10 +182,10 @@ public class GlyphFallbackRunTests
     {
         RequireFallbackFonts(ReportedPhrase);
         var runs = GlyphFallback.Split(ReportedPhrase, Arial, SKFontStyle.Bold);
-        using var paint = new SKPaint { TextSize = 120f, Typeface = Arial };
+        using var font = new SKFont(Arial, 120f) { LinearMetrics = true };   // the old paint's metrics
 
         var widths = new float[runs.Length];
-        var total = GlyphFallback.Measure(runs, paint, widths, out var ascent, out var descent);
+        var total = GlyphFallback.Measure(runs, font, widths, out var ascent, out var descent);
 
         Assert.True(total > 0, "the phrase must have a positive advance width");
         Assert.Equal(widths.Sum(), total, 2);
