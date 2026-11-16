@@ -30,7 +30,7 @@ public class VaultCompareTests
     private static string?[] Texts(Window window) => window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
 
     [Fact]
-    public Task TicketsSwitchPricesAndReturnToOffer() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task TicketsSwitchPricesAndReturnToOffer() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var dialog = VaultGateDialog.ShowOffer(null, null, 1, () => { });
         try
@@ -51,11 +51,11 @@ public class VaultCompareTests
             Click(dialog, Loc.Get("vaultgate_billing_monthly"));
             Assert.Contains(monthly, Texts(dialog));
             Click(dialog, Loc.Get("vaultgate_back"));
+            await Task.Delay(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(190) + 150);
             Assert.Equal(460, dialog.Width);
             Assert.Contains(Loc.Get("vaultgate_signin"), Texts(dialog));
         }
         finally { dialog.Close(); }
-        return Task.CompletedTask;
     });
 
     [Fact]
@@ -85,7 +85,7 @@ public class VaultCompareTests
     });
 
     [Fact]
-    public Task StampCaptionSitsBelowPriceForBothBillingChoices() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task StampCaptionSitsBelowPriceForBothBillingChoices() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var oldSale = VaultGateDialog.Sale;
         var proxy = InviteApi.DefaultBaseUrl;
@@ -100,6 +100,10 @@ public class VaultCompareTests
                 foreach (var yearly in new[] { false, true })
                 {
                     if (yearly) Click(dialog, Loc.Get("vaultgate_billing_yearly"));
+                    // The billing roll swaps the amount and caption after their fades; measure the settled stamp.
+                    for (var i = 0; i < 100 && dialog.GetVisualDescendants().OfType<Grid>().Any(g => g.Name == "AmountWindow" && g.Children.Count > 1); i++) await Task.Delay(20);
+                    await Task.Delay(300);
+                    dialog.UpdateLayout();
                     var ticket = dialog.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "BasicTicket");
                     var stamp = ticket.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PriceStamp");
                     var price = VaultOffer.PriceFor(1, VaultOffer.HeadlineCurrency(PlanCatalog.Current), PlanCatalog.Current);
@@ -113,7 +117,6 @@ public class VaultCompareTests
             finally { dialog.Close(); }
         }
         finally { VaultGateDialog.Sale = oldSale; InviteApi.DefaultBaseUrl = proxy; }
-        return Task.CompletedTask;
     });
 
     [Fact]

@@ -239,7 +239,7 @@ public sealed partial class VaultGateDialog : Window
             }
             foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
                 PaintPrice(slot, tier, compact, yearly, hints);
-            if (_comparing) PaintCompare();
+            if (_comparing) PaintCompare(false);
             if (!_plans.FromServer) await FillSaleAsync();
         }
         catch (Exception ex) { Log.Debug("[VaultGate] plans refresh failed: {E}", ex.GetType().Name); }
@@ -428,7 +428,9 @@ public sealed partial class VaultGateDialog : Window
             FontFamily = FriendsDrawer.Display, FontWeight = compact ? FontWeight.Bold : FontWeight.SemiBold, FontSize = compact ? 30 : 28, Foreground = ticketInk ?? Brushes.White,
             Margin = new Thickness(0, 0, 8, 0),
         };
-        line.Children.Add(amount);
+        // WPF Compare.cs:418: the ticket amount sits in a clipped window so it can roll.
+        if (compact) { amount.RenderTransform = new TranslateTransform(); line.Children.Add(new Grid { Name = "AmountWindow", ClipToBounds = true, Children = { amount } }); }
+        else line.Children.Add(amount);
         if (sale != null)
             line.Children.Add(new TextBlock
             {
