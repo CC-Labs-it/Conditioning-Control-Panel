@@ -57,6 +57,7 @@ public sealed class LauncherWindowTests
                 LauncherWindow.Boot = BootDecision.PanelFirst;
                 ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
                 LockdownService.Current = null;
+                ConditioningControlPanel.Services.UI.NavBadges.ResetForTests();
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
                 shell.Close();
                 CoreSettings.ServiceProvider = null;
@@ -75,6 +76,20 @@ public sealed class LauncherWindowTests
 
     private static Button JoinButton(MenuItem row) =>
         (Button)((Grid)((Border)row.Header!).Child!).Children[2];
+
+    [Fact]
+    public void RunLeavesNoSocialBadgeBehind()
+    {
+        // PaintLobby writes the process-wide NavBadges store and the drop marks it seen;
+        // a later shell would otherwise show this test's Social badge on its rail.
+        Run(_ =>
+        {
+            ConditioningControlPanel.Services.UI.NavBadges.Set(ConditioningControlPanel.Services.UI.NavSections.Social, 1);
+            ConditioningControlPanel.Services.UI.NavBadges.MarkSeen(ConditioningControlPanel.Services.UI.NavSections.Social);
+        });
+        Assert.Equal(0, ConditioningControlPanel.Services.UI.NavBadges.Get(ConditioningControlPanel.Services.UI.NavSections.Social));
+        Assert.Equal(0, ConditioningControlPanel.Services.UI.NavBadges.Seen(ConditioningControlPanel.Services.UI.NavSections.Social));
+    }
 
     [Fact]
     public void LobbyChipRefreshesOnShowAndOpensLobby() => Run(shell =>
