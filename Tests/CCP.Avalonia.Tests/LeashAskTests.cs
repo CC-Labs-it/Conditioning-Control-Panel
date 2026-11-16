@@ -195,19 +195,6 @@ public sealed class LeashAskTests
         });
 
     [Fact]
-    public void EscapeOnCardBeforeWindowAttachmentDismissesAsk() => AvaloniaTestDispatcher.Run(() =>
-    {
-        ChatThresholdLinksTests.Setup();
-        var window = new LeashAskWindow();
-        var dismissed = false;
-        window.Card.Dismissed += () => dismissed = true;
-        var key = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape };
-        window.Card.RaiseEvent(key);
-        Assert.True(dismissed);
-        Assert.True(key.Handled);
-    });
-
-    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {

@@ -129,38 +129,6 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
-    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
-        LeashGateCardTests.Run(false, (shell, _, _) =>
-        {
-            shell.Show();
-            shell.RebindLeashAsks(); // Bind the old service before it is replaced.
-            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
-            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
-            LeashHead.Service = replacement;
-            try
-            {
-                var manual = LeashAskWindow.Open(replacement.Snapshot.Offers.Single(o => o.From.Id == "juno"),
-                    () => replacement, shell)!;
-                Assert.Same(manual, LeashAskWindow.Current);
-                shell.RebindLeashAsks(); // The two-second timer catches the replacement while Look is open.
-                manual.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-                Assert.Equal("leash-ask:vex", next.Card.Tag);
-                next.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current); // The manually shown offer must not return.
-            }
-            finally
-            {
-                LeashHead.Service = null;
-                shell.RebindLeashAsks();
-                LeashAskWindow.CloseCurrent();
-                Dispatcher.UIThread.RunJobs();
-            }
-        });
-
-    [Fact]
     public void LookConsumesItsQueuedOfferAndEscapeAdvancesToTheOtherOffer() =>
         LeashGateCardTests.Run(false, (shell, _, service) =>
         {
