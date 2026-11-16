@@ -72,6 +72,65 @@ public sealed partial class GameWindowTests
         finally { GameWindow.GoonUtcNow = old; }
     });
 
+    /// <summary>WPF GoonHostService.cs:300,1789-1792: a recovery relaunch comes back windowed whatever the
+    /// remembered mode, and the remembered mode itself is left alone.</summary>
+    [Fact]
+    public void GoonWatch_RecoveryRelaunchIsWindowed() => Run((shell, launcher) =>
+    {
+        var old = GameWindow.GoonUtcNow;
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.GoonUtcNow = () => now;
+        try
+        {
+            CoreSettings.Current.GoonFullscreen = true;
+            var w = GameWindow.Launch(GameWindow.GoonId)!;
+            Assert.Equal(WindowState.FullScreen, w.WindowState);
+            w.HandleMessage("{\"type\":\"ready\"}");
+            now = now.AddSeconds(21); w.CheckGoonWatch(now);
+            var next = Assert.Single(GameWindow.OpenWindowsForTests(), x => x.Spec.Id == GameWindow.GoonId);
+            Assert.NotSame(w, next);
+            Assert.Equal(WindowState.Normal, next.WindowState);
+            Assert.True(CoreSettings.Current.GoonFullscreen);
+            next.Close();
+            // Only the relaunch is windowed: the next ordinary open uses the remembered mode again.
+            var again = GameWindow.Launch(GameWindow.GoonId)!;
+            Assert.Equal(WindowState.FullScreen, again.WindowState);
+            again.Close();
+        }
+        finally { GameWindow.GoonUtcNow = old; }
+    });
+
+    /// <summary>WPF MainWindow.xaml.cs:1526-1588 through the shell: once Goon is up the first Escape is its
+    /// pause (kept-escape), a second within 2 s is the panic that closes it.</summary>
+    [Fact]
+    public void Goon_EscapePausesOnceUp_ASecondEscapeClosesIt() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            (s.PanicKey, s.PanicKeyEnabled) = ("Escape", true);
+            launcher.Hide();
+            var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
+            var w = GameWindow.Launch(GameWindow.GoonId)!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var sent = new System.Collections.Generic.List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            shell.HandlePanicKeyPress(t0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(w, GameWindow.OpenWindowsForTests());
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+
+            shell.HandlePanicKeyPress(t0.AddSeconds(1));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
     [Fact]
     public void GoonWatch_HiddenPageAndLateUiTickDoNotRecover() => Run((shell, launcher) =>
     {

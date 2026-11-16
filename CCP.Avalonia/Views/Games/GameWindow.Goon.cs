@@ -37,7 +37,8 @@ internal sealed partial class GameWindow
     /// <summary>WPF :300,328: built in the remembered window mode; presence until close.</summary>
     private void WireGoon()
     {
-        if (CoreSettings.Current.GoonFullscreen) WindowState = WindowState.FullScreen;
+        // WPF :300,1789-1792: a recovery relaunch comes back windowed, so a re-wedged page keeps a close button.
+        if (CoreSettings.Current.GoonFullscreen && !_goonRecoveryWindowed) WindowState = WindowState.FullScreen;
         Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Goon);
         Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Goon);
     }
@@ -49,6 +50,7 @@ internal sealed partial class GameWindow
     private long? _goonPaint;
     private bool _goonRetried;
     private static int _goonPanicEpoch;
+    private static bool _goonRecoveryWindowed;
 
     private void StartGoonWatch()
     {
@@ -123,7 +125,10 @@ internal sealed partial class GameWindow
         var epoch = _goonPanicEpoch;
         Close();
         if (!retry || epoch != _goonPanicEpoch) return;
-        var next = LaunchWindow(Spec);
+        GameWindow? next;
+        _goonRecoveryWindowed = true;
+        try { next = LaunchWindow(Spec); }
+        finally { _goonRecoveryWindowed = false; }
         if (next != null) _goonRetried = next._goonRetried = true;
     }
 
