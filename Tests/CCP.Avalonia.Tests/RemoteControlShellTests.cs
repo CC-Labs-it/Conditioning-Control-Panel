@@ -425,10 +425,12 @@ public sealed class RemoteControlShellTests
             try
             {
                 if (relay.IsActive) await relay.StopAsync();
+                // Lockdown refuses the shell's close (WPF WindowChrome.cs:131), so end it first or the
+                // shell stays subscribed to LanguageChanged and later language tests hit its dispatcher.
+                lockdown?.Deactivate(); lockdown?.Dispose();
                 runner?.Stop(); CoreEngine.Stop(); shell?.Close();
                 RemoteControlTabView.Relay = oldRelay;
                 global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
-                lockdown?.Deactivate(); lockdown?.Dispose();
                 LockdownService.Current = oldLockdown;
                 CoreSettings.ServiceProvider = oldProvider;
                 ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed = oldLeash;
