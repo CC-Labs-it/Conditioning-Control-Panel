@@ -119,7 +119,8 @@ namespace ConditioningControlPanel
 
         private void StartDeeperTabTutorial()
         {
-            ShowTab("deeper");
+            // The tour walks the library, the editor and the catalogue: the full layout.
+            ShowDeeperEditorLayout();
             UpdateDeeperWelcomeCardVisibility(); // keep the card consistent with state
             StartTutorial(TutorialType.Deeper);
         }
@@ -1166,7 +1167,7 @@ namespace ConditioningControlPanel
         // from the OpenError recovery toast.
         private void SwitchToDeeperLibraryTab()
         {
-            try { ShowTab("deeper"); }
+            try { ShowDeeperEditorLayout(); }
             catch (Exception ex) { App.Logger?.Debug("[Catalogue] SwitchToDeeperLibraryTab failed: {Msg}", ex.Message); }
         }
 
