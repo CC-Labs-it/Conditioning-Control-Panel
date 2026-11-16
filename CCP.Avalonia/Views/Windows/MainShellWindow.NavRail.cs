@@ -9,7 +9,8 @@
 // in MainShellWindow.NavCoin.cs. Rail shadow is covered separately by PR #3337.
 // The guarded possession reroute press seam is here (#4419); it has no effect writer on this head yet
 // (WPF Services/Possession/Effects/MisrouteEffect.cs). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d.
-// Launcher lobby snapshots feed the Social pill through NavBadges.
+// Launcher lobby snapshots and the shell's own visible-panel lease (MainShellWindow.LobbyBadge.cs)
+// feed the Social pill through NavBadges.
 
 using System;
 using System.Collections.Generic;
@@ -102,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 NavBadges.Changed += OnNavBadgeChanged;
                 Closed += (_, _) => NavBadges.Changed -= OnNavBadgeChanged;
                 foreach (var row in _navSectionRows) PaintNavBadge(row, NavBadges.Get(row.Section));
+                HookLobbyBadge();   // WPF MainWindow.SocialTabs.cs:23: the badge's own lobby lease
                 // WPF :118 + MainWindow.xaml.cs:3653: the active mod's medallions, again on a mod switch.
                 ApplyDoorArt();
                 ApplyModToNavRailLabels();
