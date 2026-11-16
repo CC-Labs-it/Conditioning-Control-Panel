@@ -29,7 +29,7 @@ public class ReviewWiringTests
         var src = Source("ConditioningControlPanel", "MainWindow", "MainWindow.xaml.cs");
         Assert.Contains("PanelDoorLink.Fallback = () =>", src);
         // Same handler as the title-bar button; a disabled button (Lab run) stays a no-op.
-        Assert.Contains("if (button == null || !button.IsEnabled) return;", Section(src, "PanelDoorLink.Fallback", "PanelDoorLink.OpenLauncherDoor"));
+        Assert.Contains("if (button == null || !button.IsEnabled) return;", Section(src, "PanelDoorLink.Fallback", "FxBisect.Watch(this)"));
     }
 
     [Fact]
