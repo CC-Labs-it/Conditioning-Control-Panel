@@ -195,19 +195,24 @@ internal static class X11ActiveWindow
         mw > 0 && mh > 0 && x <= (long)mx + 2 && y <= (long)my + 2 &&
         x + width >= (long)mx + mw - 2 && y + height >= (long)my + mh - 2;
 
-    private static string ReadProcessName(IntPtr window)
+    internal static (string? Process, bool Own) ReadKeywordForeground() =>
+        ReadActive(window => ReadProcess(window), ((string?)null, false));
+
+    private static string ReadProcessName(IntPtr window) => ReadProcess(window).Process ?? "";
+
+    private static (string? Process, bool Own) ReadProcess(IntPtr window)
     {
         if (XGetWindowProperty(_display, window, _netWmPid, 0, 1, false, _cardinal,
-                out var actualType, out var format, out var n, out _, out var prop) != 0 || prop == IntPtr.Zero) return "";
+                out var actualType, out var format, out var n, out _, out var prop) != 0 || prop == IntPtr.Zero) return (null, false);
         try
         {
-            if (actualType != _cardinal || format != 32 || n != 1) return "";
+            if (actualType != _cardinal || format != 32 || n != 1) return (null, false);
             var pid = Marshal.ReadIntPtr(prop).ToInt64(); // Xlib stores format-32 values as longs
-            if (pid <= 0 || pid > int.MaxValue) return "";
+            if (pid <= 0 || pid > int.MaxValue) return (null, false);
             using var process = Process.GetProcessById((int)pid);
-            return process.ProcessName ?? "";
+            return (process.ProcessName, pid == Environment.ProcessId);
         }
-        catch { return ""; }
+        catch { return (null, false); }
         finally { XFree(prop); }
     }
 

@@ -972,6 +972,37 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void X11KeysymsReachKeywordAndPanicDropsQueuedKeys() => Run((_, s, played) =>
+    {
+        KeywordTriggerHead.KeyboardSupportedForTests = true;
+        KeywordTriggerHead.X11SourceForTests = true;
+        try
+        {
+        KeywordTriggerHead.AttachKeyboard();
+        Assert.NotNull(X11PanicKey.KeywordPress);
+        KeywordTriggerHead.Engine.Start();
+        foreach (var c in "sit ") KeywordTriggerHead.QueueX11Keysym(c);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(played);
+        foreach (var c in "sit ") KeywordTriggerHead.QueueX11Keysym(c);
+        PanicSurfaces.All.Single(x => x.Id == "keyword-triggers").Stop(null);
+        Assert.False(s.KeywordTriggersEnabled);
+        s.KeywordTriggersEnabled = true;
+        _singletonNow = _singletonNow.AddHours(2); // past keyword and loop-protection cooldowns
+        KeywordTriggerHead.Engine.Start(); // even a later restart must not replay old input
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, played.Count); // one play and its stop, no queued replay
+        Assert.Null(X11PanicKey.KeywordPress);
+        }
+        finally
+        {
+            KeywordTriggerHead.DetachKeyboard();
+            KeywordTriggerHead.KeyboardSupportedForTests = null;
+            KeywordTriggerHead.X11SourceForTests = false;
+        }
+    });
+
+    [Fact]
     public void KeyboardDetachClearsPartialInput() => Run((_, s, played) =>
     {
         KeywordTriggerHead.Engine.Start();

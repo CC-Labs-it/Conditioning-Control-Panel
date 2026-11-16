@@ -25,8 +25,9 @@ internal static class KeywordTriggerHead
     internal static KeywordAudioRuntime Engine { get; } = new();
     // OS input seams: tests can drive Win32PanicKey.OnDown without installing a native hook.
     internal static bool? KeyboardSupportedForTests;
+    internal static bool X11SourceForTests;
     internal static Func<int, char?>? TranslateForTests;
-    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? (OperatingSystem.IsWindows() &&
+    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? ((OperatingSystem.IsWindows() || OperatingSystem.IsLinux() && X11PanicKey.IsListening) &&
         string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
     private static bool _subscribed;
     private static int _generation;
@@ -45,9 +46,10 @@ internal static class KeywordTriggerHead
     internal static void AttachKeyboard()
     {
         if (!CoreSettings.Current.KeywordTriggersEnabled || _subscribed || !HasKeyboardInput) return;
-        Win32PanicKey.KeyDown += OnKey;
+        if (X11SourceForTests || OperatingSystem.IsLinux() && KeyboardSupportedForTests != true) X11PanicKey.KeywordPress = OnX11Press;
+        else Win32PanicKey.KeyDown += OnKey;
         _subscribed = true;
-        if (KeyboardSupportedForTests != true) Win32PanicKey.EnsureListening(); // shared panic hook
+        if (OperatingSystem.IsWindows() && KeyboardSupportedForTests != true) Win32PanicKey.EnsureListening(); // shared panic hook
     }
 
     // WPF KeywordTriggerService.cs:176-185: start is idempotent and requires awareness access.
@@ -59,7 +61,9 @@ internal static class KeywordTriggerHead
     }
     /// <summary>Confirm the shared hook before program rollover or enrollment can rely on it.
     /// Sync subscribes only on Windows outside the isolated user-data profile.</summary>
-    internal static bool KeyboardSourceAvailable() => KeyboardSourceAvailable(OperatingSystem.IsWindows(),
+    internal static bool KeyboardSourceAvailable() => OperatingSystem.IsLinux()
+        ? string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")) && X11PanicKey.IsListening
+        : KeyboardSourceAvailable(OperatingSystem.IsWindows(),
         Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
         () => Win32PanicKey.EnsureListening() && Win32PanicKey.IsListening);
 
@@ -187,12 +191,49 @@ internal static class KeywordTriggerHead
     {
         Interlocked.Increment(ref _generation);
         Engine.ClearInput();
+        X11PanicKey.KeywordPress = null;
         if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
         _subscribed = false;
     }
 
     /// <summary>Cuts the clip only; the panic pass uses <see cref="SwitchOffForPanic"/>.</summary>
     internal static void StopAudio() => Engine.StopAudio();
+
+    // XKB resolves the current layout, group and modifiers on the listener connection.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct XkbState
+    {
+        public byte Group, LockedGroup;
+        public ushort BaseGroup, LatchedGroup;
+        public byte Mods, BaseMods, LatchedMods, LockedMods, CompatState, GrabMods, CompatGrabMods, LookupMods, CompatLookupMods;
+        public ushort PointerButtons;
+    }
+    [DllImport("libX11.so.6")] private static extern int XkbGetState(IntPtr display, uint device, out XkbState state);
+    [DllImport("libX11.so.6")] private static extern bool XkbLookupKeySym(IntPtr display, byte keycode, uint state, out uint consumed, out ulong sym);
+
+    private static void OnX11Press(IntPtr display, int code)
+    {
+        var generation = Volatile.Read(ref _generation);
+        if (X11PanicKey.KeywordPress != OnX11Press || code is < 0 or > 255 || XkbGetState(display, 0x100, out var state) != 0) return;
+        if (!XkbLookupKeySym(display, (byte)code, (uint)(state.Mods | state.Group << 13), out _, out var sym)) return;
+        QueueX11Keysym(sym, generation);
+    }
+
+    internal static void QueueX11Keysym(ulong sym) => QueueX11Keysym(sym, Volatile.Read(ref _generation));
+
+    private static void QueueX11Keysym(ulong sym, int generation)
+    {
+        var key = X11KeywordInput.Special(sym);
+        var character = key == null ? X11KeywordInput.Character(sym) : null;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (generation != Volatile.Read(ref _generation)) return;
+            var foreground = Engine.NeedsForeground(DateTime.UtcNow) ? X11ActiveWindow.ReadKeywordForeground() : (null, false);
+            if (key is { } k) Engine.Key(k, foreground.Item1, foreground.Item2);
+            else if (character is { } c) Engine.Character(c, foreground.Item1, foreground.Item2);
+            else Engine.Key(KeywordInputKey.None, foreground.Item1, foreground.Item2);
+        });
+    }
 
     private static void OnKey(int vk, string? name)
     {

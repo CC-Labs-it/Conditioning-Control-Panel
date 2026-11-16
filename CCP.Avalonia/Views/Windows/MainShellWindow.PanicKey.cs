@@ -44,7 +44,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
             X11PanicKey.Unhearable = WarnUnhearable;
-            return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
+            var started = X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
+            if (started) KeywordTriggerHead.Sync(); // saved-on Awareness was synced before the X11 listener started
+            return started;
         }
 
         /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold,
