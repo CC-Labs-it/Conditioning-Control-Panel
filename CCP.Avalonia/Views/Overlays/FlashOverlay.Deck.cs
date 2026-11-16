@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
 using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.SuperCore;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -33,6 +34,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _deckTimer;
         private static long _lastDeckTick;
         private static bool _deckSwitchHooked;
+        private static SuperStage? _listeningStage;
+        internal static Action<TimeSpan, Action> DeckKnockAfter = (delay, action) => DispatcherTimer.RunOnce(action, delay);
+
+        private static void HookDeckStage()
+        {
+            var stage = Platform.Super.SuperStageHost.Stage;
+            if (ReferenceEquals(_listeningStage, stage)) return;
+            if (_listeningStage != null) _listeningStage.Blasted -= OnDeckBlast;
+            _listeningStage = stage;
+            stage.Blasted += OnDeckBlast;
+        }
+
+        // WPF FlashService.cs:2769-2782: the ring reaches each card after distance / 1.4 ms.
+        private static void OnDeckBlast(Blast blast)
+        {
+            if (blast.ReachPx <= 0) return;
+            var generation = Generation;
+            foreach (var (window, rect) in Active.ToArray())
+            {
+                if (window.Deck is not { } deck) continue;
+                double dx = rect.X + rect.Width / 2.0 - blast.X, dy = rect.Y + rect.Height / 2.0 - blast.Y;
+                double distance = Math.Sqrt(dx * dx + dy * dy);
+                if (distance > blast.ReachPx + Math.Max(rect.Width, rect.Height) * 0.3) continue;
+                var delay = TimeSpan.FromMilliseconds((int)Math.Clamp(distance / 1.4, 40, 900));
+                DeckKnockAfter(delay, () =>
+                {
+                    if (Generation != generation || !ReferenceEquals(window.Deck, deck)
+                        || !Active.Any(e => e.Window == window)) return;
+                    DeckPress(window);
+                });
+            }
+        }
 
         /// <summary>WPF AttachDeck (:2726): a clickable flash becomes a card when Super is on and nothing
         /// owned acts on the same click. Returns the margin (px) the window grew by, 0 when it stays plain.</summary>
@@ -50,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.PointerEntered += (_, _) => DeckHover(w, true);
             w.PointerExited += (_, _) => DeckHover(w, false);
             HookDeckSwitch();
+            HookDeckStage();
             EnsureDeckTick();
             return pad;
         }
@@ -64,7 +98,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static bool DeckTickRunning => _deckTimer != null;
 
-        private static void StopDeckTick() { _deckTimer?.Stop(); _deckTimer = null; }
+        private static void StopDeckTick()
+        {
+            _deckTimer?.Stop(); _deckTimer = null;
+            if (_listeningStage != null) _listeningStage.Blasted -= OnDeckBlast;
+            _listeningStage = null;
+        }
 
         /// <summary>One frame for every card on real elapsed time (WPF FlashLayer tick :410); stops itself
         /// when no card is left. A card that asked to be raised goes on top, list and screen.</summary>
