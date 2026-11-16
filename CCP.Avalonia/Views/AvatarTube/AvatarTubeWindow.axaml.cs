@@ -321,6 +321,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            AttachCompanionLevels();
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
             AttachTriggerSettings(); // WPF Speech.cs:1630-1675
 
@@ -343,6 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             StopFloatingAnimation(); // WPF Windowing.cs:1507
             ReleaseWindowing();
             ReleaseSpeechWindow();   // WPF Speech.cs:1099: the bubble's window closes with the tube
+            DetachCompanionLevels();
             DetachAwareness();
             UnwireContentPolicyWarning();
 
@@ -1331,6 +1333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
                                 bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null)
         {
+            _levelReactionSpeaking = false;
             ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
                 var spokenHandled = false;
