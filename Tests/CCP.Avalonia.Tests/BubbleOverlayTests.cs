@@ -224,6 +224,164 @@ public sealed class BubbleOverlayTests
         }
     });
 
+    [Fact]
+    public void Chaos_disables_froth_in_the_running_host() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldEffect = BubbleOverlay.FrothEffectOn;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true; BubbleOverlay.FrothEffectOn = _ => true;
+            host.Show(); BubbleOverlay.Start(host);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { new AmbientBubble { X = 300, Y = 300, Size = 150 }, new AmbientBubble { X = 300, Y = 300, Size = 150 } });
+            BubbleOverlay.BeginChaos(host, _ => { });
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(1));
+            Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos(); BubbleOverlay.Stop(); BubbleOverlay.FrothEffectOn = oldEffect;
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks; host.Close();
+        }
+    });
+
+    [Fact]
+    public void Ripe_froth_draws_a_gold_rim() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldImage = BubbleOverlay.Image;
+        var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 600, 600), 1);
+        try
+        {
+            BubbleOverlay.Image = null;
+            var field = BubbleOverlay.Field;
+            field.Bubbles.Clear();
+            for (int i = 0; i < 6; i++) field.Bubbles.Add(new AmbientBubble { X = 250, Y = 250, Size = 100 });
+            for (int i = 0; i < 60; i++) field.StepFroth(true, .03, 45, 4.5, _ => { });
+            Assert.True(Assert.Single(field.Bubbles).FrothRim > .99);
+            var layer = (Control)w.Content!;
+            layer.Measure(new Size(600, 600)); layer.Arrange(new Rect(0, 0, 600, 600));
+            using var image = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(600, 600));
+            image.Render(layer);
+            var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(30 * 30 * 4);
+            try
+            {
+                image.CopyPixels(new PixelRect(395, 285, 30, 30), buffer, 30 * 30 * 4, 30 * 4);
+                bool gold = false;
+                for (int i = 0; i < 30 * 30; i++)
+                {
+                    uint pixel = unchecked((uint)System.Runtime.InteropServices.Marshal.ReadInt32(buffer, i * 4));
+                    if (((pixel >> 16) & 255) > 180 && ((pixel >> 8) & 255) > 120 && (pixel & 255) < 80) { gold = true; break; }
+                }
+                Assert.True(gold);
+            }
+            finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+        }
+        finally
+        {
+            BubbleOverlay.Field.StepFroth(false, 0, 45, 4.5, _ => { });
+            BubbleOverlay.Field.Bubbles.Clear(); BubbleOverlay.Image = oldImage; w.Close();
+        }
+    });
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(100, true)]
+    public void Froth_pop_reach_controls_chain(int reach, bool expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldEffect = BubbleOverlay.FrothEffectOn;
+        var settings = CoreSettings.Current;
+        var oldReach = settings.FrothPopReach;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            BubbleOverlay.FrothEffectOn = _ => true;
+            settings.FrothPopReach = reach;
+            host.Show(); BubbleOverlay.Start(host);
+            BubbleOverlay.Field.Bubbles.Clear();
+            var source = new AmbientBubble { X = 300, Y = 300, Size = 500 };
+            var neighbour = new AmbientBubble { X = 950, Y = 500, Size = 150 };
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { source, neighbour });
+            BubbleOverlay.Pop(source);
+            for (int i = 0; i < 30; i++) BubbleOverlay.Field.StepFroth(true, .03, 90, 4.5, BubbleOverlay.Pop);
+            Assert.Equal(expected, neighbour.Popping);
+        }
+        finally
+        {
+            BubbleOverlay.Stop(); settings.FrothPopReach = oldReach;
+            BubbleOverlay.FrothEffectOn = oldEffect;
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks; host.Close();
+        }
+    });
+
+    [Fact]
+    public void Froth_switch_merges_pays_each_part_and_chaos_ends_it() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldEffect = BubbleOverlay.FrothEffectOn;
+        bool on = true;
+        int pops = 0;
+        Action counted = () => pops++;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            BubbleOverlay.FrothEffectOn = _ => on;
+            BubbleOverlay.Popped += counted;
+            host.Show();
+            BubbleOverlay.Start(host);
+            Assert.True(BubbleOverlay.IsRunning);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { new AmbientBubble { X = 300, Y = 300, Size = 150 }, new AmbientBubble { X = 300, Y = 300, Size = 150 } });
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(1));
+            var merged = Assert.Single(BubbleOverlay.Field.Bubbles);
+            Assert.Equal(2, merged.FrothPartCount);
+            BubbleOverlay.Pop(merged);
+            BubbleOverlay.Pop(merged);
+            Assert.Equal(2, pops);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { new AmbientBubble { X = 300, Y = 300, Size = 150 }, new AmbientBubble { X = 300, Y = 300, Size = 150 } });
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(2));
+            Assert.Equal(2, Assert.Single(BubbleOverlay.Field.Bubbles).FrothPartCount);
+            on = false;
+            ConditioningControlPanel.Services.Super.SuperAccess.RaiseChanged(ConditioningControlPanel.Services.Super.SuperEffect.InnerBloom);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            on = true;
+            ConditioningControlPanel.Services.Super.SuperAccess.RaiseChanged(ConditioningControlPanel.Services.Super.SuperEffect.InnerBloom);
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { new AmbientBubble { X = 300, Y = 300, Size = 150 }, new AmbientBubble { X = 300, Y = 300, Size = 150 } });
+            BubbleOverlay.BeginChaos(host, _ => { });
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(3));
+            Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos(); BubbleOverlay.Stop();
+            BubbleOverlay.Popped -= counted;
+            BubbleOverlay.FrothEffectOn = oldEffect;
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            host.Close();
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -546,4 +704,75 @@ public sealed class BubbleOverlayTests
         Assert.False(Win32Overlay.Hits(rects, 2, 300, 300));   // the third rect is past count
         Assert.False(Win32Overlay.Hits(rects, 0, 120, 120));   // empty field: fully click-through
     }
+
+    [Fact]
+    public void Froth_rechecks_the_switch_after_one_second_without_an_event() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldEffect = BubbleOverlay.FrothEffectOn;
+        bool on = true;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true; BubbleOverlay.FrothEffectOn = _ => on;
+            host.Show(); BubbleOverlay.Start(host);
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(new[] { new AmbientBubble { X = 300, Y = 300, Size = 150 }, new AmbientBubble { X = 300, Y = 300, Size = 150 } });
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(1));
+            Assert.Equal(2, Assert.Single(BubbleOverlay.Field.Bubbles).FrothPartCount);
+            on = false;
+            System.Threading.Thread.Sleep(1100);
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(2));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+        }
+        finally
+        {
+            BubbleOverlay.Stop(); BubbleOverlay.FrothEffectOn = oldEffect;
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks; host.Close();
+        }
+    });
+
+    [Fact]
+    public void Panic_during_froth_payout_stops_the_remaining_parts() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldEffect = BubbleOverlay.FrothEffectOn;
+        var settings = CoreSettings.Current;
+        var oldBudget = (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday);
+        int pops = 0;
+        Action panic = () =>
+        {
+            pops++;
+            global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "bubble-host").Stop(null);
+        };
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true; BubbleOverlay.FrothEffectOn = _ => true;
+            host.Show(); BubbleOverlay.Start(host);
+            BubbleOverlay.Field.Bubbles.Clear();
+            for (int i = 0; i < 3; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 300, Y = 300, Size = 150 });
+            BubbleOverlay.Field.StepFroth(true, .03, 67.5, 4.5, _ => { });
+            var carrier = Assert.Single(BubbleOverlay.Field.Bubbles);
+            BubbleOverlay.Popped += panic;
+            BubbleOverlay.Pop(carrier);
+            Assert.Equal(1, pops);
+            Assert.Equal(0, BubbleOverlay.WindowCount);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+        }
+        finally
+        {
+            BubbleOverlay.Popped -= panic; BubbleOverlay.EndChaos(); BubbleOverlay.Stop();
+            (settings.AmbientBubbleXpDayKey, settings.AmbientBubbleXpPaidToday) = oldBudget;
+            BubbleOverlay.FrothEffectOn = oldEffect; BubbleOverlay.SkipPlatformChecksForTests = oldChecks; host.Close();
+        }
+    });
 }

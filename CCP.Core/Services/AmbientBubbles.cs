@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="Step"/>. Positions are WPF's: DIPs of the bubble's own screen (screen px / scaling),
     /// top-left of the <see cref="Size"/> box. The head only draws and hit-tests.
     /// </summary>
-    public sealed class AmbientBubble
+    public sealed partial class AmbientBubble
     {
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
@@ -561,7 +561,7 @@ namespace ConditioningControlPanel.Services
     /// pop reward (lucky roll, daily XP bucket) and one logical step for every bubble. Not a
     /// singleton on purpose: the head owns one per run. UI-thread only.
     /// </summary>
-    public sealed class AmbientBubbleField
+    public sealed partial class AmbientBubbleField
     {
         /// <summary>WPF MAX_BUBBLES_HOST: the shared-host cap, which is how every bubble renders here.
         /// Solid mode off is WPF's per-window path, capped at 3 (MAX_BUBBLES).</summary>
