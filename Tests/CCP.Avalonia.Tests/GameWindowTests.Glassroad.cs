@@ -29,13 +29,15 @@ public sealed partial class GameWindowTests
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
     {
         public readonly List<(string Method, string Url, string Body, string? Token)> Seen = new();
+        public System.Net.HttpStatusCode Status = System.Net.HttpStatusCode.OK;
+        public string Reply = "{\"ok\":1}";
         protected override async System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
             System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
         {
             var body = request.Content == null ? "" : await request.Content.ReadAsStringAsync(ct);
             Seen.Add((request.Method.Method, request.RequestUri!.ToString(), body,
                 request.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null));
-            return new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent("{\"ok\":1}") };
+            return new System.Net.Http.HttpResponseMessage(Status) { Content = new System.Net.Http.StringContent(Reply) };
         }
     }
 
@@ -70,6 +72,44 @@ public sealed partial class GameWindowTests
             (CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, GameWindow.PbpHttpClient, GameWindow.PbpServerBase) = (oldDoor, oldOwns, oldHttp, oldBase);
             (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, MainShellWindow.LeashGateDueProvider) = (oldUid, oldSecret, oldGate);
         }
+    });
+
+    [Fact]
+    public void Glassroad_MergedReplySwapsAndPanicDropsQueuedReply() => RunGlassroad((_, _, fake) =>
+    {
+        var hooks = (MergedAccountRecovery.StopSync, MergedAccountRecovery.StampQuests, MergedAccountRecovery.Reauthenticate, MergedAccountRecovery.ReloadProfile, MergedAccountRecovery.Finished);
+        MergedAccountRecovery.ResetForTest();
+        var settings = new ConditioningControlPanel.Models.AppSettings { UnifiedId = "u_old123456", AuthToken = "old" };
+        MergedAccountRecovery.SettingsForTest = () => settings;
+        MergedAccountRecovery.Reauthenticate = () => System.Threading.Tasks.Task.FromResult(false);
+        MergedAccountRecovery.StopSync = null;
+        MergedAccountRecovery.StampQuests = null;
+        MergedAccountRecovery.ReloadProfile = null;
+        MergedAccountRecovery.Finished = null;
+        fake.Status = System.Net.HttpStatusCode.Conflict;
+        fake.Reply = "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon123456\"}";
+        try
+        {
+            var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            Dispatcher.UIThread.RunJobs();
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            w.Web.OnWebMessage("{\"type\":\"net\",\"id\":\"a\",\"path\":\"/v2/race/access\"}");
+            Assert.True(w.GlassroadPending.Wait(TimeSpan.FromSeconds(10)));
+            PanicSurfaces.All.Single(s => s.Id == "games").Stop(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(MergedAccountRecovery.LastSwap.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Equal("u_old123456", settings.UnifiedId);
+            w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            Dispatcher.UIThread.RunJobs();
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            w.Web.OnWebMessage("{\"type\":\"net\",\"id\":\"b\",\"path\":\"/v2/race/access\"}");
+            Assert.True(w.GlassroadPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(MergedAccountRecovery.LastSwap.Wait(TimeSpan.FromSeconds(10)));
+            Assert.Equal("u_canon123456", settings.UnifiedId);
+        }
+        finally { GameWindow.CloseAllForPanic(); MergedAccountRecovery.ResetForTest();
+            (MergedAccountRecovery.StopSync, MergedAccountRecovery.StampQuests, MergedAccountRecovery.Reauthenticate, MergedAccountRecovery.ReloadProfile, MergedAccountRecovery.Finished) = hooks; }
     });
 
     [Theory]
