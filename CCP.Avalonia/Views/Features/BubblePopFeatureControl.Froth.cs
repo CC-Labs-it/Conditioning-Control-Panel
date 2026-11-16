@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features;
 public partial class BubblePopFeatureControl
 {
     private readonly StackPanel _frothRows = new() { IsVisible = false, Name = "FrothRows" };
-    private readonly Slider _frothSize = new() { Name = "SliderFrothSize", Minimum = 2.5, Maximum = 6, TickFrequency = 0.5, IsSnapToTickEnabled = true };
+    private readonly Slider _frothSize = new() { Name = "SliderFrothSize", Minimum = 2.5, Maximum = 6, SmallChange = 0.5, LargeChange = 0.5, TickFrequency = 0.5, IsSnapToTickEnabled = true };
     private readonly Slider _frothReach = new() { Name = "SliderFrothReach", Minimum = 0, Maximum = 200, TickFrequency = 10, IsSnapToTickEnabled = true };
     private readonly Slider _frothPush = new() { Name = "SliderFrothPush", Minimum = 0, Maximum = 200, TickFrequency = 10, IsSnapToTickEnabled = true };
     private readonly TextBlock _frothSizeText = new(), _frothReachText = new(), _frothPushText = new();
