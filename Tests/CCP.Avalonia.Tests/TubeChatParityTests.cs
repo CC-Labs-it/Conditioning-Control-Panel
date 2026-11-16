@@ -268,6 +268,17 @@ public sealed class TubeChatParityTests
             video.ForceCleanup();
             Assert.True(ConversationDelivery.AskCardsShown!(ask));
 
+            // WPF App.xaml.cs:801: a playing browser video suppresses ask cards.
+            var browserBusy = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy;
+            try
+            {
+                ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy = true;
+                Assert.False(ConversationDelivery.AskCardsShown!(ask));
+                ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy = false;
+                Assert.True(ConversationDelivery.AskCardsShown!(ask));
+            }
+            finally { ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixBrowserMediaBusy = browserBusy; }
+
             // Audit #1956: WPF's IsBusy counts an active Lockdown (App.xaml.cs BusyProvider).
             var ld = LockdownService.Current = new LockdownService();
             ld.Activate(TimeSpan.FromMinutes(30));
