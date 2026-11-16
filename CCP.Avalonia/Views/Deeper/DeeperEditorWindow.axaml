@@ -578,6 +578,10 @@
                                             </MenuItem>
                                         </ContextMenu>
                                     </Canvas.ContextMenu>
+                                    <Border x:Name="HoverTimeTip" IsVisible="False" IsHitTestVisible="False"
+                                            Background="#DD202020" CornerRadius="3" Padding="4,2" ZIndex="200">
+                                        <TextBlock x:Name="TxtHoverTime" Foreground="White" FontSize="11"/>
+                                    </Border>
                                     <!-- Playhead -->
                                     <Line x:Name="PlayheadLine" StartPoint="0,0" EndPoint="0,0"
                                           Stroke="{DynamicResource DeeperAccentBrush}" StrokeThickness="2"

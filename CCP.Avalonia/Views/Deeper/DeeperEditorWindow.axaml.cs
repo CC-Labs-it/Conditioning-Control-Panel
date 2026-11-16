@@ -389,6 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // -- Timeline canvas + scroller
             TimelineCanvas.PointerPressed += TimelineCanvas_PointerPressed;
             TimelineCanvas.PointerMoved += TimelineCanvas_PointerMoved;
+            TimelineCanvas.PointerExited += (_, _) => HoverTimeTip.IsVisible = false;
             TimelineCanvas.PointerReleased += TimelineCanvas_PointerReleased;
             TimelineCanvas.PointerCaptureLost += TimelineCanvas_PointerCaptureLost;
             TimelineCanvas.SizeChanged += TimelineCanvas_SizeChanged;
@@ -1156,6 +1157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var ed in s_open.ToArray())
             {
+                ed.HoverTimeTip.IsVisible = false;
                 var localVideo = ed._browserNavigated && ed.BrowserPreview.Source?.IsFile == true;
                 if (localVideo)
                 {
@@ -1507,6 +1509,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void TimelineCanvas_PointerMoved(object? sender, PointerEventArgs e)
         {
+            UpdateHoverTimeTip(e);
             if (_dragMode == DragMode.RubberBand)
             {
                 UpdateRubberBand(e.GetPosition(TimelineCanvas));
@@ -1737,6 +1740,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 TxtRuleBandEnd.Text = _draggedRegion.End.ToString("0.##", CultureInfo.InvariantCulture);
             }
             finally { ClearWhenEventsDrained(() => _suppressRuleSync = false); }
+        }
+
+        // WPF DeeperEditorWindow.xaml.cs:1794: show cursor time above the lanes.
+        private void UpdateHoverTimeTip(PointerEventArgs e)
+        {
+            var width = TimelineCanvas.Bounds.Width;
+            if (_totalSeconds <= 0 || width <= 0) { HoverTimeTip.IsVisible = false; return; }
+            var x = e.GetPosition(TimelineCanvas).X;
+            TxtHoverTime.Text = FormatHoverTime(Math.Clamp(x / width, 0, 1) * _totalSeconds);
+            HoverTimeTip.IsVisible = true;
+            var tipWidth = HoverTimeTip.Bounds.Width;
+            var left = x + 12;
+            if (tipWidth > 0 && left + tipWidth > width) left = x - tipWidth - 4;
+            Canvas.SetLeft(HoverTimeTip, Math.Clamp(left, 0, Math.Max(0, width - tipWidth)));
+            Canvas.SetTop(HoverTimeTip, RulerStripHeight + 2);
         }
 
         private void ApplyScrubFromMouse(PointerEventArgs e)
