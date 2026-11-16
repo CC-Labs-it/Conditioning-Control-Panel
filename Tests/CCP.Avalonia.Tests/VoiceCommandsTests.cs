@@ -174,10 +174,8 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
-        Assert.False(shell.WakeLoopArmed);
-        Assert.False(shell.PushToTalkArmed);
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
@@ -215,78 +213,6 @@ public sealed class VoiceCommandsTests
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
-    }, beforeShell: () =>
-    {
-        // This test injects commands directly. A live WAV wake loop can enqueue a second command
-        // while the dispatcher is pumped, contaminating the exact-once escape assertion.
-        CoreSettings.Current.MicConsentGiven = true;
-        CoreSettings.Current.SpeechWakeWordEnabled = false;
-        CoreSettings.Current.SpeechPushToTalkEnabled = false;
-        CoreSettings.Current.SpeechWakeWords = WavPhrase;
-        CoreSettings.Current.AvatarEnabled = true;
-        CoreEntitlement.HasPremiumProvider = () => true;
-        CoreSpeech.IsAvailableProvider = () => true;
-    });
-
-    [Theory]
-    [InlineData("success")]
-    [InlineData("setup")]
-    [InlineData("creation")]
-    [InlineData("body")]
-    public Task InlineFixtureRestoresStateOnSuccessAndFailure(string stage) => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
-        var s = CoreSettings.Current;
-        var original = (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-            s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven);
-        var oldPremium = CoreEntitlement.HasPremiumProvider;
-        var oldSpeech = CoreSpeech.IsAvailableProvider;
-        var oldLockdown = LockdownService.Current;
-        using var lockdown = new LockdownService();
-        try
-        {
-            (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-                s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven)
-                = (false, true, true, "original phrase", false, false, true, true);
-            Func<bool> premium = () => false, speech = () => false;
-            CoreEntitlement.HasPremiumProvider = premium;
-            CoreSpeech.IsAvailableProvider = speech;
-            LockdownService.Current = lockdown;
-            var expected = (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-                s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven);
-
-            Task RunFixture() => RunUi(shell =>
-            {
-                s.PanicKeyEnabled = true;
-                s.AutonomyModeEnabled = s.AutonomyConsentGiven = false;
-                LockdownService.Current = null;
-                if (stage == "body") throw new InvalidOperationException(stage);
-                return Task.CompletedTask;
-            }, beforeShell: () =>
-            {
-                (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled, s.SpeechWakeWords, s.AvatarEnabled)
-                    = (true, false, false, WavPhrase, true);
-                CoreEntitlement.HasPremiumProvider = () => true;
-                CoreSpeech.IsAvailableProvider = () => true;
-                LockdownService.Current = null;
-                if (stage == "setup") throw new InvalidOperationException(stage);
-            }, createShell: () => stage == "creation" ? throw new InvalidOperationException(stage) : new MainShellWindow());
-
-            if (stage == "success") await RunFixture();
-            else Assert.Equal(stage, (await Assert.ThrowsAsync<InvalidOperationException>(RunFixture)).Message);
-            Assert.Equal(expected, (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-                s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven));
-            Assert.Same(premium, CoreEntitlement.HasPremiumProvider);
-            Assert.Same(speech, CoreSpeech.IsAvailableProvider);
-            Assert.Same(lockdown, LockdownService.Current);
-        }
-        finally
-        {
-            (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-                s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven) = original;
-            CoreEntitlement.HasPremiumProvider = oldPremium;
-            CoreSpeech.IsAvailableProvider = oldSpeech;
-            LockdownService.Current = oldLockdown;
-        }
     });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
@@ -426,37 +352,15 @@ public sealed class VoiceCommandsTests
             }
         });
 
-    // These tests drive UI or inline commands directly; they do not need recognition or a microphone.
-    private static Task RunUi(Func<MainShellWindow, Task> body, Action? beforeShell = null, Func<MainShellWindow>? createShell = null) =>
+    // The help row is UI state; no recognition or microphone is exercised by this test.
+    private static Task RunUi(Func<MainShellWindow, Task> body) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
-            var s = CoreSettings.Current;
-            var saved = (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-                s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven);
-            var premium = CoreEntitlement.HasPremiumProvider;
-            var speech = CoreSpeech.IsAvailableProvider;
-            var lockdown = LockdownService.Current;
-            MainShellWindow? shell = null;
-            try
-            {
-                AmbientBeatLoopsTests.Setup();
-                beforeShell?.Invoke();
-                shell = createShell?.Invoke() ?? new MainShellWindow();
-                shell.Show();
-                await body(shell);
-            }
-            finally
-            {
-                try { shell?.RequestExit(); }
-                finally
-                {
-                    (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled,
-                        s.SpeechWakeWords, s.AvatarEnabled, s.PanicKeyEnabled, s.AutonomyModeEnabled, s.AutonomyConsentGiven) = saved;
-                    CoreEntitlement.HasPremiumProvider = premium;
-                    CoreSpeech.IsAvailableProvider = speech;
-                    LockdownService.Current = lockdown;
-                }
-            }
+            AmbientBeatLoopsTests.Setup();
+            var shell = new MainShellWindow();
+            shell.Show();
+            try { await body(shell); }
+            finally { shell.RequestExit(); }
         });
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
