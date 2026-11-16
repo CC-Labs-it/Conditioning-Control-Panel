@@ -13,6 +13,8 @@ public class PinkTintLayer : BaseLayer
     private double _opacity;
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
+    /// <summary>The colour and strength the pink filter was last told to show. Steam (its Super look) wears them.</summary>
+    internal static (byte R, byte G, byte B, double Opacity) LastLook { get; private set; } = (255, 105, 180, 0.2);
 
     private readonly CompositorEngine _engine;
     private int _sortedZ;
@@ -69,15 +71,40 @@ public class PinkTintLayer : BaseLayer
         var o = Math.Clamp(opacity, 0.0, 1.0);
         if (r == _r && g == _g && b == _b && o == _opacity) return;  // no visible change
         _r = r; _g = g; _b = b; _opacity = o;
+        LastLook = (r, g, b, o);
         _dirty = true;
     }
 
     public void Hide() => SetActive(false);
 
+    // Super Creep picked as "Super only": the tint steps aside behind a veil while the fog runs.
+    // OverlayService pushes the decision (UI thread); the veil eases on the engine tick.
+    private volatile bool _stepAside;
+    private double _veil = 1;
+
+    /// <summary>Hide the tint for Super only (true) or bring it back. A layer not on screen snaps, so a fresh show never flashes. UI thread.</summary>
+    public void SetStepAside(bool on)
+    {
+        if (!IsActive) _veil = on ? 0 : 1;
+        if (_stepAside == on) return;   // the 500 ms reconciler pushes every tick: no repaint for nothing
+        _stepAside = on;
+        _dirty = true;
+    }
+
+    public override void Update(TimeSpan delta)
+    {
+        double target = _stepAside ? 0 : 1;
+        if (_veil == target) return;
+        _veil = Super.SuperStepAside.Step(_veil, _stepAside, delta.TotalSeconds,
+            Super.SuperStepAside.FadeSecondsFor(MotionFx.Level));
+        _dirty = true;
+    }
+
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
     {
-        if (_opacity <= 0) return;
-        _paint.Color = new SKColor(_r, _g, _b, (byte)Math.Clamp(_opacity * 255, 0, 255));
+        double o = _opacity * Super.SuperStepAside.Ease(_veil);
+        if (o <= 0) return;
+        _paint.Color = new SKColor(_r, _g, _b, (byte)Math.Clamp(o * 255, 0, 255));
         canvas.DrawRect(boundsPx, _paint);
     }
 }

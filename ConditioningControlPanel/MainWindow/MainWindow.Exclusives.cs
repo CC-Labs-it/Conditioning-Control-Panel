@@ -258,7 +258,7 @@ namespace ConditioningControlPanel
         /// The switch's own handler asks the tier gate.</summary>
         private void OpenFocusGazeSwitch()
         {
-            ShowTab("play");
+            ShowTab("playeyes");   // "play" is the launcher's Games door now (declutter wave 2)
             var slot = PlayTab?.SlotFocusGaze;
             if (slot == null) return;
             Dispatcher.BeginInvoke(new Action(() =>

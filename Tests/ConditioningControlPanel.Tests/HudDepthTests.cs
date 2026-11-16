@@ -145,6 +145,46 @@ public class HudDepthTests
         Assert.Contains("<ScaleTransform x:Name=\"StartPressScale\"/>", xaml);
     }
 
+    // Declutter wave 1 (2026-11-15): one filled button on the bar.
+    [Fact]
+    public void StartIsTheOnlyFilledButtonAndSaveAndExitAreOutlinePlanks()
+    {
+        var xaml = AppFile("MainWindow", "MainWindow.xaml");
+        var bar = Regex.Match(xaml, "<!-- Global Bottom Bar.*?<!-- Remote Control Overlay", RegexOptions.Singleline).Value;
+        Assert.NotEqual("", bar);
+
+        // START flexes alone; Save and Exit size to their labels.
+        Assert.Single(Regex.Matches(bar, "<ColumnDefinition Width=\"\\*\"/>"));
+        Assert.Matches(new Regex("<ColumnDefinition Width=\"\\*\"/>\\s*<!-- START"), bar);
+        Assert.DoesNotContain("SecondaryButton", Regex.Match(bar, "<Button x:Name=\"BtnSaveAll\"[^>]*>", RegexOptions.Singleline).Value);
+
+        var save = Regex.Match(bar, "<Button x:Name=\"BtnSaveAll\"[^>]*>", RegexOptions.Singleline).Value;
+        Assert.Contains("Style=\"{StaticResource BarOutlineButton}\"", save);
+        Assert.Contains("Click=\"BtnSave_Click\"", save);
+        var exit = Regex.Match(bar, "<Button Grid.Column=\"6\".*?</Button>", RegexOptions.Singleline).Value;
+        Assert.Contains("BasedOn=\"{StaticResource BarOutlineButton}\"", exit);
+        Assert.Contains("Click=\"BtnExit_Click\"", exit);
+        // danger on text and border only, never on the resting face
+        Assert.Contains("<Setter Property=\"Foreground\" Value=\"{DynamicResource DangerBrush}\"/>", exit);
+        Assert.Contains("<Setter Property=\"BorderBrush\" Value=\"{DynamicResource DangerBrush}\"/>", exit);
+        Assert.DoesNotContain("Property=\"Background\"", exit);
+
+        // the outline plank: transparent at rest, and the parts HudPlank.cs moves
+        var style = Regex.Match(bar, "<Style x:Key=\"BarOutlineButton\".*?</Style>", RegexOptions.Singleline).Value;
+        Assert.Contains("<Setter Property=\"Background\" Value=\"Transparent\"/>", style);
+        Assert.Contains("x:Name=\"DepthDrop\"", style);
+        Assert.Contains("x:Name=\"DepthFace\"", style);
+        Assert.Contains("BorderBrush=\"{TemplateBinding BorderBrush}\"", style);
+
+        // FocusVisualStyle is off, so the template carries its own keyboard focus state: a bright,
+        // thicker outline on the template part (Exit shares the template, so it gets it too).
+        var focus = Regex.Match(style, "<Trigger Property=\"IsKeyboardFocused\" Value=\"True\">.*?</Trigger>", RegexOptions.Singleline).Value;
+        Assert.NotEqual("", focus);
+        Assert.Contains("<Setter TargetName=\"b\" Property=\"BorderBrush\" Value=\"{DynamicResource TextLightBrush}\"/>", focus);
+        Assert.Contains("<Setter TargetName=\"b\" Property=\"BorderThickness\" Value=\"2\"/>", focus);
+        Assert.DoesNotContain("<Setter Property=\"Template\"", exit);
+    }
+
     [Fact]
     public void ThePinkButtonAndSecondaryButtonCarryOptInDepth()
     {

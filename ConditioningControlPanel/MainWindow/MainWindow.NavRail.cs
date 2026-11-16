@@ -574,13 +574,18 @@ namespace ConditioningControlPanel
         /// <summary>Opens a section the way its rail row does; logs and stays on an unknown key.</summary>
         internal void OpenNavSection(string section)
         {
-            var tab = NavRailRules.TargetTab(section, App.Settings?.Current?.NavLastTabBySection);
+            var json = App.Settings?.Current?.NavLastTabBySection;
+            var tab = NavRailRules.TargetTab(section, json);
             if (tab == null)
             {
                 App.Logger?.Warning("OpenNavSection: no section {Section}", section);
                 return;
             }
-            ShowTab(tab);
+            // Play's remembered tab still naming the old Games pill = this user came for the games.
+            _playCameForGames = section == NavSections.Play
+                && NavSections.CameForGames(NavRailRules.ReadLastTab(section, json));
+            try { ShowTab(tab); }
+            finally { _playCameForGames = false; }
         }
 
         /// <summary>Ctrl+1..7 jump to the rail's sections. Window InputBindings: they only fire

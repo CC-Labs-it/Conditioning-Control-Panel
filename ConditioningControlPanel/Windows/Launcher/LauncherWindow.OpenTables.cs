@@ -36,7 +36,7 @@ public partial class LauncherWindow
         {
             FontSize = 12,
             FontWeight = FontWeights.Bold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = new SolidColorBrush(Color.FromRgb(0x2A, 0x06, 0x18)),
         };
         _openTablesBadge = new Border

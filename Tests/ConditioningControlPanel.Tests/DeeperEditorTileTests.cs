@@ -60,13 +60,18 @@ public class DeeperEditorTileTests
     // ---------------------------------------------------------------- the slot
 
     [Fact]
-    public void The_editor_tile_holds_the_slot_the_tease_tile_had()
+    public void The_tile_is_collapsed_and_the_editor_stays_on_Play_Deeper()
     {
+        // Declutter wave 2 (2026-11-15): the tile left Home (collapsed, not deleted; the daily
+        // box took its cell). The editor itself must stay one pill away: Play > Deeper.
         var tile = TileElement();
-        Assert.Contains("Grid.Row=\"1\"", tile, StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"0\"", tile, StringComparison.Ordinal);
-        Assert.Contains("features/deeper_editor.png", tile, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"Collapsed\"", tile, StringComparison.Ordinal);
         Assert.Contains("Click=\"CardDeeperEditor_Click\"", tile, StringComparison.Ordinal);
+
+        var play = ConditioningControlPanel.Services.UI.NavSections.Find(ConditioningControlPanel.Services.UI.NavSections.Play)!;
+        Assert.Contains(play.Tabs.Where(t => !t.Hidden), t => t.Key == "deeper");
+        Assert.Contains("Click=\"BtnDeeperNewEnhancement_Click\"",
+            ReadSource("Views", "Tabs", "DeeperTabView.xaml"), StringComparison.Ordinal);
     }
 
     [Fact]

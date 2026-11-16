@@ -42,6 +42,8 @@ public partial class LauncherWindow
     private const double TileArtMinHeight = LauncherGridLayout.MinArtHeight;
     private const double TileTiltDegrees = 1.2;
     private const double TileArtParallaxPx = 7;
+    /// <summary>One decode size for tile and door art, so both read the same bitmap cache entry.</summary>
+    private const int TileArtDecodeWidth = 640;
     private const int TileTiltMs = 90;
     private const int TileHoverMs = 160;
     private const double TileGlowRest = 0.35;
@@ -104,7 +106,7 @@ public partial class LauncherWindow
         ImageSource? art = null;
         if (revealed && entry.ArtPath != null)
         {
-            try { art = ModResourceResolver.ResolveImageDecoded(entry.ArtPath, 640); }
+            try { art = ModResourceResolver.ResolveImageDecoded(entry.ArtPath, TileArtDecodeWidth); }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] art {Path} failed", entry.ArtPath); }
         }
         art ??= entry.Id switch
@@ -173,7 +175,7 @@ public partial class LauncherWindow
             LauncherSfx.Click();
             ShowShortcutResult(LauncherShortcuts.TryCreateDesktopShortcut(entry.Id));
         };
-        if (revealed) plate.Children.Add(shortcutBtn);
+        if (revealed && LauncherDoorRules.OffersShortcut(entry.Door)) plate.Children.Add(shortcutBtn);
         body.Children.Add(plate);
 
         // --- title, blurb, play ---
@@ -192,7 +194,7 @@ public partial class LauncherWindow
         {
             Text = revealed ? entry.Title : Loc.Get("launcher_mystery_title"),
             FontSize = 19, FontWeight = FontWeights.SemiBold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = titleBrush, TextTrimming = TextTrimming.CharacterEllipsis,
             Height = LauncherGridLayout.TitleHeight, VerticalAlignment = VerticalAlignment.Center,
         });
@@ -317,7 +319,7 @@ public partial class LauncherWindow
         row.Children.Add(new TextBlock
         {
             Text = Loc.Get(textKey), FontSize = 11, FontWeight = FontWeights.Bold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
         });
         pill.Child = row;
@@ -381,7 +383,7 @@ public partial class LauncherWindow
         var mark = new TextBlock
         {
             Text = "?", FontSize = 96, FontWeight = FontWeights.Bold,
-            FontFamily = new FontFamily("/Fonts/#Fredoka, Segoe UI"),
+            FontFamily = LauncherDoorCard.DisplayFont,
             Foreground = new SolidColorBrush(Lighten(hue, 0.55)), Opacity = 0.95,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 0, 12),

@@ -189,6 +189,10 @@ namespace ConditioningControlPanel.Services
         // when the number CHANGES (#1099). Guarded by _lockObj, like _soundQueue.
         private int _lastLoggedVoicePoolCount = -1;
         private readonly List<string> _tempPackFiles = new();  // Track temp files for cleanup
+        // Super Flicker Deck: a pack picture decrypts to a fresh temp path on every draw, so the
+        // path alone cannot say "this picture is already up". Temp path -> pack entry key, under
+        // _lockObj, cleared with the temp files.
+        private readonly Dictionary<string, string> _tempPackIdentity = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _lockObj = new();
         private FlashWindow[] _windowsSnapshot = Array.Empty<FlashWindow>(); // Reusable snapshot for heartbeat
 
@@ -469,6 +473,7 @@ namespace ConditioningControlPanel.Services
             {
                 App.Logger?.Warning("FlashService: could not create {Path} - {Error}", soundsPath, ex.Message);
             }
+            Services.Super.SuperAccess.Changed += OnSuperChanged;
             // Animation/fade heartbeat runs off CompositionTarget.Rendering (vsync-aligned)
             // — see StartHeartbeat. A 33ms DispatcherTimer's OS-quantized cadence beats
             // against the display refresh and makes GIF flashes judder (same fix as the
@@ -1763,6 +1768,7 @@ namespace ConditioningControlPanel.Services
                 window.Left = finalX;
                 window.Top = finalY;
                 window.Frames = imageData.Frames;
+                lock (_lockObj) window.SourcePath = SourceIdentityLocked(imageData.FilePath ?? "");
                 window.ClipPath = imageData.ClipPath;
                 // #1194: the user's GIF speed slider, applied once here rather than per tick.
                 window.FrameDelay = ScaleFrameDelay(imageData.FrameDelay, settings.FlashGifSpeedMultiplier);
@@ -2597,6 +2603,9 @@ namespace ConditioningControlPanel.Services
                             window.LayerItem.EntranceMotion = MotionFx.Level;
                         }
                         frames = null;   // ownership transferred — FlashLayer.Remove disposes them
+                        AttachDeck(window, window.LayerItem);
+                        HookStage();
+                        if (window.LayerItem is { } poolItem) poolItem.OnPoolEaten = _ => PoolAte(window);
 
                         if (window.IsClickable)
                             EnsureLayerHook();
@@ -2683,6 +2692,7 @@ namespace ConditioningControlPanel.Services
                         // Re-check on the UI thread — the flash may have expired since the snapshot.
                         if (win.IsFadingOut || win.LayerItem == null) return;
                         if (startDrag) BeginLayerDrag(win, grab);
+                        else if (!right && win.LayerItem.Deck != null) DeckPress(win);
                         else OnFlashClicked(win, App.Settings.Current);
                     }
                     catch (Exception ex)
@@ -2694,6 +2704,262 @@ namespace ConditioningControlPanel.Services
             }
             return false;
         }
+
+        #region Super Flicker Deck (compositor path)
+
+        // Phase variety for the idle sway. UI thread only.
+        private int _deckIndex;
+
+        /// <summary>How many draws a flip looks through for a picture that is not already up.</summary>
+        private const int DeckCandidates = 4;
+
+        /// <summary>
+        /// Make a freshly spawned compositor flash a Flicker Deck card when Super is on and nothing
+        /// owned would also act on it. The classic per-window path never gets here.
+        /// </summary>
+        private void AttachDeck(FlashWindow window, Compositor.FlashLayer.FlashItem? item)
+        {
+            if (item == null) return;
+            var s = App.Settings?.Current;
+            var owned = OwnsFlashV2();
+            if (!FlickerDeck.Applies(Services.Super.SuperAccess.IsOn(Services.Super.SuperEffect.FlickerDeck),
+                    window.UsesLayer, window.IsClickable, window.PreviewV2, window.IsRemix, window.IsNatasha,
+                    dragOwnedOn: s?.FlashDraggable == true && owned,
+                    shatterOwnedOn: s?.FlashShatterEnabled == true && owned))
+                return;
+            // Flips to break (DeckOptions): the stock 4 rolls 3..5, exactly as before it had options.
+            var (breakMin, breakMax) = SuperCore.DeckOptions.BreakRange(s?.DeckFlips ?? SuperCore.DeckOptions.FlipsDefault);
+            item.Deck = FlickerDeck.Create(_deckIndex++ % 8, _random, breakMin, breakMax);
+            item.OnDeckRaise = _ => RaiseDeckWindow(window);
+            item.OnDeckSwap = _ => ApplyDeckSwap(window);
+            item.OnDeckGaveUp = _ => window.DeckPending = null;
+        }
+
+        // ---- Super on the shared stage (CCP.Core/Super): blasts, the bouncing word, the Whirlpool ----
+
+        private bool _stageHooked;
+
+        /// <summary>Listen to the shared stage once. UI thread.</summary>
+        private void HookStage()
+        {
+            if (_stageHooked) return;
+            _stageHooked = true;
+            var stage = Services.Super.SuperStageHost.Stage;
+            stage.Blasted += OnStageBlast;
+            stage.Swept += OnStageSwept;
+        }
+
+        /// <summary>The cards on screen right now, with their rects (device px).</summary>
+        private List<(FlashWindow Window, float X, float Y, float W, float H)> DeckCards()
+        {
+            var cards = new List<(FlashWindow, float, float, float, float)>();
+            lock (_lockObj)
+            {
+                foreach (var w in _activeWindows)
+                    if (w.LayerItem is { Deck: not null, PoolEaten: false } it) cards.Add((w, it.X, it.Y, it.W, it.H));
+            }
+            return cards;
+        }
+
+        /// <summary>UI THREAD: something went off. Every card inside its ring is knocked (one flip,
+        /// as a click would) when the ring gets there. The card that broke is already gone.</summary>
+        private void OnStageBlast(SuperCore.Blast b)
+        {
+            if (b.ReachPx <= 0) return;
+            foreach (var c in DeckCards())
+            {
+                double dx = c.X + c.W / 2 - b.X, dy = c.Y + c.H / 2 - b.Y, d = Math.Sqrt(dx * dx + dy * dy);
+                if (d > b.ReachPx + Math.Max(c.W, c.H) * 0.3) continue;
+                _ = KnockLater(c.Window, (int)Math.Clamp(d / 1.4, 40, 900));
+            }
+        }
+
+        /// <summary>UI THREAD: the bouncing word crossed this box. A card it crosses is knocked, at
+        /// most once every 1.6 s per card.</summary>
+        private void OnStageSwept(double left, double top, double right, double bottom)
+        {
+            long now = Environment.TickCount64;
+            foreach (var c in DeckCards())
+            {
+                double cx = c.X + c.W / 2, cy = c.Y + c.H / 2;
+                if (cx < left - c.W * 0.25 || cx > right + c.W * 0.25 || cy < top - c.H * 0.25 || cy > bottom + c.H * 0.25) continue;
+                if (now - c.Window.LastKnockTick < 1600) continue;
+                c.Window.LastKnockTick = now;
+                DeckPress(c.Window);
+            }
+        }
+
+        private async Task KnockLater(FlashWindow window, int delayMs)
+        {
+            try
+            {
+                await Task.Delay(delayMs);
+                bool live;
+                lock (_lockObj) live = _activeWindows.Contains(window);
+                if (!live || window.LayerItem is not { Deck: not null, PoolEaten: false }) return;
+                window.LastKnockTick = Environment.TickCount64;
+                DeckPress(window);
+            }
+            catch (Exception ex) { App.Logger?.Debug("Deck knock: {E}", ex.Message); }
+        }
+
+        /// <summary>
+        /// UI THREAD: the Whirlpool pulled this flash into its eye. It leaves the way a broken card
+        /// does when it is one, and it pays NOTHING (owner, 2026-11-15): no click event, no XP, no
+        /// hydra, no haptics. Resting the mouse must never be a way to farm.
+        /// </summary>
+        private void PoolAte(FlashWindow window)
+        {
+            bool live;
+            lock (_lockObj) live = _activeWindows.Remove(window);
+            if (!live) return;
+            try { window.LifetimeCts?.Cancel(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            window.ShatterOnDismiss = true;
+            if (window.LayerItem?.Deck != null) window.DeckBreak = true;
+            SafeCloseFlashWindow(window);
+        }
+
+        /// <summary>UI THREAD: a left click on a card. Flip, shatter, or nothing while it is busy.</summary>
+        private void DeckPress(FlashWindow window)
+        {
+            var item = window.LayerItem;
+            if (item?.Deck is not { } deck) { OnFlashClicked(window, App.Settings.Current); return; }
+            switch (FlickerDeck.Press(deck, MotionFx.Level))
+            {
+                case FlickerPress.Shatter:
+                    window.DeckBreak = true;
+                    OnFlashClicked(window, App.Settings.Current);
+                    break;
+                case FlickerPress.Flip:
+                    // Keep the card alive through its lift and the longest edge-on wait.
+                    window.BoostLifetime((int)((FlickerDeck.LiftSpanSec + FlickerDeck.MaxHoldSec) * 1000) + 250);
+                    _ = LoadDeckPictureAsync(window, item);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Fetch the next picture for a flip from the same pool the flashes draw from, skipping
+        /// anything already on screen. The decode and the Skia copy run off the UI thread; the
+        /// frames wait on the item until the flip reaches its edge. No picture = the flip opens on
+        /// the old one.
+        /// </summary>
+        private async Task LoadDeckPictureAsync(FlashWindow window, Compositor.FlashLayer.FlashItem item)
+        {
+            SkiaSharp.SKImage[]? frames = null;
+            try
+            {
+                // Prefer a picture that is not up anywhere; a small library may have nothing
+                // else, then anything but the card's own face beats a long edge-on wait.
+                // Off the UI thread: a pack draw decrypts to disk.
+                var candidates = await Task.Run(() => GetNextImages(DeckCandidates));
+                List<string> order;
+                string own;
+                lock (_lockObj)
+                {
+                    own = window.SourcePath;
+                    var up = new HashSet<string>(_activeWindows.Select(w => w.SourcePath)
+                        .Where(p => !string.IsNullOrEmpty(p)), StringComparer.OrdinalIgnoreCase);
+                    var keyed = candidates.Select(p => (Path: p, Key: SourceIdentityLocked(p))).ToList();
+                    order = keyed.Where(c => !up.Contains(c.Key)).Select(c => c.Path)
+                        .Concat(keyed.Where(c => up.Contains(c.Key)
+                            && !string.Equals(c.Key, own, StringComparison.OrdinalIgnoreCase)).Select(c => c.Path))
+                        .ToList();
+                }
+                LoadedImageData? data = null;
+                foreach (var path in order)
+                {
+                    data = await LoadImageAsync(path);
+                    if (data is { Frames.Count: > 0 }) break;
+                    data = null;
+                }
+                if (data == null)
+                {
+                    // Nothing to flip to: open on the old face at the edge, no long hold.
+                    if (ReferenceEquals(window.LayerItem, item) && item.Deck is { } d) d.NoPicture = true;
+                    return;
+                }
+
+                var source = data.Frames.ToArray();
+                frames = await Task.Run(() =>
+                {
+                    var f = new SkiaSharp.SKImage[source.Length];
+                    for (int i = 0; i < f.Length; i++) f[i] = Compositor.SkiaWpfInterop.ToSKImage(source[i]);
+                    return f;
+                });
+
+                // Back on the UI thread. The flash may have gone, the switch may be off, or the
+                // flip may have given up waiting.
+                if (!ReferenceEquals(window.LayerItem, item) || item.Deck is not { Busy: true, Swapped: false }
+                    || item.Frames == null || window.IsFadingOut)
+                    return;
+                item.DropDeckPending();
+                item.DeckPendingFrames = frames;
+                window.DeckPending = data;
+                frames = null;   // the layer owns them now
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Flicker Deck picture failed: {E}", ex.Message);
+            }
+            finally
+            {
+                DisposeLayerFrames(frames);
+            }
+        }
+
+        /// <summary>The layer swapped the Skia frames: bring the window's frames and clock along.</summary>
+        private void ApplyDeckSwap(FlashWindow window)
+        {
+            var data = window.DeckPending;
+            window.DeckPending = null;
+            if (data == null) return;
+            try { window.ClipPlayer?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            window.ClipPlayer = null;
+            window.ClipPath = data.ClipPath;
+            window.ClipAttempted = false;
+            window.Frames = data.Frames;
+            window.FrameDelay = ScaleFrameDelay(data.FrameDelay, App.Settings?.Current?.FlashGifSpeedMultiplier ?? 1);
+            window.StartTime = DateTime.Now;
+            window.CurrentFrameIndex = 0;
+            lock (_lockObj) window.SourcePath = SourceIdentityLocked(data.FilePath ?? "");
+            // A new face deserves a full look: a flip late in the flash's life would otherwise
+            // fade the fresh picture a moment after it lands. BoostLifetime only ever lengthens.
+            window.BoostLifetime(window.OriginalLifetimeMs);
+        }
+
+        /// <summary>The card is in the air: it is now the topmost one, for the click test too.</summary>
+        private void RaiseDeckWindow(FlashWindow window)
+        {
+            lock (_lockObj)
+            {
+                if (!_activeWindows.Remove(window)) return;
+                _activeWindows.Add(window);
+            }
+        }
+
+        /// <summary>The switch went off (or the tier dropped): every card is a plain flash again.</summary>
+        private void OnSuperChanged(Services.Super.SuperEffect effect)
+        {
+            if (effect != Services.Super.SuperEffect.FlickerDeck) return;
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    if (Services.Super.SuperAccess.IsOn(Services.Super.SuperEffect.FlickerDeck)) return;
+                    _flashLayer?.ClearDecks();
+                    lock (_lockObj)
+                    {
+                        foreach (var w in _activeWindows) { w.DeckPending = null; w.DeckBreak = false; }
+                    }
+                }
+                catch (Exception ex) { Diag.Swallowed(ex, "flicker deck off"); }
+            });
+        }
+
+        #endregion
 
         #region Flashes v2 wave 2 - drag and fling (compositor path)
 
@@ -2790,7 +3056,9 @@ namespace ConditioningControlPanel.Services
             }
             if (outcome == FlashDragOutcome.Tap && !window.IsFadingOut)
             {
-                OnFlashClicked(window, App.Settings.Current);
+                // A tap on a Deck card is its press (flip, then break); a drag only moved it.
+                if (window.LayerItem?.Deck != null) DeckPress(window);
+                else OnFlashClicked(window, App.Settings.Current);
             }
             else if (outcome == FlashDragOutcome.Fling && window.IsNatasha && !window.NatashaDodged && !window.IsFadingOut)
             {
@@ -3843,6 +4111,7 @@ namespace ConditioningControlPanel.Services
                         if (!string.IsNullOrEmpty(tempPath))
                         {
                             _tempPackFiles.Add(tempPath);  // Track for cleanup
+                            _tempPackIdentity[tempPath] = PackEntryKey(packImage);
                             result.Add(tempPath);
                             App.Logger?.Debug("Using pack image: {Name} from pack {PackId}", packImage.File.OriginalName, packImage.PackId);
                             continue;
@@ -3967,6 +4236,7 @@ namespace ConditioningControlPanel.Services
                         if (!string.IsNullOrEmpty(tempPath))
                         {
                             _tempPackFiles.Add(tempPath);   // track for cleanup
+                            _tempPackIdentity[tempPath] = PackEntryKey(packImage);
                             result.Add(tempPath);
                         }
                         // decrypt failed → index stays marked chosen so we don't retry a broken entry
@@ -4621,6 +4891,13 @@ namespace ConditioningControlPanel.Services
             _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
         }
 
+        /// <summary>
+        /// The picture behind a draw: the pack entry for a decrypted temp file, else the path or URL
+        /// itself. Caller holds _lockObj.
+        /// </summary>
+        private string SourceIdentityLocked(string path)
+            => !string.IsNullOrEmpty(path) && _tempPackIdentity.TryGetValue(path, out var key) ? key : path;
+
         private string? GetNextSound()
         {
             lock (_lockObj)
@@ -5165,6 +5442,31 @@ namespace ConditioningControlPanel.Services
                     {
                         var item = window.LayerItem;
                         window.LayerItem = null;
+                        // Super Flicker Deck: the click that reached BreakAt breaks the card into
+                        // its own triangles. Only that click; a gaze pop or a right-click leaves
+                        // the base way.
+                        if (shatterThis && window.DeckBreak && item.Deck != null)
+                        {
+                            window.DeckBreak = false;
+                            window.DeckPending = null;
+                            // The break goes off on the shared stage: its ring knocks the cards and
+                            // pops the bubbles in reach, and it leaves a hole in the fog. A card the
+                            // pool shrank reaches less far. Break reach (DeckOptions) scales the
+                            // ring only, never the hole.
+                            double side = Math.Max(item.W, item.H), small = Math.Clamp(item.PoolScale, 0.35, 1);
+                            double reachSides = SuperCore.DeckOptions.ReachSides(
+                                App.Settings?.Current?.DeckBreakReach ?? SuperCore.DeckOptions.ReachDefault);
+                            Services.Super.SuperStageHost.Stage.Blast(new SuperCore.Blast(
+                                item.X + item.W / 2, item.Y + item.H / 2, side * reachSides * small, side * 0.8 * small,
+                                SuperCore.BlastKind.CardBreak));
+                            _flashLayer?.BeginDeckShatter(item, MotionFx.Level);
+                            window.MotionState = null;
+                            window.IsFadingOut = false;
+                            CloseStateBagWindow(window);
+                            return;
+                        }
+                        window.DeckBreak = false;
+                        window.DeckPending = null;
                         // Gentle visuals: a popped flash leaves as a plain fade (no break, no style).
                         var gentlePop = shatterThis && Safety.GentleVisuals.On;
                         var shatter = shatterThis && !gentlePop ? BuildShatter(window, item) : null;
@@ -5341,6 +5643,9 @@ namespace ConditioningControlPanel.Services
             {
                 SafeCloseFlashWindow(window);
             }
+            // Super Flicker Deck: a break already handed to the layer has no window any more, so
+            // the loop above cannot reach it. Panic and Stop take the falling shards too.
+            try { _flashLayer?.ClearDeckBreaks(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             _soundPlayingForCurrentFlash = false;
 
@@ -5354,6 +5659,7 @@ namespace ConditioningControlPanel.Services
 
         public void Dispose()
         {
+            Services.Super.SuperAccess.Changed -= OnSuperChanged;
             Stop();
             try { _remix?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _flashLayer?.Clear(); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -5456,6 +5762,18 @@ namespace ConditioningControlPanel.Services
         /// plain cut. Presentation only - XP, hydra and the active list are untouched by it.
         /// </summary>
         public bool ShatterOnDismiss { get; set; }
+
+        /// <summary>Where this flash's picture came from: Super Flicker Deck never flips to one already up.</summary>
+        public string SourcePath { get; set; } = "";
+
+        /// <summary>Super Flicker Deck: this dismiss is the click that reached BreakAt.</summary>
+        public bool DeckBreak { get; set; }
+
+        /// <summary>Super Deck: when a blast or the bouncing word last knocked this card (TickCount64).</summary>
+        public long LastKnockTick { get; set; }
+
+        /// <summary>Super Flicker Deck: the next picture's decode, waiting for the flip's edge.</summary>
+        internal LoadedImageData? DeckPending { get; set; }
 
         /// <summary>Back Room-only interaction showcase, independent of saved ownership settings.</summary>
         public bool PreviewV2 { get; set; }

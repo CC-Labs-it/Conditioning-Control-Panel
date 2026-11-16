@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Tests;
 /// Nav polish wave 1 (2026-10-06, lane STRIP): pills never move when the page changes, every
 /// header row has one height, pills are named UIA buttons, the Play pills follow the page.
 /// </summary>
+[Collection(SectionTabStripCollection.Name)]
 public class NavStripPolishTests
 {
     private static SectionTabStrip Laid(string section, string tab, double width = 1480)
@@ -80,7 +81,7 @@ public class NavStripPolishTests
     [Fact]
     public void PlayPillsFollowThePageOrder()
     {
-        Assert.Equal(new[] { "play", "playeyes", "playsessions" },
+        Assert.Equal(new[] { "playeyes", "playsessions", "deeper" },   // declutter wave 2: Games left for the launcher
             NavStripRules.Pills(NavSections.Play).Select(t => t.Key).Take(3).ToArray());
     }
 

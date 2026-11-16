@@ -112,6 +112,35 @@ namespace ConditioningControlPanel.Features
             DependencyProperty.Register(nameof(TeaseTier), typeof(int), typeof(FeatureCard),
                 new PropertyMetadata(0, OnTeaseTierChanged));
 
+        /// <summary>The V2 this tile owns, by SuperEffect name ("FlickerDeck"). Blank = no corner.</summary>
+        public static readonly DependencyProperty SuperProperty =
+            DependencyProperty.Register(nameof(Super), typeof(string), typeof(FeatureCard),
+                new PropertyMetadata(null, (d, _) => ((FeatureCard)d).ApplySuper()));
+
+        public string? Super
+        {
+            get => (string?)GetValue(SuperProperty);
+            set => SetValue(SuperProperty, value);
+        }
+
+        private Controls.SuperCorner? _superCorner;
+
+        /// <summary>The cut corner that switches the V2 (top-left; the badges step aside for it).</summary>
+        private void ApplySuper()
+        {
+            if (_superCorner != null) { ContentRoot.Children.Remove(_superCorner); _superCorner = null; }
+            if (Enum.TryParse<Services.Super.SuperEffect>(Super, out var effect))
+            {
+                _superCorner = new Controls.SuperCorner(effect, bottomRight: false)
+                {
+                    Inverted = () => DashboardDepth && DimWhenInactive && DashCardTip.Inverted,
+                };
+                // Under the rim, the active ring and the lock veil: the ring runs over the corner.
+                ContentRoot.Children.Insert(ContentRoot.Children.IndexOf(RimLight), _superCorner);
+            }
+            BadgeColumn.Margin = new Thickness(_superCorner != null ? Controls.SuperCorner.Leg + 2 : 8, 8, 0, 0);
+        }
+
         public static readonly DependencyProperty ShowV2BadgeProperty =
             DependencyProperty.Register(nameof(ShowV2Badge), typeof(bool), typeof(FeatureCard),
                 new PropertyMetadata(false, OnShowV2BadgeChanged));
@@ -320,6 +349,7 @@ namespace ConditioningControlPanel.Features
             // HelpButtonStyle / HelpTooltipStyle / PinkBrush live.
             Loaded += OnCardLoaded;
             Unloaded += OnCardUnloaded;
+            DashCardTip.Attach(this, () => DashboardDepth && DimWhenInactive && !IsLocked, () => new UIElement?[] { BtnHelp });
             IsVisibleChanged += OnCardVisibilityChanged;
             MouseEnter += OnCardMouseEnter;
             MouseLeave += OnCardMouseLeave;
@@ -813,6 +843,14 @@ namespace ConditioningControlPanel.Features
             if (e.OriginalSource is DependencyObject src && IsDescendantOf(src, BtnHelp)) return;
             bool invert = DashboardDepth && DimWhenInactive && App.Settings?.Current?.DashboardInvertClicks == true;
             bool toggle = right != invert;
+            // The V2 corner follows the tile's own rule: the on/off click flips the V2, the other
+            // click falls through and opens the settings like the rest of the tile.
+            if (toggle && _superCorner != null && e.OriginalSource is DependencyObject cs && IsDescendantOf(cs, _superCorner))
+            {
+                e.Handled = true;
+                _superCorner.Press();
+                return;
+            }
             if (toggle && IsLocked) return;
             if (right || toggle) e.Handled = true;
             RaiseEvent(new RoutedEventArgs(toggle ? ToggleRequestedEvent : ClickEvent, this));
