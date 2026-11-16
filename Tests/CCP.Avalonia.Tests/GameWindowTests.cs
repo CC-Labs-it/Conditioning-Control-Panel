@@ -697,7 +697,7 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"ready\"}");
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
-        Assert.Equal(false, (bool?)sent[0]["prizeCounter"]);
+        Assert.Null(sent[0]["prizeCounter"]);
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
     });
