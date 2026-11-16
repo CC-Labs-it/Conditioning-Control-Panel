@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HookLinkComet();
             InitializeCalendarFx();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
-            SlowTick.Tick += (_, _) => RefreshHero();
+            SlowTick.Tick += (_, _) => PageTick();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
@@ -130,7 +130,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
 
         // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).
-        internal void RepaintForLock() { RefreshHero(); PaintStamps(); }
+        internal void RepaintForLock() { RefreshHero(); RefreshDay(false); PaintStamps(); }
+
+        // WPF xaml.cs:93: the page tick also refreshes today and its cap.
+        internal void PageTick() { RefreshHero(); RefreshDay(false); }
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();
