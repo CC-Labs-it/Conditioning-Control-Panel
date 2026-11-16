@@ -77,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public void OnTabShown()
         {
             Refresh();
+            TrailerWeb.Start();
             LadderOnShown();
             RefreshHeroSheen();
             // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.
