@@ -1,6 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Platform;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Models;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -10,34 +14,63 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    // WebView2 refuses one user-data folder opened with two argument sets, so a host carrying the motion
+    // switch must leave the shared WebViewProfile.Folder, and each switch value gets its own folder.
     [Fact]
-    public void EveryHostSetsMotionArgumentAndJustDropKeepsAutoplay() => AvaloniaTestDispatcher.Run(() =>
+    public void EveryHostSetsMotionArgumentOffTheSharedProfileAndJustDropKeepsAutoplay() => AvaloniaTestDispatcher.Run(() =>
     {
-        foreach (var spec in GameWindow.Games.Values)
-        {
-            var window = new GameWindow(spec);
-            try
-            {
-                var args = (WindowsWebView2EnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(typeof(WindowsWebView2EnvironmentRequestedEventArgs));
-                if (spec.Id == GameWindow.JustDropId) window.Web.WindowsBrowserArguments = GameWindow.JustDropBrowserArguments;
-                window.Web.ApplyWindowsOptions(args);
-                window.Web.OnEnvironmentRequested(args);
-                Assert.Contains("--force-prefers-", args.AdditionalBrowserArguments);
-                Assert.True(window.Web.HostedPageMotion);
-                if (spec.Id == GameWindow.JustDropId) Assert.Contains("--autoplay-policy=no-user-gesture-required", args.AdditionalBrowserArguments);
-            }
-            finally { window.Close(); }
-        }
-        var intake = new IntakeHostWindow();
+        var saved = ConditioningControlPanel.CoreSettings.Current.MotionLevel;
         try
         {
-            var args = (WindowsWebView2EnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(typeof(WindowsWebView2EnvironmentRequestedEventArgs));
-            intake.Web.OnEnvironmentRequested(args);
-            Assert.Contains("--force-prefers-", args.AdditionalBrowserArguments);
-            Assert.True(intake.Web.HostedPageMotion);
+            var folders = new Dictionary<MotionLevel, HashSet<string?>>();
+            foreach (var level in new[] { MotionLevel.Off, MotionLevel.Full })
+            {
+                ConditioningControlPanel.CoreSettings.Current.MotionLevel = level;
+                var seen = folders[level] = new HashSet<string?>();
+                foreach (var spec in GameWindow.Games.Values)
+                {
+                    var window = new GameWindow(spec);
+                    try
+                    {
+                        if (spec.Id == GameWindow.JustDropId) window.Web.WindowsBrowserArguments = GameWindow.JustDropBrowserArguments;
+                        var args = RequestNativeEnvironment(window.Web);
+                        Assert.Contains("--force-prefers-", args.AdditionalBrowserArguments);
+                        Assert.NotEqual(WebViewProfile.Folder, args.UserDataFolder);
+                        seen.Add(args.UserDataFolder);
+                        Assert.True(window.Web.HostedPageMotion);
+                        if (spec.Id == GameWindow.JustDropId) Assert.Contains("--autoplay-policy=no-user-gesture-required", args.AdditionalBrowserArguments);
+                    }
+                    finally { window.Close(); }
+                }
+                var intake = new IntakeHostWindow();
+                try
+                {
+                    var args = RequestNativeEnvironment(intake.Web);
+                    Assert.Contains("--force-prefers-", args.AdditionalBrowserArguments);
+                    Assert.NotEqual(WebViewProfile.Folder, args.UserDataFolder);
+                    seen.Add(args.UserDataFolder);
+                    Assert.True(intake.Web.HostedPageMotion);
+                }
+                finally { intake.Close(); }
+            }
+            // Own-profile games (Loom, Piece by Piece, Just Drop) keep their folder; the rest split by switch value.
+            Assert.Single(folders[MotionLevel.Off].Except(folders[MotionLevel.Full]));
+            Assert.Single(folders[MotionLevel.Full].Except(folders[MotionLevel.Off]));
         }
-        finally { intake.Close(); }
+        finally { ConditioningControlPanel.CoreSettings.Current.MotionLevel = saved; }
     });
+
+    // The native adapter's EnvironmentRequested chain in WebHost.CreateNativeView order: shared profile,
+    // per-host options, persistent profile, then the host's own subscribers.
+    private static WindowsWebView2EnvironmentRequestedEventArgs RequestNativeEnvironment(ConditioningControlPanel.Avalonia.Views.Controls.WebHost web)
+    {
+        var args = (WindowsWebView2EnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(typeof(WindowsWebView2EnvironmentRequestedEventArgs));
+        Assert.True(WebViewProfile.Apply(args));
+        web.ApplyWindowsOptions(args);
+        web.ApplyPersistentProfile(args);
+        web.OnEnvironmentRequested(args);
+        return args;
+    }
 
     [Fact]
     public void NativePageFullscreenChangesGameAndIntakeWindowsButNotJustDrop() => AvaloniaTestDispatcher.Run(() =>

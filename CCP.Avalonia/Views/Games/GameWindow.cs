@@ -186,8 +186,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void ConfigureHostedPageMotion(WebViewEnvironmentRequestedEventArgs args)
         {
-            if (args is global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs windows)
-                windows.AdditionalBrowserArguments = HostedPageMotion.Merge(windows.AdditionalBrowserArguments, CoreSettings.Current.MotionLevel);
+            if (args is not global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            var level = CoreSettings.Current.MotionLevel;
+            windows.AdditionalBrowserArguments = HostedPageMotion.Merge(windows.AdditionalBrowserArguments, level);
+            // WebView2 refuses a user-data folder reopened with other arguments (Platform/WebViewProfile), so
+            // the motion switch never rides the shared profile; one folder per switch (WPF ChaosWebViewHost.cs:1475-1484).
+            if (windows.UserDataFolder == WebViewProfile.Folder)
+            {
+                var folder = System.IO.Path.Combine(CorePaths.UserData, level == ConditioningControlPanel.Models.MotionLevel.Off ? "browser_data_avalonia_hosted_reduce" : "browser_data_avalonia_hosted_motion");
+                try { System.IO.Directory.CreateDirectory(folder); } catch (Exception ex) { Diag.Swallowed(ex); }
+                windows.UserDataFolder = folder;
+            }
         }
 
         private WindowState? _pageWindowedState;
