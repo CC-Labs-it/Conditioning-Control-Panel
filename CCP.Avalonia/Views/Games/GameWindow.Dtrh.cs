@@ -11,7 +11,7 @@
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
-// achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
+// RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
@@ -48,13 +48,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        internal static Action<GameWindow, int> DtrhCreditBubbles = (window, count) => window.CreditRaceBubbles(count);
+
         // WPF DtrhHostService.cs:314,403. Keep the store at the head boundary so bridge tests
         // need neither a profile write nor process-wide engagement history.
         internal static Func<int, System.Collections.Generic.List<string>> DtrhFavorites = DtrhAssetStatsStore.TopAssets;
         internal static Action<JObject> DtrhMergeAssetStats = DtrhAssetStatsStore.Merge;
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
-        private bool _dtrhRunActive, _dtrhExiting;
+        private bool _dtrhRunActive, _dtrhExiting, _dtrhPanicStopped;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private global::Avalonia.PixelPoint _dtrhWindowPosition;
@@ -183,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// A booting page, or a second close while exiting, closes immediately.</summary>
         private void CloseDtrhForPanic()
         {
+            _dtrhPanicStopped = true;
             try
             {
                 if (DtrhReady)
@@ -412,6 +415,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);
                 CoreProgression.AddXP(booking.BaseXp, "Chaos");   // WPF AddXP(baseXp, XPSource.Chaos)
+                // WPF DtrhHostService.cs:648-656: include run bubbles in achievements and quests.
+                try
+                {
+                    int bubbles = (int?)o["sessionStats"]?["bubblesPopped"] ?? 0;
+                    if (!_dtrhPanicStopped && bubbles > 0) DtrhCreditBubbles(this, bubbles);
+                }
+                catch (Exception ex) { Log.Debug("DtrhHost bubble credit: {E}", ex.Message); }
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;

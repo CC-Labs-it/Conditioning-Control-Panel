@@ -13,6 +13,29 @@ namespace CCP.Avalonia.Tests;
 // Restack b154: the DtRH engagement history (#3727) and saved Loom spirals (#3949) on the trunk host.
 public sealed partial class GameWindowTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dtrh_BubblesCreditedOnceUnlessPanicStopped(bool panic) => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var old = GameWindow.DtrhCreditBubbles;
+        var credited = new List<int>();
+        try
+        {
+            GameWindow.DtrhCreditBubbles = (_, count) => credited.Add(count);
+            var w = GameWindow.Launch("dtrh")!;
+            w.HandleMessage("{type:'ready'}");
+            w.HandleMessage("{type:'run-started'}");
+            if (panic) ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "games").Stop(null);
+            const string end = "{type:'run-ended',score:100,durationSec:60,sessionStats:{bubblesPopped:7}}";
+            w.HandleMessage(end);
+            w.HandleMessage(end);
+            if (panic) Assert.Empty(credited); else Assert.Equal(new[] { 7 }, credited);
+            w.Close();
+        }
+        finally { GameWindow.DtrhCreditBubbles = old; }
+    });
+
     private const string DtrhTinyGif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
     /// <summary>WPF DtrhHostService.cs:309-318,400-404: page deltas reach the store;
