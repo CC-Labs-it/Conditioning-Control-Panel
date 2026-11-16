@@ -100,7 +100,7 @@ public class PossessionRoomWarpTests
     [InlineData("panic")]
     [InlineData("director")]
     [InlineData("detach")]
-    public Task ReassemblyEasesHomeAndPanicStopsItImmediately(string stop) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ReassemblyEasesHomeAndStopsStillEndWithinTheReturnBound(string stop) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var canvas = new Grid { Width = 800, Height = 600 };
         var layer = new Canvas { Width = 800, Height = 600 };
@@ -137,11 +137,16 @@ public class PossessionRoomWarpTests
             Assert.Equal(0.02, wash.Opacity, 6);
             if (stop != "finish")
             {
+                // WPF PossessionEffectBase.cs:195 and RoomWarpEffect.cs:107-140: a released return is not cut short.
                 if (stop == "panic") PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
                 else if (stop == "director") director.UndoAll();
                 else director.DetachHost(host);
-                Assert.Empty(layer.Children);
-                Assert.Equal(0, host.Frames.Count);
+                Assert.False(returning.IsCompleted);
+                Assert.Same(wash, Assert.Single(layer.Children));
+                Assert.Equal(2, sag.Y, 6);
+                Assert.Equal(1, host.Frames.Count);
+                // With no more frames, the wall-clock bound (600 + 100 ms) still ends the return.
+                await returning.WaitAsync(TimeSpan.FromSeconds(3));
             }
             else
                 host.Frames.Frame(TimeSpan.FromMilliseconds(1600));

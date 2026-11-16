@@ -129,16 +129,11 @@ internal sealed class RoomWarpEffect : PossessionEffectBase
         _returned = null;
     }
 
-    // Reassembly releases the director's ledger before awaiting the animation.
     internal static void UndoAllLive()
     {
-        foreach (var effect in Live.ToArray()) _ = effect.UndoAsync(TimeSpan.Zero);
-    }
-
-    internal static void StopReturning(IPossessionHost? host)
-    {
         foreach (var effect in Live.ToArray())
-            if (effect._returning && (host == null || ReferenceEquals(effect.Context?.Host, host)))
-                _ = effect.UndoAsync(TimeSpan.Zero);
+            // A room already easing home (released by the director) finishes its bounded return, as on WPF;
+            // stopping it at once would be a panic cleanup stricter than WPF (owner call, as DropEffect).
+            if (!effect._returning) _ = effect.UndoAsync(TimeSpan.Zero);
     }
 }
