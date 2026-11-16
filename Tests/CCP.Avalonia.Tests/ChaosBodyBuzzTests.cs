@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -67,14 +66,9 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
-            BubbleOverlay.EndChaos();
-            BubbleOverlay.Field.Bubbles.Clear();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
-            // A previous test can leave an ambient bubble in its pop animation.
-            BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
-            var targets = Enumerable.Range(1, 10).Select(i => new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() }).ToArray();
-            foreach (var target in targets) BubbleOverlay.Field.Bubbles.Add(target);
+            for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
             BubbleOverlay.Field.Bubbles.Add(outside);
             ChaosRunHost.BodyBuzz(source);
@@ -85,7 +79,7 @@ public class ChaosBodyBuzzTests
             await Task.Delay(800);
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
             Assert.False(outside.Popping);
-            Assert.Equal(8, targets.Count(b => b.Popping));
+            Assert.Equal(8, BubbleOverlay.Field.Bubbles.FindAll(b => b.Popping).Count);
             ChaosRunHost.BodyBuzz(source);
             BubbleOverlay.EndChaos();
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
