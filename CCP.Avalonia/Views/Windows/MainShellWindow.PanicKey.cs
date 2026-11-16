@@ -159,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF MainWindow.xaml.cs:1741,1763: DtRH before the Back Room, including Breakout.
                 // WPF :1806-1829: then the For You feed's two rungs (ghost off, then close). Override still stops all.
                 if (Games.GameWindow.HandleDtrhPanic()
+                    || Games.GameWindow.HandleBackRoomPanic(now)
                     || Games.GameWindow.HandleBreakoutPanic(now)
                     || Games.GameWindow.ForYouTakesPanicKey())
                 {
