@@ -142,6 +142,39 @@ public sealed class MandatoryVideoBrowserTests
         }
     });
 
+    /// <summary>WPF BrowserVideoEngine.cs:960-971 and player.js doPause/doResume: an Esc before the first frame
+    /// holds the page paused with its start deadline stopped, so the clip neither plays under the card nor falls
+    /// back; Resume plays it with a fresh deadline.</summary>
+    [Fact]
+    public Task EarlyGracePauseHoldsThePageWithoutFallback() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var rig = new Rig();
+        var scripts = new List<string>();
+        BrowserVideoSurface.Create = () => new BrowserVideoSurface(s => { scripts.Add(s); return Task.FromResult<string?>("true"); });
+        var o = MandatoryVideoOverlay.Instance;
+        await rig.Open(strict: false);
+        var browser = o.Browser!;
+        var page = browser.Views[0];
+        Assert.True(page.StartupArmed);
+
+        Assert.True(o.TryGracePause(false));                            // Esc before the page is even loaded
+        Assert.False(page.StartupArmed);
+        page.View.OnNavigationCompleted(new Uri("about:blank"));
+        await Task.Delay(10);
+        Assert.Contains("\"paused\":true", scripts.Single(s => s.StartsWith("(function(c)")));   // the page starts paused
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(browser, o.Browser);
+        Assert.False(BrowserVideoSurface.StoodDown);
+        Assert.False(browser.IsPlaying);
+
+        o.ResumeFromGrace("test card resume");
+        Assert.Equal("window.ccpVideo?.resume();", scripts.Last());
+        Assert.True(page.StartupArmed);                                 // a fresh start deadline
+        Send(page, new { type = "playing" });
+        Assert.True(browser.IsPlaying);
+        Assert.False(page.StartupArmed);
+    });
+
     private sealed class SourceRecorder : IActionDispatcher
     {
         internal IPlaybackTimeSource? Source;
@@ -214,6 +247,16 @@ public sealed class MandatoryVideoBrowserTests
             audio.Duck(50);
             audio.Drain();
             Assert.Equal(new[] { "set-sink-input-volume 4 32768" }, sets);   // the page's own audio stays up
+
+            // WPF AudioService.cs:1030-1031 on Windows: the WebView2 session is the clip's own sound.
+            var vol = new Dictionary<int, float> { [10] = 1f, [30] = 1f };
+            var win = WindowsDucker.ForApp(null, body => body(vol.Keys.Select(pid => new DuckSession(pid, () => vol[pid], v => vol[pid] = v)).ToList()),
+                pid => pid == 30 ? "msedgewebview2" : "spotify");
+            win.Duck(50);
+            win.Drain();
+            Assert.Equal((0.5f, 1f), (vol[10], vol[30]));
+            win.Unduck(-1);
+            win.Drain();
         }
         finally { audio.Shutdown(); BrowserVideoSurface.Release(owner); }
     });
