@@ -145,6 +145,87 @@ public class LockdownDoseEngineTests
         });
     }
 
+    // WPF MainWindow.RemoteControl.cs:1293-1330 starts the requested session; a keeper tick
+    // must not replace its start while the Linux panic-key portal is still binding.
+    [Theory]
+    [InlineData(false, "none")]
+    [InlineData(true, "none")]
+    [InlineData(false, "leave")]
+    [InlineData(false, "stop")]
+    [InlineData(false, "panic")]
+    public Task KeeperDoesNotSupersedeRemoteSessionWaitingForPortal(bool keeperFirst, string interruption) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var oldSettings = (s.LockdownDoseKeeperEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.AudioOnlySession, s.LockdownDisablePanicKey);
+        var old = (LockdownService.Current, AvApp.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
+            PortalPanicShortcut.BindForTests, MainShellWindow.PostPortalStart);
+        var bound = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var posted = new TaskCompletionSource<Action>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ld = new LockdownService();
+        SessionRunner? runner = null;
+        MainShellWindow? shell = null;
+        bool queued = false, drained = false;
+        try
+        {
+            s.LockdownDoseKeeperEnabled = s.PanicKeyEnabled = s.FlashEnabled = s.AudioOnlySession = true;
+            s.LockdownDisablePanicKey = false;
+            LockdownService.Current = ld;
+            runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            shell = new MainShellWindow();
+            shell.Show();
+            PortalPanicShortcut.BindForTests = (_, _) => bound.Task;
+            MainShellWindow.PostPortalStart = action => posted.TrySetResult(action);
+            ld.Activate(TimeSpan.FromMinutes(20));
+            if (keeperFirst) { shell.EnforceLockdownDoseEngine(true); queued = true; }
+            var session = new ConditioningControlPanel.Models.Session { Id = "remote-dose", DurationMinutes = 30 };
+            var stillCurrent = true;
+            shell.StartSession(session, remote: true, () => stillCurrent);
+            queued = true;
+            shell.EnforceLockdownDoseEngine(true);
+            for (var i = 0; i < 5; i++) shell.EnforceLockdownDoseEngine(false);
+            Assert.False(runner.IsRunning);
+            Assert.False(CoreEngine.IsRunning);
+            if (interruption == "leave") stillCurrent = false;
+            if (interruption == "stop") MainShellWindow.StopSessionFromRemote();
+            if (interruption == "panic") RemoteCommands.Execute("trigger_panic", null);
+            bound.TrySetResult("F8");
+            var drain = await posted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            drain(); drained = true;
+            Assert.Equal(interruption == "none", runner.IsRunning);
+            if (interruption == "none")
+            {
+                Assert.Same(session, runner.CurrentSession);
+                Assert.True(shell.IsSessionRemoteStarted);
+                Assert.True(CoreEngine.IsRunning);
+            }
+        }
+        finally
+        {
+            try
+            {
+                bound.TrySetResult("F8");
+                if (queued && !drained && await Task.WhenAny(posted.Task, Task.Delay(TimeSpan.FromSeconds(10))) == posted.Task)
+                    (await posted.Task)();
+                PortalPanicShortcut.BindForTests = null;
+                ld.Dispose();
+                runner?.Stop();
+                MainShellWindow.StopEngine();
+                shell?.RequestExit();
+                MainShellWindow.ReleasePortalWhenUnused();
+                await PortalPanicShortcut.UnbindAsync();
+            }
+            finally
+            {
+                (LockdownService.Current, AvApp.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
+                    PortalPanicShortcut.BindForTests, MainShellWindow.PostPortalStart) = old;
+                (s.LockdownDoseKeeperEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.AudioOnlySession, s.LockdownDisablePanicKey) = oldSettings;
+                PanicAftermath.EndQuiet();
+                Dispatcher.UIThread.RunJobs();
+            }
+        }
+    });
+
     [Theory]
     [InlineData("en", "Lockdown starts or restarts the engine while a feature is enabled")]
     [InlineData("de", "Lockdown startet den Motor, solange eine Funktion aktiviert ist, oder startet ihn erneut.")]
