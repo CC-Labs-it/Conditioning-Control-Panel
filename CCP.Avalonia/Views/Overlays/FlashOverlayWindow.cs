@@ -80,6 +80,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Width = m.W / k + 2 * GlowPadPx / k;
             Height = m.H / k + 2 * GlowPadPx / k;
             Position = new PixelPoint((int)Math.Round(m.X) - GlowPadPx, (int)Math.Round(m.Y) - GlowPadPx);
+            if (DeckInputPx is not { } input) return;
+            // A swinging card's window is the swing box: the clickable part follows it (WPF hit-tests the live item rect).
+            var glow = GlowPadPx - DeckPadPx;
+            var r = new PixelRect(DeckPadPx, DeckPadPx, (int)Math.Ceiling(m.W) + 2 * glow, (int)Math.Ceiling(m.H) + 2 * glow);
+            if (r == input[0]) return;
+            input[0] = r;
+            X11Overlay.SetInputRect(this, r);   // Windows: the deck tick polls DeckInputPx
         }
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _picture, _root;
