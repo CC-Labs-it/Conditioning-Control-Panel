@@ -61,6 +61,29 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>The seeded instance, so App can restore ducked apps on exit.</summary>
         internal static LibVlcAudio? Instance { get; set; }
 
+        /// <summary>A one-shot's stop is its handle; this is that clip's pause (WPF AudioPlaybackHandle.Pause/Resume).</summary>
+        internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Action, Action<bool>> Pausers = new();
+        internal static void SetPaused(Action stop, bool paused) { if (Pausers.TryGetValue(stop, out var pause)) pause(paused); }
+
+        // WPF DtrhHostService.cs:819-835,1073: a release must win even if queued work runs out of order.
+        internal static (Action<bool> Set, Action Refresh) LatestPauseControl(object playerGate,
+            Func<bool> finished, Action<bool> apply, Action<Action> enqueue)
+        {
+            var stateGate = new object();
+            bool requested = false;
+            void Refresh() => enqueue(() =>
+            {
+                lock (playerGate)
+                {
+                    bool latest;
+                    lock (stateGate) latest = requested;
+                    if (!finished()) apply(latest);
+                }
+            });
+            void Set(bool paused) { lock (stateGate) requested = paused; Refresh(); }
+            return (Set, Refresh);
+        }
+
         /// <summary>The process's one LibVLC, shared with video (MiniPlayerWindow), as WPF shares
         /// VideoService.SharedLibVLC. Null when libvlc did not load.</summary>
         internal static LibVLC? Shared { get; private set; }
@@ -197,6 +220,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
             var vol = VlcVolume(volume);
             var done = 0;
+            var pauseControl = LatestPauseControl(player, () => Volatile.Read(ref done) != 0, paused =>
+            {
+                try
+                {
+                    if (paused && player.IsPlaying) player.SetPause(true);
+                    else if (!paused && player.State == VLCState.Paused) player.SetPause(false);
+                }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag} pause", tag); }
+            }, action => ThreadPool.QueueUserWorkItem(_ => action()));
             void Finish()
             {
                 if (Interlocked.Exchange(ref done, 1) != 0) return;
@@ -218,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             player.Playing += (_, _) =>
             {
                 Volatile.Write(ref playing, 1);
+                pauseControl.Refresh(); // a pause requested while the clip was opening
                 // The bug report's last section (#4076): every sound, engine on or off.
                 ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning, false, DateTime.Now);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
@@ -227,12 +260,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 try { onStarted(TimeSpan.FromMilliseconds(Math.Max(0, Math.Max(player.Length, Interlocked.Read(ref knownLength))))); }
                 catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag}: onStarted threw", tag); }
             };
+            player.Paused += (_, _) => pauseControl.Refresh(); // release may have overtaken an in-flight pause
             player.EndReached += (_, _) => Finish();
             player.EncounteredError += (_, _) => Finish();
             player.Stopped += (_, _) => Finish();
             if (!player.Play()) Finish();
             // Off the caller's thread: libvlc's Stop must never run inside one of its own events.
-            return () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+            Action stop = () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+            Pausers.AddOrUpdate(stop, pauseControl.Set);
+            return stop;
         }
 
         /// <summary>A clip the caller can re-volume and stop (mind wipe). A loop is WPF's overlap
