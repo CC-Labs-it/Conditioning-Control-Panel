@@ -734,20 +734,25 @@ public sealed class MandatoryVideoSchedulerTests
     public void DeferredStartKeepsVideoHapticsAndScriptStoppedUntilReady() => With(20, false, () =>
     {
         using var h = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
-        var old = CoreHaptics.Service; CoreHaptics.Service = h;
+        var old = CoreHaptics.Service; var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreHaptics.Service = h; CoreEntitlement.HasPremiumProvider = () => true;
         try
         {
             var seq = typeof(ConditioningControlPanel.Services.Haptics.FunScriptService).GetField("_loadSeq", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
             var before = (long)seq.GetValue(h.FunScript)!;
             var clock = new FakeClock(); var host = new Host { DeferStart = true };
             var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+            var starts = 0; video.VideoStarted += () => starts++;
             Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
             Assert.Equal(0, h.GetLayer(HapticLayer.Video)); Assert.Equal(before, (long)seq.GetValue(h.FunScript)!);
+            Assert.True(video.IsPlaying); Assert.Same(h, CoreHaptics.Service); Assert.True(h.Settings.VideoEnabled); Assert.True(h.Mixer.IsGateOpen);
             host.PendingStart!();
-            Assert.True(h.GetLayer(HapticLayer.Video) > 0); Assert.True((long)seq.GetValue(h.FunScript)! > before);
+            Assert.Equal(1, starts); Assert.True(video.IsPlaying); Assert.Same(h, CoreHaptics.Service);
+            Assert.True(h.GetLayer(HapticLayer.Video) > 0, "video background haptics did not start");
+            Assert.True((long)seq.GetValue(h.FunScript)! > before, "video script did not start");
             video.ForceCleanup();
         }
-        finally { CoreHaptics.Service = old; }
+        finally { CoreHaptics.Service = old; CoreEntitlement.HasPremiumProvider = oldPremium; }
     });
 
     [Theory]
