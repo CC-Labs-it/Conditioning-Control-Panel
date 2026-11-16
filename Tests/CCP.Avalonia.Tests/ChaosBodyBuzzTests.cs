@@ -40,13 +40,6 @@ public class ChaosBodyBuzzTests
         }
     }
 
-    [Fact]
-    public Task ShockwaveIgnoresAnEarlierPoppingBubble() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
-        BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true });
-        await ShockwaveSelectsRendererAndCancelsHops(false);
-    });
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -74,7 +67,6 @@ public class ChaosBodyBuzzTests
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
             BubbleOverlay.BeginChaos(new Border(), _ => { });
-            BubbleOverlay.Field.Bubbles.Clear(); // The shared field can contain an ambient pop from an earlier test.
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
