@@ -18,6 +18,57 @@ namespace CCP.Avalonia.Tests;
 /// seams that leaked before (PLAYBOOK P02) and really puts each one back.</summary>
 public class TestIsolationTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LeftoverShellIsClosedEvenWhenLockdownOrTrayVetoesUserClose(bool lockdown) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            var old = ConditioningControlPanel.Services.LockdownService.Current;
+            var ld = new ConditioningControlPanel.Services.LockdownService();
+            var active = typeof(ConditioningControlPanel.Services.LockdownService).GetField("_isActive",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var oldSandboxed = ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.TraySandboxed;
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var closed = false;
+            shell.Closed += (_, _) => closed = true;
+            try
+            {
+                shell.Show();
+                if (lockdown)
+                {
+                    active.SetValue(ld, true);
+                    ConditioningControlPanel.Services.LockdownService.Current = ld;
+                }
+                else
+                {
+                    ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.TraySandboxed = () => true;
+                    shell.CreateTray();
+                    shell.TrayHostPresent = () => true;
+                }
+                var listeners = typeof(ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashAskWindow)
+                    .GetField("CurrentClosed", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+                bool Listening() => ((System.Delegate?)listeners.GetValue(null))?.GetInvocationList()
+                    .Any(handler => ReferenceEquals(handler.Target, shell)) == true;
+                Assert.True(Listening());
+                shell.Close();
+                Assert.False(closed); // A real user close is refused or hides the window.
+                OpenWindows.CloseLeftovers();
+                Assert.True(closed);
+                Assert.False(Listening()); // The old shell must not open offers in later tests.
+            }
+            finally
+            {
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+                shell.Tray?.Dispose();
+                active.SetValue(ld, false);
+                ConditioningControlPanel.Services.LockdownService.Current = old;
+                ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.TraySandboxed = oldSandboxed;
+                ld.Dispose();
+            }
+        });
+
     [Fact]
     public void MotionPreferenceCacheIsRestoredWithItsTimestamp() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
