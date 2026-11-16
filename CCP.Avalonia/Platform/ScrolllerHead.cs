@@ -14,8 +14,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// 24 h day limit. The off switch DELETES every copy (Core <see cref="ScrolllerPolicyService.Accept"/> calls
 /// <see cref="PurgeAll"/>). The copies on this head: the device cache, DtRH's <c>&lt;assets&gt;/.temp/ccp_temp_remote_*</c>
 /// copies, and any other <c>ccp_temp_remote_*</c> file in the temp folders. Each step is guarded on its own.
-/// <para>The away watcher is <see cref="ScrolllerAwayHost"/>. Not here (WPF has them): the wallpaper and
-/// the in-memory RemoteMediaCache (this head has neither surface).</para>
+/// <para>The away watcher is <see cref="ScrolllerAwayHost"/>. The Takeover wallpaper's remote pool is swept here too
+/// (WPF ScrolllerCopySweeper.cs:35,46). Not here: the in-memory RemoteMediaCache (this head has no such surface).</para>
 /// </summary>
 internal static class ScrolllerHead
 {
@@ -58,6 +58,7 @@ internal static class ScrolllerHead
     public static void SweepAll()
     {
         Step(() => ScrolllerDiskCache.SweepExpired());
+        Step(() => _ = WallpaperHead.Service?.EnforceRemoteMaxAgeAsync());
         Step(() => DtrhRemoteMedia.SweepLocalCopies(DtrhRemoteMedia.AssetsTempCopier.Release));
         // One period ahead, as the device cache: nothing waits past the day for the next sweep.
         Step(() => ScrolllerDiskCache.SweepTempCopies(TempDirs(), ScrolllerDiskCache.TempPrefix,
@@ -71,6 +72,7 @@ internal static class ScrolllerHead
     public static void PurgeAll(string reason)
     {
         Step(() => ScrolllerDiskCache.PurgeAll(reason));
+        Step(() => _ = WallpaperHead.Service?.EnforceRemoteMaxAgeAsync(all: true));
         Step(() => DtrhRemoteMedia.SweepLocalCopies(DtrhRemoteMedia.AssetsTempCopier.Release, all: true));
         Step(() => ScrolllerDiskCache.SweepTempCopies(TempDirs(), ScrolllerDiskCache.TempPrefix, TimeSpan.Zero));
         Step(() => LegacyWebViewCaches.SweepAll());
