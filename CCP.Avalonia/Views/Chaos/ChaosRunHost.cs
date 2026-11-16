@@ -288,7 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
             _pendulumWave = 0;   // WPF :402: the swing re-rolls its beat for wave 1
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired, OnBoundEnraged);
             RefreshRippleInput();
             _ripplePointer?.Dispose();   // never two grabs if a run restarts without EndField
             _ripplePointer = RipplePointer.Start(OnRippleRightDown);
@@ -329,8 +329,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (!cfg.ScriptedFirstRun && (cfg.Difficulty >= ChaosDifficulty.Hard || ChaosMeta.AtLeast(ChaosRank.Entranced))
                     && Rng.NextDouble() < ChaosTuning.BOUND_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
                 {
+                    bool debut = !ChaosMeta.State.SeenBound;
+                    if (debut)
+                    {
+                        ChaosMeta.State.SeenBound = true;
+                        ChaosMeta.Save();
+                        ChaosAnnouncerOverlay.Announce($"{IconMap.Bound} {Loc.Get("chaos_bound_title")}: {Loc.Get("chaos_bound_hint")}", ChaosAnnounceKind.Item,
+                            artKey: "bound", subText: Loc.Get("chaos_bound_hint"));
+                        _state.PushEvent($"{IconMap.Bound} {Loc.Get("chaos_bound_event")}");
+                    }
                     var (a, b) = ChaosBubbleVariants.BuildBoundPair(effIntensity, _state.FuseTimeMult,
-                        cfg.EffectIntensity, _state.BubbleScale);
+                        cfg.EffectIntensity, _state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1.0);
                     ChaosMeta.MarkDiscovered("bubble:bound");
                     BubbleOverlay.SpawnBoundPair(a, b);
                     if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
@@ -446,6 +455,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             TeaseBark("ChaosTeaseDenied", ++_teaseDenied);   // WPF :1416-1421
             if (_teaseDenied >= ChaosTuning.TEASE_DENIED_STREAK_COUNT && !_teaseStreakBarked)
             { _teaseStreakBarked = true; TeaseBark("ChaosTeaseDeniedStreak", _teaseDenied); }
+        }
+
+        // WPF ChaosModeService.cs:1394 with Bubble.Enrage's label (BubbleService.cs:2760).
+        internal static void OnBoundEnraged(AmbientBubble b)
+        {
+            if (_state == null) return;
+            Label(b, Loc.Get("chaos_bound_enraged"), Color.FromRgb(0xFF, 0x5A, 0x5A));
+            ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.5f);
+            Pulse(Color.FromRgb(0xFF, 0x4A, 0x4A), 0.30);
+            _state.PushEvent($"{IconMap.Bound} {Loc.Get("chaos_bound_enraged_event")}");
         }
 
         internal static AmbientBubble SpawnChaperone(double intensity)

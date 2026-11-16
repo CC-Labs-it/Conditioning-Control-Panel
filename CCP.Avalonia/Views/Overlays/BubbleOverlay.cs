@@ -572,6 +572,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // WPF BubbleService.cs:1538, 1800-1894: both halves share a clock and a tether.
         private static readonly ChaosBoundPairs BoundPairs = new();
         private static readonly Dictionary<int, (AmbientBubble A, AmbientBubble B)> BoundHalves = new();
+        private static Action<AmbientBubble>? _chaosBoundEnraged;   // WPF _chaosOnBoundEnraged (:1791)
 
         internal static (AmbientBubble A, AmbientBubble B) SpawnBoundPair(EffectBubbleSpec a, EffectBubbleSpec b)
         {
@@ -586,6 +587,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.SpawnAtPxX = Math.Clamp(x, area.X + b.SizePx * scale / 2, Math.Max(area.X + b.SizePx * scale / 2, area.Right - b.SizePx * scale / 2));
             b.SpawnAtPxY = center.Y;
             var second = SpawnChaos(b, motion: ChaosMotion.RoamBounce);
+            second.MirrorVelocityFrom(first);   // WPF BubbleService.cs:1567
             BoundPairs.Add(a.PairId, first, second);
             BoundHalves.Add(a.PairId, (first, second));
             TickBoundPairs();
@@ -595,7 +597,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void ResolveBound(AmbientBubble half, bool defused)
         {
             if (half.Spec is not { IsBoundHalf: true } spec || !BoundHalves.TryGetValue(spec.PairId, out var pair)) return;
-            BoundPairs.Resolve(spec.PairId, half, defused, Field.Clock());
+            if (BoundPairs.Resolve(spec.PairId, half, defused, Field.Clock()) is { } survivor) _chaosBoundEnraged?.Invoke(survivor);
             ChaosFieldFxOverlay.ClearTether(spec.PairId);
             if (!defused || (pair.A.Popping && pair.B.Popping)) BoundHalves.Remove(spec.PairId);
         }
@@ -605,7 +607,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var expired = BoundPairs.Step(Field.Clock(), Field.FreezeChaos || Field.HoldChaos);
             foreach (var (id, pair) in BoundHalves.ToArray())
             {
-                if (expired.Contains(pair.A) || expired.Contains(pair.B)) { BoundHalves.Remove(id); ChaosFieldFxOverlay.ClearTether(id); }
+                if (expired.Contains(pair.A) || expired.Contains(pair.B))
+                {
+                    BoundHalves.Remove(id); ChaosFieldFxOverlay.ClearTether(id);
+                    _chaosBoundEnraged?.Invoke(expired.Contains(pair.A) ? pair.A : pair.B);   // WPF :1873
+                }
                 else if (!pair.A.Popping && !pair.B.Popping && Field.Bubbles.Contains(pair.A) && Field.Bubbles.Contains(pair.B))
                     ChaosFieldFxOverlay.SetTether(id, CenterPx(pair.A), CenterPx(pair.B));
                 else ChaosFieldFxOverlay.ClearTether(id);
@@ -625,9 +631,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
             Func<AmbientBubble, bool>? canChannel = null,
             Action<AmbientBubble>? onTeaseTouched = null, Action<AmbientBubble>? onTeaseDenied = null,
-            Action<AmbientBubble>? onTreatExpired = null)
+            Action<AmbientBubble>? onTreatExpired = null, Action<AmbientBubble>? onBoundEnraged = null)
         {
             _chaosPopped = onPop;
+            _chaosBoundEnraged = onBoundEnraged;
             _chaosCanChannel = canChannel;
             _chaosTeaseTouched = onTeaseTouched;
             Field.ChaosTeaseDenied = onTeaseDenied == null ? null : b => { AnchorPop(b); onTeaseDenied(b); };
@@ -685,6 +692,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosPopped = null;
             _chaosCanChannel = null;
             _chaosTeaseTouched = null;
+            _chaosBoundEnraged = null;
             Field.ChaosTeaseDenied = null;
             Field.ChaosDefused = Field.ChaosDetonated = Field.ChaosTreatExpired = null;
             Field.Held = false;
@@ -1330,16 +1338,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     finally { glow?.Dispose(); }
                 }
             }
-            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
+            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new(), EnragedShadows = new();
             /// <summary>WPF Bubble.SetLucky: #FFD700 at 0.8, no offset. The shadow is taken of what is drawn,
             /// so it fades with the bubble and its sparkles. Bounds cover the turned sprite and every live sparkle.</summary>
             private static DrawingContext.PushedState? LuckyGlow(DrawingContext dc, AmbientBubble b, double cx, double cy,
                 double size, double scale, double k, double ox, double oy)
             {
-                if (b.LuckyGlowBlur <= 0) return null;
-                var blur = b.LuckyGlowBlur * k;
-                if (!LuckyShadows.TryGetValue(blur, out var effect))
-                    LuckyShadows[blur] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+                // WPF Bubble.Enrage (BubbleService.cs:2756) replaces any glow with a #FF2D2D flare, blur 30 at 0.95.
+                if (!b.Enraged && b.LuckyGlowBlur <= 0) return null;
+                var blur = (b.Enraged ? 30 : b.LuckyGlowBlur) * k;
+                var cache = b.Enraged ? EnragedShadows : LuckyShadows;
+                if (!cache.TryGetValue(blur, out var effect))
+                    cache[blur] = effect = b.Enraged
+                        ? new DropShadowEffect { Color = Color.FromRgb(0xFF, 0x2D, 0x2D), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.95 }
+                        : new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
                 var angle = b.Angle * Math.PI / 180;
                 var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
                 double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;
