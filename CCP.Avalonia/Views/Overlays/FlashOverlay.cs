@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// the lucky glow pulse and toast, Natasha's favourite,
     /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static partial class FlashOverlay
@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
         internal static event Action? Displayed;
+        internal static event Action? Clicked;
         internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
         // Test seam: headless has no click-through overlays, so the burst would stop before loading.
         internal static Func<bool> OverlaysAvailable = () => X11Overlay.IsAvailable;
@@ -683,6 +684,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            Clicked?.Invoke(); // WPF FlashService.cs:2986
             if (s.GentleVisuals)
             {
                 Exiting.Add(w);
