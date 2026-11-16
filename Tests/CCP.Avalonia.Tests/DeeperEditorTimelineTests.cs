@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -68,6 +69,37 @@ public sealed class DeeperEditorTimelineTests
         return Task.CompletedTask;
     });
 
+    private static int? ReadPublishedTimelineHeight(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return Newtonsoft.Json.Linq.JObject.Parse(reader.ReadToEnd()).Value<int?>("DeeperEditorTimelineHeight");
+        }
+        catch (IOException) { return null; }
+        catch (Newtonsoft.Json.JsonException) { return null; }
+    }
+
+    [Fact]
+    public void ReadingPublishedTimelineHeightLeavesAnInFlightSaveAlone()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-timeline-read-");
+        var path = System.IO.Path.Combine(dir.FullName, "settings.json");
+        var temp = path + ".pending.tmp";
+        try
+        {
+            File.WriteAllText(path, "{\"DeeperEditorTimelineHeight\":160}");
+            File.WriteAllText(temp, "{\"DeeperEditorTimelineHeight\":225}");
+            Assert.Equal(160, ReadPublishedTimelineHeight(path));
+            Assert.True(File.Exists(temp));
+            File.Move(temp, path, overwrite: true);
+            Assert.Equal(225, ReadPublishedTimelineHeight(path));
+            Assert.Equal(225, new ConditioningControlPanel.Services.SettingsService(path).Current.DeeperEditorTimelineHeight);
+        }
+        finally { dir.Delete(true); }
+    }
+
     [Fact]
     public Task DraggingTimelineSplitterPersistsHeightForNextEditor() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -92,11 +124,14 @@ public sealed class DeeperEditorTimelineTests
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
             var deadline = System.Diagnostics.Stopwatch.StartNew();
-            while (new ConditioningControlPanel.Services.SettingsService().Current.DeeperEditorTimelineHeight != saved)
+            // Constructing SettingsService while a save is in flight runs temp recovery and can delete its temp file.
+            var settingsPath = System.IO.Path.Combine(CorePaths.UserData, "settings.json");
+            while (ReadPublishedTimelineHeight(settingsPath) != saved)
             {
                 Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
                 await Task.Delay(50);
             }
+            Assert.Equal(saved, new ConditioningControlPanel.Services.SettingsService().Current.DeeperEditorTimelineHeight);
             editor.ForceClose();
             next = new DeeperEditorWindow(new Enhancement(), null);
             next.Show(); Dispatcher.UIThread.RunJobs();
