@@ -146,6 +146,30 @@ public class LightsDownOverlayTests
     });
 
     [Fact]
+    public void EachVideoWindowGetsItsOwnDimWindowOnItsOwnScreen() => AvaloniaTestDispatcher.Run(() =>
+    {
+        // WPF LightsDownService.cs:60-67: one overlay per video window, on its screen, under it.
+        var video = new MandatoryVideoOverlay(null);
+        var surfaces = (System.Collections.Generic.List<MandatoryVideoOverlay.Surface>)video.Surfaces;
+        var calls = new System.Collections.Generic.List<(Window Video, Window Below, PixelRect Bounds)>();
+        try
+        {
+            var a = new PixelRect(0, 0, 1920, 1080);
+            var b = new PixelRect(1920, 0, 1280, 1024);
+            surfaces.Add(video.Build(MultiMonitorResultTests.MakeScreen(1, a, a, true), false));
+            surfaces.Add(video.Build(MultiMonitorResultTests.MakeScreen(1, b, b, false), false));
+            Assert.True(LightsDownOverlay.OpenForVideo(video, (v, bounds, scale) =>
+                LightsDownOverlay.TryOpen(v, bounds, scale, _ => true, _ => true, _ => true,
+                    (_, under) => { calls.Add((v, under, bounds)); return true; })));
+            Assert.Equal(2, LightsDownOverlay.Count);
+            Assert.Equal(new[] { surfaces[0].Window, surfaces[1].Window }, calls.Select(c => c.Below));
+            Assert.All(calls, c => Assert.Same(c.Video, c.Below));
+            Assert.Equal(new[] { a, b }, calls.Select(c => c.Bounds));
+        }
+        finally { LightsDownOverlay.CloseAll(); foreach (var s in surfaces) s.Window.Close(); surfaces.Clear(); }
+    });
+
+    [Fact]
     public void VideoFrameDrawsDimOutsidePictureAndStreakInside() => AvaloniaTestDispatcher.Run(() =>
     {
         using var frame = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(200, 100), new Vector(96, 96));
