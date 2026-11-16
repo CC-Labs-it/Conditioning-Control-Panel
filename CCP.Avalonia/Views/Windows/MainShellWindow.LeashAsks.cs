@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -22,9 +21,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 public partial class MainShellWindow
 {
-    // Each shell may bind at a different time; shown offers belong to the service, not a window.
-    private static readonly ConditionalWeakTable<ILeashService, HashSet<string>> ShownLeashOffers = new();
-    private static string LeashOfferKey(LeashOffer offer) => offer.From.Id + "@" + offer.At.ToUnixTimeSeconds();
     private ILeashService? _askService;
     private readonly HashSet<string> _seenLeashOffers = new();
     private readonly List<LeashOffer> _waitingLeashAsks = new();
@@ -78,9 +74,7 @@ public partial class MainShellWindow
         }
         foreach (var offer in snap.Offers)
         {
-            var key = LeashOfferKey(offer);
-            if (_askService != null && ShownLeashOffers.GetOrCreateValue(_askService).Contains(key)) continue;
-            if (!_seenLeashOffers.Add(key)) continue;
+            if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
             _waitingLeashAsks.Add(offer);
         }
@@ -90,11 +84,8 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
-    private void OnLeashOfferShown(LeashOffer offer)
-    {
-        if (LeashHead.Service is { } service) ShownLeashOffers.GetOrCreateValue(service).Add(LeashOfferKey(offer));
+    private void OnLeashOfferShown(LeashOffer offer) =>
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
-    }
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 

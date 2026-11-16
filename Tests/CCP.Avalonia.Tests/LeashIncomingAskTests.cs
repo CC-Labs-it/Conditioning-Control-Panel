@@ -73,37 +73,6 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
-    public void ASecondShellDoesNotRepeatAnOfferAlreadyShownByTheFirst() =>
-        LeashGateCardTests.Run(false, (shell, launcher, service) =>
-        {
-            service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
-            launcher.Show();
-            shell.RebindLeashAsks();
-            var first = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-            Assert.Equal("leash-ask:juno", first.Card.Tag);
-            var other = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
-            try
-            {
-                other.Show();
-                other.Hide();
-                other.RebindLeashAsks();
-                first.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                var second = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-                Assert.Equal("leash-ask:vex", second.Card.Tag);
-                second.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current);
-            }
-            finally
-            {
-                LeashAskWindow.CloseCurrent();
-                other.Close();
-                Dispatcher.UIThread.RunJobs();
-            }
-        });
-
-    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
