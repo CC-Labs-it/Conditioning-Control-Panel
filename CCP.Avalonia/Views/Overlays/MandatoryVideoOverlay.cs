@@ -200,6 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
+            _forceLibVlc = false;   // each clip gets one browser attempt
             _capSpent = 0;
             // WPF VideoService.cs:3082-3085: a cached remote clip keeps its URL identity (credit, remote guards).
             _source = Scheduler.ShowingPath ?? path;
@@ -250,9 +251,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
+            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            // WPF VideoService.cs:3207: the browser engine first, before the duck so its own audio is never swept.
+            var browser = TryStartBrowser(path);
 
             var vlc = LibVlcAudio.Shared;
-            if (vlc == null)
+            if (vlc == null && !browser)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
                 Dispatcher.UIThread.Post(Scheduler.End);
@@ -262,10 +266,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // bouncing text, and arm the attention checks.
             if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
-            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            if (browser) { StartBrowserClocks(path); return; }
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
-            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
+            _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
@@ -403,6 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void UpdateVolume()
         {
             if (_player is { } p) ApplyVolume(p);
+            _browser?.SetVolume(PlayerVolume = EffectivePlayerVolume);
             _refreshFloating?.Invoke();
         }
 
@@ -823,6 +828,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             }
             if (PrimaryPaused) return;
+            if (_browser != null) FrameTs = Stopwatch.GetTimestamp();   // the page's own stall check (code 100) owns a lost picture
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
@@ -1340,6 +1346,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try { _playback.Dispose(); } catch { }
                 }
                 _playback = null;
+                _browser = null;
+                CloseControlHosts();
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;

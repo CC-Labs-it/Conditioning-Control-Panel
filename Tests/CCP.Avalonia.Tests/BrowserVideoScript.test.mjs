@@ -113,3 +113,9 @@ test('a rejected resume reports an error to the host', async () => {
   await Promise.resolve();
   assert.deepEqual(p.messages.at(-1), { type: 'error', code: 0, session: 'test' });
 });
+test('the playhead is reported in whole milliseconds for the host clock', () => {
+  const p = page();
+  p.video.currentTime = 1.2345;
+  p.video.ontimeupdate();
+  assert.deepEqual(p.messages, [{ type: 'time', ms: 1235, session: 'test' }]);
+});

@@ -149,6 +149,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         let started=false, lastTime=0, lastAdvance=performance.now();
         v.onplaying=()=>{started=true; lastAdvance=performance.now(); send({type:'playing'});};
         v.onended=()=>send({type:'ended'});
+        v.ontimeupdate=()=>send({type:'time',ms:Math.round(v.currentTime*1000)});
         v.onerror=()=>send({type:'error',code:v.error?.code||0});
         setTimeout(()=>{if(!started) send({type:'error',code:101});},10000);
         const watchdog=setInterval(()=>{

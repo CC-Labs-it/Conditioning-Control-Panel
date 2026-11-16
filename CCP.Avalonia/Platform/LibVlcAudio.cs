@@ -611,8 +611,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 foreach (var si in DuckRecovery.ParseSinkInputs(_pactl("-f json list sink-inputs")))
                 {
                     if (si.Pid == Environment.ProcessId) continue;
-                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process.
-                    if ((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true)
+                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process; a browser video
+                    // session is the app's own audio, so it is never swept (WPF :1030-1031).
+                    if (((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true) || BrowserVideoSurface.SessionActive)
                         && (si.Name.StartsWith("WebKit", StringComparison.Ordinal)
                             || si.Name.Contains("webview2", StringComparison.OrdinalIgnoreCase))) continue;
                     var index = si.Index;
