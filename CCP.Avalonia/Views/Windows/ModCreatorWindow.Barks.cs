@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -194,7 +195,7 @@ public partial class ModCreatorWindow
         row.Children.Add(text);
         var attach = new Button { Content = Loc.Get("mod_event_attach") };
         var label = new TextBlock { MaxWidth = 160, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var play = new Button { Content = "▶" };
+        var play = new Button { Content = new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 12 } };
         ToolTip.SetTip(play, Loc.Get("mod_event_preview"));
         string? Source()
         {

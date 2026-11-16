@@ -471,7 +471,7 @@ public sealed class ModCreatorBarksTests
         try
         {
             w.LoadBarksFrom(root);
-            var play = Variants(Card(w)).GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "▶"));
+            var play = Variants(Card(w)).GetLogicalDescendants().OfType<Button>().Single(b => b.Content is ConditioningControlPanel.Avalonia.Controls.IconGlyph);
             Assert.True(play.IsVisible);
             play.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(clip, played);
