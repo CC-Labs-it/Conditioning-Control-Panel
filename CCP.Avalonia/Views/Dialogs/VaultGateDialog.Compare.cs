@@ -414,8 +414,7 @@ public sealed partial class VaultGateDialog
     private async void LeaveCompare()
     {
         if (_leaving) return;
-        // The glow comes back on the press at every motion level; width and desk wait for the fade (WPF Compare.cs:106-112).
-        _card.BoxShadow = OfferGlow;
+        // The desk keeps its dark shadow through the fade; BuildOffer restores the glow (WPF Compare.cs:106-112, 134-136).
         _billingMotion?.Cancel();
         foreach (var c in _hoverMotion.Values) { c.Cancel(); c.Dispose(); }
         _hoverMotion.Clear();

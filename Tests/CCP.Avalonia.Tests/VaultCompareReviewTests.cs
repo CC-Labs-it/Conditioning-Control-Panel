@@ -134,18 +134,29 @@ public class VaultCompareReviewTests
         return Task.CompletedTask;
     });
 
-    // WPF Compare.cs:134-136: the desk swaps the pink glow for a dark drop shadow, the offer gets it back.
-    [Fact]
-    public Task CompareDeskDropsThePinkGlow() => WithDialog(dialog =>
+    // WPF Compare.cs:134-136: the desk swaps the pink glow for a dark drop shadow, the offer gets it back
+    // only after the Back fade (WPF Compare.cs:106-112 runs FaceChrome(false) in the fade's callback).
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public Task CompareDeskDropsThePinkGlow(MotionLevel level) => WithDialog(async dialog =>
     {
         var card = Assert.IsType<Border>(dialog.Content);
         var glow = card.BoxShadow;
+        var desk = BoxShadows.Parse("4 4 18 0 #B3060210");
         Click(dialog, Loc.Get("vaultgate_compare"));
-        Assert.Equal(BoxShadows.Parse("4 4 18 0 #B3060210"), card.BoxShadow);
+        Assert.Equal(desk, card.BoxShadow);
         Click(dialog, Loc.Get("vaultgate_back"));
+        if (level != MotionLevel.Off)
+        {
+            Assert.Equal(desk, card.BoxShadow);
+            await Task.Delay(60);
+            Assert.Equal(desk, card.BoxShadow);
+            await Task.Delay(300);
+            Dispatcher.UIThread.RunJobs();
+        }
         Assert.Equal(glow, card.BoxShadow);
-        return Task.CompletedTask;
-    });
+    }, level);
 
     [Fact]
     public void FaceResizePreservesCenterAndClampsInPhysicalPixels()
