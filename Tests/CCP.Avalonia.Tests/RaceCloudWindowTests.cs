@@ -11,8 +11,21 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class RaceCloudWindowTests
+public sealed class RaceCloudWindowTests : IDisposable
 {
+    // Showing or disposing a window saves its bounds into shared settings; put them back after every test.
+    private readonly (double, double, double, double) _bounds;
+    public RaceCloudWindowTests()
+    {
+        var s = CoreSettings.Current;
+        _bounds = (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight);
+    }
+    public void Dispose()
+    {
+        var s = CoreSettings.Current;
+        (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = _bounds;
+    }
+
     private static readonly Uri Site = new("https://bambicloud.com/");
     private static RaceCloudWindow Create() => new(Site, u => u.Scheme == "https" && u.Host == "bambicloud.com");
 
@@ -41,23 +54,18 @@ public sealed class RaceCloudWindowTests
     public Task CloseHidesAndSavesBounds() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var s = CoreSettings.Current;
-        var old = (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight);
-        try
-        {
-            using var window = Create();
-            int hidden = 0; window.Hidden += () => hidden++;
-            window.ShowOrFocus();
-            window.Window.Position = new global::Avalonia.PixelPoint(40, 50);
-            window.Window.Width = 700; window.Window.Height = 600;
-            window.Window.Close();
-            Assert.False(window.IsOpen);
-            Assert.Equal(1, hidden);
-            Assert.Equal(40, s.RaceCloudWindowLeft);
-            Assert.Equal(50, s.RaceCloudWindowTop);
-            Assert.Equal(700, s.RaceCloudWindowWidth);
-            Assert.Equal(600, s.RaceCloudWindowHeight);
-        }
-        finally { (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = old; }
+        using var window = Create();
+        int hidden = 0; window.Hidden += () => hidden++;
+        window.ShowOrFocus();
+        window.Window.Position = new global::Avalonia.PixelPoint(40, 50);
+        window.Window.Width = 700; window.Window.Height = 600;
+        window.Window.Close();
+        Assert.False(window.IsOpen);
+        Assert.Equal(1, hidden);
+        Assert.Equal(40, s.RaceCloudWindowLeft);
+        Assert.Equal(50, s.RaceCloudWindowTop);
+        Assert.Equal(700, s.RaceCloudWindowWidth);
+        Assert.Equal(600, s.RaceCloudWindowHeight);
         return Task.CompletedTask;
     });
 
@@ -101,22 +109,16 @@ public sealed class RaceCloudWindowTests
     [Fact]
     public Task StartAfterCloseKeepsWindowHidden() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        var s = CoreSettings.Current;
-        var old = (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight);
-        try
-        {
-            using var window = Create();
-            var scripts = new List<string>();
-            window.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("ok"); };
-            window.ShowOrFocus();
-            window.Web.OnNavigationCompleted(Site);
-            window.Window.Close();
-            scripts.Clear();
-            window.RequestStart();
-            Assert.False(window.IsOpen);
-            Assert.Contains(scripts, x => x.Contains("cloud-start"));
-        }
-        finally { (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = old; }
+        using var window = Create();
+        var scripts = new List<string>();
+        window.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("ok"); };
+        window.ShowOrFocus();
+        window.Web.OnNavigationCompleted(Site);
+        window.Window.Close();
+        scripts.Clear();
+        window.RequestStart();
+        Assert.False(window.IsOpen);
+        Assert.Contains(scripts, x => x.Contains("cloud-start"));
         return Task.CompletedTask;
     });
 
@@ -132,6 +134,16 @@ public sealed class RaceCloudWindowTests
         window.Web.OnNavigationCompleted(Site);
         window.Web.OnWebMessage("{\"type\":\"other\"}");
         Assert.Empty(frames);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task NeverShownWindowSavesNoBounds() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var s = CoreSettings.Current;
+        (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = (0, 0, 0, 0);
+        Create().Dispose();
+        Assert.Equal((0d, 0d, 0d, 0d), (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight));
         return Task.CompletedTask;
     });
 
@@ -193,16 +205,11 @@ public sealed class RaceCloudWindowTests
     public Task RememberedPositionIsClampedToScreen() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var s = CoreSettings.Current;
-        var old = (s.RaceCloudWindowLeft, s.RaceCloudWindowTop);
-        try
-        {
-            s.RaceCloudWindowLeft = 100000; s.RaceCloudWindowTop = 100000;
-            using var window = Create();
-            var screen = window.Window.Screens.Primary!;
-            Assert.InRange(window.Window.Position.X, screen.WorkingArea.X, screen.WorkingArea.Right - 200);
-            Assert.InRange(window.Window.Position.Y, screen.WorkingArea.Y, screen.WorkingArea.Bottom - 120);
-        }
-        finally { (s.RaceCloudWindowLeft, s.RaceCloudWindowTop) = old; }
+        s.RaceCloudWindowLeft = 100000; s.RaceCloudWindowTop = 100000;
+        using var window = Create();
+        var screen = window.Window.Screens.Primary!;
+        Assert.InRange(window.Window.Position.X, screen.WorkingArea.X, screen.WorkingArea.Right - 200);
+        Assert.InRange(window.Window.Position.Y, screen.WorkingArea.Y, screen.WorkingArea.Bottom - 120);
         return Task.CompletedTask;
     });
 
@@ -214,17 +221,12 @@ public sealed class RaceCloudWindowTests
         Assert.Equal(new global::Avalonia.Size(1100, 820), RaceCloudWindow.DefaultSize(null, 1));
         Assert.Equal(new global::Avalonia.Size(1100, 820), RaceCloudWindow.DefaultSize(new global::Avalonia.PixelSize(3840, 2160), 1));
         var s = CoreSettings.Current;
-        var old = (s.RaceCloudWindowWidth, s.RaceCloudWindowHeight);
-        try
-        {
-            s.RaceCloudWindowWidth = 0; s.RaceCloudWindowHeight = 0;
-            using var window = Create();
-            var screen = window.Window.Screens.Primary!;
-            var expected = RaceCloudWindow.DefaultSize(screen.Bounds.Size, screen.Scaling);
-            Assert.Equal(expected.Width, window.Window.Width);
-            Assert.Equal(expected.Height, window.Window.Height);
-        }
-        finally { (s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = old; }
+        s.RaceCloudWindowWidth = 0; s.RaceCloudWindowHeight = 0;
+        using var window = Create();
+        var screen = window.Window.Screens.Primary!;
+        var expected = RaceCloudWindow.DefaultSize(screen.Bounds.Size, screen.Scaling);
+        Assert.Equal(expected.Width, window.Window.Width);
+        Assert.Equal(expected.Height, window.Window.Height);
         return Task.CompletedTask;
     });
 

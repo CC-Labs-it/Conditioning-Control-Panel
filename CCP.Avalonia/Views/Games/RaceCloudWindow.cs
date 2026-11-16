@@ -138,7 +138,8 @@ internal sealed class RaceCloudWindow : IDisposable
     private void Failed() => Message?.Invoke(new JObject { ["type"] = "cloud-failed" });
     private void SaveBounds()
     {
-        if (_window.WindowState != WindowState.Normal || _window.Width < 200 || _window.Height < 200) return;
+        // WPF RaceCloudWindow.cs:179-181: no window built yet means nothing to save.
+        if (!_shownOnce || _window.WindowState != WindowState.Normal || _window.Width < 200 || _window.Height < 200) return;
         var s = CoreSettings.Current;
         s.RaceCloudWindowLeft = _window.Position.X; s.RaceCloudWindowTop = _window.Position.Y;
         s.RaceCloudWindowWidth = _window.Width; s.RaceCloudWindowHeight = _window.Height;
