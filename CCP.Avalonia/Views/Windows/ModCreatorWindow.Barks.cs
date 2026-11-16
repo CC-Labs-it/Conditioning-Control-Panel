@@ -215,7 +215,8 @@ public partial class ModCreatorWindow
         }
         attach.Click += async (_, _) =>
         {
-            var picked = await PickFilesAsync(Loc.Get("mod_event_attach"), new[] { "*.mp3" }, false);
+            // Avalonia filters are case-sensitive on Linux; WPF Windows/ModCreatorWindow.Barks.cs:433 "*.mp3" is not.
+            var picked = await PickFilesAsync(Loc.Get("mod_event_attach"), new[] { "*.mp3", "*.mP3", "*.Mp3", "*.MP3" }, false);
             if (picked.Count == 0 || !card.Lines.Any(v => v.Row == row)) return;
             AttachBarkAudio(card, row, picked[0]);
             Refresh();

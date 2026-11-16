@@ -10,6 +10,8 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using System.IO.Enumeration;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -477,6 +479,31 @@ public sealed class ModCreatorBarksTests
             Assert.Equal(1, stops);
         }
         finally { ConditioningControlPanel.CoreAudio.PlayStoppableProvider = old; }
+    });
+
+    [Fact]
+    public void BarkAttachPickerOffersEveryMp3CaseAndAttachesMixedCaseFile() => Run((w, root) =>
+    {
+        var path = Path.Combine(root, "clip.MP3"); File.WriteAllText(path, "audio");
+        var file = DispatchProxy.Create<IStorageFile, NewEnhancementSourceTests.ItemProxy>();
+        ((NewEnhancementSourceTests.ItemProxy)(object)file).PathValue = new Uri(path);
+        var provider = DispatchProxy.Create<IStorageProvider, NewEnhancementSourceTests.PickerProxy>();
+        var picker = (NewEnhancementSourceTests.PickerProxy)(object)provider; picker.Result = file;
+        using var scope = NewEnhancementSourceTests.BindStorageProvider(new NewEnhancementSourceTests.Factory(provider));
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'Rule',trigger:'Event',variant_pool:['text']}]");
+        w.Show();
+        w.LoadBarksFrom(root);
+        Click(Variants(Card(w)), "mod_event_attach");
+        Dispatcher.UIThread.RunJobs();
+        var patterns = Assert.IsType<FilePickerOpenOptions>(picker.Options).FileTypeFilter!.Single().Patterns!;
+        foreach (var name in new[] { "x.mp3", "x.mP3", "x.Mp3", "x.MP3" })
+            Assert.Contains(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false));
+        Assert.DoesNotContain(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, "x.wav", ignoreCase: false));
+        var output = Path.Combine(root, "out");
+        var rules = Export(w, output);
+        Assert.Equal("rule_1.mp3", rules[0]["variant_pool"]![0]!["audio"]!.Value<string>());
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_1.mp3")));
     });
 
 }
