@@ -179,6 +179,8 @@ public sealed class VoiceCommandsTests
         // Commands below are injected directly. A replaying wake mic can dispatch a second command.
         Assert.False(shell.WakeLoopArmed);
         Assert.Equal(0, mic.Starts);
+        // Commands are injected below. Do not let the WAV wake a second command listener.
+        Assert.False(engine.IsListening);
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
