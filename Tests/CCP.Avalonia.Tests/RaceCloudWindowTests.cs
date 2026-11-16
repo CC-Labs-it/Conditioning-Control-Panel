@@ -185,6 +185,28 @@ public sealed class RaceCloudWindowTests
     });
 
     [Fact]
+    public Task FirstOpenSizeIsCappedToPrimaryScreen() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Assert.Equal(new global::Avalonia.Size(1366 * 0.6, 768 * 0.8), RaceCloudWindow.DefaultSize(new global::Avalonia.PixelSize(1366, 768), 1));
+        Assert.Equal(new global::Avalonia.Size(1280 * 0.6, 720 * 0.8), RaceCloudWindow.DefaultSize(new global::Avalonia.PixelSize(1920, 1080), 1.5));
+        Assert.Equal(new global::Avalonia.Size(1100, 820), RaceCloudWindow.DefaultSize(null, 1));
+        Assert.Equal(new global::Avalonia.Size(1100, 820), RaceCloudWindow.DefaultSize(new global::Avalonia.PixelSize(3840, 2160), 1));
+        var s = CoreSettings.Current;
+        var old = (s.RaceCloudWindowWidth, s.RaceCloudWindowHeight);
+        try
+        {
+            s.RaceCloudWindowWidth = 0; s.RaceCloudWindowHeight = 0;
+            using var window = Create();
+            var screen = window.Window.Screens.Primary!;
+            var expected = RaceCloudWindow.DefaultSize(screen.Bounds.Size, screen.Scaling);
+            Assert.Equal(expected.Width, window.Window.Width);
+            Assert.Equal(expected.Height, window.Window.Height);
+        }
+        finally { (s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ProfileIsSetBeforeAttachmentAndWatcherMatchesWpf() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         using var window = Create();

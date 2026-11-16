@@ -43,10 +43,12 @@ internal sealed class RaceCloudWindow : IDisposable
         _web.BrowserProcessFailed += Failed;
         var s = CoreSettings.Current;
         _window = new Window { Title = "BambiCloud", Background = Brushes.Black, Content = _web,
-            Width = s.RaceCloudWindowWidth > 200 ? s.RaceCloudWindowWidth : 1100,
-            Height = s.RaceCloudWindowHeight > 200 ? s.RaceCloudWindowHeight : 820,
             WindowStartupLocation = s.RaceCloudWindowLeft != 0 || s.RaceCloudWindowTop != 0
                 ? WindowStartupLocation.Manual : WindowStartupLocation.CenterScreen };
+        var primary = _window.Screens.Primary;
+        var size = DefaultSize(primary?.Bounds.Size, primary?.Scaling ?? 1);
+        _window.Width = s.RaceCloudWindowWidth > 200 ? s.RaceCloudWindowWidth : size.Width;
+        _window.Height = s.RaceCloudWindowHeight > 200 ? s.RaceCloudWindowHeight : size.Height;
         if (_window.WindowStartupLocation == WindowStartupLocation.Manual)
         {
             var x = (int)s.RaceCloudWindowLeft; var y = (int)s.RaceCloudWindowTop;
@@ -67,6 +69,11 @@ internal sealed class RaceCloudWindow : IDisposable
         };
         _web.Source = _startUrl;
     }
+
+    // WPF :135-136: first open is capped at 60% x 80% of the primary screen (DIPs).
+    internal static Size DefaultSize(PixelSize? primary, double scaling) => primary is { } p
+        ? new Size(Math.Min(1100, p.Width / scaling * 0.6), Math.Min(820, p.Height / scaling * 0.8))
+        : new Size(1100, 820);
 
     private bool AllowNavigation(Uri uri)
     {
