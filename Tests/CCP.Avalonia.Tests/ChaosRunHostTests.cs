@@ -666,6 +666,35 @@ public sealed class ChaosRunHostTests
     });
 
     [Fact]
+    public Task Relapse_raises_wave_escalation_like_WPF() => WithFreshRun(() =>
+    {
+        var previous = BarkHead.Engine; var settings = CoreSettings.Current;
+        var avatar = settings.AvatarEnabled; var volume = settings.MasterVolume; int spoken = 0;
+        try
+        {
+            settings.AvatarEnabled = true; settings.MasterVolume = 50;
+            ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.RelapseLoopArmed = true;
+            Ticks(239);   // one tick short of the 60 s end
+            var rule = new BarkRule { Id = "relapse-test", Trigger = "ChaosWaveEscalated",
+                Conditions = new() { ["wave_eq"] = 4.0 }, VariantPool = new() { new BarkVariant("heard") } };
+            // Each read is two minutes on, so the 60 s global gap cannot hide the second raise.
+            var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++, Clock = new LeapClock() };
+            engine.Start(); BarkHead.Engine = engine;
+            Ticks(1);
+            // WPF ChaosModeService.cs:1087 (Relapse) and :1453 (the boundary into loop 4) both raise wave 4.
+            Assert.Equal(2, spoken);
+        }
+        finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
+    });
+
+    private sealed class LeapClock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => _now = _now.AddMinutes(2);
+    }
+
+    [Fact]
     public Task Panic_does_not_raise_run_completed() => WithFreshRun(() =>
     {
         var previous = BarkHead.Engine; var settings = CoreSettings.Current;

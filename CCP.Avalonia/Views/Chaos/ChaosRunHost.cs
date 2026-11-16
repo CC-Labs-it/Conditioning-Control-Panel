@@ -960,6 +960,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce("☠ RELAPSE — one more loop", ChaosAnnounceKind.Temptation,
                     artKey: "relapse", subText: "one more loop");   // WPF :1083
                 _state.PushEvent("☠ relapse. one more loop — everything drips double");
+                BarkHead.Engine?.Raise("ChaosWaveEscalated", c => c.Set("wave", (double)(_state.WaveIndex + 1)));   // WPF :1087
             }
             var (newWave, waveLen) = ChaosRunEngine.WaveAt(_state, elapsed);
             // WPF :1094 Pocket Watch: the wave countdown (+ a live score line).
