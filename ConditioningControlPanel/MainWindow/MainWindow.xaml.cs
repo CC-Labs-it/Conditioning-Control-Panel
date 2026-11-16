@@ -222,6 +222,8 @@ namespace ConditioningControlPanel
             InitializeComponent();
             // Declutter wave 2: a panel link to something that lives in the launcher now opens
             // the launcher on that door (Games or Tools).
+            Services.UI.PanelDoorLink.IsLockedDown = () => App.Lockdown?.IsActive == true;
+            Services.UI.PanelDoorLink.Fallback = () => Services.Launcher.LauncherHost.BackToLauncher();
             Services.UI.PanelDoorLink.OpenLauncherDoor = key =>
             {
                 if (Services.Launcher.LauncherDoorRules.TryParse(key, out var door))

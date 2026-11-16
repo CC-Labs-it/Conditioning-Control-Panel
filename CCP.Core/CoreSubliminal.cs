@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Serilog;
+using ConditioningControlPanel.Services.Super;
 
 namespace ConditioningControlPanel
 {
@@ -191,7 +192,7 @@ namespace ConditioningControlPanel
             {
                 if (!_isRunning || !CoreSettings.Current.SubliminalEnabled) return;
 
-                var text = PickPhrase();
+                var text = SuperAccess.ReplacesBase(SuperEffect.Afterglow) ? null : PickPhrase();
                 if (text != null)
                 {
                     // A head whose surface throws must not kill the schedule.

@@ -146,6 +146,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>Idempotent: take every subliminal surface off screen and stop the whisper.</summary>
         private void TearDownSurfaces()
         {
+            DispatcherHelper.RunOnUI(() => { _afterglow?.Stop(); Compositor.AfterglowLineLayer.StopAll(); });
             _visibleOneShotGen = null;
 
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
@@ -265,6 +266,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         internal void FlashPhrase(string text)
         {
+            Compositor.AfterglowLineLayer.WordShown(text);
             if (!_isRunning) _oneShotActive = true; // Allow display from remote control
 
             // Check for linked audio
