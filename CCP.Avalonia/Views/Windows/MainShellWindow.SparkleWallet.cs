@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 
@@ -29,7 +30,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             wallet.VisitRequested += VisitFromSparkleWallet;
             Closed += (_, _) => ShutdownSparkleWallet();
             Deactivated += (_, _) => HeaderWallet?.ClosePopup();
+            AccountSeed.ProfileLoaded += OnSparkleWalletProfileLoaded;
             ReplaceSparkleWalletSettings();
+            SparkleWalletBootRead.Refresh();
+        }
+
+        private void OnSparkleWalletProfileLoaded()
+        {
+            if (_sparkleWalletActive) SparkleWalletBootRead.Refresh();
         }
 
         private void ReplaceSparkleWalletSettings()
@@ -75,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void ShutdownSparkleWallet()
         {
             _sparkleWalletActive = false;
+            AccountSeed.ProfileLoaded -= OnSparkleWalletProfileLoaded;
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= ReplaceSparkleWalletSettings;
             SparklePointRewards.Awarded -= OnSparklePointAwarded;
             if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
