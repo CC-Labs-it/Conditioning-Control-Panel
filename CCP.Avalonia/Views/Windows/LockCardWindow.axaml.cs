@@ -488,6 +488,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (input.Length > 0 && !LockCardText.IsPrefixOf(input, _phrase))
             {
                 _totalErrors++;
+                ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("typo");   // WPF TypoMade (:774)
 
                 // "Reset on typo" (WPF :763-775, ccp-bugs #1163, off by default): a mistake wipes
                 // the line the way a finished repeat does, so the user starts this repeat over.
@@ -592,6 +593,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Platform.ChasterHead.Service?.Note("typo", _totalErrors); Platform.ChasterHead.Service?.Note("lockcard"); }
                 catch (Exception ex) { Log.Debug("chaster lock card hook: {E}", ex.Message); }
                 try { Completed?.Invoke(); } catch (Exception ex) { Log.Debug("lock card completed handler: {E}", ex.Message); }
+                ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("done");   // WPF LockCardCompleted
             }
 
             // ponytail: the rest stays stubbed and has no Core seam to reach through.

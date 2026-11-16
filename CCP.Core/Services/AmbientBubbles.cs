@@ -707,6 +707,9 @@ namespace ConditioningControlPanel.Services
         public static volatile Action? StartAction;
         public static volatile Action? StopAction;
         public static volatile Action? RefreshFrequencyAction;
+        /// <summary>The head's bubble field runs (WPF App.Bubbles.IsRunning, for the remote status).</summary>
+        public static volatile Func<bool>? IsRunningProvider;
+        public static bool IsRunning { get { try { return IsRunningProvider?.Invoke() ?? false; } catch { return false; } } }
 
         public static void Start() { try { StartAction?.Invoke(); } catch { } }
         public static void Stop() { try { StopAction?.Invoke(); } catch { } }
