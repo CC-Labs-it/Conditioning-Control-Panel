@@ -362,7 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // layered-window compositor bug and has no X11 twin.
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
-            Opened += (_, _) => ApplyInputRegion();
+            Opened += (_, _) => { ApplyInputRegion(); StartTopmostWatch(OperatingSystem.IsWindows() && TryGetPlatformHandle()?.HandleDescriptor == "HWND" && TryGetPlatformHandle()?.Handle != IntPtr.Zero); };
             // WPF Bubble.cs:666/757 opens the bubble layer to clicks only while the ask chips show.
             _bubbleCanvas.PropertyChanged += (_, e) => { if (e.Property == IsHitTestVisibleProperty) ApplyInputRegion(); };
 
