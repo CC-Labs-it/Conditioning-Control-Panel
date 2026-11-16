@@ -463,10 +463,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var pad = w.ApplyGlow(glow, scaling);
             w.ApplyCorners(FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), glow.HasGlow,
                 Math.Min(rect.Width, rect.Height) / (scaling > 0 ? scaling : 1), dpiScale: 1.0));
-            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
-            if (clickable) w.MakeClickable(() => Pop(w));
+            if (clickable) w.MakeClickable(() => Pop(w), () => DeckPress(w));
+            var deckPad = AttachDeck(w, rect, scaling, clickable);
+            pad = w.GlowPadPx;
+            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             if (!Present(w, winRect, clickable))
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: the platform refused a click-through topmost overlay window; flashes skipped");
@@ -474,6 +476,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Close();
                 return false;
             }
+            // A card's grown margin stays click-through: only the picture and its glow take the mouse.
+            if (deckPad > 0) X11Overlay.SetInputRect(w, new PixelRect(deckPad, deckPad, winRect.Width - 2 * deckPad, winRect.Height - 2 * deckPad));
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
@@ -567,6 +571,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _lastDriftTick = now;
             foreach (var (w, m) in Drifting)
                 if (w is not FlashOverlayWindow { Exit: not null } && w is not FlashOverlayWindow { Shatter: not null }
+                    && w is not FlashOverlayWindow { DeckShatter: not null }
                     && FlashMotion.Step(m, dt))   // a leaving flash holds still
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
@@ -600,6 +605,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void CloseWindows(bool final)
         {
             _closed |= final;
+            StopDeckTick();
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
             PackImages.CleanupTemps();
@@ -676,13 +682,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// (BuildExit, FlashService.cs:2334) or the plain cut for None.</summary>
         internal static void Pop(FlashOverlayWindow w, bool fromGaze = false)
         {
-            if (w.IsFadingOut || w.Exit != null || w.Shatter != null || !Active.Any(e => e.Window == w)) return;
+            if (w.IsFadingOut || w.Exit != null || w.Shatter != null || w.DeckShatter != null || !Active.Any(e => e.Window == w)) return;
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            // WPF FlashService.cs:5225-5240: the click that reached BreakAt breaks the card, ahead of Gentle and the exit picker.
+            if (w.DeckBreak)
+            {
+                w.DeckBreak = false;
+                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return; }
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                return;
+            }
             if (s.GentleVisuals)
             {
                 Exiting.Add(w);
@@ -772,16 +787,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
             int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
         {
-            var root = CorePaths.EffectiveAssets;
-            var dir = Path.Combine(root, "images");
             var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
             if (targets.Length == 0) return result;
-
-            var files = Directory.Exists(dir)
-                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                    .ToList(), root, s)
-                : new List<string>();
+            var files = FlashFiles(s);
 
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
@@ -813,6 +821,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
             }
             return result;
+        }
+
+        /// <summary>The enabled images under the assets folder (WPF GetMediaFiles).</summary>
+        private static List<string> FlashFiles(AppSettings s)
+        {
+            var root = CorePaths.EffectiveAssets;
+            var dir = Path.Combine(root, "images");
+            return Directory.Exists(dir)
+                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .ToList(), root, s)
+                : new List<string>();
         }
 
         /// <summary>An animated GIF/WebP decoded at its display size (at most 2048 px), under WPF's flash
