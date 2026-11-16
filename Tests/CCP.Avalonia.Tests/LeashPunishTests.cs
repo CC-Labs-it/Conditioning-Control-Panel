@@ -81,6 +81,8 @@ public sealed class LeashPunishTests
             Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)));
             LeashPunishWindow.Current!.Close();
             Assert.Equal(1, played);
+            // The gate is shared with UTC cues: a refusal on local time would let one through inside the gap.
+            Assert.False(LeashSound.Rules.TryPlay(LeashCue.Denied, DateTime.UtcNow, true, false));
             Assert.NotNull(LeashPunishWindow.Current);
             PanicSurfaces.All.Single(x => x.Id == "leash-task").Stop(shell);
             Assert.Equal(1, stopped);

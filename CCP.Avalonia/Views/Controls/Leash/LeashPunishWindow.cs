@@ -288,7 +288,7 @@ internal sealed class LeashPunishWindow : Window
             (_title.Foreground, _hint.Foreground) = (F.Text, F.Muted);
         };
         _refuseTimer.Start();
-        LeashSound.RefusedClose(DateTime.Now); // WPF LeashPunishWindow.cs:361
+        LeashSound.RefusedClose(DateTime.UtcNow); // WPF LeashPunishWindow.cs:361
         var level = CoreSettings.Current?.MotionLevel ?? Models.MotionLevel.Full;
         if (level != Models.MotionLevel.Off) Shake(level == Models.MotionLevel.Reduced ? 7.0 : 16.0);
     }
