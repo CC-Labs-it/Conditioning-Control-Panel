@@ -5,11 +5,16 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models.Deeper;
@@ -65,8 +70,8 @@ public sealed class MandatoryVideoBrowserTests
             o.ToggleUserMute();                                             // the mute button reaches the page
             Assert.Equal(0, page.Volume);
 
-            Send(page, new { type = "key", key = "Escape" });               // a focused page reports Esc
-            Dispatcher.UIThread.RunJobs();
+            // The mute click activated the controls window: Esc pressed there still reaches the clip.
+            controls.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Assert.True(o.GracePaused);
             Assert.False(page.View.IsVisible);                              // the grace card is not under the web view
             Assert.True(o.Surfaces[0].Grace.IsVisible);
@@ -221,12 +226,49 @@ public sealed class MandatoryVideoBrowserTests
         Assert.Empty(o.Windows);
     });
 
+    /// <summary>A focused mirror page reports Esc and the panic key too (WPF TranslateDomKey, VideoService.Browser.cs:851-881):
+    /// with no global panic listener they are the only way out. Strict force-stops on both; a normal clip pauses on
+    /// Esc and stops on the panic key (PanicOverridesAll on).</summary>
+    [Theory]
+    [InlineData("Escape", "F12", true)]
+    [InlineData(".", "OemPeriod", true)]
+    [InlineData("Backspace", "Back", true)]
+    [InlineData("/", "OemQuestion", true)]
+    [InlineData("Escape", "F12", false)]
+    [InlineData(",", "OemComma", false)]
+    public Task MirrorPageKeysReachTheClipWithoutTheGlobalListener(string dom, string panicKey, bool strict) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var rig = new Rig();
+        rig.TwoScreens();
+        rig.Settings.Current.PanicKey = panicKey;
+        MandatoryVideoOverlay.PanicListenerLive = () => false;
+        var o = MandatoryVideoOverlay.Instance;
+        await rig.Open(strict, windows: 2);
+        var mirror = o.Browser!.Views[1];
+        Assert.Contains(mirror.View, o.Surfaces[1].Picture.Children);
+        mirror.View.OnNavigationCompleted(new Uri("about:blank"));
+        await Task.Delay(10);
+        Send(o.Browser.Views[0], new { type = "playing" });
+        Send(mirror, new { type = "key", key = dom });
+        Dispatcher.UIThread.RunJobs();
+        if (strict || dom != "Escape") Assert.Empty(o.Windows);
+        else Assert.True(o.GracePaused && o.Windows.Count == 2);
+    });
+
     [Fact]
     public void PageKeysMapToKeyNamesAndABrowserSessionIsNeverDucked() => AvaloniaTestDispatcher.Run(() =>
     {
         Assert.Equal(global::Avalonia.Input.Key.D7, MandatoryVideoOverlay.PageKey("7"));
         Assert.Equal(global::Avalonia.Input.Key.Space, MandatoryVideoOverlay.PageKey(" "));
         Assert.Equal(global::Avalonia.Input.Key.Escape, MandatoryVideoOverlay.PageKey("Escape"));
+        Assert.Equal(global::Avalonia.Input.Key.Back, MandatoryVideoOverlay.PageKey("Backspace"));
+        var oem = new Dictionary<string, Key>
+        {
+            [","] = Key.OemComma, ["."] = Key.OemPeriod, ["-"] = Key.OemMinus, ["="] = Key.OemPlus, [";"] = Key.OemSemicolon,
+            ["'"] = Key.OemQuotes, ["["] = Key.OemOpenBrackets, ["]"] = Key.OemCloseBrackets, ["\\"] = Key.OemBackslash,
+            ["/"] = Key.OemQuestion, ["`"] = Key.OemTilde,
+        };
+        foreach (var (dom, key) in oem) Assert.Equal(key, MandatoryVideoOverlay.PageKey(dom));
         Assert.Null(MandatoryVideoOverlay.PageKey(""));
 
         using var rig = new Rig();
@@ -314,17 +356,43 @@ public sealed class MandatoryVideoBrowserTests
             CoreEngine.Video = Video;
         }
 
-        internal async Task Open(bool strict)
+        internal async Task Open(bool strict, int windows = 1)
         {
             Assert.True(Video.Trigger(strict));
             var o = MandatoryVideoOverlay.Instance;
             for (var i = 0; i < 100 && o.Windows.Count == 0; i++) await Task.Delay(50);   // the 1.3 s pre-roll
-            Assert.Single(o.Windows);
+            Assert.Equal(windows, o.Windows.Count);
+        }
+
+        private static readonly System.Reflection.FieldInfo Lifetime = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        private object? _lifetime;
+        private Func<Visual, IReadOnlyList<Screen>>? _query;
+        private bool _twoScreens;
+
+        /// <summary>The clip fills two monitors: a host window to enumerate from and a fake topology.</summary>
+        internal void TwoScreens()
+        {
+            (_twoScreens, _lifetime, _query) = (true, Lifetime.GetValue(Application.Current), ScreenList.QueryOverride);
+            Lifetime.SetValue(Application.Current, new ClassicDesktopStyleApplicationLifetime { MainWindow = new Window(), ShutdownMode = ShutdownMode.OnExplicitShutdown });
+            ScreenList.QueryOverride = _ => new[] { MakeScreen(new PixelRect(0, 0, 1920, 1080), true), MakeScreen(new PixelRect(1920, 0, 1920, 1080), false) };
+            (Settings.Current.FillAllMonitorsWithVideo, Settings.Current.VideoTargetMonitor) = (true, ConditioningControlPanel.Services.UI.MonitorTarget.All);
+        }
+
+        // Same Avalonia 12.1 internals as LockCardMultiMonitorTests.MakeScreen.
+        private static Screen MakeScreen(PixelRect bounds, bool primary)
+        {
+            var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen), new object[] { new PlatformHandle(new IntPtr(bounds.X + 1), "headless-test") })!;
+            typeof(Screen).GetProperty(nameof(Screen.Scaling))!.SetValue(screen, 1.0);
+            typeof(Screen).GetProperty(nameof(Screen.Bounds))!.SetValue(screen, bounds);
+            typeof(Screen).GetProperty(nameof(Screen.WorkingArea))!.SetValue(screen, bounds);
+            typeof(Screen).GetProperty(nameof(Screen.IsPrimary))!.SetValue(screen, primary);
+            return screen;
         }
 
         public void Dispose()
         {
             Video.Stop();
+            if (_twoScreens) { ScreenList.QueryOverride = _query; Lifetime.SetValue(Application.Current, _lifetime); }
             LastGrace.SetValue(MandatoryVideoOverlay.Instance, _lastGrace);
             MandatoryVideoOverlay.Instance.Scheduler = _scheduler;
             MandatoryVideoOverlay.PanicListenerLive = _listener;

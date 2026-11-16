@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             internal Window? GraceHost { get; set; }
             internal global::Avalonia.Platform.Screen? Screen { get; init; }
             internal EventHandler<KeyEventArgs>? PanicTunnel { get; init; }
+            internal Action<KeyEventArgs>? OnKey { get; init; }
         }
 
         private readonly List<Surface> _surfaces = new();
@@ -551,7 +552,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel };
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel, OnKey = OnKey };
         }
 
         /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:

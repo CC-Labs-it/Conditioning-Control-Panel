@@ -78,8 +78,26 @@ internal sealed partial class MandatoryVideoOverlay
 
     private void OnBrowserMessage(BrowserVideoSurface view, JsonElement message)
     {
+        var type = message.GetProperty("type").GetString();
+        if (type == "key")
+        {
+            // WPF OnBrowserKey (:741): a focused page eats keys, so it reports them to the window's handlers.
+            // Any page, mirrors included: without the global panic listener this is the only way out (WPF
+            // relies on its always-on keyboard hook, BrowserVideoEngine.cs:724-736).
+            if (message.TryGetProperty("key", out var k) && PageKey(k.GetString()) is { } key)
+            {
+                var alt = message.TryGetProperty("alt", out var a) && a.ValueKind == JsonValueKind.True;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_browser == null || _closing || !_browser.Views.Contains(view) || _surfaces.Count == 0) return;
+                    var window = (_surfaces.FirstOrDefault(x => x.Picture.Children.Contains(view.View)) ?? _surfaces[0]).Window;
+                    window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = alt ? KeyModifiers.Alt : KeyModifiers.None });
+                });
+            }
+            return;
+        }
         if (!BrowserCurrent(view)) return;
-        switch (message.GetProperty("type").GetString())
+        switch (type)
         {
             case "time":
                 // WPF OnBrowserTime (VideoService.Browser.cs:585): the pause state comes from the message (#874).
@@ -108,28 +126,22 @@ internal sealed partial class MandatoryVideoOverlay
                     OnNaturalVideoEnd();
                 });
                 break;
-            case "key":
-                // WPF OnBrowserKey (:741): a focused page eats keys, so it reports them to the window's handlers.
-                if (message.TryGetProperty("key", out var k) && PageKey(k.GetString()) is { } key)
-                {
-                    var alt = message.TryGetProperty("alt", out var a) && a.ValueKind == JsonValueKind.True;
-                    var window = _surfaces.Count > 0 ? _surfaces[0].Window : null;
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        if (!BrowserCurrent(view) || window == null) return;
-                        window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = alt ? KeyModifiers.Alt : KeyModifiers.None });
-                    });
-                }
-                break;
         }
     }
 
-    /// <summary>WPF TranslateDomKey (VideoService.Browser.cs:854): DOM key values to key names.</summary>
+    /// <summary>WPF TranslateDomKey (VideoService.Browser.cs:851-881): DOM key values to key names.</summary>
     internal static Key? PageKey(string? dom)
     {
         if (string.IsNullOrEmpty(dom)) return null;
         var name = dom.Length == 1 && char.IsAsciiDigit(dom[0]) ? "D" + dom
-            : dom switch { " " => "Space", "Enter" => "Return", "ArrowUp" => "Up", "ArrowDown" => "Down", "ArrowLeft" => "Left", "ArrowRight" => "Right", _ => dom };
+            : dom switch
+            {
+                " " => "Space", "Backspace" => "Back", "Enter" => "Return",
+                "ArrowUp" => "Up", "ArrowDown" => "Down", "ArrowLeft" => "Left", "ArrowRight" => "Right",
+                "," => "OemComma", "." => "OemPeriod", "-" => "OemMinus", "=" => "OemPlus", ";" => "OemSemicolon",
+                "'" => "OemQuotes", "[" => "OemOpenBrackets", "]" => "OemCloseBrackets", "\\" => "OemBackslash",
+                "/" => "OemQuestion", "`" => "OemTilde", _ => dom,
+            };
         return HotkeyNames.TryParse(name, out var key) ? key : null;
     }
 
@@ -183,6 +195,8 @@ internal sealed partial class MandatoryVideoOverlay
             WindowStartupLocation = WindowStartupLocation.Manual, Content = x.Buttons.Row,
         };
         if (x.PanicTunnel != null) host.AddHandler(InputElement.KeyDownEvent, x.PanicTunnel, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        // A click on Mute or Close activates this window: Esc and the other video keys still reach the clip.
+        if (x.OnKey != null) host.KeyDown += (_, e) => x.OnKey(e);
         host.Opened += (_, _) => host.Position = new PixelPoint(
             x.Window.Position.X + (int)((x.Window.Bounds.Width - host.Bounds.Width) * x.Window.RenderScaling), x.Window.Position.Y);
         _controlHosts.Add(host);
