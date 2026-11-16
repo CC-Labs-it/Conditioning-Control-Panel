@@ -574,9 +574,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly Dictionary<int, (AmbientBubble A, AmbientBubble B)> BoundHalves = new();
         private static Action<AmbientBubble>? _chaosBoundEnraged;   // WPF _chaosOnBoundEnraged (:1791)
 
-        internal static (AmbientBubble A, AmbientBubble B) SpawnBoundPair(EffectBubbleSpec a, EffectBubbleSpec b)
+        internal static (AmbientBubble A, AmbientBubble B) SpawnBoundPair(EffectBubbleSpec a, EffectBubbleSpec b,
+            double hitboxScale = 1, bool liveMagnet = false)
         {
-            var first = SpawnChaos(a, motion: ChaosMotion.RoamBounce);
+            // WPF CreateChaosBubble (BubbleService.cs:1620-1621) gives both halves the run's hitbox and magnet.
+            var first = SpawnChaos(a, motion: ChaosMotion.RoamBounce, hitboxScale: hitboxScale, liveMagnet: liveMagnet);
             var center = CenterPx(first);
             double scale = ScaleFor(first);
             // Keep the second half on the first half's screen, choosing the roomier direction.
@@ -586,7 +588,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (x > area.Right - b.SizePx * scale / 2) x = center.X - offset;
             b.SpawnAtPxX = Math.Clamp(x, area.X + b.SizePx * scale / 2, Math.Max(area.X + b.SizePx * scale / 2, area.Right - b.SizePx * scale / 2));
             b.SpawnAtPxY = center.Y;
-            var second = SpawnChaos(b, motion: ChaosMotion.RoamBounce);
+            var second = SpawnChaos(b, motion: ChaosMotion.RoamBounce, hitboxScale: hitboxScale, liveMagnet: liveMagnet);
             second.MirrorVelocityFrom(first);   // WPF BubbleService.cs:1567
             BoundPairs.Add(a.PairId, first, second);
             BoundHalves.Add(a.PairId, (first, second));

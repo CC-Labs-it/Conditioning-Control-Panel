@@ -106,9 +106,10 @@ public sealed class ChaosBoundTetherTests
         var pulses = new List<Color>();
         try
         {
-            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, Difficulty = ChaosDifficulty.Hard });
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, Difficulty = ChaosDifficulty.Hard, HitboxScale = 1.25 });
             ChaosRunHost.Overlay!.FinishCountdown();
             ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.MagnetEnabled = true;   // silk_touch: hitbox 1.25 plus magnet (WPF BubbleService.cs:1620-1621)
             ChaosMeta.State.RunsCompleted = 0;   // below the Chaperone and Tease ranks; Hard alone admits the Bound
             ChaosMeta.State.SeenBound = false;
             ChaosRunHost.Rng = new AlwaysHit();
@@ -124,6 +125,7 @@ public sealed class ChaosBoundTetherTests
             Assert.Equal($"{IconMap.Bound} two of them, one thread", ChaosRunHost.State!.RecentEvents[0]);
             var halves = BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsBoundHalf == true).ToList();
             Assert.Equal(2, halves.Count);
+            Assert.All(halves, h => Assert.Equal(Math.Round(h.Size * 1.75), h.HitSize));   // live half: 1.25 x 1.4 magnet
             var state = ChaosRunHost.State!;
             double eff = ChaosFieldMath.EffectiveIntensity(state.RunIntensity, state.Config.DifficultyMult);
             // The shortest Bound variant fuse is 3500 ms; only the 1.5x debut lifts both halves past 5250.

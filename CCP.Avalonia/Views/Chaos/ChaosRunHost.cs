@@ -341,7 +341,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     var (a, b) = ChaosBubbleVariants.BuildBoundPair(effIntensity, _state.FuseTimeMult,
                         cfg.EffectIntensity, _state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1.0);
                     ChaosMeta.MarkDiscovered("bubble:bound");
-                    BubbleOverlay.SpawnBoundPair(a, b);
+                    BubbleOverlay.SpawnBoundPair(a, b, cfg.HitboxScale, _state.MagnetEnabled);
                     if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
                         ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
                     return;
