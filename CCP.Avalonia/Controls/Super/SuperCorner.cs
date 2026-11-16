@@ -95,7 +95,7 @@ public sealed class SuperCorner : Control, ICustomHitTest
         var panel = new StackPanel { MaxWidth = 250 };
         panel.Children.Add(new TextBlock { Text = Loc.GetF("super_corner_title", Loc.Get("super_name_" + Effect.ToString().ToLowerInvariant())), FontWeight = FontWeight.SemiBold, Foreground = Gold, FontSize = 12.5 });
         panel.Children.Add(new TextBlock { Text = SuperDoor.Twist(Effect), TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Opacity = 0.85, FontSize = 11.5, Margin = new Thickness(0, 3, 0, 5) });
-        panel.Children.Add(new TextBlock { Text = Loc.Get(Inverted() ? "super_corner_tip_inverted" : "super_corner_tip"), TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Opacity = 0.6, FontSize = 11 });
+        panel.Children.Add(new TextBlock { Text = Loc.Get(Inverted() ? "avalonia_super_corner_tip_inverted" : "avalonia_super_corner_tip"), TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Opacity = 0.6, FontSize = 11 });
         if (!SuperAccess.IsUnlocked(Effect)) panel.Children.Add(new TextBlock { Text = Loc.Get("super_for_supporters"), Foreground = Gold, FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
         return panel;
     }

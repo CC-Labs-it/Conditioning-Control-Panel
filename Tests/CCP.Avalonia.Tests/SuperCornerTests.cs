@@ -124,7 +124,7 @@ public class SuperCornerTests
             Dispatcher.UIThread.RunJobs();
             var tip = Assert.IsType<StackPanel>(Assert.IsType<ToolTip>(ToolTip.GetTip(corner)).Content);
             Assert.Equal(SuperDoor.Twist(SuperEffect.Scrawl), ((TextBlock)tip.Children[1]).Text);
-            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("super_corner_tip_inverted"), ((TextBlock)tip.Children[2]).Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("avalonia_super_corner_tip_inverted"), ((TextBlock)tip.Children[2]).Text);
             Click(window, corner, new Point(8, 8), MouseButton.Left);
             Assert.True(SuperAccess.IsSwitchedOn(SuperEffect.Scrawl));
             Assert.True(corner.Lit);
@@ -244,8 +244,28 @@ public class SuperCornerTests
         var corner = new SuperCorner(SuperEffect.Scrawl, false) { Inverted = () => true };
         var tip = (StackPanel)corner.BuildTip();
         Assert.Equal(SuperDoor.Twist(SuperEffect.Scrawl), ((TextBlock)tip.Children[1]).Text);
-        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("super_corner_tip_inverted"), ((TextBlock)tip.Children[2]).Text);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("avalonia_super_corner_tip_inverted"), ((TextBlock)tip.Children[2]).Text);
+        corner.Inverted = () => false;
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("avalonia_super_corner_tip"), ((TextBlock)((StackPanel)corner.BuildTip()).Children[2]).Text);
     });
+
+    [Fact]
+    public void HintKeysPreserveWpfFallbackAcrossAllLanguages()
+    {
+        var files = System.IO.Directory.GetFiles(System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages"), "*.json");
+        Assert.Equal(10, files.Length);
+        foreach (var file in files)
+        {
+            var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(file));
+            foreach (var suffix in new[] { "", "_inverted" })
+            {
+                Assert.Null(json["super_corner_tip" + suffix]);
+                Assert.False(string.IsNullOrWhiteSpace((string?)json["avalonia_super_corner_tip" + suffix]));
+            }
+        }
+        Assert.Equal("super_corner_tip", ConditioningControlPanel.Localization.Loc.Get("super_corner_tip"));
+        Assert.Equal("super_corner_tip_inverted", ConditioningControlPanel.Localization.Loc.Get("super_corner_tip_inverted"));
+    }
 
     [Fact]
     public void BadgeInsetTracksTheMappedFeature() => WithTile(
