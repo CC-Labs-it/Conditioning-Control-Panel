@@ -59,17 +59,23 @@ namespace ConditioningControlPanel.Services.Deeper
             {
                 var vlc = VideoService.SharedLibVLC;
                 if (vlc == null) return null;
-                using var media = new Media(vlc, path, FromType.FromPath);
-                var status = await media.Parse(MediaParseOptions.ParseLocal, VlcParseTimeoutMs).ConfigureAwait(false);
-                if (status != MediaParsedStatus.Done) return null;
-                var ms = media.Duration;
-                return ms > 0 ? ms / 1000.0 : null;
+                return await ProbeLibVlcAsync(vlc, path).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 Diag.Swallowed(ex);
                 return null;
             }
+        }
+
+        internal static async Task<double?> ProbeLibVlcAsync(LibVLC vlc, string path)
+        {
+            using var media = new Media(vlc, path, FromType.FromPath);
+            var status = await LibVlcParse.ParseOffCallbackAsync(media, MediaParseOptions.ParseLocal, VlcParseTimeoutMs)
+                .ConfigureAwait(false);
+            if (status != MediaParsedStatus.Done) return null;
+            var ms = media.Duration;
+            return ms > 0 ? ms / 1000.0 : null;
         }
 
     }

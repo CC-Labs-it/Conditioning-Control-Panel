@@ -43,7 +43,7 @@ public sealed class CompanionEffectsTests
             CoreAccount.IsLoggedInProvider = () => true;
             var all = CompanionEffects.Activities();
             // WPF CompanionActivities.cs:15 offers every LauncherCatalogue game, Classic included (:249).
-            Assert.Equal(new[] { "game.breakoutdemo", "game.piecebypiece", "game.race", "game.raceclassic", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
+            Assert.Equal(new[] { "game.breakoutdemo", "game.breakout", "game.piecebypiece", "game.race", "game.raceclassic", "game.dtrh", "game.intake", "page.studio", "page.presets", "page.quests", "page.assets" },
                 all.Select(a => a.Id));
             var race = all.Single(a => a.Id == "game.race");
             var intake = all.Single(a => a.Id == "game.intake");
@@ -57,7 +57,7 @@ public sealed class CompanionEffectsTests
             CoreAccount.IsLoggedInProvider = () => false;          // the tile would ask to sign in
             Assert.False(intake.Allowed);
             Assert.False(race.Allowed);
-            Assert.True(all[0].Allowed && all[1].Allowed);          // the free demo and the free board need no account
+            Assert.True(all.Single(a => a.Id == "game.breakoutdemo").Allowed && all.Single(a => a.Id == "game.piecebypiece").Allowed);          // the free demo and the free board need no account
             Assert.False(dtrh.Allowed);
             CoreAccount.IsLoggedInProvider = () => true;
             service.Current.AudioOnlySession = true;
