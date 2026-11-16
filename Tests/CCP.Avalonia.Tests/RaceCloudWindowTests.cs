@@ -99,6 +99,28 @@ public sealed class RaceCloudWindowTests
     });
 
     [Fact]
+    public Task StartAfterCloseKeepsWindowHidden() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight);
+        try
+        {
+            using var window = Create();
+            var scripts = new List<string>();
+            window.Web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("ok"); };
+            window.ShowOrFocus();
+            window.Web.OnNavigationCompleted(Site);
+            window.Window.Close();
+            scripts.Clear();
+            window.RequestStart();
+            Assert.False(window.IsOpen);
+            Assert.Contains(scripts, x => x.Contains("cloud-start"));
+        }
+        finally { (s.RaceCloudWindowLeft, s.RaceCloudWindowTop, s.RaceCloudWindowWidth, s.RaceCloudWindowHeight) = old; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task DropsOffsiteAndNonCloudMessages() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         using var window = Create();

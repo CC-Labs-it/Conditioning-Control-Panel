@@ -18,7 +18,7 @@ internal sealed class RaceCloudWindow : IDisposable
     private readonly Uri _startUrl;
     private readonly WebHost _web;
     private readonly Window _window;
-    private bool _disposed, _startWanted;
+    private bool _disposed, _startWanted, _shownOnce;
     internal Func<string, bool> OpenExternal = ExternalOpener.Open;
     internal WebHost Web => _web;
     internal Window Window => _window;
@@ -96,14 +96,15 @@ internal sealed class RaceCloudWindow : IDisposable
             _startWanted = false;
             _web.Navigate(uri);
         }
-        if (!_window.IsVisible) { _window.ShowActivated = !background; _window.Show(); }
+        if (!_window.IsVisible) { _window.ShowActivated = !background; _window.Show(); _shownOnce = true; }
         if (!background) { _window.Activate(); _web.FocusPage(); }
     }
     public void RequestStart()
     {
         if (_disposed) return;
         _startWanted = true;
-        if (!_window.IsVisible) ShowInBackground();
+        // WPF RaceCloudWindow.cs:75 opens only a never-built window; a closed one stays hidden.
+        if (!_shownOnce) ShowInBackground();
         PostToPage(new { type = "cloud-start" });
     }
     public void PostToPage(object msg)
