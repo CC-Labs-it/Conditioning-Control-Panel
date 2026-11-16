@@ -98,6 +98,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return true;
         }
 
+        // Keep visible hosted cards above bubbles and flashes during a pinned Chaos run.
+        internal static void RaiseHosted()
+        {
+            if (HostedCards.Count == 0) return;
+            foreach (var lease in Hosts.Values) lease.Raise();
+        }
+
         private static void ClearCards()
         {
             foreach (var retire in RetireHosted) retire();

@@ -878,6 +878,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosGifCascadeOverlay.RaiseActive();
             ChaosFlashOverlay.RaiseActive(RaiseOverlayWindow);
             FlashOverlay.RaiseAll(RaiseOverlayWindow);
+            SubliminalOverlay.RaiseHosted();
         }
 
         // WPF ChaosModeService.cs:745-757, 937-951: lift every visible DVD surface.
