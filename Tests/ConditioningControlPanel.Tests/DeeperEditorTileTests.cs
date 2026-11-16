@@ -106,8 +106,9 @@ public class DeeperEditorTileTests
         Assert.True(at > 0, "MainWindow has no CardDeeperEditor_Click");
         var body = presets.Substring(at, Math.Min(200, presets.Length - at));
 
-        // Whitespace-insensitive, but the destination is pinned: this is a door to a page.
-        Assert.Contains("ShowTab(\"deeper\")", body, StringComparison.Ordinal);
+        // The destination is pinned: this is a door to a page. Since Play > Deeper went
+        // play-only (2026-11-16), the tile is the Editor link and opens the FULL layout.
+        Assert.Contains("ShowDeeperEditorLayout()", body, StringComparison.Ordinal);
         // The owner's correction, kept honest. Opening the editor from the wall put a modal
         // dialog on the front page; the tile lands on the room and lets the user choose.
         Assert.DoesNotContain("BtnDeeperNewEnhancement_Click", body, StringComparison.Ordinal);

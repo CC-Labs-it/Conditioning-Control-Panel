@@ -478,6 +478,9 @@ namespace ConditioningControlPanel
                         // no empty state). Idempotent, and it does the first scan itself, so only a
                         // later show pays for a second one.
                         if (!InitializeDeeperHub()) RefreshDeeperLibraryUI();
+                        // Play > Deeper is play-only (choose a file, heat map, one Play button);
+                        // ShowDeeperEditorLayout asks for the full layout for this one visit.
+                        ApplyDeeperLayoutForVisit();
                         // Phase 2: the Deeper hub's device/monitor pickers moved to
                         // Settings → Devices, so there is nothing to populate here. The refresh
                         // below still fills the consent + calibration status cells, which are

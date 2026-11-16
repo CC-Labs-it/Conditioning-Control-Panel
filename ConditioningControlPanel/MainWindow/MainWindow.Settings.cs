@@ -554,7 +554,7 @@ namespace ConditioningControlPanel
                 // App Info & Data popup which hosts the login/data sections.
                 showPatreon: () => ShowAppInfoPopup(),
                 showAwareness: () => ShowTab("awareness"),
-                showDeeper: () => ShowTab("deeper"),
+                showDeeper: () => ShowDeeperEditorLayout(),   // the tour points at the full layout
                 // Generic router for every other RequiresTab key (Phase 1's door rail put all
                 // 22 of them on screen). Bound to THIS window rather than left to the service's
                 // Application.Current.MainWindow fallback, so the tutorial always drives the
