@@ -16,6 +16,7 @@ internal sealed partial class GameWindow
     {
         if (_roomMinimized == minimized) return;
         _roomMinimized = minimized;
+        if (Spec.Id == "backroom") { _roomBridge?.Suspend(minimized, "minimise"); return; }
         if (minimized) _backRoomFx?.CancelAll();
         Post(new { type = "suspend", on = minimized, reason = "minimise" });
     }

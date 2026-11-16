@@ -200,7 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             PropertyChanged += (_, e) =>
             {
-                if (!IsBreakout || e.Property != WindowStateProperty) return;
+                if (!(IsBreakout || Spec.Id == "backroom") || e.Property != WindowStateProperty) return;
                 RoomMinimizedChanged(WindowState == WindowState.Minimized);
             };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
@@ -214,7 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
+            Closing += (_, _) => { _closing = true; _roomBridge?.CloseNow(); _backRoomFx?.CancelAll(); CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")

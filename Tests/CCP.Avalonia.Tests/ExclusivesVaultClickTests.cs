@@ -175,7 +175,7 @@ public sealed class ExclusivesVaultClickTests
     [InlineData("breakout", true)]
     [InlineData("dtrh", true)]
     [InlineData("focusgaze", true)]
-    [InlineData("backroom", false)]
+    [InlineData("backroom", true)]
     [InlineData("arcademy", false)]
     public void PremiumCardsMatchThePlayWallDoors(string key, bool onThisBuild) =>
         Assert.Equal(onThisBuild, ExclusivesTabView.IsOnThisBuild(key));
