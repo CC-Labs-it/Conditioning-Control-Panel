@@ -18,12 +18,13 @@ public class AfterglowWiringTests
     {
         var src = Src("ConditioningControlPanel", "Services", "Subliminal", "SubliminalService.cs");
         // Take two: the ghost line is fed where a subliminal is shown and cleared where the service stops.
+        // On the port the scheduler is Core's: the head draws one chosen phrase (FlashPhrase) and
+        // clears its surfaces in TearDownSurfaces, which Stop and the run-state hook both reach.
         Assert.DoesNotContain("new Super.AfterglowDriver()", src);
-        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "internal void FlashPhrase("));
+        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "internal void FlashPhrase(string text)"));
+        Assert.Contains("TearDownSurfaces();", Body(src, "public void Stop()"));
         Assert.Contains("AfterglowLineLayer.StopAll", Body(src, "private void TearDownSurfaces()"));
         Assert.Contains("_afterglow?.Stop();", Body(src, "private void TearDownSurfaces()"));
-        Assert.Contains("TearDownSurfaces();", Body(src, "public void Stop()"));
-        Assert.Contains("TearDownSurfaces();", Body(src, "internal void OnRunStateChanged("));
         Assert.Contains("_afterglow?.Dispose();", Body(src, "public void Dispose()"));
         Assert.Contains("glow.GetActiveTextRectsPx()", Body(src, "public System.Drawing.Rectangle[] GetActiveTextScreenRects()"));
     }
@@ -36,9 +37,8 @@ public class AfterglowWiringTests
         Assert.DoesNotContain("SpawnAfterglow", src);
         Assert.DoesNotContain("_afterglowBonus", src);
         Assert.DoesNotContain("PickWeighted", src);
+        // The pick is Core's plain one on the port.
         Assert.Contains("CoreSubliminal.PickPhrase()", Body(src, "public void FlashSubliminal()"));
-        var core = Src("CCP.Core", "CoreSubliminal.cs");
-        Assert.Contains("active[Rng.Next(active.Count)]", Body(core, "public static string? PickPhrase()"));
     }
 
     /// <summary>The driver tears down on the switch, rechecks every second and needs the compositor.</summary>

@@ -25,7 +25,12 @@ public class ReviewWiringTests
 
     [Fact]
     public void Wpf_launcher_door_installs_fallback()
-        => Assert.Contains("PanelDoorLink.Fallback = () => Services.Launcher.LauncherHost.BackToLauncher()", Source("ConditioningControlPanel", "MainWindow", "MainWindow.xaml.cs"));
+    {
+        var src = Source("ConditioningControlPanel", "MainWindow", "MainWindow.xaml.cs");
+        Assert.Contains("PanelDoorLink.Fallback = () =>", src);
+        // Same handler as the title-bar button; a disabled button (Lab run) stays a no-op.
+        Assert.Contains("if (button == null || !button.IsEnabled) return;", Section(src, "PanelDoorLink.Fallback", "PanelDoorLink.OpenLauncherDoor"));
+    }
 
     [Fact]
     public void Wpf_afterglow_receives_the_shown_phrase()
@@ -44,7 +49,7 @@ public class ReviewWiringTests
     {
         var src = Source("CCP.Core", "CoreSubliminal.cs");
         var tick = src.Substring(src.IndexOf("private static void OnTick(", StringComparison.Ordinal));
-        Assert.Contains("SuperAccess.ReplacesBase(SuperEffect.Afterglow)", tick);
+        Assert.Contains("SuperAccess.ReplacesBase(Services.Super.SuperEffect.Afterglow)", tick);
         Assert.Contains("lock (Gate) ArmLocked()", tick);
     }
 }

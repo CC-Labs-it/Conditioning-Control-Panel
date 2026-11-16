@@ -8,7 +8,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
 internal static partial class BubbleOverlay
 {
-    internal static Func<PixelPoint?> FrothPointer = () => X11Pointer.Read()?.At;
+    internal static Func<PixelPoint?> FrothPointer = () =>
+        OperatingSystem.IsWindows() ? Win32Overlay.CursorPosition() : OperatingSystem.IsLinux() ? X11Pointer.Read()?.At : null;
 
     // WPF BubbleService.Froth.cs:115-154. The stage and pointer use device pixels.
     internal static void StepFrothMotion(double dt)

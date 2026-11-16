@@ -146,8 +146,12 @@ namespace ConditioningControlPanel.Services
         /// <summary>Idempotent: take every subliminal surface off screen and stop the whisper.</summary>
         private void TearDownSurfaces()
         {
-            DispatcherHelper.RunOnUI(() => { _afterglow?.Stop(); Compositor.AfterglowLineLayer.StopAll(); });
             _visibleOneShotGen = null;
+
+            // Super Afterglow: panic and the emergency exit stop subliminals through here, and
+            // every ghost goes with the cards.
+            _afterglow?.Stop();
+            DispatcherHelper.RunOnUI(Compositor.AfterglowLineLayer.StopAll);
 
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
             // mid-chaos-run, and closing layered windows then is the deadlock trigger).
@@ -266,8 +270,8 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         internal void FlashPhrase(string text)
         {
-            Compositor.AfterglowLineLayer.WordShown(text);
             if (!_isRunning) _oneShotActive = true; // Allow display from remote control
+            Compositor.AfterglowLineLayer.WordShown(text);   // Super Afterglow: this word leaves a ghost
 
             // Check for linked audio
             string? audioPath = FindLinkedAudio(text);
