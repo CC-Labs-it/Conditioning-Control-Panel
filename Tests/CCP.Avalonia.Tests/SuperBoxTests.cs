@@ -26,6 +26,7 @@ public sealed class SuperBoxTests
     {
         ShellTestPlatform.Ensure();
         var language = LocalizationManager.Instance.CurrentLanguage;
+        var endedByPanic = SuperPreview.EndedByPanic;
         LocalizationManager.Instance.SetLanguage("en");
         var provider = CoreSettings.ServiceProvider;
         var hasPremium = CoreEntitlement.HasPremiumProvider;
@@ -55,6 +56,7 @@ public sealed class SuperBoxTests
         finally
         {
             SuperPreview.End(panic: false);
+            typeof(SuperPreview).GetProperty(nameof(SuperPreview.EndedByPanic))!.SetValue(null, endedByPanic);   // End while idle leaves it as the last test set it
             window?.Close();
             LocalizationManager.Instance.SetLanguage(language);
             SuperBox.HostedOnThisHead.Clear();
