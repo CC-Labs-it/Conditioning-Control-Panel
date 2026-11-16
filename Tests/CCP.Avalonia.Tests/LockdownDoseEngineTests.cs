@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
@@ -156,7 +157,10 @@ public class LockdownDoseEngineTests
     public Task KeeperDoesNotSupersedeRemoteSessionWaitingForPortal(bool keeperFirst, string interruption) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureApp();
-        var s = CoreSettings.Current;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var settingsDir = Directory.CreateTempSubdirectory("ccp-dose-session-");
+        var isolated = new SettingsService(Path.Combine(settingsDir.FullName, "settings.json"));
+        var s = isolated.Current;
         var oldSettings = (s.LockdownDoseKeeperEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.AudioOnlySession, s.LockdownDisablePanicKey);
         var old = (LockdownService.Current, AvApp.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
             PortalPanicShortcut.BindForTests, MainShellWindow.PostPortalStart);
@@ -168,6 +172,7 @@ public class LockdownDoseEngineTests
         bool queued = false, drained = false;
         try
         {
+            CoreSettings.ServiceProvider = () => isolated;
             s.LockdownDoseKeeperEnabled = s.PanicKeyEnabled = s.FlashEnabled = s.AudioOnlySession = true;
             s.LockdownDisablePanicKey = false;
             LockdownService.Current = ld;
@@ -217,11 +222,19 @@ public class LockdownDoseEngineTests
             }
             finally
             {
-                (LockdownService.Current, AvApp.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
-                    PortalPanicShortcut.BindForTests, MainShellWindow.PostPortalStart) = old;
-                (s.LockdownDoseKeeperEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.AudioOnlySession, s.LockdownDisablePanicKey) = oldSettings;
-                PanicAftermath.EndQuiet();
-                Dispatcher.UIThread.RunJobs();
+                try
+                {
+                    (LockdownService.Current, AvApp.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
+                        PortalPanicShortcut.BindForTests, MainShellWindow.PostPortalStart) = old;
+                    (s.LockdownDoseKeeperEnabled, s.PanicKeyEnabled, s.FlashEnabled, s.AudioOnlySession, s.LockdownDisablePanicKey) = oldSettings;
+                    PanicAftermath.EndQuiet();
+                    Dispatcher.UIThread.RunJobs();
+                }
+                finally
+                {
+                    try { isolated.SealForReset(); }
+                    finally { CoreSettings.ServiceProvider = oldProvider; settingsDir.Delete(recursive: true); }
+                }
             }
         }
     });
