@@ -431,14 +431,16 @@ public sealed partial class VaultGateDialog : Window
                 FontFamily = FriendsDrawer.Display, Foreground = ticketInk ?? Dim, FontSize = compact ? 14 : 17, VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 8, compact ? 3 : 4),
             });
-        line.Children.Add(new TextBlock
+        var caption = new TextBlock
         {
             Text = sale != null ? Loc.Get("vaultgate_sale_first")
                 : yearly ? Loc.GetF("vaultgate_price_year", VaultOffer.YearlyPerMonth(price))
                 : Loc.GetF("vaultgate_price", VaultOffer.PerDay(price)),
             Foreground = ticketInk ?? Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5), TextWrapping = TextWrapping.Wrap,
-        });
+        };
+        if (saleDetails == null) line.Children.Add(caption);
         slot.Children.Add(line);
+        if (saleDetails != null) slot.Children.Add(caption);
         if (sale == null)
         {
             if (hints && !yearly) AddHints(slot, tier, price);

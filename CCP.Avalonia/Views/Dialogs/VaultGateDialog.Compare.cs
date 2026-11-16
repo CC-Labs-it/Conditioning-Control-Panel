@@ -94,16 +94,19 @@ public sealed partial class VaultGateDialog
         var muted = B(lab ? "#A99A84" : "#7D6878");
         var name = Loc.Get(lab ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name");
         var main = new StackPanel { Margin = new Thickness(26, 16, 26, 8) };
-        main.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_ticket_admit").ToUpper(System.Globalization.CultureInfo.CurrentUICulture), Foreground = muted, FontSize = 10.5, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
-        main.Children.Add(new TextBlock { Text = name, Foreground = accent, FontSize = 32, FontWeight = FontWeight.Bold });
-        main.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
+        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var who = new StackPanel();
+        who.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_ticket_admit").ToUpper(System.Globalization.CultureInfo.CurrentUICulture), Foreground = muted, FontSize = 10.5, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
+        who.Children.Add(new TextBlock { Text = name, Foreground = accent, FontSize = 32, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
+        who.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
+        top.Children.Add(who);
         var saleDetails = new StackPanel();
         var price = (StackPanel)Price(tier, compact: true, yearly: _yearly, saleDetails: saleDetails);
         price.Tag = text;
         price.Margin = new Thickness(0);
         PaintPrice(price, tier, true, _yearly, false, saleDetails);
         // WPF Compare.cs:416-447: the price sits inside a tilted double-rule stamp.
-        main.Children.Add(new Border
+        var stamp = new Border
         {
             Name = "PriceStamp", BorderBrush = accent, BorderThickness = new Thickness(2.5),
             CornerRadius = new CornerRadius(3), Padding = new Thickness(2.5),
@@ -112,7 +115,10 @@ public sealed partial class VaultGateDialog
             Opacity = 0.93,
             Child = new Border { BorderBrush = accent, BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(1.5), Padding = new Thickness(11, 0, 11, 1), Child = price },
-        });
+        };
+        Grid.SetColumn(stamp, 1);
+        top.Children.Add(stamp);
+        main.Children.Add(top);
         main.Children.Add(saleDetails);
         main.Children.Add(new Border { Height = 1, Background = accent, Opacity = 0.4, Margin = new Thickness(0, 10, 0, 9) });
         void Perk(string number, string words, IBrush ink)
