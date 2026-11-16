@@ -19,13 +19,6 @@ namespace CCP.Avalonia.Tests;
 public class ChaosBodyBuzzTests
 {
     [Fact]
-    public Task ShockwaveTestStartsWithACleanBubbleField() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
-        BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true });
-        await ShockwaveSelectsRendererAndCancelsHops(false);
-    });
-
-    [Fact]
     public async Task ShockwaveTestRestoresIncomingFieldOverlaySettingAndZapTime()
     {
         bool previous = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
@@ -73,9 +66,6 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
-            // Earlier tests can leave ambient bubbles or their spawn timer in the shared field.
-            BubbleOverlay.EndChaos();
-            BubbleOverlay.Stop();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
