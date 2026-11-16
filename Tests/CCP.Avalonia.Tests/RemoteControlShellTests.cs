@@ -530,8 +530,14 @@ public sealed class RemoteControlShellTests
                 runner.Stop();
                 runner.Start(session);
             }
-            if (leave) { fake.Poll = "{\"controller_connected\":false}"; await relay.PollOnceAsync(); }
-            else await relay.StopAsync();
+            if (leave)
+            {
+                // WPF StopRemoteTriggeredEffects (RemoteControlService.cs:1188-1192): a leave keeps every run going.
+                fake.Poll = "{\"controller_connected\":false}"; await relay.PollOnceAsync();
+                Assert.True(runner.IsRunning);
+                Assert.True(CoreEngine.IsRunning);
+            }
+            await relay.StopAsync();
             Assert.Equal(!remote || reuseLocally, runner.IsRunning);
         }
         finally

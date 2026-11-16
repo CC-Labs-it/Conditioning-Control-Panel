@@ -283,8 +283,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops and the wearer's own
         /// values come back (RemoteWearer: their strict lock, panic on unless a running Lockdown holds it off).
         /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).
-        /// <paramref name="leashCut"/> keeps the full teardown over a local run (WPF RemoteEndRule.cs:26-27).</summary>
-        public static void StopEffects(bool force, bool leashCut = false)
+        /// <paramref name="leashCut"/> keeps the full teardown over a local run (WPF RemoteEndRule.cs:26-27).
+        /// <paramref name="controllerLeft"/> keeps a controller-started session running (WPF StopRemoteTriggeredEffects :1188-1192);
+        /// only the remote session's end stops it (StopAllRemoteEffects :1024-1029).</summary>
+        public static void StopEffects(bool force, bool leashCut = false, bool controllerLeft = false)
         {
             // A leave and the session end both arrive here unforced; RemoteRelay.Cleanup adds the session-end reset.
             if (LeavesLocalRun(force, leashCut))
@@ -300,7 +302,7 @@ namespace ConditioningControlPanel.Services
                     catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay restore refresh failed"); }
                 return;
             }
-            var remoteSession = IsSessionRemoteStarted?.Invoke() == true;
+            var remoteSession = !controllerLeft && IsSessionRemoteStarted?.Invoke() == true;
             if (force) ResetAutonomy();
             else try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too

@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Services
         private readonly string? _baseUrl;
         private readonly Func<string?> _token, _unifiedId;
         private readonly Func<string, JObject?, string?> _execute;
-        private readonly Action<bool, bool> _stopEffects;
+        private readonly Action<bool, bool, bool> _stopEffects;
         private CancellationTokenSource? _loop;
         private int _pollBusy, _consecutiveFailures;
         private DateTime? _idleSince;
@@ -106,6 +106,12 @@ namespace ConditioningControlPanel.Services
         /// full teardown over a local run (RemoteEndRule.LeavesLocalRun).</param>
         public RemoteRelay(Func<string?> token, Func<string?> unifiedId, string appVersion,
             Func<string, JObject?, string?> execute, Action<bool, bool> stopEffects, HttpMessageHandler? handler = null)
+            : this(token, unifiedId, appVersion, execute, (force, leashCut, _) => stopEffects(force, leashCut), handler) { }
+
+        /// <param name="stopEffects">(force, leashCut, controllerLeft): a leave keeps a controller-started
+        /// session running (WPF StopRemoteTriggeredEffects, RemoteControlService.cs:1188-1192).</param>
+        public RemoteRelay(Func<string?> token, Func<string?> unifiedId, string appVersion,
+            Func<string, JObject?, string?> execute, Action<bool, bool, bool> stopEffects, HttpMessageHandler? handler = null)
         {
             (_token, _unifiedId, _execute, _stopEffects) = (token, unifiedId, execute, stopEffects);
             _baseUrl = handler != null ? RealBaseUrl : ResolveBaseUrl(
@@ -220,7 +226,7 @@ namespace ConditioningControlPanel.Services
             // session's snapshot and its recovery file go.
             void StopEffects()
             {
-                try { _stopEffects(false, leashCut); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                try { _stopEffects(false, leashCut, false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
                 if (!RemoteCommands.LeavesLocalRun(false, leashCut)) RemoteCommands.ResetAutonomy();   // WPF StopAllRemoteEffects: the session end and a leash cut reset autonomy, a leave does not
                 Remote.RemoteWearer.Drop();
                 RemoteCommands.ResetEasy();   // WPF ResetV2SessionState
@@ -360,7 +366,7 @@ namespace ConditioningControlPanel.Services
             RemoteCommands.RemoteHaptics.Stop();
             Remote.RemoteWearer.ReleaseSafetyState();
             if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
-                try { _stopEffects(false, false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                try { _stopEffects(false, false, true); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
         }
 
         private int _leaveGeneration;
@@ -409,7 +415,7 @@ namespace ConditioningControlPanel.Services
             kind = (kind ?? "").Trim().ToLowerInvariant();
             if (!IsActive || kind is not ("more" or "easy" or "stop")) return false;
             Action? local = kind == "easy" ? RemoteCommands.ApplyEasy
-                : kind == "stop" ? () => { if (Safety.VoicePanicReach.PanicKeyRuns(LockdownService.Current?.IsActive == true, CoreSettings.Current.PanicKeyEnabled)) _stopEffects(true, false);
+                : kind == "stop" ? () => { if (Safety.VoicePanicReach.PanicKeyRuns(LockdownService.Current?.IsActive == true, CoreSettings.Current.PanicKeyEnabled)) _stopEffects(true, false, false);
                     else { RemoteCommands.StopHaptics(); var visuals = Remote.RemoteWearer.HandBackAllButStrict(); Remote.RemoteWearer.ReleaseSafetyState(); if (visuals > 0) try { RemoteCommands.RefreshOverlays?.Invoke(); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] overlay restore failed"); } } }
                 : null;
             if (local != null)
