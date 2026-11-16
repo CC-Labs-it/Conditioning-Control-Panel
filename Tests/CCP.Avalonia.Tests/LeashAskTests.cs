@@ -25,7 +25,6 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF LeashDrawerSection offer row -> LeashSurfaces.ShowAsk -> LeashAskCard, from the Leash page.</summary>
-[Collection(RunsAloneCollection.Name)] // The ask window and leash service are process-wide.
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
@@ -175,8 +174,6 @@ public sealed class LeashAskTests
         {
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
-            var oldClock = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
-            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
             try
             {
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
@@ -194,11 +191,7 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally
-            {
-                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldClock;
-                (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old;
-            }
+            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
     [Fact]
