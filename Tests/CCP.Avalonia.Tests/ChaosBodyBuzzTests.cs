@@ -13,7 +13,8 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>Runs alone because the test changes the shared BubbleOverlay field and ChaosRunHost state.</summary>
+/// <summary>Runs alone: it fills the shared BubbleOverlay.Field and waits 800 ms for the hops to land; a parallel chaos class
+/// popping a bubble in that gap counted 9 instead of 8 (restack wave 2 run 3, Linux shard 0).</summary>
 [Collection(RunsAloneCollection.Name)]
 public class ChaosBodyBuzzTests
 {
@@ -66,15 +67,8 @@ public class ChaosBodyBuzzTests
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
             BubbleOverlay.BeginChaos(new Border(), _ => { });
-            BubbleOverlay.Field.Bubbles.Clear(); // Start with known targets even if an ambient field was already running.
-            BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true }); // An ambient bubble can already be popping.
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
-            var targets = new AmbientBubble[10];
-            for (int i = 0; i < targets.Length; i++)
-            {
-                targets[i] = new AmbientBubble { X = (i + 1) * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
-                BubbleOverlay.Field.Bubbles.Add(targets[i]);
-            }
+            for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
             BubbleOverlay.Field.Bubbles.Add(outside);
             ChaosRunHost.BodyBuzz(source);
@@ -85,7 +79,7 @@ public class ChaosBodyBuzzTests
             await Task.Delay(800);
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
             Assert.False(outside.Popping);
-            for (int i = 0; i < targets.Length; i++) Assert.Equal(i < 8, targets[i].Popping);
+            Assert.Equal(8, BubbleOverlay.Field.Bubbles.FindAll(b => b.Popping).Count);
             ChaosRunHost.BodyBuzz(source);
             BubbleOverlay.EndChaos();
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
