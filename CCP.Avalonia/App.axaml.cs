@@ -82,9 +82,54 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The lookup resumes off the UI thread (ConfigureAwait(false)); its opener builds a window.</summary>
         internal static Task<bool> OnUiThread(Func<bool> open) => Dispatcher.UIThread.InvokeAsync(open).GetTask();
 
+        /// <summary>The v2 observer (WPF App.Awareness, App.xaml.cs:3093). Null without one.</summary>
+        internal static ConditioningControlPanel.Services.Awareness.AwarenessObserver? AwarenessObserverHost { get; private set; }
+
+        /// <summary>WPF App.xaml.cs:3062-3099: one memory and one scorer shared by the observer and its arbiter.
+        /// This head has no speaker or line source yet (WPF :3091-3094), so the arbiter stays silent, nothing
+        /// leaves the machine and the legacy mouth is not muted (WPF AwarenessRouting.Attach is not called).</summary>
+        internal static ConditioningControlPanel.Services.Awareness.AwarenessObserver CreateAwarenessObserver(
+            ConditioningControlPanel.Services.Awareness.ActivityLedger ledger,
+            ConditioningControlPanel.Services.Awareness.IForegroundProbe foreground,
+            ConditioningControlPanel.Services.Awareness.IInputProbe input,
+            ConditioningControlPanel.Services.Awareness.IMicrophoneProbe microphone)
+        {
+            var memory = new ConditioningControlPanel.Services.Awareness.StubCompanionMemory();
+            var scorer = new ConditioningControlPanel.Services.Awareness.WorthinessScorer();
+            var arbiter = new ConditioningControlPanel.Services.Awareness.ReactionArbiter(scorer: scorer, memory: memory);
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Memory = memory;   // WPF :3103, the wipe forgets it
+            return new ConditioningControlPanel.Services.Awareness.AwarenessObserver(ledger, scorer, arbiter, memory, null,
+                foreground, input, microphone, null, new AwarenessAppStateProbe(), null);
+        }
+
+        /// <summary>WPF AppStateProbe (AwarenessProbes.cs:452) without the achievement ring and blocking surfaces.</summary>
+        private sealed class AwarenessAppStateProbe : ConditioningControlPanel.Services.Awareness.IAppStateProbe
+        {
+            public ConditioningControlPanel.Services.Awareness.AppStateSample Read(DateTime at)
+            {
+                try
+                {
+                    var s = CoreSettings.Current;
+                    return new(CoreSession.IsSessionRunning, s.PlayerLevel, s.CurrentStreak, null, false);
+                }
+                catch { return ConditioningControlPanel.Services.Awareness.AppStateSample.Empty; }
+            }
+        }
+
+        /// <summary>Stricter than WPF: a panic stops the v2 poll and flushes the ledger. The dial or a relaunch
+        /// starts it again; the legacy poll is untouched.</summary>
+        internal static void StopAwarenessObserverForPanic()
+        {
+            if (AwarenessObserverHost is not { } observer) return;
+            observer.Stop();
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
+        }
+
         /// <summary>WPF App.xaml.cs:2853/2928: publish the ledger, sweep retention on disk (creates nothing),
-        /// and let the awareness switch start/stop it. Startup calls this; tests drive the same hook.</summary>
-        internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger)
+        /// and let the awareness switch start/stop it (WPF :3087, through the observer when there is one).
+        /// Startup calls this; tests drive the same hook.</summary>
+        internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger,
+            ConditioningControlPanel.Services.Awareness.AwarenessObserver? observer = null)
         {
             // WPF App.xaml.cs:3125: upgraders may never reopen the consent dialog.
             try
@@ -98,16 +143,45 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = ledger;
             try { ledger.PruneOnDisk(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "ActivityLedger: startup retention sweep failed"); }
+            AwarenessObserverHost = observer;
+            if (observer != null)
+            {
+                // WPF App.xaml.cs:3105-3119: the wipe and forget reach the observer and pacing state too.
+                var arbiter = observer.Arbiter as ConditioningControlPanel.Services.Awareness.ReactionArbiter;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetObserverState = observer.ResetTransientState;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetPacingState = () => { arbiter?.Cooldowns.Reset(); observer.Scorer.Reset(); };
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ForgetPacingState = id => { arbiter?.Cooldowns.Forget(id); observer.Scorer.Forget(id); };
+            }
             WindowAwarenessService.V2Lifecycle = start =>
             {
-                if (start && System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
-                else if (!start) ledger.Stop();
+                if (start)
+                {
+                    observer?.Start();
+                    if (observer != null) ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = observer.IsRunning;
+                    if (observer?.IsRunning != true && System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
+                }
+                else
+                {
+                    observer?.Stop();
+                    if (observer != null) ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
+                    ledger.Stop();
+                }
             };
         }
 
         /// <summary>WPF App.OnExit:6285: dispose the ledger and unpublish it.</summary>
         internal static void ReleasePrivacyLedger()
         {
+            try { AwarenessObserverHost?.Dispose(); } catch { }
+            if (AwarenessObserverHost != null)
+            {
+                AwarenessObserverHost = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.Memory = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetObserverState = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ResetPacingState = null;
+                ConditioningControlPanel.Services.Awareness.AwarenessLive.ForgetPacingState = null;
+            }
             try { ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger?.Dispose(); } catch { }
             ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = null;
         }
@@ -992,8 +1066,14 @@ namespace ConditioningControlPanel.Avalonia
                 InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
-                // the ledger starts when awareness turns on. No observer feeds it on this head yet.
-                InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
+                // the ledger starts when awareness turns on, through the v2 observer when it may run (WPF :3046-3099).
+                ConditioningControlPanel.Services.Awareness.AwarenessObserver.EntitlementProvider = () => WindowAwarenessService.HasEntitlement;
+                ConditioningControlPanel.Services.Awareness.AwarenessObserver.PostToUi = a => Dispatcher.UIThread.Post(a);
+                var awarenessLedger = new ConditioningControlPanel.Services.Awareness.ActivityLedger();
+                InstallPrivacyLedger(awarenessLedger, CreateAwarenessObserver(awarenessLedger,
+                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessForegroundProbe() : new Platform.X11ForegroundProbe(),
+                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessInputProbe() : new Platform.X11AwarenessInputProbe(),
+                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessMicrophoneProbe() : new Platform.AwarenessMicrophoneProbe()));
 
                 // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
                 // it handed the user's settings back gets them back now, before anything reads them.
