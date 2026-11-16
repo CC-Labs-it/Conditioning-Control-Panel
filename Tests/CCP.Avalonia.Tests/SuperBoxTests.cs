@@ -25,6 +25,7 @@ public sealed class SuperBoxTests
     private static void WithBox(SuperEffect effect, bool premium, Action<SuperBox, SettingsService, Func<int>> body, bool hosted = true) => AvaloniaTestDispatcher.Run(() =>
     {
         ShellTestPlatform.Ensure();
+        var language = LocalizationManager.Instance.CurrentLanguage;
         LocalizationManager.Instance.SetLanguage("en");
         var provider = CoreSettings.ServiceProvider;
         var hasPremium = CoreEntitlement.HasPremiumProvider;
@@ -55,6 +56,7 @@ public sealed class SuperBoxTests
         {
             SuperPreview.End(panic: false);
             window?.Close();
+            LocalizationManager.Instance.SetLanguage(language);
             SuperBox.HostedOnThisHead.Clear();
             SuperBox.HostedOnThisHead.UnionWith(hostedBefore);
             SuperAccess.TryingProvider = trying;
