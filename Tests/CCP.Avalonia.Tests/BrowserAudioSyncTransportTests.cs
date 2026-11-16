@@ -140,14 +140,66 @@ public sealed class BrowserAudioSyncTransportTests
         shell.AudioSyncChunkLoaded(null, EventArgs.Empty);
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(scripts, s => s.Contains("__hapticUpdateProgress?.(37, \"Working\")"));
-        Assert.Contains(scripts, s => s.Contains("__hapticShowOverlay?."));
-        Assert.Contains(scripts, s => s.Contains("__hapticHideOverlay?."));
+        Assert.Contains(scripts, s => s.Contains("querySelector('video')?.pause()") && s.Contains("__hapticShowOverlay?.('Loading haptic data...')"));
+        Assert.Contains(scripts, s => s.Contains("__hapticHideOverlay?.()") && s.Contains("querySelector('video')?.play()"));
         scripts.Clear();
         shell.AudioSyncProgress(null, new ConditioningControlPanel.Services.Audio.ChunkProgressEventArgs(0, "Late", 99));
         shell.StopBrowserAudioSync();
         Dispatcher.UIThread.RunJobs();
         Assert.DoesNotContain(scripts, s => s.Contains("__hapticUpdateProgress?."));
         await Task.CompletedTask;
+    });
+
+    // Reset and cloud restore replace CoreSettings.Current; the old AudioSync object must stop driving the page.
+    [Fact]
+    public Task ReplacedSettingsAreReadLive() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previousProvider = CoreSettings.ServiceProvider;
+        var settingsPath = System.IO.Path.Combine(CorePaths.UserData, "settings.json");
+        var saved = System.IO.File.Exists(settingsPath) ? System.IO.File.ReadAllBytes(settingsPath) : null;
+        MainShellWindow? shell = null;
+        try
+        {
+            var service = new ConditioningControlPanel.Services.SettingsService();
+            service.Current.Haptics.AudioSync.Enabled = true;
+            CoreSettings.ServiceProvider = () => service;
+            shell = new MainShellWindow();
+            shell.Show();
+            var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var scripts = new List<string>();
+            host.ScriptInvoker = s => { scripts.Add(s); return Task.FromResult<string?>(null); };
+            shell.AudioSyncConnectedOverride = () => true;
+            host.OnNavigationCompleted(new Uri("https://hypnotube.com/watch"));
+            Assert.Contains(scripts, s => s.Contains("__hapticSyncInjected"));
+
+            var stale = service.Current.Haptics.AudioSync;
+            var off = new ConditioningControlPanel.Models.AppSettings();
+            off.Haptics.AudioSync.Enabled = false;
+            scripts.Clear();
+            service.RestoreFrom(off);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(scripts, s => s.Contains("__hapticCancel?."));
+            scripts.Clear();
+            host.OnNavigationCompleted(new Uri("https://hypnotube.com/watch"));
+            Assert.DoesNotContain(scripts, s => s.Contains("__hapticSyncInjected"));
+
+            stale.Enabled = false; stale.Enabled = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(scripts, s => s.Contains("__hapticSyncInjected"));
+            service.Current.Haptics.AudioSync.Enabled = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(scripts, s => s.Contains("__hapticSyncInjected"));
+            Assert.Contains(scripts, s => s.Contains("__hapticRearm?."));
+        }
+        finally
+        {
+            shell?.Close();
+            CoreSettings.ServiceProvider = previousProvider;
+            if (saved is null) System.IO.File.Delete(settingsPath); else System.IO.File.WriteAllBytes(settingsPath, saved);
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
     });
 
     [Fact]

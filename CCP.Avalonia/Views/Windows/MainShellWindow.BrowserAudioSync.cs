@@ -17,6 +17,7 @@ public partial class MainShellWindow
     private WebHost? _audioSyncHost;
     private HapticService? _audioSyncHaptics;
     private AudioSyncSettings? _audioSyncSettings;
+    private SettingsService? _audioSyncSettingsService;
     private BrowserAudioSyncService? _audioSyncService;
     private readonly object _audioSyncGate = new();
     private int _audioSyncGeneration;
@@ -35,14 +36,16 @@ public partial class MainShellWindow
         _audioSyncHost = BrowserView;
         if (_audioSyncHost == null) return;
         _audioSyncHaptics = CoreHaptics.Service;
-        _audioSyncSettings = CoreSettings.Current.Haptics.AudioSync;
+        _audioSyncSettingsService = CoreSettings.Service;
         _audioSyncService = Platform.AudioSyncHost.Service;
         _audioSyncHost.NavigationBeginning += AudioSyncNavigationBeginning;
         _audioSyncHost.NavigationFinished += AudioSyncNavigationFinished;
         _audioSyncHost.WebMessage += AudioSyncMessage;
         _audioSyncHost.BrowserProcessFailed += StopBrowserAudioSync;
         if (_audioSyncHaptics != null) _audioSyncHaptics.ConnectionChanged += AudioSyncConnectionChanged;
-        _audioSyncSettings.PropertyChanged += AudioSyncSettingsChanged;
+        HookAudioSyncSettings();
+        // Reset and cloud restore replace Current; WPF reads the setting fresh (MainWindow/MainWindow.Browser.cs:148, :1428).
+        if (_audioSyncSettingsService != null) _audioSyncSettingsService.CurrentReplaced += AudioSyncSettingsReplaced;
         if (_audioSyncService != null)
         {
             _audioSyncService.ProcessingProgress += AudioSyncProgress;
@@ -56,7 +59,7 @@ public partial class MainShellWindow
         (url.Host.Equals("hypnotube.com", StringComparison.OrdinalIgnoreCase) ||
          url.Host.EndsWith(".hypnotube.com", StringComparison.OrdinalIgnoreCase));
 
-    private bool AudioSyncEligible => _audioSyncSettings?.Enabled == true && AudioSyncConnected;
+    private bool AudioSyncEligible => CoreSettings.Current.Haptics.AudioSync.Enabled && AudioSyncConnected;
     private void AudioSyncNavigationBeginning() => StopBrowserAudioSync();
     private void AudioSyncNavigationFinished(Uri url, bool success)
     {
@@ -67,14 +70,26 @@ public partial class MainShellWindow
         if (connected && AudioSyncEligible) _ = ArmBrowserAudioSyncAsync(true);
         else if (!connected) StopBrowserAudioSync();
     });
+    private void HookAudioSyncSettings()
+    {
+        if (_audioSyncSettings != null) _audioSyncSettings.PropertyChanged -= AudioSyncSettingsChanged;
+        _audioSyncSettings = CoreSettings.Current.Haptics.AudioSync;
+        _audioSyncSettings.PropertyChanged += AudioSyncSettingsChanged;
+    }
     private void AudioSyncSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(AudioSyncSettings.Enabled)) return;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (AudioSyncEligible) _ = ArmBrowserAudioSyncAsync(true);
-            else StopBrowserAudioSync();
-        });
+        if (e.PropertyName == nameof(AudioSyncSettings.Enabled)) Dispatcher.UIThread.Post(SyncAudioSyncEnabled);
+    }
+    private void AudioSyncSettingsReplaced() => Dispatcher.UIThread.Post(() =>
+    {
+        if (_audioSyncHost == null) return;
+        HookAudioSyncSettings();
+        SyncAudioSyncEnabled();
+    });
+    private void SyncAudioSyncEnabled()
+    {
+        if (!AudioSyncEligible) StopBrowserAudioSync();
+        else if (!_audioSyncArmed) _ = ArmBrowserAudioSyncAsync(true);
     }
 
     internal async Task ArmBrowserAudioSyncAsync(bool rearm)
@@ -203,9 +218,11 @@ public partial class MainShellWindow
     }
     internal void AudioSyncProgress(object? sender, ChunkProgressEventArgs e) =>
         PostAudioSyncScript($"window.__hapticUpdateProgress?.({e.PercentComplete}, {JsonSerializer.Serialize(e.Status)});");
+    // WPF BrowserService.cs:1120-1160: a seek into unloaded data pauses the page until the chunk is ready.
     internal void AudioSyncChunkLoading(object? sender, int index) =>
-        PostAudioSyncScript("window.__hapticShowOverlay?.();");
-    internal void AudioSyncChunkLoaded(object? sender, EventArgs e) => PostAudioSyncScript("window.__hapticHideOverlay?.();");
+        PostAudioSyncScript("(function(){document.querySelector('video')?.pause();window.__hapticShowOverlay?.('Loading haptic data...');})();");
+    internal void AudioSyncChunkLoaded(object? sender, EventArgs e) =>
+        PostAudioSyncScript("(function(){window.__hapticHideOverlay?.();document.querySelector('video')?.play();})();");
 
     private void DisposeBrowserAudioSync()
     {
@@ -219,6 +236,7 @@ public partial class MainShellWindow
         }
         if (_audioSyncHaptics != null) _audioSyncHaptics.ConnectionChanged -= AudioSyncConnectionChanged;
         if (_audioSyncSettings != null) _audioSyncSettings.PropertyChanged -= AudioSyncSettingsChanged;
+        if (_audioSyncSettingsService != null) _audioSyncSettingsService.CurrentReplaced -= AudioSyncSettingsReplaced;
         if (_audioSyncService != null)
         {
             _audioSyncService.ProcessingProgress -= AudioSyncProgress;
@@ -228,6 +246,7 @@ public partial class MainShellWindow
         _audioSyncHost = null;
         _audioSyncHaptics = null;
         _audioSyncSettings = null;
+        _audioSyncSettingsService = null;
         _audioSyncService = null;
     }
 }
