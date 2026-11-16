@@ -222,7 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
-            if (spec.Id == "goon") { Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => StopGoonWatch(); }
+            if (spec.Id == GoonId) { WireGoon(); Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => StopGoonWatch(); }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {

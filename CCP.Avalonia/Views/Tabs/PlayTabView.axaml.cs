@@ -270,7 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // Launch shims (WPF PlayTabView.Cards.cs). Every name below is the MainWindow handler the
         // WPF card forwards to. GAMES: the Breakout demo, Piece by Piece, DtRH and Racing Thoughts open their
         // GameWindow as the launcher does (LauncherWindow.Destinations). Full Breakout uses the same host
-        // with a Lab gate. Goon, Back Room and Arcademy doors activate when their hosts register.
+        // with a Lab gate. Goon is registered (GameWindow.Goon.cs); Back Room and Arcademy activate when their hosts register.
         // ==================================================================================
 
         internal void RefreshGameDoors()

@@ -2167,6 +2167,7 @@ public sealed partial class GameWindowTests
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
     [InlineData(GameWindow.GlassroadId, "Glassroad", "kept-escape")]
     [InlineData(GameWindow.PrizeCounterId, "Counter", "kept-escape")]
+    [InlineData(GameWindow.GoonId, "Goon", "kept-escape")]
     [InlineData(GameWindow.FypId, "None", null)]
     [InlineData(GameWindow.JustDropId, "None", null)]
     public void EveryHostedGame_KnowsItsKeptEscapePage(string id, string page, string? frame) => Run((_, launcher) =>
