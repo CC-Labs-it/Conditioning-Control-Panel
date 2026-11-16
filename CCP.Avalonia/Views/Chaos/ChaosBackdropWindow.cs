@@ -29,6 +29,8 @@ internal sealed class ChaosBackdropWindow : Window
     private ChaosBackdropWindow()
     {
         SystemDecorations = WindowDecorations.None;
+        // WPF AllowsTransparency + window Opacity (:181, :193): BackdropOpacity lets the desktop bleed through.
+        TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Black;
         ShowInTaskbar = false;
         ShowActivated = false;

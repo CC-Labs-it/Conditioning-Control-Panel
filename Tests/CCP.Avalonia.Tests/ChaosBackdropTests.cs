@@ -39,10 +39,23 @@ public sealed class ChaosBackdropTests
                 ChaosRunHost.StopTimerForTests();
                 var plate = Assert.IsType<ChaosBackdropWindow>(ChaosBackdropWindow.Active);
                 Assert.True(plate.IsVisible);
+                Assert.Contains(WindowTransparencyLevel.Transparent, plate.TransparencyLevelHint);   // WPF AllowsTransparency
                 Assert.Equal(1, plate.Depth);
                 plate.SetDepth(2);
                 Assert.Equal(2, plate.Depth);
-                ChaosRunHost.ForceShutdown();
+                var overlay = ChaosRunHost.Overlay!;
+                ChaosRunHost.RequestStop();   // WPF EndRun leaves the plate under the recap
+                Assert.Same(plate, ChaosBackdropWindow.Active);
+                Assert.True(plate.IsVisible);
+                overlay.Close();   // dismiss: WPF CleanupAfterRun :3321
+                Assert.Null(ChaosBackdropWindow.Active);
+                Assert.False(plate.IsVisible);
+
+                ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false, PlayMode = ChaosPlayMode.Story });
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                plate = Assert.IsType<ChaosBackdropWindow>(ChaosBackdropWindow.Active);
+                ChaosRunHost.ForceShutdown();   // panic
                 Assert.Null(ChaosBackdropWindow.Active);
                 Assert.False(plate.IsVisible);
             }

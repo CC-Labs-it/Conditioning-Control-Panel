@@ -1321,7 +1321,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _overlay?.CancelDraftAndCountdown();
             _runTimer?.Stop();
             EndField();
-            ChaosBackdropWindow.CloseActive();
             StopToys();
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
@@ -1548,6 +1547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void CleanupAfterRun()
         {
             ChaosHubWindow.SetCompanionActive(false);
+            ChaosBackdropWindow.CloseActive();   // WPF CleanupAfterRun :3321; EndRun keeps the plate under the recap
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();
