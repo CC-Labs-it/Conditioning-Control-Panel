@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -29,8 +30,28 @@ public sealed class BubblePayloadHostTests
     public void DashboardBoostReachesPlainAndTriggerButNotChaos(bool trigger) => AvaloniaTestDispatcher.Run(() =>
     {
         var s = new AppSettings { BubbleTriggersEnabled = trigger, BubbleTriggerChance = 50, BubbleTriggerVariants = new() { "flash" } };
-        AmbientBubble Spawn(int boost) { s.BubbleSpeedBoost = boost; return BubbleOverlay.CreateAmbient(0, new PixelRect(0, 0, 1920, 1080), 1, s, null, true, new Random(1)); }
-        var normal = Spawn(0); var fast = Spawn(500);
+        // CreateAmbient reads more than its Random: the trigger spec's size comes from ChaosBubbleVariants'
+        // shared unseeded roll (a draw above ~0.997 unclamps the size factor, ~0.5% of runs), and the
+        // trigger cap and Brain Drain pool from the live field and v2 grants. Pin all three so both
+        // spawns differ only by the boost.
+        var (granted, rng, field) = (PrizeOwnership.IsGranted, ChaosBubbleVariants.Rng, BubbleOverlay.Field.Bubbles.ToArray());
+        AmbientBubble normal, fast;
+        try
+        {
+            PrizeOwnership.IsGranted = _ => false;
+            BubbleOverlay.Field.Bubbles.Clear();
+            AmbientBubble Spawn(int boost)
+            {
+                s.BubbleSpeedBoost = boost; ChaosBubbleVariants.Rng = new Random(2);
+                return BubbleOverlay.CreateAmbient(0, new PixelRect(0, 0, 1920, 1080), 1, s, null, true, new Random(1));
+            }
+            normal = Spawn(0); fast = Spawn(500);
+        }
+        finally
+        {
+            PrizeOwnership.IsGranted = granted; ChaosBubbleVariants.Rng = rng;
+            BubbleOverlay.Field.Bubbles.Clear(); BubbleOverlay.Field.Bubbles.AddRange(field);
+        }
         Assert.Equal(trigger, fast.AmbientTrigger);
         var y = normal.Y; normal.Step(); var fy = fast.Y; fast.Step();
         Assert.Equal(6 * (y - normal.Y), fy - fast.Y, 6);
