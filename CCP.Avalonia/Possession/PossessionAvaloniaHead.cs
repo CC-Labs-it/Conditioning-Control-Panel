@@ -10,7 +10,7 @@
 // context fields (BarkService.cs:398-416).
 //
 // Not on this head yet (honest no-ops, recorded in docs/avalonia-parity.html shell-possession):
-// the scenes (Scenes = none), the reactive adapter (WPF PossessionEvents), the warden (Warden stays
+// two scenes, the reactive adapter (WPF PossessionEvents), the warden (Warden stays
 // null, so every warden verb is skipped as WPF does when the tube is unavailable).
 
 using System;
@@ -178,6 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         internal static PossessionDirectorHead CreateDirectorHead() => new()
         {
+            Scenes = () => new[] { new WhereYouAreScene() },
             OnUi = OnUi,
             UiAlive = () => Application.Current != null && !_shutdownStarted,
             Settings = () => CoreSettings.Service?.Current,
