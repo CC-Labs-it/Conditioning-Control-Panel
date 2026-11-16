@@ -305,6 +305,9 @@ public sealed partial class VaultGateDialog
         choose.PointerExited += (_, _) => { if (!choose.IsPressed) faceMove.Y = 0; };
         choose.PropertyChanged += (_, e) => { if (e.Property == Button.IsPressedProperty) faceMove.Y = choose.IsPressed ? 4 : choose.IsPointerOver ? -1 : 0; };
         choose.HorizontalAlignment = HorizontalAlignment.Stretch;
+        Border? self = null;
+        choose.AddHandler(PointerPressedEvent, (_, e) => { if (self != null && e.GetCurrentPoint(choose).Properties.IsLeftButtonPressed) PressTicket(self, true); }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        choose.AddHandler(PointerReleasedEvent, (_, e) => { if (self != null && e.InitialPressMouseButton == MouseButton.Left) PressTicket(self, false); }, RoutingStrategies.Tunnel, handledEventsToo: true);
         choose.Click += (_, _) => { OpenPlan(tier, lab ? "compare-lab" : "compare-vault"); Close(); };
         stub.Children.Add(choose);
         var ways = PayWays(tier, lab ? "compare-lab" : "compare-vault", stacked: true, ink: muted);
@@ -324,6 +327,7 @@ public sealed partial class VaultGateDialog
         }
         var foil = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = new GradientStops { new(Color.Parse("#F6E3A1"), 0), new(Color.Parse("#B48C2C"), 0.28), new(Color.Parse("#FFF2C2"), 0.47), new(Color.Parse("#9E7A24"), 0.7), new(Color.Parse("#E7C86E"), 1) } };
         var ticket = new Border { Name = lab ? "PrimeTicket" : "BasicTicket", Background = stock, BorderBrush = lab ? foil : accent, BorderThickness = new Thickness(lab ? 3 : 0), CornerRadius = new CornerRadius(8), Child = body, RenderTransform = new TranslateTransform() };
+        self = ticket;
         ticket.PointerEntered += (_, _) => HoverTicket(ticket, true);
         ticket.PointerExited += (_, _) => HoverTicket(ticket, false);
         _ticketMoves[ticket] = (TranslateTransform)ticket.RenderTransform!;
@@ -331,46 +335,58 @@ public sealed partial class VaultGateDialog
         return ticket;
     }
     // WPF Compare.cs:525-594: full motion translates, reduced motion fades, off settles at once.
-    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default, int delayMs = 0)
+    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default, int delayMs = 0, bool hold = false)
     {
-        // Backward fill holds the start value through the delay, as WPF BeginTime does.
-        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 ? FillMode.Backward : FillMode.None,
+        // Backward fill holds the start value through the delay, as WPF BeginTime does. The value
+        // after the run is the base value, so callers set the base to the end state first.
+        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 || hold ? FillMode.Backward : FillMode.None,
             Children = { new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } }, new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } } } };
         try { await animation.RunAsync(target, token); }
         catch (OperationCanceledException) { }
     }
 
+    // WPF Compare.cs:560-571: both tweens start now; Backward fill holds each ticket hidden (and on
+    // Full lowered) through its 80 ms turn instead of drawing it in place first.
     private void DealTickets()
     {
-        if (CompareMotion == MotionLevel.Off) return;
+        var level = CompareMotion;
+        if (level == MotionLevel.Off) return;
         for (var i = 0; i < _compareTickets.Count; i++)
         {
             var ticket = _compareTickets[i];
-            var delay = i * 80;
-            void Deal()
-            {
-                if (!_comparing || !ticket.IsAttachedToVisualTree()) return;
-                var level = CompareMotion;
-                if (level == MotionLevel.Off) return;
-                _ = Tween(ticket, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(240)));
-                if (level == MotionLevel.Full) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340);
-            }
-            if (delay == 0) Dispatcher.UIThread.Post(Deal, DispatcherPriority.Loaded);
-            else DispatcherTimer.RunOnce(Deal, TimeSpan.FromMilliseconds(delay));
+            _ = Tween(ticket, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(240)), delayMs: i * 80, hold: true);
+            if (level == MotionLevel.Full) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340, delayMs: i * 80, hold: true);
         }
     }
 
     private readonly Dictionary<Border, CancellationTokenSource> _hoverMotion = new();
+    // WPF Compare.cs:368-380, 640-643: hover lifts -3, a press on Choose sets the ticket down +2, at
+    // every motion level; only Full tweens there.
+    private readonly HashSet<Border> _pressedTickets = new(), _overTickets = new();
     private void HoverTicket(Border ticket, bool over)
+    {
+        if (over) _overTickets.Add(ticket);
+        else { _overTickets.Remove(ticket); _pressedTickets.Remove(ticket); }
+        SettleTicket(ticket);
+    }
+
+    private void PressTicket(Border ticket, bool pressed)
+    {
+        if (pressed) _pressedTickets.Add(ticket); else _pressedTickets.Remove(ticket);
+        SettleTicket(ticket);
+    }
+
+    private void SettleTicket(Border ticket)
     {
         if (_hoverMotion.Remove(ticket, out var old)) { old.Cancel(); old.Dispose(); }
         if (!_ticketMoves.TryGetValue(ticket, out var transform)) return;
+        var pressed = _pressedTickets.Contains(ticket);
         var from = transform.Y;
-        transform.Y = over && CompareMotion == MotionLevel.Full ? -3 : 0;
-        if (CompareMotion != MotionLevel.Full) return;
+        transform.Y = pressed ? 2 : _overTickets.Contains(ticket) ? -3 : 0;
+        if (CompareMotion != MotionLevel.Full || from == transform.Y) return;
         var next = new CancellationTokenSource();
         _hoverMotion[ticket] = next;
-        _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, 160, next.Token);
+        _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, pressed ? 90 : 160, next.Token);
     }
 
     private async void LeaveCompare()
@@ -387,7 +403,8 @@ public sealed partial class VaultGateDialog
             BuildOffer();
             _ = FillAsyncBits();
             // WPF Compare.cs:112: the offer fades back in; Off stays immediate.
-            if (CompareMotion != MotionLevel.Off) _ = Tween(_body, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)));
+            _body.Opacity = 1;
+            if (CompareMotion != MotionLevel.Off) _ = Tween(_body, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), hold: true);
         }
         if (CompareMotion == MotionLevel.Off) { Finish(); return; }
         _leaving = true;
@@ -395,6 +412,7 @@ public sealed partial class VaultGateDialog
         var fadeMs = GentleVisuals.FadeMs(190);
         if (CompareMotion == MotionLevel.Full)
             foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
+        _body.Opacity = 0;
         await Tween(_body, OpacityProperty, 1, 0, fadeMs);
         Finish();
     }
@@ -409,6 +427,7 @@ public sealed partial class VaultGateDialog
         if (ReferenceEquals(Open, this)) Open = null;
         _card.IsHitTestVisible = false;
         var fadeMs = GentleVisuals.FadeMs(190);
+        _card.Opacity = 0;
         _ = Tween(_card, OpacityProperty, 1, 0, fadeMs);
         if (CompareMotion == MotionLevel.Full)
             foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);

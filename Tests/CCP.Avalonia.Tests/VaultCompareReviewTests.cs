@@ -297,21 +297,84 @@ public class VaultCompareReviewTests
         Assert.Equal(1, body.Opacity);
     }, MotionLevel.Reduced, true, 2.0);
 
+    // WPF Compare.cs:370-380, 640-643: hover lifts -3 and a press on Choose sets the ticket down +2 at
+    // every level; only Full tweens.
     [Theory]
-    [InlineData(MotionLevel.Full, -3)]
-    [InlineData(MotionLevel.Reduced, 0)]
-    [InlineData(MotionLevel.Off, 0)]
-    public Task TicketHoverUsesMotionPreference(MotionLevel level, double expected) => WithDialog(async dialog =>
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public Task TicketHoverUsesMotionPreference(MotionLevel level) => WithDialog(async dialog =>
     {
         Click(dialog, Loc.Get("vaultgate_compare"));
         await Task.Delay(450);
         var ticket = Named<Border>(dialog, "BasicTicket");
         var move = (TranslateTransform)ticket.RenderTransform!;
         ticket.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, ticket, null!, dialog, default, 0, PointerPointProperties.None, KeyModifiers.None));
-        Assert.Equal(expected, move.Y);
+        Assert.Equal(-3, move.Y);
+        var choose = Named<Button>(dialog, "BasicChoose");
+        var pointer = new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        choose.RaiseEvent(new PointerPressedEventArgs(choose, pointer, dialog, default, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+        Assert.Equal(2, move.Y);
+        choose.RaiseEvent(new PointerReleasedEventArgs(choose, pointer, dialog, default, 0,
+            new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased), KeyModifiers.None, MouseButton.Left));
+        Assert.Equal(-3, move.Y);
         ticket.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, ticket, null!, dialog, default, 0, PointerPointProperties.None, KeyModifiers.None));
         Assert.Equal(0, move.Y);
     }, level);
+
+    // WPF Compare.cs:560-571: each ticket is hidden (and on Full lowered) until its 80 ms turn.
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    public Task PrimeStaysHiddenUntilItsTurn(MotionLevel level) => WithDialog(async dialog =>
+    {
+        // Build the desk once first so JIT and first layout do not eat Prime's 80 ms turn.
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        Click(dialog, Loc.Get("vaultgate_back"));
+        for (var i = 0; i < 100 && dialog.Width != 460; i++) await Task.Delay(20);
+        Dispatcher.UIThread.RunJobs();
+        dialog.UpdateLayout();
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var prime = Named<Border>(dialog, "PrimeTicket");
+        var samples = new System.Collections.Generic.List<(double Opacity, double Y)>();
+        // Drive frames by hand: every rendered frame before Prime's 80 ms turn must show it hidden.
+        while (clock.ElapsedMilliseconds < 50)
+        {
+            global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            if (clock.ElapsedMilliseconds < 70) samples.Add((prime.Opacity, ((TranslateTransform)prime.RenderTransform!).Y));
+            await Task.Delay(5);
+        }
+        Assert.NotEmpty(samples);
+        Assert.All(samples, s => Assert.Equal((0, level == MotionLevel.Full ? 26 : 0), s));
+        for (var i = 0; i < 100 && prime.Opacity < 1; i++) await Task.Delay(20);
+        Assert.Equal(1, prime.Opacity);
+    }, level);
+
+    // WPF Compare.cs:588, 622-636: the fading face holds 0 until Close()/then(), it never flashes back.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task LeavingHoldsTheFadedOutValue(bool close) => WithDialog(async dialog =>
+    {
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        var card = (Border)dialog.Content!;
+        var body = card.Child!;
+        if (close) dialog.Close();
+        else Click(dialog, Loc.Get("vaultgate_back"));
+        Assert.Equal(0, (close ? card : body).GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
+        if (close)
+        {
+            for (var i = 0; i < 50 && dialog.IsVisible; i++) { await Task.Delay(20); Assert.Equal(0, card.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0)); }
+            Assert.False(dialog.IsVisible);
+            return;
+        }
+        for (var i = 0; i < 100 && dialog.Width != 460; i++) await Task.Delay(20);
+        Assert.Equal(460, dialog.Width);
+        Assert.Equal(1, body.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
+    }, MotionLevel.Full);
 
     [Theory]
     [InlineData(MotionLevel.Full, false)]
