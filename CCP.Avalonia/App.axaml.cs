@@ -1050,12 +1050,7 @@ namespace ConditioningControlPanel.Avalonia
                 SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
-                CoreSubliminal.RunStateChanged = running =>
-                {
-                    if (running) return;
-                    Views.Overlays.SubliminalWhisperShow.StopAll();
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Overlays.SubliminalOverlay.CloseAll);
-                };
+                CoreSubliminal.RunStateChanged = Views.Overlays.SubliminalWhisperShow.RunStateChanged;
                 CoreBouncingText.StartAction = () =>
                 {
                     if (desktop.MainWindow is { } host) Views.Overlays.BouncingTextOverlay.Start(host);
