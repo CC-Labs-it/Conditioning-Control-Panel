@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // WPF includes the Brain Drain melt in this prize; keep the offer gated until it can fire here.
             RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box", available: false);
 
+            InitFrothRows();
             LoadFromSettings();
         }
 
@@ -87,7 +88,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             Platform.WebcamTracker.Instance.StateChanged += OnWebcamStateChanged;
+            ConditioningControlPanel.Services.Super.SuperAccess.Changed += OnFrothAccessChanged;
             RebindToCurrentSettings();
+            RefreshFrothRows();
             RebuildMotionPicker();   // grants may have changed while detached (WPF OnLoaded:30)
         }
 
@@ -100,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             Platform.WebcamTracker.Instance.StateChanged -= OnWebcamStateChanged;
+            ConditioningControlPanel.Services.Super.SuperAccess.Changed -= OnFrothAccessChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -112,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _hooked = CoreSettings.Current;
             _hooked.PropertyChanged += OnSettingsPropertyChanged;
             LoadFromSettings();
+            RefreshFrothRows();
         }
 
         private void Unhook()
