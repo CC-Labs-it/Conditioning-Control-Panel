@@ -66,6 +66,9 @@ public class SpeakPlayerTests
             // The trunk player starts audio only after its waveform load (#4751), off the UI thread.
             for (int i = 0; i < 500 && !audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
             Assert.True(audio.Playing);
+            // Manual ticks only: a live 100 ms tick inside RunJobs restarted the band after replacement (CI flake).
+            ((DispatcherTimer)typeof(EnhancementPlayerWindow).GetField("_uiTimer",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!).Stop();
             var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
                 new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
                     EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent } } };
