@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Bitmap? Image;
         internal static Bitmap? TeaseImage;
         internal static Bitmap? BrainDrainImage;   // WPF the bundled molten-spiral bubble (braindrain_melt.png)
+        internal static Bitmap? DarterImage;   // WPF assets/Chaos/bubbles/darter.png
         internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, double Delay, long Start, bool Animated)> TeaseFaces = new();
         private static int _teaseAnimated;
 
@@ -198,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LoadBubbleImage();
             TeaseImage = ChaosArt.Resolve("bubbles", "tease");
             BrainDrainImage = ChaosArt.Resolve("bubbles", Services.Chaos.BrainDrainBubble.VariantId);
+            DarterImage = ChaosArt.Resolve("bubbles", "darter");   // WPF assets/Chaos/bubbles/darter.png
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
@@ -793,7 +795,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
                 b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
                 b.Spec.IsLive ? 1.3 : 1.0);
-            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : null, b.Spec.IsFreeze ? 0.6f : 1f);
+            // WPF BubbleService.cs:1614-1616: the darter and freeze pickups have their own catch cue.
+            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : b.Spec.IsDarter ? "rabbit_catch" : null, b.Spec.IsFreeze || b.Spec.IsDarter ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -1187,7 +1190,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
                     var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage
+                        : b.Spec?.IsDarter == true ? BubbleOverlay.DarterImage : null);
                     var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)

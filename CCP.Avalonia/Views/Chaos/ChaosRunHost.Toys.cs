@@ -23,6 +23,8 @@ internal static partial class ChaosRunHost
     private static FrameClock? _sweepTimer;
     // Same desktop pointer seam as the existing cursor/trail surfaces; null off X11.
     internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadToyPointer = X11Pointer.Read;
+    // WPF ChaosModeService.cs:2889 reads VK_LBUTTON: a right click (Ripple) must not spend the whistle.
+    internal static Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadRabbitAimPointer = X11Pointer.ReadLeft;
 
     /// <summary>The toys <see cref="FireToyEffect"/> can run on this head (#4225). Keep it in step with
     /// the switch below: an inert toy must not spend its charge or cooldown.</summary>
@@ -67,7 +69,7 @@ internal static partial class ChaosRunHost
         try
         {
             if (_rabbitCallPending <= 0 || _state == null || !_active) { DisarmRabbitCall(); return; }
-            if (ReadToyPointer() is not { } p) return;
+            if (ReadRabbitAimPointer() is not { } p) return;
             if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.MoveCursorGlowToPx(p.At.X, p.At.Y);
             else ChaosCursorGlowOverlay.MoveToPx(p.At.X, p.At.Y);
             bool pressed = p.Pressed && !_rabbitAimPrevDown;

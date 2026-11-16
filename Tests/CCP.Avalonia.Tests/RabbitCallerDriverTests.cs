@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -26,6 +27,7 @@ public sealed class RabbitCallerDriverTests
         {
             AmbientBeatLoopsTests.Setup();
             var s = CoreSettings.Current;
+            var savedAim = ChaosRunHost.ReadRabbitAimPointer;
             var saved = (s.ChaosSkiaFxEnabled, ChaosRunHost.ReadToyPointer, ChaosCursorGlowOverlay.ReadPointer,
                 ChaosCursorGlowOverlay.MakeClickThrough, ChaosEffectBannerOverlay.SkipPlatformChecksForTests,
                 ConditioningControlPanel.CoreAudio.PlayOneShotProvider, LocalizationManager.Instance.CurrentLanguage);
@@ -37,6 +39,7 @@ public sealed class RabbitCallerDriverTests
                 LocalizationManager.Instance.SetLanguage("en");
                 s.ChaosSkiaFxEnabled = false;   // the classic halo window path
                 ChaosRunHost.ReadToyPointer = () => (at, down, false);
+                ChaosRunHost.ReadRabbitAimPointer = () => (at, down, false);
                 ChaosCursorGlowOverlay.ReadPointer = () => (at, false, false);
                 ChaosCursorGlowOverlay.MakeClickThrough = _ => true;
                 ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
@@ -61,6 +64,7 @@ public sealed class RabbitCallerDriverTests
                     ChaosCursorGlowOverlay.MakeClickThrough, ChaosEffectBannerOverlay.SkipPlatformChecksForTests,
                     ConditioningControlPanel.CoreAudio.PlayOneShotProvider, _) = saved;
                 LocalizationManager.Instance.SetLanguage(saved.Item7);
+                ChaosRunHost.ReadRabbitAimPointer = savedAim;
             }
             return Task.CompletedTask;
         });
@@ -161,5 +165,47 @@ public sealed class RabbitCallerDriverTests
         pointer(100, 100, true);
         ChaosRunHost.RabbitAimTick();
         Assert.Empty(Darters());
+    });
+
+    // WPF ChaosModeService.cs:2889 reads VK_LBUTTON only: a right click casts Ripple and keeps the whistle.
+    [Fact]
+    public void Aim_reads_the_left_button_only()
+    {
+        Assert.Equal(typeof(X11Pointer).GetMethod(nameof(X11Pointer.ReadLeft)), ChaosRunHost.ReadRabbitAimPointer.Method);
+        const uint button1 = 1 << 8, button3 = 1 << 10;
+        Assert.False(X11Pointer.ButtonDown(button3, leftOnly: true));
+        Assert.True(X11Pointer.ButtonDown(button1, leftOnly: true));
+        Assert.True(X11Pointer.ButtonDown(button3, leftOnly: false));
+        var right = Win32Pointer.Read(
+            (out Win32Pointer.Point p) => { p = default; return true; },
+            key => key == 2 ? unchecked((short)0x8000) : (short)0, leftOnly: true);
+        Assert.False(right!.Value.Pressed);
+    }
+
+    // WPF BubbleService.cs:1614, :4712-4716 and ChaosModeService.cs:2351-2375: a caught summoned rabbit
+    // plays rabbit_catch, scores 120 x mult and slows time; it fires no flash payload and pays no treat.
+    [Fact]
+    public Task Catching_a_summoned_rabbit_slows_time_and_fires_no_payload() => Run((toy, pointer, cues) =>
+    {
+        var firer = EffectPayload.Firer;
+        var fired = new List<EffectPayload>();
+        try
+        {
+            EffectPayload.Firer = fired.Add;
+            pointer(300, 300, false);
+            ChaosRunHost.UseToyById("rabbit_caller");
+            ChaosRunHost.RabbitAimTick();
+            pointer(300, 300, true);
+            ChaosRunHost.RabbitAimTick();
+            var state = ChaosRunHost.State!;
+            double score = state.Score, mult = state.TotalMult;
+            BubbleOverlay.PopChaos(Darters()[0]);
+            Assert.Empty(fired);
+            Assert.Contains("rabbit_catch", cues);
+            Assert.Equal(ChaosBubbleVariants.DARTER_BASE_POINTS * mult, state.Score - score, 6);
+            Assert.True(ChaosRunHost.SlowMoRemainingSec > 0);
+            Assert.Contains(state.RecentEvents, e => e.EndsWith("time slows"));
+        }
+        finally { EffectPayload.Firer = firer; }
     });
 }
