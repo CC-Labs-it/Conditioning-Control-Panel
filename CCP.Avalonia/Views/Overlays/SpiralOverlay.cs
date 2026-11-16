@@ -163,8 +163,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
-        private static double PulseOpacity => _pulseWeight is { } k
-            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity;
+        internal static double SuperVeil { get; private set; } = 1;
+        internal static void StepSuperAside(bool replace, double dt)
+        {
+            bool held = VoiceOpacity.HasValue || HasTimedPayload || _pulseWeight.HasValue || App.Sessions?.SpiralOpacity != null;
+            SuperVeil = ConditioningControlPanel.Services.Super.SuperStepAside.Step(SuperVeil,
+                ConditioningControlPanel.Services.Super.SuperStepAside.Hides(replace, held), dt,
+                ConditioningControlPanel.Services.Super.SuperStepAside.FadeSecondsFor(UiMotionPreference.ResolveLevel(CoreSettings.Current.MotionLevel, UiMotionPreference.AnimationsEnabled, GentleVisuals.On)));
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+        }
+        private static double PulseOpacity => (_pulseWeight is { } k
+            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity)
+            * ConditioningControlPanel.Services.Super.SuperStepAside.Ease(SuperVeil);
 
         internal static void SetPulse(double? weight)
         {

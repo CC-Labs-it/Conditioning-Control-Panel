@@ -170,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
                         Displayed?.Invoke();
+                        SuperStageOverlay.WordShown(text);
                     }
                     barkRaised = true;
                     continue;
@@ -183,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
                 Present(w, raiseBark: !barkRaised);
+                if (!barkRaised) SuperStageOverlay.WordShown(text);
                 barkRaised = true;
                 w.Run(alpha, hold);
             }
