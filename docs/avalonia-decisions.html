@@ -1765,6 +1765,7 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Restack b220 (#4299): the consumer (<code>KeywordAudioRuntime.CheckOcrWords</code>, one fire path with the keyboard) and the lifecycle (<code>ScreenOcrService</code>, <code>KeywordTriggerHead.SyncOcr</code> from the master and OCR switches and the interval slider) are in; #4267's parallel matcher was dropped for this one consumer.</li>
 <li>When an engine lands: <code>ScreenOcrService.Word</code> has no screen, so a regex match unions word rectangles across monitors; WPF <code>KeywordTriggerService.cs:1102</code> unions only words on the first word's screen. Add the screen to <code>Word</code> then. The panic fallback must also stop and restart the scanner (WPF PanicWatchdog; #4551).</li>
 </ul>
+<<<<<<< HEAD
 <h2 id="2026-11-14-open-pr-pile-is-cbs">2026-11-14: The restacked open PR pile is CB's (owner)</h2>
 <ul>
 <li>Decision: the open port PR pile (1,043 avalonia-port PRs after CB's restack waves 1-4; 254 of 259 port/7.2-based ones conflict) is left to CB's restack. The port does not re-cut or close it.</li>
@@ -1794,6 +1795,12 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Decision: the Avalonia head does not sample the season peak rank.</li>
 <li>Why: WPF never calls <code>SeasonRecapService.SampleRank</code> (no caller on origin/main or port/7.2), so WPF's peak stays 0. Parity is the same 0 peak.</li>
 <li>Alternatives: wire sampling on this head only (a deviation WPF does not have).</li>
+=======
+<h2 id="2026-11-16-super-box-unhosted-effects">2026-11-16: The Super box offers no star or weekly try for an effect this head cannot show (routine; reviewer finding on #5360)</h2>
+<ul>
+<li>WPF shows the gold box with a working star and the weekly 10 s try for all eight Super effects. On this head an effect only runs once its host lane exists, so <code>SuperBox.HostedOnThisHead</code> lists the hosted effects. For any other effect the box shows, the star is disabled with the existing "Coming Soon" text and "Try it" never appears, so a player never spends the weekly try on an effect that draws nothing.</li>
+<li>Each effect lane adds its effect to <code>HostedOnThisHead</code> when it lands; the box then behaves exactly like WPF. The <code>super-box</code> ledger row stays stub until then.</li>
+>>>>>>> 3b0d67df17 (docs(super): super-box row is stub until effects register; record the unhosted-effect rule)
 </ul>
 </body>
 </html>
