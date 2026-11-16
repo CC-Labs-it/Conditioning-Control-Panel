@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -25,7 +26,79 @@ internal static partial class ChaosRunHost
 
     /// <summary>The toys <see cref="FireToyEffect"/> can run on this head (#4225). Keep it in step with
     /// the switch below: an inert toy must not spend its charge or cooldown.</summary>
-    internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim" or "freeze_trigger";
+    internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim" or "freeze_trigger" or "rabbit_caller";
+
+    // WPF ChaosModeService.cs:2814-2815,2834-2841: Rabbit Caller aim and capstone storm state.
+    private static DispatcherTimer? _rabbitAimTimer;
+    private static int _rabbitCallPending;
+    private static bool _rabbitCallMaxed, _rabbitAimPrevDown;
+    private static double _rabbitStormRemaining, _rabbitStormAccum;
+    private static string _rabbitGlyph = "";
+    internal static int RabbitCallPending => _rabbitCallPending;
+    internal static bool RabbitAimRunning => _rabbitAimTimer?.IsEnabled == true;
+    internal static double RabbitStormRemaining => _rabbitStormRemaining;
+
+    // WPF ChaosModeService.cs:2843-2866: arm the whistle; the next click summons the rabbits there.
+    private static void ArmRabbitCall(int rabbits, bool maxed)
+    {
+        _rabbitCallPending = rabbits;
+        _rabbitCallMaxed = maxed;
+        _rabbitAimPrevDown = true;   // the press that armed us is already down
+        if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.ArmCursorGlow(); else ChaosCursorGlowOverlay.Arm();
+        if (_rabbitAimTimer == null)
+        {
+            _rabbitAimTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
+            _rabbitAimTimer.Tick += (_, _) => RabbitAimTick();
+        }
+        _rabbitAimTimer.Start();
+    }
+
+    // WPF ChaosModeService.cs:2869-2874: stand down without summoning.
+    private static void DisarmRabbitCall()
+    {
+        _rabbitCallPending = 0;
+        _rabbitAimTimer?.Stop();
+        if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.DisarmCursorGlow(); else ChaosCursorGlowOverlay.Disarm();
+    }
+
+    // WPF ChaosModeService.cs:2876-2911: follow the cursor; the next fresh press summons.
+    internal static void RabbitAimTick()
+    {
+        try
+        {
+            if (_rabbitCallPending <= 0 || _state == null || !_active) { DisarmRabbitCall(); return; }
+            if (ReadToyPointer() is not { } p) return;
+            if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.MoveCursorGlowToPx(p.At.X, p.At.Y);
+            else ChaosCursorGlowOverlay.MoveToPx(p.At.X, p.At.Y);
+            bool pressed = p.Pressed && !_rabbitAimPrevDown;
+            _rabbitAimPrevDown = p.Pressed;
+            // Drafts and pauses hold the whistle.
+            if (!pressed || !_spawning || _manualPaused || _lessonCardPaused || _draftPaused) return;
+            int rabbits = _rabbitCallPending;
+            bool maxed = _rabbitCallMaxed;
+            DisarmRabbitCall();
+            for (int i = 0; i < rabbits; i++)
+                SpawnDarter(p.At.X + Rng.Next(-60, 61), p.At.Y + Rng.Next(-60, 61));
+            if (maxed)
+            {
+                _rabbitStormRemaining = 10.0;
+                _rabbitStormAccum = 0;
+                ChaosEffectBannerOverlay.Show("rabbits", "Rabbit Storm", Color.FromRgb(0xFF, 0x4D, 0xC4));
+            }
+            ChaosOverlayWindow.ChaosSfx.Play("rabbit_spawn", 0.5f);
+            _state.PushEvent($"{_rabbitGlyph} {Loc.GetF(maxed ? "Chaos_Rabbit_Storm" : "Chaos_Rabbit_Answered", rabbits)}");
+        }
+        catch (Exception ex) { Serilog.Log.Debug("RabbitAimTick: {E}", ex.Message); }
+    }
+
+    // WPF ChaosModeService.cs:2824-2830. Base motion: pinned RoamBounce; WPF darter lifetime is part B.
+    private static void SpawnDarter(double? atPxX = null, double? atPxY = null)
+    {
+        if (_state == null) return;
+        var spec = ChaosBubbleVariants.BuildDarter(_state.RunIntensity, spotlight: false, atPxX, atPxY);
+        ChaosMeta.MarkDiscovered("bubble:darter");
+        BubbleOverlay.SpawnChaos(spec, motion: spec.Motion, hitboxScale: _state.Config.HitboxScale, liveMagnet: _state.MagnetEnabled);
+    }
 
     // WPF ChaosModeService.cs:2697-2709,2736-2749,2779-2780.
     private static bool FireToyEffect(ChaosToyState toy)
@@ -108,9 +181,14 @@ internal static partial class ChaosRunHost
                 s.PushEvent($"{glyph} {Loc.GetF(maxed ? "Chaos_EStim_Chain" : "Chaos_EStim_Conduct", charges)}");
                 return true;
             }
+            case "rabbit_caller":
+                // WPF ChaosModeService.cs:2751-2759; ChaosToyRules spent the cooldown.
+                _rabbitGlyph = toy.Glyph;
+                ArmRabbitCall(Math.Max(1, (int)power), maxed);
+                ChaosOverlayWindow.ChaosSfx.Play("toy_ready", 0.5f);
+                s.PushEvent($"{toy.Glyph} {Loc.Get("Chaos_Rabbit_Whistle")}");
+                return true;
             default:
-                // ponytail: rabbit motion/aim need their BubbleService mechanics
-                // ported; do not award first_play for an inert toy.
                 return false;
         }
     }
@@ -170,6 +248,14 @@ internal static partial class ChaosRunHost
             }
         }
         _snapRemaining = Math.Max(0, _snapRemaining - ChaosRunEngine.TICK_SEC);
+        // WPF ChaosModeService.cs:2986-2993: the capstone storm adds a rabbit every 1.25 s.
+        if (_rabbitStormRemaining > 0)
+        {
+            _rabbitStormRemaining -= ChaosRunEngine.TICK_SEC;
+            _rabbitStormAccum += ChaosRunEngine.TICK_SEC;
+            if (_rabbitStormAccum >= 1.25) { _rabbitStormAccum = 0; SpawnDarter(); }
+            if (_rabbitStormRemaining <= 0) ChaosEffectBannerOverlay.End("rabbits");
+        }
         // WPF TickActiveToys (:3020-3027): DVD glow and banner follow toy logos, not thoughts.
         bool dvdLive = ChaosDvdOverlay.AnyToyActive;
         foreach (var toy in _state.ActiveToys)
@@ -180,6 +266,7 @@ internal static partial class ChaosRunHost
                 "porn_dvd" => dvdLive,
                 "e_stim" => BubbleOverlay.EStimCharges > 0,
                 "freeze_trigger" => _freezeRemainingSec > 0,
+                "rabbit_caller" => _rabbitCallPending > 0 || _rabbitStormRemaining > 0,
                 _ => false,
             };
         if (_dvdBannerOn && !dvdLive)
@@ -194,6 +281,9 @@ internal static partial class ChaosRunHost
     {
         _sweepTimer?.Stop();
         _sweepTimer = null;
+        DisarmRabbitCall();   // WPF ChaosModeService.cs:3180,3233,3316
+        _rabbitStormRemaining = _rabbitStormAccum = 0;
+        ChaosEffectBannerOverlay.End("rabbits");
         _vibeRemaining = _snapRemaining = _thoughtAccumSec = 0;
         _afterglow = _vibeHover = false;
         _dvdBannerOn = false;

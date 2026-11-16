@@ -1502,13 +1502,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
-            // The field cannot yet place or move a summoned darter. Do not spend the whistle.
-            if (toy.Id == "rabbit_caller")
-            {
-                if (_spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true })
-                    ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
-                return;
-            }
             // WPF UseToy :2690: a wave draft holds the run (_paused), so toys wait for GO.
             if (!ToyEffectPorted(toy.Id)) return;   // #4225: an inert toy spends no charge or cooldown
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true });
