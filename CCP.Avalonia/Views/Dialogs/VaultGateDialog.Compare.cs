@@ -226,7 +226,8 @@ public sealed partial class VaultGateDialog
         who.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
         top.Children.Add(who);
         var price = (StackPanel)Price(tier, compact: true, yearly: _yearly);
-        price.Tag = accent;
+        var salePanel = new StackPanel { Name = lab ? "PrimeSale" : "BasicSale" };
+        price.Tag = (accent, salePanel);
         price.Margin = new Thickness(0);
         price.MaxWidth = 185;
         price.RenderTransform = new TranslateTransform();
@@ -255,6 +256,7 @@ public sealed partial class VaultGateDialog
         Grid.SetColumn(priceRow, 1);
         top.Children.Add(priceRow);
         main.Children.Add(top);
+        main.Children.Add(salePanel);
         main.Children.Add(new Border { Height = 1, Background = accent, Opacity = 0.4, Margin = new Thickness(0, 10, 0, 9) });
         void Perk(string number, string words, IBrush ink)
         {

@@ -418,7 +418,9 @@ public sealed partial class VaultGateDialog : Window
         var price = VaultOffer.PriceFor(tier, _currency, _plans);
         var sale = VaultSale.AppliesTo(Sale, tier, DateTime.UtcNow, yearly) ? Sale : null;
         var line = new WrapPanel();
-        var ticketInk = slot.Tag as IBrush;
+        var ticket = slot.Tag is ValueTuple<IBrush, StackPanel> pair ? pair : ((IBrush?)null, (StackPanel?)null);
+        var ticketInk = ticket.Item1 ?? slot.Tag as IBrush;
+        var saleSlot = ticket.Item2 ?? slot; if (ticket.Item2 != null) saleSlot.Children.Clear();
         line.Children.Add(new TextBlock
         {
             Text = VaultOffer.Money(sale != null ? VaultSale.FirstMonthCents(price.MonthlyCents, sale.Percent)
@@ -449,10 +451,10 @@ public sealed partial class VaultGateDialog : Window
             if (hints && !yearly) AddHints(slot, tier, price);
             return;
         }
-        slot.Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
-            Good, compact ? 12 : 12.5, new Thickness(0, 2, 0, 0)));
+        saleSlot.Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
+            ticketInk ?? Good, compact ? 12 : 12.5, new Thickness(0, ticket.Item2 != null ? 10 : 2, 0, 0)));
         if (VaultSale.EndsText(sale) is string ends)
-            slot.Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
+            saleSlot.Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), ticketInk ?? Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
     }
 
     private void AddHints(StackPanel slot, int tier, TierPrice price)
