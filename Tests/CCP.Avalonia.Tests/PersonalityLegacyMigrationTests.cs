@@ -1,9 +1,7 @@
 using System;
-using System.Linq;
-using System.Reflection;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
@@ -27,17 +25,8 @@ public class PersonalityLegacyMigrationTests
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);
         var snapshot = ProcessStateSnapshot.Take();
-        var app = (App)Application.Current!;
-        var lifetimeField = typeof(Application).GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single(f => typeof(IApplicationLifetime).IsAssignableFrom(f.FieldType));
-        var oldLifetime = app.ApplicationLifetime;
-        var oldSettings = typeof(App).GetProperty(nameof(App.Settings))!.GetValue(null);
-        var dispatchField = typeof(App).GetField("_desktopDispatch", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        var oldDispatch = dispatchField.GetValue(app);
-        var backupProperty = typeof(App).GetProperty("CloudAutoBackup", BindingFlags.Static | BindingFlags.NonPublic)!;
-        var oldBackup = backupProperty.GetValue(null);
-        var oldLedger = ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger;
-        using var lifetime = new ClassicDesktopStyleApplicationLifetime();
+        var oldProvider = CoreSettings.ServiceProvider;
+        SettingsService? service = null;
         try
         {
             var seed = new SettingsService();
@@ -50,18 +39,18 @@ public class PersonalityLegacyMigrationTests
             s.CompanionPrompt.Personality = "A saved personality";
             s.UserPersonalityPresets.Clear();
             seed.SaveImmediate(suppressCloudBackup: true);
-            lifetimeField.SetValue(app, lifetime);
-            var method = typeof(App).GetMethod("StartDesktop", BindingFlags.NonPublic | BindingFlags.Instance)!;
-            Func<double, string, Task> step = (progress, _) => progress == 0.4
-                ? Task.FromException(new StopStartup()) : Task.CompletedTask;
-            async Task<AppSettings> Launch()
+            seed.SealForReset();
+            // One simulated launch: the previous run's exit flush, then the settings load and the
+            // startup migration exactly as StartDesktop runs them (wiring pinned by the test below).
+            Task<AppSettings> Launch()
             {
-                (dispatchField.GetValue(app) as ConditioningControlPanel.Avalonia.AvaloniaCoreDispatch)?.Stop();
-                App.Settings?.SaveImmediate(suppressCloudBackup: true); // the exit flush of the previous launch
-                App.Settings?.SealForReset();
-                var task = (Task)method.Invoke(app, new object[] { step })!;
-                await Assert.ThrowsAsync<StopStartup>(() => task);
-                return App.Settings!.Current;
+                service?.SaveImmediate(suppressCloudBackup: true);
+                service?.SealForReset();
+                var loaded = new SettingsService();
+                service = loaded;
+                CoreSettings.ServiceProvider = () => loaded;
+                App.MigrateLegacyPersonalityOnce(loaded);
+                return Task.FromResult(loaded.Current);
             }
             var migrated = await Launch();
             Assert.True(migrated.PersonalityLegacyMigrated);
@@ -100,16 +89,24 @@ public class PersonalityLegacyMigrationTests
         }
         finally
         {
-            (dispatchField.GetValue(app) as ConditioningControlPanel.Avalonia.AvaloniaCoreDispatch)?.Stop();
-            dispatchField.SetValue(app, oldDispatch);
-            backupProperty.SetValue(null, oldBackup);
-            ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = oldLedger;
-            App.Settings?.SealForReset();
-            typeof(App).GetProperty(nameof(App.Settings))!.SetValue(null, oldSettings);
-            lifetimeField.SetValue(app, oldLifetime);
+            service?.SealForReset();
+            CoreSettings.ServiceProvider = oldProvider;
             snapshot.Restore();
         }
     });
 
-    private sealed class StopStartup : Exception { }
+    [Fact]
+    public void DesktopStartupRunsTheMigrationRightAfterSettingsLoad()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "App.axaml.cs"));
+        var start = src.IndexOf("private async Task StartDesktop(", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var load = src.IndexOf("CoreSettings.ServiceProvider = () => Settings;", start, StringComparison.Ordinal);
+        Assert.True(load > start);
+        var call = src.IndexOf("MigrateLegacyPersonalityOnce(Settings);", start, StringComparison.Ordinal);
+        Assert.True(call > load, "StartDesktop must run the legacy personality migration after settings load");
+    }
+
+    private static string RepoRoot([CallerFilePath] string here = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
