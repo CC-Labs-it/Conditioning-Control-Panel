@@ -749,6 +749,29 @@ public sealed class AssetsTabTests
         finally { AssetsTabView.AppInFront = oldInFront; }
     });
 
+    [Fact]
+    public Task ContextMenuRevealsSelectedFile() => Run(async (shell, tab, s) =>
+    {
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images").Children.Single();
+        await tab.ThumbnailLoads;
+        var tile = await Thumbnail(shell, tab);
+        var old = ConditioningControlPanel.Avalonia.Platform.ExternalOpener.SelectInFileManager;
+        string? selected = null;
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.ExternalOpener.SelectInFileManager = path => { selected = path; return true; };
+            tile.ContextMenu!.Open(tile);
+            Dispatcher.UIThread.RunJobs();
+            tile.ContextMenu.Items.OfType<MenuItem>().Last().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(Path.GetFullPath(tab.CurrentFolderFiles[0].FullPath), selected);
+        }
+        finally
+        {
+            tile.ContextMenu?.Close();
+            ConditioningControlPanel.Avalonia.Platform.ExternalOpener.SelectInFileManager = old;
+        }
+    });
+
     // ---- harness ----------------------------------------------------------------------
 
     private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
