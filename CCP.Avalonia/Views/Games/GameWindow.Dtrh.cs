@@ -56,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Action<JObject> DtrhMergeAssetStats = DtrhAssetStatsStore.Merge;
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
-        private bool _dtrhRunActive, _dtrhExiting, _dtrhPanicStopped;
+        private bool _dtrhRunActive, _dtrhExiting;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private global::Avalonia.PixelPoint _dtrhWindowPosition;
@@ -185,7 +185,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// A booting page, or a second close while exiting, closes immediately.</summary>
         private void CloseDtrhForPanic()
         {
-            _dtrhPanicStopped = true;
             try
             {
                 if (DtrhReady)
@@ -419,7 +418,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 try
                 {
                     int bubbles = (int?)o["sessionStats"]?["bubblesPopped"] ?? 0;
-                    if (!_dtrhPanicStopped && bubbles > 0) DtrhCreditBubbles(this, bubbles);
+                    if (bubbles > 0) DtrhCreditBubbles(this, bubbles);
                 }
                 catch (Exception ex) { Log.Debug("DtrhHost bubble credit: {E}", ex.Message); }
                 ChaosRank? rankUp = null;

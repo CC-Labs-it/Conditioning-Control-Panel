@@ -13,10 +13,12 @@ namespace CCP.Avalonia.Tests;
 // Restack b154: the DtRH engagement history (#3727) and saved Loom spirals (#3949) on the trunk host.
 public sealed partial class GameWindowTests
 {
+    /// <summary>WPF DtrhHostService.cs:250-258,648-656: panic asks the page to end the run;
+    /// the settled run still credits its bubbles, once.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Dtrh_BubblesCreditedOnceUnlessPanicStopped(bool panic) => RunDtrh(lab: true, (_, _, _, _) =>
+    public void Dtrh_BubblesCreditedOncePerSettledRun(bool panic) => RunDtrh(lab: true, (_, _, _, _) =>
     {
         var old = GameWindow.DtrhCreditBubbles;
         var credited = new List<int>();
@@ -24,13 +26,20 @@ public sealed partial class GameWindowTests
         {
             GameWindow.DtrhCreditBubbles = (_, count) => credited.Add(count);
             var w = GameWindow.Launch("dtrh")!;
+            var sent = new List<string?>();
+            w.Posted += json => sent.Add((string?)JObject.Parse(json)["type"]);
             w.HandleMessage("{type:'ready'}");
             w.HandleMessage("{type:'run-started'}");
-            if (panic) ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "games").Stop(null);
+            if (panic)
+            {
+                ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "games").Stop(null);
+                Assert.Contains("end-run", sent);
+            }
             const string end = "{type:'run-ended',score:100,durationSec:60,sessionStats:{bubblesPopped:7}}";
             w.HandleMessage(end);
             w.HandleMessage(end);
-            if (panic) Assert.Empty(credited); else Assert.Equal(new[] { 7 }, credited);
+            Assert.Equal(new[] { 7 }, credited);
+            Assert.Single(sent, t => t == "payout-result");
             w.Close();
         }
         finally { GameWindow.DtrhCreditBubbles = old; }
