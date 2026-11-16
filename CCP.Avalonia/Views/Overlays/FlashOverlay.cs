@@ -392,14 +392,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF FlashService.ScaleFrameDelay (:119-126) then the gentle-visuals slow-down
-        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame.</summary>
-        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier)
+        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame. A deck face skips the
+        /// slow-down, as WPF ApplyDeckSwap (:2930) does.</summary>
+        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier, bool gentle = true)
         {
             var ms = sourceDelay.TotalMilliseconds;
             if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
             if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
             ms = Math.Max(10.0, ms / Math.Clamp(multiplier, 0.25, 4.0));
-            if (ConditioningControlPanel.Services.Safety.GentleVisuals.On)
+            if (gentle && ConditioningControlPanel.Services.Safety.GentleVisuals.On)
                 ms = ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(ms);
             return TimeSpan.FromMilliseconds(ms);
         }
@@ -466,7 +467,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
             if (clickable) w.MakeClickable(() => Pop(w), () => DeckPress(w));
-            var deckPad = AttachDeck(w, rect, scaling, clickable);
+            AttachDeck(w, rect, scaling, clickable);
             pad = w.GlowPadPx;
             var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             if (!Present(w, winRect, clickable))
@@ -477,7 +478,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return false;
             }
             // A card's grown margin stays click-through: only the picture and its glow take the mouse.
-            if (deckPad > 0) X11Overlay.SetInputRect(w, new PixelRect(deckPad, deckPad, winRect.Width - 2 * deckPad, winRect.Height - 2 * deckPad));
+            // Windows: polled by the deck tick (DeckInput).
+            if (w.DeckInputPx is { } input) X11Overlay.SetInputRect(w, input[0]);
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
