@@ -22,12 +22,15 @@ namespace ConditioningControlPanel.Services
         // settings.json aside. See that method for why nothing may write after it.
         private volatile bool _sealed;
 
-        // Serializes the rotate+write half of SaveImmediate. Without it two overlapping saves
+        // Serializes recovery and the rotate+write half of SaveImmediate across instances. Without it
+        // a loader can delete another instance's live temp file. Two overlapping saves
         // (debounce timer thread + a direct UI-thread call) could File.Move each other's
         // half-written temp over settings.json (#761). Never taken while _timerLock is held,
         // and never held across the UI-thread serialize hop — both would deadlock the shutdown
         // path, where SaveImmediate runs ON the UI thread.
         private readonly object _saveLock = new();
+        private static readonly object _fileLock = new();
+        internal Action? BeforePublishForTest;
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
         // disarms them after each test so a dead test's private service cannot write settings.json
@@ -199,12 +202,15 @@ namespace ConditioningControlPanel.Services
                 // per-write temp name now, so glob (the legacy fixed settings.json.tmp matches too)
                 // and only adopt a candidate that still parses — a truncated temp must never be
                 // promoted to settings.json.
-                RecoverAndCleanTempFiles();
-
-                if (File.Exists(_settingsPath))
+                string? json;
+                lock (_fileLock)
                 {
-                    var json = File.ReadAllText(_settingsPath);
+                    RecoverAndCleanTempFiles();
+                    json = File.Exists(_settingsPath) ? File.ReadAllText(_settingsPath) : null;
+                }
 
+                if (json != null)
+                {
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
                     // enum value renamed/removed in a new release, which StringEnumConverter throws
@@ -968,6 +974,7 @@ namespace ConditioningControlPanel.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
 
                 lock (_saveLock)
+                lock (_fileLock)
                 {
                     // Sealed while this snapshot was being serialized: the reset owns the file now.
                     if (_sealed) return false;
@@ -1002,6 +1009,7 @@ namespace ConditioningControlPanel.Services
                             stream.Flush(true);
                         }
                         BeforeAtomicPublishForTests?.Invoke();
+                        BeforePublishForTest?.Invoke();
                         PublishAtomicFile(tempPath);
                     }
                     catch
