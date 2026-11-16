@@ -134,6 +134,37 @@ public sealed class InputMenuThemeTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task DeeperFileRowsUseHouseChrome() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow();
+        try
+        {
+            editor.Show();
+            var file = (MenuItem)editor.GetVisualDescendants().OfType<Menu>().Single().Items[0]!;
+            file.IsSubMenuOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            var row = editor.FindControl<MenuItem>("MenuSave")!;
+            Assert.Equal(new Thickness(10, 6), row.Padding);
+            Assert.Equal(new Thickness(0, 1), row.Margin);
+            Assert.Equal(new CornerRadius(6), row.CornerRadius);
+            row.IsSelected = true;
+            Dispatcher.UIThread.RunJobs();
+            var border = row.GetVisualDescendants().OfType<Border>().First(x => x.Name == "PART_LayoutRoot");
+            Assert.Equal(Colour(editor, "TransparentPink20Brush"), ((ISolidColorBrush)border.Background!).Color);
+            row.IsEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0.45, row.Opacity);
+        }
+        finally
+        {
+            editor.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
     private static void Setup()
     {
         if (Application.Current is not null) return;

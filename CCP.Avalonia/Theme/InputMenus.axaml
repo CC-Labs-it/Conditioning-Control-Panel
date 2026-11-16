@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- Inputs.xaml:476: context-menu rows. Keep Fluent's popup and part names so local
        view styles and submenu behavior continue to work. -->
-  <Style Selector="ContextMenu MenuItem">
+  <Style Selector="ContextMenu MenuItem, MenuItem MenuItem">
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Padding" Value="10,6"/>
@@ -10,10 +10,10 @@
     <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Cursor" Value="Hand"/>
   </Style>
-  <Style Selector="ContextMenu MenuItem:selected /template/ Border#PART_LayoutRoot">
+  <Style Selector="ContextMenu MenuItem:selected /template/ Border#PART_LayoutRoot, MenuItem MenuItem:selected /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
   </Style>
-  <Style Selector="ContextMenu MenuItem:disabled">
+  <Style Selector="ContextMenu MenuItem:disabled, MenuItem MenuItem:disabled">
     <Setter Property="Opacity" Value="0.45"/>
     <Setter Property="Cursor" Value="Arrow"/>
   </Style>
