@@ -49,6 +49,7 @@
   "deeper_open_editor_failed_title": "편집기를 열 수 없습니다",
   "deeper_open_editor_failed_fmt": "Deeper 편집기를 열 수 없습니다:\n\n{0}: {1}",
   "webcam_unnamed_device": "(이름 없는 장치)",
+  "race_origin_unavailable": "저장된 로컬 주소를 사용할 수 없어 레이스를 열 수 없습니다. 다른 앱을 닫고 CCP를 다시 시작하세요. 문제가 계속되면 CCP 저장 공간을 확인하세요.",
   "rt_engine_intro": "Racing Thoughts에는 레이스 엔진이 필요합니다. 한 번만 124 MB를 받습니다.",
   "rt_engine_download": "다운로드",
   "rt_engine_cancel": "취소",

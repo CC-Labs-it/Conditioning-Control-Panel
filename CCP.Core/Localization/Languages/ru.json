@@ -49,6 +49,7 @@
   "deeper_open_editor_failed_title": "Не удалось открыть редактор",
   "deeper_open_editor_failed_fmt": "Не удалось открыть редактор Deeper:\n\n{0}: {1}",
   "webcam_unnamed_device": "(устройство без имени)",
+  "race_origin_unavailable": "Гонку не удалось открыть: сохранённый локальный адрес недоступен. Закройте другое приложение и перезапустите CCP. Если проблема останется, проверьте хранилище CCP.",
   "rt_engine_intro": "Для Racing Thoughts нужен гоночный движок. 124 МБ один раз.",
   "rt_engine_download": "Скачать",
   "rt_engine_cancel": "Отмена",

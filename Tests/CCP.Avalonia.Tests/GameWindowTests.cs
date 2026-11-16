@@ -954,6 +954,46 @@ public sealed partial class GameWindowTests
     }
 
     [Fact]
+    public void RaceDoorsRefuseFallbackOriginUntilRestart() => RunGlassroad((_, _, _) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("race-origin-").FullName;
+        var preference = Path.Combine(dir, "port");
+        var held = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        var (oldServer, oldNotice, oldOwns) = (GameWindow.Server, GameWindow.RaceOriginNotice, RacingAccess.IsGrantedProvider);
+        try
+        {
+            held.Start();
+            var port = ((System.Net.IPEndPoint)held.LocalEndpoint).Port;
+            File.WriteAllText(preference, port.ToString());
+            using (var fallback = new WebAssetServer(dir, preference))
+            {
+                GameWindow.Server = () => fallback;
+                var notices = new List<string>();
+                GameWindow.RaceOriginNotice = notices.Add;
+                RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
+                Assert.Null(GameWindow.Launch("raceclassic"));
+                GameWindow.UseLinuxRaceCard = () => true;
+                Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+                Assert.Equal(2, notices.Count);
+                Assert.DoesNotContain(GameWindow.OpenWindowsForTests(), w => w.Spec.Id is "raceclassic" or GameWindow.GlassroadId);
+            }
+            held.Stop();
+            using var restarted = new WebAssetServer(dir, preference);
+            Assert.Equal(port, restarted.Port);
+            GameWindow.Server = () => restarted;
+            var race = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
+            Assert.Equal(port, race.PageUrl!.Port);
+            race.Close();
+        }
+        finally
+        {
+            held.Stop();
+            (GameWindow.Server, GameWindow.RaceOriginNotice, RacingAccess.IsGrantedProvider) = (oldServer, oldNotice, oldOwns);
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
     public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
     {
         launcher.BuildTiles();

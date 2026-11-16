@@ -48,6 +48,7 @@
   "deeper_open_editor_failed_title": "无法打开编辑器",
   "deeper_open_editor_failed_fmt": "无法打开 Deeper 编辑器:\n\n{0}: {1}",
   "webcam_unnamed_device": "（未命名设备）",
+  "race_origin_unavailable": "无法打开比赛，因为保存的本地地址不可用。请关闭占用该地址的应用，然后重启 CCP。如果问题仍然存在，请检查 CCP 的存储空间。",
   "rt_engine_intro": "Racing Thoughts 需要赛车引擎。仅下载一次，124 MB。",
   "rt_engine_download": "下载",
   "rt_engine_cancel": "取消",

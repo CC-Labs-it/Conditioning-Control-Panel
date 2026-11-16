@@ -87,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>Where pages come from; tests point it at a throwaway root.</summary>
         internal static Func<WebAssetServer> Server { get; set; } = () => WebAssetServer.Shared;
+        internal static Action<string> RaceOriginNotice = title =>
+            new Dialogs.MessageDialog(title, Loc.Get("race_origin_unavailable"), showCancel: false).Show();
 
         internal Game Spec { get; }
         internal WebHost Web { get; }
@@ -158,6 +160,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
             if (spec.Id == FypId) OpenFypVisit();
+            // Do not let a race write state to an origin that will be abandoned next launch.
+            if ((spec.Id == GlassroadId || spec.Id == "raceclassic") && !Server().HasStableOrigin)
+            {
+                RaceOriginNotice(Loc.Get(spec.TitleKey));
+                return null;
+            }
             try
             {
                 var window = new GameWindow(spec);

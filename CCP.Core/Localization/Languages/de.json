@@ -49,6 +49,7 @@
   "deeper_open_editor_failed_title": "Editor konnte nicht geöffnet werden",
   "deeper_open_editor_failed_fmt": "Deeper Editor konnte nicht geöffnet werden:\n\n{0}: {1}",
   "webcam_unnamed_device": "(Unbenanntes Gerät)",
+  "race_origin_unavailable": "Das Rennen kann nicht geöffnet werden, weil seine gespeicherte lokale Adresse nicht verfügbar ist. Schließe die andere App und starte CCP neu. Prüfe sonst den CCP-Speicher.",
   "rt_engine_intro": "Racing Thoughts benötigt seine Rennengine. Einmalig 124 MB.",
   "rt_engine_download": "Herunterladen",
   "rt_engine_cancel": "Abbrechen",
