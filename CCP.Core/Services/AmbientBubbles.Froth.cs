@@ -8,6 +8,7 @@ namespace ConditioningControlPanel.Services
     public sealed partial class AmbientBubble
     {
         private double _frothGrow = 1, _frothShown = 1, _frothRim, _frothVx, _frothVy, _frothPool = 1;
+        private double _frothLeft = double.NegativeInfinity, _frothRight = double.PositiveInfinity;
         internal double FrothFuse = -1;
         internal List<AmbientBubble>? FrothParts;
         internal bool FrothPartsPaid;
@@ -44,6 +45,8 @@ namespace ConditioningControlPanel.Services
             double drag = Math.Max(0, 1 - dt * (insidePool ? FrothRules.PoolDrag : FrothRules.Drag));
             _frothVx *= drag; _frothVy *= drag;
             double dx = _frothVx * dt, dy = _frothVy * dt;
+            // WPF BubbleService.Froth.cs:355: cancel only outward movement, and clear its velocity.
+            if ((X + dx < _frothLeft && dx < 0) || (X + dx > _frothRight && dx > 0)) { dx = 0; _frothVx = 0; }
             X += dx; Y += dy; _startX += dx; _startY += dy; _spiralCx += dx; _spiralCy += dy;
             _frothPool = Math.Clamp(poolScale, .05, 1);
         }

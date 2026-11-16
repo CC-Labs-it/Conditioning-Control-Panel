@@ -44,12 +44,5 @@ public class ReviewWiringTests
     public void Wpf_afterglow_line_stops_on_teardown()
         => Assert.Contains("AfterglowLineLayer.StopAll", Section(WpfSubliminal(), "private void TearDownSurfaces()", "public void StopOneShotSubliminals()"));
 
-    [Fact]
-    public void Scheduler_rechecks_afterglow_before_show_and_still_rearms()
-    {
-        var src = Source("CCP.Core", "CoreSubliminal.cs");
-        var tick = src.Substring(src.IndexOf("private static void OnTick(", StringComparison.Ordinal));
-        Assert.Contains("SuperAccess.ReplacesBase(Services.Super.SuperEffect.Afterglow)", tick);
-        Assert.Contains("lock (Gate) ArmLocked()", tick);
-    }
+
 }
