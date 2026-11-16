@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -22,6 +23,7 @@ public class SuperRowsTests
     public void FrothRowsFollowSwitchAndWriteClampedSettings() => AvaloniaTestDispatcher.Run(() =>
     {
         ShellTestPlatform.Ensure();
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         LocalizationManager.Instance.SetLanguage("en");
         var oldService = CoreSettings.ServiceProvider;
         var oldPremium = CoreEntitlement.HasPremiumProvider;
@@ -59,16 +61,18 @@ public class SuperRowsTests
             window?.Close(); CoreSettings.ServiceProvider = oldService;
             CoreEntitlement.HasPremiumProvider = oldPremium; SuperAccess.TryingProvider = oldTrying;
             service.SealForReset();
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
         }
     });
 
     [Fact]
-    public void PanicHidesFrothPreviewRows() => AvaloniaTestDispatcher.Run(() =>
+    public void PanicReturnsFrothRowsToLockedState() => AvaloniaTestDispatcher.Run(() =>
     {
         ShellTestPlatform.Ensure();
         var oldService = CoreSettings.ServiceProvider;
         var oldPremium = CoreEntitlement.HasPremiumProvider;
         var oldTrying = SuperAccess.TryingProvider;
+        var oldEnded = SuperPreview.EndedByPanic;
         var service = new SettingsService();
         Window? window = null;
         try
@@ -80,20 +84,106 @@ public class SuperRowsTests
             window = new Window { Content = page, Width = 800, Height = 800 };
             window.Show(); Dispatcher.UIThread.RunJobs();
             var rows = Assert.IsType<StackPanel>(Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>()).Body);
-            Assert.False(rows.IsVisible);
+            Assert.True(rows.IsVisible);
+            Assert.Equal(0.45, rows.Opacity);
+            Assert.False(rows.IsHitTestVisible);
+            Assert.Equal(KeyboardNavigationMode.None, KeyboardNavigation.GetTabNavigation(rows));
             typeof(SuperPreview).GetField("_trying", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, SuperEffect.InnerBloom);
             typeof(SuperPreview).GetField("_startedTick", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, Environment.TickCount64);
             SuperAccess.RaiseChanged(SuperEffect.InnerBloom);
             Assert.True(rows.IsVisible);
+            Assert.Equal(1, rows.Opacity);
+            Assert.True(rows.IsHitTestVisible);
+            Assert.Equal(KeyboardNavigationMode.Continue, KeyboardNavigation.GetTabNavigation(rows));
             PanicSurfaces.All.Single(s => s.Id == "super-preview").Stop(null);
-            Assert.False(rows.IsVisible);
+            Assert.True(rows.IsVisible);
+            Assert.Equal(0.45, rows.Opacity);
+            Assert.False(rows.IsHitTestVisible);
+            Assert.Equal(KeyboardNavigationMode.None, KeyboardNavigation.GetTabNavigation(rows));
             Assert.True(SuperPreview.EndedByPanic);
         }
         finally
         {
-            SuperPreview.End(false); window?.Close(); CoreSettings.ServiceProvider = oldService;
+            SuperPreview.End(false);
+            typeof(SuperPreview).GetProperty(nameof(SuperPreview.EndedByPanic))!.SetValue(null, oldEnded);
+            window?.Close(); CoreSettings.ServiceProvider = oldService;
             CoreEntitlement.HasPremiumProvider = oldPremium; SuperAccess.TryingProvider = oldTrying;
             service.SealForReset();
         }
     });
+
+    [Fact]
+    public void FrothRowsRelocalizeAndStopListeningWhenDetached() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ShellTestPlatform.Ensure();
+        var loc = LocalizationManager.Instance;
+        var oldLanguage = loc.CurrentLanguage;
+        var oldService = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        Window? window = null;
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            service.Current.FrothPopReach = 0;
+            service.Current.FrothCursorPush = 0;
+            loc.SetLanguage("en");
+            var page = new BubblePopFeatureControl();
+            window = new Window { Content = page, Width = 800, Height = 800 };
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            var rows = Assert.IsType<StackPanel>(Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>()).Body);
+            var row = rows.Children.OfType<Grid>().First();
+            var title = Assert.IsType<TextBlock>(row.Children[0]);
+            string englishTitle = title.Text!;
+            string englishTip = Assert.IsType<string>(ToolTip.GetTip(row));
+            loc.SetLanguage("de"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Loc.Get("super_froth_size"), title.Text);
+            Assert.NotEqual(englishTitle, title.Text);
+            Assert.Equal(Loc.Get("tooltip_super_froth_size"), ToolTip.GetTip(row));
+            Assert.NotEqual(englishTip, ToolTip.GetTip(row));
+            Assert.Equal(2, rows.GetLogicalDescendants().OfType<TextBlock>().Count(t => t.Text == Loc.Get("super_opt_off")));
+            window.Content = null; Dispatcher.UIThread.RunJobs();
+            string detachedTitle = title.Text!;
+            loc.SetLanguage("en"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(detachedTitle, title.Text);
+            window.Content = page; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(englishTitle, title.Text);
+        }
+        finally
+        {
+            window?.Close(); CoreSettings.ServiceProvider = oldService;
+            service.SealForReset(); loc.SetLanguage(oldLanguage);
+        }
+    });
+
+
+    [Fact]
+    public void RowTestRestoresLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ShellTestPlatform.Ensure();
+        var loc = LocalizationManager.Instance;
+        var language = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("de");
+            FrothRowsFollowSwitchAndWriteClampedSettings();
+            Assert.Equal("de", loc.CurrentLanguage);
+        }
+        finally { loc.SetLanguage(language); }
+    });
+
+    [Fact]
+    public void PanicTestRestoresPanicState() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ShellTestPlatform.Ensure();
+        var ended = SuperPreview.EndedByPanic;
+        var property = typeof(SuperPreview).GetProperty(nameof(SuperPreview.EndedByPanic))!;
+        try
+        {
+            property.SetValue(null, false);
+            PanicReturnsFrothRowsToLockedState();
+            Assert.False(SuperPreview.EndedByPanic);
+        }
+        finally { property.SetValue(null, ended); }
+    });
+
 }

@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
@@ -35,7 +36,7 @@ public partial class BubblePopFeatureControl
 
     private void AddFrothRow(string key, Slider slider, TextBlock value)
     {
-        var row = new Grid { Height = 36, ColumnDefinitions = new ColumnDefinitions("120,*,56") };
+        var row = new Grid { Height = 36, ColumnDefinitions = new ColumnDefinitions("120,*,56"), Tag = key };
         ToolTip.SetTip(row, Loc.Get("tooltip_" + key));
         var title = new TextBlock { Text = Loc.Get(key), FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center };
         slider.Margin = new Thickness(14, 0); slider.VerticalAlignment = VerticalAlignment.Center;
@@ -51,13 +52,29 @@ public partial class BubblePopFeatureControl
         if (Dispatcher.UIThread.CheckAccess()) RefreshFrothRows(); else Dispatcher.UIThread.Post(RefreshFrothRows);
     }
 
+    private void OnFrothLanguageChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) RefreshFrothRows(); else Dispatcher.UIThread.Post(RefreshFrothRows);
+    }
+
     private void RefreshFrothRows()
     {
         var s = CoreSettings.Current;
         _loadingFroth = true;
         try
         {
-            _frothRows.IsVisible = SuperAccess.IsSelected(SuperEffect.InnerBloom);
+            bool lit = SuperAccess.IsSelected(SuperEffect.InnerBloom);
+            bool unlocked = SuperAccess.IsUnlocked(SuperEffect.InnerBloom);
+            _frothRows.IsVisible = lit || !unlocked;
+            _frothRows.Opacity = lit ? 1 : 0.45;
+            _frothRows.IsHitTestVisible = lit;
+            KeyboardNavigation.SetTabNavigation(_frothRows, lit ? KeyboardNavigationMode.Continue : KeyboardNavigationMode.None);
+            foreach (var child in _frothRows.Children)
+                if (child is Grid row && row.Tag is string key && row.Children[0] is TextBlock title)
+                {
+                    title.Text = Loc.Get(key);
+                    ToolTip.SetTip(row, Loc.Get("tooltip_" + key));
+                }
             _frothSize.Value = s.FrothMaxSize; _frothSizeText.Text = s.FrothMaxSize.ToString("0.0") + "x";
             _frothReach.Value = s.FrothPopReach; _frothReachText.Text = s.FrothPopReach <= 0 ? Loc.Get("super_opt_off") : $"{s.FrothPopReach}%";
             _frothPush.Value = s.FrothCursorPush; _frothPushText.Text = s.FrothCursorPush <= 0 ? Loc.Get("super_opt_off") : $"{s.FrothCursorPush}%";
