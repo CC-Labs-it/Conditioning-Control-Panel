@@ -4,7 +4,8 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
-// document-created scripts, media/audio-sync reporting, playlist autoplay and page fullscreen/mirroring.
+// document-created scripts, media/audio-sync reporting and playlist autoplay. Page fullscreen,
+// its zoom and mirroring live in MainShellWindow.BrowserFullscreen.cs.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
@@ -54,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelVideoAutoPlay();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
+            ExitBrowserPopoutFullscreen();   // WPF :990, before the remote branch navigates home
             EndRemoteBrowserVideo();
         }
 

@@ -100,6 +100,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <h3 id="web-pages-inside-the-app">Web pages inside the app</h3>
 <ol start="31">
 <li>Search for &quot;intake&quot; -&gt; start Graded Intake. Expect the page to draw and keep moving (not a frozen frame). WPF <code>MainWindow/MainWindow.Lab.cs:343</code>. Rows: <code>shell-webview2-hosts</code>, <code>views-tab-graded-intake</code>.</li>
+<li>[SAFETY] Home browser, not popped out: play a HypnoTube video and press its fullscreen button. Expect the page to fill the screen at 100 % zoom with the card reading Browser in fullscreen; Esc, a double click, the page exit and panic each put it back in the card at its old zoom. With &quot;Show content on&quot; set to all screens the screens mirror and stop mirroring on exit. With a controller connected, your own page refuses fullscreen but the controller&#x27;s video may go fullscreen and its stop ends it. WPF <code>MainWindow/MainWindow.Browser.cs:2816-2848, 2995-3136</code>. Rows: <code>shell-webview2-hosts</code>.</li>
 <li>Browser site buttons and Reload: each navigates and the status line says connected. WPF <code>MainWindow/MainWindow.Browser.cs:132-158</code>. Rows: <code>shell-browser</code>.</li>
 </ol>
 <h3 id="tray-friends-line">Tray friends line</h3>

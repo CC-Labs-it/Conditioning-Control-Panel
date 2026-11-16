@@ -25,6 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e)
         {
             if (BrowserBlockedOffline()) return;
+            // WPF :2723-2727: the fullscreen window stands in for the pop-out, so the button focuses it.
+            if (_browserTakeoverWindow is { } fullscreen) { fullscreen.Activate(); return; }
             if (_browserPopoutWindow != null)
             {
                 FocusBrowserSurface();
