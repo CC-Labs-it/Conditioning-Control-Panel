@@ -90,12 +90,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
             Log.Information("VideoService: close button - dismissing the video (the Esc door)");
-            Scheduler.End();
+            EndPrimary("close button");
         }
 
         private void HideCloseButtons()
         {
-            foreach (var x in _surfaces) x.Buttons.Close.IsVisible = false;
+            foreach (var x in AllSurfaces) x.Buttons.Close.IsVisible = false;   // WPF VideoService.Controls.cs:84-87: every window
         }
 
         /// <summary>WPF WatchForLocks: a Lockdown that starts mid-video takes the X down. Subscribed once
