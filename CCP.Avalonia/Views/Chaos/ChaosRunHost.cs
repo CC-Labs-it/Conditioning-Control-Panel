@@ -325,6 +325,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
                     return;
                 }
+                // WPF ChaosModeService.cs:1281-1298: Bound replaces the ordinary slot.
+                if (!cfg.ScriptedFirstRun && (cfg.Difficulty >= ChaosDifficulty.Hard || ChaosMeta.AtLeast(ChaosRank.Entranced))
+                    && Rng.NextDouble() < ChaosTuning.BOUND_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
+                {
+                    var (a, b) = ChaosBubbleVariants.BuildBoundPair(effIntensity, _state.FuseTimeMult,
+                        cfg.EffectIntensity, _state.BubbleScale);
+                    ChaosMeta.MarkDiscovered("bubble:bound");
+                    BubbleOverlay.SpawnBoundPair(a, b);
+                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
+                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
+                    return;
+                }
                 // WPF :1301 (after the Chaperone roll at :1264): a Tease replaces the ordinary slot, never the scripted first run.
                 if (TrySpawnTease(cfg, effIntensity))
                 {

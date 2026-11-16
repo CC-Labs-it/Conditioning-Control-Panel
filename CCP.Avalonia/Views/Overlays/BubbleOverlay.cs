@@ -19,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -568,6 +569,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return centers.ToArray();
         }
 
+        // WPF BubbleService.cs:1538, 1800-1894: both halves share a clock and a tether.
+        private static readonly ChaosBoundPairs BoundPairs = new();
+        private static readonly Dictionary<int, (AmbientBubble A, AmbientBubble B)> BoundHalves = new();
+
+        internal static (AmbientBubble A, AmbientBubble B) SpawnBoundPair(EffectBubbleSpec a, EffectBubbleSpec b)
+        {
+            var first = SpawnChaos(a, motion: ChaosMotion.RoamBounce);
+            var center = CenterPx(first);
+            double scale = ScaleFor(first);
+            // Keep the second half on the first half's screen, choosing the roomier direction.
+            var area = first.Screen < Targets.Count ? Targets[first.Screen].WorkingArea : new PixelRect(0, 0, 1920, 1080);
+            double offset = ChaosTuning.BOUND_SEPARATION_DIP * scale;
+            double x = center.X + offset;
+            if (x > area.Right - b.SizePx * scale / 2) x = center.X - offset;
+            b.SpawnAtPxX = Math.Clamp(x, area.X + b.SizePx * scale / 2, Math.Max(area.X + b.SizePx * scale / 2, area.Right - b.SizePx * scale / 2));
+            b.SpawnAtPxY = center.Y;
+            var second = SpawnChaos(b, motion: ChaosMotion.RoamBounce);
+            BoundPairs.Add(a.PairId, first, second);
+            BoundHalves.Add(a.PairId, (first, second));
+            TickBoundPairs();
+            return (first, second);
+        }
+
+        private static void ResolveBound(AmbientBubble half, bool defused)
+        {
+            if (half.Spec is not { IsBoundHalf: true } spec || !BoundHalves.TryGetValue(spec.PairId, out var pair)) return;
+            BoundPairs.Resolve(spec.PairId, half, defused, Field.Clock());
+            ChaosFieldFxOverlay.ClearTether(spec.PairId);
+            if (!defused || (pair.A.Popping && pair.B.Popping)) BoundHalves.Remove(spec.PairId);
+        }
+
+        internal static void TickBoundPairs()
+        {
+            var expired = BoundPairs.Step(Field.Clock(), Field.FreezeChaos || Field.HoldChaos);
+            foreach (var (id, pair) in BoundHalves.ToArray())
+            {
+                if (expired.Contains(pair.A) || expired.Contains(pair.B)) { BoundHalves.Remove(id); ChaosFieldFxOverlay.ClearTether(id); }
+                else if (!pair.A.Popping && !pair.B.Popping && Field.Bubbles.Contains(pair.A) && Field.Bubbles.Contains(pair.B))
+                    ChaosFieldFxOverlay.SetTether(id, CenterPx(pair.A), CenterPx(pair.B));
+                else ChaosFieldFxOverlay.ClearTether(id);
+            }
+        }
+
+        private static void ClearBoundPairs()
+        {
+            foreach (var id in BoundHalves.Keys) ChaosFieldFxOverlay.ClearTether(id);
+            BoundHalves.Clear();
+            BoundPairs.Clear();
+        }
+
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
@@ -583,12 +634,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
+                ResolveBound(b, true);
                 AnchorPop(b);
                 // WPF CreateChaosBubble onDefuse (:1571): a held snap deflates with a hiss, a sweep snaps.
                 PlayChaosCue(b.DefusedViaChannel && File.Exists(ChaosCuePath("defuse_hiss")) ? "defuse_hiss" : "snap", 0.6f);
                 onDefuse(b);
             };
-            Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
+            Field.ChaosDetonated = onDetonate == null ? null : b => { ResolveBound(b, false); AnchorPop(b); onDetonate(b); };
             Field.ChaosTreatExpired = onTreatExpired;
             if (_running) return;
             Start(host, null, ambient: false);
@@ -607,6 +659,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF PopAllBubbles at a wave boundary, retaining the chaos callbacks.</summary>
         internal static void ClearChaos()
         {
+            ClearBoundPairs();
             Field.Held = false;
             Field.Bubbles.Clear();
             ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
@@ -619,6 +672,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            ClearBoundPairs();
             Field.HoldChaos = false;
             ClearEStim();
             Field.FreezeChaos = false;
@@ -915,6 +969,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void StepChaosField()
         {
             Field.Step();
+            TickBoundPairs();
             if (Field.HoldChaos) return;
             foreach (var b in Field.Bubbles)
             {
