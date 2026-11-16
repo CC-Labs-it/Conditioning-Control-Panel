@@ -84,7 +84,32 @@ internal static class BarkHead
             Wire<EventHandler>(h => brainDrain.Triggered += h, h => brainDrain.Triggered -= h,
                 (_, _) => e.Raise("BrainDrainTriggered")); // WPF BarkService.cs:749-751
         Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
+        // WPF AttachSessionEngine (BarkService.cs:956-1003, MainWindow.Presets.cs:1627). Stopped fuses WPF's
+        // SessionStopped and SessionCompleted, which WPF raises in that order (SessionEngine.cs:395, :438).
+        if (App.Sessions is { } run)
+        {
+            Wire<Action>(h => run.Started += h, h => run.Started -= h, () => { _phaseName = ""; e.Raise("SessionStarted"); });
+            Wire<Action<Session, bool>>(h => run.Stopped += h, h => run.Stopped -= h, (_, completed) =>
+            {
+                e.Raise("SessionStopped");
+                if (completed) e.Raise("SessionCompleted");
+            });
+            Wire<Action<int>>(h => run.PhaseChanged += h, h => run.PhaseChanged -= h, i =>
+            {
+                _phaseName = run.CurrentSession?.Phases is { } p && i >= 0 && i < p.Count ? p[i].Name ?? "" : "";
+                e.Raise("SessionPhaseChanged", c => c.Set("phase_index", i).Set("phase_name", _phaseName).Set("phase_is_deepener", PhaseIsDeepener));
+            });
+            Wire<Action>(h => run.Progressed += h, h => run.Progressed -= h,
+                () => e.Raise("SessionProgress", c => c.Set("session_elapsed_sec", run.Elapsed.TotalSeconds)));
+            Wire<Action<int>>(h => run.Paused += h, h => run.Paused -= h, n => e.Raise("SessionPaused", c => c.Set("pause_n", (double)n)));
+            Wire<Action<TimeSpan>>(h => run.Resumed += h, h => run.Resumed -= h,
+                gap => e.Raise("SessionResumed", c => c.Set("pause_n", (double)run.PauseCount).Set("paused_sec", gap.TotalSeconds)));
+        }
     }
+
+    // WPF BarkState.cs:139-143: the last announced phase, kept after the session ends, cleared on the next start.
+    private static string _phaseName = "";
+    private static bool PhaseIsDeepener => _phaseName.Contains("deep", StringComparison.OrdinalIgnoreCase);
 
     private static Action? _onUserMessage;
     private static EventHandler<ModPackage>? _onModChanged;
@@ -120,6 +145,13 @@ internal static class BarkHead
             // WPF ResolveField :1446: the free collection's 100%, the ceiling the tab shows.
             "achievements_all_unlocked" => App.Achievements is { } a && a.GetTotalCount(false) is var total
                 && total > 0 && a.GetUnlockedCount(false) >= total,
+            // WPF BarkState.cs:26-28, :146-147: zero (or -1) once the session is not running.
+            "session_elapsed_sec" => App.Sessions is { IsRunning: true } r ? r.Elapsed.TotalSeconds : 0d,
+            "session_phase_index" => App.Sessions is { IsRunning: true } r ? r.CurrentPhaseIndex : -1,
+            "pauses_this_session" => App.Sessions is { IsRunning: true } r ? (double)r.PauseCount : 0d,
+            "session_planned_min" => App.Sessions is { IsRunning: true } r ? (double)(r.CurrentSession?.DurationMinutes ?? 0) : 0d,
+            "phase_name" => _phaseName,
+            "phase_is_deepener" => PhaseIsDeepener,
             _ => null,
         };
 
