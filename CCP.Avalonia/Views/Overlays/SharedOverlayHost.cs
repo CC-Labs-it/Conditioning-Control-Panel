@@ -25,11 +25,18 @@ internal static class SharedOverlayHost
     // WPF draws tint, spiral and cards on one host, so a raise never lifts the spiral over an "over" tint
     // (OverlayService.RefreshPinkFilterOrder), and ReassertZOrder keeps that host below a playing video
     // (OverlayService.cs:3071,3389, #497). Here they are separate windows, so restore both orders by hand.
-    // shortcut: with a video up the stage only goes under the video, not under a tint the video also covers.
+    // With a video up, stack the stage under it, then an "over" tint directly under it too: the order is
+    // video > tint > stage, so the tint still covers the stage once the video closes.
     private static void Seat(Window stage, bool raise)
     {
         var videos = LiveVideos();
-        if (videos.Count > 0) { StackBelow(stage, videos); return; }
+        if (videos.Count > 0)
+        {
+            StackBelow(stage, videos);
+            if (!CoreSettings.Current.PinkFilterUnderEffects)
+                foreach (var tint in PinkFilterOverlay.Shown) StackBelow(tint, videos);
+            return;
+        }
         if (raise) Raise(stage);
         if (!CoreSettings.Current.PinkFilterUnderEffects) PinkFilterOverlay.SyncOrder();
     }

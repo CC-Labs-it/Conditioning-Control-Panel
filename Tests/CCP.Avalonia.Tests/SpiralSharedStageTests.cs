@@ -160,10 +160,72 @@ public sealed class SpiralSharedStageTests
             SpiralOverlay.Refresh(host);
             while (SpiralOverlay.Decoding is { IsCompleted: false } d) await d;
             Assert.True(stage()!.IsVisible);
-            var (w, anchors) = Assert.Single(stacked);
+            var (w, anchors) = stacked[0];
             Assert.Same(stage(), w);
             Assert.Same(live, anchors);
+            Assert.All(stacked, e => Assert.Same(live, e.Item2));   // everything goes under the video
             Assert.Empty(raised);   // neither raised over the video nor the tint lifted over it
+        }
+        finally
+        {
+            PinkFilterOverlay.CloseAll();
+            (s.PinkFilterEnabled, s.PinkFilterUnderEffects) = saved;
+            (PinkFilterOverlay.RaiseWindow, PinkFilterOverlay.SkipPlatformChecksForTests) = (raiseTint, skipTint);
+            (SharedOverlayHost.Raise, SharedOverlayHost.StackBelow, SharedOverlayHost.LiveVideos) = (raiseStage, stackBelow, videos);
+            video.Close();
+        }
+    });
+
+    // WPF compositor order: video > over-tint > spiral host (OverlayService.cs:3071,3389, RefreshPinkFilterOrder).
+    // A stage created mid-video must not end up between the tint and the video, or the spiral covers the
+    // tint once the video closes.
+    [Fact]
+    public Task Mid_video_stage_stays_under_an_over_tint_after_the_video_closes() => WithSpiral(true, async (host, s, stage, _) =>
+    {
+        var saved = (s.PinkFilterEnabled, s.PinkFilterUnderEffects);
+        var (raiseTint, skipTint) = (PinkFilterOverlay.RaiseWindow, PinkFilterOverlay.SkipPlatformChecksForTests);
+        var (raiseStage, stackBelow, videos) = (SharedOverlayHost.Raise, SharedOverlayHost.StackBelow, SharedOverlayHost.LiveVideos);
+        var z = new List<Window>();   // bottom -> top
+        bool Top(Window w) { z.Remove(w); z.Add(w); return true; }
+        bool Below(Window w, IReadOnlyList<Window> anchors)
+        {
+            z.Remove(w);
+            var i = z.FindIndex(anchors.Contains);
+            if (i < 0) z.Add(w); else z.Insert(i, w);
+            return true;
+        }
+        var video = new Window();
+        try
+        {
+            SubliminalOverlay.CloseAll();
+            SpiralOverlay.CloseAll();
+            PinkFilterOverlay.SkipPlatformChecksForTests = true;
+            PinkFilterOverlay.RaiseWindow = Top;
+            SharedOverlayHost.Raise = Top;
+            SharedOverlayHost.StackBelow = Below;
+            (s.PinkFilterEnabled, s.PinkFilterUnderEffects) = (true, false);
+            PinkFilterOverlay.Refresh(host);
+            var tint = Assert.Single(PinkFilterOverlay.Shown);
+            z.Add(tint);
+            z.Add(video);   // a video plays over the tint
+            var live = new Window[] { video };
+            SharedOverlayHost.LiveVideos = () => live;
+
+            // The new stage maps on top of everything, then Seat restacks it.
+            var configure = SharedOverlayHost.Configure;
+            SharedOverlayHost.Configure = (w, b) => { var ok = configure(w, b); z.Add(w); return ok; };
+            try
+            {
+                SpiralOverlay.Refresh(host);
+                while (SpiralOverlay.Decoding is { IsCompleted: false } d) await d;
+            }
+            finally { SharedOverlayHost.Configure = configure; }
+            Assert.True(stage()!.IsVisible);
+            Assert.Same(video, z[^1]);   // the video stays on top
+
+            z.Remove(video);              // the video closes
+            live = Array.Empty<Window>();
+            Assert.True(z.IndexOf(tint) > z.IndexOf(stage()!), "the over tint must stay above the spiral stage");
         }
         finally
         {
