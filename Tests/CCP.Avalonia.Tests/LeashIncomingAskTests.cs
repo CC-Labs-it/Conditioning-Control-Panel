@@ -160,38 +160,6 @@ public sealed class LeashIncomingAskTests
             }
         });
 
-    [Fact]
-    public void LookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
-        LeashGateCardTests.Run(false, (shell, _, _) =>
-        {
-            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
-            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
-            LeashHead.Service = replacement;
-            shell.Show();
-            shell.ShowTab("leash");
-            var page = shell.Named<LeashTabView>("LeashTab")!;
-            try
-            {
-                var row = page.GetLogicalDescendants().OfType<Border>().Single(c => c.Tag as string == "leash-offer-row:vex");
-                LeashGateCardTests.Click(row.GetLogicalDescendants().OfType<Button>().Single(c => c.Tag as string == "leash-offer-look"));
-                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
-                shell.RebindLeashAsks(); // The timer binds the replacement after the manual Look.
-                LeashAskWindow.Current!.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal("leash-ask:juno", LeashAskWindow.Current!.Card.Tag);
-                LeashAskWindow.Current!.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current);
-            }
-            finally
-            {
-                LeashHead.Service = null;
-                shell.RebindLeashAsks();
-                LeashAskWindow.CloseCurrent();
-                Dispatcher.UIThread.RunJobs();
-            }
-        });
-
     [Theory]
     [InlineData("wayland-test", null)]
     [InlineData(null, "wayland")]

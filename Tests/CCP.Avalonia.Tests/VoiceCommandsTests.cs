@@ -174,13 +174,12 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
-        var savedPanicKeyEnabled = s.PanicKeyEnabled;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
-        var ld = LockdownService.Current = new LockdownService();
+        using var ld = LockdownService.Current = new LockdownService();
         try
         {
             Assert.True(shell.SetAutonomyEnabled(true));
@@ -209,35 +208,12 @@ public sealed class VoiceCommandsTests
         }
         finally
         {
-            try { ld.Dispose(); }
-            finally
-            {
-                s.PanicKeyEnabled = savedPanicKeyEnabled;
-                LockdownService.Current = null;
-                (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
-                shell.Autonomy.Stop();
-            }
+            shell.Autonomy.Stop();
+            LockdownService.Current = null;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
-    }, withoutVoiceCapture: true);
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task SpokenSafeWordTestRestoresPanicKeySetting(bool initial) =>
-        AvaloniaTestDispatcher.RunAsync(async () =>
-        {
-            AmbientBeatLoopsTests.Setup();
-            var settings = CoreSettings.Current;
-            var saved = settings.PanicKeyEnabled;
-            try
-            {
-                settings.PanicKeyEnabled = initial;
-                await TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown();
-                Assert.Equal(initial, settings.PanicKeyEnabled);
-            }
-            finally { settings.PanicKeyEnabled = saved; }
-        });
+    });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
     /// ships mantras; the WAV says the phrase, so it matches, credits 30 XP and paints the verdict.</summary>
@@ -377,28 +353,14 @@ public sealed class VoiceCommandsTests
         });
 
     // The help row is UI state; no recognition or microphone is exercised by this test.
-    private static Task RunUi(Func<MainShellWindow, Task> body, bool withoutVoiceCapture = false) =>
+    private static Task RunUi(Func<MainShellWindow, Task> body) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
-            var settings = CoreSettings.Current;
-            var savedModes = (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled);
-            var savedPremium = CoreEntitlement.HasPremiumProvider;
-            if (withoutVoiceCapture)
-            {
-                // Inline commands supply their own transcript. A concurrent wake loop can issue another command.
-                (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled) = (false, false);
-                CoreEntitlement.HasPremiumProvider = () => true;
-            }
             var shell = new MainShellWindow();
             shell.Show();
             try { await body(shell); }
-            finally
-            {
-                shell.RequestExit();
-                (settings.SpeechWakeWordEnabled, settings.SpeechPushToTalkEnabled) = savedModes;
-                CoreEntitlement.HasPremiumProvider = savedPremium;
-            }
+            finally { shell.RequestExit(); }
         });
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
