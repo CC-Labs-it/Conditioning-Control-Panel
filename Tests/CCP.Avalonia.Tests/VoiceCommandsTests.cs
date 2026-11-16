@@ -174,9 +174,10 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
     {
         var s = CoreSettings.Current;
+        Assert.False(shell.WakeLoopArmed);
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
         using var ld = LockdownService.Current = new LockdownService();
@@ -213,6 +214,14 @@ public sealed class VoiceCommandsTests
             (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
+    }, beforeShow: () =>
+    {
+        // This test injects a command; a replaying wake mic would be a second command source.
+        CoreSettings.Current.MicConsentGiven = true;
+        CoreSettings.Current.SpeechWakeWordEnabled = false;
+        CoreSettings.Current.SpeechPushToTalkEnabled = false;
+        CoreSpeech.IsAvailableProvider = () => true;
+        CoreEntitlement.HasPremiumProvider = () => true;
     });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
@@ -353,10 +362,11 @@ public sealed class VoiceCommandsTests
         });
 
     // The help row is UI state; no recognition or microphone is exercised by this test.
-    private static Task RunUi(Func<MainShellWindow, Task> body) =>
+    private static Task RunUi(Func<MainShellWindow, Task> body, Action? beforeShow = null) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
+            beforeShow?.Invoke();
             var shell = new MainShellWindow();
             shell.Show();
             try { await body(shell); }
