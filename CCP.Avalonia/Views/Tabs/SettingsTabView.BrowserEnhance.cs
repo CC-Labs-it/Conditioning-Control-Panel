@@ -17,8 +17,9 @@ public partial class SettingsTabView
 
     private void HookBrowserEnhance()
     {
-        BrowserWebHost.NavigationStarting += StopBrowserEnhancement;
+        BrowserWebHost.NavigationStarting += () => { _browserDiscoveryPanicStopped = false; StopBrowserEnhancement(); };
         BrowserWebHost.NavigationCompleted += url => EvaluateBrowserEnhancement(url.ToString());
+        BrowserWebHost.NavigationFinished += (url, success) => { if (success) _ = DiscoverBrowserEnhancementAsync(url); };
         AttachedToVisualTree += (_, _) => EvaluateBrowserEnhancement(BrowserWebHost.CurrentUrl?.ToString());
         DetachedFromVisualTree += (_, _) => StopBrowserEnhancement();
         UpdateBrowserEnhanceStatus(null);
@@ -34,6 +35,7 @@ public partial class SettingsTabView
 
     internal void StopBrowserEnhancement()
     {
+        CancelBrowserDiscovery();
         _browserEnhanceHost.Unload();
         _browserEnhanceSource?.Dispose();
         _browserEnhanceSource = null;
