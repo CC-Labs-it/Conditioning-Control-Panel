@@ -1036,6 +1036,9 @@ namespace ConditioningControlPanel.Avalonia
                 // Mandatory video: Core schedules, the overlay plays (WPF App.Video).
                 CoreEngine.Video = Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler;
                 CoreEngine.Video.DeferTrigger = Views.Windows.LockCardWindow.DeferVideo;
+                // WPF BrowserMediaService.ForceEndCore -> MainWindow.EndWebVideoTakeover; the session's tick is off-thread.
+                ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.TearDownTakeover = () =>
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Views.Windows.MainShellWindow.Current?.EndWebVideoTakeover());
                 CoreEngine.BubbleCount = Views.Windows.BubbleCountHost.Instance.Scheduler;
 
                 await step(0.4, "Initializing flash service...");

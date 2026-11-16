@@ -123,7 +123,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("programs-fx", sh => sh?.Named<Tabs.ProgramsTabView>("ProgramsTab")?.StopProgramFxForPanic()),
             // WPF b9368d963 (MainWindow.xaml.cs PanicStopEverySurface "web video" / "Deeper player"): page video and the
             // Deeper player kept playing after a panic. WPF :2045-2046 media block, before the tail's StopEngine.
-            new("browser-media", sh => (sh ?? MainShellWindow.Current)?.PanicPauseBrowserMedia()),
+            new("browser-media", sh =>
+            {
+                // WPF PanicEndBrowserMedia -> BrowserMedia.ForceEndCore("panic"): the session and its tick end too.
+                try { (sh ?? MainShellWindow.Current)?.PanicPauseBrowserMedia(); }
+                finally { ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("panic"); }
+            }),
             new("deeper-player", _ => Deeper.EnhancementPlayerWindow.PanicPauseAll()), // WPF MainWindow.xaml.cs:2067
             // WPF :1554 CancelPendingAi (right after FirstShowService.Stop :1553) runs long before StopEngine (:1838); :1721-1732 game
             // surfaces and Lab minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1733); :1819 KillAllAudio

@@ -335,8 +335,14 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _scheduler);
             try
             {
+                // WPF VideoService.cs:2948: a browser video (user- or app-started) holds the tick; retry shortly.
+                if (!_playing && Services.Browser.BrowserMediaSession.Shared.HoldsScreen)
+                {
+                    Log.Information("VideoService: scheduler tick skipped, browser media active");
+                    ScheduleNext(SkipRetrySeconds);
+                }
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);
