@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
         internal void EndWebVideoTakeover()
         {
+            ExitBrowserPopoutFullscreen(); // WPF MainWindow.Browser.cs:990
             CancelVideoAutoPlay();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
             EndRemoteBrowserVideo();
