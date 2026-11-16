@@ -1777,20 +1777,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void OnAvatarPointerPressed(object? sender, PointerPressedEventArgs e)
         {
             var point = e.GetCurrentPoint(this);
-            if (point.Properties.IsRightButtonPressed) return; // Avalonia opens the ContextMenu itself
+            if (point.Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed) return;
 
-            // The reaction bark, the one line of WPF's ImgAvatar_MouseLeftButtonDown
-            // (AvatarTubeWindow.ChatInput.cs:75) that crosses. It feeds the rolling 60s click
-            // count behind the click-escalation eggs.
             CoreBark.NotifyAvatarClicked();
             RainClickEmote();
-
-            // ponytail: the rest of that handler stays head-side and none of it is a Core move -
-            // the 4-click animation refresh, the 50-clicks-in-60s collapse trigger,
-            // App.Achievements.TrackAvatarClick, V1 click emotes and the 1-in-25 pop sound all
-            // reach App.* or the animated-avatar pipeline. So does BounceAvatar (the click squash,
-            // AvatarTubeWindow.Avatar.cs), which here would be a hand-stepped tween on
-            // AvatarBounceHost's RenderTransform, not an Animation.
+            HandleAvatarClick();
         }
 
         /// <summary>
