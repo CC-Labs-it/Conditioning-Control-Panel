@@ -93,6 +93,7 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     /// palette (the panic ladder's rung 2), so the leash part stands aside. Only a physical key press can be that.</summary>
     internal static bool PaletteTakesPress(bool fromKey, bool paletteOpen, bool lockCardOpen, string? panicKey) =>
         fromKey && paletteOpen && !lockCardOpen && string.Equals(panicKey, "Escape", StringComparison.OrdinalIgnoreCase);
+    internal static Func<MainShellWindow?> Shell = () => MainShellWindow.Current;   // test seam: headless has no MainWindow
     // ---- the host -----------------------------------------------------------------------------
     private bool _windowed;
     private LeashWatch? _watching;
@@ -225,7 +226,9 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
                 _windowed = true;
                 return LeashPunishWindow.OpenFile(media, holder, locked) && StartSampler();
             }
-            MainShellWindow.Current?.PlayDeeperLibraryEntry(path);
+            // WPF AppLeashTaskHost.cs:211 always reloads: the reload restarts the end check, so a player
+            // that already finished this entry still reports the new watch (not PlayDeeperLibraryEntry).
+            Shell()?.ShowOrActivateDeeperPlayer().LoadEnhancementFile(path);
             return true;
         }
         catch (Exception ex) { Serilog.Log.Warning("Leash watch failed: {E}", ex.Message); return false; }

@@ -231,4 +231,61 @@ public sealed class LeashPunishTests
         }
     });
 
+    [Fact]
+    public void CatalogueWatchFinishesWhenThePlayerAlreadyFinishedThatEntry() => LeashGateCardTests.Run(false, (shell, _, _) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("leash-deeper-again-").FullName;
+        var path = Path.Combine(dir, "watch.ccpenh.json");
+        var enh = new Enhancement { MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1" };
+        enh.Metadata.Name = "Watch";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        CoreSettings.Current.DeeperSubmissions[path] = new DeeperSubmissionRecord { CatalogueId = "watch-id" };
+        var (oldTimer, oldShell) = (LeashTaskRunner.TimerFactory, LeashTaskHost.Shell);
+        LeashTaskRunner.TimerFactory = () => null;
+        LeashTaskHost.Shell = () => shell;
+        using var host = new LeashTaskHost();
+        var runner = new LeashTaskRunner(host);
+        var completed = 0;
+        runner.Completed += _ => completed++;
+        var now = DateTimeOffset.UtcNow;
+        var punishment = new Punishment("p", PunishKind.Video, 1, new LeashWatch("catalogue", "watch-id", null),
+            new LeashPerson("u", "Holder", null), now, now.AddDays(1));
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var navigated = typeof(EnhancementPlayerWindow).GetField("_videoNavigated", flags)!;
+        var poll = typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", flags)!;
+        var value = "99.9|100|0";
+        EnhancementPlayerWindow? player = null;
+        void PlayToTheEnd()
+        {
+            navigated.SetValue(player, true);
+            var task = (System.Threading.Tasks.Task)poll.Invoke(player, null)!;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(task.IsCompleted);
+        }
+        try
+        {
+            // The user already played X to the end in Deeper; the window is still open.
+            player = shell.ShowOrActivateDeeperPlayer();
+            global::Avalonia.Controls.ControlExtensions.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>(player, "VideoBrowser")!.ScriptInvoker =
+                _ => System.Threading.Tasks.Task.FromResult<string?>(value);
+            player.LoadEnhancementFile(path);
+            PlayToTheEnd();
+            // Then the holder assigns X: WPF AppLeashTaskHost.cs:211 reloads it, so its end counts again.
+            Assert.True(runner.Start(punishment));
+            Assert.Same(player, shell.ShowOrActivateDeeperPlayer());
+            Assert.Equal(path, player.LoadedFilePath);
+            Assert.Equal(0, completed);
+            PlayToTheEnd();
+            Assert.Equal(1, completed);
+            Assert.False(runner.IsRunning);
+        }
+        finally
+        {
+            runner.Cancel();
+            player?.Close();
+            CoreSettings.Current.DeeperSubmissions.Remove(path);
+            (LeashTaskRunner.TimerFactory, LeashTaskHost.Shell) = (oldTimer, oldShell);
+            Directory.Delete(dir, true);
+        }
+    });
 }
