@@ -69,16 +69,16 @@ public class VaultCompareReviewTests
             Assert.Equal(Loc.GetF("vaultgate_stamp_off", 25), Named<TextBlock>(dialog, "LeverSaving").Text);
             var basic = Named<Border>(dialog, "BasicSaving");
             var prime = Named<Border>(dialog, "PrimeSaving");
-            Assert.Equal(0, basic.Opacity);
-            Assert.Equal(0, prime.Opacity);
+            Assert.Equal(0, basic.GetBaseValue(Visual.OpacityProperty).Value);
+            Assert.Equal(0, prime.GetBaseValue(Visual.OpacityProperty).Value);
             Click(dialog, Loc.Get("vaultgate_billing_yearly"));
-            Assert.Equal(Loc.GetF("vaultgate_stamp_off", 25), ((TextBlock)basic.Child!).Text);
-            Assert.Equal(Loc.GetF("vaultgate_stamp_off", 50), ((TextBlock)prime.Child!).Text);
-            Assert.Equal(0.9, basic.Opacity);
-            Assert.Equal(0.9, prime.Opacity);
+            Assert.Equal(Loc.GetF("vaultgate_stamp_off", 25), basic.GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Equal(Loc.GetF("vaultgate_stamp_off", 50), prime.GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Equal(0.9, basic.GetBaseValue(Visual.OpacityProperty).Value);
+            Assert.Equal(0.9, prime.GetBaseValue(Visual.OpacityProperty).Value);
             Click(dialog, Loc.Get("vaultgate_billing_monthly"));
-            Assert.Equal(0, basic.Opacity);
-            Assert.Equal(0, prime.Opacity);
+            Assert.Equal(0, basic.GetBaseValue(Visual.OpacityProperty).Value);
+            Assert.Equal(0, prime.GetBaseValue(Visual.OpacityProperty).Value);
         }
         finally { dialog.Close(); Cache.SetValue(null, cached); ReadUtc.SetValue(null, readUtc); PlanCatalog.FetchOverride = fetch; InviteApi.DefaultBaseUrl = url; CoreSettings.ServiceProvider = provider; }
     }
@@ -116,7 +116,7 @@ public class VaultCompareReviewTests
                 var e = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, Source = lever };
                 lever.RaiseEvent(e);
                 Assert.True(e.Handled);
-                Assert.Equal(yearly ? 0.9 : 0, Named<Border>(dialog, "BasicSaving").Opacity);
+                Assert.Equal(yearly ? 0.9 : 0, Named<Border>(dialog, "BasicSaving").GetBaseValue(Visual.OpacityProperty).Value);
                 Assert.True(lever.IsFocused);
             }
             KeyPress(Key.Right, true);
@@ -157,7 +157,7 @@ public class VaultCompareReviewTests
 
     [Theory]
     [InlineData("heading")][InlineData("perforation")][InlineData("notches")][InlineData("foil")]
-    [InlineData("ink")][InlineData("hover")][InlineData("press")]
+    [InlineData("ink")][InlineData("hover")][InlineData("press")][InlineData("stamp")]
     public Task TicketDetailsMatchTheStockAndStub(string part) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var dialog = new VaultGateDialog();
@@ -178,6 +178,18 @@ public class VaultCompareReviewTests
                     var price = top.GetVisualDescendants().OfType<Grid>().Single(x => x.Name == "TicketPrice");
                     Assert.Equal(1, Grid.GetColumn(price));
                     Assert.Contains(top.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get(lab ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name"));
+                }
+                if (part == "stamp")
+                {
+                    // WPF Compare.cs:431-456: double rule tilted -4, round saving stamp overlapping its left edge.
+                    var stamp = ticket.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "PriceStamp");
+                    Assert.Equal(-4, Assert.IsType<RotateTransform>(stamp.RenderTransform).Angle);
+                    Assert.Equal(2.5, stamp.BorderThickness.Left);
+                    Assert.Equal(1, Assert.IsType<Border>(stamp.Child).BorderThickness.Left);
+                    var saving = Named<Border>(dialog, lab ? "PrimeSaving" : "BasicSaving");
+                    Assert.Same(stamp.Parent, saving.Parent);
+                    Assert.Equal(-11, Assert.IsType<TransformGroup>(saving.RenderTransform).Children.OfType<RotateTransform>().Single().Angle);
+                    Assert.True(saving.Bounds.X < stamp.Bounds.X && saving.Bounds.Right > stamp.Bounds.X, $"saving {saving.Bounds}, stamp {stamp.Bounds}");
                 }
                 if (part == "perforation")
                 {
@@ -247,6 +259,37 @@ public class VaultCompareReviewTests
             dialog.UpdateLayout();
             Assert.True(((Control)dialog.Content!).IsHitTestVisible);
             Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("vaultgate_signin"));
+            if (level == MotionLevel.Off) Assert.Equal(1, ((Border)dialog.Content!).Child!.Opacity);
+        }
+        finally { dialog.Close(); CoreSettings.ServiceProvider = provider; UiMotionPreference.OsProbe = os; UiMotionPreference.CacheStamp = long.MinValue; }
+    });
+
+    // WPF VaultGateDialog.Compare.cs:112: the offer fades in after the tickets leave.
+    [Fact]
+    public Task BackFadesTheOfferIn() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var os = UiMotionPreference.OsProbe;
+        var service = new SettingsService();
+        service.Current.MotionLevel = MotionLevel.Reduced;
+        service.Current.GentleVisuals = true;
+        service.Current.GentleFadeSeconds = 2.0;
+        CoreSettings.ServiceProvider = () => service;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var dialog = new VaultGateDialog();
+        try
+        {
+            dialog.Show();
+            Click(dialog, Loc.Get("vaultgate_compare"));
+            Click(dialog, Loc.Get("vaultgate_back"));
+            for (var i = 0; i < 300 && !dialog.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == Loc.Get("vaultgate_signin")); i++)
+                await Task.Delay(20);
+            await Task.Delay(300);
+            var body = ((Border)dialog.Content!).Child!;
+            Assert.InRange(body.Opacity, 0.01, 0.9);
+            await Task.Delay(2200);
+            Assert.Equal(1, body.Opacity);
         }
         finally { dialog.Close(); CoreSettings.ServiceProvider = provider; UiMotionPreference.OsProbe = os; UiMotionPreference.CacheStamp = long.MinValue; }
     });

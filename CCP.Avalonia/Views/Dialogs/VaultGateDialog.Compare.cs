@@ -185,8 +185,18 @@ public sealed partial class VaultGateDialog
         {
             var (tier, price, saving) = _comparePrices[i];
             var off = PlanCatalog.YearlyOffPercent(_plans.For(tier));
-            ((TextBlock)saving.Child!).Text = off > 0 ? Loc.GetF("vaultgate_stamp_off", off) : "";
-            saving.Opacity = _yearly && off > 0 ? 0.9 : 0;
+            ((TextBlock)((Border)saving.Child!).Child!).Text = off > 0 ? Loc.GetF("vaultgate_stamp_off", off) : "";
+            var show = _yearly && off > 0;
+            saving.Opacity = show ? 0.9 : 0;
+            // WPF Compare.cs:509-521: the round stamp thumps in after the roll or lifts off.
+            if (animate && CompareMotion != MotionLevel.Off && show)
+            {
+                _ = Tween(saving, OpacityProperty, 0, 0.9, GentleVisuals.RiseMs(GentleVisuals.FadeMs(120)), token, 150);
+                if (CompareMotion == MotionLevel.Full)
+                    foreach (var axis in new[] { ScaleTransform.ScaleXProperty, ScaleTransform.ScaleYProperty })
+                        _ = Tween(saving, axis, 1.45, 1, 230, token, 150);
+            }
+            else if (animate && CompareMotion != MotionLevel.Off && off > 0) _ = Tween(saving, OpacityProperty, 0.9, 0, GentleVisuals.FadeMs(140), token);
             var slotIndex = _priceSlots.FindIndex(s => ReferenceEquals(s.Slot, price));
             if (slotIndex >= 0) _priceSlots[slotIndex] = (price, tier, true, _yearly, false);
             PaintPrice(price, tier, true, _yearly, false);
@@ -208,7 +218,7 @@ public sealed partial class VaultGateDialog
         var accent = B(lab ? "#E5C76B" : "#C8235F");
         var muted = B(lab ? "#A99A84" : "#7D6878");
         var name = Loc.Get(lab ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name");
-        var main = new StackPanel { Margin = new Thickness(26, 16, 26, 8) };
+        var main = new StackPanel { Margin = new Thickness(26, 16, 26, 4) };
         var top = new Grid { Name = "TicketHeading", ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var who = new StackPanel();
         who.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_ticket_admit").ToUpper(System.Globalization.CultureInfo.CurrentUICulture), Foreground = muted, FontSize = 10.5, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
@@ -216,13 +226,30 @@ public sealed partial class VaultGateDialog
         who.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
         top.Children.Add(who);
         var price = (StackPanel)Price(tier, compact: true, yearly: _yearly);
-        price.Tag = text;
+        price.Tag = accent;
+        price.Margin = new Thickness(0);
+        price.MaxWidth = 185;
         price.RenderTransform = new TranslateTransform();
         PaintPrice(price, tier, true, _yearly, false);
-        var priceRow = new Grid { Name = "TicketPrice", ColumnDefinitions = new ColumnDefinitions("*,Auto"), MaxWidth = 190, VerticalAlignment = VerticalAlignment.Top };
-        priceRow.Children.Add(price);
-        var saving = new Border { Name = lab ? "PrimeSaving" : "BasicSaving", BorderBrush = accent, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(30), Padding = new Thickness(6), IsHitTestVisible = false, Child = new TextBlock { Foreground = accent, FontWeight = FontWeight.Bold, FontSize = 12, TextWrapping = TextWrapping.Wrap } };
-        Grid.SetColumn(saving, 1);
+        // WPF Compare.cs:416-460: a tilted double-ruled price stamp, the round saving stamp parked over its corner.
+        var priceRow = new Grid { Name = "TicketPrice", VerticalAlignment = VerticalAlignment.Top };
+        priceRow.Children.Add(new Border
+        {
+            Name = "PriceStamp", BorderBrush = accent, BorderThickness = new Thickness(2.5), CornerRadius = new CornerRadius(3), Padding = new Thickness(2.5),
+            Child = new Border { BorderBrush = accent, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(1.5), Padding = new Thickness(11, 3, 11, 7), ClipToBounds = true, Child = price },
+            RenderTransform = new RotateTransform(-4), Opacity = 0.93, Margin = new Thickness(0, 14, 6, 0), VerticalAlignment = VerticalAlignment.Top,
+        });
+        var saving = new Border
+        {
+            Name = lab ? "PrimeSaving" : "BasicSaving", Width = 84, Height = 84, CornerRadius = new CornerRadius(42), BorderBrush = accent, BorderThickness = new Thickness(2.5), Padding = new Thickness(2.5),
+            Child = new Border
+            {
+                CornerRadius = new CornerRadius(39), BorderBrush = accent, BorderThickness = new Thickness(1),
+                Child = new TextBlock { Foreground = accent, FontWeight = FontWeight.Bold, FontSize = 13, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 2) },
+            },
+            RenderTransform = new TransformGroup { Children = { new ScaleTransform(1, 1), new RotateTransform(-11) } },
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(-70, 30, 0, 0), IsHitTestVisible = false, Opacity = 0,
+        };
         priceRow.Children.Add(saving);
         _comparePrices.Add((tier, price, saving));
         Grid.SetColumn(priceRow, 1);
@@ -231,7 +258,7 @@ public sealed partial class VaultGateDialog
         main.Children.Add(new Border { Height = 1, Background = accent, Opacity = 0.4, Margin = new Thickness(0, 10, 0, 9) });
         void Perk(string number, string words, IBrush ink)
         {
-            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Margin = new Thickness(0, 0, 0, lab ? 6 : 3) };
+            var line = new Grid { ColumnDefinitions = new ColumnDefinitions(lab ? "48,*" : "30,*"), Margin = new Thickness(0, 0, 0, lab ? 6 : 3) };
             line.Children.Add(new TextBlock { Text = number, Foreground = accent, FontWeight = FontWeight.Bold, FontSize = 11.5 });
             var value = new TextBlock { Text = words, Foreground = ink, FontSize = lab ? 14 : 13, TextWrapping = TextWrapping.Wrap };
             Grid.SetColumn(value, 1);
@@ -286,9 +313,10 @@ public sealed partial class VaultGateDialog
         return ticket;
     }
     // WPF Compare.cs:525-594: full motion translates, reduced motion fades, off settles at once.
-    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default)
+    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default, int delayMs = 0)
     {
-        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms) };
+        // Backward fill holds the start value through the delay, as WPF BeginTime does.
+        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 ? FillMode.Backward : FillMode.None };
         animation.Children.Add(new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } });
         animation.Children.Add(new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } });
         try { await animation.RunAsync(target, token); }
@@ -341,6 +369,8 @@ public sealed partial class VaultGateDialog
             if (!IsVisible) return;
             BuildOffer();
             _ = FillAsyncBits();
+            // WPF Compare.cs:112: the offer fades back in; Off stays immediate.
+            if (CompareMotion != MotionLevel.Off) _ = Tween(_body, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)));
         }
         if (CompareMotion == MotionLevel.Off) { Finish(); return; }
         _leaving = true;

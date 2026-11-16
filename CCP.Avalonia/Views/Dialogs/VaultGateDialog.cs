@@ -423,7 +423,7 @@ public sealed partial class VaultGateDialog : Window
         {
             Text = VaultOffer.Money(sale != null ? VaultSale.FirstMonthCents(price.MonthlyCents, sale.Percent)
                 : yearly ? price.YearlyCents : price.MonthlyCents, _currency),
-            FontFamily = FriendsDrawer.Display, FontWeight = FontWeight.SemiBold, FontSize = compact ? 22 : 28, Foreground = ticketInk ?? Brushes.White,
+            FontFamily = FriendsDrawer.Display, FontWeight = compact ? FontWeight.Bold : FontWeight.SemiBold, FontSize = compact ? 30 : 28, Foreground = ticketInk ?? Brushes.White,
             Margin = new Thickness(0, 0, 8, 0),
         });
         if (sale != null)
@@ -433,14 +433,17 @@ public sealed partial class VaultGateDialog : Window
                 FontFamily = FriendsDrawer.Display, Foreground = ticketInk ?? Dim, FontSize = compact ? 14 : 17, VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 8, compact ? 3 : 4),
             });
-        line.Children.Add(new TextBlock
+        var sub = new TextBlock
         {
             Text = sale != null ? Loc.Get("vaultgate_sale_first")
                 : yearly ? Loc.GetF("vaultgate_price_year", VaultOffer.YearlyPerMonth(price))
                 : Loc.GetF("vaultgate_price", VaultOffer.PerDay(price)),
             Foreground = ticketInk ?? Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5), TextWrapping = TextWrapping.Wrap,
-        });
+        };
         slot.Children.Add(line);
+        // WPF Compare.cs:418-427: the ticket stamp sets its sub line under the amount.
+        if (compact) { sub.FontSize = 11; sub.FontWeight = FontWeight.SemiBold; sub.Margin = new Thickness(0, -2, 0, 0); slot.Children.Add(sub); }
+        else line.Children.Add(sub);
         if (sale == null)
         {
             if (hints && !yearly) AddHints(slot, tier, price);
