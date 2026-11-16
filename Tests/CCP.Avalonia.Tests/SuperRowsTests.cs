@@ -42,8 +42,14 @@ public class SuperRowsTests
             var rows = Assert.IsType<StackPanel>(box.Body);
             SuperAccess.Set(SuperEffect.InnerBloom, false);
             Assert.False(rows.IsVisible);
+            Assert.Equal(0.45, rows.Opacity);
+            Assert.False(rows.IsHitTestVisible);
+            Assert.Equal(KeyboardNavigationMode.None, KeyboardNavigation.GetTabNavigation(rows));
             SuperAccess.Set(SuperEffect.InnerBloom, true);
             Assert.True(rows.IsVisible);
+            Assert.Equal(1, rows.Opacity);
+            Assert.True(rows.IsHitTestVisible);
+            Assert.Equal(KeyboardNavigationMode.Continue, KeyboardNavigation.GetTabNavigation(rows));
             var sliders = rows.GetLogicalDescendants().OfType<Slider>().ToArray();
             Assert.Equal(3, sliders.Length);
             sliders[0].Value = 5.7;
