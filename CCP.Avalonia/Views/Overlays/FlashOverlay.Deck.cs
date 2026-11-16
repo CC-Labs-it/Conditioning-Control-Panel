@@ -29,6 +29,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The next face for a flip (tests swap it): a picture decoded at the card's width, and its path.</summary>
         internal static Func<FlashOverlayWindow, Task<(Bitmap Picture, string Path)?>> DeckPicture = LoadDeckPicture;
 
+        /// <summary>Windows has no input shape: each tick tests the cursor against the card and toggles
+        /// click-through, as the bubble field does (tests swap it). WPF's card window is the picture's
+        /// own size (FlashService.cs:1770, the layer draws around it), so the grown margin never takes a click.</summary>
+        internal static Func<FlashOverlayWindow, PixelRect[], bool> DeckInput = (w, r) =>
+            X11Overlay.BackendOf(w.TryGetPlatformHandle()) == OverlayBackend.Win32 && X11Overlay.SetInputRects(w, r, 1);
+
         // WPF FlashService.cs:2720: phase variety for the idle sway. UI thread only.
         private static int _deckIndex;
         private static DispatcherTimer? _deckTimer;
@@ -80,6 +86,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // Room for the lift (x1.1 and 10% up), the wobble, the peek, the shadow and the puff.
             var pad = (int)Math.Ceiling(Math.Max(rect.Width, rect.Height) * 0.25) + 32;
             w.AttachDeck(FlickerDeck.Create(_deckIndex++ % 8, Rng, min, max), pad, scaling);
+            var glow = w.GlowPadPx - pad;   // the picture and its glow keep the mouse, the grown margin does not
+            w.DeckInputPx = new[] { new PixelRect(pad, pad, rect.Width + 2 * glow, rect.Height + 2 * glow) };
             w.PointerEntered += (_, _) => DeckHover(w, true);
             w.PointerExited += (_, _) => DeckHover(w, false);
             HookDeckSwitch();
@@ -119,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 any = true;
                 if (StepPool(w, rect, dt)) continue;
+                if (w.DeckInputPx is { } input) DeckInput(w, input);   // still a card's size after the switch goes off
                 if (w.Deck != null && w.StepDeck(dt, level)) (raise ??= new()).Add(w);
             }
             foreach (var w in Exiting)
@@ -235,17 +244,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (ReferenceEquals(w.Deck, deck)) deck.NoPicture = true;
                 return;
             }
-            if (!w.OfferDeckPicture(deck, got.Picture, got.Path)) got.Picture.Dispose();
+            // WPF ApplyDeckSwap (FlashService.cs:2918-2930): an animated face plays at the GIF speed slider.
+            GifFrames.TryGetValue(got.Picture, out var gif);
+            if (!w.OfferDeckPicture(deck, got.Picture, got.Path, gif?.Frames,
+                    gif is null ? default : GifFrameDelay(gif.Delay, CoreSettings.Current.FlashGifSpeedMultiplier, gentle: false)))
+                Drop(got.Picture);
+            else GifFrames.Remove(got.Picture);
         }
 
         /// <summary>Up to four draws from the flash pool, preferring a picture not up anywhere, then
         /// anything but the card's own face (WPF :2866-2880), decoded off the UI thread at the card's width.</summary>
-        private static Task<(Bitmap Picture, string Path)?> LoadDeckPicture(FlashOverlayWindow w)
+        internal static Task<(Bitmap Picture, string Path)?> LoadDeckPicture(FlashOverlayWindow w)
         {
             // shortcut: compares raw paths, not WPF's SourceIdentityLocked pack identity; a pack picture may repeat on a small pool.
             var up = new HashSet<string>(Active.Select(e => e.Window.SourcePath).OfType<string>(), StringComparer.OrdinalIgnoreCase);
             var own = w.SourcePath;
-            var width = Math.Max(1, Active.Find(e => e.Window == w).Rect.Width);
+            var rect = Active.Find(e => e.Window == w).Rect;
             var s = CoreSettings.Current;
             return Task.Run<(Bitmap Picture, string Path)?>(() =>
             {
@@ -258,8 +272,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     try
                     {
+                        // WPF LoadImageAsync: a GIF or WebP keeps its frames (decoded as a flash is).
+                        using (var codec = SkiaSharp.SKCodec.Create(path))
+                            if (codec is { FrameCount: > 1 } && DecodeAnimated(path, rect) is { } first) return (first, path);
                         using var stream = File.OpenRead(path);
-                        return (Bitmap.DecodeToWidth(stream, width), path);
+                        return (Bitmap.DecodeToWidth(stream, Math.Max(1, rect.Width)), path);
                     }
                     catch (Exception ex) { Log.Debug("Flicker Deck: could not decode {Path}: {E}", path, ex.Message); }
                 }

@@ -39,6 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal bool DeckBreak { get; set; }
         internal string? SourcePath { get; private set; }
         internal int DeckPadPx { get; private set; }
+        /// <summary>The part of the grown window that takes the mouse (window px): the picture and its glow.</summary>
+        internal PixelRect[]? DeckInputPx { get; set; }
         internal double DeckPeekDx, DeckPeekDy;
         /// <summary>Test seams: the crack strokes, the sheen band, the puff and the break.</summary>
         internal Path? CrackLine { get; private set; }
@@ -55,6 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly TranslateTransform _deckShift = new();
         private Bitmap? _deckFace;
         private string? _pendingPath;
+        private System.Collections.Generic.List<Bitmap>? _pendingFrames;
+        private TimeSpan _pendingDelay;
         private Canvas? _deckFx;
         private Path? _crackUnder;
         private double _crackAmount = -1, _crackReach = -1, _shadowLift = -1;
@@ -117,23 +121,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Deck == null) return;
             Deck = null;
             DeckBreak = false;
-            DeckPending?.Dispose();
-            DeckPending = null;
+            DropDeckPending();
             ApplyDeckPose(new FlickerPose(1, 1, 0, 0, 0, 0, 0));
             if (DeckShadow != null) DeckShadow.IsVisible = false;
             if (_deckFx != null) _deckFx.IsVisible = false;
             DropDeckSparks();
         }
 
-        /// <summary>A picture for the flip in flight; false (caller disposes) when the flip no longer wants it.</summary>
-        internal bool OfferDeckPicture(FlickerDeckState deck, Bitmap picture, string path)
+        /// <summary>A picture for the flip in flight, with its animation frames (<paramref name="frames"/>[0] is
+        /// <paramref name="picture"/>) when it has them; false (caller disposes) when the flip no longer wants it.</summary>
+        internal bool OfferDeckPicture(FlickerDeckState deck, Bitmap picture, string path,
+            System.Collections.Generic.List<Bitmap>? frames = null, TimeSpan frameDelay = default)
         {
             if (_closed || IsFadingOut || Exit != null || !ReferenceEquals(Deck, deck) || deck is not { Busy: true, Swapped: false })
                 return false;
-            DeckPending?.Dispose();
+            DropDeckPending();
             DeckPending = picture;
-            _pendingPath = path;
+            (_pendingPath, _pendingFrames, _pendingDelay) = (path, frames, frameDelay);
             return true;
+        }
+
+        private void DropDeckPending()
+        {
+            if (_pendingFrames is { } frames) for (var i = 1; i < frames.Count; i++) frames[i].Dispose();
+            _pendingFrames = null;
+            DeckPending?.Dispose();
+            DeckPending = null;
         }
 
         /// <summary>One frame of the card (WPF FlashLayer.StepDeck :929): step, then swap, puff and pose.
@@ -145,24 +158,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if ((ev & FlickerEvents.Swap) != 0 && DeckPending is { } next)
             {
                 DeckPending = null;
-                SwapFace(next);
+                SwapFace(next, _pendingFrames, _pendingDelay);
+                _pendingFrames = null;
                 DeckSparks = SwapPuff(deck, level);
                 BuildSparkLayer();
             }
-            if ((ev & FlickerEvents.GaveUp) != 0) { DeckPending?.Dispose(); DeckPending = null; }
+            if ((ev & FlickerEvents.GaveUp) != 0) DropDeckPending();
             if (DeckSparks is { } puff && !FlickerShatter.StepSparks(puff, dt)) DropDeckSparks();
             DrawDeckSparks();
             if (Exit == null) ApplyDeckPose(FlickerDeck.Sample(deck, level));
             return (ev & FlickerEvents.Raise) != 0;
         }
 
-        /// <summary>WPF ApplyDeckSwap / FlashLayer :937-947: the new face replaces the old, a GIF stops.</summary>
-        private void SwapFace(Bitmap next)
+        /// <summary>WPF ApplyDeckSwap (FlashService.cs:2918-2930) / FlashLayer :937-947: the new face replaces
+        /// the old, whose GIF stops, and an animated face plays from its first frame.</summary>
+        private void SwapFace(Bitmap next, System.Collections.Generic.List<Bitmap>? nextFrames, TimeSpan frameDelay)
         {
             _gifTimer?.Stop(); _gifTimer = null;
             if (_gifFrames is { } frames) for (var i = 1; i < frames.Count; i++) frames[i].Dispose();
             _gifFrames = null;
+            GifFrameIndex = 0;
             _image.Source = next;
+            if (nextFrames != null) Animate(nextFrames, frameDelay);
             _deckFace?.Dispose();
             _deckFace = next;
             SourcePath = _pendingPath;
@@ -306,8 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void DropDeckPictures()
         {
-            DeckPending?.Dispose();
-            DeckPending = null;
+            DropDeckPending();
             _deckFace?.Dispose();
             _deckFace = null;
         }
