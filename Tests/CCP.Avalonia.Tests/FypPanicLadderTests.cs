@@ -181,7 +181,7 @@ public sealed class FypPanicLadderTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldProvider = CoreSettings.ServiceProvider;
-        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure);
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror);
         var oldAssets = CorePaths.EffectiveAssetsProvider;
         var lib = System.IO.Directory.CreateTempSubdirectory("fyp-ghost-").FullName;
         CorePaths.EffectiveAssetsProvider = () => lib;   // the page-reboot rung builds a manifest
@@ -198,6 +198,7 @@ public sealed class FypPanicLadderTests
         var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive; // headless has no native window
         GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
         GameWindow.FypGhostClickThrough = (_, on) => { clickThrough = on; return true; };
         GameWindow.FypGhostOpacity = (_, a) => { alpha = a; return opacityOk; };
         GameWindow.FypGhostNow = () => now;
@@ -285,7 +286,7 @@ public sealed class FypPanicLadderTests
         {
             feed.Close();
             shell.Close();
-            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure) = old;
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror) = old;
             CorePaths.EffectiveAssetsProvider = oldAssets;
             CoreSettings.ServiceProvider = oldProvider;
             System.IO.Directory.Delete(lib, true);
@@ -302,10 +303,11 @@ public sealed class FypPanicLadderTests
                 .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure);
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror);
         bool through = false;
         double alpha = 1;
         GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
         GameWindow.FypGhostClickThrough = (_, on) => { through = on; return true; };
         GameWindow.FypGhostOpacity = (_, value) => { alpha = value; return true; };
@@ -338,7 +340,7 @@ public sealed class FypPanicLadderTests
         finally
         {
             feed.Close();
-            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure) = old;
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror) = old;
         }
     });
 
@@ -354,12 +356,13 @@ public sealed class FypPanicLadderTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldProvider = CoreSettings.ServiceProvider;
-        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure);
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror);
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         bool clickThrough = false;
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive; // headless has no native window
         GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
         GameWindow.FypGhostClickThrough = (_, on) => { clickThrough = on; return true; };
         GameWindow.FypGhostOpacity = (_, _) => true;
         var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
@@ -378,7 +381,7 @@ public sealed class FypPanicLadderTests
         finally
         {
             feed.Close();
-            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure) = old;
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror) = old;
             CoreSettings.ServiceProvider = oldProvider;
         }
     });
