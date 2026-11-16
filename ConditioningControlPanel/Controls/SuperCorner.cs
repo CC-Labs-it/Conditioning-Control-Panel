@@ -130,7 +130,8 @@ namespace ConditioningControlPanel.Controls
             // The cut edge: the long side, so an off corner still reads as a gold dog-ear.
             dc.DrawLine(Edge, BottomRight ? new Point(0, Leg) : new Point(Leg, 0), BottomRight ? new Point(Leg, 0) : new Point(0, Leg));
 
-            var star = new FormattedText("★", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 13,
+            // Filled star on, outline star off: the shape changes too, not just the colours (ccp-bugs #1635).
+            var star = new FormattedText(lit ? SuperBox.StarOnGlyph : SuperBox.StarOffGlyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 13,
                 lit ? Ink : DimStar, VisualTreeHelper.GetDpi(this).PixelsPerDip);
             double c = BottomRight ? Leg * 0.64 : Leg * 0.36;
             dc.DrawText(star, new Point(c - star.Width / 2, c - star.Height / 2));

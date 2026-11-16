@@ -170,4 +170,43 @@ public class SuperBoxRenderTests
         Assert.Contains($"Effect=\"{effect}\"", xaml);
         Assert.DoesNotContain("SuperRow", xaml);
     }
+
+    [Fact]
+    public void Every_box_carries_a_labelled_v2_toggle_matching_the_star()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            if (Environment.GetEnvironmentVariable("CCP_SUPER_ALL") == "1") return;
+            foreach (var e in Enum.GetValues<SuperEffect>())
+            {
+                var box = new SuperBox { Effect = e };
+                Realize(box);
+                box.Refresh();
+                // No account: the V2 is not running, so the toggle reads off, like the star.
+                Assert.False(box.StarLit);
+                Assert.False(box.V2Toggle.IsChecked == true);
+                Assert.Equal(Visibility.Visible, box.V2Toggle.Visibility);
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("super_v2_toggle"),
+                    System.Windows.Automation.AutomationProperties.GetName(box.V2Toggle));
+            }
+        });
+    }
+
+    [Fact]
+    public void Star_is_an_outline_when_off_never_a_glyph_from_an_icon_font()
+    {
+        // ccp-bugs #1635: on some machines the star drew as an empty box from Segoe MDL2 Assets.
+        Assert.Equal("★", SuperBox.StarOnGlyph);
+        Assert.Equal("☆", SuperBox.StarOffGlyph);
+        var src = File.ReadAllText(Path.Combine(SourceRoot(), "Controls", "SuperBox.cs"));
+        Assert.DoesNotContain("new FontFamily(\"Segoe MDL2 Assets", src);
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            if (Environment.GetEnvironmentVariable("CCP_SUPER_ALL") == "1") return;
+            var box = new SuperBox { Effect = SuperEffect.Creep };
+            Realize(box);
+            box.Refresh();
+            Assert.Equal(SuperBox.StarOffGlyph, box.StarGlyph);
+        });
+    }
 }
