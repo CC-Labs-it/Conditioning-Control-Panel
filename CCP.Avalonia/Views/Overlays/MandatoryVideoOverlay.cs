@@ -197,8 +197,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
 
+        internal Func<double?> VideoMinutes = () => App.Achievements?.Progress?.TotalVideoMinutes;
+        internal Action FirstVideoMoment = () => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("firstVideoEver", null);
+
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
+            // WPF VideoService.cs:3174-3185: offer the moment before either playback route.
+            try { if (VideoMinutes() <= 0) FirstVideoMoment(); }
+            catch (Exception ex) { Log.Debug(ex, "First video moment failed"); }
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
             _capSpent = 0;
             // WPF VideoService.cs:3082-3085: a cached remote clip keeps its URL identity (credit, remote guards).
