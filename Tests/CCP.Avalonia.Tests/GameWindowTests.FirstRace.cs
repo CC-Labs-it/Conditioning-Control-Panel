@@ -82,7 +82,11 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void FirstRace_DownloadStartsShellAndPanicStopsIt() => FirstRace((w, fake) =>
+    public void FirstRace_DownloadStartsShellAndPanicStopsIt()
+    {
+        // The fake shell is /usr/bin/setsid + /bin/cat, as in the other LinuxRaceHost tests (GameWindowTests.LinuxRace.cs:21).
+        if (!OperatingSystem.IsLinux()) Assert.Skip("Linux owned race shell; the fake shell needs setsid and cat.");
+        FirstRace((w, fake) =>
     {
         var oldLaunch = GameWindow.LaunchRaceShell;
         LinuxRaceHost? host = null;
@@ -101,6 +105,7 @@ public sealed partial class GameWindowTests
         }
         finally { host?.Dispose(); GameWindow.LaunchRaceShell = oldLaunch; }
     });
+    }
 
     [Fact]
     public void FirstRace_InstalledEngineReportsMissingHost() => FirstRace((w, _) =>
