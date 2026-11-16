@@ -159,11 +159,17 @@ public sealed class FirstShowPopTests(ITestOutputHelper output)
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Off;
             await fx.LoadAsync(new[] { path, path, path, path });
-            fx.Tick(19.5, 0); fx.Tick(20, .1);
+            // After SubliminalUntil (27) and before GatherAt (28): no subliminal word over the probes.
+            fx.Tick(27.2, 0); fx.Tick(27.7, .1);
             var bubble = Assert.Single(fx.LiveBubbles);
             var flash = Assert.Single(fx.LiveFlashes);
             host = new Window { Width = fx.Width, Height = fx.Height, Content = fx }; host.Show(); Dispatcher.UIThread.RunJobs();
             using var shown = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
+            fx.Tick(27.35, 0);   // age .15 s: half way through the .3 s fade-in (WPF FirstShowEffects.cs:260,264)
+            using var fading = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
+            fx.Tick(27.1, 0);    // before birth: the same stage with neither actor drawn
+            using var empty = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
+            fx.Tick(27.7, 0);
             fx.DrawBubbleSprite = false;
             using var noSprite = Shot(fx, SKRectI.Create(0, 0, 1600, 900), false).Image;
             fx.DrawBubbleSprite = true;
@@ -173,6 +179,8 @@ public sealed class FirstShowPopTests(ITestOutputHelper output)
             var halo = At(shown, bubble.X + bubble.W / 2 + 3, bubble.Y);
             var plain = At(without, bubble.X + bubble.W / 2 + 3, bubble.Y);
             Assert.True(halo.Red > plain.Red + 3 && halo.Red - plain.Red > halo.Green - plain.Green, $"halo {halo}, base {plain}");
+            var dim = At(fading, bubble.X + bubble.W / 2 + 3, bubble.Y);
+            Assert.True(dim.Red - plain.Red < (halo.Red - plain.Red) * .75, $"halo mid-fade {dim}, full {halo}, base {plain}");
             var rim = At(shown, bubble.X - bubble.W * .28, bubble.Y - bubble.W * .20);
             var bare = At(noSprite, bubble.X - bubble.W * .28, bubble.Y - bubble.W * .20);
             Assert.True(rim.Red > bare.Red + 25 && rim.Blue > bare.Blue + 25, $"sprite rim {rim}, without sprite {bare}");
@@ -183,9 +191,11 @@ public sealed class FirstShowPopTests(ITestOutputHelper output)
             Assert.True(shine.Red > shade.Red + 5, $"shine {shine}, shade {shade}");
             Assert.True(face.Green > edge.Green + 40, $"face {face}, edge {edge}");
             var glow = At(shown, flash.Left - 2, flash.Center.Y);
-            var far = At(shown, flash.Left - 25, flash.Center.Y);
+            var far = At(empty, flash.Left - 2, flash.Center.Y);
             Assert.True(glow.Red > far.Red + 3 && glow.Red - far.Red > glow.Green - far.Green, $"flash glow {glow}, base {far}");
             Assert.True(glow.Red < 180, $"hard pink border: {glow}");
+            var glowFading = At(fading, flash.Left - 2, flash.Center.Y);
+            Assert.True(glowFading.Red - far.Red < (glow.Red - far.Red) * .75, $"flash glow mid-fade {glowFading}, full {glow}, base {far}");
             var inset = At(shown, flash.Left + 2, flash.Center.Y);
             var picture = At(shown, flash.Left + 12, flash.Center.Y);
             var corner = At(shown, flash.Left + 5, flash.Top + 5);

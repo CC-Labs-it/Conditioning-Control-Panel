@@ -322,7 +322,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
                 if (a.Text != null) { if (DrawWords) DrawOutlined(dc, a.Text, Math.Min(56, W * .035), a.X, a.Y, Colors.HotPink, 6); }
                 else if (a.Bubble)
                 {
-                    DrawGlow(dc, box, true);
+                    DrawGlow(dc, box, true, a.Alpha);
                     if (_bubbleSprite != null) { if (DrawBubbleSprite) dc.DrawImage(_bubbleSprite, box); }
                     else dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(232, 232, 240)), new Pen(Brushes.White, 2), box);
                     dc.DrawEllipse(GlassShine, null, box);
@@ -345,7 +345,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
                     double scale = Math.Min(inner.Width / frame.Size.Width, inner.Height / frame.Size.Height);
                     double width = frame.Size.Width * scale, height = frame.Size.Height * scale;
                     var fit = new Rect(a.X - width / 2, a.Y - height / 2, width, height);
-                    DrawGlow(dc, fit, false);
+                    DrawGlow(dc, fit, false, a.Alpha);
                     using (dc.PushClip(new RoundedRect(fit, 14))) dc.DrawImage(frame, fit);
                 }
             }
@@ -362,12 +362,13 @@ internal sealed class FirstShowEffects : Control, IDisposable
         }
     }
     // WPF BubbleLayer.cs:183-190 and FlashLayer.cs:413-438: blurred filled shapes, not strokes.
-    private void DrawGlow(DrawingContext dc, Rect box, bool bubble)
+    // The raw Skia replay skips PushOpacity (no opacity save layer), so the actor alpha goes into the paint (WPF BubbleLayer.cs:186, FlashLayer.cs:436).
+    private void DrawGlow(DrawingContext dc, Rect box, bool bubble, double alpha)
     {
         using var rec = new SkiaSharp.SKPictureRecorder();
         var canvas = rec.BeginRecording(new SkiaSharp.SKRect(0, 0, (float)W, (float)H));
         using var blur = SkiaSharp.SKMaskFilter.CreateBlur(SkiaSharp.SKBlurStyle.Normal, bubble ? 4 : 6);
-        using var paint = new SkiaSharp.SKPaint { IsAntialias = true, Color = HotPink.WithAlpha((byte)((bubble ? .45 : .65) * 255)), MaskFilter = blur };
+        using var paint = new SkiaSharp.SKPaint { IsAntialias = true, Color = HotPink.WithAlpha((byte)((bubble ? .45 : .65) * Math.Clamp(alpha, 0, 1) * 255)), MaskFilter = blur };
         if (bubble) canvas.DrawCircle((float)box.Center.X, (float)box.Center.Y, (float)box.Width / 2, paint);
         else canvas.DrawRoundRect(new SkiaSharp.SKRect((float)box.Left, (float)box.Top, (float)box.Right, (float)box.Bottom), 14, 14, paint);
         dc.Custom(new PictureOp(rec.EndRecording(), new Rect(0, 0, W, H)));
