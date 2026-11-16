@@ -436,4 +436,47 @@ public sealed class ModCreatorBarksTests
         else { Assert.Null(rule["mood"]); Assert.Null(rule["conditions"]); }
     });
 
+    [Fact]
+    public void BarkAudioLabelsAndAttachmentsRoundTrip() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'Rule',trigger:'Event',variant_pool:['text',{text:'missing',audio:'rule_1.mp3'}]}]");
+        w.LoadBarksFrom(root);
+        var variants = Variants(Card(w));
+        Assert.Contains(variants.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("mod_barks_text_only"));
+        Assert.Contains(variants.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("mod_mantra_missing_fmt", "rule_1.mp3"));
+        var source = Path.Combine(root, "input.mp3"); File.WriteAllText(source, "audio");
+        var cards = (System.Collections.IList)typeof(ModCreatorWindow).GetField("_barkCards", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+        var row = (StackPanel)variants.Children[0];
+        typeof(ModCreatorWindow).GetMethod("AttachBarkAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new[] { cards[0], row, source });
+        var output = Path.Combine(root, "out");
+        var rules = Export(w, output);
+        Assert.Equal("rule_2.mp3", rules[0]["variant_pool"]![0]!["audio"]!.Value<string>());
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_2.mp3")));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_1.mp3")));
+    });
+
+    [Fact]
+    public void LoadedBarkPreviewUsesSharedPanicStop() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        var clip = Path.Combine(Path.GetDirectoryName(FileAt(root))!, "clip.mp3");
+        File.WriteAllText(clip, "audio");
+        File.WriteAllText(FileAt(root), "[{id:'rule',trigger:'Event',variant_pool:[{text:'line',audio:'clip.mp3'}]}]");
+        var old = ConditioningControlPanel.CoreAudio.PlayStoppableProvider;
+        var stops = 0; string? played = null;
+        ConditioningControlPanel.CoreAudio.PlayStoppableProvider = (path, _, _, _, _) => { played = path; return () => stops++; };
+        try
+        {
+            w.LoadBarksFrom(root);
+            var play = Variants(Card(w)).GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "▶"));
+            Assert.True(play.IsVisible);
+            play.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(clip, played);
+            typeof(ModCreatorWindow).GetMethod("StopPreviewsForPanic", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
+            Assert.Equal(1, stops);
+        }
+        finally { ConditioningControlPanel.CoreAudio.PlayStoppableProvider = old; }
+    });
+
 }
