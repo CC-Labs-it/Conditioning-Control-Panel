@@ -14,7 +14,8 @@ internal sealed partial class GameWindow
 {
     private BackRoomBridge? _roomBridge;
 
-    // WPF BackRoomHostService.cs:26, 399-452: one room, free to open, with the account pinned per bridge.
+    // WPF BackRoomHostService.cs:26, 399-452: one room, no tier gate, with the account pinned per bridge.
+    // The sign-in check lives on the one door, MainShellWindow.LaunchPlayBackRoom (WPF LaunchCore :310-315).
     static partial void RegisterBackRoom(Dictionary<string, Game> games) =>
         games["backroom"] = new("backroom", "launcher_game_backroom_title", "backroom/index.html");
 
