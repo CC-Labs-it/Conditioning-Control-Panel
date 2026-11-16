@@ -23,12 +23,26 @@ internal static partial class ChaosRunHost
         var center = BubbleOverlay.CenterPx(source);
         if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Ripple(center, 440, 450, strong: false);
         else ChaosFieldFxOverlay.Ripple(center, 440, 450);
+        EStimBurstAt(center, 8, 440);
+        Pulse(Color.FromRgb(0x7A, 0xE0, 0xFF), 0.25);
+        _state.PushEvent(Loc.Get("chaos_body_buzz_spreads"));   // no icon in code (IconEmojiRatchet)
+    }
+
+    // WPF BubbleService.cs:1901-1914: the spanked rabbit sweep calls this for each victim.
+    internal static void ElectrifiedVictim(Point victimPx)
+    {
+        if (_state?.ElectrifiedRabbits == true) EStimBurstAt(victimPx, 3, 620);
+    }
+
+    // WPF BubbleService.cs:445-485: free, non-chaining discharges shared with Body Buzz.
+    private static void EStimBurstAt(Point fromPx, int maxArcs, double rangePx)
+    {
         var targets = BubbleOverlay.Field.Bubbles.Where(b => !b.Popping && b.Spec != null && !b.Spec.IsDarter && !b.Spec.IsFreeze && !b.Spec.IsTease && !b.Spec.IsBrittle
                 && !(b.Spec.IsChaperoneLive && b.Escort is { Popping: false } escort && BubbleOverlay.Field.Bubbles.Contains(escort)))
             .Select(b => (Bubble: b, Point: BubbleOverlay.CenterPx(b)))
-            .Select(x => (x.Bubble, x.Point, Distance: Math.Pow(x.Point.X - center.X, 2) + Math.Pow(x.Point.Y - center.Y, 2)))
-            .Where(x => x.Distance <= 440 * 440).OrderBy(x => x.Distance).Take(8).ToArray();
-        var bolts = targets.Select(x => (From: center, To: x.Point)).ToArray();
+            .Select(x => (x.Bubble, x.Point, Distance: Math.Pow(x.Point.X - fromPx.X, 2) + Math.Pow(x.Point.Y - fromPx.Y, 2)))
+            .Where(x => x.Distance <= rangePx * rangePx).OrderBy(x => x.Distance).Take(maxArcs).ToArray();
+        var bolts = targets.Select(x => (From: fromPx, To: x.Point)).ToArray();
         for (int i = 0; i < targets.Length; i++)
         {
             var target = targets[i].Bubble;
@@ -55,8 +69,6 @@ internal static partial class ChaosRunHost
                 BubbleOverlay.PlayChaosCue("estim_zap", 0.45f);
             }
         }
-        Pulse(Color.FromRgb(0x7A, 0xE0, 0xFF), 0.25);
-        _state.PushEvent(Loc.Get("chaos_body_buzz_spreads"));   // no icon in code (IconEmojiRatchet)
     }
 
     internal static void ClearBodyBuzzHops()
