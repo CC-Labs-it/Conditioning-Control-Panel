@@ -45,7 +45,7 @@ public partial class AvatarTubeWindow
             var line = level == CompanionProgress.MaxLevel
                 ? $"{name} reached MAX LEVEL."
                 : $"{name} is now level {level}.";
-            GigglePriority(line, playSound: false, aiGenerated: false);
+            GigglePriority(line, aiGenerated: false);   // WPF Reactions.cs:557,561: default playSound giggles
             _levelReactionSpeaking = HasBubbleUp;
         });
     }

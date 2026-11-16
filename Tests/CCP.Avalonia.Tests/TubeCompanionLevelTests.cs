@@ -42,6 +42,8 @@ public sealed class TubeCompanionLevelTests
             var tube = shell.Tube!;
             Assert.NotNull(tube);
             tube.AvatarSwitchScheduler = (_, fire) => { fire(); return () => { }; };
+            var sounds = new System.Collections.Generic.List<bool>();
+            tube.SpeechAudioPlayer = (playSound, _, _, spoken) => { sounds.Add(playSound); spoken?.Invoke(); };
             tube.SwitchToCompanionAvatar(CompanionId.OGBambiSprite);
             Assert.Equal(3, tube.CurrentAvatarSet);
             Assert.Equal(0, s.ActiveCompanionId);
@@ -55,6 +57,7 @@ public sealed class TubeCompanionLevelTests
             Assert.Contains("10", caption.Text);
             Assert.Contains("level 10", text.Text);
             Assert.True(tube.HasBubbleUp);
+            Assert.Equal(new[] { true }, sounds);   // WPF Speech.cs:332,543-546: the milestone giggles
             PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(shell);
             Assert.False(tube.HasBubbleUp);
             progress.Level = 99; progress.CurrentXP = 0;
