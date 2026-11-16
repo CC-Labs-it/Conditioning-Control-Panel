@@ -37,6 +37,7 @@ public sealed class AwarenessFinishViewTests
             CoreSession.IsSessionRunningProvider, KeywordAvatarComment.TubeSource, CoreEntitlement.HasPremiumProvider,
             ConditioningControlPanel.Avalonia.App.Ai);
         AvatarTubeWindow? tube = null;
+        var restorePanic = ProcessStateSnapshot.CapturePanic();
         try
         {
             var settings = new SettingsService();
@@ -65,9 +66,13 @@ public sealed class AwarenessFinishViewTests
         }
         finally
         {
-            tube?.Close(); KeywordAvatarComment.CancelPending();
-            (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
-                KeywordAvatarComment.TubeSource, CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.Avalonia.App.Ai) = saved;
+            try
+            {
+                tube?.Close(); KeywordAvatarComment.CancelPending();
+                (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
+                    KeywordAvatarComment.TubeSource, CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.Avalonia.App.Ai) = saved;
+            }
+            finally { restorePanic(); }
         }
     });
 
