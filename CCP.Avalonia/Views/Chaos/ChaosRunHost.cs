@@ -243,6 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // then nothing (boons, HUD, StartToys) ever starts. Background runs after the panic's Default.
             if (PanicWatchdog.PanicPending) { Dispatcher.UIThread.Post(BeginRun, DispatcherPriority.Background); return; }
             _heavyUntilUtc = DateTime.MinValue;   // WPF ChaosModeService.cs:405
+            ChaosBackdropWindow.ShowForRun(ActiveMode, _state.ActIndex); // WPF ChaosModeService.cs:518
             HookRunVideo();   // WPF ChaosModeService.cs:504
             _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
             _scriptThreat = _scriptSnapped = _scriptDraft = _sinRigged = _sinPending = false;
@@ -991,6 +992,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 {
                     _state.WaveIndex = newWave;
                     _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                    ChaosBackdropWindow.Active?.SetDepth(_state.ActIndex);
                     AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:1460
                 }
             }
@@ -1109,6 +1111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             _state.WaveIndex = _pendingWave;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
+            ChaosBackdropWindow.Active?.SetDepth(_state.ActIndex);
             _pendingWave = 0;
             _overlay?.ShowReadyGo(ResumeAfterDraft);
         }
@@ -1249,6 +1252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosBackdropWindow.CloseActive();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
@@ -1543,6 +1547,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void CleanupAfterRun()
         {
             ChaosHubWindow.SetCompanionActive(false);
+            ChaosBackdropWindow.CloseActive();   // WPF CleanupAfterRun :3321; EndRun keeps the plate under the recap
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();
