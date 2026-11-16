@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -101,6 +102,7 @@ public sealed class SuperBox : Border
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-6, 0, 4, 0), Content = _starGlyph,
         };
         _star.Click += (_, _) => OnStarPressed();
+        ToolTip.SetShowOnDisabled(_star, true);
 
         _ring.Children.Add(new Ellipse { Width = 2 * RingR + 2, Height = 2 * RingR + 2, Stroke = new SolidColorBrush(Color.FromRgb(0x33, 0x26, 0x4F)), StrokeThickness = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
         _ring.Children.Add(_ringArc);
@@ -139,7 +141,11 @@ public sealed class SuperBox : Border
         Paint(lit: false);
     }
 
-    /// <summary>True when the star draws on: unlocked and switched on.</summary>
+    /// <summary>Effects with a running lane on this head; each host lane adds its own. For any other effect the
+    /// star and the weekly try stay off, so no free try is spent on nothing.</summary>
+    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new();
+
+    /// <summary>True when the star draws on: hosted, unlocked and switched on.</summary>
     public bool StarLit { get; private set; }
 
     /// <summary>True when the box draws lit (tier or a running try), false when dim.</summary>
@@ -152,6 +158,7 @@ public sealed class SuperBox : Border
     /// <summary>WPF :268: a locked tier shakes the sign and gets the tier refusal (SuperDoor), others flip.</summary>
     internal void OnStarPressed()
     {
+        if (!HostedOnThisHead.Contains(Effect)) return;
         if (!SuperDoor.Press(Effect)) Shake(_signHost);
         Refresh();
     }
@@ -253,9 +260,12 @@ public sealed class SuperBox : Border
         bool unlocked = SuperAccess.IsUnlocked(effect);
         bool thisWeek = !paid && SuperPreview.ThisWeek == effect;
         bool baseOn = SuperAccess.IsBaseOn(effect);
+        bool hosted = HostedOnThisHead.Contains(effect);
 
         Paint(lit: unlocked);
-        StarLit = unlocked && SuperAccess.IsSwitchedOn(effect);
+        StarLit = hosted && unlocked && SuperAccess.IsSwitchedOn(effect);
+        _star.IsEnabled = hosted;
+        ToolTip.SetTip(_star, hosted ? null : Loc.Get("label_coming_soon"));
         _starGlyph.Foreground = StarLit ? StarOn : StarOff;
         AutomationProperties.SetName(_star, name);
         _head.IsVisible = !paid;
@@ -271,7 +281,7 @@ public sealed class SuperBox : Border
             _corner.Children.Add(_ring);
             StartRing();
         }
-        else if (thisWeek && SuperPreview.CanTry(effect) && baseOn)
+        else if (hosted && thisWeek && SuperPreview.CanTry(effect) && baseOn)
         {
             // WPF :436 shakes the folded (collapsed) picker on a refusal, which draws nothing.
             _corner.Children.Add(MakeChip(Loc.Get("super_try"), Mint, () => SuperPreview.TryStart(effect)));

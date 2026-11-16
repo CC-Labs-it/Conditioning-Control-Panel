@@ -22,7 +22,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class SuperBoxTests
 {
     /// <summary>Runs <paramref name="body"/> on a shown box with isolated settings, tier and preview state.</summary>
-    private static void WithBox(SuperEffect effect, bool premium, Action<SuperBox, SettingsService, Func<int>> body) => AvaloniaTestDispatcher.Run(() =>
+    private static void WithBox(SuperEffect effect, bool premium, Action<SuperBox, SettingsService, Func<int>> body, bool hosted = true) => AvaloniaTestDispatcher.Run(() =>
     {
         ShellTestPlatform.Ensure();
         LocalizationManager.Instance.SetLanguage("en");
@@ -31,6 +31,7 @@ public sealed class SuperBoxTests
         var denied = CoreEntitlement.ShowDeniedHandler;
         var trying = SuperAccess.TryingProvider;
         var all = Environment.GetEnvironmentVariable("CCP_SUPER_ALL");
+        var hostedBefore = SuperBox.HostedOnThisHead.ToArray();
         var service = new SettingsService();
         int refusals = 0;
         Window? window = null;
@@ -41,6 +42,8 @@ public sealed class SuperBoxTests
             CoreEntitlement.HasPremiumProvider = () => premium;
             CoreEntitlement.ShowDeniedHandler = _ => refusals++;
             SuperAccess.TryingProvider = () => SuperPreview.Trying;
+            SuperBox.HostedOnThisHead.Clear();
+            if (hosted) SuperBox.HostedOnThisHead.Add(effect);
             typeof(AppSettings).GetProperty(SuperBase.SettingFor(effect))!.SetValue(service.Current, true);
             var box = new SuperBox { Effect = effect };
             window = new Window { Content = box, Width = 600, Height = 300 };
@@ -52,6 +55,8 @@ public sealed class SuperBoxTests
         {
             SuperPreview.End(panic: false);
             window?.Close();
+            SuperBox.HostedOnThisHead.Clear();
+            SuperBox.HostedOnThisHead.UnionWith(hostedBefore);
             SuperAccess.TryingProvider = trying;
             CoreEntitlement.HasPremiumProvider = hasPremium;
             CoreEntitlement.ShowDeniedHandler = denied;
@@ -116,6 +121,43 @@ public sealed class SuperBoxTests
         Assert.Contains(Loc.Get("super_back_monday"), CornerTexts(box));
         Assert.DoesNotContain(Loc.Get("super_try"), CornerTexts(box));
     });
+
+    /// <summary>WPF MainWindow.xaml.cs:1635: a press a lock card consumes still ends the try.</summary>
+    [Fact]
+    public void PanicPressSpentOnALockCardStillEndsTheTry() => WithBox(SuperPreview.ThisWeek, premium: false, (box, service, _) =>
+    {
+        service.Current.PanicKeyEnabled = true;
+        service.Current.PanicKey = "F8";
+        var shell = new MainShellWindow();
+        try
+        {
+            Assert.True(SuperPreview.TryStart(box.Effect));
+            LockCardWindow.ShowOnAllMonitors("good girl", 1, strictMode: true);
+            Assert.True(LockCardWindow.IsAnyOpen());
+            shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
+            Assert.False(LockCardWindow.IsAnyOpen()); // the press stopped at the lock-card rung
+            Assert.Null(SuperPreview.Trying);
+            Assert.True(SuperPreview.EndedByPanic);
+        }
+        finally
+        {
+            LockCardWindow.ForceCloseAll();
+            shell.Close();
+        }
+    });
+
+    /// <summary>No lane runs the effect on this head: the star and the weekly try stay off, nothing is spent.</summary>
+    [Fact]
+    public void UnhostedEffectNeverSpendsTheTry() => WithBox(SuperPreview.ThisWeek, premium: false, (box, service, refusals) =>
+    {
+        Assert.False(box.Star.IsEnabled);
+        box.OnStarPressed();
+        Assert.Equal(0, refusals());
+        Assert.False(box.StarLit);
+        Assert.DoesNotContain(Loc.Get("super_try"), CornerTexts(box));
+        Assert.Contains(Loc.Get("super_get_basic"), CornerTexts(box));
+        Assert.Equal(SuperPreviewRule.NeverUsed, service.Current.SuperPreviewUsedWeek);
+    }, hosted: false);
 
     [Fact]
     public void BoxSitsOnAllEightFeaturePages() => AvaloniaTestDispatcher.Run(() =>
