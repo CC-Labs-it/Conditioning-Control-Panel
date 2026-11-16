@@ -62,10 +62,15 @@ public partial class TutorialOverlay
         }
     }
 
-    private void UnsubscribeAdvanceTrigger()
+    // keepDialog: a real click advances first and posts Next(), then closes the dialog, whose
+    // Closed handler tears this overlay down before the post runs; the Closing backup must survive.
+    private void UnsubscribeAdvanceTrigger(bool keepDialog = false)
     {
-        if (_subDialog != null) _subDialog.Closing -= OnSubDialogClosing;
-        _subDialog = null;
+        if (!keepDialog)
+        {
+            if (_subDialog != null) _subDialog.Closing -= OnSubDialogClosing;
+            _subDialog = null;
+        }
         if (_subButton != null)
         {
             _subButton.RemoveHandler(PointerReleasedEvent, OnSubButtonReleased);
@@ -84,7 +89,7 @@ public partial class TutorialOverlay
     private void OnSubDialogClosing(object? sender, WindowClosingEventArgs e)
     {
         if (sender is not NewEnhancementDialog { ClosingWithSuccess: true } || e.Cancel ||
-            _closed || _advanceFiredThisStep || !CoreTutorial.IsActive ||
+            _closed || !CoreTutorial.IsActive ||
             !ReferenceEquals(CoreTutorial.CurrentStep, _step)) return;
         _advanceFiredThisStep = true;
         UnsubscribeAdvanceTrigger();
