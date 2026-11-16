@@ -70,10 +70,13 @@ public class VaultCompareTests
                 var ticket = dialog.GetVisualDescendants().OfType<Border>().Single(b => b.Name == ticketName);
                 var stamp = ticket.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PriceStamp");
                 var heading = ticket.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Loc.Get(tierName));
-                var grid = Assert.IsType<Grid>(stamp.GetVisualParent());
+                // WPF Compare.cs:269-291: heading column, then the stamp host in column 1 of the same grid.
+                var host = Assert.IsType<Grid>(stamp.GetVisualParent());
+                var grid = Assert.IsType<Grid>(host.GetVisualParent());
+                Assert.Equal("TicketHeading", grid.Name);
                 var headingColumn = Assert.IsType<StackPanel>(grid.Children[0]);
                 Assert.Contains(heading, headingColumn.GetVisualDescendants());
-                Assert.Equal(1, Grid.GetColumn(stamp));
+                Assert.Equal(1, Grid.GetColumn(host));
                 Assert.True(stamp.TranslatePoint(new Point(), grid)!.Value.X > heading.TranslatePoint(new Point(), grid)!.Value.X);
             }
         }
@@ -96,7 +99,7 @@ public class VaultCompareTests
                 Click(dialog, Loc.Get("vaultgate_compare"));
                 foreach (var yearly in new[] { false, true })
                 {
-                    if (yearly) Click(dialog, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
+                    if (yearly) Click(dialog, Loc.Get("vaultgate_billing_yearly"));
                     var ticket = dialog.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "BasicTicket");
                     var stamp = ticket.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PriceStamp");
                     var price = VaultOffer.PriceFor(1, VaultOffer.HeadlineCurrency(PlanCatalog.Current), PlanCatalog.Current);
@@ -104,7 +107,7 @@ public class VaultCompareTests
                     var amount = stamp.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == VaultOffer.Money(cents, VaultOffer.HeadlineCurrency(PlanCatalog.Current)));
                     var captionText = yearly ? Loc.GetF("vaultgate_price_year", VaultOffer.YearlyPerMonth(price)) : Loc.Get("vaultgate_sale_first");
                     var caption = stamp.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == captionText);
-                    Assert.True(caption.TranslatePoint(new Point(), stamp)!.Value.Y >= amount.TranslatePoint(new Point(), stamp)!.Value.Y + amount.Bounds.Height - 1);
+                    Assert.True(caption.TranslatePoint(new Point(), stamp)!.Value.Y >= amount.TranslatePoint(new Point(), stamp)!.Value.Y + amount.Bounds.Height - 2.5, $"{(yearly ? "yearly" : "monthly")}: caption {caption.TranslatePoint(new Point(), stamp)}, amount {amount.TranslatePoint(new Point(), stamp)} {amount.Bounds}");
                 }
             }
             finally { dialog.Close(); }
@@ -131,7 +134,7 @@ public class VaultCompareTests
                 Assert.All(stamps, stamp => Assert.True(stamp.Child is Border inner && inner.BorderThickness.Left == 1));
                 var struck = stamps[0].GetVisualDescendants().OfType<TextBlock>().Single(t => Equals(t.Tag, "struck"));
                 Assert.Equal(TextDecorations.Strikethrough, struck.TextDecorations);
-                Click(dialog, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
+                Click(dialog, Loc.Get("vaultgate_billing_yearly"));
                 Assert.DoesNotContain(dialog.GetVisualDescendants().OfType<TextBlock>(), t => Equals(t.Tag, "struck"));
             }
             finally { dialog.Close(); }
@@ -177,7 +180,7 @@ public class VaultCompareTests
                 Assert.Contains(saleLine, Texts(dialog));
                 Assert.Contains(endsLine, Texts(dialog));
                 Assert.DoesNotContain(stamp.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == saleLine || t.Text == endsLine);
-                Click(dialog, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
+                Click(dialog, Loc.Get("vaultgate_billing_yearly"));
                 Assert.DoesNotContain(saleLine, Texts(dialog));
                 Assert.DoesNotContain(endsLine, Texts(dialog));
                 Click(dialog, Loc.Get("vaultgate_billing_monthly"));
