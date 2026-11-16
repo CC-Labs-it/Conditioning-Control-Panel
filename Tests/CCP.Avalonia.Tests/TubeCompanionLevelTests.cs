@@ -64,8 +64,9 @@ public sealed class TubeCompanionLevelTests
             CompanionCore.AddCompanionXP(CompanionProgress.GetXPForLevel(99), "test");
             Assert.Contains("MAX LEVEL", text.Text);
             Assert.True(tube.HasBubbleUp);
-            shell.OnEngineStopped();
-            Assert.False(tube.HasBubbleUp);
+            shell.OnEngineStopped();   // WPF Reactions.cs:631-635: a stop only giggles, the line stays
+            Assert.True(tube.HasBubbleUp);
+            Assert.Contains("MAX LEVEL", text.Text);
         }
         finally { shell.Close(); PanicAftermath.EndQuiet(); CoreMods.ActiveModPackageProvider = previousPackage; CoreMods.ActiveModIdProvider = previousId; }
         return Task.CompletedTask;
@@ -99,6 +100,12 @@ public sealed class TubeCompanionLevelTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(tube.HasBubbleUp);
             Assert.Contains("10", tube.FindControl<TextBlock>("TxtAvatarLevel")!.Text);
+            tube.Hide();   // WPF Speech.cs:365,481: a hidden tube still logs the line, only the bubble is skipped
+            progress.Level = 19; progress.CurrentXP = 0;
+            CompanionCore.AddCompanionXP(CompanionProgress.GetXPForLevel(19), "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("level 20", tube.ChatHistory.Last().Text);
+            Assert.False(tube.HasBubbleUp);
         }
         finally { shell.Close(); PanicAftermath.EndQuiet(); CoreMods.ActiveModPackageProvider = previousPackage; CoreMods.ActiveModIdProvider = previousId; }
         return Task.CompletedTask;

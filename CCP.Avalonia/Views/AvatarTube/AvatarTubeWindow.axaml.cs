@@ -1333,7 +1333,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
                                 bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null)
         {
-            _levelReactionSpeaking = false;
             ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
                 var spokenHandled = false;
