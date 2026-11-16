@@ -11,7 +11,7 @@
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, session stats,
-// RevealService.Sync, EMI desk fires, the audio-web pack request,
+// achievements bubble credit, RevealService.Sync, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. WebHost has no process-failed signal;
 // the heartbeat watch recovers silent ready pages only, not failures before ready.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
@@ -429,8 +429,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);
                 try { CoreProgression.AddXP(booking.BaseXp, "Chaos"); }   // WPF AddXP(baseXp, XPSource.Chaos)
                 catch (Exception ex) { Log.Debug("DtrhHost payout AddXP: {E}", ex.Message); }
-                try { CreditRaceBubbles((int?)o["sessionStats"]?["bubblesPopped"] ?? 0); }
-                catch (Exception ex) { Log.Debug("DtrhHost bubble credit: {E}", ex.Message); }
                 if (!fromTeardown)
                 {
                     try { DtrhRunCompletedBark((int)finalXp, booking.Difficulty); }
@@ -506,7 +504,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 snapshot["abandoned"] = true;
                 OnDtrhRunEnded(snapshot, fromTeardown: true);
             }
-            RaceMilestonePopup?.Close();
             _dtrhRunActive = false;
             _dtrhExiting = false;
             Log.Information("DtrhHostService: closed");
