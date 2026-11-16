@@ -162,6 +162,124 @@ public sealed class FlickerDeckOverlayTests
     });
 
     [Fact]
+    public Task Press_and_swap_extend_lifetime_without_shortening_it() => OnUi((_, clock) =>
+    {
+        var (w, _) = Card();
+        w.SpawnedAt = clock.Now;
+        w.Lifetime = TimeSpan.FromMilliseconds(500);
+        w.Run(1, TimeSpan.Zero, w.Lifetime);
+        w.Deck!.BreakAt = 4;
+        var before = w.ExpiresAt;
+        w.MouseDown(new Point(w.Width / 2, w.Height / 2), MouseButton.Left);
+        Assert.True(w.ExpiresAt >= clock.Now + (long)((FlickerDeck.LiftSpanSec + FlickerDeck.MaxHoldSec) * TimeSpan.TicksPerSecond));
+        Assert.True(w.ExpiresAt > before);
+        // A fresh face gets the original lifetime, even when it lands close to the deadline.
+        w.Lifetime = TimeSpan.FromSeconds(10);
+        for (var i = 0; i < 40; i++) Tick(clock, 0.02);
+        Assert.True(w.ExpiresAt >= clock.Now + TimeSpan.TicksPerSecond * 9);
+    });
+
+    [Fact]
+    public Task Break_raises_one_stage_blast_and_panic_closes_the_shatter() => OnUi((s, _) =>
+    {
+        var stage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
+        var blasts = new System.Collections.Generic.List<ConditioningControlPanel.SuperCore.Blast>();
+        void OnBlast(ConditioningControlPanel.SuperCore.Blast b) => blasts.Add(b);
+        stage.Blasted += OnBlast;
+        var oldReach = s.DeckBreakReach;
+        try
+        {
+            s.DeckBreakReach = 50;
+            var (w, _) = Card();
+            w.Deck!.BreakAt = 1;
+            w.MouseDown(new Point(w.Width / 2, w.Height / 2), MouseButton.Left);
+            FlashOverlay.DeckPress(w);
+            var b = Assert.Single(blasts);
+            Assert.Equal(ConditioningControlPanel.SuperCore.BlastKind.CardBreak, b.Kind);
+            Assert.Equal(600, b.X);
+            Assert.Equal(450, b.Y);
+            Assert.Equal(320, b.ReachPx, 6);
+            Assert.Equal(320, b.HolePx, 6);
+            Assert.NotNull(w.DeckShatter);
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(p => p.Id == "flash").Stop(null);
+            Assert.Empty(FlashOverlay.Exiting);
+            Assert.False(w.IsVisible);
+        }
+        finally { s.DeckBreakReach = oldReach; stage.Blasted -= OnBlast; }
+    });
+
+    [Fact]
+    public Task Panic_from_a_blast_listener_closes_the_breaking_card() => OnUi((_, _) =>
+    {
+        var stage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
+        void Panic(ConditioningControlPanel.SuperCore.Blast _) =>
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(p => p.Id == "flash").Stop(null);
+        stage.Blasted += Panic;
+        try
+        {
+            var (w, _) = Card();
+            w.Deck!.BreakAt = 1;
+            w.MouseDown(new Point(w.Width / 2, w.Height / 2), MouseButton.Left);
+            Assert.False(w.IsVisible);
+            Assert.Null(w.DeckShatter);
+            Assert.Empty(FlashOverlay.Exiting);
+            Assert.Empty(FlashOverlay.Active);
+        }
+        finally { stage.Blasted -= Panic; }
+    });
+
+    [Fact]
+    public Task Live_pool_pulls_pictures_only_when_enabled() => OnUi((s, clock) =>
+    {
+        var stage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
+        var saved = (s.WhirlpoolDragsPictures, stage.DragsPictures);
+        try
+        {
+            stage.Pool.Reset(); stage.PoolOn = true; stage.DragsPictures = true;
+            stage.Pool.Step(14, 550, 450, 0, 1, 1080);
+            var (w, _) = Card();
+            s.WhirlpoolDragsPictures = false;
+            var start = w.Position;
+            Tick(clock, 0.1);
+            Assert.Equal(start, w.Position);
+            s.WhirlpoolDragsPictures = true;
+            for (int i = 0; i < 5; i++) Tick(clock, 0.05);
+            Assert.NotEqual(start, w.Position);
+            Assert.True(w.PoolScale < 1);
+        }
+        finally { stage.PoolOn = false; stage.Pool.Reset(); (s.WhirlpoolDragsPictures, stage.DragsPictures) = saved; }
+    });
+
+    [Fact]
+    public Task Pool_eye_breaks_a_card_without_click_rewards_and_panic_closes_it() => OnUi((s, clock) =>
+    {
+        var stage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
+        var saved = (s.WhirlpoolDragsPictures, stage.DragsPictures, FlashOverlay.Multiply, s.CorruptionMode);
+        int blasts = 0, children = 0;
+        void OnBlast(ConditioningControlPanel.SuperCore.Blast b) { if (b.Kind == ConditioningControlPanel.SuperCore.BlastKind.CardBreak) blasts++; }
+        stage.Blasted += OnBlast;
+        try
+        {
+            s.WhirlpoolDragsPictures = true; stage.DragsPictures = true; s.CorruptionMode = true;
+            FlashOverlay.Multiply = (_, _, _, _) => children++;
+            stage.Pool.Reset(); stage.PoolOn = true; stage.Pool.Step(14, 600, 450, 0, 1, 1080);
+            var (w, _) = Card();
+            Tick(clock, 0.05);
+            Assert.Equal(1, blasts);
+            Assert.Equal(0, children);
+            Assert.NotNull(w.DeckShatter);
+            Assert.DoesNotContain(FlashOverlay.Active, e => e.Window == w);
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(p => p.Id == "flash").Stop(null);
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            stage.Blasted -= OnBlast; stage.PoolOn = false; stage.Pool.Reset();
+            (s.WhirlpoolDragsPictures, stage.DragsPictures, FlashOverlay.Multiply, s.CorruptionMode) = saved;
+        }
+    });
+
+    [Fact]
     public Task Motion_off_keeps_the_card_still_and_breaks_it_with_the_plain_cut() => OnUi((s, clock) =>
     {
         s.MotionLevel = MotionLevel.Off;

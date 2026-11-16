@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Super Flicker Deck on this head (WPF FlashService.cs:2717-2965 + FlashLayer.cs:929): which
     /// flashes become cards, the press that flips or breaks one, the next picture, and one shared
     /// tick that steps every card. Panic and Stop reach it through <see cref="CloseAll"/>.
-    /// The shared stage (break blasts, the Whirlpool's pull) and the click lifetime boost are s73-deck-b's.
+    /// The shared stage supplies the pool and receives card breaks.
     /// </summary>
     internal static partial class FlashOverlay
     {
@@ -50,13 +50,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.PointerEntered += (_, _) => DeckHover(w, true);
             w.PointerExited += (_, _) => DeckHover(w, false);
             HookDeckSwitch();
-            if (_deckTimer == null)
-            {
-                _lastDeckTick = Clock.GetTimestamp();
-                _deckTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => DeckTick());
-                _deckTimer.Start();
-            }
+            EnsureDeckTick();
             return pad;
+        }
+
+        private static void EnsureDeckTick()
+        {
+            if (_deckTimer != null) return;
+            _lastDeckTick = Clock.GetTimestamp();
+            _deckTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => DeckTick());
+            _deckTimer.Start();
         }
 
         internal static bool DeckTickRunning => _deckTimer != null;
@@ -73,16 +76,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var level = FlashOverlayWindow.DeckLevel;
             var any = false;
             List<FlashOverlayWindow>? raise = null;
-            foreach (var (w, _) in Active)
-                if (w.Deck != null)
-                {
-                    any = true;
-                    if (w.StepDeck(dt, level)) (raise ??= new()).Add(w);
-                }
+            foreach (var (w, rect) in Active.ToArray())
+            {
+                any = true;
+                if (StepPool(w, rect, dt)) continue;
+                if (w.Deck != null && w.StepDeck(dt, level)) (raise ??= new()).Add(w);
+            }
             foreach (var w in Exiting)
                 if (w.Deck != null) { any = true; w.StepDeck(dt, level); }
             if (raise != null) foreach (var w in raise) RaiseDeck(w);
             if (!any) StopDeckTick();
+        }
+
+        /// <summary>WPF FlashLayer.StepPool: still pictures follow the shared pool in desktop pixels.</summary>
+        internal static bool StepPool(FlashOverlayWindow w, PixelRect rect, double dt)
+        {
+            if (dt <= 0 || w.IsFadingOut || w.Exit != null || w.Shatter != null || w.DeckShatter != null) return false;
+            if (w.MotionStyle != FlashMotionStyle.Still) { w.ResetPool(); return false; }
+            var stage = Platform.Super.SuperStageHost.Stage;
+            var pull = CoreSettings.Current.WhirlpoolDragsPictures
+                ? stage.Pull(rect.X + rect.Width / 2.0, rect.Y + rect.Height / 2.0, 1.4, ConditioningControlPanel.SuperCore.PullKind.Picture)
+                : default;
+            if (!pull.Inside && w.PoolVx == 0 && w.PoolVy == 0 && w.PoolScale >= 0.999) return false;
+            w.PoolVx = (w.PoolVx + pull.Ax * dt) * Math.Max(0, 1 - 2.4 * dt);
+            w.PoolVy = (w.PoolVy + pull.Ay * dt) * Math.Max(0, 1 - 2.4 * dt);
+            if (!pull.Inside && Math.Abs(w.PoolVx) < 0.5 && Math.Abs(w.PoolVy) < 0.5) w.PoolVx = w.PoolVy = 0;
+            w.PoolX += w.PoolVx * dt;
+            w.PoolY += w.PoolVy * dt;
+            int dx = (int)Math.Round(w.PoolX), dy = (int)Math.Round(w.PoolY);
+            w.PoolX -= dx; w.PoolY -= dy;
+            var moved = new PixelRect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
+            var i = Active.FindIndex(e => e.Window == w);
+            if (i < 0) return false;
+            Active[i] = (w, moved);
+            w.Position = new PixelPoint(w.Position.X + dx, w.Position.Y + dy);
+            w.SetPoolScale(w.PoolScale + ((pull.Inside ? pull.Scale : 1) - w.PoolScale) * (1 - Math.Exp(-8 * dt)));
+            if (!pull.Eaten) return false;
+            Active.RemoveAt(i); // no click reward, haptics or hydra
+            Exiting.Add(w);
+            w.Closed += (_, _) => Exiting.Remove(w);
+            if (w.Deck != null)
+            {
+                var side = Math.Max(rect.Width, rect.Height);
+                var small = Math.Clamp(w.PoolScale, 0.35, 1);
+                stage.Blast(new ConditioningControlPanel.SuperCore.Blast(moved.X + rect.Width / 2.0, moved.Y + rect.Height / 2.0,
+                    side * ConditioningControlPanel.SuperCore.DeckOptions.ReachSides(CoreSettings.Current.DeckBreakReach) * small,
+                    side * 0.8 * small, ConditioningControlPanel.SuperCore.BlastKind.CardBreak));
+                if (!w.IsVisible) return true;
+                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return true; }
+            }
+            else if (!w.TryBeginShatter(CoreSettings.Current.MotionLevel, Rng)) { w.Close(); return true; }
+            return true;
         }
 
         /// <summary>WPF RaiseDeckWindow (:2938) + FlashLayer.BringToFront: in the air, it is the top card.</summary>
@@ -134,6 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Pop(w);
                     break;
                 case FlickerPress.Flip:
+                    w.BoostLifetime((int)((FlickerDeck.LiftSpanSec + FlickerDeck.MaxHoldSec) * 1000) + 250);
                     _ = FetchDeckPicture(w, deck);
                     break;
             }

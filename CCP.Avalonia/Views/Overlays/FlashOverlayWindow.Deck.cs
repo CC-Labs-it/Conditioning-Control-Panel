@@ -19,6 +19,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed partial class FlashOverlayWindow
     {
+        internal double PoolVx, PoolVy, PoolX, PoolY;
+        internal double PoolScale { get; private set; } = 1;
+        private readonly ScaleTransform _poolScale = new();
+        internal void SetPoolScale(double scale)
+        {
+            PoolScale = scale;
+            if (_card.RenderTransform is TransformGroup group && !group.Children.Contains(_poolScale)) group.Children.Add(_poolScale);
+            _poolScale.ScaleX = _poolScale.ScaleY = scale;
+        }
+        internal void ResetPool() { PoolVx = PoolVy = PoolX = PoolY = 0; SetPoolScale(1); }
+
         internal FlickerDeckState? Deck { get; private set; }
         internal FlickerShatterState? DeckShatter { get; private set; }
         internal FlickerSpark[]? DeckSparks { get; private set; }
@@ -155,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _deckFace?.Dispose();
             _deckFace = next;
             SourcePath = _pendingPath;
+            BoostLifetime((int)Lifetime.TotalMilliseconds); // WPF ApplyDeckSwap: a full look at the new face.
             ClipCorners();
             LayoutDeckFx();
         }
