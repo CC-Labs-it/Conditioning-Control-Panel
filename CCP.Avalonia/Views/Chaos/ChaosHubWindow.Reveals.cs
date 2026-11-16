@@ -14,13 +14,14 @@ public partial class ChaosHubWindow
         public readonly string Id = id;
         public readonly Control Target = target;
         public readonly double Begin = begin;
-        public bool Chimed;
     }
 
     internal static Action<string, float> PlayRevealSfx = ChaosOverlayWindow.ChaosSfx.Play;
 
     private readonly List<RevealPulse> _revealPulses = new();
+    private readonly List<double> _revealChimes = new();
     private BeatLoop? _revealLoop;
+    private long _revealStarted;
     private bool _revealClosed;
 
     // WPF ChaosHubWindow.Reveals.cs:168-244: one batch bark, silent consumption for
@@ -43,18 +44,32 @@ public partial class ChaosHubWindow
                 [RevealIds.Diary] = _hdrDiary,
                 [RevealIds.StatsPanel] = this.FindControl<Control>("HdrStats"),
             };
+            // WPF replaces the animations but their delayed chime timers keep running.
+            // Keep one beat alive so old chimes and the new batch share its timeline.
+            double elapsed = _revealLoop == null ? 0 : BeatLoop.Time.GetElapsedTime(_revealStarted).TotalSeconds;
+            foreach (var pulse in _revealPulses) pulse.Target.Opacity = 1;
+            _revealPulses.Clear();
+            string? first = null;
             foreach (var id in RevealService.PendingIds())
             {
                 if (map.TryGetValue(id, out var target) && target is { IsVisible: true })
-                    _revealPulses.Add(new(id, target, _revealPulses.Count * 0.6));
+                {
+                    double begin = elapsed + _revealPulses.Count * 0.6;
+                    _revealPulses.Add(new(id, target, begin));
+                    _revealChimes.Add(begin);
+                    first ??= id;
+                }
                 else RevealService.MarkSeen(id);
             }
-            if (_revealPulses.Count == 0) return;
-            // The window's shared beat (AmbientBeatLoopsTests), not a per-view frame timer.
-            // Start steps t=0 at once: the first chime, then the batch bark, as before.
-            _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
-            _revealLoop.Start();
-            Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", _revealPulses[0].Id));
+            if (first == null) return;
+            if (_revealLoop == null)
+            {
+                _revealStarted = BeatLoop.Time.GetTimestamp();
+                _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
+                _revealLoop.Start();
+            }
+            else AdvanceRevealFlashes(elapsed);
+            Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", first));
         }
         catch (Exception ex) { Log.Warning("RunRevealFlashes failed ({E})", ex.Message); }
     }
@@ -63,15 +78,16 @@ public partial class ChaosHubWindow
     // without sleeping or changing the production clock. No forever composition loop.
     internal void AdvanceRevealFlashes(double elapsed)
     {
+        foreach (double begin in _revealChimes.ToArray())
+        {
+            if (elapsed < begin) continue;
+            _revealChimes.Remove(begin);
+            PlayRevealSfx("reveal_chime", 0.5f);
+        }
         foreach (var pulse in _revealPulses.ToArray())
         {
             double t = elapsed - pulse.Begin;
             if (t < 0) continue;
-            if (!pulse.Chimed)
-            {
-                pulse.Chimed = true;
-                PlayRevealSfx("reveal_chime", 0.5f);
-            }
             if (t >= 3)
             {
                 pulse.Target.Opacity = 1;
@@ -80,7 +96,7 @@ public partial class ChaosHubWindow
             }
             else pulse.Target.Opacity = 0.625 + 0.375 * Math.Cos(t * 2 * Math.PI);
         }
-        if (_revealPulses.Count == 0) { _revealLoop?.Stop(); _revealLoop = null; }
+        if (_revealPulses.Count == 0 && _revealChimes.Count == 0) { _revealLoop?.Stop(); _revealLoop = null; }
     }
 
     private void StopRevealFlashes()
@@ -95,5 +111,6 @@ public partial class ChaosHubWindow
             RevealService.MarkSeen(pulse.Id);
         }
         _revealPulses.Clear();
+        _revealChimes.Clear();
     }
 }
