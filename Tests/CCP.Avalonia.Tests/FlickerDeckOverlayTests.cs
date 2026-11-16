@@ -330,4 +330,23 @@ public sealed class FlickerDeckOverlayTests
         Tick(clock, 0.02);
         Assert.Equal(box, Assert.Single(asked));   // Windows polls the same rect
     });
+
+    [Fact]
+    public Task A_peeked_card_clicked_to_the_top_slides_home_under_a_still_pointer() => OnUi((_, clock) =>
+    {
+        var (under, _) = Card();
+        under.Deck!.BreakAt = 4;
+        Card();   // the same rect, drawn above: the first card is buried
+        under.MouseMove(new Point(under.Width / 2, under.Height / 2));
+        Assert.True(under.Deck.Hover, "a buried card under the pointer peeks");
+        for (var i = 0; i < 20; i++) Tick(clock, 0.02);
+        Assert.True(Math.Abs(Shift(under).X) + Math.Abs(Shift(under).Y) > 5, "never peeked");
+        under.MouseDown(new Point(under.Width / 2, under.Height / 2), MouseButton.Left);
+        // WPF FlashLayer.UpdateDeckHover (:839) runs every tick: once BringToFront puts it on top it is not buried.
+        for (var i = 0; i < 60; i++) Tick(clock, 0.02);
+        Assert.Same(under, FlashOverlay.Active[^1].Window);
+        Assert.False(under.Deck.Hover);
+        Assert.Equal(0, Shift(under).X, 3);
+        Assert.Equal(0, Shift(under).Y, 3);
+    });
 }
