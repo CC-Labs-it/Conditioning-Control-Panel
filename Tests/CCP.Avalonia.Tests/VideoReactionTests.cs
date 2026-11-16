@@ -36,6 +36,10 @@ public sealed class VideoReactionTests
         var oldAvatar = s.AvatarEnabled;
         var ai = new VideoAi();
         HeadApp.Ai = ai; s.AiChatEnabled = true; s.AvatarEnabled = true;
+        // The panic quiet and engine hold are process-wide: put back whatever an earlier test left.
+        var quiet = typeof(PanicAftermath).GetField("_quietUntilMs", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var held = typeof(PanicAftermath).GetField("_engineHeld", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var (oldQuiet, oldHeld) = (quiet.GetValue(null), held.GetValue(null));
         PanicAftermath.EndQuiet();
         var shell = new MainShellWindow();
         try
@@ -63,7 +67,7 @@ public sealed class VideoReactionTests
             video.Stop(); pending.SetResult("late stop"); await work;
             Assert.False(tube.HasBubbleUp);
         }
-        finally { shell.Close(); pathField.SetValue(video, oldPath); CoreEngine.Video = oldVideo; HeadApp.Ai = oldAi; s.AiChatEnabled = oldEnabled; s.AvatarEnabled = oldAvatar; }
+        finally { shell.Close(); pathField.SetValue(video, oldPath); CoreEngine.Video = oldVideo; HeadApp.Ai = oldAi; s.AiChatEnabled = oldEnabled; s.AvatarEnabled = oldAvatar; quiet.SetValue(null, oldQuiet); held.SetValue(null, oldHeld); }
     });
 
     private sealed class VideoAi : IAiService

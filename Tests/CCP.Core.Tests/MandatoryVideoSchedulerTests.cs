@@ -62,6 +62,41 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(1, cancelled);
     });
 
+    [Fact]
+    public void FailedCheckRaisesFinishedOnlyAfterMercyNotOnRetry() => With(20, false, () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled, s.MercyAfterFails);
+        var prior = CoreProgression.TrackAttentionCheckProvider;
+        CoreProgression.TrackAttentionCheckProvider = _ => { };
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int finished = 0;
+        v.VideoFinished += () => finished++;
+        try
+        {
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled, s.MercyAfterFails) = (true, true, true, 2);
+            Assert.True(v.Trigger()); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            v.NoteSpawn(); v.Ended();
+            Assert.Equal(new[] { AttentionVerdict.Fail }, host.Messages);
+            Assert.Equal(0, finished);   // WPF ShowMessage closes the clip without Cleanup's VideoEnded
+            host.Then!(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.True(v.IsPlaying);
+            Assert.Equal(0, finished);
+            v.NoteSpawn(); v.Ended();
+            Assert.Equal(AttentionVerdict.Mercy, host.Messages[^1]);
+            Assert.Equal(0, finished);   // not while the mercy message is up
+            host.Then!();
+            Assert.Equal(1, finished);
+        }
+        finally
+        {
+            v.Stop();
+            CoreProgression.TrackAttentionCheckProvider = prior;
+            (s.AttentionChecksEnabled, s.MandatoryVideoReplayAfterFailedCheck, s.MercySystemEnabled, s.MercyAfterFails) = old;
+        }
+    });
+
     [Theory]
     [InlineData(true, false, false, 1)]
     [InlineData(false, false, false, 0)]

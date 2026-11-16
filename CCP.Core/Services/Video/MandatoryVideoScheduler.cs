@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>A playing clip has closed, including attention retries and forced cleanup.
         /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
         public event Action? VideoEnded;
-        // Cancelled teardown is excluded so a stop cannot start a new companion reaction.
+        // WPF Cleanup's VideoEnded (natural end, Esc, mercy); a forced stop raises VideoCancelled instead.
         public event Action? VideoFinished;
         public event Action? VideoCancelled;
 
@@ -550,7 +550,15 @@ namespace ConditioningControlPanel.Services
         public void End()
         {
             if (!Finish()) return;
+            RaiseFinished();
             AfterEnd();
+        }
+
+        // WPF raises VideoEnded from Cleanup only (VideoService.cs:7954): not on a verdict retry, and after the mercy message.
+        private void RaiseFinished()
+        {
+            try { VideoFinished?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoFinished handler failed: {Error}", ex.Message); }
         }
 
         private void AfterEnd()
@@ -613,7 +621,7 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
-                if (mercy) { AfterEnd(); return; }
+                if (mercy) { RaiseFinished(); AfterEnd(); return; }   // WPF VideoService.cs:5926
                 // WPF VideoService.cs:5964-5965: retry directly, retaining strictness and the prior clip fallback.
                 // An attention retry is part of the current run, so it must not enter the feed hold.
                 var retryPath = PickNext() ?? LastVideoPath;
@@ -719,8 +727,6 @@ namespace ConditioningControlPanel.Services
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
             try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
-            try { if (!cancelled) VideoFinished?.Invoke(); }
-            catch (Exception ex) { Log.Debug("VideoFinished handler failed: {Error}", ex.Message); }
             try { VideoEnded?.Invoke(); }
             catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
             return true;
