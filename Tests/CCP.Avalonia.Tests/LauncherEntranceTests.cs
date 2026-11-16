@@ -27,7 +27,7 @@ namespace CCP.Avalonia.Tests;
 /// change state on a stepped clock. Sounds go through CoreAudio, captured here, never played.</summary>
 public sealed class LauncherEntranceTests
 {
-    private static void Run(MotionLevel motion, Action<MainShellWindow, LauncherWindow, List<string>> body)
+    private static void Run(MotionLevel motion, Action<MainShellWindow, LauncherWindow, List<string>> body, bool fittingTiles = false)
     {
         AvaloniaTestDispatcher.Run(() =>
         {
@@ -57,9 +57,17 @@ public sealed class LauncherEntranceTests
             {
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
-                Assert.True(LauncherWindow.BackToLauncher(shell));
-                shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
-                Dispatcher.UIThread.RunJobs();
+                // Keep the initial grid within the headless viewport for pointer and entrance checks.
+                var destinations = (IDictionary<string, (Func<bool> Locked, Action<MainShellWindow> Open)>)LauncherWindow.Destinations;
+                var breakout = destinations["breakout"];
+                try
+                {
+                    if (fittingTiles) destinations.Remove("breakout");
+                    Assert.True(LauncherWindow.BackToLauncher(shell));
+                    shell.StepLauncherFade(1);
+                    Dispatcher.UIThread.RunJobs();
+                }
+                finally { destinations["breakout"] = breakout; }
                 var launcher = LauncherWindow.Instance!;
                 launcher.UpdateLayout();
                 body(shell, launcher, cues);
@@ -127,7 +135,7 @@ public sealed class LauncherEntranceTests
             w.MouseUp(new Point(0, 0), MouseButton.Left);
             Assert.Equal(ConditioningControlPanel.Services.UI.InteractionPressMotion.ScaleFor(false), scale.ScaleX);
         }
-    });
+    }, fittingTiles: true);
 
     [Fact]
     public void TitleBar_DoublePressTogglesMaximise() => Run(MotionLevel.Off, (_, w, _) =>

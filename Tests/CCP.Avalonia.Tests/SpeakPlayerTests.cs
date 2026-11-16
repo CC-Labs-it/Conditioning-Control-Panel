@@ -150,9 +150,13 @@ public class SpeakPlayerTests
             var uiTimer = (DispatcherTimer)player.GetType().GetField("_uiTimer",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
             uiTimer.Stop();
+            // Drive the player clock with Tick below; an automatic tick could start the replacement early.
+            ((DispatcherTimer)player.GetType().GetField("_uiTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!).Stop();
             var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                // This test owns the queued flash explicitly; do not race the repeating cue timer on slow UI runners.
                 new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
-                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent } } };
+                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent,
+                    EffectSpeakCueIntervalMs = int.MaxValue } } };
             player.LoadEnhancementFromMemory(enhancement, "test"); Tick(player); audio.PositionSeconds = 1.2; Tick(player);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards); Assert.True(cards[0].IsVisible);
