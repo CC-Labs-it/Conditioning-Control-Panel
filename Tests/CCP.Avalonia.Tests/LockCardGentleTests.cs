@@ -16,14 +16,16 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class LockCardGentleTests
 {
+    internal Action? AfterSetupForTest;
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task SolvedCardUsesGentleTiming(bool gentle) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup(gentle);
+        var previousProvider = CoreSettings.ServiceProvider;
         try
         {
+            Setup(gentle);
             LockCardWindow.ShowOnAllMonitors("a", 1, false, true);
             var card = LockCardWindow.Primary!;
             if (gentle)
@@ -40,7 +42,7 @@ public sealed class LockCardGentleTests
             await Task.Delay(800);
             Assert.False(LockCardWindow.IsAnyOpen());
         }
-        finally { LockCardWindow.ForceCloseAll(); }
+        finally { try { LockCardWindow.ForceCloseAll(); } finally { CoreSettings.ServiceProvider = previousProvider; } }
     });
 
     [Theory]
@@ -48,9 +50,10 @@ public sealed class LockCardGentleTests
     [InlineData(true)]
     public Task PanicOrReplacementDuringFadeDoesNotCloseNewCard(bool replace) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup(true);
+        var previousProvider = CoreSettings.ServiceProvider;
         try
         {
+            Setup(true);
             LockCardWindow.ShowOnAllMonitors("a", 1, false, true);
             var card = LockCardWindow.Primary!;
             FocusInput(card);
@@ -64,15 +67,16 @@ public sealed class LockCardGentleTests
             await Task.Delay(800);
             Assert.Equal("new", LockCardWindow.Primary!.PhraseShown);
         }
-        finally { LockCardWindow.ForceCloseAll(); }
+        finally { try { LockCardWindow.ForceCloseAll(); } finally { CoreSettings.ServiceProvider = previousProvider; } }
     });
 
     [Fact]
     public Task AllMirrorsFadeAndClose() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        Setup(true);
+        var previousProvider = CoreSettings.ServiceProvider;
         try
         {
+            Setup(true);
             LockCardWindow.ShowOnAllMonitors("a", 1, false, true);
             var card = LockCardWindow.Primary!;
             var build = typeof(LockCardWindow).GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -91,15 +95,17 @@ public sealed class LockCardGentleTests
             Assert.False(card.IsVisible);
             Assert.False(mirror.IsVisible);
         }
-        finally { LockCardWindow.ForceCloseAll(); }
+        finally { try { LockCardWindow.ForceCloseAll(); } finally { CoreSettings.ServiceProvider = previousProvider; } }
     });
 
     [Fact]
     public Task PendingFocusChangeIsSettledBeforeTyping() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        Setup(true);
+        var previousProvider = CoreSettings.ServiceProvider;
         try
         {
+            Setup(true);
+            AfterSetupForTest?.Invoke();
             LockCardWindow.ShowOnAllMonitors("a", 1, false, true);
             var card = LockCardWindow.Primary!;
             var other = new TextBox(); card.FindControl<Grid>("MainGrid")!.Children.Add(other);
@@ -109,7 +115,7 @@ public sealed class LockCardGentleTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(card.IsCompleted);
         }
-        finally { LockCardWindow.ForceCloseAll(); }
+        finally { try { LockCardWindow.ForceCloseAll(); } finally { CoreSettings.ServiceProvider = previousProvider; } }
         return Task.CompletedTask;
     });
     private static void FocusInput(LockCardWindow card)
