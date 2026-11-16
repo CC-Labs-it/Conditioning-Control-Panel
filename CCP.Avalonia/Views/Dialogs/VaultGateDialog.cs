@@ -66,7 +66,7 @@ public sealed partial class VaultGateDialog : Window
     private string _funnelKey = "vault";   // WPF VaultGateDialog: the funnel beacon names the gate it came from
     private PlanSet _plans = PlanCatalog.Current;
     private PriceCurrency _currency => VaultOffer.HeadlineCurrency(_plans);
-    private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly, bool Hints)> _priceSlots = new();
+    private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly, bool Hints, StackPanel? SaleDetails)> _priceSlots = new();
     private bool _yearly;
     private StackPanel? _proofSlot, _codeSlot;
 
@@ -235,8 +235,8 @@ public sealed partial class VaultGateDialog : Window
                 Sale = _plans.Sale;
                 _saleReadUtc = DateTime.UtcNow;
             }
-            foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
-                PaintPrice(slot, tier, compact, yearly, hints);
+            foreach (var (slot, tier, compact, yearly, hints, saleDetails) in _priceSlots)
+                PaintPrice(slot, tier, compact, yearly, hints, saleDetails);
             if (!_plans.FromServer) await FillSaleAsync();
         }
         catch (Exception ex) { Log.Debug("[VaultGate] plans refresh failed: {E}", ex.GetType().Name); }
@@ -256,7 +256,7 @@ public sealed partial class VaultGateDialog : Window
         }
         catch (Exception ex) { Log.Debug("[VaultGate] sale read failed: {E}", ex.GetType().Name); }
         Sale = sale;
-        foreach (var (slot, tier, compact, yearly, hints) in _priceSlots) PaintPrice(slot, tier, compact, yearly, hints);
+        foreach (var (slot, tier, compact, yearly, hints, saleDetails) in _priceSlots) PaintPrice(slot, tier, compact, yearly, hints, saleDetails);
     }
 
     private void PaintProof()
@@ -399,19 +399,20 @@ public sealed partial class VaultGateDialog : Window
         return list;
     }
 
-    private Control Price(int tier, bool compact = false, bool yearly = false, bool hints = false)
+    private Control Price(int tier, bool compact = false, bool yearly = false, bool hints = false, StackPanel? saleDetails = null)
     {
         var slot = new StackPanel { Margin = new Thickness(0, compact ? 8 : 12, 0, compact ? 0 : 4) };
-        _priceSlots.Add((slot, tier, compact, yearly, hints));
-        PaintPrice(slot, tier, compact, yearly, hints);
+        _priceSlots.Add((slot, tier, compact, yearly, hints, saleDetails));
+        PaintPrice(slot, tier, compact, yearly, hints, saleDetails);
         return slot;
     }
 
     /// <summary>The price, or during a first-month sale the sale price beside the struck normal one,
     /// the "then" line and the end date. Yearly never shows a sale.</summary>
-    private void PaintPrice(StackPanel slot, int tier, bool compact, bool yearly, bool hints)
+    private void PaintPrice(StackPanel slot, int tier, bool compact, bool yearly, bool hints, StackPanel? saleDetails = null)
     {
         slot.Children.Clear();
+        saleDetails?.Children.Clear();
         var price = VaultOffer.PriceFor(tier, _currency, _plans);
         var sale = VaultSale.AppliesTo(Sale, tier, DateTime.UtcNow, yearly) ? Sale : null;
         var line = new WrapPanel();
@@ -443,10 +444,10 @@ public sealed partial class VaultGateDialog : Window
             if (hints && !yearly) AddHints(slot, tier, price);
             return;
         }
-        slot.Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
+        (saleDetails ?? slot).Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
             Good, compact ? 12 : 12.5, new Thickness(0, 2, 0, 0)));
         if (VaultSale.EndsText(sale) is string ends)
-            slot.Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
+            (saleDetails ?? slot).Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
     }
 
     private void AddHints(StackPanel slot, int tier, TierPrice price)

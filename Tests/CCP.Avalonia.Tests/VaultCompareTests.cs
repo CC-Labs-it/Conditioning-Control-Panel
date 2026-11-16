@@ -85,6 +85,55 @@ public class VaultCompareTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task SaleDetailsStayOutsideTheRotatedStamp() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldSale = VaultGateDialog.Sale;
+        var proxy = InviteApi.DefaultBaseUrl;
+        var sale = new VaultSaleInfo(20, DateTime.UtcNow.AddDays(10), new[] { 1 });
+        InviteApi.DefaultBaseUrl = () => null;
+        VaultGateDialog.Sale = sale;
+        try
+        {
+            var dialog = VaultGateDialog.ShowOffer(null, null, 1, () => { });
+            try
+            {
+                Click(dialog, Loc.Get("vaultgate_compare"));
+                var ticket = dialog.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "BasicTicket");
+                var stamp = ticket.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PriceStamp");
+                var currency = VaultOffer.HeadlineCurrency(PlanCatalog.Current);
+                var normal = VaultOffer.Money(VaultOffer.PriceFor(1, currency, PlanCatalog.Current).MonthlyCents, currency);
+                var saleLine = Loc.GetF("vaultgate_sale_line", sale.Percent, normal);
+                var endsLine = Loc.GetF("vaultgate_sale_ends", VaultSale.EndsText(sale)!);
+                var stampTexts = stamp.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+                Assert.Contains(normal, stampTexts);
+                Assert.Contains(Loc.Get("vaultgate_sale_first"), stampTexts);
+                Assert.DoesNotContain(saleLine, stampTexts);
+                Assert.DoesNotContain(endsLine, stampTexts);
+                var ticketTexts = ticket.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+                Assert.Contains(saleLine, ticketTexts);
+                Assert.Contains(endsLine, ticketTexts);
+                VaultGateDialog.Sale = null;
+                await dialog.FillPlansAsync();
+                Assert.DoesNotContain(saleLine, Texts(dialog));
+                Assert.DoesNotContain(endsLine, Texts(dialog));
+                VaultGateDialog.Sale = sale;
+                await dialog.FillPlansAsync();
+                Assert.Contains(saleLine, Texts(dialog));
+                Assert.Contains(endsLine, Texts(dialog));
+                Assert.DoesNotContain(stamp.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == saleLine || t.Text == endsLine);
+                Click(dialog, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
+                Assert.DoesNotContain(saleLine, Texts(dialog));
+                Assert.DoesNotContain(endsLine, Texts(dialog));
+                Click(dialog, Loc.Get("vaultgate_billing_monthly"));
+                Assert.Contains(saleLine, Texts(dialog));
+                Assert.Contains(endsLine, Texts(dialog));
+            }
+            finally { dialog.Close(); }
+        }
+        finally { VaultGateDialog.Sale = oldSale; InviteApi.DefaultBaseUrl = proxy; }
+    });
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
