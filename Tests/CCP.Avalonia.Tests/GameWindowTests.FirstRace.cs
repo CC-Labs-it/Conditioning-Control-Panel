@@ -82,6 +82,35 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void FirstRace_InstalledStartsShellAndPanicStopsIt() => FirstRace((card, fake) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var old = GameWindow.LaunchRaceShell;
+        using var process = LinuxRaceHostTests.StartCat();
+        using var observer = System.Diagnostics.Process.GetProcessById(process.Id);
+        try
+        {
+            GameWindow.LaunchRaceShell = (w, _) => new LinuxRaceHost(w, process);
+            card.HandoffRaceRoom("abcdef123456");
+            Click(card.RaceDownload);
+            fake.Reply.SetResult(RaceEngineFetchResult.Installed);
+            Dispatcher.UIThread.RunJobs();
+            var session = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.NotSame(card, session);
+            Assert.False(session.IsVisible);
+            Assert.NotNull(session.RaceShell);
+            var frames = new System.Collections.Generic.List<string>();
+            session.Posted += frames.Add;
+            session.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Contains(frames, x => x.Contains("abcdef123456"));
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(null!);
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.True(observer.WaitForExit(5000));
+        }
+        finally { GameWindow.LaunchRaceShell = old; }
+    });
+
+    [Fact]
     public void FirstRace_InstalledEngineReportsMissingHost() => FirstRace((w, _) =>
     {
         Assert.Equal(Loc.Get("rt_engine_start_failed"), w.RaceStatus.Text);

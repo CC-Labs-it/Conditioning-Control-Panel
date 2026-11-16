@@ -1,4 +1,4 @@
-// B2 section 4: Linux first race card and the owned shell launch (LinuxRaceHost). The fetch arrives in a separate lane.
+// B2 section 4: Linux first race card and the owned shell launch (LinuxRaceHost).
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -83,9 +83,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 var result = await fetch.FetchAsync(progress, cancel.Token);
                 if (_raceFetch != cancel || cancel.IsCancellationRequested || _closing) return;
+                if (result == RaceEngineFetchResult.Installed)
+                {
+                    // The card is a shown window; the shell needs its own unshown session so closing the card
+                    // does not dispose the newly launched process. Keep every invitation queued while fetching.
+                    var session = new GameWindow(Spec);
+                    if (session.StartRaceShell(null) == true)
+                    {
+                        while (_raceRooms.TryDequeue(out var room)) session.HandoffRaceRoom(room);
+                        Close();
+                        return;
+                    }
+                }
                 RaceStatus.Text = Loc.Get(result switch
                 {
-                    RaceEngineFetchResult.Installed => "rt_engine_start_failed", // owned host is a separate lane
+                    RaceEngineFetchResult.Installed => "rt_engine_start_failed",
                     RaceEngineFetchResult.Network => "rt_engine_network",
                     RaceEngineFetchResult.Checksum => "rt_engine_checksum",
                     RaceEngineFetchResult.Storage => "rt_engine_storage",
