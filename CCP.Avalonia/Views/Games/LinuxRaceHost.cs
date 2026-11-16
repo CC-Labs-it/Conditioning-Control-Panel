@@ -34,6 +34,37 @@ internal sealed class LinuxRaceHost : IDisposable
     internal static string? EnginePath => RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64
         ? Path.Combine(RaceEngineFetcher.DefaultRoot, RaceEngineManifest.For(RuntimeInformation.ProcessArchitecture).DirectoryName, "electron") : null;
     internal static string ShellPath => Path.Combine(AppContext.BaseDirectory, "Resources", "web", "glassroad-shell", "main.js");
+    // The helper owns the namespace decision and licence gate. Only its documented argument is accepted.
+    internal static async Task<string?> ProbeEngineAsync(string script, string engineDirectory, CancellationToken cancellationToken)
+    {
+        var start = new ProcessStartInfo("/bin/bash") { UseShellExecute = false, RedirectStandardOutput = true,
+            RedirectStandardError = true, CreateNoWindow = true };
+        start.ArgumentList.Add(script);
+        start.ArgumentList.Add(engineDirectory);
+        using var process = new Process { StartInfo = start };
+        if (!process.Start()) throw new IOException("Race engine check did not start");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(4));
+        string decision, argument;
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+            decision = await stderr.WaitAsync(deadline.Token);
+            argument = (await stdout.WaitAsync(deadline.Token)).Trim();
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            throw;
+        }
+        Serilog.Log.Information("Glassroad: engine check: {Decision}", decision.Trim());
+        if (process.ExitCode != 0) throw new IOException("Race engine check failed");
+        if (argument.Length == 0) return null;
+        if (argument == "--no-sandbox") return argument;
+        throw new IOException("Race engine check returned an invalid argument");
+    }
     private const string LaunchBackend = "x11"; internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url) => TryLaunch(window, url, EnginePath, ShellPath);
     /// <summary>Null when the engine or shell is not installed; throws when they are and the shell did not start.</summary>
     internal static LinuxRaceHost? TryLaunch(GameWindow window, Uri url, string? enginePath, string shellPath)
