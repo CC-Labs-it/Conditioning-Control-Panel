@@ -29,12 +29,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Tabs.PlayTabView.LaunchGame("goon");
         }
 
-        // WPF MainWindow.Lab.cs:302-313: Back Room has no tier gate and reports launch failures.
-        // WPF BackRoomHostService.cs:310-315 (LaunchCore, behind Play, Exclusives and the wallet): a signed-out
-        // room could only fail at every table, so the door asks for an account first.
+        // WPF MainWindow.Lab.cs:302-313: Back Room is free and reports launch failures.
         internal void LaunchPlayBackRoom()
         {
-            if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; }
             try { Tabs.PlayTabView.LaunchGame("backroom"); }
             catch (System.Exception ex)
             {
