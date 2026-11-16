@@ -1106,7 +1106,7 @@ namespace ConditioningControlPanel.Avalonia
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
                 // WPF App.xaml.cs:3218: seed the clock before constructing the haptic service.
                 SeedHapticPlaybackTime();
-                // Part B: EMI Desk hapticsConnected needs the moment director (WPF :3225).
+                // EMI Desk wires the haptics moment with its app events after the shell opens.
                 Views.Overlays.HapticMockToast.Seed();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 Platform.AudioSyncHost.Start(CoreHaptics.Service, Settings.Current.Haptics.AudioSync);
