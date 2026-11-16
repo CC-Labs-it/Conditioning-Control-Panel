@@ -156,7 +156,7 @@ public sealed class VaultGateTests
     });
 
     [Fact]
-    public Task PadlockOpensTheCardAndItsLinksClick() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task PadlockOpensTheCardAndItsLinksClick() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureAvalonia();
         var shell = new MainShellWindow();
@@ -191,12 +191,12 @@ public sealed class VaultGateTests
             Click(card!, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
             Assert.Contains(Loc.Get("vaultgate_yearly_note"), Texts(card!));
             Click(card!, Loc.Get("vaultgate_back"));
-            await Task.Delay(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(190) + 150);
             Assert.Contains(Loc.Get("vaultgate_signin"), Texts(card!));
             Click(card!, Loc.Get("vaultgate_close"));
             Assert.Null(VaultGateDialog.Open);
         }
         finally { VaultGateDialog.Open?.Close(); shell.Close(); }
+        return Task.CompletedTask;
     });
 
     [Fact]

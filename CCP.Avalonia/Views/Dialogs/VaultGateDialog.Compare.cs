@@ -1,17 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Avalonia.Animation;
+using System.Linq;
 using Avalonia.Collections;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Styling;
-using Avalonia.Threading;
-using Avalonia.VisualTree;
-using ConditioningControlPanel.Avalonia.Controls;
-using ConditioningControlPanel.Models;
-using ConditioningControlPanel.Services.Safety;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -24,17 +16,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 // WPF VaultGateDialog.Compare.cs:65-140, 245-392: desk, ticket stock and tear-off stubs.
 public sealed partial class VaultGateDialog
 {
-    private bool _comparing, _resizePending, _leaving;
+    private bool _comparing, _resizePending;
     private double _resizeOldHeight, _resizeTargetWidth;
     private readonly List<(int Tier, StackPanel Price, Border Saving)> _comparePrices = new();
-    private readonly List<Border> _compareTickets = new();
     private TextBlock? _monthWord, _yearWord, _leverSaving, _yearNote;
     private Border? _knob;
     private TranslateTransform? _knobSlide;
-    private readonly Dictionary<Border, TranslateTransform> _ticketMoves = new();
     private Button? _leverBadge;
-    private CancellationTokenSource? _billingMotion;
-    private static MotionLevel CompareMotion => AmbientFxCanvas.Env.Level;
 
     // WPF Compare.cs:140-151. Position and working area are physical pixels, sizes are DIPs.
     internal static PixelPoint Recenter(PixelPoint at, Size before, Size after, PixelRect area, double scale)
@@ -83,40 +71,29 @@ public sealed partial class VaultGateDialog
         FaceChrome(true);
         _comparing = true;
         _comparePrices.Clear();
-        _compareTickets.Clear();
-        _ticketMoves.Clear();
         _body.Children.Clear();
         _priceSlots.Clear();
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var title = Heading(Loc.Get("vaultgate_compare_title"));
         title.FontSize = 25;
         title.Margin = new Thickness(0, 0, 20, 0);
-        head.Children.Add(title);
         var lever = BillingSwitch();
         Grid.SetColumn(lever, 1);
-        head.Children.Add(lever);
-        _body.Children.Add(head);
-        var row = new Grid { Margin = new Thickness(0, 14, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,26,*") };
-        row.Children.Add(Ticket(1));
+        _body.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { title, lever } });
+        var basic = Ticket(1);
         var prime = Ticket(2);
         Grid.SetColumn(prime, 2);
-        row.Children.Add(prime);
-        _body.Children.Add(row);
+        _body.Children.Add(new Grid { Margin = new Thickness(0, 14, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,26,*"), Children = { basic, prime } });
         _yearNote = Para(Loc.Get("vaultgate_yearly_note"), Gold, 12, new Thickness(0, 12, 0, 0));
         _body.Children.Add(_yearNote);
-        var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 8, 0, 0) };
         var back = Link(Loc.Get("vaultgate_back"));
         back.Margin = new Thickness(0, 0, 28, 0);
-        back.Click += (_, _) => LeaveCompare();
-        foot.Children.Add(back);
+        back.Click += (_, _) => { BuildOffer(); _ = FillAsyncBits(); };
         var fine = Fine(Loc.Get("vaultgate_fine"));
         fine.Margin = new Thickness(0);
         fine.TextAlignment = TextAlignment.Left;
         Grid.SetColumn(fine, 1);
-        foot.Children.Add(fine);
-        _body.Children.Add(foot);
-        PaintCompare(false);
-        DealTickets();
+        _body.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 8, 0, 0), Children = { back, fine } });
+        PaintCompare();
     }
 
     private Control BillingSwitch()
@@ -159,27 +136,20 @@ public sealed partial class VaultGateDialog
     {
         if (_yearly == yearly) return;
         _yearly = yearly;
-        PaintCompare(true);
+        PaintCompare();
     }
 
     // WPF Compare.cs:194, 231-242, 440-507. Refresh from the same plan snapshot as prices.
-    private void PaintCompare(bool animate)
+    private void PaintCompare()
     {
         if (!_comparing || _knob == null || _monthWord == null || _yearWord == null || _leverSaving == null || _yearNote == null) return;
-        _billingMotion?.Cancel();
-        _billingMotion?.Dispose();
-        _billingMotion = new CancellationTokenSource();
-        var token = _billingMotion.Token;
         _monthWord.Foreground = _yearly ? Dim : Brushes.White;
         _yearWord.Foreground = _yearly ? Brushes.White : Dim;
         var basicOff = PlanCatalog.YearlyOffPercent(_plans.Basic);
         _leverSaving.Text = basicOff > 0 ? Loc.GetF("vaultgate_stamp_off", basicOff) : "";
         if (_leverBadge != null) _leverBadge.IsVisible = basicOff > 0;
         _knob.Background = _yearly ? Gold : B("#FFF8EC");
-        var slide = _knobSlide!;
-        var oldX = slide.X;
-        slide.X = _yearly ? 26 : 0;
-        if (animate && CompareMotion == MotionLevel.Full) _ = Tween(_knob, TranslateTransform.XProperty, oldX, slide.X, 160, token);
+        _knobSlide!.X = _yearly ? 26 : 0;
         _yearNote.Opacity = _yearly ? 1 : 0;
         for (var i = 0; i < _comparePrices.Count; i++)
         {
@@ -188,24 +158,9 @@ public sealed partial class VaultGateDialog
             ((TextBlock)((Border)saving.Child!).Child!).Text = off > 0 ? Loc.GetF("vaultgate_stamp_off", off) : "";
             var show = _yearly && off > 0;
             saving.Opacity = show ? 0.9 : 0;
-            // WPF Compare.cs:509-521: the round stamp thumps in after the roll or lifts off.
-            if (animate && CompareMotion != MotionLevel.Off && show)
-            {
-                _ = Tween(saving, OpacityProperty, 0, 0.9, GentleVisuals.RiseMs(GentleVisuals.FadeMs(120)), token, 150);
-                if (CompareMotion == MotionLevel.Full)
-                    foreach (var axis in new[] { ScaleTransform.ScaleXProperty, ScaleTransform.ScaleYProperty })
-                        _ = Tween(saving, axis, 1.45, 1, 230, token, 150);
-            }
-            else if (animate && CompareMotion != MotionLevel.Off && off > 0) _ = Tween(saving, OpacityProperty, 0.9, 0, GentleVisuals.FadeMs(140), token);
             var slotIndex = _priceSlots.FindIndex(s => ReferenceEquals(s.Slot, price));
             if (slotIndex >= 0) _priceSlots[slotIndex] = (price, tier, true, _yearly, false);
             PaintPrice(price, tier, true, _yearly, false);
-            if (animate && CompareMotion != MotionLevel.Off)
-            {
-                _ = Tween(price, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), token);
-                if (CompareMotion == MotionLevel.Full)
-                    _ = Tween(price, TranslateTransform.YProperty, _yearly ? 22 : -22, 0, 260, token);
-            }
         }
     }
 
@@ -230,7 +185,6 @@ public sealed partial class VaultGateDialog
         price.Tag = (accent, salePanel);
         price.Margin = new Thickness(0);
         price.MaxWidth = 185;
-        price.RenderTransform = new TranslateTransform();
         PaintPrice(price, tier, true, _yearly, false);
         // WPF Compare.cs:416-460: a tilted double-ruled price stamp, the round saving stamp parked over its corner.
         var priceRow = new Grid { Name = "TicketPrice", VerticalAlignment = VerticalAlignment.Top };
@@ -277,9 +231,7 @@ public sealed partial class VaultGateDialog
             Child = new TextBlock { Text = Loc.GetF("vaultgate_choose", name), Foreground = B(lab ? "#1B1422" : "#FFF6EC"), FontSize = 17, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center } };
         var faceMove = new TranslateTransform();
         face.RenderTransform = faceMove;
-        var faceParts = new Grid();
-        faceParts.Children.Add(new Border { Background = lip, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 4, 0, 0) });
-        faceParts.Children.Add(face);
+        var faceParts = new Grid { Children = { new Border { Background = lip, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 4, 0, 0) }, face } };
         var choose = Bare(faceParts);
         choose.Name = lab ? "PrimeChoose" : "BasicChoose";
         choose.PointerEntered += (_, _) => { if (!choose.IsPressed) faceMove.Y = -1; };
@@ -292,14 +244,11 @@ public sealed partial class VaultGateDialog
         ways.Margin = new Thickness(18, 0, 0, 0);
         Grid.SetColumn(ways, 1);
         stub.Children.Add(ways);
-        var body = new Grid { RowDefinitions = new RowDefinitions("*,20,Auto") };
-        body.Children.Add(main);
         var foot = new Border { Background = stubInk, CornerRadius = new CornerRadius(0, 0, 8, 8), Child = stub };
         Grid.SetRow(foot, 2);
-        body.Children.Add(foot);
         var perf = new global::Avalonia.Controls.Shapes.Rectangle { Name = "Perforation", Height = 2, Stroke = muted, StrokeThickness = 2, StrokeDashArray = new AvaloniaList<double> { 0.1, 2.6 }, StrokeLineCap = PenLineCap.Round, Opacity = 0.55, Margin = new Thickness(18, 0), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetRow(perf, 1);
-        body.Children.Add(perf);
+        var body = new Grid { RowDefinitions = new RowDefinitions("*,20,Auto"), Children = { main, foot, perf } };
         foreach (var side in new[] { HorizontalAlignment.Left, HorizontalAlignment.Right })
         {
             var notch = new global::Avalonia.Controls.Shapes.Ellipse { Name = "TicketNotch", Width = 22, Height = 22, Fill = B("#141020"), HorizontalAlignment = side, VerticalAlignment = VerticalAlignment.Center, Margin = side == HorizontalAlignment.Left ? new Thickness(-11, 0, 0, 0) : new Thickness(0, 0, -11, 0), IsHitTestVisible = false };
@@ -307,102 +256,6 @@ public sealed partial class VaultGateDialog
             body.Children.Add(notch);
         }
         var foil = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = new GradientStops { new(Color.Parse("#F6E3A1"), 0), new(Color.Parse("#B48C2C"), 0.28), new(Color.Parse("#FFF2C2"), 0.47), new(Color.Parse("#9E7A24"), 0.7), new(Color.Parse("#E7C86E"), 1) } };
-        var ticket = new Border { Name = lab ? "PrimeTicket" : "BasicTicket", Background = stock, BorderBrush = lab ? foil : accent, BorderThickness = new Thickness(lab ? 3 : 0), CornerRadius = new CornerRadius(8), Child = body, RenderTransform = new TranslateTransform() };
-        ticket.PointerEntered += (_, _) => HoverTicket(ticket, true);
-        ticket.PointerExited += (_, _) => HoverTicket(ticket, false);
-        _ticketMoves[ticket] = (TranslateTransform)ticket.RenderTransform!;
-        _compareTickets.Add(ticket);
-        return ticket;
+        return new Border { Name = lab ? "PrimeTicket" : "BasicTicket", Background = stock, BorderBrush = lab ? foil : accent, BorderThickness = new Thickness(lab ? 3 : 0), CornerRadius = new CornerRadius(8), Child = body };
     }
-    // WPF Compare.cs:525-594: full motion translates, reduced motion fades, off settles at once.
-    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default, int delayMs = 0)
-    {
-        // Backward fill holds the start value through the delay, as WPF BeginTime does.
-        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 ? FillMode.Backward : FillMode.None };
-        animation.Children.Add(new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } });
-        animation.Children.Add(new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } });
-        try { await animation.RunAsync(target, token); }
-        catch (OperationCanceledException) { }
-    }
-
-    private void DealTickets()
-    {
-        if (CompareMotion == MotionLevel.Off) return;
-        for (var i = 0; i < _compareTickets.Count; i++)
-        {
-            var ticket = _compareTickets[i];
-            var delay = i * 80;
-            void Deal()
-            {
-                if (!_comparing || !ticket.IsAttachedToVisualTree()) return;
-                var level = CompareMotion;
-                if (level == MotionLevel.Off) return;
-                _ = Tween(ticket, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(240)));
-                if (level == MotionLevel.Full) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340);
-            }
-            if (delay == 0) Dispatcher.UIThread.Post(Deal, DispatcherPriority.Loaded);
-            else DispatcherTimer.RunOnce(Deal, TimeSpan.FromMilliseconds(delay));
-        }
-    }
-
-    private readonly Dictionary<Border, CancellationTokenSource> _hoverMotion = new();
-    private void HoverTicket(Border ticket, bool over)
-    {
-        if (_hoverMotion.Remove(ticket, out var old)) { old.Cancel(); old.Dispose(); }
-        if (!_ticketMoves.TryGetValue(ticket, out var transform)) return;
-        var from = transform.Y;
-        transform.Y = over && CompareMotion == MotionLevel.Full ? -3 : 0;
-        if (CompareMotion != MotionLevel.Full) return;
-        var next = new CancellationTokenSource();
-        _hoverMotion[ticket] = next;
-        _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, 160, next.Token);
-    }
-
-    private async void LeaveCompare()
-    {
-        if (_leaving) return;
-        _billingMotion?.Cancel();
-        foreach (var c in _hoverMotion.Values) { c.Cancel(); c.Dispose(); }
-        _hoverMotion.Clear();
-        void Finish()
-        {
-            _leaving = false;
-            _card.IsHitTestVisible = true;
-            if (!IsVisible) return;
-            BuildOffer();
-            _ = FillAsyncBits();
-            // WPF Compare.cs:112: the offer fades back in; Off stays immediate.
-            if (CompareMotion != MotionLevel.Off) _ = Tween(_body, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)));
-        }
-        if (CompareMotion == MotionLevel.Off) { Finish(); return; }
-        _leaving = true;
-        _card.IsHitTestVisible = false;
-        var fadeMs = GentleVisuals.FadeMs(190);
-        if (CompareMotion == MotionLevel.Full)
-            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
-        await Tween(_body, OpacityProperty, 1, 0, fadeMs);
-        Finish();
-    }
-
-    private bool _closingAnimation;
-    protected override void OnClosing(WindowClosingEventArgs e)
-    {
-        if (_closingAnimation || _leaving) { e.Cancel = true; return; }
-        if (!_comparing || CompareMotion == MotionLevel.Off || !IsVisible) { base.OnClosing(e); return; }
-        e.Cancel = true;
-        _closingAnimation = true;
-        if (ReferenceEquals(Open, this)) Open = null;
-        _card.IsHitTestVisible = false;
-        var fadeMs = GentleVisuals.FadeMs(190);
-        _ = Tween(_card, OpacityProperty, 1, 0, fadeMs);
-        if (CompareMotion == MotionLevel.Full)
-            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
-        DispatcherTimer.RunOnce(() =>
-        {
-            _closingAnimation = false;
-            _comparing = false;
-            Close();
-        }, TimeSpan.FromMilliseconds(fadeMs + 20));
-    }
-
 }
