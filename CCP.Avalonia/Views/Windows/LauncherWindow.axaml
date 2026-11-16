@@ -323,7 +323,7 @@
                         </Border>
                     </Panel>
                     <StackPanel Grid.Row="1" Margin="32,20,32,0">
-                        <TextBlock Text="{loc:Str launcher_section_panel}" Classes="eyebrow"/>
+                        <TextBlock x:Name="PanelEyebrow" Classes="eyebrow"/>
                         <TextBlock Text="{loc:Str launcher_panel_title}" Margin="0,8,0,0" TextWrapping="Wrap"
                                    FontFamily="Fredoka, Segoe UI" FontSize="30" FontWeight="SemiBold"
                                    LineHeight="34" Foreground="{DynamicResource TextLightBrush}"/>
@@ -378,7 +378,7 @@
 
             <!-- the games: two columns or three by the column's width (LauncherGridLayout) -->
             <Grid x:Name="GamesColumn" Grid.Column="2" RowDefinitions="Auto,*">
-                <TextBlock Text="{loc:Str launcher_section_games}" Classes="eyebrow" Margin="9,0,0,4"/>
+                <TextBlock x:Name="GamesEyebrow" Classes="eyebrow" Margin="9,0,0,4"/>
                 <ScrollViewer x:Name="GamesScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <UniformGrid x:Name="GamesGrid" Columns="2" VerticalAlignment="Top"/>
                 </ScrollViewer>
