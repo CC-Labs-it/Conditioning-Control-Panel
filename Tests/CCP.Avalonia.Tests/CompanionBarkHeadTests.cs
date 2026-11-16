@@ -57,6 +57,20 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Fact]
+    public void PickingAssetsRaisesTheCompanionAction() => WithSeamsRestored(_ =>
+    {
+        var old = BarkHead.Engine;
+        var owner = new Window();
+        try
+        {
+            BarkHead.Engine = Seeded(Rule("UiAction", "assets", ("action", "pick_assets")), out var spoken);
+            var picker = MainShellWindow.PickAssetsFolder(owner);
+            Assert.Equal("assets", spoken());
+        }
+        finally { owner.Close(); BarkHead.Engine = old; }
+    });
+
     [Fact]   // WPF MainWindow.xaml.cs:1755: a ladder-mode panic press raises her safety line before the stop pass
     public void ALadderPanicPressRaisesThePanicBark() => WithSeamsRestored(s =>
     {
