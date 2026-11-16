@@ -150,39 +150,44 @@ public sealed class NavRailPaintTests
             () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty),
             () => System.Threading.Tasks.Task.FromResult(((System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>)
                 Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>(), true)));
+        var oldPoll = MainShellWindow.CreateLobbyBadgePoll;
         MainShellWindow.CreateLobbyBadgePoll = () => poll;
-        Run(MotionLevel.Off, w =>
+        try
         {
-            var launcher = new LauncherWindow { CreateLobby = () => new ConditioningControlPanel.Services.Lobby.LobbyPoll(new BadgeTimer(),
-                () => false, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
-                () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.Lobby.PbpLobbyReply.Empty),
-                () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty),
-                () => System.Threading.Tasks.Task.FromResult(((System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>)
-                    Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>(), false))) };
-            try
+            Run(MotionLevel.Off, w =>
             {
-                launcher.Show(); Dispatcher.UIThread.RunJobs();
-                launcher.Hide(); Dispatcher.UIThread.RunJobs();   // the launcher's poll stops here
-                var social = Row(w, NavSections.Social);
-                Assert.True(timer.Running);   // the visible panel holds the badge lease
-                seats = 3; timer.Fire(); Dispatcher.UIThread.RunJobs();
-                Assert.True(social.Badge!.IsVisible);
-                Assert.Equal("3", social.BadgeText!.Text);
-                w.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
-                Assert.False(timer.Running);
-                w.WindowState = WindowState.Normal; Dispatcher.UIThread.RunJobs();
-                Assert.True(timer.Running);
-                w.Hide(); Dispatcher.UIThread.RunJobs();
-                Assert.False(timer.Running);   // hidden to the tray: lease released
-                w.Show(); Dispatcher.UIThread.RunJobs();
-                Assert.True(timer.Running);
-                seats = 0; timer.Fire(); Dispatcher.UIThread.RunJobs();
-                Assert.False(social.Badge.IsVisible);
-                w.Close(); Dispatcher.UIThread.RunJobs();
-                Assert.False(timer.Running);   // closed: the poll is disposed
-            }
-            finally { launcher.Close(); }
-        });
+                var launcher = new LauncherWindow { CreateLobby = () => new ConditioningControlPanel.Services.Lobby.LobbyPoll(new BadgeTimer(),
+                    () => false, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
+                    () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.Lobby.PbpLobbyReply.Empty),
+                    () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty),
+                    () => System.Threading.Tasks.Task.FromResult(((System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>)
+                        Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>(), false))) };
+                try
+                {
+                    launcher.Show(); Dispatcher.UIThread.RunJobs();
+                    launcher.Hide(); Dispatcher.UIThread.RunJobs();   // the launcher's poll stops here
+                    var social = Row(w, NavSections.Social);
+                    Assert.True(timer.Running);   // the visible panel holds the badge lease
+                    seats = 3; timer.Fire(); Dispatcher.UIThread.RunJobs();
+                    Assert.True(social.Badge!.IsVisible);
+                    Assert.Equal("3", social.BadgeText!.Text);
+                    w.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
+                    Assert.False(timer.Running);
+                    w.WindowState = WindowState.Normal; Dispatcher.UIThread.RunJobs();
+                    Assert.True(timer.Running);
+                    w.Hide(); Dispatcher.UIThread.RunJobs();
+                    Assert.False(timer.Running);   // hidden to the tray: lease released
+                    w.Show(); Dispatcher.UIThread.RunJobs();
+                    Assert.True(timer.Running);
+                    seats = 0; timer.Fire(); Dispatcher.UIThread.RunJobs();
+                    Assert.False(social.Badge.IsVisible);
+                    w.Close(); Dispatcher.UIThread.RunJobs();
+                    Assert.False(timer.Running);   // closed: the poll is disposed
+                }
+                finally { launcher.Close(); }
+            });
+        }
+        finally { MainShellWindow.CreateLobbyBadgePoll = oldPoll; }
     }
 
     [Fact]
