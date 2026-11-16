@@ -17,6 +17,27 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class RemoteRelayTests
 {
+    [Fact]
+    public async Task Status_advertises_only_available_signal_and_brain_drain_capabilities()
+    {
+        var saved = CoreEngine.StartBrainDrain;
+        try
+        {
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            foreach (var available in new[] { false, true })
+            {
+                CoreEngine.StartBrainDrain = available ? () => { } : null;
+                await r.PushStatusNowAsync();
+                var caps = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["caps"]!.ToObject<string[]>()!;
+                Assert.Equal(available ? new[] { "haptic_pattern", "haptic_level", "signal", "brain_drain" }
+                                       : new[] { "haptic_pattern", "haptic_level", "signal" }, caps);
+            }
+        }
+        finally { CoreEngine.StartBrainDrain = saved; }
+    }
+
     // WPF RemoteControlService.cs:1476/:1488 dispatch; :980 panic/session end stop and re-arm on the saved
     // switch; :1159 a leave only cancels pulses; :1020/:1179 every card closes; :964/:1154 over the wearer's own
     // run neither touches autonomy nor the cards; :921 the status lists a running autonomy.
@@ -608,7 +629,9 @@ public sealed class RemoteRelayTests
         Poll(f, "{\"controller_connected\":true}");
         await r.PollOnceAsync();
         var caps = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["caps"];
-        Assert.Equal(new[] { "haptic_pattern", "haptic_level" }, caps!.Values<string>().ToArray());
+        Assert.Equal(CoreEngine.StartBrainDrain != null
+            ? new[] { "haptic_pattern", "haptic_level", "signal", "brain_drain" }
+            : new[] { "haptic_pattern", "haptic_level", "signal" }, caps!.Values<string>().ToArray());
     }
 
     [Fact]
