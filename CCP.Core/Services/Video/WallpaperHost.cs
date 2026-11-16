@@ -32,6 +32,8 @@ public sealed class WallpaperHost
     internal Func<int, CancellationToken, Task<List<string>>> RemoteFetch = FetchRemoteAsync;
     internal Action<string> ReleaseRemote = DtrhRemoteMedia.AssetsTempCopier.Release;
     internal Func<Models.AppSettings> Settings = () => CoreSettings.Current;
+    /// <summary>The mixed-source roll, 0..n-1. Replaceable by tests.</summary>
+    internal Func<int, int> Roll = n => Random.Shared.Next(n);
     internal Task LastFill { get; private set; } = Task.CompletedTask;
     public bool IsActive { get; private set; }
     public Task WhenIdle { get { lock (_gate) return _tail; } }
@@ -71,7 +73,7 @@ public sealed class WallpaperHost
         // WPF PickImage :412: online draws remote, mixed rolls the ratio; an empty side falls back to the other.
         var s = Settings();
         var useRemote = remote.Length > 0 && (pool.Length == 0 || s.MediaSource == "online"
-            || (s.MediaSource == "mixed" && Random.Shared.Next(100) < s.RemoteMediaRatio));
+            || (s.MediaSource == "mixed" && Roll(100) < s.RemoteMediaRatio));
         if (useRemote) pool = remote;
         if (!IsActive)
         {

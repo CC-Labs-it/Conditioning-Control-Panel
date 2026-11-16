@@ -98,11 +98,15 @@ public sealed class WallpaperRemotePoolTests : IDisposable
         var desktop = new Desktop();
         var host = Host(desktop, Once(remote), new());
         _s.MediaSource = "mixed";
-        _s.RemoteMediaRatio = 0;
+        _s.RemoteMediaRatio = 30; // the setter clamps to 5..95, so 0 would still draw remote 5 % of the time
+        host.Roll = _ => 30; // a roll at the ratio stays local
         Assert.True(await host.ShuffleAsync()); // pool still cold: local
         await host.LastFill;
         Assert.True(await host.ShuffleAsync());
-        Assert.Equal(local, desktop.Applied[^1]); // mixed at 0 % stays local
+        Assert.Equal(local, desktop.Applied[^1]);
+        host.Roll = _ => 29; // a roll under the ratio draws remote
+        Assert.True(await host.ShuffleAsync());
+        Assert.Equal(remote, desktop.Applied[^1]);
         _s.MediaSource = "online";
         Assert.True(await host.ShuffleAsync());
         Assert.Equal(remote, desktop.Applied[^1]);
@@ -113,7 +117,7 @@ public sealed class WallpaperRemotePoolTests : IDisposable
         File.Delete(local);
         _s.RemoteMediaConsented = false;
         Assert.False(await host.ShuffleAsync()); // no consent: the remote pool is never drawn
-        Assert.Equal(4, desktop.Applied.Count);
+        Assert.Equal(5, desktop.Applied.Count);
     }
 
     [Fact]
