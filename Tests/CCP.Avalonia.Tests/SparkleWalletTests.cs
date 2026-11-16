@@ -168,6 +168,28 @@ public sealed class SparkleWalletTests
     });
 
     [Fact]
+    public void WalletClickRequestsCounterAndClosesHelp() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        var wallet = new SparkleWallet();
+        var w = new Window { Content = wallet };
+        try
+        {
+            w.Show();
+            var help = wallet.FindControl<Button>("HelpButton")!;
+            var button = wallet.FindControl<Button>("WalletButton")!;
+            help.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(wallet.HelpOpen);
+            var requests = 0;
+            wallet.CounterRequested += (_, _) => { Assert.False(wallet.HelpOpen); requests++; };
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, requests);
+            Assert.False(wallet.InviteOpen);
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
     public void WalletVisorUsesTheEmiGeometryRenderer() => AvaloniaTestDispatcher.Run(() =>
     {
         Platform();

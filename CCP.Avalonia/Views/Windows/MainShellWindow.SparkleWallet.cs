@@ -27,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += ReplaceSparkleWalletSettings;
             SparklePointRewards.Awarded += OnSparklePointAwarded;
             wallet.VisitRequested += VisitFromSparkleWallet;
+            wallet.CounterRequested += OpenCounterFromSparkleWallet;
             Closed += (_, _) => ShutdownSparkleWallet();
             Deactivated += (_, _) => HeaderWallet?.ClosePopup();
             ReplaceSparkleWalletSettings();
@@ -72,6 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// billboard's Back Room door (sign-in first, else Play, where its door will live).</summary>
         private void VisitFromSparkleWallet(object? sender, EventArgs e) => OpenBillboardBackRoom();
 
+        private void OpenCounterFromSparkleWallet(object? sender, EventArgs e) => Games.GameWindow.LaunchPrizeCounter(from: "wallet");
+
         private void ShutdownSparkleWallet()
         {
             _sparkleWalletActive = false;
@@ -79,7 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SparklePointRewards.Awarded -= OnSparklePointAwarded;
             if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
             _sparkleWalletSettings = null;
-            if (HeaderWallet is { } wallet) { wallet.VisitRequested -= VisitFromSparkleWallet; wallet.ClosePopup(); }
+            if (HeaderWallet is { } wallet) { wallet.VisitRequested -= VisitFromSparkleWallet; wallet.CounterRequested -= OpenCounterFromSparkleWallet; wallet.ClosePopup(); }
         }
     }
 }
