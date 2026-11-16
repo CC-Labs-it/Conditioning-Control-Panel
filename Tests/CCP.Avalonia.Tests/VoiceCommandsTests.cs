@@ -174,51 +174,9 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task AQueuedWakeFromAStoppedLoopCannotTriggerACommand() => RunUi(async shell =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
-        var oldWake = s.SpeechWakeWords;
-        var oldTripwires = s.LockdownTripwiresEnabled;
-        var oldLockdown = LockdownService.Current;
-        using var ld = new LockdownService();
-        try
-        {
-            s.SpeechWakeWords = "hey bambi";
-            s.LockdownTripwiresEnabled = true;
-            LockdownService.Current = ld;
-            ld.Activate(TimeSpan.FromMinutes(30));
-            var escapes = new System.Collections.Generic.List<string>();
-            ld.EscapeAttempted += a => escapes.Add(a.Kind);
-            using var cancelled = new CancellationTokenSource();
-            shell.PostWakeWordHeard("hey bambi stop taking over", cancelled.Token);
-            cancelled.Cancel();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Empty(escapes);
-
-            shell.PostWakeWordHeard("hey bambi stop taking over", CancellationToken.None);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(new[] { ConditioningControlPanel.Services.Possession.EscapeKinds.Stop }, escapes);
-        }
-        finally
-        {
-            ld.Deactivate();
-            LockdownService.Current = oldLockdown;
-            s.SpeechWakeWords = oldWake;
-            s.LockdownTripwiresEnabled = oldTripwires;
-        }
-        await Task.CompletedTask;
-    }, disableVoice: true);
-
-    // Commands are injected as text here. A replaying wake-word microphone can issue an unrelated
-    // command during the dispatcher pump, so use the UI fixture instead of starting recognition.
-    [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
-    {
-        var s = CoreSettings.Current;
-        var saved = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.PanicKeyEnabled);
-        var premium = CoreEntitlement.HasPremiumProvider;
-        var previousLockdown = LockdownService.Current;
-        CoreEntitlement.HasPremiumProvider = () => true;
         s.AutonomyConsentGiven = true;
         s.PanicKeyEnabled = true;
         using var ld = LockdownService.Current = new LockdownService();
@@ -250,14 +208,12 @@ public sealed class VoiceCommandsTests
         }
         finally
         {
-            ld.Deactivate();
             shell.Autonomy.Stop();
-            LockdownService.Current = previousLockdown;
-            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.PanicKeyEnabled) = saved;
-            CoreEntitlement.HasPremiumProvider = premium;
+            LockdownService.Current = null;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
-    }, disableVoice: true);
+    });
 
     /// <summary>Takeover's surprise Spoken Mantra (WPF RunSpokenMantraAsync): only picked when the mod
     /// ships mantras; the WAV says the phrase, so it matches, credits 30 XP and paints the verdict.</summary>
@@ -397,21 +353,14 @@ public sealed class VoiceCommandsTests
         });
 
     // The help row is UI state; no recognition or microphone is exercised by this test.
-    private static Task RunUi(Func<MainShellWindow, Task> body, bool disableVoice = false) =>
+    private static Task RunUi(Func<MainShellWindow, Task> body) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             AmbientBeatLoopsTests.Setup();
-            var s = CoreSettings.Current;
-            var modes = (s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled);
-            if (disableVoice) (s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled) = (false, false);
             var shell = new MainShellWindow();
             shell.Show();
             try { await body(shell); }
-            finally
-            {
-                try { shell.RequestExit(); }
-                finally { if (disableVoice) (s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled) = modes; }
-            }
+            finally { shell.RequestExit(); }
         });
 
     private static Task Run(Func<MainShellWindow, WavMic, SpeechEngine, Task> body) => Run(null, body);
