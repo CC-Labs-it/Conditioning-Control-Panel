@@ -2,6 +2,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Super;
@@ -23,6 +24,23 @@ public class LightsDownOverlayTests
             _ => true, _ => false));
         Assert.Equal(0, LightsDownOverlay.Count);
         video.Close();
+    });
+
+    [Fact]
+    public void RefusesWhenWindowManagerCannotKeepVideoAbove() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var video = new Window();
+        var old = X11Overlay.WmCannotKeepAboveForTests;
+        var shapeCalls = 0;
+        try
+        {
+            X11Overlay.WmCannotKeepAboveForTests = () => true;
+            Assert.False(LightsDownOverlay.TryOpen(video, new PixelRect(0, 0, 100, 100), 1,
+                _ => true, _ => { shapeCalls++; return true; }, _ => true, (_, _) => true));
+            Assert.Equal(0, shapeCalls);
+            Assert.Equal(0, LightsDownOverlay.Count);
+        }
+        finally { X11Overlay.WmCannotKeepAboveForTests = old; LightsDownOverlay.CloseAll(); video.Close(); }
     });
 
     [Fact]
