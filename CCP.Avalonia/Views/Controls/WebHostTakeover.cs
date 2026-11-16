@@ -4,36 +4,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     {
         // WPF MainWindow.Browser.cs:843-955: poll for the player, play, request fullscreen,
         // retry fullscreen after a blocked play, and leave fullscreen on end or double-click.
-        // Media reporting and metadata wait for the browser media service.
+        // fsExit and fsDenied go to MainShellWindow.BrowserMedia.cs; playback itself comes from the always-on reporter there.
+        // Metadata for the random cut start is not ported.
         internal const string VideoAutoPlayScript = """
             (async function() {
                 window._ccpTakeoverStopped = false;
+                const post = o => {
+                    try {
+                        const s = JSON.stringify(o);
+                        if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(s);
+                        else window.chrome.webview.postMessage(s);
+                    } catch (_) {}
+                };
                 let video = document.querySelector('video');
                 for (let i = 0; i < 20 && !video; i++) {
                     await new Promise(r => setTimeout(r, 500));
                     if (window._ccpTakeoverStopped) return;
                     video = document.querySelector('video');
                 }
-                if (!video || window._ccpTakeoverStopped) return;
+                if (window._ccpTakeoverStopped) return;
+                if (!video) { post({ type: 'fsExit' }); return; }
                 const exitFullscreen = () => {
                     if (document.exitFullscreen) document.exitFullscreen();
                     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                     else if (document.msExitFullscreen) document.msExitFullscreen();
                 };
-                video.addEventListener('ended', exitFullscreen, { once: true });
+                let fsNotified = false, enteredFs = false;
+                const notifyFsExit = () => { if (fsNotified) return; fsNotified = true; post({ type: 'fsExit' }); };
+                video.addEventListener('ended', () => { exitFullscreen(); notifyFsExit(); }, { once: true });
                 video.addEventListener('dblclick', e => {
                     if (document.fullscreenElement || document.webkitFullscreenElement) {
                         exitFullscreen();
+                        notifyFsExit();
                         e.preventDefault();
                         e.stopPropagation();
                     }
                 });
+                // WPF :906-912: Esc or F11 leaves fullscreen without ended/dblclick; report it once, after a real entry.
+                const onFsChange = () => {
+                    if (document.fullscreenElement || document.webkitFullscreenElement) { enteredFs = true; return; }
+                    if (enteredFs) notifyFsExit();
+                };
+                document.addEventListener('fullscreenchange', onFsChange);
+                document.addEventListener('webkitfullscreenchange', onFsChange);
                 if (!window.__ccpMuted) video.muted = false;
                 const goFullscreen = () => {
                     if (window._ccpTakeoverStopped) return;
                     if (video.requestFullscreen) {
                         const request = video.requestFullscreen();
-                        if (request && request.catch) request.catch(() => {});
+                        if (request && request.catch) request.catch(err => post({ type: 'fsDenied',
+                            reason: String((err && (err.name || err.message)) || err).slice(0, 60) }));
                     } else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
                     else if (video.msRequestFullscreen) video.msRequestFullscreen();
                 };
