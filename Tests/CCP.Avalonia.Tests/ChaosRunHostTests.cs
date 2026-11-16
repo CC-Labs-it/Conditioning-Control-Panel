@@ -71,6 +71,49 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Golden_spawn_payout_and_panic_clear_the_field()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var rng = ChaosRunHost.Rng;
+            try
+            {
+                ChaosRunHost.Rng = new TeaseDice();
+                var cfg = Cfg(); cfg.ScriptedFirstRun = true;
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.Field.Bubbles.Clear();
+                var state = ChaosRunHost.State!;
+                state.GoldenChance = 1;
+                state.GoldDiggerEnabled = true;
+                ChaosRunHost.SpawnTick();
+                var golden = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsGolden == true));
+                int before = ChaosMeta.State.Gold;
+                double score = state.Score, focus = state.Focus;
+                BubbleOverlay.PopChaos(golden);
+                Assert.True(ChaosMeta.State.Gold > before);
+                Assert.Equal(score, state.Score);
+                Assert.Equal(focus + ChaosTuning.FOCUS_PER_GOLDEN, state.Focus);
+                var droplets = BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDroplet == true).ToList();
+                Assert.Equal(3, droplets.Count);
+                before = ChaosMeta.State.Gold;
+                BubbleOverlay.PopChaos(droplets[0]);
+                Assert.True(ChaosMeta.State.Gold > before);
+                Assert.Equal(score, state.Score);
+                PanicSurfaces.StopAll("test");
+                Assert.Empty(BubbleOverlay.Field.Bubbles);
+                Assert.False(ChaosRunHost.IsActive);
+                ChaosRunHost.SpawnTick();
+                Assert.Empty(BubbleOverlay.Field.Bubbles);
+            }
+            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = rng; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>

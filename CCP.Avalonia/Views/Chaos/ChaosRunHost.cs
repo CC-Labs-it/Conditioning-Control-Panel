@@ -355,6 +355,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
                 BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
+                // WPF ChaosModeService.cs:1165: a bonus roll accompanies each ordinary spawn.
+                if (Rng.NextDouble() < _state.GoldenChance)
+                {
+                    ChaosMeta.MarkDiscovered("bubble:golden");
+                    var golden = ChaosBubbleVariants.BuildGolden();
+                    BubbleOverlay.SpawnChaos(golden, motion: golden.Motion);
+                }
+
                 if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
                 {
                     ChaosMeta.MarkDiscovered("bubble:prism");
@@ -483,6 +491,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             CountRegenPop();   // WPF ChaosModeService :1768
+            // WPF ChaosModeService.cs:1786-1820: gold pickups bypass score and combo.
+            if (spec.IsGolden || spec.IsDroplet)
+            {
+                _state.Focus += spec.IsGolden ? ChaosTuning.FOCUS_PER_GOLDEN : ChaosTuning.FOCUS_PER_DROPLET;
+                int min, max;
+                if (spec.IsGolden)
+                {
+                    int level = ChaosMeta.IsBoonActive("rabbits_foot") ? ChaosMeta.BoonLevel("rabbits_foot") : 0;
+                    (min, max) = ChaosLifetimeBoons.GoldenPayRange(level);
+                }
+                else { min = 3; max = 7; }
+                int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(min, max + 1));
+                BankGold(gold);
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
+                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(255, 215, 0));
+                Pulse(Color.FromRgb(255, 215, 0), spec.IsGolden ? 0.35 : 0.12);
+                ChaosOverlayWindow.ChaosSfx.Play("golden_pop", spec.IsGolden ? 0.6f : 0.35f);
+                if (spec.IsGolden && _state.GoldDiggerEnabled)
+                {
+                    var center = BubbleOverlay.CenterPx(b);
+                    for (int i = 0; i < 3; i++)
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildGoldDroplet(
+                            center.X + Rng.Next(-50, 51), center.Y + Rng.Next(-20, 21)), motion: ChaosMotion.RainDown);
+                }
+                return;
+            }
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
