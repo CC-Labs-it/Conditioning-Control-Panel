@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
-    internal static class BubbleOverlay
+    internal static partial class BubbleOverlay
     {
         internal static readonly AmbientBubbleField Field = new()
         {
@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _frothHooked = true;
             SuperAccess.Changed += FrothChanged;
             SuperStageHost.Stage.Blasted += FrothBlasted;
+            SuperStageHost.Stage.Swept += FrothSwept;
         }
         private static void FrothChanged(SuperEffect effect)
         {
@@ -978,6 +979,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 if (Environment.TickCount64 - _frothAsked >= 1000) RefreshFroth();
                 Field.StepFroth(FrothOn, frothDt, FrothFresh, CoreSettings.Current.FrothMaxSize, Pop);
+                StepFrothMotion(frothDt);
                 StepChaosField();
                 PruneTeaseFaces();
                 TickChaosRipples();
