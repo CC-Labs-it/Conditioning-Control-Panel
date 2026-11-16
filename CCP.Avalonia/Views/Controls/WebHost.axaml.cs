@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// (Spiral's WebView2 chrome switches). A throwing hook is logged, never fatal.</summary>
         internal Action<IPlatformHandle?>? ConfigureNative { get; set; }
         private IDisposable? _failureWatch;
+        private IDisposable? _localContextMenu;
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
         /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
         /// Native only: a page message can never raise it.</summary>
@@ -506,6 +507,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void ClearNativeWatches()
         {
+            try { _localContextMenu?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Context menu cleanup failed"); } finally { _localContextMenu = null; }
             try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Browser failure cleanup failed"); } finally { _failureWatch = null; }
             try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; }
             try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; }
@@ -513,8 +515,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void ApplyNativeSettings(NativeWebView native, IPlatformHandle? handle)
         {
-            if (!ReferenceEquals(_web, native) || ConfigureNative is not { } configure) return;
-            try { configure(handle ?? native.TryGetPlatformHandle()); }
+            if (!ReferenceEquals(_web, native)) return;
+            handle ??= native.TryGetPlatformHandle();
+            try { _localContextMenu ??= Platform.LocalPageContextMenu.Attach(handle, uri => Platform.WebAssetServer.SuppressSharedContextMenu(uri, !GateScrolller)); }
+            catch (Exception ex) { Log.Debug(ex, "Local context menu hook failed"); }
+            if (ConfigureNative is not { } configure) return;
+            try { configure(handle); }
             catch (Exception ex) { Log.Debug(ex, "Native browser settings failed"); }
         }
 
