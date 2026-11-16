@@ -9,7 +9,7 @@ using Avalonia.Rendering.SceneGraph;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Avalonia.Platform.Super;
+using SuperStageHost = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Super;
 using ConditioningControlPanel.Services.Super.Draw;

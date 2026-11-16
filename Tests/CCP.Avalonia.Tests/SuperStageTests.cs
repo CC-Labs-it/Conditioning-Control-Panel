@@ -6,7 +6,7 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Super.Draw;
 using SkiaSharp;
 using CCP.Avalonia.Testing;
-using ConditioningControlPanel.Avalonia.Platform.Super;
+using SuperStageHost = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Super;
 using Xunit;
