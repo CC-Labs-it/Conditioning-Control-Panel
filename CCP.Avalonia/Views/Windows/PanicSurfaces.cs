@@ -53,6 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("upgrade-intro", MainShellWindow.StopUpgradeIntroForPanic),
             new("online-licence", MainShellWindow.CloseOnlineLicenceCardForPanic),   // stricter, as upgrade-intro: closes unseen, owed next launch
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
+            new("super-preview", _ => global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPreview.End(panic: true)),   // WPF MainWindow.xaml.cs:1635: the weekly try is cut
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
             new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets
             new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),

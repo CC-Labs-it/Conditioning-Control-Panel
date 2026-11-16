@@ -773,6 +773,8 @@ namespace ConditioningControlPanel.Avalonia
                 version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
             // WPF App.xaml.cs:4982-4985: notes for a returning account without a backup.
             CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
+            // WPF App.xaml.cs:558: this head says which weekly Super try runs.
+            ConditioningControlPanel.Services.Super.SuperAccess.TryingProvider = () => Controls.Super.SuperPreview.Trying;
 
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;

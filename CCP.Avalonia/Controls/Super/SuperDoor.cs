@@ -22,6 +22,15 @@ public static class SuperDoor
 
     public static string Twist(SuperEffect effect) => Loc.Get("super_twist_" + effect.ToString().ToLowerInvariant());
 
+    /// <summary>WPF SuperDoor.Help: the V2 help card, id "Super" + effect (its help loop's id too).
+    /// The star is the header icon the box passes, not an emoji here.</summary>
+    public static ConditioningControlPanel.Models.HelpContent Help(SuperEffect effect) => new()
+    {
+        SectionId = "Super" + effect,
+        Title = Loc.Get("super_name_" + effect.ToString().ToLowerInvariant()),
+        WhatItDoes = Twist(effect),
+    };
+
     public static bool Press(SuperEffect effect)
     {
         if (!SuperAccess.IsUnlocked(effect))

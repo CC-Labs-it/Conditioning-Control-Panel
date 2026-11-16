@@ -13,6 +13,7 @@
        all event handlers                ->  wired in code-behind (porting convention) -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:super="using:ConditioningControlPanel.Avalonia.Controls.Super"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -330,6 +331,9 @@
                 <Button x:Name="BtnTestVideo" Theme="{DynamicResource OutlineButton}" HorizontalAlignment="Stretch">
                     <fx:IconLabel Key="btn_test_2"/>
                 </Button>
+
+                <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <super:SuperBox x:Name="SuperBoxMain" Effect="LightsDown"/>
             </StackPanel>
 
             <!-- Mod-aware side art. Scrim kept verbatim. -->
