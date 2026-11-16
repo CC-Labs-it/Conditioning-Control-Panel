@@ -280,4 +280,89 @@ public sealed class FypPanicLadderTests
             CoreSettings.ServiceProvider = oldProvider;
         }
     });
+    [Theory]
+    [InlineData("exit")]
+    [InlineData("minimize")]
+    [InlineData("hide")]
+    [InlineData("close")]
+    [InlineData("start-failure")]
+    [InlineData("repair-start-failure")]
+    public void GhostReassertsAndStops(string exit) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity,
+            GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostRaiseManaged, GameWindow.FypGhostStartTick, GameWindow.FypGhostStartButtonRepair);
+        Action? tick = null, repair = null;
+        bool stopped = false, repairStopped = false, through = false;
+        var raised = new List<(string operation, global::Avalonia.Controls.TopLevel window)>();
+        GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostClickThrough = (_, on) => { through = on; return true; };
+        GameWindow.FypGhostOpacity = (_, _) => true;
+        GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
+        GameWindow.FypGhostRaise = w => { raised.Add(("direct", w)); return true; };
+        GameWindow.FypGhostRaiseManaged = w => { raised.Add(("managed", w)); return true; };
+        GameWindow.FypGhostStartTick = action =>
+        {
+            if (exit == "start-failure") throw new InvalidOperationException();
+            tick = action;
+            return new TickDisposal(() => stopped = true);
+        };
+        GameWindow.FypGhostStartButtonRepair = action =>
+        {
+            if (exit == "repair-start-failure") throw new InvalidOperationException();
+            repair = action;
+            return new TickDisposal(() => repairStopped = true);
+        };
+        var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
+        var sent = new List<JObject>();
+        feed.Posted += json => sent.Add(JObject.Parse(json));
+        try
+        {
+            feed.Show();
+            feed.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}");
+            if (exit == "start-failure" || exit == "repair-start-failure")
+            {
+                Assert.False(feed.IsFypGhosted);
+                Assert.False(through);
+                Assert.Empty(feed.FypGhostButtons);
+                Assert.Contains(sent, o => (string?)o["type"] == "ghost-unavailable");
+                if (exit == "repair-start-failure") Assert.True(stopped);
+                return;
+            }
+            Assert.True(feed.IsFypGhosted);
+            var buttons = feed.FypGhostButtons.ToArray();
+            tick!();
+            Assert.Equal(new[] { ("managed", (global::Avalonia.Controls.TopLevel)feed), ("direct", buttons[0]), ("direct", buttons[1]) }, raised);
+            raised.Clear();
+            repair!(); // The WM may finish raising the feed after the five second tick.
+            Assert.Equal(new[] { ("direct", (global::Avalonia.Controls.TopLevel)buttons[0]), ("direct", buttons[1]) }, raised);
+            if (exit == "exit") feed.ExitFypGhost();
+            else if (exit == "minimize") feed.WindowState = global::Avalonia.Controls.WindowState.Minimized;
+            else if (exit == "hide") feed.Hide();
+            else feed.Close();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(stopped);
+            Assert.True(repairStopped);
+            raised.Clear();
+            tick();
+            repair();
+            Assert.Empty(raised);
+        }
+        finally
+        {
+            feed.Close();
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity,
+                GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostRaiseManaged, GameWindow.FypGhostStartTick, GameWindow.FypGhostStartButtonRepair) = old;
+        }
+    });
+
+    private sealed class TickDisposal(Action stop) : IDisposable
+    {
+        public void Dispose() => stop();
+    }
+
 }
