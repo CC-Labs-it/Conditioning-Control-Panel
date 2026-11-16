@@ -144,11 +144,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     catch (Exception ex) { Log.Debug("DtrhHost: asset stats failed: {E}", ex.Message); }
                     return true;
                 case "fire-payload":
-                    FireDtrhPayload(o);
+                    // Stricter than WPF DtrhHostService.cs:343-345: nothing new fires during the panic settle window.
+                    if (!_dtrhExiting && !_closing) FireDtrhPayload(o);
                     return true;
                 case "freeze-state":
-                    ApplyDtrhFreeze((bool?)o["on"] ?? false);
+                {
+                    var on = (bool?)o["on"] ?? false;
+                    if (!on || (!_dtrhExiting && !_closing)) ApplyDtrhFreeze(on); // same panic gate; a release always lands
                     return true;
+                }
                 case "mute-state":
                     MandatoryVideoOverlay.Instance.SetExternalMute((bool?)o["on"] ?? false);
                     return true;
@@ -160,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (_dtrhRunActive) _dtrhLastProgress = o;
                     return true;
                 case "run-started":
-                    ReleaseDtrhVideo();
+                    ApplyDtrhFreeze(false); // WPF :371; the dive mute stays until teardown (:1078)
                     SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.Dtrh, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
@@ -168,7 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Log.Information("DtrhHost: run started (diff={D}, mode={M})", (string?)o["difficulty"] ?? "Gentle", (string?)o["mode"]);
                     return true;
                 case "run-ended":
-                    ReleaseDtrhVideo();
+                    ApplyDtrhFreeze(false); // WPF OnRunEnded :607 releases only the freeze
                     OnDtrhRunEnded(o, fromTeardown: false);
                     return true;
                 case "exit":

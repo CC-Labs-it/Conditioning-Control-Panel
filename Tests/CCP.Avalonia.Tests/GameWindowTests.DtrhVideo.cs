@@ -52,12 +52,15 @@ public sealed partial class GameWindowTests
             Assert.False(overlay.PrimaryPaused);
             Assert.True(w.IsVisible);
             Assert.False((bool)typeof(GameWindow).GetField("_closing", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!);
+            // WPF boot.js sends the saved mute once; DtrhHostService.cs:364-385 never releases it on run start or end.
+            w.HandleMessage("{\"type\":\"mute-state\",\"on\":true}");
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            Assert.True(overlay.ExternalMuted);
             w.HandleMessage("{\"type\":\"freeze-state\",\"on\":true}");
             Assert.True((bool)typeof(GameWindow).GetField("_dtrhFrozen", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!);
             Assert.True(decoder.Paused);
             w.HandleMessage("{\"type\":\"run-ended\"}");
             Assert.False(decoder.Paused);
-            w.HandleMessage("{\"type\":\"mute-state\",\"on\":true}");
             Assert.True(overlay.ExternalMuted);
             Assert.Equal(0, overlay.EffectivePlayerVolume);
             overlay.SetExternalMute(false);
@@ -88,6 +91,28 @@ public sealed partial class GameWindowTests
             w.HandleMessage("{\"type\":\"fire-payload\",\"kind\":\"audio\",\"strength\":-2,\"durationMult\":0}");
             Assert.Equal(0, Assert.Single(seen).Strength);
             Assert.Equal(0.1, seen[0].DurationMult);
+        }
+        finally { w.Close(); EffectPayload.Firer = old; }
+    });
+
+    // Stricter than WPF DtrhHostService.cs:343-348: a page settling after panic cannot fire a whisper or freeze.
+    [Fact]
+    public void Dtrh_panic_settle_window_fires_no_payload_or_freeze() => RunDtrh(true, (_, _, _, _) =>
+    {
+        var old = EffectPayload.Firer;
+        var seen = new List<EffectPayload>();
+        EffectPayload.Firer = seen.Add;
+        var w = GameWindow.Launch("dtrh")!;
+        try
+        {
+            w.HandleMessage("{\"type\":\"ready\"}");
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            GameWindow.CloseAllForPanic();
+            Assert.True(w.IsVisible); // still settling
+            w.HandleMessage("{\"type\":\"fire-payload\",\"kind\":\"audio\"}");
+            w.HandleMessage("{\"type\":\"freeze-state\",\"on\":true}");
+            Assert.Empty(seen);
+            Assert.False((bool)typeof(GameWindow).GetField("_dtrhFrozen", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!);
         }
         finally { w.Close(); EffectPayload.Firer = old; }
     });
