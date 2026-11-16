@@ -4,6 +4,7 @@ using System.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Haptics.Core;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Haptics
 {
@@ -75,6 +76,7 @@ namespace ConditioningControlPanel.Services.Haptics
                 cts = _playing = new CancellationTokenSource();
             }
             var ms = DurationFor(h.Ms, haptics.IsButtplugProvider);
+            Log.Debug("BackRoomHaptics: {Station}/{Tag} {Pct}% {Ms}ms", h.Station, h.Tag, (int)(h.Level * 100), ms);
             _ = PlayAsync(haptics, h.Level, ms, cts);
         }
 
