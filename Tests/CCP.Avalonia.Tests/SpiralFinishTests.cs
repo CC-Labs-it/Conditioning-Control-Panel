@@ -182,7 +182,15 @@ public sealed class SpiralFinishTests
                         Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
                         break;
                 }
-                Assert.Null(field.GetValue(game.Web));
+                // Every game now carries the hosted page motion hook; the Loom profile must not reach another game.
+                var untouched = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+                game.Web.OnEnvironmentRequested(untouched);
+                switch (untouched)
+                {
+                    case WindowsWebView2EnvironmentRequestedEventArgs win: Assert.Null(win.UserDataFolder); break;
+                    case GtkWebViewEnvironmentRequestedEventArgs gtk: Assert.Null(gtk.BaseDataDirectory); Assert.Null(gtk.BaseCacheDirectory); break;
+                    case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe: Assert.Null(wpe.DataDirectory); Assert.Null(wpe.CacheDirectory); break;
+                }
             }
             finally { loom.Close(); game.Close(); }
             return Task.CompletedTask;
