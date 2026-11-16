@@ -6366,6 +6366,8 @@
   "lockdown_audio_tics": "サウンドチック",
   "lockdown_audio_tics_tip": "部屋が大きく動いたときの小さな残り火の音と、悪化したときの短い沈み込み。静かな怪異にするならオフに。",
   "lockdown_poss_stay": "そのまま",
+  "possession_swap_pair": "{0}と{1}",
+  "possession_swap_two_buttons": "二つのボタン",
   "lockdown_poss_level_hers": "レベルは彼女の",
   "lockdown_poss_suffix_mine": "（わたしの）",
   "lockdown_poss_suffix_hers": "（彼女の）",

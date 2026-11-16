@@ -6943,6 +6943,8 @@
   "lockdown_audio_tics": "Sound tics",
   "lockdown_audio_tics_tip": "A small ember tick when the room does something big, and a short dip when it gets worse. Turn it off for a silent haunt.",
   "lockdown_poss_stay": "Stay",
+  "possession_swap_pair": "{0} and {1}",
+  "possession_swap_two_buttons": "two buttons",
   "lockdown_poss_level_hers": "level hers",
   "lockdown_poss_suffix_mine": " (mine)",
   "lockdown_poss_suffix_hers": " (hers)",

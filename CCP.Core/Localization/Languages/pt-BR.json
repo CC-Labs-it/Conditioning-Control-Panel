@@ -6366,6 +6366,8 @@
   "lockdown_audio_tics": "Tiques sonoros",
   "lockdown_audio_tics_tip": "Um pequeno tique de brasa quando a sala faz algo grande, e uma queda curta quando piora. Desligue para uma assombração silenciosa.",
   "lockdown_poss_stay": "Fique",
+  "possession_swap_pair": "{0} e {1}",
+  "possession_swap_two_buttons": "dois botões",
   "lockdown_poss_level_hers": "nivel dela",
   "lockdown_poss_suffix_mine": " (meu)",
   "lockdown_poss_suffix_hers": " (dela)",
