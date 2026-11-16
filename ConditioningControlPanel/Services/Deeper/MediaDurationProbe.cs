@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services.Deeper
             if (!MediaDurationCache.IsProbeable(mediaPath)) return null;
             var viaMf = await Task.Run(() => ProbeMediaFoundation(mediaPath)).ConfigureAwait(false);
             if (viaMf is > 0) return viaMf;
-            return await ProbeLibVlcAsync(VideoService.SharedLibVLC, mediaPath).ConfigureAwait(false);
+            return await ProbeLibVlcAsync(mediaPath).ConfigureAwait(false);
         }
 
         /// <summary>The <see cref="AudioWaveformCache.Decoder"/> for this head. Throws on decode failure.</summary>
@@ -53,13 +53,14 @@ namespace ConditioningControlPanel.Services.Deeper
             }
         }
 
-        internal static async Task<double?> ProbeLibVlcAsync(LibVLC? vlc, string path)
+        private static async Task<double?> ProbeLibVlcAsync(string path)
         {
             try
             {
+                var vlc = VideoService.SharedLibVLC;
                 if (vlc == null) return null;
                 using var media = new Media(vlc, path, FromType.FromPath);
-                var status = await LibVlcParse.ParseOffCallbackAsync(media, MediaParseOptions.ParseLocal, VlcParseTimeoutMs).ConfigureAwait(false);
+                var status = await media.Parse(MediaParseOptions.ParseLocal, VlcParseTimeoutMs).ConfigureAwait(false);
                 if (status != MediaParsedStatus.Done) return null;
                 var ms = media.Duration;
                 return ms > 0 ? ms / 1000.0 : null;
