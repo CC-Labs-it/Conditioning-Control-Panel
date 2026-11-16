@@ -94,7 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>A wash of one given file (tests and a future caller that picked its own).</summary>
         internal static Task ShowPath(IReadOnlyList<PixelRect> targets, string path, int durationMs, double opacity)
-            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, () => (path, false));
+            => ShowPick(targets, () => (path, false), durationMs, opacity);
+
+        internal static Task ShowPick(IReadOnlyList<PixelRect> targets, Func<(string? Path, bool Remote)> pick, int durationMs, double opacity)
+            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, pick);
 
         /// <summary>Back Room gif-full: a separate local-only surface, spanning every screen.</summary>
         public static void ShowHero(Visual host, string path, int durationMs, double opacity, bool still, Action? shown = null)
@@ -186,12 +189,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (targets.Count == 0) return;
                 var request = ++_request;
                 var bounds = StageBounds(targets);
-                var topmost = this == Hero || !ChaosRunHost.IsDescending || CoreSettings.Current.ChaosPinOnTop;
                 (string? Path, bool Remote) selected;
                 try { selected = await Task.Run(pick); }
                 catch (Exception ex) { Log.Debug("ChaosFlash: pick failed: {E}", ex.Message); return; }
                 var path = selected.Path;
                 if (request != _request || path == null) return;
+                // After the pick, like WPF ShowWithPick (ChaosFlashOverlay.cs:74): a run may start mid-pick.
+                var topmost = this == Hero || !ChaosRunHost.IsDescending || CoreSettings.Current.ChaosPinOnTop;
 
                 var gen = ++_gen;
                 ClearImage();

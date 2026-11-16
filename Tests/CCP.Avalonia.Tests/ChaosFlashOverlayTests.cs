@@ -129,6 +129,19 @@ public sealed class ChaosFlashOverlayTests
                 Assert.Equal(new[] { true }, bands);
                 Assert.True(Assert.Single(ChaosFlashOverlay.Shown).Topmost);
                 Assert.Single(raises);
+                // A dashboard wash whose pick is still running when an unpinned run starts follows the run (WPF :74).
+                ChaosFlashOverlay.CloseActive();
+                bands.Clear(); raises.Clear();
+                CoreSettings.Current.ChaosPinOnTop = false;
+                spawning.SetValue(null, false);
+                using var picking = new System.Threading.ManualResetEventSlim();
+                var delayed = ChaosFlashOverlay.ShowPick(TwoScreens, () => { picking.Wait(5000); return (gif, false); }, 600, .1);
+                spawning.SetValue(null, true);
+                picking.Set();
+                await delayed;
+                Assert.Equal(new[] { false, false }, bands);
+                Assert.False(Assert.Single(ChaosFlashOverlay.Shown).Topmost);
+                Assert.Empty(raises);
             }
             finally
             {
