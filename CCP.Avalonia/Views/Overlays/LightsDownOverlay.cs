@@ -28,7 +28,8 @@ internal static partial class LightsDownOverlay
         clickThrough ??= w => X11Overlay.SetClickThrough(w, true);
         transparent ??= w => w.ActualTransparencyLevel != WindowTransparencyLevel.None;
         below ??= (w, v) => X11Overlay.RestackAbove(v, w);
-        if (!eligible(video)) return false;
+        // A WM that ignores restacking (WSLg) leaves the last-mapped dim window over the video.
+        if (!eligible(video) || X11Overlay.WmCannotKeepAbove) return false;
 
         var w = new Window
         {
