@@ -352,6 +352,106 @@ public class TestIsolationTests
         });
 
     [Fact]
+    public void LightsDownSwitchTestLeavesSuperAccessHooksUnchanged() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const System.Reflection.BindingFlags staticFlags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        const System.Reflection.BindingFlags instanceFlags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(ConditioningControlPanel.Services.Super.SuperAccess);
+        var hooked = type.GetField("_baseHooked", staticFlags)!;
+        var bound = type.GetField("_baseSettings", staticFlags)!;
+        var tierHooked = type.GetField("_tierHooked", staticFlags)!;
+        var priorHooked = hooked.GetValue(null);
+        var priorBound = (ConditioningControlPanel.Models.AppSettings?)bound.GetValue(null);
+        var priorTierHooked = tierHooked.GetValue(null);
+        var priorProvider = CoreSettings.ServiceProvider;
+        var priorTierHook = ConditioningControlPanel.Services.Super.SuperAccess.TierEventsHook;
+        var changed = typeof(ConditioningControlPanel.Models.AppSettings).GetField("PropertyChanged", instanceFlags)!;
+        var priorChanged = priorBound == null ? null : changed.GetValue(priorBound);
+        var service = CoreSettings.Service;
+        var replaced = typeof(ConditioningControlPanel.Services.SettingsService).GetField("CurrentReplaced", instanceFlags)!;
+        var priorReplaced = service == null ? null : replaced.GetValue(service);
+
+        new LightsDownOverlayTests().SwitchOffClosesWindowsImmediatelyAndUnhooksOnStop();
+
+        Assert.Equal(priorHooked, hooked.GetValue(null));
+        Assert.Same(priorBound, bound.GetValue(null));
+        Assert.Equal(priorTierHooked, tierHooked.GetValue(null));
+        Assert.Same(priorProvider, CoreSettings.ServiceProvider);
+        Assert.Same(priorTierHook, ConditioningControlPanel.Services.Super.SuperAccess.TierEventsHook);
+        if (priorBound != null) Assert.Equal(priorChanged, changed.GetValue(priorBound));
+        if (service != null) Assert.Equal(priorReplaced, replaced.GetValue(service));
+    });
+
+    [Fact]
+    public void LightsDownSwitchTestPreservesAnExistingSuperSettingsSubscription() => AvaloniaTestDispatcher.Run(() =>
+    {
+        const System.Reflection.BindingFlags sf = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+        const System.Reflection.BindingFlags inst = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var type = typeof(ConditioningControlPanel.Services.Super.SuperAccess);
+        var hooked = type.GetField("_baseHooked", sf)!;
+        var bound = type.GetField("_baseSettings", sf)!;
+        var changedEvent = type.GetField("Changed", sf)!;
+        var settingsChanged = typeof(ConditioningControlPanel.Models.AppSettings).GetField("PropertyChanged", inst)!;
+        var serviceChanged = typeof(ConditioningControlPanel.Services.SettingsService).GetField("CurrentReplaced", inst)!;
+        var oldHooked = hooked.GetValue(null);
+        var oldBound = bound.GetValue(null);
+        var oldChangedEvent = changedEvent.GetValue(null);
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldTierHook = ConditioningControlPanel.Services.Super.SuperAccess.TierEventsHook;
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        var initialSettingsChanged = settingsChanged.GetValue(service.Current);
+        var initialServiceChanged = serviceChanged.GetValue(service);
+        try
+        {
+            // Set up one known subscription without re-binding the prior test's settings object.
+            hooked.SetValue(null, false);
+            bound.SetValue(null, null);
+            CoreSettings.ServiceProvider = () => service;
+            ConditioningControlPanel.Services.Super.SuperAccess.TierEventsHook = null;
+            ConditioningControlPanel.Services.Super.SuperAccess.HookBaseEvents();
+            var boundSettingsChanged = settingsChanged.GetValue(service.Current);
+            var boundServiceChanged = serviceChanged.GetValue(service);
+            Assert.NotEqual(initialSettingsChanged, boundSettingsChanged);
+            Assert.NotEqual(initialServiceChanged, boundServiceChanged);
+
+            new LightsDownOverlayTests().SwitchOffClosesWindowsImmediatelyAndUnhooksOnStop();
+
+            Assert.Same(service.Current, bound.GetValue(null));
+            Assert.Equal(boundSettingsChanged, settingsChanged.GetValue(service.Current));
+            Assert.Equal(boundServiceChanged, serviceChanged.GetValue(service));
+            var observed = 0;
+            System.Action<ConditioningControlPanel.Services.Super.SuperEffect> observer = effect =>
+            {
+                if (effect == ConditioningControlPanel.Services.Super.SuperEffect.LightsDown) observed++;
+            };
+            // Count the actual notification without invoking unrelated subscribers during this probe.
+            changedEvent.SetValue(null, observer);
+            service.Current.MandatoryVideosEnabled = !service.Current.MandatoryVideosEnabled;
+            Assert.Equal(1, observed);
+        }
+        finally
+        {
+            // A broken implementation may have rebound the handler to its temporary settings.
+            if (bound.GetValue(null) is ConditioningControlPanel.Models.AppSettings current &&
+                !ReferenceEquals(current, oldBound) && !ReferenceEquals(current, service.Current))
+            {
+                var method = type.GetMethod("OnBasePropertyChanged", sf)!;
+                var handler = (System.ComponentModel.PropertyChangedEventHandler)System.Delegate.CreateDelegate(
+                    typeof(System.ComponentModel.PropertyChangedEventHandler), method);
+                current.PropertyChanged -= handler;
+            }
+            settingsChanged.SetValue(service.Current, initialSettingsChanged);
+            serviceChanged.SetValue(service, initialServiceChanged);
+            changedEvent.SetValue(null, oldChangedEvent);
+            bound.SetValue(null, oldBound);
+            hooked.SetValue(null, oldHooked);
+            ConditioningControlPanel.Services.Super.SuperAccess.TierEventsHook = oldTierHook;
+            CoreSettings.ServiceProvider = oldProvider;
+            service.SealForReset();
+        }
+    });
+
+    [Fact]
     public void RestorePutsPanicQuietEngineHoldAndCountBack()
     {
         var original = ProcessStateSnapshot.Take();

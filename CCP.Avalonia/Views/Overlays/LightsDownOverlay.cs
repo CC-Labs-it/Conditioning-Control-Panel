@@ -9,7 +9,7 @@ using ConditioningControlPanel.Services.Super;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
 /// <summary>
-/// The safe window and dim layer for Lights Down. The video host does not start it yet.
+/// The safe window and dim layer for Lights Down, driven by the mandatory video host.
 /// WPF: Services/Super/LightsDownOverlay.cs:14 and LightsDownService.cs:89.
 /// All calls are on the UI thread.
 /// </summary>
