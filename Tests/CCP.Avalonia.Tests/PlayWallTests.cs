@@ -287,13 +287,13 @@ public sealed class PlayWallTests
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // GAMES: Goon has no host on this head, so its Play button
-                // refuses honestly; the Breakout demo and Piece by Piece open their game as the launcher does.
+                // GAMES: Goon is registered (GameWindow.Goon.cs), so its Play button is live with no refusal
+                // tooltip; the Breakout demo and Piece by Piece open their game as the launcher does.
                 foreach (var n in new[] { "BtnPlayGoon" })
                 {
                     var b = C<Button>(n);
-                    Assert.False(b.IsEnabled, n);
-                    Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(b));
+                    Assert.True(b.IsEnabled, n);
+                    Assert.Null(ToolTip.GetTip(b));
                 }
                 var launched = new System.Collections.Generic.List<string>();
                 var previousLaunch = PlayTabView.LaunchGame;
