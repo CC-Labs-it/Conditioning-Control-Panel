@@ -389,8 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF MainWindow.TabNavigation.cs:1066: the Media Log is a window, deliberately no ShowTab.
         private void BtnNavMediaLog_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
-            try { new MediaHistoryWindow().Show(this); }
-            catch (Exception ex) { Serilog.Log.Warning(ex, "BtnNavMediaLog_Click failed"); }
+            Named<Tabs.AssetsTabView>("AssetsTab")?.OpenMediaLog();
         }
     }
 }
