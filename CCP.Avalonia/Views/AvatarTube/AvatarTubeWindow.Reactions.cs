@@ -23,6 +23,26 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
+        // WPF Reactions.cs:397-417. A generation invalidates late replies on panic and close.
+        internal int LockReactionGeneration;
+        internal Func<string, int, int, Task<string?>>? LockReactionRequest;
+        internal Action<string>? LockReactionSpeech;
+
+        internal async Task<bool> PlayLockCardAiReactionAsync(string phrase, int mistakes, int repeats, int generation)
+        {
+            if (!CoreSettings.Current.AiChatEnabled || (LockReactionRequest == null && App.Ai?.IsAvailable != true)) return false;
+            try
+            {
+                var line = await (LockReactionRequest != null ? LockReactionRequest(phrase, mistakes, repeats)
+                    : App.Ai!.GetLockScreenReaction(phrase, mistakes, repeats));
+                if (generation != LockReactionGeneration || _avatarSetsClosed || string.IsNullOrWhiteSpace(line)) return false;
+                if (LockReactionSpeech is { } sink) sink(line);
+                else GigglePriority(line);
+                return true;
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to get AI lock-screen reaction"); return false; }
+        }
+
         private const double StartupCooldownSeconds = 3.0;   // WPF Speech.cs:68
         internal DateTime _startupTime = DateTime.Now;   // settable by tests
         private bool _activityAiInFlight, _stillOnAiInFlight;   // WPF: don't stack requests
