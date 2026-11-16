@@ -156,7 +156,7 @@ public sealed class VaultGateTests
     });
 
     [Fact]
-    public Task PadlockOpensTheCardAndItsLinksClick() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task PadlockOpensTheCardAndItsLinksClick() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureAvalonia();
         var shell = new MainShellWindow();
@@ -191,12 +191,12 @@ public sealed class VaultGateTests
             Click(card!, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
             Assert.Contains(Loc.Get("vaultgate_yearly_note"), Texts(card!));
             Click(card!, Loc.Get("vaultgate_back"));
+            await Task.Delay(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(190) + 150);
             Assert.Contains(Loc.Get("vaultgate_signin"), Texts(card!));
             Click(card!, Loc.Get("vaultgate_close"));
             Assert.Null(VaultGateDialog.Open);
         }
         finally { VaultGateDialog.Open?.Close(); shell.Close(); }
-        return Task.CompletedTask;
     });
 
     [Fact]
@@ -218,6 +218,17 @@ public sealed class VaultGateTests
             var struck = card.GetVisualDescendants().OfType<TextBlock>().Single(t => "struck".Equals(t.Tag));
             Assert.Equal(VaultOffer.Money(VaultOffer.PriceFor(1, cur).MonthlyCents, cur), struck.Text);
             Assert.Contains(Loc.Get("vaultgate_sale_first"), Texts(card));
+            VaultGateDialog.Sale = new VaultSaleInfo(20, DateTime.UtcNow.AddDays(2), new[] { 1 });
+            Click(card, Loc.Get("vaultgate_compare"));
+            var basic = card.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "BasicSale");
+            var prime = card.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PrimeSale");
+            Assert.Equal(2, basic.Children.Count); Assert.Equal(Loc.GetF("vaultgate_sale_line", 20, VaultOffer.Money(VaultOffer.PriceFor(1, cur).MonthlyCents, cur)), ((TextBlock)basic.Children[0]).Text);
+            Assert.Empty(prime.Children); Assert.Equal(Loc.GetF("vaultgate_sale_ends", VaultSale.EndsText(VaultGateDialog.Sale!)!), ((TextBlock)basic.Children[1]).Text);
+            Assert.DoesNotContain(card.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "PriceStamp").SelectMany(b => b.GetVisualDescendants().OfType<TextBlock>()), t => basic.Children.OfType<TextBlock>().Any(sale => sale.Text == t.Text));
+            Click(card, Loc.Get("vaultgate_billing_yearly"));
+            Assert.Empty(basic.Children);
+            Click(card, Loc.Get("vaultgate_billing_monthly"));
+            Assert.Equal(2, basic.Children.Count);
         }
         finally { VaultGateDialog.Sale = null; VaultGateDialog.Open?.Close(); }
         return Task.CompletedTask;

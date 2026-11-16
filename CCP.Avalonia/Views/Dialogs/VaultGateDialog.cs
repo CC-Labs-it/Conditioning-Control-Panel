@@ -57,7 +57,7 @@ public sealed partial class VaultGateDialog : Window
     /// <summary>The card on screen, if any. One at a time: a second padlock or toast replaces it.</summary>
     internal static VaultGateDialog? Open { get; private set; }
 
-    private readonly StackPanel _body = new();
+    private StackPanel _body = new();
     private readonly Border _card;
     private readonly ExclusiveFeature? _feature;
     private readonly int _tier;
@@ -66,7 +66,7 @@ public sealed partial class VaultGateDialog : Window
     private string _funnelKey = "vault";   // WPF VaultGateDialog: the funnel beacon names the gate it came from
     private PlanSet _plans = PlanCatalog.Current;
     private PriceCurrency _currency => VaultOffer.HeadlineCurrency(_plans);
-    private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly, bool Hints, StackPanel? SaleDetails)> _priceSlots = new();
+    private readonly List<(StackPanel Slot, int Tier, bool Compact, bool Yearly, bool Hints)> _priceSlots = new();
     private bool _yearly;
     private StackPanel? _proofSlot, _codeSlot;
 
@@ -93,6 +93,7 @@ public sealed partial class VaultGateDialog : Window
             Margin = new Thickness(12), Padding = new Thickness(22, 20, 22, 18),
             BoxShadow = BoxShadows.Parse("0 0 22 0 #73FF69B4"), Child = _body,
         };
+        SizeChanged += CompareSizeChanged;
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
         // Buttons handle their own press, so only the card's empty surface drags.
         PointerPressed += (_, e) => { if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e); };
@@ -138,6 +139,7 @@ public sealed partial class VaultGateDialog : Window
 
     private void BuildOffer()
     {
+        _comparing = false;
         FaceChrome(false);
         _body.Children.Clear();
         _priceSlots.Clear();
@@ -235,8 +237,9 @@ public sealed partial class VaultGateDialog : Window
                 Sale = _plans.Sale;
                 _saleReadUtc = DateTime.UtcNow;
             }
-            foreach (var (slot, tier, compact, yearly, hints, saleDetails) in _priceSlots)
-                PaintPrice(slot, tier, compact, yearly, hints, saleDetails);
+            foreach (var (slot, tier, compact, yearly, hints) in _priceSlots)
+                PaintPrice(slot, tier, compact, yearly, hints);
+            if (_comparing) PaintCompare(false);
             if (!_plans.FromServer) await FillSaleAsync();
         }
         catch (Exception ex) { Log.Debug("[VaultGate] plans refresh failed: {E}", ex.GetType().Name); }
@@ -256,7 +259,7 @@ public sealed partial class VaultGateDialog : Window
         }
         catch (Exception ex) { Log.Debug("[VaultGate] sale read failed: {E}", ex.GetType().Name); }
         Sale = sale;
-        foreach (var (slot, tier, compact, yearly, hints, saleDetails) in _priceSlots) PaintPrice(slot, tier, compact, yearly, hints, saleDetails);
+        foreach (var (slot, tier, compact, yearly, hints) in _priceSlots) PaintPrice(slot, tier, compact, yearly, hints);
     }
 
     private void PaintProof()
@@ -399,29 +402,30 @@ public sealed partial class VaultGateDialog : Window
         return list;
     }
 
-    private Control Price(int tier, bool compact = false, bool yearly = false, bool hints = false, StackPanel? saleDetails = null)
+    private Control Price(int tier, bool compact = false, bool yearly = false, bool hints = false)
     {
         var slot = new StackPanel { Margin = new Thickness(0, compact ? 8 : 12, 0, compact ? 0 : 4) };
-        _priceSlots.Add((slot, tier, compact, yearly, hints, saleDetails));
-        PaintPrice(slot, tier, compact, yearly, hints, saleDetails);
+        _priceSlots.Add((slot, tier, compact, yearly, hints));
+        PaintPrice(slot, tier, compact, yearly, hints);
         return slot;
     }
 
     /// <summary>The price, or during a first-month sale the sale price beside the struck normal one,
     /// the "then" line and the end date. Yearly never shows a sale.</summary>
-    private void PaintPrice(StackPanel slot, int tier, bool compact, bool yearly, bool hints, StackPanel? saleDetails = null)
+    private void PaintPrice(StackPanel slot, int tier, bool compact, bool yearly, bool hints)
     {
         slot.Children.Clear();
-        saleDetails?.Children.Clear();
         var price = VaultOffer.PriceFor(tier, _currency, _plans);
         var sale = VaultSale.AppliesTo(Sale, tier, DateTime.UtcNow, yearly) ? Sale : null;
         var line = new WrapPanel();
-        var ticketInk = slot.Tag as IBrush;
+        var ticket = slot.Tag is ValueTuple<IBrush, StackPanel> pair ? pair : ((IBrush?)null, (StackPanel?)null);
+        var ticketInk = ticket.Item1 ?? slot.Tag as IBrush;
+        var saleSlot = ticket.Item2 ?? slot; if (ticket.Item2 != null) saleSlot.Children.Clear();
         line.Children.Add(new TextBlock
         {
             Text = VaultOffer.Money(sale != null ? VaultSale.FirstMonthCents(price.MonthlyCents, sale.Percent)
                 : yearly ? price.YearlyCents : price.MonthlyCents, _currency),
-            FontFamily = FriendsDrawer.Display, FontWeight = FontWeight.SemiBold, FontSize = compact ? 22 : 28, Foreground = ticketInk ?? Brushes.White,
+            FontFamily = FriendsDrawer.Display, FontWeight = compact ? FontWeight.Bold : FontWeight.SemiBold, FontSize = compact ? 30 : 28, Foreground = ticketInk ?? Brushes.White,
             Margin = new Thickness(0, 0, 8, 0),
         });
         if (sale != null)
@@ -431,25 +435,26 @@ public sealed partial class VaultGateDialog : Window
                 FontFamily = FriendsDrawer.Display, Foreground = ticketInk ?? Dim, FontSize = compact ? 14 : 17, VerticalAlignment = VerticalAlignment.Bottom,
                 Margin = new Thickness(0, 0, 8, compact ? 3 : 4),
             });
-        var caption = new TextBlock
+        var sub = new TextBlock
         {
             Text = sale != null ? Loc.Get("vaultgate_sale_first")
                 : yearly ? Loc.GetF("vaultgate_price_year", VaultOffer.YearlyPerMonth(price))
                 : Loc.GetF("vaultgate_price", VaultOffer.PerDay(price)),
             Foreground = ticketInk ?? Dim, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5), TextWrapping = TextWrapping.Wrap,
         };
-        if (saleDetails == null) line.Children.Add(caption);
         slot.Children.Add(line);
-        if (saleDetails != null) slot.Children.Add(caption);
+        // WPF Compare.cs:418-427: the ticket stamp sets its sub line under the amount.
+        if (compact) { sub.FontSize = 11; sub.FontWeight = FontWeight.SemiBold; sub.Margin = new Thickness(0, -2, 0, 0); slot.Children.Add(sub); }
+        else line.Children.Add(sub);
         if (sale == null)
         {
             if (hints && !yearly) AddHints(slot, tier, price);
             return;
         }
-        (saleDetails ?? slot).Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
-            Good, compact ? 12 : 12.5, new Thickness(0, 2, 0, 0)));
+        saleSlot.Children.Add(Para(Loc.GetF("vaultgate_sale_line", sale.Percent, VaultOffer.Money(price.MonthlyCents, _currency)),
+            ticketInk ?? Good, compact ? 12 : 12.5, new Thickness(0, ticket.Item2 != null ? 10 : 2, 0, 0)));
         if (VaultSale.EndsText(sale) is string ends)
-            (saleDetails ?? slot).Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
+            saleSlot.Children.Add(Para(Loc.GetF("vaultgate_sale_ends", ends), ticketInk ?? Dim, compact ? 11.5 : 12, new Thickness(0, 2, 0, 0)));
     }
 
     private void AddHints(StackPanel slot, int tier, TierPrice price)
