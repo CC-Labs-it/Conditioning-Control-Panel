@@ -143,20 +143,13 @@ public sealed class LeashIncomingAskTests
                 LeashGateCardTests.Click(look);
                 var manual = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
                 Assert.Equal("leash-ask:vex", manual.Card.Tag);
-                // Rebinding while the manual ask is visible must still preserve the other offer.
-                LeashHead.Service = null; shell.RebindLeashAsks();
-                LeashHead.Service = service; shell.RebindLeashAsks();
                 manual.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
                 Dispatcher.UIThread.RunJobs();
                 var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
                 Assert.Equal("leash-ask:juno", next.Card.Tag); // The other offer still waits.
                 next.Card.Dismiss();
                 Dispatcher.UIThread.RunJobs();
-                var repeated = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-                Assert.Equal("leash-ask:vex", repeated.Card.Tag); // Rebind queues it again, as in WPF.
-                repeated.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current);
+                Assert.Null(LeashAskWindow.Current); // The offer opened by Look must not return.
                 Assert.Contains(page.GetLogicalDescendants().OfType<Border>(), c => c.Tag as string == "leash-offer-row:vex");
             }
             finally

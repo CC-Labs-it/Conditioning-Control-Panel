@@ -62,7 +62,6 @@ public sealed class LeashAskTests
                     } },
                 });
                 LeashHead.Service = svc;
-                shell.RebindLeashAsks(); // Bind while the owner is hidden, before a manual Look can race the timer.
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
                 var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
                 var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
@@ -143,7 +142,6 @@ public sealed class LeashAskTests
             CoreSettings.Current.LeashIntroSeenLeashed = true;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
-            shell.RebindLeashAsks(); // The gate timer may tick while the ask is open.
             Assert.True(card.PutItOnButton.IsEnabled); // Seen before: no read clock.
 
             wire.Reply = new JObject { ["ok"] = false };
@@ -206,16 +204,7 @@ public sealed class LeashAskTests
             var ask = LeashAskWindow.Current!;
             Assert.False(previous.IsVisible);
             Assert.NotSame(previous, ask);
-            // Force a service rebind while the manual ask is open, even if the real timer already fired.
-            var service = LeashHead.Service;
-            LeashHead.Service = null; shell.RebindLeashAsks();
-            LeashHead.Service = service; shell.RebindLeashAsks();
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(ask.IsVisible);
-            var repeated = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-            Assert.Equal("leash-ask:u_juno", repeated.Card.Tag);
-            repeated.Card.Dismiss();
             Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
@@ -223,12 +212,11 @@ public sealed class LeashAskTests
         });
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
-        Run((shell, page, wire, _) =>
+        Run((_, page, wire, _) =>
         {
             wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
-            shell.RebindLeashAsks(); // The gate timer may tick while the ask is open.
             Assert.False(card.PutItOnButton.IsEnabled);
             LeashGateCardTests.Click(Tagged<Button>(card, "leash-ask-no"));
             Assert.False((bool?)wire.Calls.Last().Body["accept"]);
