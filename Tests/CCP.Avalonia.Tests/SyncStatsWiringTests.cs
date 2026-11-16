@@ -21,11 +21,12 @@ public sealed partial class AccountSeedTests
         Directory.CreateDirectory(dir);
         var prop = typeof(AvApp).GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!;
         var (oldEngine, oldQuests, previous) = (prop.GetValue(null), AvApp.Quests, CoreDispatch.PostProvider);
+        QuestService? quests = null;
         try
         {
             var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
             prop.SetValue(null, engine);
-            AvApp.Quests = new QuestService(null, dir);
+            AvApp.Quests = quests = new QuestService(null, dir);
             CoreDispatch.PostProvider = action => action();
             var (wire, sync, _) = SignIn("u1", L40Profile("u1"));
             wire.SyncReply = """{"success":true,"user":{"stats":{"total_bubbles_popped":77,"total_weekly_quests_completed":5}}}""";
@@ -47,6 +48,7 @@ public sealed partial class AccountSeedTests
             CoreDispatch.PostProvider = previous;
             prop.SetValue(null, oldEngine);
             AvApp.Quests = oldQuests;
+            quests?.Dispose();   // its timers would post into later tests' dispatch providers
             Directory.Delete(dir, true);
         }
     });

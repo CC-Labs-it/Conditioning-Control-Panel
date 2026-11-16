@@ -100,7 +100,7 @@ public sealed class SyncStatsTests
             s.DailyQuestStreak = 8;
             var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir, "achievements.json")));
             engine.Progress.TotalBubblesPopped = 3;
-            var quests = new QuestService(null, dir);
+            using var quests = new QuestService(null, dir);   // stops its save/refresh timers before the dir goes
             quests.Progress.TotalWeeklyQuestsCompleted = 0;
             sync.StatsEngine = () => engine;
             sync.StatsQuests = () => quests;
