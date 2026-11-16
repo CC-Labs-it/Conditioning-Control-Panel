@@ -14,6 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Platform.Deeper;
 // WPF RealActionDispatcher: the head supplies the actual effects and playback commands.
 internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhancementRunCleanup
 {
+    internal readonly CancellationTokenSource FlashOwner = new();
     private readonly object _audioGate = new();
     private readonly HashSet<Action> _audioStops = new();
     private volatile bool _retired;
@@ -25,7 +26,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         lock (_audioGate) { _retired = true; stops = _audioStops.ToArray(); _audioStops.Clear(); }
         foreach (var stop in stops) { try { stop(); } catch { } }
     }
-    public void StopOneShotFlashes() { }
+    public void StopOneShotFlashes() => Views.Overlays.FlashOverlay.StopOwned(FlashOwner);
     public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
 
     private void PlayAudio(string path, float volume, bool duckOtherAudio)
@@ -89,7 +90,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Flash && effect.Phase != EffectPhase.Stop:
                 // WPF RealActionDispatcher.cs:188-194 -> FlashService.cs:793: one picture for the authored duration.
-                Dispatcher.UIThread.Post(() => { if (!ct.IsCancellationRequested && !_retired && Host is { } h) Views.Overlays.FlashOverlay.TriggerOnce(h, amount: 1, durationMs: effect.DurationMs); }); break;
+                Dispatcher.UIThread.Post(() => { if (!ct.IsCancellationRequested && !_retired && Host is { } h) Views.Overlays.FlashOverlay.TriggerOwned(h, 1, effect.DurationMs, null, false, FlashOwner); }); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Bubble: BubbleBurst(effect.DurationMs, ct); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Subliminal && effect.Phase != EffectPhase.Stop && !string.IsNullOrWhiteSpace(effect.Text):
                 Views.Overlays.SubliminalWhisperShow.Custom(effect.Text, durationMs: effect.DurationMs, suppressHaptic: effect.SuppressHaptic); break;
