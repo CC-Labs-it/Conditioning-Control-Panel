@@ -83,9 +83,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 var result = await fetch.FetchAsync(progress, cancel.Token);
                 if (_raceFetch != cancel || cancel.IsCancellationRequested || _closing) return;
+                if (result == RaceEngineFetchResult.Installed && StartRaceShell(_shellRoom) == true)
+                {
+                    Hide();
+                    return;
+                }
                 RaceStatus.Text = Loc.Get(result switch
                 {
-                    RaceEngineFetchResult.Installed => "rt_engine_start_failed", // owned host is a separate lane
+                    RaceEngineFetchResult.Installed => "rt_engine_start_failed",
                     RaceEngineFetchResult.Network => "rt_engine_network",
                     RaceEngineFetchResult.Checksum => "rt_engine_checksum",
                     RaceEngineFetchResult.Storage => "rt_engine_storage",
@@ -117,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (shell == null) return null;
             (RaceShell, PageUrl, _shellRoom) = (shell, url, room);
             Closed += (_, _) => shell.Dispose();
-            lock (Open) Open.Add(this);   // what Opened does for a shown window
+            lock (Open) { if (!Open.Contains(this)) Open.Add(this); }   // what Opened does for a shown window
             OpenGlassroad();
             return true;
         }
@@ -131,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
         private void ShowRaceCard(string? room, bool failed)
         {
+            _shellRoom = room;
             ShowRaceCard();
             if (failed) RaceStatus.Text = Loc.Get("rt_engine_start_failed");
             HandoffRaceRoom(room);   // joins once the in-app page is ready (Play race slower)

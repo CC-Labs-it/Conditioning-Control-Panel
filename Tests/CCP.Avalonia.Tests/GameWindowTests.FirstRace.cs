@@ -82,6 +82,27 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void FirstRace_DownloadStartsShellAndPanicStopsIt() => FirstRace((w, fake) =>
+    {
+        var oldLaunch = GameWindow.LaunchRaceShell;
+        LinuxRaceHost? host = null;
+        try
+        {
+            GameWindow.LaunchRaceShell = (window, _) => host = new LinuxRaceHost(window, LinuxRaceHostTests.StartCat());
+            Click(w.RaceDownload);
+            fake.Reply.SetResult(RaceEngineFetchResult.Installed);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(host);
+            Assert.Same(host, w.RaceShell);
+            Assert.False(w.IsVisible);
+            PanicSurfaces.All.Single(x => x.Id == "games").Stop(null!);
+            Assert.False(host!.IsAlive);
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { host?.Dispose(); GameWindow.LaunchRaceShell = oldLaunch; }
+    });
+
+    [Fact]
     public void FirstRace_InstalledEngineReportsMissingHost() => FirstRace((w, _) =>
     {
         Assert.Equal(Loc.Get("rt_engine_start_failed"), w.RaceStatus.Text);
