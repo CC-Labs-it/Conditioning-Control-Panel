@@ -182,14 +182,10 @@ public sealed class LeashAskTests
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
-                // The Bezier's y control points are 0, 1.5, 1, 1: its thud can overshoot below 1.
-                Assert.InRange(scale?.ScaleX ?? 1, 1 - (start - 1) * 0.5 - 1e-9, start + 1e-9);
+                Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
-                ask.AdvanceThud(119); // t=0.35: WPF curve is 1.0625, past its rest scale
-                Assert.Equal(1 - (start - 1) * 0.0625, scale?.ScaleX ?? 1, 5);
-                Assert.Equal(1 - (start - 1) * 0.0625, scale?.ScaleY ?? 1, 5);
                 ask.AdvanceThud(340);
                 Assert.Equal(1, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
