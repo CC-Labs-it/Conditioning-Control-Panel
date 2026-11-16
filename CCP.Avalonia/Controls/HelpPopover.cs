@@ -327,12 +327,23 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     Foreground = gold, FontSize = 11.5, FontWeight = FontWeight.SemiBold,
                     BorderBrush = gold, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
                     Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xCF, 0x6B)),
-                    Padding = new Thickness(9, 3, 9, 4),
+                    Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(10, 0, 0, 0),
                 };
                 var switchRow = new StackPanel { Orientation = Orientation.Horizontal };
                 switchRow.Children.Add(new IconGlyph { Kind = IconKind.Star, Foreground = gold, Size = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) });
                 switchRow.Children.Add(new TextBlock { Text = Loc.Get(_showV2 ? "help_see_classic" : "help_see_v2"), Foreground = gold, VerticalAlignment = VerticalAlignment.Center });
-                toggle.Content = switchRow;
+                var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                stack.Children.Add(switchRow);
+                if (!_showV2 && !SuperAccess.IsUnlocked(effect.Value))
+                {
+                    stack.Children.Add(new TextBlock
+                    {
+                        Name = "HelpV2Supporter", Text = Loc.Get("super_for_supporters"),
+                        Foreground = gold,
+                        Opacity = .75, FontSize = 9.5, HorizontalAlignment = HorizontalAlignment.Center,
+                    });
+                }
+                toggle.Content = stack;
                 toggle.PointerEntered += (_, _) => toggle.Background = new SolidColorBrush(Color.FromArgb(0x4D, 0xFF, 0xCF, 0x6B));
                 toggle.PointerExited += (_, _) => toggle.Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xCF, 0x6B));
                 toggle.Click += (_, _) =>
@@ -343,18 +354,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     _popupRoot = null;
                     EnsureContent();
                 };
-                var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
-                stack.Children.Add(toggle);
-                if (!_showV2 && !SuperAccess.IsUnlocked(effect.Value))
-                {
-                    stack.Children.Add(new TextBlock
-                    {
-                        Name = "HelpV2Supporter", Text = Loc.Get("super_for_supporters"),
-                        Foreground = gold,
-                        Opacity = .75, FontSize = 9.5, HorizontalAlignment = HorizontalAlignment.Center,
-                    });
-                }
-                headerRow.Children.Add(stack);
+                headerRow.Children.Add(toggle);
             }
             header.Child = headerRow;
             body.Children.Add(header);

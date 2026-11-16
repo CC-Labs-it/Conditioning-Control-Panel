@@ -34,12 +34,12 @@ public sealed class HelpLoopTests
             Click(host, button);
             Assert.Equal("PinkFilter", Find<HelpLoopView>(button).Scene.Id);
             var toggle = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle");
-            Assert.Equal(Loc.Get("help_see_v2"), ((StackPanel)toggle.Content!).Children.OfType<TextBlock>().Single().Text);
+            Assert.Contains(toggle.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("help_see_v2"));
             toggle.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.True(HelpPopover.IsOpen(button));
             Assert.True(HelpPopover.IsPinned(button));
-            Assert.Equal(Loc.Get("help_see_classic"), ((StackPanel)HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").Content!).Children.OfType<TextBlock>().Single().Text);
+            Assert.Contains(HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("help_see_classic"));
             Assert.Contains(HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>(),
                 t => t.Text == Loc.Get("super_name_creep"));
             HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "HelpV2Toggle").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
@@ -47,6 +47,38 @@ public sealed class HelpLoopTests
             Assert.Equal("PinkFilter", Find<HelpLoopView>(button).Scene.Id);
         }
         finally { HelpPopover.Clear(button); host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ClickingSupporterLabelOpensV2() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var oldTrying = SuperAccess.TryingProvider;
+        CoreEntitlement.HasPremiumProvider = () => false;
+        SuperAccess.TryingProvider = () => null;
+        var (host, button) = Host("PinkFilter");
+        try
+        {
+            Click(host, button);
+            host.CaptureRenderedFrame();
+            var label = HelpPopover.PopupContent(button)!.GetVisualDescendants().OfType<TextBlock>()
+                .Single(t => t.Name == "HelpV2Supporter");
+            var popupHost = TopLevel.GetTopLevel(label)!;
+            var point = label.TranslatePoint(new Point(label.Bounds.Width / 2, label.Bounds.Height / 2), popupHost);
+            Assert.True(point.HasValue);
+            popupHost.MouseMove(point!.Value, RawInputModifiers.None);
+            popupHost.MouseDown(point.Value, MouseButton.Left, RawInputModifiers.None);
+            popupHost.MouseUp(point.Value, MouseButton.Left, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(HelpPopover.IsOpen(button));
+            Assert.True(HelpPopover.IsPinned(button));
+            Assert.Equal("SuperCreep", Find<HelpLoopView>(button).Scene.Id);
+            SwitchV2(button);
+            Assert.Equal("PinkFilter", Find<HelpLoopView>(button).Scene.Id);
+        }
+        finally { HelpPopover.Clear(button); host.Close(); CoreEntitlement.HasPremiumProvider = oldPremium; SuperAccess.TryingProvider = oldTrying; }
         return Task.CompletedTask;
     });
 
