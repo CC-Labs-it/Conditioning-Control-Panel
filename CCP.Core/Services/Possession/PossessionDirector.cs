@@ -132,6 +132,7 @@ public sealed class PossessionDirector : IDisposable
         {
             var entry = _hosts.FirstOrDefault(h => ReferenceEquals(h.Host, host));
             if (entry == null) return;
+            try { _head.StopReturning(host); } catch (Exception ex) { Diag.Swallowed(ex); }
             // Anything still riding this window has nowhere to be undone TO once it is gone, so take it
             // down now rather than leaking a ghost that outlives its room.
             foreach (var g in _live.Where(g => ReferenceEquals(g.Host.Host, host)).ToArray())
@@ -152,6 +153,7 @@ public sealed class PossessionDirector : IDisposable
             // Release() (inside UndoGhostSync) is what owns the ledger; these two are a belt, and they
             // are only safe HERE because there is no await above them for a new ghost to arrive in.
             foreach (var g in _live.ToArray()) UndoGhostSync(g);
+            try { _head.StopReturning(null); } catch (Exception ex) { Diag.Swallowed(ex); }
             _live.Clear();
             _liveKeys.Clear();
             foreach (var h in _hosts) { try { h.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); } }
@@ -1176,6 +1178,8 @@ public sealed class PossessionDirectorHead
     public Action<PossessionDirector, IPossessionHost> AttachReactive { get; init; } = (_, _) => { };
     public Action<IPossessionHost> DetachReactive { get; init; } = _ => { };
     public Action DetachAllReactive { get; init; } = () => { };
+    /// <summary>Stop head-owned returns already released from the live ledger; null means all hosts.</summary>
+    public Action<IPossessionHost?> StopReturning { get; init; } = _ => { };
     /// <summary>Last cursor position in ghost-layer coordinates; (0,0) until the mouse has moved.</summary>
     public Func<(double X, double Y)> Pointer { get; init; } = () => (0, 0);
     /// <summary>A control's bounds in ghost-layer coordinates, or null when it has none.</summary>
