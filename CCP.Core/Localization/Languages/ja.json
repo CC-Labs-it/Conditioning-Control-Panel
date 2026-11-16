@@ -8507,9 +8507,5 @@
   "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません",
   "remote_browser_unavailable": "ブラウザーで開けませんでした",
   "remote_browser_screen_busy": "{0}が画面に表示されています",
-  "chaos_camgirl_tip": "チップ +{0} ゴールド",
-  "chaos_golden_gold": "幸運のバブル +{0} ゴールド",
-  "chaos_droplet_gold": "しずく +{0} ゴールド",
-  "chaos_gold_digger_spill": "ゴールドがこぼれた",
-  "chaos_gold_amount": "+{0} ゴールド"
+  "chaos_camgirl_tip": "チップ +{0} ゴールド"
 }

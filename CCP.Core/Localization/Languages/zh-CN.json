@@ -9010,9 +9010,5 @@
   "remote_invalid_hypnotube_url": "不是有效的 HypnoTube 视频链接",
   "remote_browser_unavailable": "浏览器无法打开",
   "remote_browser_screen_busy": "{0}正在屏幕上显示",
-  "chaos_camgirl_tip": "小费 +{0} 金币",
-  "chaos_golden_gold": "幸运泡泡 +{0} 金币",
-  "chaos_droplet_gold": "水滴 +{0} 金币",
-  "chaos_gold_digger_spill": "金币洒落",
-  "chaos_gold_amount": "+{0} 金币"
+  "chaos_camgirl_tip": "小费 +{0} 金币"
 }

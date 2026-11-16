@@ -9245,9 +9245,5 @@
   "remote_invalid_hypnotube_url": "URL video HypnoTube non valido",
   "remote_browser_unavailable": "il browser non è riuscito ad aprirlo",
   "remote_browser_screen_busy": "{0} è sullo schermo",
-  "chaos_camgirl_tip": "mancia +{0} oro",
-  "chaos_golden_gold": "bolla fortunata +{0} oro",
-  "chaos_droplet_gold": "goccia +{0} oro",
-  "chaos_gold_digger_spill": "la cercatrice sparge oro",
-  "chaos_gold_amount": "+{0} oro"
+  "chaos_camgirl_tip": "mancia +{0} oro"
 }
