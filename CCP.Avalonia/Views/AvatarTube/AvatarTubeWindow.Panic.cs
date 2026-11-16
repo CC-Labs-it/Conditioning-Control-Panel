@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             try { StopThinkingAnimation(); } catch { }
             try { _speechTimer?.Stop(); } catch { }
             try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
+            try { CloseRandomBubbles(); _greetingTimer?.Stop(); } catch { }   // stricter than WPF: no bubble or pending greeting outlives a panic
             try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
             _isWaitingForAi = false;
             _isGiggling = false;
