@@ -29,15 +29,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                     else if (document.msExitFullscreen) document.msExitFullscreen();
                 };
-                video.addEventListener('ended', () => { exitFullscreen(); post({ type: 'fsExit' }); }, { once: true });
+                let fsNotified = false, enteredFs = false;
+                const notifyFsExit = () => { if (fsNotified) return; fsNotified = true; post({ type: 'fsExit' }); };
+                video.addEventListener('ended', () => { exitFullscreen(); notifyFsExit(); }, { once: true });
                 video.addEventListener('dblclick', e => {
                     if (document.fullscreenElement || document.webkitFullscreenElement) {
                         exitFullscreen();
-                        post({ type: 'fsExit' });
+                        notifyFsExit();
                         e.preventDefault();
                         e.stopPropagation();
                     }
                 });
+                // WPF :906-912: Esc or F11 leaves fullscreen without ended/dblclick; report it once, after a real entry.
+                const onFsChange = () => {
+                    if (document.fullscreenElement || document.webkitFullscreenElement) { enteredFs = true; return; }
+                    if (enteredFs) notifyFsExit();
+                };
+                document.addEventListener('fullscreenchange', onFsChange);
+                document.addEventListener('webkitfullscreenchange', onFsChange);
                 if (!window.__ccpMuted) video.muted = false;
                 const goFullscreen = () => {
                     if (window._ccpTakeoverStopped) return;
