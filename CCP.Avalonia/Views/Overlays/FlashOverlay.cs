@@ -34,8 +34,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// remote pools, gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// the lucky glow pulse, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
+    /// gaze pop/linger, solid hosting and avatar pre-announce.</para>
     /// </summary>
     internal static partial class FlashOverlay
     {

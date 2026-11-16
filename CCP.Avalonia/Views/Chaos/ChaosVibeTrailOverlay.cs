@@ -26,9 +26,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <see cref="X11Overlay.SetClickThrough"/>; a platform that refuses click-through or
     /// per-pixel transparency gets no trail rather than a full-screen block (PinkFilterOverlay.Accept).</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Start"/> yet - the VibePopping vibe window (WPF
-    /// ChaosModeService.cs:2709/:2946) and EnsureCreated at run start (:455) need the bubble field,
-    /// which <see cref="ChaosRunHost"/> does not have. Teardown and panic already close it.</para>
     /// </summary>
     internal sealed class ChaosVibeTrailOverlay : Window
     {

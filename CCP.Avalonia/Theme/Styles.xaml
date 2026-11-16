@@ -1526,4 +1526,18 @@
     <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Opacity" Value="0.85"/></Style>
   </ControlTheme>
 
+        <ControlTheme x:Key="DlgHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource PinkBrush}"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </ControlTheme>
+
+        <ControlTheme x:Key="DlgHeaderLarge" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource PinkBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </ControlTheme>
+
 </ResourceDictionary>

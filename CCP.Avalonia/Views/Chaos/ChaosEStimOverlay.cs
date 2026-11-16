@@ -76,7 +76,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return _active = w;
         }
 
-        // ponytail: the gameplay-layer re-stack caller waits for chaos mandatory-video integration.
         /// <summary>WPF ChaosEStimOverlay.cs:100,397: re-stack live windows without unhiding them.</summary>
         public static void RaiseActive()
         {

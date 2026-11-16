@@ -1812,8 +1812,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     CoreSettings.Current.EmiDeskWidth = _bodyWidth;
                     CoreSettings.Save();
                 }
-                // ponytail: needs App.EmiDesk.Fire("resized") - her own event bus, which moves with
-                // the app shell.
                 FireDeskEvent("resized");
             }
             catch (Exception ex)
