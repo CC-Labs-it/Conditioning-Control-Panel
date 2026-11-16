@@ -89,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var w in Exiting)
                 if (w.Deck != null) { any = true; w.StepDeck(dt, level); }
             if (raise != null) foreach (var w in raise) RaiseDeck(w);
+            // WPF UpdateDeckHover runs every tick: a raise or a new flash moves no still pointer, so no crossing event.
+            foreach (var (w, _) in Active) if (w.Deck != null && w.IsPointerOver) DeckHover(w, true);
             if (!any) StopDeckTick();
         }
 
