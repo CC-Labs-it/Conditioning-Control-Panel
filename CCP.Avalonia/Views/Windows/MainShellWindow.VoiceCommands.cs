@@ -215,8 +215,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                _refreshAfterWakeCal = CalibratingWake; // a borrower returning mid-unwind re-arms once calibration ends
                 var entitled = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("voice");
-                var (wake, ptt) = _windowClosed ? (false, false)
+                var (wake, ptt) = _windowClosed || CalibratingWake ? (false, false)
                     : VoiceInputRules.ModesToRun(CoreSettings.Current, entitled, CoreSpeech.IsAvailable);
                 // A lapse / disarm mid-command ends a wake/PTT turn; Takeover's own mantra is not that
                 // session and keeps running unless consent itself is gone.
@@ -229,9 +230,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "RefreshVoiceInputModes failed"); }
         }
 
-        /// <summary>True while the user has the wake word or push-to-talk armed: the mic Graded Intake
-        /// borrows (IntakeMicBorrow, WPF AutonomyService.UserDrivenVoiceArmed).</summary>
-        internal bool UserDrivenVoiceArmed => _wakeLoopCts != null || _pttArmed;
+        /// <summary>True while the user has the wake word or push-to-talk armed, or wake calibration holds the
+        /// mic: what Graded Intake, a voice lock card and Deeper speak borrow (IntakeMicBorrow, WPF
+        /// AutonomyService.UserDrivenVoiceArmed). StopVoiceInput frees it; the borrower re-arms on release.</summary>
+        internal bool UserDrivenVoiceArmed => _wakeLoopCts != null || _pttArmed || CalibratingWake;
 
         /// <summary>WPF StopVoiceInput (privacy pill, "stop listening", a voice lock card taking the mic):
         /// cut any capture and stand both modes down until the next reconcile.</summary>
@@ -240,6 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // First: a command prompt in flight must end too, or its "you called?" re-prompt / retry
             // would reopen the mic after the user closed it.
             CancelVoicePrompt();
+            CancelWakeCalibration();
             StopWakeLoop();
             _pttArmed = false;
         }

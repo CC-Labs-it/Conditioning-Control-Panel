@@ -8,7 +8,7 @@
 // The mic opens through MainShellWindow.VoiceCommands.cs (the wake loop / push-to-talk feeding
 // Core VoiceCommands) exactly under WPF's conditions; every repaint here reconciles it, so arm,
 // Stop, revoke and an entitlement lapse all open or close it. The title-bar mic pill (WPF
-// MainWindow.LabTab.cs UpdateMicPill) lives here too. Calibration is not yet ported.
+// MainWindow.LabTab.cs UpdateMicPill) lives here too.
 //
 // _slLoading, not _isLoading: a partial-class field is declared once, and Avalonia's CheckBox
 // raises IsCheckedChanged on a programmatic set, so seeding needs its own guard.
@@ -328,15 +328,68 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ? "she_wake_model_active" : "she_wake_model_failed";
             var text = Loc.Get(key);
             tab.TxtSL_WakeEngineStatus.Text = text;
+            // WPF MainWindow.SheListening.cs:151-169: green when the engine runs, grey otherwise.
+            tab.TxtSL_WakeEngineStatus.Foreground = new SolidColorBrush(key == "she_wake_model_active" ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0x88, 0x88, 0x88));
             if (tab.TxtSL_WakeEngineStatus.Parent?.Parent is Control row) ToolTip.SetTip(row, text);
         }
 
-        /// <summary>WPF SheListening.cs:90-95: explain when the model is missing.</summary>
-        internal void SL_Calibrate_Click()
+        internal bool CalibratingWake;
+        private System.Threading.CancellationTokenSource? _wakeCalCts;
+        /// <summary>A reconcile arrived while calibration held the mic; cleared by Stop / panic.</summary>
+        private bool _refreshAfterWakeCal;
+
+        /// <summary>Stop, consent revoke, window close (all via StopVoiceInput) and panic ("wake-calibration")
+        /// end a calibration capture at once rather than after its 40 s cap.</summary>
+        internal void CancelWakeCalibration() { _refreshAfterWakeCal = false; try { _wakeCalCts?.Cancel(); } catch (ObjectDisposedException) { } }
+
+        /// <summary>WPF SL_Calibrate_Click (MainWindow.SheListening.cs:84-140): free the mic, record a few
+        /// "Hey Bambi"s, store the chosen sensitivity, then re-arm. Progress and the result use the status line.</summary>
+        internal async void SL_Calibrate_Click()
         {
-            var wake = WakeSpotterOverride ?? Platform.PulseMicSource.Wake;
-            var key = wake?.IsConfigured == true ? "she_wake_calibration_unavailable" : "she_wake_model_missing";
-            _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word", Loc.Get(key));
+            var (tab, wake, mic, s) = (SheListeningPage, WakeSpotterOverride ?? Platform.PulseMicSource.Wake, WakeMicOverride ?? Platform.PulseMicSource.Mic, CoreSettings.Current);
+            if (CalibratingWake || tab == null) return;
+            if (wake?.IsConfigured != true || mic == null)
+            {
+                await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("she_wake_cal_title"), Loc.Get("she_wake_cal_no_model"));
+                return;
+            }
+            if (!s.MicConsentGiven)
+            {
+                var dlg = new Dialogs.MicConsentDialog();
+                await dlg.ShowDialogSafe(this);
+                if (!dlg.ConsentGiven) return;
+            }
+            CalibratingWake = true; // RefreshVoiceInputModes keeps the mic closed while this owns it
+            tab.BtnSL_Calibrate.IsEnabled = false;
+            var lbl = tab.TxtSL_WakeEngineStatus;
+            var cts = new System.Threading.CancellationTokenSource();
+            try
+            {
+                StopVoiceInput();
+                _wakeCalCts = cts; // after StopVoiceInput, which would cancel it
+                for (int i = 0; i < 20 && (wake.IsListening || VoiceSpeech?.IsListening == true); i++) await System.Threading.Tasks.Task.Delay(25);
+                lbl.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA0, 0xFF));
+                lbl.Text = Loc.Get("she_wake_cal_start");
+                var progress = new Progress<(bool Analyze, int Captured)>(p => lbl.Text = p.Analyze
+                    ? Loc.Get("she_wake_cal_analyze") : Loc.GetF("she_wake_cal_progress", p.Captured, 5));
+                (double? Threshold, string Message) r;
+                try { r = await wake.CalibrateAsync(mic, s.SpeechWakeBoost, s.SpeechNoiseSuppression, progress, cts.Token); }
+                catch (Exception ex) { Log.Warning(ex, "Wake calibration failed"); r = (null, Loc.Get("she_wake_cal_failed")); }
+                if (r.Threshold is { } t) { s.SpeechWakeThreshold = t; CoreSettings.Save(); }
+                lbl.Foreground = new SolidColorBrush(r.Threshold != null ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0xFF, 0xB0, 0xB0));
+                lbl.Text = r.Message;
+            }
+            finally
+            {
+                _wakeCalCts = null;
+                cts.Dispose();
+                CalibratingWake = false;
+                tab.BtnSL_Calibrate.IsEnabled = true;
+                // Re-arm (the spotter rebuilds at the new sensitivity, WPF SheListening.cs:140) unless Stop, panic or
+                // a mic borrower cancelled - except a borrower that already handed the mic back during the unwind.
+                if (!cts.IsCancellationRequested || _refreshAfterWakeCal) RefreshVoiceInputModes();
+                UpdateMicPill();
+            }
         }
     }
 }

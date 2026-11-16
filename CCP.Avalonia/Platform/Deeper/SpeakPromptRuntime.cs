@@ -96,7 +96,7 @@ internal sealed class SpeakPromptRuntime
             await dialog.ShowDialogSafe(owner);
             return dialog.ConsentGiven && CoreSettings.Current.MicConsentGiven;
         },
-        () => shell() is { } s && (s.WakeLoopArmed || s.PushToTalkArmed),
+        () => shell()?.UserDrivenVoiceArmed == true,
         () => shell()?.StopVoiceInput(),
         () => shell()?.RefreshVoiceInputModes(),
         () => PulseMicSource.Speech?.IsListening == true,

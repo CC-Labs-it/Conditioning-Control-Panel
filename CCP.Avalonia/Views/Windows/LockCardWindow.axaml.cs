@@ -877,7 +877,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_voiceListening || !_voiceMode) return;
             _voiceListening = true;
-            if (MainShellWindow.Current is { } shell && (shell.WakeLoopArmed || shell.PushToTalkArmed))
+            if (MainShellWindow.Current is { UserDrivenVoiceArmed: true } shell)
             {
                 shell.StopVoiceInput();
                 _evictedVoiceInput = true;
