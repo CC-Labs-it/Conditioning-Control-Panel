@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Tours;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using HeadStep = ConditioningControlPanel.Avalonia.Tours.TutorialStep;
 using HeadTrigger = ConditioningControlPanel.Avalonia.Tours.TutorialAdvanceTrigger;
 
@@ -16,6 +17,7 @@ public partial class TutorialOverlay
     private bool _closed;
     private HeadStep? _subscribedStep;
     private Button? _subButton;
+    private NewEnhancementDialog? _subDialog;
     private TextBox? _subTextBox;
     private SelectingItemsControl? _subSelector;
     private Slider? _subSlider;
@@ -37,6 +39,11 @@ public partial class TutorialOverlay
                 // deferred, so the original click can finish before StepChanged rewrites the card.
                 button.AddHandler(PointerReleasedEvent, OnSubButtonReleased, RoutingStrategies.Tunnel, true);
                 button.AddHandler(Button.ClickEvent, OnSubButtonClick, RoutingStrategies.Bubble, true);
+                if (TopLevel.GetTopLevel(button) is NewEnhancementDialog dialog)
+                {
+                    _subDialog = dialog;
+                    dialog.Closing += OnSubDialogClosing;
+                }
                 break;
             case HeadTrigger.OnTextEquals when target is TextBox text:
                 _subTextBox = text;
@@ -57,6 +64,8 @@ public partial class TutorialOverlay
 
     private void UnsubscribeAdvanceTrigger()
     {
+        if (_subDialog != null) _subDialog.Closing -= OnSubDialogClosing;
+        _subDialog = null;
         if (_subButton != null)
         {
             _subButton.RemoveHandler(PointerReleasedEvent, OnSubButtonReleased);
@@ -70,6 +79,16 @@ public partial class TutorialOverlay
         if (_subSlider != null) _subSlider.RemoveHandler(PointerReleasedEvent, OnSubSliderReleased);
         _subSlider = null;
         _subscribedStep = null;
+    }
+
+    private void OnSubDialogClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (sender is not NewEnhancementDialog { ClosingWithSuccess: true } || e.Cancel ||
+            _closed || _advanceFiredThisStep || !CoreTutorial.IsActive ||
+            !ReferenceEquals(CoreTutorial.CurrentStep, _step)) return;
+        _advanceFiredThisStep = true;
+        UnsubscribeAdvanceTrigger();
+        CoreTutorial.Next();
     }
 
     private void OnSubButtonClick(object? sender, RoutedEventArgs e) => Advance();

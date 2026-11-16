@@ -72,6 +72,28 @@ public sealed class NewEnhancementTutorialTests
         finally { dialog.Close(); }
     });
 
+    [Fact]
+    public Task PositiveCloseAdvancesWhenButtonEventsAreDropped() => Run(async () =>
+    {
+        var dialog = new NewEnhancementDialog();
+        dialog.Show();
+        bool? completed = null;
+        EventHandler<bool> finished = (_, value) => completed = value;
+        CoreTutorial.Finished += finished;
+        try
+        {
+            Click(dialog, "BtnTryHypnoTubeTutorial");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("iht_create", CoreTutorial.CurrentStep!.Id);
+            dialog.FindControl<TextBox>("TxtSource")!.Text = "sample-media";
+            var create = typeof(NewEnhancementDialog).GetMethod("BtnCreateAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            await (Task)create.Invoke(dialog, null)!; // no pointer or click route
+            Assert.True(completed);
+            Assert.False(CoreTutorial.IsActive);
+        }
+        finally { CoreTutorial.Finished -= finished; dialog.Close(); }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
