@@ -547,7 +547,7 @@
                                         <ContextMenu x:Name="TimelineCtxMenu"
                                                      Background="{DynamicResource DarkerBgBrush}"
                                                      BorderBrush="{DynamicResource DeeperAccentBrush}"
-                                                     BorderThickness="2">
+                                                     BorderThickness="2" CornerRadius="8" Padding="4">
                                             <MenuItem Header="Add Effect"
                                                       Foreground="{DynamicResource DeeperAccentBrush}" FontWeight="Bold">
                                                 <MenuItem x:Name="CtxEffectHaptic" Header="Haptic"/>
