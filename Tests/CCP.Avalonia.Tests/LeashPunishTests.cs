@@ -54,6 +54,47 @@ public sealed class LeashPunishTests
             }
         });
 
+    [Fact]
+    public void RefusedClosePlaysDeniedAndPanicStopsIt() => LeashGateCardTests.Run(punished: false, (shell, _, svc) =>
+    {
+        var block = LeashHeadTests.BlockWithPunishment();
+        var pun = (Newtonsoft.Json.Linq.JObject)block["me"]!["pending"]![0]!;
+        (pun["kind"], pun["watch"]) = ("video", new Newtonsoft.Json.Linq.JObject { ["kind"] = "ht", ["id"] = "123" });
+        svc.ApplyBlock(block);
+        var oldWeb = LeashPunishWindow.CreateWeb;
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var oldArt = CoreModArt.AudioOverridePathProvider;
+        var oldMuted = CoreAudio.IsOutputSuppressedProvider;
+        var oldRules = LeashSound.Rules;
+        var oldVolume = CoreSettings.Current.MasterVolume;
+        var file = Path.GetTempFileName();
+        var host = new LeashTaskHost();
+        int played = 0, stopped = 0;
+        try
+        {
+            LeashPunishWindow.CreateWeb = false;
+            CoreSettings.Current.MasterVolume = 50;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            CoreModArt.AudioOverridePathProvider = _ => file;
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { Assert.Equal("leash-denied", tag); played++; return () => stopped++; };
+            LeashSound.Rules = new LeashSfxRules();
+            Assert.True(host.OpenWatch(new LeashWatch("ht", "123", null)));
+            LeashPunishWindow.Current!.Close();
+            Assert.Equal(1, played);
+            Assert.NotNull(LeashPunishWindow.Current);
+            PanicSurfaces.All.Single(x => x.Id == "leash-task").Stop(shell);
+            Assert.Equal(1, stopped);
+            Assert.Null(LeashPunishWindow.Current);
+        }
+        finally
+        {
+            LeashPunishWindow.CloseNow(); host.Dispose(); LeashSound.StopRefusal();
+            (LeashPunishWindow.CreateWeb, CoreAudio.PlayStoppableProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume) =
+                (oldWeb, oldPlay, oldArt, oldMuted, oldRules, oldVolume);
+            File.Delete(file);
+        }
+    });
+
     private static void StartFromTheGate(MainShellWindow shell, LauncherWindow launcher, FakeHost host, LeashTaskRunner runner)
     {
         LeashGateCardTests.PressTile(launcher);
