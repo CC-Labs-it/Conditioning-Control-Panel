@@ -58,10 +58,10 @@ namespace ConditioningControlPanel.Services
             tc.Clear(SKColors.Transparent);
 
             var srcRect = CoverSrcRect(src.Width, src.Height, w, h);
-            using (var ip = new SKPaint { IsAntialias = true })
+            using (var ip = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High })
             {
                 if (sharpen != null) ip.ImageFilter = sharpen;
-                tc.DrawBitmap(src, srcRect, new SKRect(0, 0, w, h), SkSampling.High, ip);
+                tc.DrawBitmap(src, srcRect, new SKRect(0, 0, w, h), ip);
             }
 
             ApplyEdgeFeather(tc, w, h, fL, fT, fR, fB);
@@ -70,8 +70,8 @@ namespace ConditioningControlPanel.Services
             canvas.Save();
             canvas.Translate(cx, cy);
             if (angleDeg != 0f) canvas.RotateDegrees(angleDeg);
-            using (var dp = new SKPaint { IsAntialias = true })
-                canvas.DrawImage(img, -w / 2f, -h / 2f, SkSampling.High, dp);
+            using (var dp = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High })
+                canvas.DrawImage(img, -w / 2f, -h / 2f, dp);
             canvas.Restore();
         }
 
@@ -112,7 +112,7 @@ namespace ConditioningControlPanel.Services
             {
                 const int S = 40;
                 using var small = new SKBitmap(new SKImageInfo(S, S, SKColorType.Bgra8888, SKAlphaType.Premul));
-                if (!bmp.ScalePixels(small.PeekPixels(), SkSampling.Low)) return DefaultFocus;
+                if (!bmp.ScalePixels(small.PeekPixels(), SKFilterQuality.Low)) return DefaultFocus;
                 var px = small.Pixels;
                 if (px == null || px.Length < S * S) return DefaultFocus;
 
@@ -174,8 +174,8 @@ namespace ConditioningControlPanel.Services
             using var surface = SKSurface.Create(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
             if (surface == null) return;
             var srcRect = CoverSrcRect(src.Width, src.Height, w, h);
-            using (var p = new SKPaint { IsAntialias = true })
-                surface.Canvas.DrawBitmap(src, srcRect, new SKRect(0, 0, w, h), SkSampling.High, p);
+            using (var p = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High })
+                surface.Canvas.DrawBitmap(src, srcRect, new SKRect(0, 0, w, h), p);
             using var img = surface.Snapshot();
 
             float sigma = Math.Max(20f, w / 45f);
@@ -264,7 +264,7 @@ namespace ConditioningControlPanel.Services
             var info = new SKImageInfo(Math.Max(1, (int)(full.Width * k)), Math.Max(1, (int)(full.Height * k)),
                 SKColorType.Bgra8888, SKAlphaType.Premul);
             var small = new SKBitmap(info);
-            bool ok = full.ScalePixels(small.PeekPixels(), SkSampling.Medium);
+            bool ok = full.ScalePixels(small.PeekPixels(), SKFilterQuality.Medium);
             if (ok) { full.Dispose(); return small; }
             small.Dispose();
             return full;

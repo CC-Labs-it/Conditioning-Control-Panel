@@ -158,29 +158,4 @@ public class CompositorLayerCoreTests
         Assert.False(sub.IsActive);
         Assert.Equal(2, wakes);
     }
-
-    [Fact]
-    public void Subliminal_TextWidthKeepsTheLegacyPaintMetrics()
-    {
-        // SkiaSharp 4 moved text onto SKFont, whose default (LinearMetrics off) snaps advances to whole
-        // pixels: 527 px here instead of the 529.6875 the old SKPaint measured (SkiaSharp 3.119.4, same
-        // bundled face). The card must keep the legacy width, or its centring and OCR skip rect move.
-        using var face = SKTypeface.FromFile(System.IO.Path.Combine(RepoRoot(), "Assets", "fonts", "ccpsans", "CCPSans-Bold.ttf"));
-        var sub = new SubliminalLayer(() => { });
-        var placements = new[] { new SubliminalLayer.Placement(new SKRectI(0, 0, 1000, 600), 1f) };
-        sub.Flash(placements, "Good girl", SKColors.Black, SKColors.Magenta, SKColors.White,
-            bgTransparent: true, targetOpacity: 1, holdMs: 1000, face: face);
-        sub.Update(TimeSpan.FromMilliseconds(200));   // past the fade-in
-
-        var rect = Assert.Single(sub.GetActiveTextRectsPx());
-        Assert.Equal((int)Math.Ceiling((529.6875f / 2f + 44f) * 2), rect.Width);
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "CCP.Core", "Services")))
-            dir = dir.Parent;
-        return dir?.FullName ?? throw new InvalidOperationException("repo root not found");
-    }
 }

@@ -40,7 +40,8 @@ internal static class CardArtDesaturate
                 frame.Address, frame.RowBytes);
             using var small = new SKBitmap(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
             using (var canvas = new SKCanvas(small))
-                canvas.DrawBitmap(full, new SKRect(0, 0, w, h), SkSampling.Medium);
+            using (var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
+                canvas.DrawBitmap(full, new SKRect(0, 0, w, h), paint);
             var bytes = small.Bytes;
             CardMutePixels.ToGrey(bytes);
             var grey = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);

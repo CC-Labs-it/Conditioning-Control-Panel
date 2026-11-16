@@ -132,7 +132,7 @@ public sealed class TakeoverAnnouncerOverlay : Window
     private static readonly SKColor VioletBody = new(0xC9, 0xA0, 0xFF);
     private static readonly SKColorFilter VioletCF = SKColorFilter.CreateBlendMode(VioletBody, SKBlendMode.Modulate);
     private static readonly SKColorFilter WhiteCF = SKColorFilter.CreateBlendMode(SKColors.White, SKBlendMode.Modulate);
-    private readonly SKPaint _paint = new() { BlendMode = SKBlendMode.Plus, IsAntialias = true };
+    private readonly SKPaint _paint = new() { BlendMode = SKBlendMode.Plus, IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
     private static SKImage? _dot;
 
     private TakeoverAnnouncerOverlay()
@@ -459,7 +459,7 @@ public sealed class TakeoverAnnouncerOverlay : Window
         _paint.ColorFilter = tint;
         _paint.Color = new SKColor(255, 255, 255, alpha);   // global opacity multiplier for the image draw
         var dest = new SKRect(cx - radius, cy - radius, cx + radius, cy + radius);
-        canvas.DrawImage(img, dest, SkSampling.Medium, _paint);
+        canvas.DrawImage(img, dest, _paint);
     }
 
     private void CacheDpi()

@@ -215,12 +215,12 @@ internal static class ChaosBackdropService
         if (fx) ApplyBreath(canvas, info);
 
         // scene plate (crossfade the outgoing → incoming on a depth swap)
-        using (var p = new SKPaint { IsAntialias = true })
+        using (var p = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High })
         {
             if (_fading && _artOut != null)
-                canvas.DrawImage(_artOut, CoverRect(_artOut, info), SkSampling.High, p);
+                canvas.DrawImage(_artOut, CoverRect(_artOut, info), p);
             p.Color = SKColors.White.WithAlpha((byte)(Math.Clamp(_fadeT, 0f, 1f) * 255));
-            canvas.DrawImage(_art, rect, SkSampling.High, p);
+            canvas.DrawImage(_art, rect, p);
         }
 
         if (fx) { try { DrawAuthoredFx(canvas, rect); } catch (Exception ex) { App.Logger?.Debug("ChaosBackdrop.DrawAuthoredFx: {E}", ex.Message); } }
@@ -386,10 +386,10 @@ internal static class ChaosBackdropService
             var rect = new SKRect(0, 0, bw, bh);
             using var s1 = SKSurface.Create(bi);
             s1.Canvas.Clear(SKColors.Transparent);
-            using (var ap = new SKPaint { IsAntialias = true })
-                s1.Canvas.DrawImage(src, rect, SkSampling.Medium, ap);
-            using (var mp = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = _rToA })
-                s1.Canvas.DrawImage(mask, rect, SkSampling.Medium, mp);
+            using (var ap = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium })
+                s1.Canvas.DrawImage(src, rect, ap);
+            using (var mp = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = _rToA, FilterQuality = SKFilterQuality.Medium })
+                s1.Canvas.DrawImage(mask, rect, mp);
             using var masked = s1.Snapshot();
             using var s2 = SKSurface.Create(bi);
             s2.Canvas.Clear(SKColors.Transparent);
@@ -405,8 +405,8 @@ internal static class ChaosBackdropService
     {
         if (bloom == null || alpha <= 0.002f) return;
         byte a = (byte)Math.Clamp(alpha * 255f, 0, 255);
-        using var p = new SKPaint { BlendMode = SKBlendMode.Plus, IsAntialias = true, Color = SKColors.White.WithAlpha(a) };
-        canvas.DrawImage(bloom, rect, SkSampling.High, p);
+        using var p = new SKPaint { BlendMode = SKBlendMode.Plus, IsAntialias = true, FilterQuality = SKFilterQuality.High, Color = SKColors.White.WithAlpha(a) };
+        canvas.DrawImage(bloom, rect, p);
     }
 
     /// <summary>One sheen-band pass masked to the gloss (B channel) at the given alpha.</summary>
@@ -426,8 +426,8 @@ internal static class ChaosBackdropService
             new[] { c0, c1, c2 }, SKShaderTileMode.Clamp))
         using (var bp = new SKPaint { Shader = band })
             canvas.DrawRect(rect, bp);
-        using (var mp = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = _bToA })
-            canvas.DrawImage(mask, rect, SkSampling.Medium, mp);
+        using (var mp = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = _bToA, FilterQuality = SKFilterQuality.Medium })
+            canvas.DrawImage(mask, rect, mp);
         canvas.Restore();
     }
 
@@ -441,7 +441,7 @@ internal static class ChaosBackdropService
             using var raw = SKBitmap.Decode(path);
             if (raw == null) return Array.Empty<(float, float, float)>();
             int tw = 96, th = Math.Max(1, raw.Height * 96 / Math.Max(1, raw.Width));
-            using var small = raw.Resize(new SKImageInfo(tw, th), SkSampling.Medium) ?? raw;
+            using var small = raw.Resize(new SKImageInfo(tw, th), SKFilterQuality.Medium) ?? raw;
             int w = small.Width, h = small.Height;
             const int cell = 8;
             int cols = Math.Max(1, w / cell), rows = Math.Max(1, h / cell);

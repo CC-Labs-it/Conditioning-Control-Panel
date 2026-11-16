@@ -79,6 +79,7 @@ public class BrainDrainMeltFilterTests
         using var blurFilter = sigma > 0.05f ? SKImageFilter.CreateBlur(sigma, sigma) : null;
         using var blurPaint = new SKPaint { ImageFilter = blurFilter };
         using var tile = NoiseTile();
+        using var noisePaint = new SKPaint { FilterQuality = SKFilterQuality.Low };
         using var meltPaint = new SKPaint();
 
         var canvas = surface.Canvas;
@@ -96,9 +97,9 @@ public class BrainDrainMeltFilterTests
                 float dy = (MeltDriftPxPerSec * tierScale * t) % coverage;
                 float s = coverage / NoiseTilePx;
                 using var drift = SKShader.CreateImage(tile, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat,
-                                                       new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None),
                                                        SKMatrix.CreateScaleTranslation(s, s, dx, dy));
-                using var noiseFilter = SKImageFilter.CreateShader(drift);
+                noisePaint.Shader = drift;
+                using var noiseFilter = SKImageFilter.CreatePaint(noisePaint);
                 using var meltFilter = SKImageFilter.CreateDisplacementMapEffect(
                     SKColorChannel.R, SKColorChannel.G, amplitude, noiseFilter, blurFilter);
                 meltPaint.ImageFilter = meltFilter;
@@ -112,6 +113,7 @@ public class BrainDrainMeltFilterTests
                 canvas.Restore();
                 canvas.Flush();
                 meltPaint.ImageFilter = null;
+                noisePaint.Shader = null;
             }
             else
             {

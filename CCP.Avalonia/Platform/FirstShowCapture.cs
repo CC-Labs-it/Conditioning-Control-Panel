@@ -130,7 +130,7 @@ internal sealed class FirstShowCapture
         using var noise = drift == null ? null : SKImageFilter.CreateShader(drift);
         const float amplitude = 1 + 70 * .045f;
         using var melt = noise == null ? null : SKImageFilter.CreateDisplacementMapEffect(SKColorChannel.R, SKColorChannel.G, amplitude, noise, blur);
-        using var paint = new SKPaint { ColorFilter = swap, ImageFilter = melt ?? blur };
+        using var paint = new SKPaint { ColorFilter = swap, ImageFilter = melt ?? blur, FilterQuality = SKFilterQuality.Low };
         if (melt != null)
         {
             float gutter = amplitude * .5f + 2;
@@ -138,7 +138,7 @@ internal sealed class FirstShowCapture
             surface.Canvas.Scale((w + 2 * gutter) / w, (h + 2 * gutter) / h);
             surface.Canvas.Translate(-w * .5f, -h * .5f);
         }
-        surface.Canvas.DrawImage(raw, 0, 0, SkSampling.Low, paint);   // was the paint's FilterQuality.Low
+        surface.Canvas.DrawImage(raw, 0, 0, paint);
         using var frame = surface.Snapshot();
         using var png = frame.Encode(SKEncodedImageFormat.Png, 100);
         return png?.ToArray();

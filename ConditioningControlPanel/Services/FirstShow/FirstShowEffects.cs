@@ -35,12 +35,9 @@ internal sealed class FirstShowEffects : IDisposable
     private readonly List<Actor> _actors = new();
     private readonly Action<string> _cue;
     private readonly System.Drawing.Rectangle _screen;
-    private readonly SKPaint _paint = new() { IsAntialias = true };
-    private readonly SKPaint _textPaint = new() { IsAntialias = true };
+    private readonly SKPaint _paint = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Low };
+    private readonly SKPaint _textPaint = new() { IsAntialias = true, TextAlign = SKTextAlign.Center };
     private readonly SKTypeface _font = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold);
-    // SkiaSharp 4: size/face live on SKFont, align on DrawText (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html).
-    // LinearMetrics: the legacy paint's font had it on (https://github.com/mono/skia/blob/v3.119.4/src/xamarin/SkCompatPaint.cpp), so widths stay identical.
-    private readonly SKFont _textFont;
     private SKImage? _bubbleSprite, _blurFrame;
     private BrainDrainCapturePump? _capture;
     private double _time, _nextFlash = 2, _nextBubble = 19, _nextSub = 15;
@@ -53,7 +50,6 @@ internal sealed class FirstShowEffects : IDisposable
     public FirstShowEffects(Action<string> cue)
     {
         _cue = cue;
-        _textFont = new SKFont(_font) { LinearMetrics = true };   // legacy paint parity, see the field
         _screen = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
         // These draw lists are stepped by the show host, never by a second compositor host.
         _engine.Dispose();
@@ -98,7 +94,7 @@ internal sealed class FirstShowEffects : IDisposable
                 using var bitmap = SKBitmap.Decode(path);
                 if (bitmap == null) return null;
                 int edge = Math.Max(bitmap.Width, bitmap.Height);
-                using var resized = bitmap.Resize(new SKImageInfo(Math.Max(1, bitmap.Width * 600 / Math.Max(600, edge)), Math.Max(1, bitmap.Height * 600 / Math.Max(600, edge))), SkSampling.Medium);
+                using var resized = bitmap.Resize(new SKImageInfo(Math.Max(1, bitmap.Width * 600 / Math.Max(600, edge)), Math.Max(1, bitmap.Height * 600 / Math.Max(600, edge))), SKFilterQuality.Medium);
                 var source = resized ?? bitmap;
                 using var image = SKImage.FromBitmap(source);
                 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -283,7 +279,7 @@ internal sealed class FirstShowEffects : IDisposable
             {
                 double edge = Math.Min(_time - (_drainPhase == 1 ? 11 : 13), (_drainPhase == 1 ? 13 : 15) - _time);
                 _paint.Color = SKColors.White.WithAlpha((byte)(BrainDrainLayer.AlphaFor(70) * Math.Clamp(edge / .3, 0, 1)));
-                canvas.DrawImage(_blurFrame, new SKRect(0, 0, Width, Height), SkSampling.Low, _paint);
+                canvas.DrawImage(_blurFrame, new SKRect(0, 0, Width, Height), _paint);
             }
         }
         if (_time >= 7 && _time < FirstShowScript.RevealAt) { _pink.Render(canvas, bounds, 1, elapsed); _spiral.Render(canvas, bounds, 1, elapsed); }
@@ -295,12 +291,12 @@ internal sealed class FirstShowEffects : IDisposable
             a.Flash?.Render(canvas, bounds, 1, elapsed); a.Bubbles?.Render(canvas, bounds, 1, elapsed);
             if (a.Text != null)
             {
-                _textFont.Size = Math.Min(56, Width * .035f);
+                _textPaint.Typeface = _font; _textPaint.TextSize = Math.Min(56, Width * .035f);
                 _textPaint.Style = SKPaintStyle.Stroke; _textPaint.StrokeWidth = 6;
                 _textPaint.Color = SKColors.HotPink.WithAlpha((byte)(a.Alpha * 220));
-                canvas.DrawText(a.Text, (float)a.X, (float)a.Y, SKTextAlign.Center, _textFont, _textPaint);
+                canvas.DrawText(a.Text, (float)a.X, (float)a.Y, _textPaint);
                 _textPaint.Style = SKPaintStyle.Fill; _textPaint.Color = SKColors.White.WithAlpha((byte)(a.Alpha * 255));
-                canvas.DrawText(a.Text, (float)a.X, (float)a.Y, SKTextAlign.Center, _textFont, _textPaint);
+                canvas.DrawText(a.Text, (float)a.X, (float)a.Y, _textPaint);
             }
             canvas.Restore();
         }
@@ -331,6 +327,6 @@ internal sealed class FirstShowEffects : IDisposable
         foreach (var a in _actors) { a.Flash?.Clear(); a.Bubbles?.Clear(); }
         _actors.Clear(); _media.Clear(); _spiral.Hide(); _spiral.OnDeactivated();
         _pink.Hide(); _subliminal.Clear(); _particles.Clear(); _bubbleSprite?.Dispose();
-        _paint.Dispose(); _textPaint.Dispose(); _textFont.Dispose(); _font.Dispose(); _engine.Dispose();
+        _paint.Dispose(); _textPaint.Dispose(); _font.Dispose(); _engine.Dispose();
     }
 }

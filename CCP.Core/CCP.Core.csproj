@@ -64,7 +64,7 @@
     <!-- Webcam detectors (Services/Webcam/FaceModels.cs): managed halves only. Each head brings its
          own OpenCV + ONNX Runtime natives, so nothing native ships from here. -->
     <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.32.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.20.1" />
     <!-- WebRTC data channel for the Goon Game 1v1 transport (Services\GoonGame\GoonWebRtcTransport.cs), moved here
          from the WPF head with the transport; both heads get it transitively.
          Pure managed .NET (BouncyCastle DTLS + its own SCTP stack), MIT, no native libs — so
@@ -76,11 +76,10 @@
          candidate. See docs/GOON_GAME_PLAN.md "Transport decisions". -->
     <PackageReference Include="SIPSorcery" Version="10.0.14" />
     <!-- SkiaSharp (managed + its own win/mac natives): the compositor layers and text rules in
-         Services/Compositor (GlyphFallback.cs). 4.156.1 = the one Skia line for every project: the WPF head pins
-         SkiaSharp.Views.WPF and the Avalonia head lifts Avalonia.Skia's 3.119.4 to the same version
-         (docs/avalonia-decisions.html 2026-11-15).
+         Services/Compositor (GlyphFallback.cs). 2.88.8 = what SkiaSharp.Views.WPF pins in the WPF head,
+         so WPF ships unchanged; the Avalonia head resolves 3.119.x through Avalonia.Skia and that wins there.
          Linux natives come from each head (Avalonia.Skia brings them; the Core test project references them itself). -->
-    <PackageReference Include="SkiaSharp" Version="4.156.1" />
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 
   <!--

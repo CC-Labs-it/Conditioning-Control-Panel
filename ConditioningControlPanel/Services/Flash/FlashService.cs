@@ -4286,7 +4286,7 @@ namespace ConditioningControlPanel.Services
                     double scale = decodeMax / (double)longest;
                     int tw = Math.Max(1, (int)Math.Round(bmp.Width * scale));
                     int th = Math.Max(1, (int)Math.Round(bmp.Height * scale));
-                    resized = bmp.Resize(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul), SkSampling.Medium);
+                    resized = bmp.Resize(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul), SKFilterQuality.Medium);
                     if (resized != null) bmp = resized;
                 }
 

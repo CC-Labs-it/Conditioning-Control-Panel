@@ -40,7 +40,7 @@ public sealed class BrainDrainLayer : BaseLayer
     private readonly List<UiFrame> _uiFrames = new();   // UI thread only
     private BrainDrainCapturePump? _pump;
 
-    private readonly SKPaint _drawPaint = new(); // drawn with SkSampling.Low: bilinear = WPF Image default
+    private readonly SKPaint _drawPaint = new() { FilterQuality = SKFilterQuality.Low }; // bilinear = WPF Image default
 
     private int _downscale = 4;
     private double _sourceRadius;               // WPF-BlurEffect-equivalent radius ON THE DOWNSCALED SOURCE
@@ -374,7 +374,7 @@ public sealed class BrainDrainLayer : BaseLayer
         _drawPaint.Color = SKColors.White.WithAlpha(_drawAlpha);
         canvas.DrawImage(frame.Image,
             new SKRect(captureBounds.X, captureBounds.Y, captureBounds.Right, captureBounds.Bottom),
-            SkSampling.Low, _drawPaint);
+            _drawPaint);
     }
 
     private UiFrame GetOrAddFrame(System.Drawing.Rectangle bounds)

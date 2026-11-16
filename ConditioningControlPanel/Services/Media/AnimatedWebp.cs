@@ -468,7 +468,7 @@ internal static class AnimatedWebp
             var bmp = src;
             if (tw != src.Width || th != src.Height)
             {
-                resized = src.Resize(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul), SkSampling.Medium);
+                resized = src.Resize(new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul), SKFilterQuality.Medium);
                 if (resized != null) bmp = resized;
             }
             // BitmapSource.Create COPIES the pixels, so the composition canvas can be reused.

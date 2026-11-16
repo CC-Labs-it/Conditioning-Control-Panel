@@ -28,7 +28,7 @@ internal sealed class DashboardLogoRenderer : IDisposable
             _art = Own(new SKBitmap(1024, 1024, SKColorType.Bgra8888, SKAlphaType.Premul));
             using (var canvas = new SKCanvas(_art))
                 canvas.DrawBitmap(decoded, new SKRect(0, 0, 1024, 1024));
-            _image = Own(new SKPaint { IsAntialias = true });   // was FilterQuality.Medium: SkSampling.Medium on each draw
+            _image = Own(new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium });
             _mask = Own(new SKPaint { BlendMode = SKBlendMode.DstIn });
             _spark = Own(new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f });
             _waveBlur = Own(SKImageFilter.CreateBlur(5, 5));
@@ -72,7 +72,7 @@ internal sealed class DashboardLogoRenderer : IDisposable
         canvas.Save();
         canvas.Scale(width / 1024f, height / 1024f);
         canvas.ClipRoundRect(_frame, SKClipOperation.Intersect, true);
-        canvas.DrawBitmap(_art, 0, 0, SkSampling.Medium, _image);
+        canvas.DrawBitmap(_art, 0, 0, _image);
         for (var i = 0; i < _waves.Length; i++) DrawWave(canvas, _waves[i], i, phase, energy);
         DrawWord(canvas, phase);
         DrawArc(canvas, phase, energy);
@@ -95,11 +95,11 @@ internal sealed class DashboardLogoRenderer : IDisposable
                 + Math.Sin(u * Tau * 3.1 + phase * 2) * .3));
             var source = new SKRect(x, 0, x + 2, part.Height);
             var target = new SKRect(x, dy, x + 2, part.Height + dy);
-            part.WorkCanvas.DrawBitmap(part.Art, source, target, SkSampling.Medium, _image);
-            part.LightCanvas.DrawBitmap(part.Glow, source, target, SkSampling.Medium, _image);
+            part.WorkCanvas.DrawBitmap(part.Art, source, target, _image);
+            part.LightCanvas.DrawBitmap(part.Glow, source, target, _image);
         }
         Feather(part);
-        canvas.DrawBitmap(part.Work, part.X, part.Y, SkSampling.Medium, _image);
+        canvas.DrawBitmap(part.Work, part.X, part.Y, _image);
         var progress = (phase / Tau * 3 + index * .47) % 1;
         var center = (float)((index == 0 ? progress : 1 - progress) * part.Width);
         part.LightCanvas.Save();
@@ -120,17 +120,17 @@ internal sealed class DashboardLogoRenderer : IDisposable
         part.WorkCanvas.Translate(part.Width / 2f + (float)(2.5 * Math.Sin(phase)),
             part.Height / 2f + (float)(1.4 * Math.Sin(phase)));
         part.WorkCanvas.Scale(scale);
-        part.WorkCanvas.DrawBitmap(part.Art, -part.Width / 2f, -part.Height / 2f, SkSampling.Medium, _image);
+        part.WorkCanvas.DrawBitmap(part.Art, -part.Width / 2f, -part.Height / 2f, _image);
         part.WorkCanvas.Restore();
         Feather(part);
-        canvas.DrawBitmap(part.Work, part.X, part.Y, SkSampling.Medium, _image);
+        canvas.DrawBitmap(part.Work, part.X, part.Y, _image);
     }
 
     private void DrawArc(SKCanvas canvas, double phase, double energy)
     {
         var part = _arc;
         part.WorkCanvas.Clear(SKColors.Transparent);
-        part.WorkCanvas.DrawBitmap(part.Glow, 0, 0, SkSampling.Medium, _image);
+        part.WorkCanvas.DrawBitmap(part.Glow, 0, 0, _image);
         part.WorkCanvas.Save();
         part.WorkCanvas.RotateDegrees((float)((phase * 2 + .4) * 180 / Math.PI), 267, 259);
         _mask.Shader = _arcSweep;
@@ -157,10 +157,10 @@ internal sealed class DashboardLogoRenderer : IDisposable
         alpha = Math.Clamp(alpha, 0, 1);
         _image.BlendMode = SKBlendMode.Screen;
         _image.Color = SKColors.White.WithAlpha(Alpha(alpha));
-        canvas.DrawBitmap(bitmap, x, y, SkSampling.Medium, _image);
+        canvas.DrawBitmap(bitmap, x, y, _image);
         _image.Color = SKColors.White.WithAlpha(Alpha(alpha * bloom));
         _image.ImageFilter = blur;
-        canvas.DrawBitmap(bitmap, x, y, SkSampling.Medium, _image);
+        canvas.DrawBitmap(bitmap, x, y, _image);
         _image.ImageFilter = null;
         _image.Color = SKColors.White;
         _image.BlendMode = SKBlendMode.SrcOver;

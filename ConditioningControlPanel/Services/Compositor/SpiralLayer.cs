@@ -22,7 +22,7 @@ public class SpiralLayer : BaseLayer
     private bool _dirty = true;            // #550: throttle the fullscreen re-raster to actual changes
     // Low (bilinear) not Medium: the spiral GIF (~500px) is UPSCALED to fullscreen, and mipmaps
     // only help minification - so Low is the same visual result as Medium here for less per-frame cost.
-    private readonly SKPaint _paint = new();
+    private readonly SKPaint _paint = new() { FilterQuality = SKFilterQuality.Low };
 
     public SpiralLayer(CompositorEngine engine) : base(engine.Wake) { }
 
@@ -156,7 +156,7 @@ public class SpiralLayer : BaseLayer
         float y = boundsPx.Top + (boundsPx.Height - h) / 2f;
 
         _paint.Color = SKColors.White.WithAlpha((byte)Math.Clamp(_opacity * 255, 0, 255));
-        canvas.DrawImage(img, SKRect.Create(x, y, w, h), SkSampling.Low, _paint);
+        canvas.DrawImage(img, SKRect.Create(x, y, w, h), _paint);
     }
 
     private void DisposeFrames()

@@ -173,15 +173,13 @@ internal static class GlyphFallback
     }
 
     /// <summary>
-    /// Total advance width of <paramref name="runs"/> at <paramref name="font"/>'s current
+    /// Total advance width of <paramref name="runs"/> at <paramref name="paint"/>'s current text
     /// size, plus the vertical extents ACROSS the faces involved (a fallback face is rarely
     /// metric-compatible with the primary, and centring on the primary's metrics alone would sit
     /// the text off-centre). Fills <paramref name="widths"/> with the per-run advances when given.
-    /// Leaves <c>font.Typeface</c> pointing at the last run.
+    /// Leaves <c>paint.Typeface</c> pointing at the last run.
     /// </summary>
-    // SkiaSharp 4: SKPaint's text members are compile errors, text state lives on SKFont
-    // (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html, Breaking Changes).
-    internal static float Measure(TextRun[] runs, SKFont font, float[]? widths,
+    internal static float Measure(TextRun[] runs, SKPaint paint, float[]? widths,
         out float ascent, out float descent)
     {
         float total = 0f;
@@ -190,12 +188,12 @@ internal static class GlyphFallback
 
         for (int i = 0; i < runs.Length; i++)
         {
-            font.Typeface = runs[i].Face;
-            var w = font.MeasureText(runs[i].Text);
+            paint.Typeface = runs[i].Face;
+            var w = paint.MeasureText(runs[i].Text);
             if (widths != null && i < widths.Length) widths[i] = w;
             total += w;
 
-            var fm = font.Metrics;
+            var fm = paint.FontMetrics;
             if (fm.Ascent < ascent) ascent = fm.Ascent;      // ascent is negative (up from baseline)
             if (fm.Descent > descent) descent = fm.Descent;
         }
@@ -208,33 +206,36 @@ internal static class GlyphFallback
     /// centred <c>DrawText</c>, so the common path costs exactly what it did before. Mixed text is
     /// laid out left to right from the centred start; pass <paramref name="widths"/> /
     /// <paramref name="totalWidth"/> from a queue-time <see cref="Measure"/> to keep the render
-    /// tick free of measuring. Leaves the font's typeface on the last run.
+    /// tick free of measuring. Restores <c>paint.TextAlign</c>; leaves the typeface on the last run.
     /// </summary>
     internal static void DrawCentered(SKCanvas canvas, TextRun[] runs, float cx, float baseline,
-        SKFont font, SKPaint paint, float[]? widths = null, float totalWidth = 0f)
+        SKPaint paint, float[]? widths = null, float totalWidth = 0f)
     {
         if (runs.Length == 0) return;
 
         if (runs.Length == 1)
         {
-            font.Typeface = runs[0].Face;
-            canvas.DrawText(runs[0].Text, cx, baseline, SKTextAlign.Center, font, paint);
+            paint.Typeface = runs[0].Face;
+            canvas.DrawText(runs[0].Text, cx, baseline, paint);   // caller's SKTextAlign.Center
             return;
         }
 
         if (widths == null || widths.Length < runs.Length)
         {
             widths = new float[runs.Length];
-            totalWidth = Measure(runs, font, widths, out _, out _);
+            totalWidth = Measure(runs, paint, widths, out _, out _);
         }
 
+        var align = paint.TextAlign;
+        paint.TextAlign = SKTextAlign.Left;
         float x = cx - totalWidth / 2f;
         for (int i = 0; i < runs.Length; i++)
         {
-            font.Typeface = runs[i].Face;
-            canvas.DrawText(runs[i].Text, x, baseline, SKTextAlign.Left, font, paint);
+            paint.Typeface = runs[i].Face;
+            canvas.DrawText(runs[i].Text, x, baseline, paint);
             x += widths[i];
         }
+        paint.TextAlign = align;
     }
 
     /// <summary>

@@ -427,8 +427,8 @@ namespace ConditioningControlPanel.Services
                 int w = _tile.BakeW, h = _tile.BakeH;
                 canvas.Clear(SKColors.Transparent);
                 var srcRect = CollageComposer.CoverSrcRect(frame.Width, frame.Height, _tw, _th);
-                using (var paint = new SKPaint { IsAntialias = true, ImageFilter = _sharpen })
-                    canvas.DrawBitmap(frame, srcRect, new SKRect(0, 0, w, h), SkSampling.High, paint);
+                using (var paint = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.High, ImageFilter = _sharpen })
+                    canvas.DrawBitmap(frame, srcRect, new SKRect(0, 0, w, h), paint);
                 CollageComposer.ApplyEdgeFeather(canvas, w, h, _fL * _k, _fT * _k, _fR * _k, _fB * _k);
                 _tile.Frames.Add(_owner.Upload(_surface, w, h));
                 _delays.Add(delayMs);

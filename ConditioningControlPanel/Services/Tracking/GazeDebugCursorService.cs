@@ -132,7 +132,7 @@ public class GazeDebugCursorService : IDisposable
 
         try
         {
-            _spritePaint = new SKPaint { BlendMode = SKBlendMode.Plus, IsAntialias = true };   // was FilterQuality.Medium: SkSampling.Medium on the draw
+            _spritePaint = new SKPaint { BlendMode = SKBlendMode.Plus, IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
             _trailGlow = new SKPaint { Style = SKPaintStyle.Stroke, IsAntialias = true, BlendMode = SKBlendMode.Plus, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round, MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 4f) };
             _trailCore = new SKPaint { Style = SKPaintStyle.Stroke, IsAntialias = true, BlendMode = SKBlendMode.Plus, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
             _rimPaint = new SKPaint { Style = SKPaintStyle.Stroke, IsAntialias = true, StrokeWidth = 1.6f };
@@ -441,7 +441,7 @@ public class GazeDebugCursorService : IDisposable
         _spritePaint.ColorFilter = tint;
         _spritePaint.Color = new SKColor(255, 255, 255, alpha);
         var dest = new SKRect(cx - radius, cy - radius, cx + radius, cy + radius);
-        canvas.DrawImage(img, dest, SkSampling.Medium, _spritePaint);
+        canvas.DrawImage(img, dest, _spritePaint);
     }
 
     /// <summary>
