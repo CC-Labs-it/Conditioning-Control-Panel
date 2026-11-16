@@ -518,6 +518,71 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    /// <summary>WPF BubbleService.cs:4967-4975: with tease art missing, the fallback label is drawn
+    /// above the tease face, so the face does not hide it.</summary>
+    [Fact]
+    public async Task Tease_fallback_label_draws_above_the_face()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.RootsOverride = () => Array.Empty<string>();
+            var saved = BubbleOverlay.Field.Bubbles.ToArray();
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1) { Width = 1280, Height = 720 };
+            ConditioningControlPanel.Services.Chaos.EffectBubbleSpec Spec(string label) => new()
+                { VariantId = "tease", IsTease = true, SizePx = 200, Label = label };
+            var b = new AmbientBubble { Screen = 0, X = 400, Y = 200, Size = 200, Clickable = true, Spec = Spec("\u2716") };
+            using var black = new SkiaSharp.SKBitmap(2, 2);
+            black.Erase(SkiaSharp.SKColors.Black);
+            using var png = black.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            var face = new global::Avalonia.Media.Imaging.Bitmap(png.AsStream());
+            int stride = 0;
+            byte[] Frame()
+            {
+                (w.Content as Control)!.InvalidateVisual();
+                using var bmp = w.CaptureRenderedFrame()!;
+                using var fb = bmp.Lock();
+                stride = fb.RowBytes;
+                var px = new byte[fb.RowBytes * fb.Size.Height];
+                System.Runtime.InteropServices.Marshal.Copy(fb.Address, px, 0, px.Length);
+                return px;
+            }
+            try
+            {
+                Assert.Null(BubbleOverlay.VariantImage(b.Spec));
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.Add(b);
+                BubbleOverlay.TeaseFaces[b] = (new() { face }, 100, Environment.TickCount64, false);
+                w.Show();
+                var labelled = Frame();
+                b.Spec = Spec("");
+                var plain = Frame();
+                int shown = 0;
+                for (int i = 0; i < labelled.Length; i += 4)
+                {
+                    int x = i % stride / 4, y = i / stride;
+                    if (Math.Abs(x - 500) >= 50 || Math.Abs(y - 300) >= 50) continue;
+                    // Under the 0.92 face the label shifts a pixel by at most ~20; above it, far more.
+                    if (Math.Abs(labelled[i] - plain[i]) + Math.Abs(labelled[i + 1] - plain[i + 1]) + Math.Abs(labelled[i + 2] - plain[i + 2]) > 150) shown++;
+                }
+                Assert.True(shown > 50, $"label pixels over the face {shown}");
+            }
+            finally
+            {
+                BubbleOverlay.TeaseFaces.Remove(b);
+                face.Dispose();
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
+                w.Close();
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.AddRange(saved);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>Windows input region: the window takes clicks only while the cursor is inside a
     /// live bubble rect (Win32Overlay.SetInputRects toggles WS_EX_TRANSPARENT on this answer).</summary>
     [Fact]

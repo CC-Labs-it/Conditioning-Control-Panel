@@ -20,7 +20,16 @@ public sealed class PanicSurfacesTests
     [Fact]
     public void Bubble_surface_clears_variant_bubbles_on_panic() => AvaloniaTestDispatcher.Run(() =>
     {
+        var overlay = typeof(ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay);
         var field = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.Field;
+        var faces = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.TeaseFaces;
+        // Stop on an idle overlay only clears these; a live overlay belongs to another test.
+        Assert.Equal(0, ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.WindowCount);
+        var lists = new[] { "ChaosRipples", "ChaosResidues" }
+            .Select(n => (System.Collections.IList)overlay.GetField(n, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!)
+            .Select(l => (List: l, Items: l.Cast<object>().ToArray())).ToArray();
+        var (savedBubbles, savedFaces) = (field.Bubbles.ToArray(), faces.ToArray());
+        faces.Clear();   // held aside so Stop's prune cannot dispose their frames
         field.Bubbles.Clear();
         field.Bubbles.Add(new ConditioningControlPanel.Services.AmbientBubble
         {
@@ -31,7 +40,13 @@ public sealed class PanicSurfacesTests
             PanicSurfaces.All.Single(s => s.Id == "bubble-host").Stop(null!);
             Assert.Empty(field.Bubbles);
         }
-        finally { field.Bubbles.Clear(); }
+        finally
+        {
+            field.Bubbles.Clear();
+            field.Bubbles.AddRange(savedBubbles);
+            foreach (var (key, value) in savedFaces) faces[key] = value;
+            foreach (var (list, items) in lists) { list.Clear(); foreach (var item in items) list.Add(item); }
+        }
     });
 
     [Fact]

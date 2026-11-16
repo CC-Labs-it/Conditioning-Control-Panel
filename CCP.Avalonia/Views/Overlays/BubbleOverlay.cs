@@ -978,7 +978,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
             GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, .7) }
         };
-        private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
         /// <summary>WPF BubbleService.cs:2533-2550, :3551-3565 (hand-ported from #4599): the glassy
         /// specular highlight on a plain chaos bubble while the Skia FX layer is on. Variant sprites
         /// bring their own art; ambient bubbles keep their bubble.png highlights.</summary>
@@ -1224,7 +1223,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             if (HasChaosShine(b, variantImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
-                            if (BubbleOverlay.ShowVariantLabel(b.Spec, variantImage)) DrawLabel(dc, b.Spec!.Label, cx, cy, size, k);
                             if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                             {
                                 var frame = face.Frames[face.Animated
@@ -1244,6 +1242,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                     }
                                 }
                             }
+                            // WPF BubbleService.cs:4967-4975: the tease face sits under the label.
+                            if (BubbleOverlay.ShowVariantLabel(b.Spec, variantImage)) DrawLabel(dc, b.Spec!.Label, cx, cy, size, k);
                             if (!b.Popping && BubbleOverlay.IsShielded(b))
                             {
                                 using (dc.PushOpacity(b.ShieldOpacity))
