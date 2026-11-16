@@ -26,7 +26,10 @@ internal static class KeywordTriggerHead
     // OS input seams: tests can drive Win32PanicKey.OnDown without installing a native hook.
     internal static bool? KeyboardSupportedForTests;
     internal static Func<int, char?>? TranslateForTests;
-    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? (OperatingSystem.IsWindows() &&
+    internal static bool UseX11ForTests;
+    internal static Func<IntPtr, int, ulong>? ResolveX11ForTests;
+    internal static Func<uint>? X11ForegroundForTests;
+    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? ((OperatingSystem.IsWindows() || OperatingSystem.IsLinux() && X11PanicKey.IsListening) &&
         string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
     private static bool _subscribed;
     private static int _generation;
@@ -44,10 +47,15 @@ internal static class KeywordTriggerHead
     // WPF MainWindow.Awareness.cs:480-499: the keyboard toggle does not start the service.
     internal static void AttachKeyboard()
     {
-        if (!CoreSettings.Current.KeywordTriggersEnabled || _subscribed || !HasKeyboardInput) return;
-        Win32PanicKey.KeyDown += OnKey;
+        if (!CoreSettings.Current.KeywordTriggersEnabled || !KeywordAudioRuntime.HasAccess || _subscribed || !HasKeyboardInput) return;
+        if (UseX11ForTests || KeyboardSupportedForTests != true && OperatingSystem.IsLinux())
+        {
+            var generation = Volatile.Read(ref _generation);
+            X11PanicKey.KeywordPress = (display, code) => OnX11Key(display, code, generation);
+        }
+        else Win32PanicKey.KeyDown += OnKey;
         _subscribed = true;
-        if (KeyboardSupportedForTests != true) Win32PanicKey.EnsureListening(); // shared panic hook
+        if (KeyboardSupportedForTests != true && OperatingSystem.IsWindows()) Win32PanicKey.EnsureListening(); // shared panic hook
     }
 
     // WPF KeywordTriggerService.cs:176-185: start is idempotent and requires awareness access.
@@ -58,13 +66,13 @@ internal static class KeywordTriggerHead
         Engine.Start();
     }
     /// <summary>Confirm the shared hook before program rollover or enrollment can rely on it.
-    /// Sync subscribes only on Windows outside the isolated user-data profile.</summary>
-    internal static bool KeyboardSourceAvailable() => KeyboardSourceAvailable(OperatingSystem.IsWindows(),
+    /// Sync subscribes outside the isolated user-data profile when the platform listener is available.</summary>
+    internal static bool KeyboardSourceAvailable() => KeyboardSourceAvailable(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(),
         Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
-        () => Win32PanicKey.EnsureListening() && Win32PanicKey.IsListening);
+        () => OperatingSystem.IsLinux() ? X11PanicKey.IsListening : Win32PanicKey.EnsureListening() && Win32PanicKey.IsListening);
 
-    internal static bool KeyboardSourceAvailable(bool windows, string? sandboxDir, Func<bool> ensureListening) =>
-        windows && string.IsNullOrEmpty(sandboxDir) && ensureListening();
+    internal static bool KeyboardSourceAvailable(bool supported, string? sandboxDir, Func<bool> ensureListening) =>
+        supported && string.IsNullOrEmpty(sandboxDir) && ensureListening();
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
     internal static void Stop() { DetachKeyboard(); lock (_ocrGate) _ocr?.Stop(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
@@ -187,12 +195,33 @@ internal static class KeywordTriggerHead
     {
         Interlocked.Increment(ref _generation);
         Engine.ClearInput();
-        if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
+        if (_subscribed) { Win32PanicKey.KeyDown -= OnKey; X11PanicKey.KeywordPress = null; }
         _subscribed = false;
     }
 
     /// <summary>Cuts the clip only; the panic pass uses <see cref="SwitchOffForPanic"/>.</summary>
     internal static void StopAudio() => Engine.StopAudio();
+
+    // XKB resolution belongs to the listener thread. Delivery and foreground reads stay on the UI thread.
+    private static void OnX11Key(IntPtr display, int keycode, int generation)
+    {
+        try
+        {
+            var symbol = ResolveX11ForTests?.Invoke(display, keycode) ?? X11KeywordInput.Resolve(display, keycode);
+            var special = X11KeywordInput.Special(symbol);
+            var ch = special == null ? X11KeywordInput.Character(symbol) : null;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (generation != Volatile.Read(ref _generation)) return;
+                var id = Engine.NeedsForeground(DateTime.UtcNow) ? (X11ForegroundForTests?.Invoke() ?? X11ActiveWindow.ReadForegroundPid()) : 0;
+                var foreground = Foreground(id);
+                if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
+                else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
+                else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
+            });
+        }
+        catch (Exception ex) { Log.Debug(ex, "X11 keyword input failed"); }
+    }
 
     private static void OnKey(int vk, string? name)
     {
