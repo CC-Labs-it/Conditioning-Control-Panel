@@ -21,6 +21,7 @@ public partial class ChaosHubWindow
 
     private readonly List<RevealPulse> _revealPulses = new();
     private BeatLoop? _revealLoop;
+    private long _revealStarted;
     private bool _revealClosed;
 
     // WPF ChaosHubWindow.Reveals.cs:168-244: one batch bark, silent consumption for
@@ -43,18 +44,29 @@ public partial class ChaosHubWindow
                 [RevealIds.Diary] = _hdrDiary,
                 [RevealIds.StatsPanel] = this.FindControl<Control>("HdrStats"),
             };
+            double elapsed = _revealLoop == null ? 0 : BeatLoop.Time.GetElapsedTime(_revealStarted).TotalSeconds;
+            int added = 0;
+            string? first = null;
             foreach (var id in RevealService.PendingIds())
             {
+                if (_revealPulses.Exists(p => p.Id == id)) continue;
                 if (map.TryGetValue(id, out var target) && target is { IsVisible: true })
-                    _revealPulses.Add(new(id, target, _revealPulses.Count * 0.6));
+                {
+                    _revealPulses.Add(new(id, target, elapsed + added++ * 0.6));
+                    first ??= id;
+                }
                 else RevealService.MarkSeen(id);
             }
-            if (_revealPulses.Count == 0) return;
-            // The window's shared beat (AmbientBeatLoopsTests), not a per-view frame timer.
-            // Start steps t=0 at once: the first chime, then the batch bark, as before.
-            _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
-            _revealLoop.Start();
-            Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", _revealPulses[0].Id));
+            if (first == null) return;
+            // Reuse the active beat; pending IDs already animating must not be queued twice.
+            if (_revealLoop == null)
+            {
+                _revealStarted = BeatLoop.Time.GetTimestamp();
+                _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
+                _revealLoop.Start();
+            }
+            else AdvanceRevealFlashes(elapsed);
+            Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", first));
         }
         catch (Exception ex) { Log.Warning("RunRevealFlashes failed ({E})", ex.Message); }
     }
