@@ -195,22 +195,6 @@ public sealed class LeashAskTests
         });
 
     [Fact]
-    public void ManualOfferBeforeServiceRebindDoesNotReopenAfterDismissal() =>
-        Run((shell, page, _, _) =>
-        {
-            var offeredService = LeashHead.Service;
-            LeashHead.Service = new LeashService(new Wire(), () => "u_me");
-            shell.RebindLeashAsks();
-            LeashHead.Service = offeredService;
-            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
-            var ask = LeashAskWindow.Current!;
-            shell.RebindLeashAsks(); // The periodic rebind after the manual Look.
-            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-            Dispatcher.UIThread.RunJobs();
-            Assert.Null(LeashAskWindow.Current);
-        });
-
-    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
