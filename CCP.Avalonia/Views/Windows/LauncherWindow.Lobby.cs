@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
@@ -62,6 +63,8 @@ public partial class LauncherWindow
     }
     private void PaintLobby(LobbySnapshot snapshot)
     {
+        NavBadges.Set(NavSections.Social, snapshot.OpenCount);
+        LobbyChip.Opacity = LobbyChipOpacity(snapshot.OpenCount, NavBadges.Seen(NavSections.Social));
         LobbyChipText.Text = snapshot.OpenCount > 0
             ? Loc.GetF("launcher_lobby_open", snapshot.OpenCount) : Loc.Get("launcher_lobby");
         if (_lobbyDrop is { IsOpen: true }) FillLobbyDrop(_lobbyDrop, snapshot);
@@ -74,12 +77,20 @@ public partial class LauncherWindow
             BorderBrush = new SolidColorBrush(Color.Parse("#40FFFFFF")), BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(16), Padding = new Thickness(12) };
         FillLobbyDrop(menu, _lobby.Snapshot);
-        menu.Opened += (_, _) => _lobbyLease ??= _lobby.Watch();
+        menu.Opened += (_, _) =>
+        {
+            _lobbyLease ??= _lobby.Watch();
+            NavBadges.MarkSeen(NavSections.Social);
+            LobbyChip.Opacity = LobbyChipOpacity(NavBadges.Get(NavSections.Social), NavBadges.Seen(NavSections.Social));
+        };
         menu.Closed += (_, _) => { _lobbyLease?.Dispose(); _lobbyLease = null; };
         _lobbyDrop = menu;
         LobbyChip.ContextMenu = menu;
         menu.Open(LobbyChip);
     }
+    internal static double LobbyChipOpacity(int count, int seen) =>
+        count <= 0 || NavBadges.IsFresh(count, seen) ? 1.0 : MainShellWindow.NavBadgeSeenOpacity + 0.15;
+
     private void FillLobbyDrop(ContextMenu menu, LobbySnapshot snapshot)
     {
         menu.Items.Clear();

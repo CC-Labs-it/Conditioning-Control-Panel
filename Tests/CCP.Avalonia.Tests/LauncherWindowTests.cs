@@ -91,6 +91,7 @@ public sealed class LauncherWindowTests
             launcher.Show();
             Assert.Equal(1, calls);
             Assert.Equal(Loc.GetF("launcher_lobby_open", 1), launcher.FindControl<TextBlock>("LobbyChipText")!.Text);
+            Assert.Equal(1, ConditioningControlPanel.Services.UI.NavBadges.Get(ConditioningControlPanel.Services.UI.NavSections.Social));
             launcher.Hide();
             launcher.Show();
             Assert.Equal(2, calls);
@@ -98,6 +99,10 @@ public sealed class LauncherWindowTests
             Assert.True(launcher.IsVisible);
             var menu = launcher.FindControl<Button>("LobbyChip")!.ContextMenu!;
             Assert.True(menu.IsOpen);
+            Assert.Equal(1, ConditioningControlPanel.Services.UI.NavBadges.Seen(ConditioningControlPanel.Services.UI.NavSections.Social));
+            Assert.Equal(LauncherWindow.LobbyChipOpacity(1, 1), launcher.FindControl<Button>("LobbyChip")!.Opacity);
+            Assert.Equal(0.60, LauncherWindow.LobbyChipOpacity(1, 1), 6);
+            Assert.Equal(1.0, LauncherWindow.LobbyChipOpacity(2, 1));
             var card = Assert.IsType<Border>(((MenuItem)menu.Items[0]!).Header);
             var grid = Assert.IsType<Grid>(card.Child);
             Assert.NotNull(Assert.IsType<Image>(grid.Children[0]).Source);
