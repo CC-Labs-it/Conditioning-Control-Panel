@@ -245,8 +245,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public string? LoadedFilePath { get; private set; }
 
         internal static event Action<string?>? PlaybackFinished;
-        private bool _videoFinished;
+        private bool _videoFinished, _videoHadDuration;
+        private double _videoMaxSec;
         internal void NotifyPlaybackFinished() => PlaybackFinished?.Invoke(LoadedFilePath);
+
+        /// <summary>EnhancementEngine.Stop fallback (Core EnhancementEngine.cs:481-490): a web video that
+        /// never reported a duration counts as finished on stop once 60 s were played. Then resets for the next load.</summary>
+        private void EndVideoWatch()
+        {
+            if (!_videoFinished && !_videoHadDuration && _videoMaxSec >= 60) NotifyPlaybackFinished();
+            _videoFinished = _videoHadDuration = false; _videoMaxSec = 0;
+        }
 
         /// <summary>
         /// The WPF window took (EnhancementAudioPlayer, EnhancementHostService) and a second ctor
@@ -404,6 +413,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public void LoadEnhancementFile(string ccpenhJsonPath)
         {
             if (string.IsNullOrWhiteSpace(ccpenhJsonPath)) return;
+            EndVideoWatch();
             LoadedFilePath = null;
             if (!File.Exists(ccpenhJsonPath)) { ReportLoadFailure($"File not found: {ccpenhJsonPath}"); return; }
             try
@@ -427,6 +437,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool LoadEnhancementInMemory(Enhancement? enh, string? sourceTag)
         {
             if (enh == null) return false;
+            EndVideoWatch();
             LoadedFilePath = null;   // LoadEnhancementFile sets it again after a successful load
             try
             {
@@ -466,6 +477,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public void OpenLocalMediaFile(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return;
+            EndVideoWatch();
             LoadedFilePath = null;
             if (DeeperPreview.IsLocalVideoFile(path)) LoadLocalVideo(path);
             else LoadAudio(path);
@@ -859,6 +871,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
         private void TearDownVideo()
         {
+            EndVideoWatch();
             ++_videoLoad; _videoNavigated = false;
             _videoBrowser.AllowNavigation = u => u.Scheme == "about";
             _videoBrowser.Navigate(new Uri("about:blank"));
@@ -901,7 +914,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         private void LoadLocalVideo(string path)
         {
-            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false; _videoFinished = false;
+            StopAudio(); InvalidateWaveform(); EndVideoWatch(); ++_videoLoad; _pollDisabled = false;
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -946,7 +959,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void LoadVideoUrl(string url)
         {
-            StopAudio(); InvalidateWaveform(); ++_videoLoad; _pollDisabled = false; _videoFinished = false;
+            StopAudio(); InvalidateWaveform(); EndVideoWatch(); ++_videoLoad; _pollDisabled = false;
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -1041,6 +1054,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void BtnStop_Click()
         {
             ++_videoLoad; // Discard a pending Play/Pause result and time readback.
+            EndVideoWatch();
             StopAudio();
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
@@ -1219,13 +1233,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _isPlaying = playing;
                     _txtPlayPauseGlyph.Kind = playing ? IconKind.Pause : IconKind.Play;
                 }
-                var finished = !playing && validCurrent && validDuration && cur >= dur;
-                if (finished && !_videoFinished)
+                // EnhancementEngine.cs:675-688: furthest position, and finished near the end whether
+                // or not the page paused (a looping or auto-advancing player never does). Once per load.
+                _videoHadDuration |= validDuration;
+                if (validCurrent && cur > _videoMaxSec) _videoMaxSec = cur;
+                if (!_videoFinished && validCurrent && validDuration && cur >= dur - 0.75)
                 {
                     _videoFinished = true;
                     NotifyPlaybackFinished();
                 }
-                else if (!finished) _videoFinished = false;
                 TickDeeper();
             }
             catch (Exception ex)
@@ -1985,6 +2001,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _videoBrowser.NavigationCompleted -= OnVideoNavigationCompleted;
             _videoBrowser.WebMessage -= OnVideoWebMessage;
             _closing = true; ++_videoLoad;
+            EndVideoWatch();
             StopAudio();
             InvalidateWaveform();
             // Stop the tick timer first so no UI work is queued onto a dying window — and because
