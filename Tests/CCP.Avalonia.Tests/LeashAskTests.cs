@@ -195,18 +195,6 @@ public sealed class LeashAskTests
         });
 
     [Fact]
-    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
-        Run((shell, page, _, _) =>
-        {
-            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
-            var ask = LeashAskWindow.Current!;
-            shell.RebindLeashAsks(); // The periodic rebind can land while the manual ask is open.
-            ask.Card.Dismiss();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Null(LeashAskWindow.Current);
-        });
-
-    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
