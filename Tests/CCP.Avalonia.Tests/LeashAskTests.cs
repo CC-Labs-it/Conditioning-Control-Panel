@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -28,6 +29,7 @@ namespace CCP.Avalonia.Tests;
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
+    private sealed class FrozenTime : TimeProvider { private readonly long _now = TimeProvider.System.GetTimestamp(); public override long GetTimestamp() => _now; }
 
     private sealed class Wire : ILeashApi
     {
@@ -61,7 +63,7 @@ public sealed class LeashAskTests
                         ["at"] = at.ToString("o"), ["expires_at"] = at.AddDays(7).ToString("o"),
                     } },
                 });
-                LeashHead.Service = svc;
+                LeashHead.Service = svc; shell.RebindLeashAsks();
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
                 var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
                 var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
@@ -174,6 +176,7 @@ public sealed class LeashAskTests
         {
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+            var oldClock = BeatLoop.Time; BeatLoop.Time = new FrozenTime();
             try
             {
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
@@ -191,7 +194,7 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+            finally { BeatLoop.Time = oldClock; (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
     [Fact]
@@ -216,6 +219,7 @@ public sealed class LeashAskTests
             var ask = LeashAskWindow.Current!;
             Assert.False(previous.IsVisible);
             Assert.NotSame(previous, ask);
+            var service = LeashHead.Service; LeashHead.Service = null; shell.RebindLeashAsks(); LeashHead.Service = service; shell.RebindLeashAsks();
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
