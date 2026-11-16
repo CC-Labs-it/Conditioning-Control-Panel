@@ -133,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 i.BrainDrain = Platform.BrainDrainPlayer.Instance?.IsRunning == true;
                 i.Duck = Platform.LibVlcAudio.Instance?.IsDucked == true;
                 if (i.VideoKind == null && _remoteBrowserVideoActive) i.VideoKind = "web";
-                i.IdleSeconds = Platform.DesktopIdle.ReadSeconds() ?? 0;
+                i.IdleSeconds = Platform.DesktopIdle.LastSeconds();   // WPF RemoteControlService.Screen.cs:304
             };
             ConditioningControlPanel.Services.Remote.RemoteScreenFeed.HeadFill = fill;
             Closed += (_, _) => { if (ConditioningControlPanel.Services.Remote.RemoteScreenFeed.HeadFill == fill) ConditioningControlPanel.Services.Remote.RemoteScreenFeed.HeadFill = null; };
