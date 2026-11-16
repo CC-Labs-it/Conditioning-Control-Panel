@@ -53,7 +53,8 @@ public sealed class ReleaseEvidenceTests : IDisposable
         Write("packaging/linux/THIRD-PARTY-NOTICES.txt", File.ReadAllText(Path.Combine(Repo(), "packaging/linux/THIRD-PARTY-NOTICES.txt")));
         var listed = new[] { "microsoft.netcore.app.runtime.linux-x64", "microsoft.netcore.app.host.linux-x64", "skiasharp",
             "skiasharp.nativeassets.linux", "harfbuzzsharp", "harfbuzzsharp.nativeassets.linux", "microsoft.ml.onnxruntime",
-            "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia", "avalonia.controls.webview" };
+            "opencvsharp4", "opencvsharp4.official.runtime.linux-x64", "vosk", "libvlcsharp", "avalonia", "avalonia.controls.webview",
+            "org.k2fsa.sherpa.onnx", "org.k2fsa.sherpa.onnx.runtime.linux-x64" };
         foreach (var (pkg, file) in new[] {
             ("microsoft.netcore.app.runtime.linux-x64", "LICENSE.TXT"), ("microsoft.netcore.app.runtime.linux-x64", "THIRD-PARTY-NOTICES.TXT"),
             ("skiasharp.nativeassets.linux", "LICENSE.txt"), ("skiasharp.nativeassets.linux", "THIRD-PARTY-NOTICES.txt"),
@@ -91,6 +92,9 @@ public sealed class ReleaseEvidenceTests : IDisposable
         var notices = File.ReadAllText(Path.Combine(install, "THIRD-PARTY-NOTICES.txt"));
         Assert.Contains("skiasharp.nativeassets.linux 1.0.0", notices);
         Assert.Contains("microsoft.ml.onnxruntime ThirdPartyNotices.txt fixture", notices);
+        Assert.Contains("libsherpa-onnx-c-api.so", notices);
+        Assert.Contains("org.k2fsa.sherpa.onnx 1.0.0", notices);
+        Assert.Contains("org.k2fsa.sherpa.onnx.runtime.linux-x64 1.0.0", notices);
     }
 
     [Fact]
