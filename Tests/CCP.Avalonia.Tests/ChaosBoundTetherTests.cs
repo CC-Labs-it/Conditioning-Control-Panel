@@ -82,6 +82,44 @@ public sealed class ChaosBoundTetherTests
         });
     }
 
+    // WPF BubbleService.cs:1611-1612: the detonation is handled before the Bound check, so a
+    // sweep it triggers (collar save + Unleashed, ChaosRunHost OnDetonated) snaps the partner first.
+    [Fact]
+    public Task Detonation_that_sweeps_the_partner_enrages_nothing() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var clock = BubbleOverlay.Field.Clock;
+        var now = new DateTime(2026, 11, 16, 0, 0, 0, DateTimeKind.Utc);
+        try
+        {
+            BubbleOverlay.Field.Clock = () => now;
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+            var enraged = new List<AmbientBubble>();
+            BubbleOverlay.BeginChaos(new Border(), _ => { }, _ => { }, _ => BubbleOverlay.Field.DefuseAllLive(),
+                onBoundEnraged: enraged.Add);
+            var (sa, sb) = ChaosBubbleVariants.BuildBoundPair(1);
+            var (a, b) = BubbleOverlay.SpawnBoundPair(sa, sb);
+            Assert.Equal(AmbientBubble.Result.Detonated, a.Press(canChannel: false, now));
+            BubbleOverlay.Field.ChaosDetonated!(a);
+            Assert.True(b.Popping);
+            Assert.Empty(enraged);
+            now = now.AddMilliseconds(ChaosTuning.BOUND_WINDOW_MS + 1);
+            BubbleOverlay.TickBoundPairs();   // the lapsed window enrages neither half
+            Assert.False(a.Enraged || b.Enraged);
+            Assert.Empty(enraged);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos();
+            ChaosFieldFxOverlay.CloseActive();
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+            BubbleOverlay.Field.Clock = clock;
+        }
+        return Task.CompletedTask;
+    });
+
     // WPF BubbleService.cs:1555-1563: anchor clear of the edges, random angle in [0, pi), vertical spread 0.6.
     [Fact]
     public Task Pair_spawns_around_an_anchor_at_a_random_flattened_angle() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -168,6 +206,8 @@ public sealed class ChaosBoundTetherTests
             // The shortest Bound variant fuse is 3500 ms; only the 1.5x debut lifts both halves past 5250.
             double floor = 3500 * (1.0 - eff * 0.25) * state.FuseTimeMult * ChaosTuning.DEBUT_FUSE_MULT;
             Assert.All(halves, h => Assert.True(h.Spec!.FuseMs >= (int)floor, $"fuse {h.Spec!.FuseMs} < {floor}"));
+            state.Focus = ChaosTuning.DEFUSE_COST_BOUND;   // WPF ChaosModeService.cs:1930: a half needs only its own cost
+            Assert.True(ChaosRunHost.CanChannelDefuse(halves[0]));
             Assert.True(halves[0].Snap());
             BubbleOverlay.Field.ChaosDefused!(halves[0]);
             labels.Clear(); pulses.Clear();

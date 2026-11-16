@@ -653,7 +653,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 PlayChaosCue(b.DefusedViaChannel && File.Exists(ChaosCuePath("defuse_hiss")) ? "defuse_hiss" : "snap", 0.6f);
                 onDefuse(b);
             };
-            Field.ChaosDetonated = onDetonate == null ? null : b => { ResolveBound(b, false); AnchorPop(b); onDetonate(b); };
+            Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); ResolveBound(b, false); };   // WPF BubbleService.cs:1611-1612
             Field.ChaosTreatExpired = onTreatExpired;
             if (_running) return;
             Start(host, null, ambient: false);
