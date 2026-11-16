@@ -56,6 +56,7 @@ public sealed class RemoteWallpaperCommandTests
             CoreSettings.Current.WallpaperSourceFolder = _folder;
             CoreSettings.Current.WallpaperOriginalPath = _original;
             Directory.Delete(Folder, true);
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop(); // a relay StartAsync takes the static session
         }
     }
 
@@ -119,20 +120,24 @@ public sealed class RemoteWallpaperCommandTests
     [Fact]
     public async Task StatusReportsWallpaperOnlyWhileActive()
     {
-        using var f = new Fixture();
-        var handler = new RelayHandler();
-        using var relay = new RemoteRelay(() => "token", () => "user", "1", RemoteCommands.Execute, _ => { }, handler) { AutoPoll = false };
-        await relay.StartAsync("full");
-        async Task<bool> Reported()
+        using (var f = new Fixture())
         {
-            await relay.PushStatusNowAsync();
-            return handler.Status!["active_services"]!.Values<string>().Contains("wallpaper");
+            var handler = new RelayHandler();
+            using var relay = new RemoteRelay(() => "token", () => "user", "1", RemoteCommands.Execute, _ => { }, handler) { AutoPoll = false };
+            await relay.StartAsync("full");
+            async Task<bool> Reported()
+            {
+                await relay.PushStatusNowAsync();
+                return handler.Status!["active_services"]!.Values<string>().Contains("wallpaper");
+            }
+            Assert.False(await Reported());
+            await f.Trigger();
+            Assert.True(await Reported());
+            Assert.Null(RemoteCommands.Execute("stop_wallpaper", null));
+            await f.Host.WhenIdle;
+            Assert.False(await Reported());
         }
-        Assert.False(await Reported());
-        await f.Trigger();
-        Assert.True(await Reported());
-        Assert.Null(RemoteCommands.Execute("stop_wallpaper", null));
-        await f.Host.WhenIdle;
-        Assert.False(await Reported());
+        // StartAsync took the static remote session; a later SessionStatics test must not inherit it.
+        Assert.False(ConditioningControlPanel.Services.Remote.RemoteWearer.Holding);
     }
 }
