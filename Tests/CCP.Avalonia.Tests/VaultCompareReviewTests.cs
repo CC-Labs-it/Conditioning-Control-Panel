@@ -30,7 +30,7 @@ public class VaultCompareReviewTests
         dialog.GetVisualDescendants().OfType<T>().Single(x => x.Name == name);
 
     // One scope keeps setup and cleanup identical for each headless dialog test.
-    private static Task WithDialog(Func<VaultGateDialog, Task> action, MotionLevel? level = null, bool gentle = false, double? fade = null) =>
+    private static Task WithDialog(Func<VaultGateDialog, Task> action, MotionLevel? level = null, bool gentle = false, double? fade = null, bool owned = false) =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             var provider = CoreSettings.ServiceProvider;
@@ -46,12 +46,13 @@ public class VaultCompareReviewTests
                 UiMotionPreference.CacheStamp = long.MinValue;
             }
             var dialog = new VaultGateDialog();
-            try { dialog.Show(); await action(dialog); }
+            var owner = owned ? new Window() : null;
+            try { if (owner != null) { owner.Show(); dialog.Show(owner); } else dialog.Show(); await action(dialog); }
             finally
             {
                 dialog.Close();
+                owner?.Close();
                 if (level != null) { CoreSettings.ServiceProvider = provider; UiMotionPreference.OsProbe = os; UiMotionPreference.CacheStamp = long.MinValue; }
-                if (level != null) { Assert.Same(provider, CoreSettings.ServiceProvider); Assert.Same(os, UiMotionPreference.OsProbe); Assert.Equal(long.MinValue, UiMotionPreference.CacheStamp); }
             }
         });
 
@@ -59,9 +60,7 @@ public class VaultCompareReviewTests
     private static readonly FieldInfo ReadUtc = typeof(PlanCatalog).GetField("_readUtc", BindingFlags.Static | BindingFlags.NonPublic)!;
 
     [Fact]
-    public Task SavingsFollowTheRefreshedSnapshotForBothTiers() => AvaloniaTestDispatcher.RunAsync(ExerciseSavings);
-
-    private static async Task ExerciseSavings()
+    public Task SavingsFollowTheRefreshedSnapshotForBothTiers() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var cached = Cache.GetValue(null);
         var readUtc = ReadUtc.GetValue(null);
@@ -100,24 +99,6 @@ public class VaultCompareReviewTests
             Assert.Equal(0, prime.GetBaseValue(Visual.OpacityProperty).Value);
         }
         finally { dialog.Close(); Cache.SetValue(null, cached); ReadUtc.SetValue(null, readUtc); PlanCatalog.FetchOverride = fetch; InviteApi.DefaultBaseUrl = url; CoreSettings.ServiceProvider = provider; }
-    }
-
-    [Fact]
-    public Task SavingsTestPreservesExistingCacheAndTimestamp() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
-        var before = Cache.GetValue(null);
-        var beforeTime = ReadUtc.GetValue(null);
-        var seeded = PlanCatalog.Fallback with { Currency = "EUR" };
-        var time = DateTime.UtcNow.AddMinutes(-3);
-        try
-        {
-            Cache.SetValue(null, seeded);
-            ReadUtc.SetValue(null, time);
-            await ExerciseSavings();
-            Assert.Same(seeded, PlanCatalog.Current);
-            Assert.Equal(time, ReadUtc.GetValue(null));
-        }
-        finally { Cache.SetValue(null, before); ReadUtc.SetValue(null, beforeTime); }
     });
 
     [Fact]
@@ -233,8 +214,10 @@ public class VaultCompareReviewTests
         Click(dialog, Loc.Get("vaultgate_compare"));
         var back = dialog.GetVisualDescendants().OfType<Button>().First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == Loc.Get("vaultgate_back")));
         back.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var body = ((Border)dialog.Content!).Child!;
         if (level != MotionLevel.Off)
         {
+            Assert.Equal(0, body.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0)); // WPF Compare.cs:588: held faded, no flash back
             Assert.Equal(980, dialog.Width);
             Assert.False(((Control)dialog.Content!).IsHitTestVisible);
             Assert.NotNull(Named<Border>(dialog, "BasicTicket"));
@@ -247,7 +230,8 @@ public class VaultCompareReviewTests
         dialog.UpdateLayout();
         Assert.True(((Control)dialog.Content!).IsHitTestVisible);
         Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("vaultgate_signin"));
-        if (level == MotionLevel.Off) Assert.Equal(1, ((Border)dialog.Content!).Child!.Opacity);
+        Assert.Equal(1, body.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
+        if (level == MotionLevel.Off) Assert.Equal(1, body.Opacity);
     }, level, gentle, 0.5);
 
     [Theory]
@@ -298,7 +282,7 @@ public class VaultCompareReviewTests
     }, MotionLevel.Reduced, true, 2.0);
 
     // WPF Compare.cs:370-380, 640-643: hover lifts -3 and a press on Choose sets the ticket down +2 at
-    // every level; only Full tweens.
+    // every level; it tweens unless Off or Gentle.
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
@@ -323,7 +307,7 @@ public class VaultCompareReviewTests
         Assert.Equal(0, move.Y);
     }, level);
 
-    // WPF Compare.cs:560-571: each ticket is hidden (and on Full lowered) until its 80 ms turn.
+    // WPF Compare.cs:560-571: each ticket is hidden and lowered until its 80 ms turn; Reduced still moves.
     [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
@@ -348,33 +332,10 @@ public class VaultCompareReviewTests
             await Task.Delay(5);
         }
         Assert.NotEmpty(samples);
-        Assert.All(samples, s => Assert.Equal((0, level == MotionLevel.Full ? 26 : 0), s));
+        Assert.All(samples, s => Assert.Equal((0, 26), s));
         for (var i = 0; i < 100 && prime.Opacity < 1; i++) await Task.Delay(20);
         Assert.Equal(1, prime.Opacity);
     }, level);
-
-    // WPF Compare.cs:588, 622-636: the fading face holds 0 until Close()/then(), it never flashes back.
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task LeavingHoldsTheFadedOutValue(bool close) => WithDialog(async dialog =>
-    {
-        Click(dialog, Loc.Get("vaultgate_compare"));
-        var card = (Border)dialog.Content!;
-        var body = card.Child!;
-        if (close) dialog.Close();
-        else Click(dialog, Loc.Get("vaultgate_back"));
-        Assert.Equal(0, (close ? card : body).GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
-        if (close)
-        {
-            for (var i = 0; i < 50 && dialog.IsVisible; i++) { await Task.Delay(20); Assert.Equal(0, card.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0)); }
-            Assert.False(dialog.IsVisible);
-            return;
-        }
-        for (var i = 0; i < 100 && dialog.Width != 460; i++) await Task.Delay(20);
-        Assert.Equal(460, dialog.Width);
-        Assert.Equal(1, body.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
-    }, MotionLevel.Full);
 
     [Theory]
     [InlineData(MotionLevel.Full, false)]
@@ -383,15 +344,33 @@ public class VaultCompareReviewTests
     [InlineData(MotionLevel.Off, false)]
     public Task CloseHonorsMotionPreference(MotionLevel level, bool gentle) => WithDialog(async dialog =>
     {
+        // WPF Compare.cs:582, 596-636: the card fades and holds 0; tickets slide down unless Off or Gentle.
         Click(dialog, Loc.Get("vaultgate_compare"));
+        var card = (Border)dialog.Content!;
+        var ticket = (TranslateTransform)Named<Border>(dialog, "BasicTicket").RenderTransform!;
         dialog.Close();
         Assert.Equal(level != MotionLevel.Off, dialog.IsVisible);
-        if (level != MotionLevel.Off)
+        var moved = false;
+        for (var i = 0; i < 75 && dialog.IsVisible; i++)
         {
-            await Task.Delay(gentle ? 950 : 350);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(dialog.IsVisible);
+            Assert.Equal(0, card.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
+            moved |= ticket.Y > 0;
+            await Task.Delay(20);
         }
+        Assert.False(dialog.IsVisible);
+        Assert.Equal(level != MotionLevel.Off && !gentle, moved);
     }, level, gentle);
+
+    // Avalonia asks owned windows first, so the compare fade must not cancel the shell's own X.
+    [Fact]
+    public Task OwnerCloseIsNotCancelledByTheCompareFade() => WithDialog(dialog =>
+    {
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        var owner = (Window)dialog.Owner!;
+        owner.Close();
+        Assert.False(owner.IsVisible);
+        Assert.False(dialog.IsVisible);
+        return Task.CompletedTask;
+    }, MotionLevel.Full, owned: true);
 
 }

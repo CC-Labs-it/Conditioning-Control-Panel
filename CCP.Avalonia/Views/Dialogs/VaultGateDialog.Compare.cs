@@ -36,6 +36,8 @@ public sealed partial class VaultGateDialog
     private Button? _leverBadge;
     private CancellationTokenSource? _billingMotion;
     private static MotionLevel CompareMotion => AmbientFxCanvas.Env.Level;
+    // WPF Compare.cs:58-59, 230, 548, 568, 582, 642: things move unless motion is Off or Gentle Visuals is on.
+    private static bool Moving => CompareMotion != MotionLevel.Off && !GentleVisuals.On;
 
     // WPF Compare.cs:140-151. Position and working area are physical pixels, sizes are DIPs.
     internal static PixelPoint Recenter(PixelPoint at, Size before, Size after, PixelRect area, double scale)
@@ -172,7 +174,7 @@ public sealed partial class VaultGateDialog
         var slide = _knobSlide!;
         var oldX = slide.X;
         slide.X = _yearly ? 26 : 0;
-        if (animate && CompareMotion == MotionLevel.Full) _ = Tween(_knob, TranslateTransform.XProperty, oldX, slide.X, 160, token);
+        if (animate && Moving) _ = Tween(_knob, TranslateTransform.XProperty, oldX, slide.X, 160, token);
         _yearNote.Opacity = _yearly ? 1 : 0;
         for (var i = 0; i < _comparePrices.Count; i++)
         {
@@ -185,7 +187,7 @@ public sealed partial class VaultGateDialog
             if (animate && CompareMotion != MotionLevel.Off && show)
             {
                 _ = Tween(saving, OpacityProperty, 0, 0.9, GentleVisuals.RiseMs(GentleVisuals.FadeMs(120)), token, 150);
-                if (CompareMotion == MotionLevel.Full)
+                if (Moving)
                     foreach (var axis in new[] { ScaleTransform.ScaleXProperty, ScaleTransform.ScaleYProperty })
                         _ = Tween(saving, axis, 1.45, 1, 230, token, 150);
             }
@@ -200,12 +202,12 @@ public sealed partial class VaultGateDialog
     }
 
     // WPF Compare.cs:478-486, 528-552: the old amount leaves one way and the new one arrives from the
-    // other inside the clipped window while the subline fades separately. Reduced: a plain crossfade.
+    // other inside the clipped window while the subline fades separately. Gentle: a plain crossfade.
     private async Task RollAmount(StackPanel price, TextBlock? old, string? oldSub, CancellationToken token)
     {
         var window = (Grid)((WrapPanel)price.Children[0]).Children[0];
         var next = (TextBlock)window.Children[0];
-        var full = CompareMotion == MotionLevel.Full;
+        var full = Moving;
         var dir = _yearly ? 1 : -1;
         if (old != null && old.Text != next.Text)
         {
@@ -345,8 +347,8 @@ public sealed partial class VaultGateDialog
         catch (OperationCanceledException) { }
     }
 
-    // WPF Compare.cs:560-571: both tweens start now; Backward fill holds each ticket hidden (and on
-    // Full lowered) through its 80 ms turn instead of drawing it in place first.
+    // WPF Compare.cs:560-571: both tweens start now; Backward fill holds each ticket hidden (and when
+    // moving lowered) through its 80 ms turn instead of drawing it in place first.
     private void DealTickets()
     {
         var level = CompareMotion;
@@ -355,13 +357,13 @@ public sealed partial class VaultGateDialog
         {
             var ticket = _compareTickets[i];
             _ = Tween(ticket, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(240)), delayMs: i * 80, hold: true);
-            if (level == MotionLevel.Full) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340, delayMs: i * 80, hold: true);
+            if (Moving) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340, delayMs: i * 80, hold: true);
         }
     }
 
     private readonly Dictionary<Border, CancellationTokenSource> _hoverMotion = new();
     // WPF Compare.cs:368-380, 640-643: hover lifts -3, a press on Choose sets the ticket down +2, at
-    // every motion level; only Full tweens there.
+    // every motion level; it tweens only when moving.
     private readonly HashSet<Border> _pressedTickets = new(), _overTickets = new();
     private void HoverTicket(Border ticket, bool over)
     {
@@ -383,7 +385,7 @@ public sealed partial class VaultGateDialog
         var pressed = _pressedTickets.Contains(ticket);
         var from = transform.Y;
         transform.Y = pressed ? 2 : _overTickets.Contains(ticket) ? -3 : 0;
-        if (CompareMotion != MotionLevel.Full || from == transform.Y) return;
+        if (!Moving || from == transform.Y) return;
         var next = new CancellationTokenSource();
         _hoverMotion[ticket] = next;
         _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, pressed ? 90 : 160, next.Token);
@@ -410,7 +412,7 @@ public sealed partial class VaultGateDialog
         _leaving = true;
         _card.IsHitTestVisible = false;
         var fadeMs = GentleVisuals.FadeMs(190);
-        if (CompareMotion == MotionLevel.Full)
+        if (Moving)
             foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
         _body.Opacity = 0;
         await Tween(_body, OpacityProperty, 1, 0, fadeMs);
@@ -420,6 +422,8 @@ public sealed partial class VaultGateDialog
     private bool _closingAnimation;
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        // WPF Compare.cs:596-611 fades only the dialog's own close; an owner, app or OS close must not wait.
+        if (e.CloseReason != WindowCloseReason.WindowClosing) { base.OnClosing(e); return; }
         if (_closingAnimation || _leaving) { e.Cancel = true; return; }
         if (!_comparing || CompareMotion == MotionLevel.Off || !IsVisible) { base.OnClosing(e); return; }
         e.Cancel = true;
@@ -429,13 +433,13 @@ public sealed partial class VaultGateDialog
         var fadeMs = GentleVisuals.FadeMs(190);
         _card.Opacity = 0;
         _ = Tween(_card, OpacityProperty, 1, 0, fadeMs);
-        if (CompareMotion == MotionLevel.Full)
+        if (Moving)
             foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
         DispatcherTimer.RunOnce(() =>
         {
             _closingAnimation = false;
             _comparing = false;
-            Close();
+            if (IsVisible) Close(); // the owner may have closed it mid-fade
         }, TimeSpan.FromMilliseconds(fadeMs + 20));
     }
 
