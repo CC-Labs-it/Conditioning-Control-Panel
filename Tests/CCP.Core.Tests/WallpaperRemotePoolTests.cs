@@ -17,9 +17,10 @@ public sealed class WallpaperRemotePoolTests : IDisposable
         public readonly List<string> Applied = new();
         public bool RestoreWorks = true;
         public int Restores;
+        public Task Hold = Task.CompletedTask; // blocks the queue inside Restore
         public string? Capture() => "original";
         public bool Apply(string path) { Applied.Add(path); return true; }
-        public bool Restore(string snapshot) { Restores++; return RestoreWorks; }
+        public bool Restore(string snapshot) { Hold.Wait(); Restores++; return RestoreWorks; }
     }
     private readonly string _dir = Directory.CreateTempSubdirectory("wallpaper-remote-").FullName;
     private readonly string _local;
@@ -83,6 +84,26 @@ public sealed class WallpaperRemotePoolTests : IDisposable
         Assert.False(await host.ShuffleAsync());
         await host.DeactivateAsync(); // panic and every stop path
         gate.SetResult(new() { Remote("late.jpg") });
+        await host.LastFill;
+        await host.WhenIdle;
+        Assert.False(host.IsActive);
+        Assert.Empty(desktop.Applied);
+    }
+
+    [Fact]
+    public async Task APanicQueuedBehindAShuffleStillDropsTheRetry()
+    {
+        var hold = new TaskCompletionSource();
+        var fill = new TaskCompletionSource<List<string>>();
+        var desktop = new Desktop { Hold = hold.Task };
+        var host = Host(desktop, (_, _) => fill.Task, new());
+        _s.WallpaperOriginalPath = "stale";
+        var stale = host.RestoreStaleAsync(); // holds the queue
+        var shuffle = host.ShuffleAsync(); // will find both pools empty and arm the retry
+        var panic = host.DeactivateAsync(); // PanicSurfaces: queued behind that shuffle
+        hold.SetResult();
+        await Task.WhenAll(stale, shuffle, panic);
+        fill.SetResult(new() { Remote("late.jpg") });
         await host.LastFill;
         await host.WhenIdle;
         Assert.False(host.IsActive);

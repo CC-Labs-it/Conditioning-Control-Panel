@@ -96,7 +96,8 @@ public sealed class WallpaperHost
     public Task<bool> DeactivateAsync()
     {
         lock (_remote) _pending = false; // at once: a pool landing after a stop must not put it back
-        return Queue(() => Restore());
+        // and again in order: a shuffle queued ahead of the stop may have re-armed it
+        return Queue(() => { lock (_remote) _pending = false; return Restore(); });
     }
     private bool Restore(bool once = false)
     {
