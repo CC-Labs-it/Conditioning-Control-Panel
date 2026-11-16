@@ -43,7 +43,7 @@ public partial class LauncherWindow
         if (_lobby == null)
         {
             _lobby = CreateLobby();
-            _lobby.Changed += PaintLobby;
+            _lobby.Changed += OnLobbyChanged;
         }
         PaintLobby(_lobby.Snapshot);
         _ = _lobby.RefreshAsync();
@@ -61,9 +61,15 @@ public partial class LauncherWindow
         _lobbyLease?.Dispose();
         _lobbyLease = null;
     }
+    // Only a fresh round writes the badge (WPF LauncherWindow.Lobby.cs:122): the cached repaint in StartLobby
+    // carries an old or empty count, and writing 0 would reset the seen mark the panel's poll keeps.
+    internal void OnLobbyChanged(LobbySnapshot snapshot)
+    {
+        try { NavBadges.Set(NavSections.Social, snapshot.OpenCount); } catch { }
+        PaintLobby(snapshot);
+    }
     internal void PaintLobby(LobbySnapshot snapshot)
     {
-        try { NavBadges.Set(NavSections.Social, snapshot.OpenCount); } catch { } // WPF LauncherWindow.Lobby.cs:122
         LobbyChipText.Text = snapshot.OpenCount > 0
             ? Loc.GetF("launcher_lobby_open", snapshot.OpenCount) : Loc.Get("launcher_lobby");
         if (_lobbyDrop is { IsOpen: true }) FillLobbyDrop(_lobbyDrop, snapshot);

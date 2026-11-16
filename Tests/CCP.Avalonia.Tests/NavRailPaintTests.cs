@@ -114,12 +114,12 @@ public sealed class NavRailPaintTests
         {
             var row = new ConditioningControlPanel.Services.Lobby.LobbyRow { Key = "one", Game = ConditioningControlPanel.Services.Lobby.LobbyGame.Chess };
             var empty = ConditioningControlPanel.Services.Lobby.LobbySnapshot.Empty;
-            launcher.PaintLobby(empty with { Open = new[] { row, row with { Key = "two" } } });
+            launcher.OnLobbyChanged(empty with { Open = new[] { row, row with { Key = "two" } } });
             Dispatcher.UIThread.RunJobs();
             var social = Row(w, NavSections.Social);
             Assert.True(social.Badge!.IsVisible);
             Assert.Equal("2", social.BadgeText!.Text);
-            launcher.PaintLobby(empty);
+            launcher.OnLobbyChanged(empty);
             Dispatcher.UIThread.RunJobs();
             Assert.False(social.Badge.IsVisible);
         }
@@ -142,7 +142,7 @@ public sealed class NavRailPaintTests
     {
         var timer = new BadgeTimer();
         var seats = 1;
-        var poll = new ConditioningControlPanel.Services.Lobby.LobbyPoll(timer, () => true,
+        ConditioningControlPanel.Services.Lobby.LobbyPoll Poll(BadgeTimer t) => new(t, () => true,
             () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
             () => System.Threading.Tasks.Task.FromResult(new ConditioningControlPanel.Services.Lobby.PbpLobbyReply(
                 Enumerable.Range(0, seats).Select(i => new ConditioningControlPanel.Services.Lobby.PbpOpenSeat("p_" + i, "H" + i, 300000, 0, 0)).ToList(),
@@ -150,27 +150,29 @@ public sealed class NavRailPaintTests
             () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty),
             () => System.Threading.Tasks.Task.FromResult(((System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>)
                 Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>(), true)));
+        var poll = Poll(timer);
         var oldPoll = MainShellWindow.CreateLobbyBadgePoll;
         MainShellWindow.CreateLobbyBadgePoll = () => poll;
         try
         {
             Run(MotionLevel.Off, w =>
             {
-                var launcher = new LauncherWindow { CreateLobby = () => new ConditioningControlPanel.Services.Lobby.LobbyPoll(new BadgeTimer(),
-                    () => false, () => Array.Empty<ConditioningControlPanel.Services.Friends.Friend>(),
-                    () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.Lobby.PbpLobbyReply.Empty),
-                    () => System.Threading.Tasks.Task.FromResult(ConditioningControlPanel.Services.GoonGame.OpenTablesReply.Empty),
-                    () => System.Threading.Tasks.Task.FromResult(((System.Collections.Generic.IReadOnlyList<ConditioningControlPanel.Services.Lobby.RemoteSeat>)
-                        Array.Empty<ConditioningControlPanel.Services.Lobby.RemoteSeat>(), false))) };
+                // Same servers as the shell's poll, like WPF's one shared App.Lobby.
+                var launcher = new LauncherWindow { CreateLobby = () => Poll(new BadgeTimer()) };
                 try
                 {
-                    launcher.Show(); Dispatcher.UIThread.RunJobs();
-                    launcher.Hide(); Dispatcher.UIThread.RunJobs();   // the launcher's poll stops here
                     var social = Row(w, NavSections.Social);
                     Assert.True(timer.Running);   // the visible panel holds the badge lease
                     seats = 3; timer.Fire(); Dispatcher.UIThread.RunJobs();
                     Assert.True(social.Badge!.IsVisible);
                     Assert.Equal("3", social.BadgeText!.Text);
+                    NavBadges.MarkSeen(NavSections.Social);
+                    // The launcher's cached first paint (empty) must not reset the seen mark (WPF LauncherWindow.Lobby.cs:90-122).
+                    launcher.Show(); Dispatcher.UIThread.RunJobs();
+                    Assert.Equal("3", social.BadgeText.Text);
+                    Assert.False(NavBadges.IsFresh(NavSections.Social));
+                    launcher.Hide(); Dispatcher.UIThread.RunJobs();   // the launcher's poll stops here
+                    Assert.True(timer.Running);
                     w.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
                     Assert.False(timer.Running);
                     w.WindowState = WindowState.Normal; Dispatcher.UIThread.RunJobs();
