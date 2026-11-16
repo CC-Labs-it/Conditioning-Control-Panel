@@ -104,6 +104,31 @@ public class VaultCompareReviewTests
         return Task.CompletedTask;
     });
 
+    // WPF Compare.cs:156-205: the words, track and note are mouse-only, so the row is the one Tab stop
+    // and Enter on "Monthly" cannot flip billing to yearly.
+    [Fact]
+    public Task LeverPartsTakeNoFocus() => WithDialog(dialog =>
+    {
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        var parts = Named<StackPanel>(dialog, "BillingLever").GetVisualDescendants().OfType<Button>().ToList();
+        Assert.Equal(4, parts.Count);
+        Assert.All(parts, b => Assert.False(b.Focus(NavigationMethod.Tab)));
+        return Task.CompletedTask;
+    });
+
+    // WPF Compare.cs:134-136: the desk swaps the pink glow for a dark drop shadow, the offer gets it back.
+    [Fact]
+    public Task CompareDeskDropsThePinkGlow() => WithDialog(dialog =>
+    {
+        var card = Assert.IsType<Border>(dialog.Content);
+        var glow = card.BoxShadow;
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        Assert.Equal(BoxShadows.Parse("4 4 18 0 #B3060210"), card.BoxShadow);
+        Click(dialog, Loc.Get("vaultgate_back"));
+        Assert.Equal(glow, card.BoxShadow);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public void FaceResizePreservesCenterAndClampsInPhysicalPixels()
     {

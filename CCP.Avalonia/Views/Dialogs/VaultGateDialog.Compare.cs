@@ -64,6 +64,8 @@ public sealed partial class VaultGateDialog
         _card.Background = compare ? B("#141020") : CardBg;
         _card.Padding = compare ? new Thickness(30, 20, 30, 14) : new Thickness(22, 20, 22, 18);
         _card.BorderThickness = new Thickness(compare ? 0 : 1.5);
+        // WPF Compare.cs:134-136: the desk drops a dark shadow (depth 6 at 315 degrees) instead of the pink glow.
+        _card.BoxShadow = compare ? BoxShadows.Parse("4 4 18 0 #B3060210") : OfferGlow;
     }
 
     private void BuildCompare()
@@ -113,6 +115,7 @@ public sealed partial class VaultGateDialog
             var wordText = new TextBlock { Text = Loc.Get(yearly ? "vaultgate_billing_yearly" : "vaultgate_billing_monthly"), FontSize = 13 };
             if (yearly) _yearWord = wordText; else _monthWord = wordText;
             var word = Bare(wordText);
+            word.Focusable = false;   // WPF Compare.cs:156-205: only the row takes focus; the words are mouse-only
             word.Click += (_, _) => SetBilling(yearly);
             row.Children.Add(word);
             if (!yearly)
@@ -121,12 +124,14 @@ public sealed partial class VaultGateDialog
                 _knob = new Border { Width = 25, Height = 20, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(3), RenderTransform = _knobSlide };
                 var track = Bare(new Border { Width = 60, Height = 28, CornerRadius = new CornerRadius(6), Background = B("#0C0815"), Child = _knob });
                 track.Margin = new Thickness(10, 0);
+                track.Focusable = false;
                 track.Click += (_, _) => SetBilling(!_yearly);
                 row.Children.Add(track);
             }
         }
         _leverSaving = new TextBlock { Name = "LeverSaving", Foreground = Gold, FontSize = 12, Margin = new Thickness(7, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         _leverBadge = Bare(_leverSaving);
+        _leverBadge.Focusable = false;
         _leverBadge.Click += (_, _) => SetBilling(true);
         row.Children.Add(_leverBadge);
         return row;

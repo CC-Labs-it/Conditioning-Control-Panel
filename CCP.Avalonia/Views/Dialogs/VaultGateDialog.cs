@@ -57,6 +57,7 @@ public sealed partial class VaultGateDialog : Window
     /// <summary>The card on screen, if any. One at a time: a second padlock or toast replaces it.</summary>
     internal static VaultGateDialog? Open { get; private set; }
 
+    private static readonly BoxShadows OfferGlow = BoxShadows.Parse("0 0 22 0 #73FF69B4");
     private StackPanel _body = new();
     private readonly Border _card;
     private readonly ExclusiveFeature? _feature;
@@ -91,7 +92,7 @@ public sealed partial class VaultGateDialog : Window
         {
             Background = CardBg, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1.5), BorderBrush = Pink,
             Margin = new Thickness(12), Padding = new Thickness(22, 20, 22, 18),
-            BoxShadow = BoxShadows.Parse("0 0 22 0 #73FF69B4"), Child = _body,
+            BoxShadow = OfferGlow, Child = _body,
         };
         SizeChanged += CompareSizeChanged;
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
