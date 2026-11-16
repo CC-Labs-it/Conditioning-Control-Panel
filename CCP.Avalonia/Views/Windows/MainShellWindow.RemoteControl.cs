@@ -97,7 +97,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var asksStrict = ConditioningControlPanel.Services.Leash.LeashRemoteRule.AsksStrictLock(parameters);
             var verdict = ConditioningControlPanel.Services.Leash.LeashRemoteRule.Screen("start_session", asksStrict, leashed);
             StartSession(session, remote: true, stillCurrent);
-            if (asksStrict && verdict != ConditioningControlPanel.Services.Leash.LeashRemoteVerdict.StripStrict)
+            // Escape integrity (docs/avalonia-decisions.html, 2026-09-30): no controller may switch Strict Lock on during Lockdown.
+            var lockdown = ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;
+            if (asksStrict && lockdown) Serilog.Log.Information("Remote start_session: strict_lock dropped during Lockdown");
+            if (asksStrict && !lockdown && verdict != ConditioningControlPanel.Services.Leash.LeashRemoteVerdict.StripStrict)
             {
                 ConditioningControlPanel.Services.Remote.RemoteWearer.NoteWrite(ConditioningControlPanel.Services.Remote.RemoteHeld.StrictLock, 1);
                 s.StrictLockEnabled = true;

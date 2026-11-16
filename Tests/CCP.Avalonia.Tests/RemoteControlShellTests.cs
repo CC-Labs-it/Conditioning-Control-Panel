@@ -361,6 +361,7 @@ public sealed class RemoteControlShellTests
     [InlineData("missing")]
     [InlineData("leashed")]
     [InlineData("strict")]
+    [InlineData("lockdown")]
     public Task Remote_start_uses_sessions_or_wearer_settings(string kind) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var oldRelay = RemoteControlTabView.Relay;
@@ -368,6 +369,8 @@ public sealed class RemoteControlShellTests
         var oldSessionProviders = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
         var oldProvider = CoreSettings.ServiceProvider;
         var oldLeash = ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed;
+        var oldLockdown = LockdownService.Current;
+        LockdownService? lockdown = null;
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         settings.Current.FlashFrequency = 17;
@@ -390,7 +393,13 @@ public sealed class RemoteControlShellTests
             Assert.Equal("ABC123", await relay.StartAsync("full"));
             var id = kind == "known" || kind == "unavailable" ? "known" : "absent";
             var p = kind == "missing" ? new JObject() : new JObject { ["session_id"] = id };
-            if (kind == "leashed" || kind == "strict") p["strict_lock"] = true;
+            if (kind == "leashed" || kind == "strict" || kind == "lockdown") p["strict_lock"] = true;
+            if (kind == "lockdown")
+            {
+                settings.Current.LockdownForceStrictLock = false;
+                settings.Current.LockdownDoseKeeperEnabled = false;
+                (lockdown = LockdownService.Current = new LockdownService()).Activate(TimeSpan.FromMinutes(20));
+            }
             fake.Poll = new JObject { ["controller_connected"] = true, ["commands"] = new JArray(new JObject { ["id"] = "1", ["action"] = "start_session", ["params"] = p }) }.ToString();
             await relay.PollOnceAsync();
             Assert.True(runner.IsRunning);
@@ -403,7 +412,7 @@ public sealed class RemoteControlShellTests
                 Assert.Equal(17, runner.CurrentSession.Settings.FlashPerHour);
                 Assert.Equal(4, runner.CurrentSession.Settings.SubliminalPerMin);
             }
-            if (kind == "leashed") Assert.False(settings.Current.StrictLockEnabled);
+            if (kind == "leashed" || kind == "lockdown") Assert.False(settings.Current.StrictLockEnabled);
             if (kind == "strict")
             {
                 Assert.True(settings.Current.StrictLockEnabled);
@@ -419,6 +428,8 @@ public sealed class RemoteControlShellTests
                 runner?.Stop(); CoreEngine.Stop(); shell?.Close();
                 RemoteControlTabView.Relay = oldRelay;
                 global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+                lockdown?.Deactivate(); lockdown?.Dispose();
+                LockdownService.Current = oldLockdown;
                 CoreSettings.ServiceProvider = oldProvider;
                 ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed = oldLeash;
             }
