@@ -117,7 +117,7 @@ public sealed class AudioDuckRescanTests
         finally { release.Set(); audio.Shutdown(); }
     }
 
-    private sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         private TimeSpan _now;
         private readonly List<Timer> _timers = new();

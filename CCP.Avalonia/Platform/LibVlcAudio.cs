@@ -612,7 +612,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (si.Pid == Environment.ProcessId) continue;
                     // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process.
-                    if ((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true)
+                    if (((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true) || BrowserVideoSurface.SessionActive)
                         && (si.Name.StartsWith("WebKit", StringComparison.Ordinal)
                             || si.Name.Contains("webview2", StringComparison.OrdinalIgnoreCase))) continue;
                     var index = si.Index;

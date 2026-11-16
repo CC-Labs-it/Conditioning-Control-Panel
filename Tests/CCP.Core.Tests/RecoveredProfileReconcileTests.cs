@@ -22,14 +22,12 @@ public class RecoveredProfileReconcileTests
     [InlineData(true, "2025-01", 1, 0, 10, false)]
     public async Task RecoveryGuardsPushAndPersistsBeforeClearing(bool readOk, string season, int serverLevel, int serverXp, int expectedLevel, bool markerExpected)
     {
-        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        using var profile = new PrivateProfile();
+        var path = profile.Path;
         var marker = path + ".restored";
-        var oldFile = File.Exists(path) ? File.ReadAllBytes(path) : null;
-        var oldMarker = File.Exists(marker) ? File.ReadAllBytes(marker) : null;
         var oldSettings = CoreSettings.ServiceProvider;
         var oldLogin = CoreAccount.IsLoggedInProvider;
-        Directory.CreateDirectory(CorePaths.UserData);
-        var settings = new SettingsService();
+        var settings = new SettingsService(path);
         var s = settings.Current;
         s.UnifiedId = "recover-test"; s.AuthToken = "fake"; s.OfflineMode = false;
         s.PlayerLevel = 10; s.PlayerXP = 0; s.CurrentSeason = "2025-01";
@@ -37,9 +35,10 @@ public class RecoveredProfileReconcileTests
         s.SeasonalStreakRecoveryUsed = true; s.CurrentStreak = 8; s.LastStreakDate = new DateTime(2025, 1, 1);
         s.DailyQuestStreak = 7; s.LastDailyQuestDate = new DateTime(2025, 1, 2);
         s.LastPerfectWeekStreakAwarded = 7; s.StreakFixCharges = 3;
-        settings.SaveImmediate(true);
+        Assert.True(settings.TrySaveImmediate(true));
+        settings.SealForReset();
         File.WriteAllText(marker, DateTime.UtcNow.ToString("o") + "|backup|2025-01");
-        settings = new SettingsService();
+        settings = new SettingsService(path) { SaveDebounceDueTimeMilliseconds = int.MaxValue };
         CoreSettings.ServiceProvider = () => settings;
         CoreAccount.IsLoggedInProvider = () => true;
         var handler = new Handler(readOk, season, serverLevel, serverXp, path, marker);
@@ -66,6 +65,7 @@ public class RecoveredProfileReconcileTests
             Assert.Equal(readOk ? 1 : 0, handler.Posts);
             if (readOk)
             {
+                Assert.True(settings.HasPendingSave); // the successful push arms a delayed save
                 Assert.False(handler.MarkerAtPost);
                 Assert.Equal(expectedLevel, handler.LevelAtPost);
                 Assert.Contains("keep", handler.SkillsAtPost!);
@@ -81,30 +81,29 @@ public class RecoveredProfileReconcileTests
                     Assert.Equal(3, saved.Value<int>("StreakFixCharges"));
                 }
             }
+            settings.SealForReset();
+            Assert.False(settings.HasPendingSave);
         }
         finally
         {
-            sync.Reset(); CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin;
-            if (oldFile == null) File.Delete(path); else File.WriteAllBytes(path, oldFile);
-            if (oldMarker == null) File.Delete(marker); else File.WriteAllBytes(marker, oldMarker);
+            sync.Reset(); settings.SealForReset(); CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin;
         }
     }
 
     [Fact]
     public async Task FailedSaveLeavesMarkerAndDoesNotPush()
     {
-        var path = Path.Combine(CorePaths.UserData, "settings.json");
+        using var profile = new PrivateProfile();
+        var path = profile.Path;
         var marker = path + ".restored";
-        var oldFile = File.Exists(path) ? File.ReadAllBytes(path) : null;
-        var oldMarker = File.Exists(marker) ? File.ReadAllBytes(marker) : null;
         var oldSettings = CoreSettings.ServiceProvider;
         var oldLogin = CoreAccount.IsLoggedInProvider;
-        Directory.CreateDirectory(CorePaths.UserData);
-        var initial = new SettingsService();
+        var initial = new SettingsService(path);
         initial.Current.UnifiedId = "recover-test"; initial.Current.AuthToken = "fake";
-        initial.Current.OfflineMode = false; initial.SaveImmediate(true);
+        initial.Current.OfflineMode = false; Assert.True(initial.TrySaveImmediate(true));
+        initial.SealForReset();
         File.WriteAllText(marker, DateTime.UtcNow.ToString("o") + "|backup|2025-01");
-        var settings = new SettingsService();
+        var settings = new SettingsService(path);
         settings.SealForReset();
         CoreSettings.ServiceProvider = () => settings;
         CoreAccount.IsLoggedInProvider = () => true;
@@ -121,9 +120,16 @@ public class RecoveredProfileReconcileTests
         finally
         {
             sync.Reset(); CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin;
-            if (oldFile == null) File.Delete(path); else File.WriteAllBytes(path, oldFile);
-            if (oldMarker == null) File.Delete(marker); else File.WriteAllBytes(marker, oldMarker);
         }
+    }
+
+    // Other tests can leave delayed saves against CorePaths.UserData. A private profile keeps
+    // those writes from replacing the recovery fixture between its save and reload.
+    private sealed class PrivateProfile : IDisposable
+    {
+        private readonly string _directory = Directory.CreateTempSubdirectory("ccp-reconcile-").FullName;
+        internal string Path => System.IO.Path.Combine(_directory, "settings.json");
+        public void Dispose() => Directory.Delete(_directory, recursive: true);
     }
 
     private sealed class Handler(bool ok, string season, int level, int xp, string path, string marker) : HttpMessageHandler

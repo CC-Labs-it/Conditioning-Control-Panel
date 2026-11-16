@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF ApplyDuckSweep / RescanSweep. Two passes: capture and journal every original, then lower.</summary>
         private void DuckSweep(bool rescan)
         {
-            var webView = _excludeWebView2();
+            var webView = _excludeWebView2() || BrowserVideoSurface.SessionActive;
             var ducked = Sweep(sessions =>
             {
                 float amount;
