@@ -66,11 +66,7 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
-            // Retire any ambient field and its spawn timer before populating the test field.
-            BubbleOverlay.EndChaos();
-            BubbleOverlay.Stop();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
-            BubbleOverlay.ClearChaos();
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
