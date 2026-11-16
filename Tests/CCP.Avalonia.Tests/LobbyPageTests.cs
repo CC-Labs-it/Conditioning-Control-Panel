@@ -5,6 +5,7 @@ using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Input;
@@ -125,7 +126,7 @@ public sealed class LobbyPageTests
             HeadlessInput.RenderLiveTree(window);
             var item = Named<ItemsControl>(page, "AvailableSubjectsList").ContainerFromIndex(0)!;
             var card = item.GetVisualDescendants().OfType<Border>().Single(x => x.Classes.Contains("card"));
-            var sheen = item.GetVisualDescendants().OfType<Border>().Single(x => Equals(x.Tag, "lobby-sheen"));
+            var sheen = item.GetVisualDescendants().OfType<Rectangle>().Single(x => Equals(x.Tag, "lobby-sheen"));
             Assert.Equal(0, sheen.Opacity);
             var at = card.TranslatePoint(new Point(15, 15), window)!.Value;
             window.MouseMove(at);
