@@ -313,4 +313,21 @@ public sealed class FlickerDeckOverlayTests
         Tick(clock, 0.02);
         Assert.Equal(2, asked.Count);
     });
+
+    [Fact]
+    public Task A_swinging_card_takes_the_mouse_over_its_swing_box_not_its_spawn_rect() => OnUi((_, clock) =>
+    {
+        var asked = new System.Collections.Generic.List<PixelRect>();
+        FlashOverlay.DeckInput = (_, r) => { asked.Add(r[0]); return true; };
+        var (w, pad) = Card();
+        var m = FlashMotion.Create(FlashMotionStyle.Pendulum, 400, 300, W, H, 0, 0, 1920, 1080, MotionLevel.Full, new Random(5));
+        m.AngleRad = 15 * Math.PI / 180;   // WPF FlashLayer reads the live item rect: the whole swing box
+        (m.X, m.Y, m.W, m.H) = FlashMotion.HangingBounds(m.PivotX, m.PivotY, m.Rope, m.AngleRad, W, H);
+        w.ApplyMotion(m);
+        var box = new PixelRect(pad, pad, (int)Math.Ceiling(m.W), (int)Math.Ceiling(m.H));
+        Assert.True(box.Width > W + 20 && box.Height > H + 20, $"not swung ({box})");
+        Assert.Equal(box, w.DeckInputPx![0]);
+        Tick(clock, 0.02);
+        Assert.Equal(box, Assert.Single(asked));   // Windows polls the same rect
+    });
 }
