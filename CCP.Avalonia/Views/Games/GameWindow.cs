@@ -225,6 +225,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {
+                // WPF FypHostService.cs:99,108-112: own profile; the parked ghost source must keep rendering.
+                Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required "
+                    + "--disable-features=CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows";
+                Web.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_fyp");
                 // WPF FypHostService.cs:720-748 heals a source hidden or minimized by the WM.
                 // Here the source IS the ghost: return it to normal rather than leave orphaned buttons.
                 PropertyChanged += (_, e) =>
