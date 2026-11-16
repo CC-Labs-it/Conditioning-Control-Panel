@@ -148,8 +148,13 @@ internal sealed class BrowserVideoSurface : IDisposable
         v.onloadedmetadata=meta; v.ondurationchange=meta;
         let started=false, lastTime=0, lastAdvance=performance.now();
         v.onplaying=()=>{started=true; lastAdvance=performance.now(); send({type:'playing'});};
+        // WPF player.js:445: played ranges exclude seeks and pauses from watch credit.
+        v.ontimeupdate=()=>{
+          let played=0;
+          for(let i=0;i<v.played.length;i++) played+=v.played.end(i)-v.played.start(i);
+          send({type:'time',ms:Math.round((v.currentTime||0)*1000),playedMs:Math.round(played*1000),paused:v.paused});
+        };
         v.onended=()=>send({type:'ended'});
-        v.ontimeupdate=()=>send({type:'time',ms:Math.round(v.currentTime*1000)});
         v.onerror=()=>send({type:'error',code:v.error?.code||0});
         setTimeout(()=>{if(!started) send({type:'error',code:101});},10000);
         const watchdog=setInterval(()=>{

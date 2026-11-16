@@ -418,21 +418,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// deliberately paused output is never mistaken for a stalled decoder.</summary>
         internal void PausePrimary()
         {
-            if (_player == null || _closing || PrimaryPaused) return;
+            if (_playback == null || _closing || PrimaryPaused) return;
             PrimaryPaused = true;
-            _player.SetPause(true);
+            _playback.SetPause(true);
             _sinceShow.Stop();
             _sinceFrame.Stop();
         }
 
         internal void PlayPrimary()
         {
-            if (_gracePaused || !PrimaryPaused || _player == null || _closing) return;
+            if (_gracePaused || !PrimaryPaused || _playback == null || _closing) return;
             PrimaryPaused = false;
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
-            _player.SetPause(false);
+            _playback.SetPause(false);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -700,6 +700,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             SafetyDeadline.PauseForGrace(now);
             _lastGraceUtc = _gracePausedAt = now;
             _playback?.SetPause(true);
+            _browser?.ShowViews(false);   // the grace card sits under the native web view otherwise
             PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
 
             foreach (var x in _surfaces) { x.Layer.IsHitTestVisible = false; x.Grace.IsVisible = true; if (Floating) ShowGraceHost(x); }
@@ -792,6 +793,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ResumePlaybackClocks();
             FrameTs = Stopwatch.GetTimestamp();
             _cutClock?.ResetPosition();
+            _browser?.ShowViews(true);
             _playback?.SetPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }

@@ -82,6 +82,8 @@ internal sealed partial class MandatoryVideoOverlay
         switch (message.GetProperty("type").GetString())
         {
             case "time":
+                // WPF OnBrowserTime (VideoService.Browser.cs:585): the pause state comes from the message (#874).
+                if (message.TryGetProperty("paused", out var p) && p.ValueKind is JsonValueKind.True or JsonValueKind.False) _browser!.Paused = p.GetBoolean();
                 if (message.TryGetProperty("ms", out var t) && t.TryGetDouble(out var ms)) ReportPlaybackTime(_browser!.TimeMs = (long)ms);
                 break;
             case "meta":
@@ -199,22 +201,18 @@ internal sealed partial class MandatoryVideoOverlay
     {
         internal IReadOnlyList<BrowserVideoSurface> Views => views;
         internal long TimeMs, LengthMs;
-        internal bool Started;
-        private bool _paused;
+        internal bool Started, Paused;
         public long Time { get => TimeMs; set { foreach (var v in views) v.Seek(value); } }
         public long Length => LengthMs;
-        public bool IsPlaying => Started && !_paused;
+        public bool IsPlaying => Started && !Paused;
         public bool IsSeekable => LengthMs > 0;
         public bool HasVideo => false;   // no frame callbacks: the page's own 10 s start and stall checks own it
         public void SetPause(bool paused)
         {
-            _paused = paused;
-            foreach (var v in views)
-            {
-                if (paused) v.Pause(); else v.Resume();
-                v.View.IsVisible = !paused;   // the grace card sits under the native view otherwise
-            }
+            Paused = paused;   // the paused frame stays on screen, as WPF PausePrimary
+            foreach (var v in views) { if (paused) v.Pause(); else v.Resume(); }
         }
+        internal void ShowViews(bool visible) { foreach (var v in views) v.View.IsVisible = visible; }
         internal void SetVolume(int volume) { foreach (var v in views) v.SetVolume(volume); }
         internal void Drop(BrowserVideoSurface view)
         {

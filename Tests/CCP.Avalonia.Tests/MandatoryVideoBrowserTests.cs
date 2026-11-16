@@ -12,7 +12,9 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Services.Video.Browser;
 using Xunit;
 
@@ -81,6 +83,71 @@ public sealed class MandatoryVideoBrowserTests
         }
         finally { haptics.FunScript.OnVideoStopped(); ConditioningControlPanel.CoreHaptics.Service = oldHaptics; }
     });
+
+    /// <summary>WPF VideoService.cs:637-664 (#735) and VideoService.Browser.cs:585 (#874): a Deeper hold pauses
+    /// through PausePrimary with the frame left on screen, its release never resumes under the grace card,
+    /// and the page's own pause flag answers IsPlaying.</summary>
+    [Fact]
+    public Task EnhancementHoldPausesThePageAndCannotResumeUnderTheGraceCard() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var rig = new Rig();
+        var o = MandatoryVideoOverlay.Instance;
+        var e = new Enhancement { MediaType = MediaTypes.Video, Metadata = new EnhancementMetadata { Name = "test", Creator = "test" } };
+        e.TimelineItems.Add(new TimelineItem { Kind = TimelineItemKind.Rule, Trigger = new TimeReachedTrigger { Time = 1 }, CooldownMs = 0,
+            Action = new TriggerEffectAction { EffectType = EffectTypes.Flash, DurationMs = 500 } });
+        File.WriteAllText(Path.ChangeExtension(rig.Clip, ".ccpenh.json"), EnhancementSerializer.Save(e));
+        rig.Settings.Current.VideoEnhanceIfPossible = true;
+        var (oldDispatcher, oldWebcam, oldPost) = (EnhancementHostService.DispatcherFactory, EnhancementHostService.WebcamProvider, CoreDispatch.PostProvider);
+        var recorder = new SourceRecorder();
+        try
+        {
+            EnhancementHostService.DispatcherFactory = () => recorder;
+            EnhancementHostService.WebcamProvider = null;
+            CoreDispatch.PostProvider = action => action();
+            await rig.Open(strict: false);
+            Assert.True(o.EnhancementRunning);
+            var browser = o.Browser!;
+            var page = browser.Views[0];
+            page.View.OnNavigationCompleted(new Uri("about:blank"));
+            await Task.Delay(10);
+            Send(page, new { type = "playing" });
+            Send(page, new { type = "time", ms = 1500, playedMs = 1500, paused = false });
+            var source = Assert.IsAssignableFrom<IPlaybackTimeSource>(recorder.Source);
+
+            source.Pause();                                                  // a Deeper speak hold
+            Assert.True(o.PrimaryPaused);
+            Assert.False(browser.IsPlaying);
+            Assert.True(page.View.IsVisible);                                // the paused frame stays on screen
+            source.Play();
+            Assert.False(o.PrimaryPaused);
+            Assert.True(browser.IsPlaying);
+
+            Send(page, new { type = "key", key = "Escape" });
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(o.GracePaused);
+            source.Pause();
+            source.Play();                                                   // the hold released under the card
+            Assert.True(o.GracePaused);
+            Assert.False(browser.IsPlaying);
+            Assert.False(page.View.IsVisible);
+            o.ResumeFromGrace("test card resume");
+            Assert.True(browser.IsPlaying && page.View.IsVisible && !o.PrimaryPaused);
+
+            Send(page, new { type = "time", ms = 1600, playedMs = 1600, paused = true });   // a pause the page sits in
+            Assert.False(browser.IsPlaying);
+        }
+        finally
+        {
+            (EnhancementHostService.DispatcherFactory, EnhancementHostService.WebcamProvider, CoreDispatch.PostProvider) = (oldDispatcher, oldWebcam, oldPost);
+        }
+    });
+
+    private sealed class SourceRecorder : IActionDispatcher
+    {
+        internal IPlaybackTimeSource? Source;
+        public Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext ctx, System.Threading.CancellationToken ct = default)
+        { Source = ctx.Source; return Task.CompletedTask; }
+    }
 
     [Fact]
     public Task AttentionChecksKeepTheClipOnLibVlc() => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -172,6 +239,9 @@ public sealed class MandatoryVideoBrowserTests
         private readonly MandatoryVideoScheduler _scheduler = MandatoryVideoOverlay.Instance.Scheduler;
         private readonly Func<bool> _listener = MandatoryVideoOverlay.PanicListenerLive;
         private readonly MandatoryVideoScheduler? _engineVideo = CoreEngine.Video;
+        // The singleton's grace dedup stamp outlives a clip (WPF VideoService.cs:367); a later stepped-clock test reads it.
+        private static readonly System.Reflection.FieldInfo LastGrace = typeof(MandatoryVideoOverlay).GetField("_lastGraceUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        private readonly object? _lastGrace = LastGrace.GetValue(MandatoryVideoOverlay.Instance);
         private readonly string _dir = Directory.CreateTempSubdirectory("ccp-mvideo-browser-").FullName;
         internal readonly SettingsService Settings = new();
         internal readonly MandatoryVideoScheduler Video;
@@ -212,6 +282,7 @@ public sealed class MandatoryVideoBrowserTests
         public void Dispose()
         {
             Video.Stop();
+            LastGrace.SetValue(MandatoryVideoOverlay.Instance, _lastGrace);
             MandatoryVideoOverlay.Instance.Scheduler = _scheduler;
             MandatoryVideoOverlay.PanicListenerLive = _listener;
             CoreEngine.Video = _engineVideo;
