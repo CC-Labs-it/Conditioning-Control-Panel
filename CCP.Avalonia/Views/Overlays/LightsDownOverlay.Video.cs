@@ -8,7 +8,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Super;
@@ -91,15 +90,15 @@ internal static partial class LightsDownOverlay
         foreach (var (_, _, light) in Lights) light.SetFrame(frame);
     }
 
-    private static bool OpenForVideo(MandatoryVideoOverlay video)
+    // WPF LightsDownService.cs:60-67: one dim window per video window, on that window's
+    // screen and stacked under it; a screen without a video stays bright.
+    internal static bool OpenForVideo(MandatoryVideoOverlay video, Func<Window, PixelRect, double, bool>? open = null)
     {
-        var first = video.Surfaces[0].Window;
-        var screens = ScreenList.Enumerate(first);
-        if (screens.Count == 0) return false;
-        foreach (var screen in screens)
-            if (!TryOpen(first, screen.Bounds, screen.Scaling)) return false;
+        open ??= (v, bounds, scale) => TryOpen(v, bounds, scale);
         foreach (var s in video.Surfaces)
         {
+            var screen = s.Screen ?? s.Window.Screens.ScreenFromWindow(s.Window);
+            if (screen == null || !open(s.Window, screen.Bounds, screen.Scaling)) return false;
             if (s.Picture.Parent is not Panel parent) return false;
             var light = new VideoLight(s.Video) { IsHitTestVisible = false, Focusable = false };
             parent.Children.Insert(parent.Children.IndexOf(s.Picture) + 1, light);
