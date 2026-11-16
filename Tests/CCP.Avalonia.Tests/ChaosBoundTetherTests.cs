@@ -82,6 +82,43 @@ public sealed class ChaosBoundTetherTests
         });
     }
 
+    // WPF BubbleService.cs:1555-1563: anchor clear of the edges, random angle in [0, pi), vertical spread 0.6.
+    [Fact]
+    public Task Pair_spawns_around_an_anchor_at_a_random_flattened_angle() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        try
+        {
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
+            BubbleOverlay.BeginChaos(new Border(), _ => { }, _ => { }, _ => { });
+            const double sep = ChaosTuning.BOUND_SEPARATION_DIP;   // headless: the 1920x1080 model screen at scale 1
+            bool tilted = false;
+            for (int n = 0; n < 20; n++)
+            {
+                var (sa, sb) = ChaosBubbleVariants.BuildBoundPair(1);
+                var (a, b) = BubbleOverlay.SpawnBoundPair(sa, sb);
+                var (pa, pb) = (BubbleOverlay.CenterPx(a), BubbleOverlay.CenterPx(b));
+                double dx = pb.X - pa.X, dy = pb.Y - pa.Y;
+                Assert.Equal(sep, Math.Sqrt(dx * dx + dy / 0.6 * (dy / 0.6)), 6);
+                Assert.InRange(dy, 0, sep * 0.6 + 1e-9);   // sin over [0, pi) is never negative
+                double mx = (pa.X + pb.X) / 2, my = (pa.Y + pb.Y) / 2;
+                Assert.InRange(mx, sep / 2 + 120, 1920 - sep / 2 - 120);
+                Assert.InRange(my, 160, 1080 - 160);
+                tilted |= dy > 1;
+            }
+            Assert.True(tilted, "every pair spawned flat");
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos();
+            ChaosFieldFxOverlay.CloseActive();
+            ChaosFieldFxOverlay.SkipPlatformChecksForTests = false;
+        }
+        return Task.CompletedTask;
+    });
+
     private sealed class AlwaysHit : Random { public override double NextDouble() => 0; }
 
     // WPF ChaosModeService.cs:1286-1295 (debut) and :1394-1400 with BubbleService.cs:2760 (enrage feedback).

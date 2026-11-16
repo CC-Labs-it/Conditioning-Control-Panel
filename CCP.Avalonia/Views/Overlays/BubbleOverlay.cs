@@ -577,17 +577,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static (AmbientBubble A, AmbientBubble B) SpawnBoundPair(EffectBubbleSpec a, EffectBubbleSpec b,
             double hitboxScale = 1, bool liveMagnet = false)
         {
+            // WPF BubbleService.cs:1550-1563: primary screen, an anchor clear of the edges, a random angle in [0, pi)
+            // with the vertical spread flattened to 0.6, each half half the separation from the anchor.
+            int i = Math.Max(0, Targets.FindIndex(t => t.IsPrimary));
+            var wa = i < Targets.Count ? Targets[i].WorkingArea : new PixelRect(0, 0, 1920, 1080);
+            double sepPx = ChaosTuning.BOUND_SEPARATION_DIP * (i < Targets.Count ? Targets[i].Scaling : 1);
+            var r = Field.Random;
+            double mx = sepPx / 2 + 120;
+            double ax = wa.X + mx + r.NextDouble() * Math.Max(1, wa.Width - 2 * mx);
+            double ay = wa.Y + 160 + r.NextDouble() * Math.Max(1, wa.Height - 320);
+            double ang = r.NextDouble() * Math.PI;
+            double ox = Math.Cos(ang) * sepPx / 2, oy = Math.Sin(ang) * sepPx / 2 * 0.6;
+            a.SpawnAtPxX = ax - ox; a.SpawnAtPxY = ay - oy;
+            b.SpawnAtPxX = ax + ox; b.SpawnAtPxY = ay + oy;
             // WPF CreateChaosBubble (BubbleService.cs:1620-1621) gives both halves the run's hitbox and magnet.
             var first = SpawnChaos(a, motion: ChaosMotion.RoamBounce, hitboxScale: hitboxScale, liveMagnet: liveMagnet);
-            var center = CenterPx(first);
-            double scale = ScaleFor(first);
-            // Keep the second half on the first half's screen, choosing the roomier direction.
-            var area = first.Screen < Targets.Count ? Targets[first.Screen].WorkingArea : new PixelRect(0, 0, 1920, 1080);
-            double offset = ChaosTuning.BOUND_SEPARATION_DIP * scale;
-            double x = center.X + offset;
-            if (x > area.Right - b.SizePx * scale / 2) x = center.X - offset;
-            b.SpawnAtPxX = Math.Clamp(x, area.X + b.SizePx * scale / 2, Math.Max(area.X + b.SizePx * scale / 2, area.Right - b.SizePx * scale / 2));
-            b.SpawnAtPxY = center.Y;
             var second = SpawnChaos(b, motion: ChaosMotion.RoamBounce, hitboxScale: hitboxScale, liveMagnet: liveMagnet);
             second.MirrorVelocityFrom(first);   // WPF BubbleService.cs:1567
             BoundPairs.Add(a.PairId, first, second);
