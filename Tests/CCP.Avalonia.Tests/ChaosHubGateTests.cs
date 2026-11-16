@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -13,6 +15,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -185,7 +188,11 @@ public sealed class ChaosHubGateTests
         var oldTime = BeatLoop.Time;
         var oldSfx = ChaosHubWindow.PlayRevealSfx;
         var oldEngine = BarkHead.Engine;
-        var oldAvatar = CoreSettings.Current.AvatarEnabled;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var settingsDir = Path.Combine(Path.GetTempPath(), "ccp-reveal-settings-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(settingsDir);
+        var settings = new SettingsService(Path.Combine(settingsDir, "settings.json"));
+        CoreSettings.ServiceProvider = () => settings;
         var clock = new RevealClock();
         int chimes = 0, barks = 0;
         var engine = new BarkEngine(() => new BarkRuleSet(new[]
@@ -243,9 +250,83 @@ public sealed class ChaosHubGateTests
             BeatLoop.Time = oldTime;
             ChaosHubWindow.PlayRevealSfx = oldSfx;
             BarkHead.Engine = oldEngine;
-            CoreSettings.Current.AvatarEnabled = oldAvatar;
+            settings.SealForReset();
+            CoreSettings.ServiceProvider = oldProvider;
+            Directory.Delete(settingsDir, recursive: true);
         }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Restart_preserves_delayed_chimes_until_close(bool closeEarly) => InHub(state =>
+    {
+        state.RunsCompleted = 50;
+        state.LessonsComplete.Add("slow_fuses");
+    }, hub =>
+    {
+        RevealService.Sync("test");
+        foreach (var id in RevealService.PendingIds()) RevealService.MarkSeen(id);
+        ChaosMeta.State.PendingReveals.Clear();
+        ChaosMeta.State.PendingReveals.Add(RevealIds.TabLookingGlass);
+        ChaosMeta.State.PendingReveals.Add(RevealIds.SectionToys);
+        var oldTime = BeatLoop.Time;
+        var oldSfx = ChaosHubWindow.PlayRevealSfx;
+        var clock = new RevealClock();
+        int chimes = 0;
+        BeatLoop.Time = clock;
+        ChaosHubWindow.PlayRevealSfx = (_, _) => chimes++;
+        try
+        {
+            hub.RunRevealFlashes();
+            Assert.Equal(1, chimes);
+            clock.Now = TimeSpan.FromSeconds(0.3).Ticks;
+            BeatLoop.StepAll();
+            Button(hub, "slow_fuses").RaiseEvent(
+                new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Assert.Equal(2, chimes);
+            if (closeEarly) hub.Close();
+            clock.Now = TimeSpan.FromSeconds(0.61).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(closeEarly ? 2 : 3, chimes);
+            clock.Now = TimeSpan.FromSeconds(0.91).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(closeEarly ? 2 : 4, chimes);
+            hub.Close();
+            clock.Now = TimeSpan.FromSeconds(10).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(closeEarly ? 2 : 4, chimes);
+        }
+        finally { hub.Close(); BeatLoop.Time = oldTime; ChaosHubWindow.PlayRevealSfx = oldSfx; }
+    });
+
+    [Fact]
+    public async Task Overlap_fixture_preserves_shared_bark_rotation()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-reveal-outer-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        var settings = new SettingsService(path);
+        settings.Current.BarkVariantRotation["batch"] = new List<string> { "sentinel" };
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            Assert.True(settings.TrySaveImmediate(suppressCloudBackup: true));
+            await Purchase_during_reveal_restarts_and_restagger_pending_batch(false);
+            Assert.Same(settings, CoreSettings.Service);
+            Assert.Equal(new[] { "sentinel" }, settings.Current.BarkVariantRotation["batch"]);
+            Assert.True(settings.TrySaveImmediate(suppressCloudBackup: true));
+            var loaded = new SettingsService(path);
+            Assert.Equal(new[] { "sentinel" }, loaded.Current.BarkVariantRotation["batch"]);
+        }
+        finally
+        {
+            settings.SealForReset();
+            CoreSettings.ServiceProvider = oldProvider;
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 
     [Theory]
     [InlineData("en")][InlineData("de")][InlineData("es")][InlineData("fr")][InlineData("it")]
