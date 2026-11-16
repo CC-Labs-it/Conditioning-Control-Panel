@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Super;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
@@ -92,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         private readonly Border _rootBorder, _imgIconMute, _depthSocket, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost, _v2BadgeHost;
         private readonly Grid _contentRoot, _teaseHost;
+        private SuperCorner? _superCorner;
         private readonly TextBlock _txtTitle, _txtGlyph, _txtTeaseGlyph, _txtLockLabel, _txtTierBadge;
         private readonly Button _btnHelp;
         private readonly Border _activeGlow;   // the GlowLayer sibling (CardGlow)
@@ -172,6 +174,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             ApplyLockState();
             RefreshHelpTooltip();
+            ApplySuper();
+        }
+
+        private void ApplySuper()
+        {
+            if (_superCorner != null) _contentRoot.Children.Remove(_superCorner);
+            _superCorner = SuperDoor.ForHelp(HelpSectionId) is { } effect
+                ? new SuperCorner(effect, false) { Inverted = () => DashboardDepth && DimWhenInactive && CoreSettings.Current.DashboardInvertClicks } : null;
+            if (_superCorner != null) _contentRoot.Children.Insert(_contentRoot.Children.IndexOf(_rimLight), _superCorner);
+            this.FindControl<StackPanel>("BadgeColumn")!.Margin = new Thickness(_superCorner != null ? SuperCorner.Leg + 2 : 8, 8, 0, 0);
         }
 
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -182,7 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             else if (change.Property == IconProperty || change.Property == GlyphProperty) ApplyArt();
             else if (change.Property == LockLevelProperty || change.Property == IsLockedProperty) ApplyLockState();
             else if (change.Property == IsActiveProperty || change.Property == DimWhenInactiveProperty) ApplyActiveState();
-            else if (change.Property == HelpSectionIdProperty) RefreshHelpTooltip();
+            else if (change.Property == HelpSectionIdProperty) { RefreshHelpTooltip(); ApplySuper(); }
             else if (change.Property == TierBadgeProperty) ApplyTierBadge();
             else if (change.Property == ShowV2BadgeProperty) _v2BadgeHost.IsVisible = ShowV2Badge;
             else if (change.Property == TeaseTierProperty) { ApplyTeaseState(); ApplyMute(0); }
@@ -488,6 +500,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
             bool right = e.InitialPressMouseButton == MouseButton.Right;
             bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, DimWhenInactive, CoreSettings.Current.DashboardInvertClicks);
+            if (toggle && _superCorner != null && e.Source is Visual cornerSource && (cornerSource == _superCorner || _superCorner.IsVisualAncestorOf(cornerSource)))
+            {
+                e.Handled = true;
+                _superCorner.Press();
+                return;
+            }
             if (!toggle)
             {
                 if (right) e.Handled = true;

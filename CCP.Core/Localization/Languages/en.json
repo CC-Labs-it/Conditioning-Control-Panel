@@ -6675,6 +6675,8 @@
   "super_pool_drags_pictures": "Pictures",
   "super_pool_drags_bubbles": "Bubbles",
   "super_corner_title": "V2: {0}",
+  "super_corner_tip": "Right-click to switch. Left-click to open.",
+  "super_corner_tip_inverted": "Left-click to switch. Right-click to open.",
   "super_for_supporters": "For supporters",
   "dash_card_tip": "Click opens the settings. Right-click switches it on or off.",
   "dash_card_tip_inverted": "Click switches it on or off. Right-click opens the settings.",

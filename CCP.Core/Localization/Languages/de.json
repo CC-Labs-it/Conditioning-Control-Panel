@@ -6129,6 +6129,8 @@
   "super_pool_drags_pictures": "Bilder",
   "super_pool_drags_bubbles": "Blasen",
   "super_corner_title": "V2: {0}",
+  "super_corner_tip": "Rechtsklick zum Umschalten. Linksklick zum Öffnen.",
+  "super_corner_tip_inverted": "Linksklick zum Umschalten. Rechtsklick zum Öffnen.",
   "super_for_supporters": "Für Unterstützer",
   "dash_card_tip": "Klick öffnet die Einstellungen. Rechtsklick schaltet ein oder aus.",
   "dash_card_tip_inverted": "Klick schaltet ein oder aus. Rechtsklick öffnet die Einstellungen.",

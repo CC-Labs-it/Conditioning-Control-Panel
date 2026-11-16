@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Services.UI;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Super;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -148,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private bool? _halfHover;
 
         private readonly Grid[] _regions = new Grid[2], _faces = new Grid[2];
+        private readonly SuperCorner?[] _corners = new SuperCorner?[2];
         private readonly Border[] _sockets = new Border[2], _mute = new Border[2];
         private readonly Path[] _bevels = new Path[2];
         private readonly TranslateTransform[] _travel = { new(), new() };
@@ -199,7 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _titlePillA.RenderTransform = _titleScaleA;
             _titlePillB.RenderTransform = _titleScaleB;
 
-            _contentRoot.SizeChanged += (_, _) => { UpdateRoundedClip(); RebuildGeometry(); };
+            _contentRoot.SizeChanged += (_, _) => { UpdateRoundedClip(); RebuildGeometry(); ApplyTitleEmphasis(_halfHover); };
             PointerEntered += (_, _) => ApplyHover(true);
             PointerExited += (_, _) => { _pressedHalf = null; ApplyHover(false); SetHalfHover(null); RefreshDepth(); };
             PointerMoved += (_, e) =>
@@ -231,6 +233,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Transitions = new Transitions { _splitTransition };
             // Both halves start OFF and the property callbacks fire only on a change.
             ApplyHalfRestOpacity();
+            ApplySuper();
+        }
+
+        private void ApplySuper()
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                if (_corners[i] != null) _regions[i].Children.Remove(_corners[i]!);
+                var effect = SuperDoor.ForHelp(i == 0 ? HelpSectionIdA : HelpSectionIdB);
+                _corners[i] = effect is { } e ? new SuperCorner(e, i == 1)
+                    { Inverted = () => DashboardDepth && CoreSettings.Current.DashboardInvertClicks } : null;
+                if (_corners[i] != null) _regions[i].Children.Insert(_regions[i].Children.IndexOf(i == 0 ? _activeRingA : _activeRingB), _corners[i]!);
+            }
+            _titlePillA.Margin = new Thickness(_corners[0] != null ? SuperCorner.Leg + 2 : 8, 8, 0, 0);
+            _titlePillB.Margin = new Thickness(0, 0, _corners[1] != null ? SuperCorner.Leg + 2 : 8, 8);
+            ApplyTitleEmphasis(_halfHover);
+            ApplyHelpForHover();
         }
 
         /// <summary>WPF RefreshFx: re-applies the motion/tier/focus gates; the shell calls it on Env.MotionGateChanged.</summary>
@@ -292,6 +311,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _btnHelpA.IsHitTestVisible = _halfHover != false;
             _btnHelpB.Opacity = _halfHover == true ? 0 : 1;
             _btnHelpB.IsHitTestVisible = _halfHover != true;
+            for (int i = 0; i < 2; i++)
+                if (_corners[i] is { } corner) { corner.IsHitTestVisible = _halfHover != (i == 1); corner.Opacity = corner.IsHitTestVisible ? 1 : 0; }
         }
 
         /// <summary>An OFF half rests dim unless the pointer has committed a non-dashboard card to it.</summary>
@@ -349,7 +370,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             else if (change.Property == IconAProperty) ApplyIcon(_halfHostA, _mute[0], IconA);
             else if (change.Property == IconBProperty) ApplyIcon(_halfHostB, _mute[1], IconB);
             else if (change.Property == IsActiveAProperty || change.Property == IsActiveBProperty) ApplyActiveState();
-            else if (change.Property == HelpSectionIdAProperty || change.Property == HelpSectionIdBProperty) RefreshHelp();
+            else if (change.Property == HelpSectionIdAProperty || change.Property == HelpSectionIdBProperty) { RefreshHelp(); ApplySuper(); }
             else if (change.Property == SplitProgressProperty) RebuildGeometry();
             else if (change.Property == IsVisibleProperty && !IsVisible)
             { _pressedHalf = null; ResetSplit(); RefreshDepth(); }
@@ -589,6 +610,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool right = e.InitialPressMouseButton == MouseButton.Right;
             bool toggle = DashboardDepthLaw.ToggleFor(DashboardDepth,
                 global::ConditioningControlPanel.CoreSettings.Current.DashboardInvertClicks, right);
+            if (e.Source is SuperCorner corner)
+            {
+                if (toggle) { e.Handled = true; corner.Press(); return; }
+                halfA = !corner.BottomRight;
+            }
             if (right || toggle) e.Handled = true;
             var routed = toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent);
             RaiseEvent(new RoutedEventArgs(routed, this));
@@ -646,9 +672,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private void CapGrownTitle(TextBlock text, bool grown)
         {
             double w = _contentRoot.Bounds.Width;
+            bool halfA = ReferenceEquals(text, _txtTitleA);
+            double corner = _corners[halfA ? 0 : 1] != null ? SuperCorner.Leg + 2 : 0;
+            double h = _contentRoot.Bounds.Height;
             text.MaxWidth = grown && w > 0
-                ? Math.Max(40, (w - TitlePillChrome) / TitleExpandedScale)
-                : double.PositiveInfinity;
+                ? Math.Max(40, (w - TitlePillChrome - (corner > 0 ? corner - 8 : 0)) / TitleExpandedScale)
+                : w > 0 && h > 0 ? Math.Max(30, w * (1 - 27 / h) - (corner > 0 ? corner : 8) - 19) : double.PositiveInfinity;
         }
 
         /// <summary>Drops any in-flight fill back to the resting split, without motion.</summary>

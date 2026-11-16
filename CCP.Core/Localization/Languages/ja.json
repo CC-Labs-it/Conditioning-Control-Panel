@@ -6129,6 +6129,8 @@
   "super_pool_drags_pictures": "画像",
   "super_pool_drags_bubbles": "バブル",
   "super_corner_title": "V2: {0}",
+  "super_corner_tip": "右クリックで切り替え、左クリックで開く。",
+  "super_corner_tip_inverted": "左クリックで切り替え、右クリックで開く。",
   "super_for_supporters": "サポーター向け",
   "dash_card_tip": "クリックで設定を開く。右クリックでオン・オフ。",
   "dash_card_tip_inverted": "クリックでオン・オフ。右クリックで設定を開く。",
