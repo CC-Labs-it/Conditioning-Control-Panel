@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Animation;
+using Avalonia.Collections;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
@@ -23,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs;
 // WPF VaultGateDialog.Compare.cs:65-140, 245-392: desk, ticket stock and tear-off stubs.
 public sealed partial class VaultGateDialog
 {
-    private bool _comparing, _resizePending;
+    private bool _comparing, _resizePending, _leaving;
     private double _resizeOldHeight, _resizeTargetWidth;
     private readonly List<(int Tier, StackPanel Price, Border Saving)> _comparePrices = new();
     private readonly List<Border> _compareTickets = new();
@@ -208,20 +209,25 @@ public sealed partial class VaultGateDialog
         var muted = B(lab ? "#A99A84" : "#7D6878");
         var name = Loc.Get(lab ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name");
         var main = new StackPanel { Margin = new Thickness(26, 16, 26, 8) };
-        main.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_ticket_admit").ToUpper(System.Globalization.CultureInfo.CurrentUICulture), Foreground = muted, FontSize = 10.5, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
-        main.Children.Add(new TextBlock { Text = name, Foreground = accent, FontSize = 32, FontWeight = FontWeight.Bold });
-        main.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
+        var top = new Grid { Name = "TicketHeading", ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var who = new StackPanel();
+        who.Children.Add(new TextBlock { Text = Loc.Get("vaultgate_ticket_admit").ToUpper(System.Globalization.CultureInfo.CurrentUICulture), Foreground = muted, FontSize = 10.5, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap });
+        who.Children.Add(new TextBlock { Text = name, Foreground = accent, FontSize = 32, FontWeight = FontWeight.Bold });
+        who.Children.Add(Para(Loc.Get(lab ? "vaultgate_tier_lab_tag" : "vaultgate_tier_vault_tag"), text, 15));
+        top.Children.Add(who);
         var price = (StackPanel)Price(tier, compact: true, yearly: _yearly);
         price.Tag = text;
         price.RenderTransform = new TranslateTransform();
         PaintPrice(price, tier, true, _yearly, false);
-        var priceRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var priceRow = new Grid { Name = "TicketPrice", ColumnDefinitions = new ColumnDefinitions("*,Auto"), MaxWidth = 190, VerticalAlignment = VerticalAlignment.Top };
         priceRow.Children.Add(price);
         var saving = new Border { Name = lab ? "PrimeSaving" : "BasicSaving", BorderBrush = accent, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(30), Padding = new Thickness(6), IsHitTestVisible = false, Child = new TextBlock { Foreground = accent, FontWeight = FontWeight.Bold, FontSize = 12, TextWrapping = TextWrapping.Wrap } };
         Grid.SetColumn(saving, 1);
         priceRow.Children.Add(saving);
         _comparePrices.Add((tier, price, saving));
-        main.Children.Add(priceRow);
+        Grid.SetColumn(priceRow, 1);
+        top.Children.Add(priceRow);
+        main.Children.Add(top);
         main.Children.Add(new Border { Height = 1, Background = accent, Opacity = 0.4, Margin = new Thickness(0, 10, 0, 9) });
         void Perk(string number, string words, IBrush ink)
         {
@@ -237,7 +243,19 @@ public sealed partial class VaultGateDialog
         var perks = lab ? PrimePerks : BasicPerks;
         for (var i = 0; i < perks.Length; i++) Perk((i + (lab ? BasicPerks.Length + 1 : 1)).ToString("00"), Loc.Get(perks[i]), text);
         var stub = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(26, 10, 26, 15) };
-        var choose = SmallButton(Loc.GetF("vaultgate_choose", name));
+        var lip = B(lab ? "#8F6E20" : "#8A1142");
+        var face = new Border { Name = "TicketFace", Background = accent, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 0, 0, 4), Padding = new Thickness(14, 11),
+            Child = new TextBlock { Text = Loc.GetF("vaultgate_choose", name), Foreground = B(lab ? "#1B1422" : "#FFF6EC"), FontSize = 17, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center } };
+        var faceMove = new TranslateTransform();
+        face.RenderTransform = faceMove;
+        var faceParts = new Grid();
+        faceParts.Children.Add(new Border { Background = lip, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 4, 0, 0) });
+        faceParts.Children.Add(face);
+        var choose = Bare(faceParts);
+        choose.Name = lab ? "PrimeChoose" : "BasicChoose";
+        choose.PointerEntered += (_, _) => { if (!choose.IsPressed) faceMove.Y = -1; };
+        choose.PointerExited += (_, _) => { if (!choose.IsPressed) faceMove.Y = 0; };
+        choose.PropertyChanged += (_, e) => { if (e.Property == Button.IsPressedProperty) faceMove.Y = choose.IsPressed ? 4 : choose.IsPointerOver ? -1 : 0; };
         choose.HorizontalAlignment = HorizontalAlignment.Stretch;
         choose.Click += (_, _) => { OpenPlan(tier, lab ? "compare-lab" : "compare-vault"); Close(); };
         stub.Children.Add(choose);
@@ -245,12 +263,22 @@ public sealed partial class VaultGateDialog
         ways.Margin = new Thickness(18, 0, 0, 0);
         Grid.SetColumn(ways, 1);
         stub.Children.Add(ways);
-        var body = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        var body = new Grid { RowDefinitions = new RowDefinitions("*,20,Auto") };
         body.Children.Add(main);
         var foot = new Border { Background = stubInk, CornerRadius = new CornerRadius(0, 0, 8, 8), Child = stub };
-        Grid.SetRow(foot, 1);
+        Grid.SetRow(foot, 2);
         body.Children.Add(foot);
-        var ticket = new Border { Name = lab ? "PrimeTicket" : "BasicTicket", Background = stock, BorderBrush = accent, BorderThickness = new Thickness(lab ? 3 : 0), CornerRadius = new CornerRadius(8), Child = body, RenderTransform = new TranslateTransform() };
+        var perf = new global::Avalonia.Controls.Shapes.Rectangle { Name = "Perforation", Height = 2, Stroke = muted, StrokeThickness = 2, StrokeDashArray = new AvaloniaList<double> { 0.1, 2.6 }, StrokeLineCap = PenLineCap.Round, Opacity = 0.55, Margin = new Thickness(18, 0), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetRow(perf, 1);
+        body.Children.Add(perf);
+        foreach (var side in new[] { HorizontalAlignment.Left, HorizontalAlignment.Right })
+        {
+            var notch = new global::Avalonia.Controls.Shapes.Ellipse { Name = "TicketNotch", Width = 22, Height = 22, Fill = B("#141020"), HorizontalAlignment = side, VerticalAlignment = VerticalAlignment.Center, Margin = side == HorizontalAlignment.Left ? new Thickness(-11, 0, 0, 0) : new Thickness(0, 0, -11, 0), IsHitTestVisible = false };
+            Grid.SetRow(notch, 1);
+            body.Children.Add(notch);
+        }
+        var foil = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = new GradientStops { new(Color.Parse("#F6E3A1"), 0), new(Color.Parse("#B48C2C"), 0.28), new(Color.Parse("#FFF2C2"), 0.47), new(Color.Parse("#9E7A24"), 0.7), new(Color.Parse("#E7C86E"), 1) } };
+        var ticket = new Border { Name = lab ? "PrimeTicket" : "BasicTicket", Background = stock, BorderBrush = lab ? foil : accent, BorderThickness = new Thickness(lab ? 3 : 0), CornerRadius = new CornerRadius(8), Child = body, RenderTransform = new TranslateTransform() };
         ticket.PointerEntered += (_, _) => HoverTicket(ticket, true);
         ticket.PointerExited += (_, _) => HoverTicket(ticket, false);
         _ticketMoves[ticket] = (TranslateTransform)ticket.RenderTransform!;
@@ -300,50 +328,34 @@ public sealed partial class VaultGateDialog
         _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, 160, next.Token);
     }
 
-    private void LeaveCompare()
+    private async void LeaveCompare()
     {
-        if (_card.Child is Grid prior && ReferenceEquals(_body.Parent, prior))
-        {
-            prior.Children.Remove(_body);
-            _card.Child = _body;
-        }
+        if (_leaving) return;
         _billingMotion?.Cancel();
         foreach (var c in _hoverMotion.Values) { c.Cancel(); c.Dispose(); }
         _hoverMotion.Clear();
-        if (CompareMotion == MotionLevel.Off)
+        void Finish()
         {
+            _leaving = false;
+            _card.IsHitTestVisible = true;
+            if (!IsVisible) return;
             BuildOffer();
             _ = FillAsyncBits();
-            return;
         }
-        var old = _body;
-        var tickets = _compareTickets.ToArray();
-        _card.Child = null;
-        _body = new StackPanel();
-        var overlay = new Grid();
-        overlay.Children.Add(_body);
-        old.IsHitTestVisible = false;
-        overlay.Children.Add(old);
-        _card.Child = overlay;
-        BuildOffer();
-        _ = FillAsyncBits();
+        if (CompareMotion == MotionLevel.Off) { Finish(); return; }
+        _leaving = true;
+        _card.IsHitTestVisible = false;
         var fadeMs = GentleVisuals.FadeMs(190);
-        _ = Tween(old, OpacityProperty, 1, 0, fadeMs);
         if (CompareMotion == MotionLevel.Full)
-            foreach (var ticket in tickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
-        DispatcherTimer.RunOnce(() =>
-        {
-            if (!ReferenceEquals(_card.Child, overlay)) return;
-            overlay.Children.Remove(old);
-            overlay.Children.Remove(_body);
-            _card.Child = _body;
-        }, TimeSpan.FromMilliseconds(fadeMs + 20));
+            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
+        await Tween(_body, OpacityProperty, 1, 0, fadeMs);
+        Finish();
     }
 
     private bool _closingAnimation;
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        if (_closingAnimation) { e.Cancel = true; return; }
+        if (_closingAnimation || _leaving) { e.Cancel = true; return; }
         if (!_comparing || CompareMotion == MotionLevel.Off || !IsVisible) { base.OnClosing(e); return; }
         e.Cancel = true;
         _closingAnimation = true;

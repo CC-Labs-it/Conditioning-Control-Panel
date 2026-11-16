@@ -1,9 +1,11 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -34,9 +36,16 @@ public class VaultCompareReviewTests
     private static T Named<T>(Window dialog, string name) where T : Control =>
         dialog.GetVisualDescendants().OfType<T>().Single(x => x.Name == name);
 
+    private static readonly FieldInfo Cache = typeof(PlanCatalog).GetField("_current", BindingFlags.Static | BindingFlags.NonPublic)!;
+    private static readonly FieldInfo ReadUtc = typeof(PlanCatalog).GetField("_readUtc", BindingFlags.Static | BindingFlags.NonPublic)!;
+
     [Fact]
-    public Task SavingsFollowTheRefreshedSnapshotForBothTiers() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task SavingsFollowTheRefreshedSnapshotForBothTiers() => AvaloniaTestDispatcher.RunAsync(ExerciseSavings);
+
+    private static async Task ExerciseSavings()
     {
+        var cached = Cache.GetValue(null);
+        var readUtc = ReadUtc.GetValue(null);
         var url = InviteApi.DefaultBaseUrl;
         var fetch = PlanCatalog.FetchOverride;
         var provider = CoreSettings.ServiceProvider;
@@ -71,7 +80,25 @@ public class VaultCompareReviewTests
             Assert.Equal(0, basic.Opacity);
             Assert.Equal(0, prime.Opacity);
         }
-        finally { dialog.Close(); PlanCatalog.Reset(); PlanCatalog.FetchOverride = fetch; InviteApi.DefaultBaseUrl = url; CoreSettings.ServiceProvider = provider; }
+        finally { dialog.Close(); Cache.SetValue(null, cached); ReadUtc.SetValue(null, readUtc); PlanCatalog.FetchOverride = fetch; InviteApi.DefaultBaseUrl = url; CoreSettings.ServiceProvider = provider; }
+    }
+
+    [Fact]
+    public Task SavingsTestPreservesExistingCacheAndTimestamp() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var before = Cache.GetValue(null);
+        var beforeTime = ReadUtc.GetValue(null);
+        var seeded = PlanCatalog.Fallback with { Currency = "EUR" };
+        var time = DateTime.UtcNow.AddMinutes(-3);
+        try
+        {
+            Cache.SetValue(null, seeded);
+            ReadUtc.SetValue(null, time);
+            await ExerciseSavings();
+            Assert.Same(seeded, PlanCatalog.Current);
+            Assert.Equal(time, ReadUtc.GetValue(null));
+        }
+        finally { Cache.SetValue(null, before); ReadUtc.SetValue(null, beforeTime); }
     });
 
     [Fact]
@@ -126,6 +153,102 @@ public class VaultCompareReviewTests
         }
         finally { dialog.Close(); }
         return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData("heading")][InlineData("perforation")][InlineData("notches")][InlineData("foil")]
+    [InlineData("ink")][InlineData("hover")][InlineData("press")]
+    public Task TicketDetailsMatchTheStockAndStub(string part) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var dialog = new VaultGateDialog();
+        try
+        {
+            dialog.Show();
+            Click(dialog, Loc.Get("vaultgate_compare"));
+            var card = (Control)dialog.Content!;
+            card.Measure(new Size(980, double.PositiveInfinity));
+            card.Arrange(new Rect(card.DesiredSize));
+            card.UpdateLayout();
+            foreach (var lab in new[] { false, true })
+            {
+                var ticket = Named<Border>(dialog, lab ? "PrimeTicket" : "BasicTicket");
+                if (part == "heading")
+                {
+                    var top = ticket.GetVisualDescendants().OfType<Grid>().Single(x => x.Name == "TicketHeading");
+                    var price = top.GetVisualDescendants().OfType<Grid>().Single(x => x.Name == "TicketPrice");
+                    Assert.Equal(1, Grid.GetColumn(price));
+                    Assert.Contains(top.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get(lab ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name"));
+                }
+                if (part == "perforation")
+                {
+                    var perf = ticket.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>().Single(x => x.Name == "Perforation");
+                    Assert.Equal(2, perf.StrokeDashArray!.Count);
+                    Assert.True(perf.Bounds.Width > 100 && perf.Bounds.Height > 0, $"perforation: {perf.Bounds}");
+                }
+                if (part == "notches") Assert.Equal(2, ticket.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Ellipse>().Count(x => x.Name == "TicketNotch"));
+                if (part == "foil" && lab) Assert.Equal(5, Assert.IsType<LinearGradientBrush>(ticket.BorderBrush).GradientStops.Count);
+                var choose = Named<Button>(dialog, lab ? "PrimeChoose" : "BasicChoose");
+                var face = choose.GetVisualDescendants().OfType<Border>().Single(x => x.Name == "TicketFace");
+                if (part == "ink") Assert.Equal(Color.Parse(lab ? "#E5C76B" : "#C8235F"), Assert.IsType<SolidColorBrush>(face.Background).Color);
+                var faceMove = Assert.IsType<TranslateTransform>(face.RenderTransform);
+                if (part == "hover")
+                {
+                    choose.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, choose, null!, dialog, default, 0, PointerPointProperties.None, KeyModifiers.None));
+                    Assert.Equal(-1, faceMove.Y);
+                    choose.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, choose, null!, dialog, default, 0, PointerPointProperties.None, KeyModifiers.None));
+                    Assert.Equal(0, faceMove.Y);
+                }
+                if (part == "press" && lab)
+                {
+                    var pointer = new global::Avalonia.Input.Pointer(global::Avalonia.Input.Pointer.GetNextFreeId(), PointerType.Mouse, true);
+                    choose.RaiseEvent(new PointerPressedEventArgs(choose, pointer, dialog, default, 0,
+                        new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+                    Assert.Equal(4, faceMove.Y);
+                }
+            }
+        }
+        finally { dialog.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Full, false)]
+    [InlineData(MotionLevel.Reduced, true)]
+    [InlineData(MotionLevel.Off, false)]
+    public Task BackWaitsForTicketExit(MotionLevel level, bool gentle) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var os = UiMotionPreference.OsProbe;
+        var service = new SettingsService();
+        service.Current.MotionLevel = level;
+        service.Current.GentleVisuals = gentle;
+        service.Current.GentleFadeSeconds = 0.5;
+        CoreSettings.ServiceProvider = () => service;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var dialog = new VaultGateDialog();
+        try
+        {
+            dialog.Show();
+            Click(dialog, Loc.Get("vaultgate_compare"));
+            var back = dialog.GetVisualDescendants().OfType<Button>().First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == Loc.Get("vaultgate_back")));
+            back.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            if (level != MotionLevel.Off)
+            {
+                Assert.Equal(980, dialog.Width);
+                Assert.False(((Control)dialog.Content!).IsHitTestVisible);
+                Assert.NotNull(Named<Border>(dialog, "BasicTicket"));
+                await Task.Delay(60);
+                Assert.Equal(980, dialog.Width);
+                await Task.Delay(gentle ? 600 : 300);
+            }
+            Assert.Equal(460, dialog.Width);
+            Dispatcher.UIThread.RunJobs();
+            dialog.UpdateLayout();
+            Assert.True(((Control)dialog.Content!).IsHitTestVisible);
+            Assert.Contains(dialog.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("vaultgate_signin"));
+        }
+        finally { dialog.Close(); CoreSettings.ServiceProvider = provider; UiMotionPreference.OsProbe = os; UiMotionPreference.CacheStamp = long.MinValue; }
     });
 
     [Theory]
