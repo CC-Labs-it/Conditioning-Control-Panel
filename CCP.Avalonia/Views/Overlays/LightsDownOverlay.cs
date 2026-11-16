@@ -13,7 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 /// WPF: Services/Super/LightsDownOverlay.cs:14 and LightsDownService.cs:89.
 /// All calls are on the UI thread.
 /// </summary>
-internal static class LightsDownOverlay
+internal static partial class LightsDownOverlay
 {
     private static readonly List<Window> Windows = new();
     internal static int Count => Windows.Count;
@@ -35,7 +35,7 @@ internal static class LightsDownOverlay
             SystemDecorations = WindowDecorations.None,
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
             Background = Brushes.Transparent,
-            ShowActivated = false, ShowInTaskbar = false, CanResize = false,
+            ShowActivated = false, ShowInTaskbar = false, CanResize = false, Topmost = true,
             Focusable = false, IsHitTestVisible = false,
             WindowStartupLocation = WindowStartupLocation.Manual,
             Opacity = 0,
@@ -71,7 +71,9 @@ internal static class LightsDownOverlay
 
     internal static void CloseAll()
     {
-        foreach (var w in Windows.ToArray()) w.Close();
+        StopVideo();
+        foreach (var w in Windows.ToArray())
+            try { w.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Lights Down close failed"); }
         Windows.Clear();
     }
 }
