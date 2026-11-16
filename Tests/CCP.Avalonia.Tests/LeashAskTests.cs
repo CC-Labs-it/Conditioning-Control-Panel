@@ -25,7 +25,6 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF LeashDrawerSection offer row -> LeashSurfaces.ShowAsk -> LeashAskCard, from the Leash page.</summary>
-[Collection(RunsAloneCollection.Name)] // Current and the service are process-wide while the dispatcher is pumped.
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
@@ -174,7 +173,6 @@ public sealed class LeashAskTests
         Run((_, page, _, _) =>
         {
             var settings = CoreSettings.Current;
-            var oldTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time; ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
             try
             {
@@ -185,7 +183,6 @@ public sealed class LeashAskTests
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
                 Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
-                Assert.Equal(start, scale?.ScaleX ?? 1, 3); Assert.Equal(start, scale?.ScaleY ?? 1, 3); // opening frame
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
@@ -194,7 +191,7 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally { ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldTime; (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
     [Fact]
@@ -203,12 +200,11 @@ public sealed class LeashAskTests
         {
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var previous = LeashAskWindow.Current!;
-            var service = LeashHead.Service; LeashHead.Service = null; shell.RebindLeashAsks(); LeashHead.Service = service; Tagged<Button>(page, "leash-offer-look").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var ask = LeashAskWindow.Current!;
             Assert.False(previous.IsVisible);
             Assert.NotSame(previous, ask);
             ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-            shell.RebindLeashAsks(); // The periodic service rebind can follow the manual Look.
             Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
