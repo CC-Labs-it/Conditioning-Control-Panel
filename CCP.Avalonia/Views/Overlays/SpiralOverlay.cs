@@ -65,6 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
+        /// <summary>The window an overlay pulse beats on: a classic window, else the stage hosting the spiral.</summary>
+        internal static Window? PulseOwner => Windows.Count > 0 ? Windows[0]
+            : Hosted.Count > 0 ? TopLevel.GetTopLevel(Hosted[0].Root) as Window : null;
 
         private static readonly SpiralPool Pool = new();
         private static string? _sourcePath;

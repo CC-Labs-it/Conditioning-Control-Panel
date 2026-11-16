@@ -237,6 +237,32 @@ public sealed class SpiralSharedStageTests
         }
     });
 
+    // WPF OverlayService.PulseOverlays pulses the spiral layer too: a spiral-only pulse with the spiral on
+    // the stage (no classic window, tint off) must still double it.
+    [Fact]
+    public Task Overlay_pulse_doubles_a_hosted_spiral_with_the_tint_off() => WithSpiral(true, async (_, s, stage, _) =>
+    {
+        var saved = (s.PinkFilterEnabled, s.GentleVisuals);
+        try
+        {
+            (s.PinkFilterEnabled, s.GentleVisuals) = (false, false);
+            Assert.Empty(SpiralOverlay.Shown);
+            var (_, image) = Hosted(stage()!);
+            var before = image.Opacity;
+            OverlayPulse.PulseOverlays();
+            Assert.True(OverlayPulse.IsPulsing);
+            Assert.True(image.Opacity > before);
+            OverlayPulse.Cancel();
+            Assert.Equal(before, image.Opacity, 10);
+        }
+        finally
+        {
+            OverlayPulse.Cancel();
+            (s.PinkFilterEnabled, s.GentleVisuals) = saved;
+        }
+        await Task.CompletedTask;
+    });
+
     [Fact]
     public Task Refused_stage_falls_back_to_the_classic_window() => WithSpiral(false, async (_, _, stage, acquired) =>
     {
