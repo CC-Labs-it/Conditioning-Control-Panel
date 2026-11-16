@@ -54,19 +54,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private WindowState? _pageWindowedState;
 
+        // WPF ChaosWebViewHost.cs:1661 routes page fullscreen through SetFullscreen: one window mode,
+        // so a page exit always leaves fullscreen, even one the host entered (then to a titled window).
         private void SetPageFullscreen(bool on)
         {
-            if (on)
-            {
-                if (_pageWindowedState != null) return;
-                _pageWindowedState = WindowState;
-                WindowState = WindowState.FullScreen;
-            }
-            else if (_pageWindowedState is { } previous)
-            {
-                _pageWindowedState = null;
-                WindowState = previous;
-            }
+            if (on == (WindowState == WindowState.FullScreen)) return;
+            var next = on ? WindowState.FullScreen : _pageWindowedState ?? WindowState.Normal;
+            _pageWindowedState = on ? WindowState : null;
+            WindowState = next;
         }
 
         public IntakeHostWindow()
@@ -78,6 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Content = Web;
             Web.NativeFullscreenEntered += () => SetPageFullscreen(true);
             Web.NativeFullscreenExited += () => SetPageFullscreen(false);
+            // The remembered mode belongs to a page-entered fullscreen only; any other exit drops it.
+            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty && WindowState != WindowState.FullScreen) _pageWindowedState = null; };
             Web.WebMessage += OnPageMessage;
             Web.BrowserProcessFailed += OnBrowserProcessFailed;
             // WPF DisposeAll: a closed window never leaves the mic open.

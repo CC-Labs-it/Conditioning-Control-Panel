@@ -52,6 +52,7 @@ public sealed partial class GameWindowTests
                 Assert.Equal(spec.Id == GameWindow.JustDropId ? WindowState.Maximized : WindowState.FullScreen, window.WindowState);
                 window.Web.OnNativeFullscreenExited();
                 Assert.Equal(WindowState.Maximized, window.WindowState);
+                if (spec.Id != GameWindow.JustDropId) AssertHostFullscreenExitsTitled(window, window.Web);
             }
             finally { window.Close(); }
         }
@@ -63,7 +64,25 @@ public sealed partial class GameWindowTests
             Assert.Equal(WindowState.FullScreen, intake.WindowState);
             intake.Web.OnNativeFullscreenExited();
             Assert.Equal(WindowState.Maximized, intake.WindowState);
+            AssertHostFullscreenExitsTitled(intake, intake.Web);
         }
         finally { intake.Close(); }
     });
+
+    // WPF ChaosWebViewHost.cs:598,1661: one fullscreen state, so a page exit leaves a host-entered
+    // fullscreen for a titled window, and a mode remembered before a host exit is not reused.
+    private static void AssertHostFullscreenExitsTitled(Window window, ConditioningControlPanel.Avalonia.Views.Controls.WebHost web)
+    {
+        window.WindowState = WindowState.FullScreen;
+        web.OnNativeFullscreenEntered();
+        web.OnNativeFullscreenExited();
+        Assert.Equal(WindowState.Normal, window.WindowState);
+        window.WindowState = WindowState.Maximized;
+        web.OnNativeFullscreenEntered();
+        window.WindowState = WindowState.Normal;
+        window.WindowState = WindowState.FullScreen;
+        web.OnNativeFullscreenEntered();
+        web.OnNativeFullscreenExited();
+        Assert.Equal(WindowState.Normal, window.WindowState);
+    }
 }
