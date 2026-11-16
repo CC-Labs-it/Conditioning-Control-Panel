@@ -7,11 +7,12 @@ namespace ConditioningControlPanel.Services
     // WPF BubbleService.Froth.cs:280-453. Neutral until the Avalonia host enables Froth.
     public sealed partial class AmbientBubble
     {
-        private double _frothGrow = 1, _frothShown = 1, _frothRim;
+        private double _frothGrow = 1, _frothShown = 1, _frothRim, _frothVx, _frothVy, _frothPool = 1;
+        private double _frothLeft = double.NegativeInfinity, _frothRight = double.PositiveInfinity;
         internal double FrothFuse = -1;
         internal List<AmbientBubble>? FrothParts;
         internal bool FrothPartsPaid;
-        public double FrothShown => _frothShown;
+        public double FrothShown => _frothShown * _frothPool;
         public double FrothRim => _frothRim;
         public double FrothRadius => Size * FrothRules.GlassOfSprite * _frothGrow;
         public int FrothPartCount => 1 + (FrothParts?.Count ?? 0);
@@ -35,7 +36,22 @@ namespace ConditioningControlPanel.Services
             double target = FrothRules.Ripe(FrothRadius, fresh) ? 1 : 0;
             _frothRim += Math.Clamp(target - _frothRim, -dt / .4, dt / .4);
         }
-        internal void FrothReset() { _frothGrow = _frothShown = 1; _frothRim = 0; FrothFuse = -1; }
+        // WPF BubbleService.Froth.cs:336-361: keep the base motion anchors with the pushed bubble.
+        public void FrothMove(double dt, double ax, double ay, double poolScale, bool insidePool)
+        {
+            if (!FrothLive) return;
+            dt = Math.Clamp(dt, 0, .1);
+            _frothVx += ax * dt; _frothVy += ay * dt;
+            double drag = Math.Max(0, 1 - dt * (insidePool ? FrothRules.PoolDrag : FrothRules.Drag));
+            _frothVx *= drag; _frothVy *= drag;
+            double dx = _frothVx * dt, dy = _frothVy * dt;
+            // WPF BubbleService.Froth.cs:355: cancel only outward movement, and clear its velocity.
+            if ((X + dx < _frothLeft && dx < 0) || (X + dx > _frothRight && dx > 0)) { dx = 0; _frothVx = 0; }
+            X += dx; Y += dy; _startX += dx; _startY += dy; _spiralCx += dx; _spiralCy += dy;
+            _frothPool = Math.Clamp(poolScale, .05, 1);
+        }
+
+        internal void FrothReset() { _frothGrow = _frothShown = _frothPool = 1; _frothRim = _frothVx = _frothVy = 0; FrothFuse = -1; }
     }
 
     // WPF BubbleService.Froth.cs:73-181, 248-266. Only the Avalonia host calls these methods.

@@ -217,6 +217,8 @@ namespace ConditioningControlPanel.Services
         {
             var b = new AmbientBubble { Screen = screen, Clickable = clickable };
             b.Size = BubbleSizing.Scale(r.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip), s.BubblesSize, modScale);
+            b._frothLeft = areaX / scaling;
+            b._frothRight = (areaX + areaW) / scaling - b.Size;
             b._speed = 1.0 + r.NextDouble();   // 1.0 to 2.0 DIP/step
             var boost = s.BubbleSpeedBoost;      // dashboard speed slider, up to +500%
             if (boost > 0) b._speed *= 1.0 + Math.Clamp(boost, 0, 500) / 100.0;
@@ -254,6 +256,8 @@ namespace ConditioningControlPanel.Services
             double scaling, Chaos.EffectBubbleSpec spec, Chaos.ChaosMotion motion = Chaos.ChaosMotion.FloatUp, int ambientSpeedBoost = 0)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
+            b._frothLeft = areaX / scaling;
+            b._frothRight = (areaX + areaW) / scaling - b.Size;
             // An ambient trigger spec (Payload.Ambient) keeps its own deflate clock (AmbientTrigger, Spec.TreatLifeMs):
             // the chaos treat clock skips it whether or not the caller has set the flag yet (restack b115, from #4186).
             if (!spec.IsLive && !spec.IsDarter && !spec.IsFreeze && !spec.IsHeart && !spec.IsDroplet

@@ -148,6 +148,11 @@ namespace ConditioningControlPanel.Services
         {
             _visibleOneShotGen = null;
 
+            // Super Afterglow: panic and the emergency exit stop subliminals through here, and
+            // every ghost goes with the cards.
+            _afterglow?.Stop();
+            DispatcherHelper.RunOnUI(Compositor.AfterglowLineLayer.StopAll);
+
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
             // mid-chaos-run, and closing layered windows then is the deadlock trigger).
             foreach (var win in _screenWindows.Values)
@@ -266,6 +271,7 @@ namespace ConditioningControlPanel.Services
         internal void FlashPhrase(string text)
         {
             if (!_isRunning) _oneShotActive = true; // Allow display from remote control
+            Compositor.AfterglowLineLayer.WordShown(text);   // Super Afterglow: this word leaves a ghost
 
             // Check for linked audio
             string? audioPath = FindLinkedAudio(text);

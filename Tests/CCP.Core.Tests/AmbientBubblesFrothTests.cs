@@ -123,6 +123,36 @@ public class AmbientBubblesFrothTests
         Assert.Equal(1, pops); Assert.True(near.Popping); Assert.False(far.Popping); Assert.False(otherScreen.Popping);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Push_stops_at_each_screen_edge_and_clears_horizontal_velocity(bool trigger, bool right)
+    {
+        const double areaX = -1200, areaW = 1200, scale = 1.5;
+        var random = new Random(17);
+        AmbientBubble b;
+        if (trigger)
+        {
+            var spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "flash", SizePx = 100 };
+            b = AmbientBubble.SpawnChaos(random, 0, areaX, 0, areaW, 900, scale, spec);
+            b.AmbientTrigger = true;
+        }
+        else b = AmbientBubble.Spawn(random, 0, areaX, 0, areaW, 900, scale,
+            new AppSettings(), null, true, MotionLevel.Full);
+        double left = areaX / scale, rightEdge = (areaX + areaW) / scale - b.Size;
+        b.X = right ? rightEdge - 1 : left + 1;
+        double beforeX = b.X, beforeY = b.Y, direction = right ? 1 : -1;
+        b.FrothMove(.1, direction * 2000, 200, 1, false);
+        Assert.Equal(beforeX, b.X, 9);
+        Assert.True(b.Y > beforeY); // cancelling X never cancels the vertical push
+        b.FrothMove(.1, 0, 0, 1, false);
+        Assert.Equal(beforeX, b.X, 9); // no stored outward momentum
+        b.FrothMove(.1, -direction * 500, 0, 1, false);
+        Assert.True(right ? b.X < beforeX : b.X > beforeX); // inward push works immediately
+    }
+
     [Fact]
     public void Disabling_froth_discards_merged_carriers_without_pop()
     {
