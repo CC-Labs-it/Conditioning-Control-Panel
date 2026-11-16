@@ -46,6 +46,7 @@ public sealed class SuperCorner : Control, ICustomHitTest
         var rounded = new RectangleGeometry(bottomRight ? new Rect(-170, -170, 200, 200) : new Rect(0, 0, 200, 200)) { RadiusX = 6, RadiusY = 6 };
         _shape = new CombinedGeometry(GeometryCombineMode.Intersect, triangle, rounded);
         ToolTip.SetShowDelay(this, 350);
+        ToolTipLifetime.SetDuration(this, 20000);
         UpdateTip();
         PointerEntered += (_, _) => { UpdateTip(); InvalidateVisual(); };
         PointerExited += (_, _) => InvalidateVisual();

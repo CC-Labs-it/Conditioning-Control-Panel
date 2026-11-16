@@ -287,6 +287,38 @@ public sealed class MainWindowThemeParityTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SuperCornerTooltipExpiresAfterTwentySeconds(bool bottomRight) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var clock = new TooltipClock();
+        var oldTime = global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time;
+        var corner = new global::ConditioningControlPanel.Avalonia.Controls.Super.SuperCorner(
+            global::ConditioningControlPanel.Services.Super.SuperEffect.Scrawl, bottomRight);
+        var host = new Window { Width = 100, Height = 100, Content = corner };
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time = clock;
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            ToolTip.SetIsOpen(corner, true);
+            Assert.True(ToolTip.GetIsOpen(corner));
+            clock.Advance(19999);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ToolTip.GetIsOpen(corner));
+            clock.Advance(1);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ToolTip.GetIsOpen(corner));
+        }
+        finally
+        {
+            ToolTip.SetIsOpen(corner, false);
+            host.Close();
+            global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time = oldTime;
+        }
+    });
+
     private sealed class TooltipClock : TimeProvider
     {
         private long _now;
