@@ -84,13 +84,8 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
-    private void OnLeashOfferShown(LeashOffer offer)
-    {
-        // Look may precede the periodic service rebind. Bind while the overlay is open so its
-        // snapshot is queued first, then consume this offer and retain the other waiting asks.
-        RebindLeashAsks();
+    private void OnLeashOfferShown(LeashOffer offer) =>
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
-    }
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 
