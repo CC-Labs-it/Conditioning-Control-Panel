@@ -81,6 +81,10 @@ internal static class Win32Overlay
             0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    // Win32 inserts BELOW hWndInsertAfter; a topmost anchor keeps the window in the topmost band.
+    internal static bool StackBelow(IntPtr hwnd, IntPtr anchor) =>
+        PositionWindow(hwnd, anchor, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     /// <summary>The Windows half of <see cref="X11Overlay.RestackAbove"/>: z-order only, no activation, no
     /// geometry, no owner moves. Styles, click-through and focus are untouched.</summary>
     internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling)

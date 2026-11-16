@@ -19,6 +19,20 @@ internal static class SharedOverlayHost
         X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
 
     internal static Func<Window, bool> Raise = X11Overlay.Raise; // WPF SubliminalService.cs:829
+    internal static Func<Window, IReadOnlyList<Window>, bool> StackBelow = X11Overlay.StackBelow;
+    internal static Func<IReadOnlyList<Window>> LiveVideos = () => MandatoryVideoOverlay.Instance.Windows;
+
+    // WPF draws tint, spiral and cards on one host, so a raise never lifts the spiral over an "over" tint
+    // (OverlayService.RefreshPinkFilterOrder), and ReassertZOrder keeps that host below a playing video
+    // (OverlayService.cs:3071,3389, #497). Here they are separate windows, so restore both orders by hand.
+    // shortcut: with a video up the stage only goes under the video, not under a tint the video also covers.
+    private static void Seat(Window stage, bool raise)
+    {
+        var videos = LiveVideos();
+        if (videos.Count > 0) { StackBelow(stage, videos); return; }
+        if (raise) Raise(stage);
+        if (!CoreSettings.Current.PinkFilterUnderEffects) PinkFilterOverlay.SyncOrder();
+    }
 
     // WPF compositor: one host per screen, so consumers' ZIndex orders them (SpiralLayer above SubliminalLayer).
     internal sealed class Stage { internal Window Window = null!; internal Grid Canvas = null!; internal int Leases; }
@@ -29,7 +43,7 @@ internal static class SharedOverlayHost
         private Stage? _stage;
         internal Grid Canvas { get; }
         internal Lease(Stage stage) => (_stage, Canvas) = (stage, stage.Canvas);
-        internal void Raise() { if (_stage != null) SharedOverlayHost.Raise(_stage.Window); }
+        internal void Raise() { if (_stage != null) Seat(_stage.Window, raise: true); }
         public void Dispose()
         {
             var s = _stage; _stage = null;
@@ -59,6 +73,7 @@ internal static class SharedOverlayHost
         Stages[bounds] = stage;
         // A panic sweep may close it under live leases: forget it so the next Acquire builds a new one.
         window.Closed += (_, _) => { if (Stages.TryGetValue(bounds, out var s) && s == stage) Stages.Remove(bounds); };
+        Seat(window, raise: false);   // a fresh stage maps on top: also when a spiral starts mid-video
         return new Lease(stage);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -122,6 +123,56 @@ public sealed class SpiralSharedStageTests
         SpiralOverlay.Stop();
         Assert.False(stage()!.IsVisible);
         await Task.CompletedTask;
+    });
+
+    // WPF keeps tint, spiral and cards on one host: a card's raise cannot lift the spiral over an "over" tint
+    // (OverlayService.RefreshPinkFilterOrder), and ReassertZOrder pins the host below a live video (#497).
+    [Fact]
+    public Task Stage_raise_keeps_an_over_tint_on_top_and_a_mid_video_stage_goes_under_the_video() => WithSpiral(true, async (host, s, stage, _) =>
+    {
+        var saved = (s.PinkFilterEnabled, s.PinkFilterUnderEffects);
+        var (raiseTint, skipTint) = (PinkFilterOverlay.RaiseWindow, PinkFilterOverlay.SkipPlatformChecksForTests);
+        var (raiseStage, stackBelow, videos) = (SharedOverlayHost.Raise, SharedOverlayHost.StackBelow, SharedOverlayHost.LiveVideos);
+        var raised = new List<Window>();
+        var stacked = new List<(Window, IReadOnlyList<Window>)>();
+        var video = new Window();
+        try
+        {
+            PinkFilterOverlay.SkipPlatformChecksForTests = true;
+            PinkFilterOverlay.RaiseWindow = w => { raised.Add(w); return true; };
+            SharedOverlayHost.Raise = w => { raised.Add(w); return true; };
+            SharedOverlayHost.StackBelow = (w, v) => { stacked.Add((w, v)); return true; };
+            (s.PinkFilterEnabled, s.PinkFilterUnderEffects) = (true, false);
+            PinkFilterOverlay.Refresh(host);
+            Assert.NotEmpty(PinkFilterOverlay.Shown);
+
+            raised.Clear();
+            Assert.True(SubliminalOverlay.ShowHosted(_bounds, "TEST", 0.8, TimeSpan.FromSeconds(5)));
+            Assert.Equal(new Window[] { stage()! }.Concat(PinkFilterOverlay.Shown), raised);   // the tint ends on top
+            Assert.Empty(stacked);
+
+            SubliminalOverlay.CloseAll();
+            SpiralOverlay.CloseAll();
+            Assert.False(stage()!.IsVisible);
+            raised.Clear();
+            var live = new Window[] { video };
+            SharedOverlayHost.LiveVideos = () => live;
+            SpiralOverlay.Refresh(host);
+            while (SpiralOverlay.Decoding is { IsCompleted: false } d) await d;
+            Assert.True(stage()!.IsVisible);
+            var (w, anchors) = Assert.Single(stacked);
+            Assert.Same(stage(), w);
+            Assert.Same(live, anchors);
+            Assert.Empty(raised);   // neither raised over the video nor the tint lifted over it
+        }
+        finally
+        {
+            PinkFilterOverlay.CloseAll();
+            (s.PinkFilterEnabled, s.PinkFilterUnderEffects) = saved;
+            (PinkFilterOverlay.RaiseWindow, PinkFilterOverlay.SkipPlatformChecksForTests) = (raiseTint, skipTint);
+            (SharedOverlayHost.Raise, SharedOverlayHost.StackBelow, SharedOverlayHost.LiveVideos) = (raiseStage, stackBelow, videos);
+            video.Close();
+        }
     });
 
     [Fact]

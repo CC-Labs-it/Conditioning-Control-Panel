@@ -749,19 +749,7 @@ internal static class X11Overlay
                 if (i < 0) { i = monitors.Count; monitors.Add(bounds); }
                 return new IntPtr(i + 1);
             }
-            // Managed video windows can be reparented into WM frames; stack the root children.
-            IntPtr RootChild(IntPtr h)
-            {
-                for (var i = 0; i < 32; i++)
-                {
-                    if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
-                    if (children != IntPtr.Zero) XFree(children);
-                    if (parent == root) return h;
-                    if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
-                    h = parent;
-                }
-                return IntPtr.Zero;
-            }
+            IntPtr RootChild(IntPtr h) => RootChildOf(h, root);
             var clips = new List<(IntPtr, IntPtr)>();
             foreach (var v in videos)
                 if (v.IsVisible && TryGetXid(v, out var h)) clips.Add((RootChild(h), Monitor(v)));
@@ -781,6 +769,50 @@ internal static class X11Overlay
             return !_xErrored;
         }
     }
+    /// <summary>WPF OverlayService.ReassertOne PinBelowVideo (#497, #1016): put an override-redirect overlay
+    /// directly below the anchor on its own screen, else below the first visible anchor. Native Win32/X11 only.</summary>
+    internal static bool StackBelow(Window window, IReadOnlyList<Window> anchors)
+    {
+        var bounds = window.Screens.ScreenFromWindow(window)?.Bounds;
+        Window? anchor = null;
+        foreach (var a in anchors)
+        {
+            if (!a.IsVisible) continue;
+            if (a.Screens.ScreenFromWindow(a)?.Bounds == bounds) { anchor = a; break; }
+            anchor ??= a;
+        }
+        if (anchor == null) return true;
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return TryGet(anchor, OverlayBackend.Win32, out var anchorHwnd) && Win32Overlay.StackBelow(hwnd, anchorHwnd);
+        if (!TryGetXid(window, out var xid) || !TryGetXid(anchor, out var anchorXid)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            _xErrored = false;
+            var root = XDefaultRootWindow(_display);
+            var (self, sibling) = (RootChildOf(xid, root), RootChildOf(anchorXid, root));
+            if (self == IntPtr.Zero || sibling == IntPtr.Zero || self == sibling) return false;
+            var changes = new StackChanges { Sibling = sibling, StackMode = 1 /* Below */ };
+            XConfigureWindow(_display, self, (1u << 5) | (1u << 6), ref changes);
+            XSync(_display, false);
+            return !_xErrored;
+        }
+    }
+
+    // Managed video windows can be reparented into WM frames; stack the root children. Caller holds Gate.
+    private static IntPtr RootChildOf(IntPtr h, IntPtr root)
+    {
+        for (var i = 0; i < 32; i++)
+        {
+            if (XQueryTree(_display, h, out _, out var parent, out var children, out _) == 0) return IntPtr.Zero;
+            if (children != IntPtr.Zero) XFree(children);
+            if (parent == root) return h;
+            if (parent == IntPtr.Zero || parent == h) return IntPtr.Zero;
+            h = parent;
+        }
+        return IntPtr.Zero;
+    }
+
     private static List<IntPtr> QueryChildren(IntPtr root)
     {
         var result = new List<IntPtr>();
