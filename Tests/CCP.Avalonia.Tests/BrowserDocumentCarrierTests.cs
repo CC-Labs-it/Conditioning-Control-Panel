@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
+using Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using Xunit;
 
@@ -9,6 +11,51 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class BrowserDocumentCarrierTests
 {
+    private sealed class WpeHandle : ILinuxWpePlatformHandle
+    {
+        public IntPtr WebKitWebView => new(19);
+        public IntPtr WpeViewBackend => new(20);
+        public IntPtr Handle => WebKitWebView;
+        public string HandleDescriptor => "wpe";
+    }
+
+    private sealed class GtkHandle : IGtkWebViewPlatformHandle
+    {
+        public IntPtr WebKitWebView => new(17);
+        public IntPtr Handle => WebKitWebView;
+        public string HandleDescriptor => "gtk";
+    }
+
+    [Fact]
+    public async Task GtkDocumentStartKeepsGtkLibraryAndTopFrame()
+    {
+        IntPtr view = IntPtr.Zero;
+        string[]? libraries = null;
+        bool frames = true;
+        Assert.True(await WebViewCarrier.InstallLinuxAsync(new GtkHandle(), "carrier", false,
+            (v, l, _, f) => { view = v; libraries = l; frames = f; return Task.FromResult(true); }));
+        Assert.Equal(new IntPtr(17), view);
+        Assert.Equal(ScrolllerWebKitFilter.Libraries, libraries);
+        Assert.False(frames);
+    }
+
+    [Fact]
+    public async Task WpeDocumentStartUsesItsOwnWebKitAndAllFrames()
+    {
+        IntPtr view = IntPtr.Zero;
+        string[]? libraries = null;
+        string? script = null;
+        bool frames = false;
+        Func<IntPtr, string[], string, bool, Task<bool>> install = (v, l, s, f) =>
+        { view = v; libraries = l; script = s; frames = f; return Task.FromResult(true); };
+        Assert.True(await WebViewCarrier.InstallLinuxAsync(new WpeHandle(), "wheel", true, install));
+        Assert.Equal(new IntPtr(19), view);
+        Assert.Equal(new[] { "libWPEWebKit-2.0.so.1" }, libraries);
+        Assert.Equal("wheel", script);
+        Assert.True(frames);
+        Assert.False(await WebViewCarrier.InstallLinuxAsync(null, "wheel", true, install));
+    }
+
     [Fact]
     public Task CarrierIsInstalledBeforeNavigationAndOnEachEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

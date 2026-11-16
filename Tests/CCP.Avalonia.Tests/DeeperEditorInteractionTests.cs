@@ -141,6 +141,8 @@ public sealed class DeeperEditorInteractionTests
         Assert.NotNull(script);
         Assert.Contains("ccp_editor_zoom_fit", script);
         Assert.Contains("keydown", script);
+        Assert.Contains("ccp_zoom_out", script);
+        Assert.Contains("wheel", script);
     });
 
     // Focus inside the preview (any frame, cross-origin included): the engine's native key signal is the route.
@@ -177,6 +179,34 @@ public sealed class DeeperEditorInteractionTests
         Assert.Equal(2d, Field(w, "_zoomFactor"));
         w.BrowserPreview.OnWebMessage("ccp_editor_zoom_fit");
         Assert.Equal(1d, Field(w, "_zoomFactor"));
+    });
+
+    [Fact]
+    public Task PreviewWheelScriptIsInstalledForAllFrames() => Run((w, _) =>
+    {
+        var property = w.BrowserPreview.GetType().GetProperty("AllFramesDocumentStartScript", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        var script = Assert.IsType<string>(property!.GetValue(w.BrowserPreview));
+        Assert.Contains("ccp_zoom_out", script);
+        Assert.Contains("window.top.postMessage", script);
+    });
+
+    [Fact]
+    public Task PreviewPageZoomButtonsAndMessagesClamp() => Run((w, _) =>
+    {
+        double applied = 0;
+        w.BrowserPreview.ZoomInvoker = (zoom, _) => applied = zoom;
+        w.BrowserPreview.BrowserZoomAdapterReady();
+        w.BtnPreviewZoomIn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1.1, applied, 8);
+        w.BrowserPreview.OnWebMessage("ccp_zoom_out");
+        Assert.Equal(1.0, applied, 8);
+        for (int i = 0; i < 100; i++) w.BrowserPreview.OnWebMessage("ccp_zoom_out");
+        Assert.Equal(0.25, applied, 8);
+        for (int i = 0; i < 100; i++) w.BrowserPreview.OnWebMessage("ccp_zoom_in");
+        Assert.Equal(5.0, applied, 8);
+        w.BtnPreviewZoomOut.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(4.9, applied, 8);
     });
 
     [Fact]

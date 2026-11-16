@@ -77,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         // signal takes them (WebHost.NativeKeyFilter), as WPF routes preview keys at xaml.cs:5006.
         private void HookPreviewZoomKeys()
         {
+            BrowserPreview.AllFramesDocumentStartScript = PreviewWheelScript;
             BrowserPreview.NativeKeyFilter = IsZoomResetKey;
             BrowserPreview.NativeKeyDown += (_, _) => SetZoom(1.0);
         }
@@ -95,12 +96,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     },true);
 })();";
 
-        private void PreviewZoom_NavigationCompleted(Uri uri) =>
-            _ = BrowserPreview.InvokeScriptAsync(PreviewZoomScript);
+        // The frame posts to the top document, whose bridge reaches WebHost even for cross-origin frames.
+        internal const string PreviewWheelScript = @"(function(){
+    if(window.__ccpEditorWheelBound)return;window.__ccpEditorWheelBound=true;
+    function send(m){var w=window.chrome&&window.chrome.webview;
+        if(w&&w.postMessage)w.postMessage(m);
+        else if(window.invokeCSharpAction)window.invokeCSharpAction(m);}
+    if(window===window.top)window.addEventListener('message',function(e){
+        if(e.data==='ccp_frame_zoom_in')send('ccp_zoom_in');
+        else if(e.data==='ccp_frame_zoom_out')send('ccp_zoom_out');
+    });
+    window.addEventListener('wheel',function(e){
+        if(!e.ctrlKey)return;
+        var m=e.deltaY>0?'out':'in';
+        if(window===window.top)send('ccp_zoom_'+m);
+        else window.top.postMessage('ccp_frame_zoom_'+m,'*');
+        e.preventDefault();
+    },{passive:false,capture:true});
+})();";
+
+        private void PreviewZoom_NavigationCompleted(Uri uri)
+        {
+            _ = BrowserPreview.InvokeScriptAsync(PreviewZoomScript + PreviewWheelScript);
+        }
 
         private void PreviewZoom_WebMessage(string message)
         {
-            if (message.Trim().Trim('"') == "ccp_editor_zoom_fit") SetZoom(1.0);
+            switch (message.Trim().Trim('"'))
+            {
+                case "ccp_editor_zoom_fit": SetZoom(1.0); break;
+                case "ccp_zoom_in": AdjustPreviewZoom(0.10); break;
+                case "ccp_zoom_out": AdjustPreviewZoom(-0.10); break;
+            }
         }
 
         // -- Right-click context menu --------------------------------------------
