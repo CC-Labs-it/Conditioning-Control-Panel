@@ -235,6 +235,47 @@ public class PortalPauseShortcutTests
         await Task.CompletedTask;
     });
     [Fact]
+    public Task LostPortalSessionRetriesWithBackoffUntilVideoEnds() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        using var rig = new VideoRig();
+        var shell = rig.Shell;
+        bool playing = true;
+        long now = 0;
+        int attempts = 0, graces = 0;
+        Action? lost = null, press = null;
+        var first = new Registration();
+        shell.PauseKeyVideoPlaying = () => playing;
+        shell.PauseKeyNow = () => now;
+        shell.PauseKeyGracePause = () => { graces++; return true; };
+        shell.RegisterWaylandPauseKey = (_, p, l, _) =>
+        {
+            attempts++; press = p; lost = l;
+            return Task.FromResult<IDisposable?>(attempts == 1 ? first : attempts == 2 ? null : new Registration());
+        };
+        shell.StartPauseKeyPortal();
+        var staleLost = lost!;
+        staleLost(); Dispatcher.UIThread.RunJobs();
+        Assert.True(first.Disposed); Assert.False(shell.PauseKeyArmed);
+        shell.ApplyPauseKeyPortal(); now = 999; shell.ApplyPauseKeyPortal();
+        Assert.Equal(1, attempts);
+        now = 1000; shell.ApplyPauseKeyPortal(); // a refused retry also backs off
+        Assert.Equal(2, attempts); Assert.False(shell.PauseKeyArmed);
+        shell.ApplyPauseKeyPortal(); Assert.Equal(2, attempts);
+        now = 2000; shell.ApplyPauseKeyPortal();
+        Assert.Equal(3, attempts); Assert.True(shell.PauseKeyArmed);
+        staleLost(); Dispatcher.UIThread.RunJobs(); // old session cannot cancel the replacement
+        press!(); Dispatcher.UIThread.RunJobs(); Assert.Equal(1, graces);
+        lost!(); Dispatcher.UIThread.RunJobs();
+        playing = false; shell.ApplyPauseKeyPortal();
+        now = 3000; shell.ApplyPauseKeyPortal(); Assert.Equal(3, attempts);
+        playing = true; shell.ApplyPauseKeyPortal(); Assert.Equal(4, attempts);
+        lost!(); Dispatcher.UIThread.RunJobs();
+        CoreSettings.Current.PauseKey = "F10"; // a new binding does not wait for the old key's retry
+        shell.ApplyPauseKeyPortal(); Assert.Equal(5, attempts); Assert.True(shell.PauseKeyArmed);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task StaleActivationCannotPauseAfterRebindOrVideoEnd() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         using var rig = new VideoRig();

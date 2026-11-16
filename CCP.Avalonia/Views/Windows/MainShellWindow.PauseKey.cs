@@ -21,6 +21,9 @@ public partial class MainShellWindow
     private (bool Wanted, string Key)? _pauseKeyBinding;
     private CancellationTokenSource? _pauseKeyPending;
     private int _pauseKeyGeneration;
+    private string? _pauseKeyRetryKey;
+    private long _pauseKeyRetryAt;
+    internal Func<long> PauseKeyNow = () => Environment.TickCount64;
     internal TimeSpan PauseKeyBindTimeout = MandatoryVideoScheduler.PreRoll + TimeSpan.FromMilliseconds(100);
     internal Func<TimeSpan, Task> PauseKeyDelay = Task.Delay;
     private int _pauseDeadlineGeneration = -1;
@@ -60,6 +63,7 @@ public partial class MainShellWindow
             _pauseKeyScheduler = null;
         }
         _pauseKeyBinding = null;
+        _pauseKeyRetryKey = null;
         _pauseDeadline = null;
         _pauseDeadlineGeneration = -1;
         CancelPauseKeyRegistration();
@@ -118,6 +122,8 @@ public partial class MainShellWindow
     {
         var s = CoreSettings.Current;
         var binding = (PauseKeyWayland && PauseKeyVideoPlaying() && !PauseKeyRefused(s), s.PauseKey?.Trim() ?? "");
+        if (_pauseKeyRetryKey != null && (!binding.Item1 || binding.Item2 != _pauseKeyRetryKey)) _pauseKeyRetryKey = null;
+        if (_pauseKeyRetryKey != null && _pauseKeyBinding == null && PauseKeyNow() < _pauseKeyRetryAt) return;
         if (_pauseKeyBinding == binding) return;
         _pauseKeyBinding = binding;
         CancelPauseKeyRegistration();
@@ -137,6 +143,14 @@ public partial class MainShellWindow
         _pauseKeyRegistration = null;
     }
 
+    private void RetryPauseKeyRegistration(string key)
+    {
+        CancelPauseKeyRegistration();
+        _pauseKeyBinding = null;
+        _pauseKeyRetryKey = key;
+        _pauseKeyRetryAt = PauseKeyNow() + 1000;
+    }
+
     private async Task BindWaylandPauseKeyAsync(string key, int generation, CancellationToken cancellation)
     {
         IDisposable? registration = null;
@@ -144,12 +158,18 @@ public partial class MainShellWindow
         {
             registration = await RegisterWaylandPauseKey(key,
                 () => Dispatcher.UIThread.Post(() => { if (generation == _pauseKeyGeneration) OnPortalPauseKeyPressed(key); }),
-                () => Dispatcher.UIThread.Post(() => { if (generation == _pauseKeyGeneration) CancelPauseKeyRegistration(); }),
+                () => Dispatcher.UIThread.Post(() => { if (generation == _pauseKeyGeneration) RetryPauseKeyRegistration(key); }),
                 cancellation);
             if (generation != _pauseKeyGeneration || cancellation.IsCancellationRequested) registration?.Dispose();
-            else _pauseKeyRegistration = registration;
+            else if (registration == null && _pauseKeyRetryKey == key) RetryPauseKeyRegistration(key);
+            else { _pauseKeyRegistration = registration; _pauseKeyRetryKey = null; }
         }
-        catch (Exception ex) { registration?.Dispose(); Log.Warning(ex, "Pause key Wayland registration failed"); }
+        catch (Exception ex)
+        {
+            registration?.Dispose();
+            if (generation == _pauseKeyGeneration && _pauseKeyRetryKey == key) RetryPauseKeyRegistration(key);
+            Log.Warning(ex, "Pause key Wayland registration failed");
+        }
     }
 
     /// <summary>UI thread. Rechecked here: settings or Lockdown may have changed since the last poll.</summary>
