@@ -14,7 +14,6 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -171,37 +170,28 @@ public sealed class LeashAskTests
     [InlineData(MotionLevel.Reduced, 1.04)]
     [InlineData(MotionLevel.Off, 1.0)]
     public void OpenedAskThudsUnlessMotionIsOff(MotionLevel motion, double start) =>
-        AvaloniaTestDispatcher.Run(() =>
+        Run((_, page, _, _) =>
         {
-            var oldTime = BeatLoop.Time;
-            BeatLoop.Time = new SteppedTime(); // Keep the one-shot at its first frame until stepped below.
+            var settings = CoreSettings.Current;
+            var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
             try
             {
-                Run((_, page, _, _) =>
-                {
-                    var settings = CoreSettings.Current;
-                    var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
-                    try
-                    {
-                        settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
-                        settings.PerformanceMode = false;
-                        LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
-                        var ask = LeashAskWindow.Current!;
-                        var scale = ask.Card.RenderTransform as ScaleTransform;
-                        Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it
-                        Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
-                        ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
-                        Assert.Equal(start, scale?.ScaleX ?? 1, 3);
-                        Assert.Equal(start, scale?.ScaleY ?? 1, 3);
-                        ask.AdvanceThud(340);
-                        Assert.Equal(1, scale?.ScaleX ?? 1, 3);
-                        Assert.Equal(1, scale?.ScaleY ?? 1, 3);
-                        Assert.False(ask.ThudActive);
-                    }
-                    finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
-                });
+                settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
+                settings.PerformanceMode = false;
+                LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+                var ask = LeashAskWindow.Current!;
+                var scale = ask.Card.RenderTransform as ScaleTransform;
+                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
+                Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
+                ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
+                Assert.Equal(start, scale?.ScaleX ?? 1, 3);
+                Assert.Equal(start, scale?.ScaleY ?? 1, 3);
+                ask.AdvanceThud(340);
+                Assert.Equal(1, scale?.ScaleX ?? 1, 3);
+                Assert.Equal(1, scale?.ScaleY ?? 1, 3);
+                Assert.False(ask.ThudActive);
             }
-            finally { BeatLoop.Time = oldTime; }
+            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
         });
 
     [Fact]
