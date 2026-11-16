@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -53,6 +54,40 @@ public sealed class DeeperPlayerAudioTests
         obj.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(obj, args);
     private static void Click(EnhancementPlayerWindow window, string name) =>
         window.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Fact]
+    public Task KeyboardSeekUpdatesAudioAndPanicKeepsItPaused() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var open = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var win = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks };
+        try
+        {
+            win.Show();
+            win.OpenLocalMediaFile("seek.mp3");
+            Dispatcher.UIThread.RunJobs();
+            audio.PositionSeconds = 20;
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            win.PlayerKey(Key.Right);
+            Assert.Equal(25, audio.PositionSeconds);
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal("0:25", win.FindControl<TextBlock>("TxtCurrent")!.Text);
+            win.PlayerKey(Key.Left, shift: true);
+            Assert.Equal(0, audio.PositionSeconds);
+            win.PlayerKey(Key.Right, shift: true);
+            Assert.Equal(30, audio.PositionSeconds);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+            Assert.False(audio.Playing);
+            win.PlayerKey(Key.Right);
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.False(audio.Playing);
+            Assert.Equal(35, audio.PositionSeconds);
+        }
+        finally { win.Close(); DeeperLocalAudio.Open = open; }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(true)]
