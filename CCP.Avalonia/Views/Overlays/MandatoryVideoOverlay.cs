@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// Missing against WPF: off-thread player rescue and LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input and no-activate z-order.
+    /// attention input and remaining z-order parity.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -56,6 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private Action? _refreshFloating;
         internal Action<Window> ApplyFloatingPassive { get; set; } = X11Overlay.SetPassive;
+        internal Action<Window> DenyVideoMouseActivate { get; set; } = w => Win32Window.DenyMouseActivate(w);
+        internal Action<Window> MakeVideoNonActivating { get; set; } = Win32Window.MakeNonActivating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null)
         {
@@ -493,7 +495,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;
                 };
             }
-            else Place(w, screen);
+            else
+            {
+                Place(w, screen);
+                w.Opened += (_, _) =>
+                {
+                    DenyVideoMouseActivate(w);
+                    if (Chaos.ChaosRunHost.IsActive) MakeVideoNonActivating(w);
+                };
+            }
             void OnKey(KeyEventArgs e)
             {
                 // WPF main 642a040e9e (#1594 #1595): a floating video leaves Escape alone unless it is the panic key.
