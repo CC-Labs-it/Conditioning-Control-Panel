@@ -18,7 +18,7 @@ namespace CCP.Avalonia.Tests;
 
 public class VaultCompareTests
 {
-    private static void Click(Window window, string text)
+    internal static void Click(Window window, string text)
     {
         var button = window.GetVisualDescendants().OfType<Button>()
             .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == text));

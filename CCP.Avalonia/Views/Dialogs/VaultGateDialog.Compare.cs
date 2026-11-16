@@ -88,34 +88,26 @@ public sealed partial class VaultGateDialog
         _ticketMoves.Clear();
         _body.Children.Clear();
         _priceSlots.Clear();
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var title = Heading(Loc.Get("vaultgate_compare_title"));
         title.FontSize = 25;
         title.Margin = new Thickness(0, 0, 20, 0);
-        head.Children.Add(title);
         var lever = BillingSwitch();
         Grid.SetColumn(lever, 1);
-        head.Children.Add(lever);
-        _body.Children.Add(head);
-        var row = new Grid { Margin = new Thickness(0, 14, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,26,*") };
-        row.Children.Add(Ticket(1));
+        _body.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { title, lever } });
+        var basic = Ticket(1);
         var prime = Ticket(2);
         Grid.SetColumn(prime, 2);
-        row.Children.Add(prime);
-        _body.Children.Add(row);
+        _body.Children.Add(new Grid { Margin = new Thickness(0, 14, 0, 0), ColumnDefinitions = new ColumnDefinitions("*,26,*"), Children = { basic, prime } });
         _yearNote = Para(Loc.Get("vaultgate_yearly_note"), Gold, 12, new Thickness(0, 12, 0, 0));
         _body.Children.Add(_yearNote);
-        var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 8, 0, 0) };
         var back = Link(Loc.Get("vaultgate_back"));
         back.Margin = new Thickness(0, 0, 28, 0);
         back.Click += (_, _) => LeaveCompare();
-        foot.Children.Add(back);
         var fine = Fine(Loc.Get("vaultgate_fine"));
         fine.Margin = new Thickness(0);
         fine.TextAlignment = TextAlignment.Left;
         Grid.SetColumn(fine, 1);
-        foot.Children.Add(fine);
-        _body.Children.Add(foot);
+        _body.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 8, 0, 0), Children = { back, fine } });
         PaintCompare(false);
         DealTickets();
     }
@@ -306,9 +298,7 @@ public sealed partial class VaultGateDialog
             Child = new TextBlock { Text = Loc.GetF("vaultgate_choose", name), Foreground = B(lab ? "#1B1422" : "#FFF6EC"), FontSize = 17, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center } };
         var faceMove = new TranslateTransform();
         face.RenderTransform = faceMove;
-        var faceParts = new Grid();
-        faceParts.Children.Add(new Border { Background = lip, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 4, 0, 0) });
-        faceParts.Children.Add(face);
+        var faceParts = new Grid { Children = { new Border { Background = lip, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 4, 0, 0) }, face } };
         var choose = Bare(faceParts);
         choose.Name = lab ? "PrimeChoose" : "BasicChoose";
         choose.PointerEntered += (_, _) => { if (!choose.IsPressed) faceMove.Y = -1; };
@@ -321,14 +311,11 @@ public sealed partial class VaultGateDialog
         ways.Margin = new Thickness(18, 0, 0, 0);
         Grid.SetColumn(ways, 1);
         stub.Children.Add(ways);
-        var body = new Grid { RowDefinitions = new RowDefinitions("*,20,Auto") };
-        body.Children.Add(main);
         var foot = new Border { Background = stubInk, CornerRadius = new CornerRadius(0, 0, 8, 8), Child = stub };
         Grid.SetRow(foot, 2);
-        body.Children.Add(foot);
         var perf = new global::Avalonia.Controls.Shapes.Rectangle { Name = "Perforation", Height = 2, Stroke = muted, StrokeThickness = 2, StrokeDashArray = new AvaloniaList<double> { 0.1, 2.6 }, StrokeLineCap = PenLineCap.Round, Opacity = 0.55, Margin = new Thickness(18, 0), VerticalAlignment = VerticalAlignment.Center };
         Grid.SetRow(perf, 1);
-        body.Children.Add(perf);
+        var body = new Grid { RowDefinitions = new RowDefinitions("*,20,Auto"), Children = { main, foot, perf } };
         foreach (var side in new[] { HorizontalAlignment.Left, HorizontalAlignment.Right })
         {
             var notch = new global::Avalonia.Controls.Shapes.Ellipse { Name = "TicketNotch", Width = 22, Height = 22, Fill = B("#141020"), HorizontalAlignment = side, VerticalAlignment = VerticalAlignment.Center, Margin = side == HorizontalAlignment.Left ? new Thickness(-11, 0, 0, 0) : new Thickness(0, 0, -11, 0), IsHitTestVisible = false };
@@ -347,9 +334,8 @@ public sealed partial class VaultGateDialog
     private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default, int delayMs = 0)
     {
         // Backward fill holds the start value through the delay, as WPF BeginTime does.
-        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 ? FillMode.Backward : FillMode.None };
-        animation.Children.Add(new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } });
-        animation.Children.Add(new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } });
+        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 ? FillMode.Backward : FillMode.None,
+            Children = { new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } }, new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } } } };
         try { await animation.RunAsync(target, token); }
         catch (OperationCanceledException) { }
     }
