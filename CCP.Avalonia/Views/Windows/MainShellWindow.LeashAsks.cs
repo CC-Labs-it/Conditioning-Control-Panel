@@ -76,10 +76,6 @@ public partial class MainShellWindow
         {
             if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
-            // Look may open an offer before this service is bound by the two-second timer.
-            // Treat that card as shown, while leaving other offers in the queue.
-            if (LeashAskWindow.Current?.Body is LeashAskCard card &&
-                card.Offer.From.Id == offer.From.Id && card.Offer.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds()) continue;
             _waitingLeashAsks.Add(offer);
         }
         _waitingLeashAsks.RemoveAll(w => !snap.Offers.Any(o => o.From.Id == w.From.Id));
@@ -88,13 +84,8 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
-    private void OnLeashOfferShown(LeashOffer offer)
-    {
-        // Bind while the shown card is still current, so even a quick close before the next
-        // timer tick cannot make the new service queue the same offer again.
-        RebindLeashAsks();
+    private void OnLeashOfferShown(LeashOffer offer) =>
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
-    }
 
     private void OnLeashAskClosed() => Dispatcher.UIThread.Post(TryShowLeashAsk);
 
