@@ -29,7 +29,7 @@ public sealed class LockCardGentleTests
             if (gentle)
                 Assert.Equal(TimeSpan.FromMilliseconds(750), Assert.IsType<DoubleTransition>(Assert.Single(card.Transitions!)).Duration);
             else Assert.Null(card.Transitions);
-            card.FindControl<TextBox>("TxtInput")!.Focus();
+            FocusInput(card);
             card.KeyTextInput("a");
             Dispatcher.UIThread.RunJobs();
             Assert.True(card.IsCompleted);
@@ -53,7 +53,7 @@ public sealed class LockCardGentleTests
         {
             LockCardWindow.ShowOnAllMonitors("a", 1, false, true);
             var card = LockCardWindow.Primary!;
-            card.FindControl<TextBox>("TxtInput")!.Focus();
+            FocusInput(card);
             card.KeyTextInput("a");
             Dispatcher.UIThread.RunJobs();
             await Task.Delay(1650);
@@ -78,7 +78,7 @@ public sealed class LockCardGentleTests
             var build = typeof(LockCardWindow).GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Static)!;
             var mirror = (LockCardWindow)build.Invoke(null, new object[] { "a", 1, false, false, true, false })!;
             typeof(LockCardWindow).GetMethod("ShowWithGentle", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(mirror, null);
-            card.FindControl<TextBox>("TxtInput")!.Focus();
+            FocusInput(card);
             card.KeyTextInput("a");
             Dispatcher.UIThread.RunJobs();
             Assert.True(mirror.IsCompleted);
@@ -93,6 +93,33 @@ public sealed class LockCardGentleTests
         }
         finally { LockCardWindow.ForceCloseAll(); }
     });
+
+    [Fact]
+    public Task PendingFocusChangeIsSettledBeforeTyping() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(true);
+        try
+        {
+            LockCardWindow.ShowOnAllMonitors("a", 1, false, true);
+            var card = LockCardWindow.Primary!;
+            var other = new TextBox(); card.FindControl<Grid>("MainGrid")!.Children.Add(other);
+            Dispatcher.UIThread.Post(() => Assert.True(other.Focus()), DispatcherPriority.Input);
+            FocusInput(card);
+            card.KeyTextInput("a");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(card.IsCompleted);
+        }
+        finally { LockCardWindow.ForceCloseAll(); }
+        return Task.CompletedTask;
+    });
+    private static void FocusInput(LockCardWindow card)
+    {
+        // KeyTextInput drains dispatcher and render work before it delivers the keystroke.
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(card.FindControl<TextBox>("TxtInput")!.Focus());
+    }
 
     private static void Setup(bool gentle)
     {
