@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Serilog;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp;
@@ -97,6 +98,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
+        /// <summary>Head preparation before a clip is shown. Called at pre-roll and again before Show;
+        /// a head must bound its own wait. No UI or platform types cross this seam.</summary>
+        public Func<Task>? PreparePlayback { get; set; }
+
         /// <summary>A playing clip has closed, including attention retries and forced cleanup.
         /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
         public event Action? VideoEnded;
@@ -135,6 +140,8 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
+        /// <summary>Identifies the current clip, including its pre-roll.</summary>
+        internal int PlaybackGeneration => _retryGeneration;
         public bool IsStrict { get; private set; }
 
         /// <summary>WPF ScheduleNext: 3600/perHour jittered 0.8-1.2x, never under 60 s.</summary>
@@ -486,6 +493,13 @@ namespace ConditioningControlPanel.Services
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
+            // Begin head preparation as soon as a clip is accepted, before the pre-roll.
+            Task Prepare()
+            {
+                try { return PreparePlayback?.Invoke() ?? Task.CompletedTask; }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: preparation failed"); return Task.CompletedTask; }
+            }
+            _ = Prepare();
             AttentionSpawned = AttentionHits = 0;
             // WPF VideoService.cs:2587-2630: Freeze, 800 ms, then PlayVideo's 1.3 s pre-roll.
             _videoFreeze = freezeBeforePreroll;
@@ -512,6 +526,29 @@ namespace ConditioningControlPanel.Services
                     mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
                     return;
                 }
+                // Recheck preparation at the end of pre-roll, including settings changes while it ran.
+                var ready = Prepare();
+                if (!ready.IsCompleted)
+                {
+                    _ = ready.ContinueWith(t => CoreDispatch.Post(() => ShowPrepared(mine, t)),
+                        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                    return;
+                }
+                ShowPrepared(mine, ready);
+            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            void ShowPrepared(ITimer? mine, Task ready)
+            {
+                if (ready.IsFaulted) Log.Warning(ready.Exception, "VideoService: preparation failed");
+                if (!ReferenceEquals(mine, _preroll) || !_playing) return;
+                // A setting can change after an earlier task completed but before this UI callback.
+                var current = Prepare();
+                if (!current.IsCompleted)
+                {
+                    _ = current.ContinueWith(t => CoreDispatch.Post(() => ShowPrepared(mine, t)),
+                        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                    return;
+                }
+                if (current.IsFaulted) Log.Warning(current.Exception, "VideoService: preparation failed");
                 Dispose(ref _preroll);
                 var playbackPath = PlaybackPath(path);
                 if (playbackPath == null) { End(); return; }
@@ -535,7 +572,7 @@ namespace ConditioningControlPanel.Services
                 if (!_playing || generation != _retryGeneration) return;
                 try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
-            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            }
             _preroll = created;
             created.Change(freezeBeforePreroll ? FreezeLead : PreRoll, Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);

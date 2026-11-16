@@ -535,6 +535,43 @@ public class TestIsolationTests
         }
     });
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    public System.Threading.Tasks.Task LockCardGentleTestsRestoreProviderBeforeAssemblyCleanup(int which) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var original = CoreSettings.ServiceProvider;
+        var settings = new ConditioningControlPanel.Services.SettingsService();
+        System.Func<ConditioningControlPanel.Services.SettingsService?>? expected = which == 7 ? null : () => settings;
+        try
+        {
+            CoreSettings.ServiceProvider = expected;
+            var test = new LockCardGentleTests();
+            switch (which)
+            {
+                case 0: await test.SolvedCardUsesGentleTiming(false); break;
+                case 1: await test.SolvedCardUsesGentleTiming(true); break;
+                case 2: await test.PanicOrReplacementDuringFadeDoesNotCloseNewCard(false); break;
+                case 3: await test.PanicOrReplacementDuringFadeDoesNotCloseNewCard(true); break;
+                case 4: await test.AllMirrorsFadeAndClose(); break;
+                case 5: await test.PendingFocusChangeIsSettledBeforeTyping(); break;
+                default:
+                    test.AfterSetupForTest = () => throw new System.InvalidOperationException("probe");
+                    await Assert.ThrowsAsync<System.InvalidOperationException>(test.PendingFocusChangeIsSettledBeforeTyping);
+                    break;
+            }
+            Assert.Same(expected, CoreSettings.ServiceProvider);
+            Assert.Same(which == 7 ? null : settings, CoreSettings.Service);
+        }
+        finally { CoreSettings.ServiceProvider = original; }
+    });
+
     [Fact]
     public async System.Threading.Tasks.Task ClearConversationTestRestoresSavedSettingsBeforeAssemblyCleanup()
     {
