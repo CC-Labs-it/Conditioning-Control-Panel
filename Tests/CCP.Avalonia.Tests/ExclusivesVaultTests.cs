@@ -121,14 +121,18 @@ public sealed class ExclusivesVaultTests
                 Assert.True(fyp.BadgeFreeToday);   // tiered: the badge re-stamps, no pill
                 Assert.False(view.FindControl<Border>("SpotVeil")!.IsVisible);
 
-                // Open doors lead their shelf: today's free Haptics jumps ahead of the locked Basic doors. Graded
-                // Intake sits in Basic since 5ce1a6cd1 and its unspent pass is an open door (WPF IsVaultDoorOpen), so
-                // it leads, then Haptics (roster order within the open half).
-                CoreEntitlement.IsFreeTodayProvider = key => key == "haptics";
+                // Open doors lead their shelf: today's free Takeover jumps ahead of the locked Basic doors.
+                // Graded Intake's unspent pass is also an open door, after Takeover in roster order.
+                // Haptics is free for everyone (HapticsAccess), so it stays in the Free group.
+                CoreEntitlement.IsFreeTodayProvider = key => key == "takeover";
                 view.RefreshVault();
                 var shelf = view.FindControl<ItemsControl>("ExclusivesShelf")!.Items.Cast<object>().ToList();
-                Assert.Equal("gradedintake", ((ExclusiveCardRow)shelf[1]).Feature.Key);
-                Assert.Equal("haptics", ((ExclusiveCardRow)shelf[2]).Feature.Key);
+                Assert.Equal("bambitakeover", ((ExclusiveCardRow)shelf[1]).Feature.Key);
+                Assert.Equal("gradedintake", ((ExclusiveCardRow)shelf[2]).Feature.Key);
+                Assert.True(shelf.FindIndex(i => i is ExclusiveCardRow r && r.Feature.Key == "haptics") >
+                            shelf.FindIndex(i => i is ExclusiveGroupRow g && g.Group.ToString() == "Free"));
+                Assert.False(Rows(view).Single(r => r.Feature.Key == "haptics").IsLocked);
+                Assert.False(Rows(view).Single(r => r.Feature.Key == "haptics").FreeToday);
                 var basicCards = shelf.Skip(1).TakeWhile(i => i is ExclusiveCardRow).Count();
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("premium_group_count", 2, basicCards),
                              ((ExclusiveGroupRow)shelf[0]).Count);

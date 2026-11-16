@@ -68,6 +68,8 @@
   <ItemGroup>
     <!-- Platform-agnostic engine (net10.0). Types moved there keep their original namespaces,
          so consuming files here need no changes. -->
+    <!-- The byte-identical rules live in Core; compiling both copies creates ambiguous public types. -->
+    <Compile Remove="Services\Launcher\LauncherDoorRules.cs" />
     <ProjectReference Include="..\CCP.Core\CCP.Core.csproj" />
   </ItemGroup>
 
