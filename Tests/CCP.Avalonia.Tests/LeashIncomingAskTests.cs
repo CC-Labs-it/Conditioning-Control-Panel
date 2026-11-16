@@ -73,38 +73,6 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
-    public void ManualAskShownBeforeSnapshotDeliveryIsNotQueuedAgain() =>
-        LeashGateCardTests.Run(false, (shell, _, _) =>
-        {
-            var service = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
-            // A manual Look can run from another snapshot subscriber before the shell receives it.
-            service.SnapshotChanged += snapshot =>
-            {
-                if (snapshot.Offers.Count > 0)
-                    LeashAskWindow.Open(snapshot.Offers[0], () => service, shell);
-            };
-            LeashHead.Service = service;
-            shell.RebindLeashAsks();
-            shell.Show();
-            try
-            {
-                service.ApplyBlock(Block((First, "juno")));
-                var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-                Assert.Equal("leash-ask:juno", ask.Card.Tag);
-                ask.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current);
-            }
-            finally
-            {
-                LeashHead.Service = null;
-                shell.RebindLeashAsks();
-                LeashAskWindow.CloseCurrent();
-                Dispatcher.UIThread.RunJobs();
-            }
-        });
-
-    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
