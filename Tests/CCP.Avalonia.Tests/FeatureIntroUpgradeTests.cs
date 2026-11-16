@@ -28,6 +28,27 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
     });
+    [Theory]
+    [InlineData("old-version", false, 1)]
+    [InlineData("", false, 0)]
+    [InlineData(null, false, 0)]
+    [InlineData("old-version", true, 0)]
+    public Task UpdateMomentFiresBeforeNotesAndStopsOnPanic(string? previous, bool panic, int expected) => Run(previous, async shell =>
+    {
+        var calls = 0;
+        shell.UpgradeMoment = (moment, context) =>
+        {
+            calls++;
+            Assert.Equal("afterUpdate", moment);
+            Assert.Equal(CoreReleaseContent.AppVersion, context!.GetType().GetProperty("target")!.GetValue(context));
+            Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+        };
+        CoreReleaseContent.PatchNotesProvider = () => { Assert.Equal(expected, calls); return ""; };
+        if (panic) PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
+        await shell.ShowWhatsNewIfNeeded();
+        await shell.ShowWhatsNewIfNeeded();
+        Assert.Equal(expected, calls);
+    });
     [Fact]
     public Task ShellOpenedStampsVersionlessWelcomedProfileWithoutNotes() => Run("", shell =>
     {
