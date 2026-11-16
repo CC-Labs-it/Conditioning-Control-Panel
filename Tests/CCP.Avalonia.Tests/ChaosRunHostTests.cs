@@ -77,11 +77,16 @@ public sealed class ChaosRunHostTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup(); FreshMeta();
-            var rng = ChaosRunHost.Rng;
+            var (rng, art, audio, announcer) = (ChaosRunHost.Rng, CoreModArt.AudioOverridePathProvider, CoreAudio.PlayOneShotProvider, CoreSettings.Current.ChaosAnnouncerEnabled);
+            var chime = System.IO.Path.GetTempFileName();
+            var played = new List<string>();
             try
             {
                 ChaosRunHost.Rng = new TeaseDice();
-                var cfg = Cfg(); cfg.ScriptedFirstRun = true;
+                CoreModArt.AudioOverridePathProvider = key => key.StartsWith("chime", StringComparison.Ordinal) ? chime : null;
+                CoreAudio.PlayOneShotProvider = (_, _, tag, _, done) => { played.Add(tag); done?.Invoke(); };
+                CoreSettings.Current.ChaosAnnouncerEnabled = true; ChaosAnnouncerOverlay.CloseActive();
+                var cfg = Cfg(); cfg.ScriptedFirstRun = true; cfg.HitboxScale = 2;
                 ChaosRunHost.StartRun(cfg);
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
@@ -89,19 +94,28 @@ public sealed class ChaosRunHostTests
                 var state = ChaosRunHost.State!;
                 state.GoldenChance = 1;
                 state.GoldDiggerEnabled = true;
+                played.Clear();
                 ChaosRunHost.SpawnTick();
                 var golden = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsGolden == true));
+                Assert.Equal(golden.Size, golden.HitSize);   // WPF BubbleService.cs:3285: pickups keep their natural hitbox
+                Assert.Contains("bubble-chime", played);
                 int before = ChaosMeta.State.Gold;
                 double score = state.Score, focus = state.Focus;
                 BubbleOverlay.PopChaos(golden);
-                Assert.True(ChaosMeta.State.Gold > before);
+                int paid = ChaosMeta.State.Gold - before;
+                Assert.True(paid > 0);
+                Assert.Equal("gold digger: it spills", state.RecentEvents[0]);
+                Assert.Equal($"{ChaosGlyphs.Gold} lucky bubble +{paid} gold", state.RecentEvents[1]);
+                Assert.Equal($"{ChaosGlyphs.Gold} +{paid} gold", ChaosAnnouncerOverlay.Active!.Current!.Text);
                 Assert.Equal(score, state.Score);
                 Assert.Equal(focus + ChaosTuning.FOCUS_PER_GOLDEN, state.Focus);
                 var droplets = BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDroplet == true).ToList();
                 Assert.Equal(3, droplets.Count);
+                Assert.All(droplets, d => Assert.Equal(d.Size, d.HitSize));
                 before = ChaosMeta.State.Gold;
                 BubbleOverlay.PopChaos(droplets[0]);
                 Assert.True(ChaosMeta.State.Gold > before);
+                Assert.Equal($"{ChaosGlyphs.Gold} droplet +{ChaosMeta.State.Gold - before} gold", state.RecentEvents[0]);
                 Assert.Equal(score, state.Score);
                 PanicSurfaces.StopAll("test");
                 Assert.Empty(BubbleOverlay.Field.Bubbles);
@@ -109,7 +123,12 @@ public sealed class ChaosRunHostTests
                 ChaosRunHost.SpawnTick();
                 Assert.Empty(BubbleOverlay.Field.Bubbles);
             }
-            finally { ChaosRunHost.ForceShutdown(); ChaosRunHost.Rng = rng; FreshMeta(); }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); ChaosAnnouncerOverlay.CloseActive(); ChaosRunHost.Rng = rng; FreshMeta();
+                (CoreModArt.AudioOverridePathProvider, CoreAudio.PlayOneShotProvider, CoreSettings.Current.ChaosAnnouncerEnabled) = (art, audio, announcer);
+                System.IO.File.Delete(chime);
+            }
             return Task.CompletedTask;
         });
     }
