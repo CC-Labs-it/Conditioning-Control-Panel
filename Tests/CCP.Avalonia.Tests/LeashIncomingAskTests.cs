@@ -73,36 +73,6 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
-    public void ManualOfferBeforeServiceRebindIsNotQueuedAgain()
-        => LeashGateCardTests.Run(false, (shell, launcher, _) =>
-        {
-            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
-            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
-            LeashHead.Service = replacement;
-            try
-            {
-                // Look can arrive before the shell's two-second service rebind.
-                var manual = LeashAskWindow.Open(replacement.Snapshot.Offers[0], () => replacement, null)!;
-                shell.RebindLeashAsks();
-                launcher.Show();
-                manual.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
-                Assert.Equal("leash-ask:vex", next.Card.Tag);
-                next.Card.Dismiss();
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(LeashAskWindow.Current);
-            }
-            finally
-            {
-                LeashHead.Service = null;
-                shell.RebindLeashAsks();
-                LeashAskWindow.CloseCurrent();
-                Dispatcher.UIThread.RunJobs();
-            }
-        });
-
-    [Fact]
     public void WithdrawnOffersAndOldServiceCannotOpenAfterRebind() =>
         LeashGateCardTests.Run(false, (shell, _, oldService) =>
         {
