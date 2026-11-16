@@ -86,10 +86,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (result == RaceEngineFetchResult.Installed)
                 {
                     // The card is a shown window; the shell needs its own unshown session so closing the card
-                    // does not dispose the newly launched process. Keep every invitation queued while fetching.
+                    // does not dispose the newly launched process. The first queued invite rides the launch URL
+                    // (as LaunchWindow does) and stays queued here until the shell is known to run.
                     var session = new GameWindow(Spec);
-                    if (session.StartRaceShell(null) == true)
+                    if (session.StartRaceShell(_raceRooms.TryPeek(out var first) ? first : null) == true)
                     {
+                        if (first != null) _raceRooms.Dequeue();
                         while (_raceRooms.TryDequeue(out var room)) session.HandoffRaceRoom(room);
                         Close();
                         return;
@@ -136,9 +138,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The shell died before loading a page: close this session and show the card saying so.</summary>
         internal void RaceShellFailed()
         {
+            var pending = _raceRooms.ToArray();   // Close clears the queue; invites not yet joined go to the card
             Close();
             var card = new GameWindow(Spec);
             card.ShowRaceCard(_shellRoom, failed: true);
+            foreach (var room in pending) card.HandoffRaceRoom(room);
             card.Show();
         }
         private void ShowRaceCard(string? room, bool failed)

@@ -99,13 +99,49 @@ public sealed partial class GameWindowTests
             Assert.NotSame(card, session);
             Assert.False(session.IsVisible);
             Assert.NotNull(session.RaceShell);
-            var frames = new System.Collections.Generic.List<string>();
-            session.Posted += frames.Add;
-            session.HandleMessage("{\"type\":\"ready\"}");
-            Assert.Contains(frames, x => x.Contains("abcdef123456"));
+            Assert.Contains("join=abcdef123456", session.PageUrl!.Query);   // the launch URL carries it, as LaunchWindow does
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(null!);
             Assert.False(GameWindow.IsAnyOpen());
             Assert.True(observer.WaitForExit(5000));
+        }
+        finally { GameWindow.LaunchRaceShell = old; }
+    });
+
+    [Fact]   // r72 review P2: invites survive a shell that dies before loading, and the retry carries them
+    public void FirstRace_ShellFailureKeepsPendingRoomsForRetry() => FirstRace((card, fake) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var old = GameWindow.LaunchRaceShell;
+        using var first = LinuxRaceHostTests.StartCat();
+        using var second = LinuxRaceHostTests.StartCat();
+        var procs = new System.Collections.Generic.Queue<System.Diagnostics.Process>(new[] { first, second });
+        var urls = new System.Collections.Generic.List<Uri>();
+        try
+        {
+            GameWindow.LaunchRaceShell = (w, u) => { urls.Add(u); return new LinuxRaceHost(w, procs.Dequeue()); };
+            card.HandoffRaceRoom("abcdef123456");
+            card.HandoffRaceRoom("123456abcdef");
+            Click(card.RaceDownload);
+            fake.Reply.SetResult(RaceEngineFetchResult.Installed);
+            Dispatcher.UIThread.RunJobs();
+            var session = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.Contains("join=abcdef123456", urls[0].Query);
+            session.RaceShell!.Kill(pipeEnded: true);
+            session.RaceShell.Dispose();
+            Dispatcher.UIThread.RunJobs();
+            var retry = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.NotSame(session, retry);
+            Assert.Equal(Loc.Get("rt_engine_start_failed"), retry.RaceStatus.Text);
+            Click(retry.RaceDownload);
+            Dispatcher.UIThread.RunJobs();
+            var again = Assert.Single(GameWindow.OpenWindowsForTests());
+            Assert.NotNull(again.RaceShell);
+            Assert.Contains("join=abcdef123456", urls[1].Query);
+            var frames = new System.Collections.Generic.List<string>();
+            again.Posted += frames.Add;
+            again.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Contains(frames, x => x.Contains("123456abcdef"));
+            again.Close();
         }
         finally { GameWindow.LaunchRaceShell = old; }
     });
