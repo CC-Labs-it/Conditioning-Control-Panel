@@ -152,6 +152,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var logo = ChaosArt.TryLoad(ChaosArt.FilePath("menu_logo.png"));
             Part<Image>("MenuLogoImage").Source = logo;
             Part<StackPanel>("MenuLogoFallback").IsVisible = logo == null;
+            // WPF ChaosHubWindow.xaml.cs:108-118: optional title and dollhouse art.
+            var banner = ChaosArt.MenuImage("banner.png");
+            Part<Image>("BannerImage").Source = banner;
+            Part<Image>("BannerImage").IsVisible = banner != null;
+            var backdrop = ChaosArt.Resolve("hub", "backdrop");
+            Part<Image>("HubBackdrop").Source = backdrop;
+            Part<Image>("HubBackdrop").IsVisible = backdrop != null;
 
             _dollhouseView = Part<Grid>("DollhouseView");
             UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
@@ -1220,13 +1227,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var accGroup = PocketGroup("ACCESSORY", "Accessory");
             if (accGroup != null) _pocketSlotsHost.Children.Add(accGroup);
             if (_pocketSlotsHost.Children.Count == 0)
-                _pocketSlotsHost.Children.Add(new TextBlock
+            {
+                var empty = new StackPanel { Margin = new Thickness(0, 2, 0, 2) };
+                var art = ChaosArt.Resolve("hub", "pockets_empty");
+                if (art != null) empty.Children.Add(new Image
                 {
-                    Text = "no pockets sewn yet.",
-                    Foreground = DimText,
-                    FontSize = 12,
-                    Margin = new Thickness(0, 2, 0, 2),
+                    Source = art, Height = 96, Stretch = Stretch.Uniform,
+                    HorizontalAlignment = HorizontalAlignment.Left, Opacity = 0.8,
+                    Margin = new Thickness(0, 0, 0, 6),
                 });
+                empty.Children.Add(new TextBlock { Text = "no pockets sewn yet.", Foreground = DimText, FontSize = 12 });
+                _pocketSlotsHost.Children.Add(empty);
+            }
 
             // ---- collections ----
             FillCategoryTiles(_tilesAccessories, "Accessory", padTo: 8);
