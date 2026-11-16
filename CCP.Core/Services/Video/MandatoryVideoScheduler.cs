@@ -100,6 +100,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>A playing clip has closed, including attention retries and forced cleanup.
         /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
         public event Action? VideoEnded;
+        // Cancelled teardown is excluded so a stop cannot start a new companion reaction.
+        public event Action? VideoFinished;
+        public event Action? VideoCancelled;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
@@ -664,6 +667,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            try { VideoCancelled?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoCancelled handler failed: {Error}", ex.Message); }
             _feedDefer.Reset(); // A panic cannot leave a held trigger behind.
             Dispose(ref _bubbleWait);
             _waitEndsRun = false;
@@ -714,6 +719,8 @@ namespace ConditioningControlPanel.Services
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
             try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
+            try { if (!cancelled) VideoFinished?.Invoke(); }
+            catch (Exception ex) { Log.Debug("VideoFinished handler failed: {Error}", ex.Message); }
             try { VideoEnded?.Invoke(); }
             catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
             return true;

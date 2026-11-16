@@ -321,6 +321,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            AttachVideoReaction();
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
             AttachTriggerSettings(); // WPF Speech.cs:1630-1675
 
@@ -344,6 +345,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             ReleaseWindowing();
             ReleaseSpeechWindow();   // WPF Speech.cs:1099: the bubble's window closes with the tube
             DetachAwareness();
+            DetachVideoReaction();
             UnwireContentPolicyWarning();
 
             // Every timer this window starts is stopped here. --render-all constructs ~180 windows

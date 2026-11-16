@@ -1,5 +1,10 @@
 using System;
 using System.Threading.Tasks;
+using System.IO;
+using System.Threading;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services.Video;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Awareness;
@@ -23,6 +28,46 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
+        private MandatoryVideoScheduler? _reactionVideo;
+        private int _videoReactionGeneration;
+
+        private void AttachVideoReaction()
+        {
+            DetachVideoReaction();
+            _reactionVideo = CoreEngine.Video;
+            if (_reactionVideo != null) { _reactionVideo.VideoFinished += OnVideoFinished; _reactionVideo.VideoCancelled += CancelVideoReaction; }
+        }
+
+        private void DetachVideoReaction()
+        {
+            CancelVideoReaction();
+            if (_reactionVideo != null) { _reactionVideo.VideoFinished -= OnVideoFinished; _reactionVideo.VideoCancelled -= CancelVideoReaction; }
+            _reactionVideo = null;
+        }
+
+        private void CancelVideoReaction() => Interlocked.Increment(ref _videoReactionGeneration);
+
+        // WPF AvatarTubeWindow.Reactions.cs:362-382 and VideoService.cs:724-725.
+        private void OnVideoFinished()
+        {
+            var title = Path.GetFileNameWithoutExtension(_reactionVideo?.LastVideoPath);
+            var generation = Volatile.Read(ref _videoReactionGeneration);
+            Dispatcher.UIThread.Post(async () => await ReactToVideoAsync(title, generation));
+        }
+
+        internal async Task ReactToVideoAsync(string? title, int generation)
+        {
+            if (generation != Volatile.Read(ref _videoReactionGeneration) || PanicAftermath.TriggersSilenced()
+                || string.IsNullOrEmpty(title) || !CoreSettings.Current.AiChatEnabled || App.Ai?.IsAvailable != true) return;
+            try
+            {
+                var reaction = await App.Ai.GetVideoDoneReaction(title);
+                if (generation == Volatile.Read(ref _videoReactionGeneration) && !PanicAftermath.TriggersSilenced()
+                    && !string.IsNullOrWhiteSpace(reaction)) GigglePriority(reaction);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to get AI video-done reaction"); }
+        }
+
         private const double StartupCooldownSeconds = 3.0;   // WPF Speech.cs:68
         internal DateTime _startupTime = DateTime.Now;   // settable by tests
         private bool _activityAiInFlight, _stillOnAiInFlight;   // WPF: don't stack requests
