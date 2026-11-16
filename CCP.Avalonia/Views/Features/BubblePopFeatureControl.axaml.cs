@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             Platform.WebcamTracker.Instance.StateChanged += OnWebcamStateChanged;
             ConditioningControlPanel.Services.Super.SuperAccess.Changed += OnFrothAccessChanged;
+            LocalizationManager.Instance.LanguageChanged += OnFrothLanguageChanged;
             RebindToCurrentSettings();
             RefreshFrothRows();
             RebuildMotionPicker();   // grants may have changed while detached (WPF OnLoaded:30)
@@ -104,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreAccount.UnifiedIdentityChanged -= OnIdentityChanged;
             Platform.WebcamTracker.Instance.StateChanged -= OnWebcamStateChanged;
             ConditioningControlPanel.Services.Super.SuperAccess.Changed -= OnFrothAccessChanged;
+            LocalizationManager.Instance.LanguageChanged -= OnFrothLanguageChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
