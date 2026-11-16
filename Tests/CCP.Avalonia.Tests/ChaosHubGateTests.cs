@@ -134,6 +134,29 @@ public sealed class ChaosHubGateTests
         Assert.True(id == "slow_fuses" ? disk.PurchasedUpgrades.Contains(id) : disk.LifetimeBoonLevels[id] == 1);
     });
 
+    [Fact]
+    public Task Purchasing_extreme_tier_flashes_its_reveal() => InHub(state =>
+    {
+        state.RunsCompleted = 50;
+        state.LessonsComplete.Add("extreme_tier");
+    }, hub =>
+    {
+        RevealService.Sync("test");
+        foreach (var id in RevealService.PendingIds()) RevealService.MarkSeen(id);
+        int chimes = 0;
+        var old = ChaosHubWindow.PlayRevealSfx;
+        ChaosHubWindow.PlayRevealSfx = (_, _) => chimes++;
+        try
+        {
+            Button(hub, "extreme_tier").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Assert.True(RevealService.IsPending(RevealIds.PillInescapable));
+            Assert.Equal(1, chimes);
+            hub.AdvanceRevealFlashes(3);
+            Assert.True(RevealService.IsSeen(RevealIds.PillInescapable));
+        }
+        finally { ChaosHubWindow.PlayRevealSfx = old; }
+    });
+
     [Theory]
     [InlineData("en")][InlineData("de")][InlineData("es")][InlineData("fr")][InlineData("it")]
     [InlineData("pt-BR")][InlineData("ru")][InlineData("ja")][InlineData("ko")][InlineData("zh-CN")]
