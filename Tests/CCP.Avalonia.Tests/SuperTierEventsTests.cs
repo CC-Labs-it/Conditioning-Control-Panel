@@ -17,6 +17,8 @@ public sealed partial class AccountSeedTests
     public void ProviderAndIdentityChangesRefreshEveryEffect()
     {
         var field = typeof(SuperAccess).GetField("_tierHooked", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var identityField = typeof(CoreAccount).GetField("UnifiedIdentityChanged", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var oldIdentityHandlers = identityField.GetValue(null);
         var oldHooked = (bool)field.GetValue(null)!;
         var oldHook = SuperAccess.TierEventsHook;
         var oldId = CoreAccount.UnifiedUserId;
@@ -40,9 +42,11 @@ public sealed partial class AccountSeedTests
         finally
         {
             SuperAccess.Changed -= Changed;
+            identityField.SetValue(null, oldIdentityHandlers);
             CoreAccount.UnifiedUserId = oldId;
             SuperAccess.TierEventsHook = oldHook;
             field.SetValue(null, oldHooked);
         }
+        Assert.Equal(oldIdentityHandlers, identityField.GetValue(null));
     }
 }

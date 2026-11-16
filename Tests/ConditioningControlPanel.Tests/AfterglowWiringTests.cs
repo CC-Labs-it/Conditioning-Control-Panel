@@ -12,16 +12,18 @@ public class AfterglowWiringTests
         => File.ReadAllText(Path.Combine(RepoRoot(), Path.Combine(parts)));
 
     /// <summary>Panic and the emergency exit stop subliminals through Stop / Dispose; both must take
-    /// every pop down. Start arms the driver, the OCR exclusion knows the words.</summary>
+    /// every pop down. The OCR exclusion knows the words.</summary>
     [Fact]
     public void Service_StartsAndStopsTheDriverWithTheAmbientScheduler()
     {
         var src = Src("ConditioningControlPanel", "Services", "Subliminal", "SubliminalService.cs");
         // Take two: the ghost line is fed where a subliminal is shown and cleared where the service stops.
         Assert.DoesNotContain("new Super.AfterglowDriver()", Body(src, "public void Start()"));
-        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "public void FlashSubliminal()"));
-        Assert.Contains("AfterglowLineLayer.StopAll", Body(src, "public void Stop()"));
-        Assert.Contains("_afterglow?.Stop();", Body(src, "public void Stop()"));
+        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "internal void FlashPhrase("));
+        Assert.Contains("TearDownSurfaces();", Body(src, "public void Stop()"));
+        Assert.Contains("TearDownSurfaces();", Body(src, "internal void OnRunStateChanged("));
+        Assert.Contains("AfterglowLineLayer.StopAll", Body(src, "private void TearDownSurfaces()"));
+        Assert.Contains("_afterglow?.Stop();", Body(src, "private void TearDownSurfaces()"));
         Assert.Contains("_afterglow?.Dispose();", Body(src, "public void Dispose()"));
         Assert.Contains("glow.GetActiveTextRectsPx()", Body(src, "public System.Drawing.Rectangle[] GetActiveTextScreenRects()"));
     }
@@ -34,7 +36,7 @@ public class AfterglowWiringTests
         Assert.DoesNotContain("SpawnAfterglow", src);
         Assert.DoesNotContain("_afterglowBonus", src);
         Assert.DoesNotContain("PickWeighted", src);
-        Assert.Contains("activeTexts[_random.Next(activeTexts.Count)]", Body(src, "public void FlashSubliminal()"));
+        Assert.Contains("CoreSubliminal.PickPhrase()", Body(src, "public void FlashSubliminal()"));
     }
 
     /// <summary>The driver tears down on the switch, rechecks every second and needs the compositor.</summary>
