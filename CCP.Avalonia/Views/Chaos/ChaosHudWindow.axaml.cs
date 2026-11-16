@@ -44,9 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    <c>ChaosWindowZ</c>. Both map without a shim: the ex-styles are
     ///    <c>ShowInTaskbar="False"</c> + <c>ShowActivated="False"</c> in the XAML, and the
     ///    topmost re-assert is <c>Topmost</c>. No <c>DllImport</c> survives - a net10.0 head has
-    ///    no user32. <c>X11Overlay.SetClickThrough</c> is deliberately NOT called: this HUD is
-    ///    interactive, and WPF never set <c>WS_EX_TRANSPARENT</c> on it either (the unpainted
-    ///    alpha-0 region is click-through by itself on both platforms).
+    ///    no user32. A native input region keeps the unpainted margin click-through.
     ///  - <b>Animation.</b> Every <c>DoubleAnimation</c>/<c>ColorAnimation</c> here is transient
     ///    juice (streak punch and shake, score pop, shield flash and pop, focus breath and blink,
     ///    the ready-glow breath, the clock's end-rush blink, the multiplier punch, the 180ms panel
@@ -255,6 +253,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _collapseRecheck?.Stop();
                 _openDwell?.Stop();
             };
+
+            Opened += (_, _) => UpdateInputRegion();
+            SizeChanged += (_, _) => UpdateInputRegion();
+            ScalingChanged += (_, _) => UpdateInputRegion();
 
             // Top-anchored and ~60% of the work-area height, so it doesn't span the whole
             // screen (shrinks from the bottom up). Left/right edge is chosen by ApplySide.
@@ -487,6 +489,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _expandedAt = DateTime.UtcNow;
             _panel.IsVisible = true;
             _strip.IsVisible = false;   // the panel is translucent — don't let the strip bleed through
+            UpdateInputRegion();
             Animate(0);
         }
 
@@ -637,6 +640,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (_expanded) return;
                 _panel.IsVisible = false;
                 _strip.IsVisible = true;
+                UpdateInputRegion();
             });
         }
 
@@ -685,6 +689,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // Both switches (strip + expanded-header) stay in sync — whichever is visible reads right.
             StyleSwitch(_sideLeftBtn, _sideRightBtn, _sideLeftGlyph, _sideRightGlyph, onRight);
             StyleSwitch(_sideLeftBtn2, _sideRightBtn2, _sideLeftGlyph2, _sideRightGlyph2, onRight);
+            UpdateInputRegion();
+        }
+
+        // The panel remains interactive until its closing slide finishes. Coordinates are physical
+        // pixels relative to the window, as required by XFixes and the Win32 window region.
+        internal static PixelRect InputRect(double width, double height, double scale, bool right, bool panel)
+        {
+            int w = (int)Math.Ceiling(width * scale);
+            int h = (int)Math.Ceiling(height * scale);
+            int strip = Math.Min(w, (int)Math.Ceiling(116 * scale));
+            return new PixelRect(panel ? 0 : right ? w - strip : 0, 0, panel ? w : strip, h);
+        }
+
+        internal Action<PixelRect[]>? InputRegionOverride;
+        private void UpdateInputRegion()
+        {
+            if (!IsVisible || _closed || Bounds.Width <= 0 || Bounds.Height <= 0) return;
+            var rects = new[] { InputRect(Bounds.Width, Bounds.Height, RenderScaling, _onRight, _panel.IsVisible) };
+            if (InputRegionOverride is { } apply) apply(rects);
+            else X11Overlay.SetWindowInputRegion(this, rects);
         }
 
         private void StyleSwitch(Border leftBtn, Border rightBtn, IconGlyph leftGlyph, IconGlyph rightGlyph, bool onRight)
@@ -736,6 +760,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _expanded = true;
                 _panel.IsVisible = true;
                 _strip.IsVisible = false;
+                UpdateInputRegion();
                 Animate(0);
             }
             else if (!_panel.IsPointerOver)

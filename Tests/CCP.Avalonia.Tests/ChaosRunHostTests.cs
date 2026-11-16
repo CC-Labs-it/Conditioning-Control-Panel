@@ -1079,6 +1079,31 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task PanicSurfaceClosesHudInputRegion()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var hud = ChaosRunHost.Hud!;
+                int calls = 0;
+                hud.InputRegionOverride = _ => calls++;
+                hud.SetPreRunExpanded(true);
+                Assert.True(calls > 0);
+                ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.False(hud.IsVisible);
+                int stopped = calls;
+                hud.SetPreRunExpanded(true);
+                Assert.Equal(stopped, calls);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Panic_during_the_countdown_and_mid_run_ends_the_run()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
