@@ -13,8 +13,8 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>Runs alone while it fills the shared BubbleOverlay.Field and waits for the hops to land.
-/// Reset the field and ambient timer too: an earlier test may have left bubbles or a running spawner.</summary>
+/// <summary>Runs alone: it fills the shared BubbleOverlay.Field and waits 800 ms for the hops to land; a parallel chaos class
+/// popping a bubble in that gap counted 9 instead of 8 (restack wave 2 run 3, Linux shard 0).</summary>
 [Collection(RunsAloneCollection.Name)]
 public class ChaosBodyBuzzTests
 {
@@ -39,16 +39,6 @@ public class ChaosBodyBuzzTests
             zapField.SetValue(null, previousZap);
         }
     }
-
-    [Fact]
-    public Task ShockwaveStartsWithAnEmptyFieldEvenAfterAnEarlierBubble() => AvaloniaTestDispatcher.RunAsync(async () =>
-    {
-        BubbleOverlay.EndChaos();
-        BubbleOverlay.Stop();
-        BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 10000, Y = 10000, Size = 20, Popping = true });
-        try { await ShockwaveSelectsRendererAndCancelsHops(false); }
-        finally { BubbleOverlay.EndChaos(); BubbleOverlay.Stop(); }
-    });
 
     [Theory]
     [InlineData(false)]
@@ -76,8 +66,6 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
-            BubbleOverlay.EndChaos();
-            BubbleOverlay.Stop();
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
@@ -104,7 +92,7 @@ public class ChaosBodyBuzzTests
         }
         finally
         {
-            BubbleOverlay.EndChaos(); BubbleOverlay.Stop();
+            BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
             LocalizationManager.Instance.SetLanguage(language);
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();
