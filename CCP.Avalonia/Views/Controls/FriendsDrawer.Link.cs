@@ -160,11 +160,12 @@ public sealed partial class FriendsDrawer
         (cue == "click" ? "ui_click.mp3" : cue == "accepted" ? "ui_unlock.mp3" : "ui_denied.mp3"),
         cue == "click" ? .12f : cue == "accepted" ? .18f : .14f, "friends-" + cue);
 
-    internal void PlayLinkFx(Control from, bool wave, IBrush? color = null)
+    /// <summary><paramref name="sparks"/> set: only that many sparks, no pop (WPF Juice.cs:150 hop).</summary>
+    internal void PlayLinkFx(Control from, bool wave, IBrush? color = null, int? sparks = null)
     {
-        var k = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => .5, _ => 1.0 };
+        var k = FeedMotionAmount;
         if (k == 0 || TopLevel.GetTopLevel(this) == null) return; // closed drawer: a detached BeatLoop would wait in Live forever
-        var fx = new LinkBurst(from, wave, k, from.TranslatePoint(new Point(from.Bounds.Width / 2, from.Bounds.Height / 2), _linkFx) ?? default, color);
+        var fx = new LinkBurst(from, wave, k, from.TranslatePoint(new Point(from.Bounds.Width / 2, from.Bounds.Height / 2), _linkFx) ?? default, color, sparks);
         _linkFx.Children.Add(fx);
         global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? beat = null;
         beat = new(fx, seconds => { fx.Step(seconds * 1000); if (fx.Done) { beat!.Stop(); _linkFx.Children.Remove(fx); } });
@@ -176,20 +177,20 @@ public sealed partial class FriendsDrawer
     // WPF FriendsDrawer.Juice.cs: Pop 380/110 ms, 12 sparks; Shockwave two rings 120 ms apart, 14 sparks.
     internal sealed class LinkBurst : Control
     {
-        private readonly Control _from; private readonly Point _center; private readonly double _k;
+        private readonly Control _from; private readonly Point _center; private readonly double _k; private readonly int? _sparks;
         internal IBrush Color { get; }
         internal bool Wave { get; } internal double Age { get; private set; }
-        internal int Sparks => (int)Math.Round((Wave ? 14 : 12) * _k);
+        internal int Sparks => _sparks ?? (int)Math.Round((Wave ? 14 : 12) * _k);
         internal bool Done => Age >= (Wave ? 620 / _k + 120 : 680);
-        internal LinkBurst(Control from, bool wave, double k, Point center, IBrush? color = null)
-        { _from = from; Wave = wave; _k = k; _center = center; Color = color ?? (wave ? Mint : Lilac); Effect = new DropShadowEffect { Color = ((ISolidColorBrush)Color).Color, BlurRadius = wave ? 12 : 6, Opacity = .9, OffsetX = 0, OffsetY = 0 }; Width = Height = 1; Tag = wave ? "friends-link-wave" : "friends-link-pop"; Step(0); }
+        internal LinkBurst(Control from, bool wave, double k, Point center, IBrush? color = null, int? sparks = null)
+        { _from = from; Wave = wave; _k = k; _center = center; _sparks = sparks; Color = color ?? (wave ? Mint : Lilac); Effect = new DropShadowEffect { Color = ((ISolidColorBrush)Color).Color, BlurRadius = wave ? 12 : 6, Opacity = .9, OffsetX = 0, OffsetY = 0 }; Width = Height = 1; Tag = wave ? "friends-link-wave" : sparks != null ? "friends-hop-sparks" : "friends-link-pop"; Step(0); }
         internal static double PopScale(double ms, double k) => ms >= 380 ? 1 : ms <= 110
             ? 1 + .22 * k * (1 - Math.Pow(1 - ms / 110, 2))
             : 1 + .22 * k * (1 - global::ConditioningControlPanel.Services.EmiDesk.EmiTossRules.ElasticOut((ms - 110) / 270));
         internal void Step(double ms)
         {
             Age = ms;
-            if (!Wave) { var scale = PopScale(ms, _k); // the theme's press transition would smooth each beat; WPF BeginAnimation owns the scale
+            if (!Wave && _sparks == null) { var scale = PopScale(ms, _k); // the theme's press transition would smooth each beat; WPF BeginAnimation owns the scale
                 if (ms < 380) _from.Transitions = null; _from.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative); _from.RenderTransform = new ScaleTransform(scale, scale); if (ms >= 380) _from.ClearValue(TransitionsProperty); }
             InvalidateVisual();
         }
