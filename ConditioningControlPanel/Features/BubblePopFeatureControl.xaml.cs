@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Features
         /// <inheritdoc/>
         public void RebindToCurrentSettings()
         {
+            LoadFrothRows();     // the gold box's rows show the new settings too
             (_settingsHook ??= new SettingsHook(OnSettingsPropertyChanged)).Rebind();
             LoadFromSettings();
         }
@@ -324,7 +325,7 @@ namespace ConditioningControlPanel.Features
             MotionRow.Visibility = rain || spiral ? Visibility.Visible : Visibility.Collapsed;
             V2Box.Visibility = rain || spiral || !RowGetBubblesV2.IsRowHidden
                 ? Visibility.Visible : Visibility.Collapsed;
-            V2BoxBadge.Content ??= FeatureCard.NewV2Badge(new Thickness(0));
+            // The v2 section sits inside the gold SuperBox now, which wears the one v2 tag.
             bool wasLoading = _isLoading;
             _isLoading = true;
             try

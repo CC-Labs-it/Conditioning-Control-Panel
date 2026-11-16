@@ -124,6 +124,9 @@ namespace ConditioningControlPanel
 
         private void UpdateBannerWelcomeMessage()
         {
+            // The welcome line takes its slot back, so an announcement that held it has ended.
+            SetBannerAnnouncementLive(false);
+
             // Check offline mode first
             if (App.Settings?.Current?.OfflineMode == true &&
                 !string.IsNullOrWhiteSpace(App.Settings?.Current?.OfflineUsername))
@@ -467,6 +470,9 @@ namespace ConditioningControlPanel
 
             TxtBannerSecondary.Text = message;
 
+            // Live until it ends: the banner shows on every page, not just Home.
+            SetBannerAnnouncementLive(true);
+
             // A genuinely new message, so it bypasses the rotation throttle.
             SweepBannerSheen(force: true);
 
@@ -476,6 +482,12 @@ namespace ConditioningControlPanel
                 _bannerRotationTimer.Start();
             }
         }
+
+        /// <summary>
+        /// Ends the announcement: the welcome line takes its slot back and the banner is Home's
+        /// alone again (it collapses if another page is on screen).
+        /// </summary>
+        public void ClearBannerAnnouncement() => UpdateBannerWelcomeMessage();
 
         /// <summary>
         /// The One Account beat's hyperlink. BrowserLauncher rather than the raw

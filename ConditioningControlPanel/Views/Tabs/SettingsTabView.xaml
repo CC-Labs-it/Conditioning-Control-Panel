@@ -575,12 +575,12 @@
             <features:FeatureCard DashboardDepth="True" Grid.Row="0" Grid.Column="0" x:Name="CardFlash" x:FieldModifier="internal"
                                   Title="Flash Images"
                                   Icon="pack://application:,,,/Resources/features/flash.png"
-                                  HelpSectionId="FlashImages"
+                                  HelpSectionId="FlashImages" Super="FlickerDeck"
                                   Click="CardFlash_Click"
                                   DimWhenInactive="True"
                                   ToggleRequested="CardFlash_Toggle"/>
             <features:SplitFeatureCard DashboardDepth="True" Grid.Row="0" Grid.Column="1" x:Name="ComboVideoBubble" x:FieldModifier="internal"
-                                       TitleA="Mandatory Video" TitleB="Bubble Count" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount"
+                                       TitleA="Mandatory Video" TitleB="Bubble Count" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount" SuperA="LightsDown"
                                        IconA="pack://application:,,,/Resources/features/mandatory_videos.png"
                                        IconB="pack://application:,,,/Resources/features/Bubble_count.png"
                                        ClickA="ComboVideoBubble_ClickA" ClickB="ComboVideoBubble_ClickB"
@@ -588,14 +588,14 @@
             <features:FeatureCard DashboardDepth="True" Grid.Row="0" Grid.Column="2" x:Name="CardSubliminal" x:FieldModifier="internal"
                                   Title="Subliminals"
                                   Icon="pack://application:,,,/Resources/features/subliminal.png"
-                                  HelpSectionId="Subliminals"
+                                  HelpSectionId="Subliminals" Super="Afterglow"
                                   Click="CardSubliminal_Click"
                                   DimWhenInactive="True"
                                   ToggleRequested="CardSubliminal_Toggle"/>
             <features:FeatureCard DashboardDepth="True" Grid.Row="0" Grid.Column="3" x:Name="CardBouncingText" x:FieldModifier="internal"
                                   Title="Bouncing Text"
                                   Icon="pack://application:,,,/Resources/features/bouncing_text.png"
-                                  HelpSectionId="BouncingText"
+                                  HelpSectionId="BouncingText" Super="Scrawl"
                                   Click="CardBouncingText_Click"
                                   DimWhenInactive="True"
                                   ToggleRequested="CardBouncingText_Toggle"/>
@@ -624,7 +624,7 @@
                  enhancement and the owner corrected it on the desk run, 2026-09-12: "the deeper
                  editor should link and open the deeper page, not the editor". The wall's
                  "navigate, never launch" rule, which this tile is now back inside. -->
-            <features:FeatureCard DashboardDepth="True" Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" x:FieldModifier="internal"
+            <features:FeatureCard DashboardDepth="True" Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" x:FieldModifier="internal" Visibility="Collapsed"
                                   Title="{loc:Str dash_deeper_editor_title}"
                                   Icon="pack://application:,,,/Resources/features/deeper_editor.png"
                                   Click="CardDeeperEditor_Click">
@@ -899,7 +899,7 @@
             </Border>
     
             <features:SplitFeatureCard DashboardDepth="True" Grid.Row="1" Grid.Column="3" x:Name="ComboSpiralPink" x:FieldModifier="internal"
-                                       TitleA="Spiral Overlay" TitleB="Pink Filter" HelpSectionIdA="SpiralOverlay" HelpSectionIdB="PinkFilter"
+                                       TitleA="Spiral Overlay" TitleB="Pink Filter" HelpSectionIdA="SpiralOverlay" HelpSectionIdB="PinkFilter" SuperA="Vortex" SuperB="Creep"
                                        IconA="pack://application:,,,/Resources/features/spiral_overlay.png"
                                        IconB="pack://application:,,,/Resources/features/Pink_filter.png"
                                        ClickA="ComboSpiralPink_ClickA" ClickB="ComboSpiralPink_ClickB"
@@ -921,7 +921,7 @@
                  mid-turn, so a handler on a face would see leaves the pointer never made). The
                  turn itself is MainWindow.DashboardFx.cs region 2c, never a Storyboard
                  (SetTargetName no-ops across this UserControl's namescope). -->
-            <Grid Grid.Row="2" Grid.Column="0" x:Name="MysteryFlipHost" x:FieldModifier="internal"
+            <Grid Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" x:Name="MysteryFlipHost" x:FieldModifier="internal"
                   RenderTransformOrigin="0.5,0.5">
                 <Grid.RenderTransform>
                     <TransformGroup>
@@ -947,8 +947,10 @@
                     <Grid>
                         <Border CornerRadius="11" RenderOptions.BitmapScalingMode="HighQuality">
                             <Border.Background>
+                                <!-- Uniform: the plate is two rows tall since the declutter strip-out,
+                                     and a filled picture lost its sides there. Show it whole. -->
                                 <ImageBrush x:Name="MysteryRevealArtBrush" x:FieldModifier="internal"
-                                            Stretch="UniformToFill"/>
+                                            Stretch="Uniform"/>
                             </Border.Background>
                         </Border>
                         <Border CornerRadius="0,0,11,11" VerticalAlignment="Bottom" IsHitTestVisible="False">
@@ -1005,7 +1007,7 @@
                  the card's top-left. Breath is driven by MainWindow.DashboardFx alongside the
                  ring above, and stops with it on the day's first hover. -->
             <Border x:Name="MysteryBadge" x:FieldModifier="internal"
-                    Grid.Row="2" Grid.Column="0" Panel.ZIndex="12" IsHitTestVisible="False"
+                    Grid.Row="1" Grid.Column="0" Panel.ZIndex="12" IsHitTestVisible="False"
                     HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,2,2,0" Padding="8,3,8,4" CornerRadius="8"
                     RenderTransformOrigin="0.5,0.5">
@@ -1028,7 +1030,7 @@
                            Foreground="#3A2A00" FontSize="10" FontWeight="Black"/>
             </Border>
             <features:SplitFeatureCard DashboardDepth="True" Grid.Row="2" Grid.Column="3" x:Name="ComboMindDrain" x:FieldModifier="internal"
-                                       TitleA="Mind Wipe" TitleB="Brain Drain" HelpSectionIdA="MindWipe" HelpSectionIdB="BrainDrain"
+                                       TitleA="Mind Wipe" TitleB="Brain Drain" HelpSectionIdA="MindWipe" HelpSectionIdB="BrainDrain" SuperB="Undertow"
                                        IconA="pack://application:,,,/Resources/features/Mind_Wipers.png"
                                        IconB="pack://application:,,,/Resources/features/brain_drain.png"
                                        ClickA="ComboMindDrain_ClickA" ClickB="ComboMindDrain_ClickB"
@@ -1071,7 +1073,7 @@
             <features:FeatureCard DashboardDepth="True" Grid.Row="3" Grid.Column="2" x:Name="CardBubblePop" x:FieldModifier="internal"
                                   Title="Bubble Pop"
                                   Icon="pack://application:,,,/Resources/features/Bubble_pop.png"
-                                  HelpSectionId="BubblePop"
+                                  HelpSectionId="BubblePop" Super="InnerBloom"
                                   Click="CardBubblePop_Click"
                                   DimWhenInactive="True"
                                   ToggleRequested="CardBubblePop_Toggle"/>

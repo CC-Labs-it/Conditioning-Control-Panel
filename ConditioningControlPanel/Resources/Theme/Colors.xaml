@@ -177,10 +177,12 @@
     <Color x:Key="SectionHueAudio">#FFFF7E6B</Color>
     <Color x:Key="SectionHueAudioWash">#14FF7E6B</Color>
     <Color x:Key="SectionHueAudioBorder">#40FF7E6B</Color>
-    <!-- Studio door hue (same coral as Audio by design - Studio rack pages key off this alias) -->
-    <Color x:Key="SectionHueStudio">#FFFF7E6B</Color>
-    <Color x:Key="SectionHueStudioWash">#14FF7E6B</Color>
-    <Color x:Key="SectionHueStudioBorder">#40FF7E6B</Color>
+    <!-- Studio door hue: the strip's Studio pink (NavStripRules.Pink), so tab, rack row and
+         pane read as one place. Was the Audio coral until 2026-11-15. Studio rack pages key
+         off this alias; wash = 8% alpha, border = 25% alpha, like every other section. -->
+    <Color x:Key="SectionHueStudio">#FFFF69B4</Color>
+    <Color x:Key="SectionHueStudioWash">#14FF69B4</Color>
+    <Color x:Key="SectionHueStudioBorder">#40FF69B4</Color>
     <Color x:Key="SectionHueDevices">#FF5CE0A5</Color>
     <Color x:Key="SectionHueDevicesWash">#145CE0A5</Color>
     <Color x:Key="SectionHueDevicesBorder">#405CE0A5</Color>

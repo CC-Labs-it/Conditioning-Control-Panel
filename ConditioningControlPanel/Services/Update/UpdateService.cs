@@ -20,66 +20,59 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.2.4";
+        public const string AppVersion = "7.3.0";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.2.4 - Free Toys
+        public const string CurrentPatchNotes = @"v7.3.0 - Back to the basics
 
-NEW IN 7.2.4
+NEW IN 7.3.0
 
-TOYS ARE FREE
-connected toys are free for everyone now, no Basic needed. your limits still apply and panic still stops them.
+most of you spend most of your time on the basics: flashes, bubbles, the spiral, subliminals. it has been almost a year since those arrived, so a V2 was owed. this one is their revamp.
 
-RACING THOUGHTS CLASSIC IS BACK
-the original 2D race returns beside the 3D one, as its own door on Play and in the launcher. free for everyone, every track open. the 3D Racing Thoughts stays Prime. Classic is also on the website and, soon, on the phone.
+SUPER EFFECTS
+eight of the basics get a second version. look for the gold corner on a dashboard tile: click it and the V2 runs. each one has its own gold box of options in the feature's panel, and a ""See V2"" button in its help card shows what it does before you turn it on.
 
-PIECE BY PIECE
-- right-click arrows and circles on the board: right drag from one square to another draws an arrow, a right click circles a square, the same again removes it, a left click clears them all. only you see them. a right drag that starts off the board still turns the camera.
+- Deck (Flash Images): tap a flash and it flips. keep going and it cracks, then breaks, and a break knocks its neighbours.
+- Froth (Bubbles): bubbles merge, carry both pictures inside, and turn gold when ripe. pop one and the pop can chain. a merged bubble pays the sum of its parts.
+- Whirlpool (Spiral): a spiral under your cursor that grows while you rest and shrinks when you move. it drags pictures, bubbles and fog to the eye and pops them there.
+- Steam (Pink Filter): pink fog drifts in from the edges. wipe it with the mouse and it creeps back, with words in it.
+- Afterglow (Subliminals): words pop by the mouse and leave ghosts that build a line.
+- Scrawl (Bouncing Text): the bouncing word stamps itself on the screen and the stamps stay a while.
+- Lights Down (Mandatory Videos): the room dims around the video.
+- Undertow (Brain Drain): a clear lens in the blur that follows you and shrinks.
+
+they react to each other: the Whirlpool swallows flashes and bubbles, flings the bouncing word back out, and stirs the fog into a spiral.
+
+Super effects come with Basic and up. without a plan the corner and the options stay visible, with a lock. Gentle visuals calms them, and panic stops all of them.
+
+A QUIETER PANEL
+- the launcher is three doors now: the Panel, Games and Tools. each door opens its own page, and Continue takes you back to the last thing you played.
+- the games moved out of Play and into the Games door. Play keeps Eyes, Sessions and Deeper. Just Drop and the Deeper editor moved to the launcher too.
+- Studio: every row shows on, off or selected at a glance, each group shows how many are on, and the page wears one colour.
+- the tab strip is quieter: only the tab you are on is filled, and there is one help button instead of one per tab.
+- Start has its own bar, and the header banner shows on Home only.
+
+WE TAKE BITCOIN NOW
+for those of you who are extra careful about privacy, or just prefer it: you can pay with Bitcoin. it buys a pass for Basic or Prime, paid once, for the months you pick. it never renews and nothing gets billed again. you get a code, and Settings > Account > ""Redeem a code"" turns it on.
+
+the card that compares Basic and Prime is redone as two tickets, and the Bitcoin pass is linked right on it.
 
 NEW
-- Mod Creator: Text Replacements lists every original text a replacement can match, with a search box. click one and it fills the original box. Export list saves the whole list as a text file.
-- Mandatory videos: ""Loop short videos until the minimum"", off by default. on, a clip shorter than the minimum replays until the minimum has played, then ends once, with one result.
-- Wallpaper: ""Save this wallpaper"" keeps the picture on your desktop, in Pictures > CCP Wallpapers.
-- Wallpaper: a Fit choice (Fill, Fit, Stretch, Span, Center), so a vertical or mixed setup can span instead of stretch. your own fit comes back after.
-- the launcher shows an ""Update ready"" chip when a new version is waiting, so you can update without opening the panel.
-- Settings > Account: ""Redeem a code"" for a pass code.
-- Settings > Data: Delete account now sits in the Danger zone, next to Factory reset.
-- Perk effects: Full, No cards or Off, in Settings > Notifications. Off also turns off the Pink Rush wash and the gold and pink sparkles on flashes and bubbles. XP still pays the same.
-- Circe's Tab: a price and the day limit can go up to 24 hours. anything over an hour shows a warning line.
-- Awareness: a new ""On at launch"" switch. it can now be turned off during a session, and pausing a session pauses it.
-- quests: click a daily or weekly quest to open the page that completes it. Lockdown included.
-- Natasha's bubbles: trigger words can come up more often, in Circe's Tab costs.
-- Brain Drain: the audio clip rate goes down to 0, for blur only.
-- ""+Add Trigger"" jumps to the new row and puts the cursor in it.
-- fewer popups: the online media offer, the ""share achievements on Discord?"" question and the tier celebration cards are gone. online media and Discord sharing are still one switch away.
+- Mandatory videos: ""Fill the minimum with other videos"", off by default. on, a clip shorter than the minimum is followed by other clips until the minimum has played.
+- Mod Creator: searching a skill by name shows its effect and flavour texts with it.
+- Piece by Piece: a castling hint on the board, and you can castle by dropping the king on the rook. the board stays readable under the spiral, and a Board motion switch calms it.
 
 FIXES
-- the app no longer freezes when a video in the in-app browser goes full screen.
-- Escape typed into another app no longer pauses and then closes a floating video. a floating video now answers Escape only when Escape is your panic key.
-- a settings backup taken during a session now keeps your own values, so a restore on a new PC no longer brings back the session's pink filter, ducking or Hydra.
-- your own voice lines speak on the idle timer again.
-- importing the same pack twice no longer makes a copy of every file.
-- Prize Counter: a buy that needs Discord says ""Link Discord first"" instead of failing on every try.
-- Wallpaper no longer leaves a white desktop when Windows rotates your wallpapers: Dynamic redraws the whole desktop when it stops, and Static and the session wallpaper leave a rotating, Spotlight or per-monitor desktop alone.
-- other apps such as Discord no longer stay turned down after a session.
-- the spiral clears when a session ends.
-- the companion's speech bubble no longer covers the chat box, and the tube no longer covers its own menu.
-- the Prize Counter plays its sounds as soon as it opens.
-- Bubble Count time counts for the ""watch videos"" quests, including a clip you leave early.
-- a strict lock card with panic turned off says that Escape closes it.
-- the Social badge checks the Lobby every 2 minutes instead of every 10 seconds. the Lobby itself stays live while it is open.
+- a local AI host typed without http:// no longer stops the panel from opening.
+- the companion no longer giggles about once a minute with the engine off.
+- cutting your own leash is never blocked by an open ""Let go"" question.
+- Deeper: fixed a crash while a library file was being read.
+- Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-HUNTING A STRAY SOUND
-thanks to your reports, most ""random"" sounds now have a name. the giggle while idle was the companion asking you something on its own: with nothing running it now shows the question quietly, unless you let it speak while idle. it also waits while a Deeper session plays. the sounds right at launch are the launcher's own chimes and hover notes (its speaker button mutes them). still hearing something? send an in-app bug report right away, it now names more sources.
-
-ALSO LOGGED FOR THE NEXT REPORT
-- a crash when the in-app browser goes full screen now saves your graphics card and window sizes.
-- corner GIFs log how long they take to load and show.
-
-this replaces the 7.2.3 pre-release and carries all of it. coming from 7.2.1 or older? read the 7.2.2 notes on the release page.";
+this is a pre-release. it carries everything in 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";

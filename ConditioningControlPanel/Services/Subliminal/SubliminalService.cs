@@ -51,6 +51,8 @@ namespace ConditioningControlPanel.Services
         // the shared per-monitor Skia host - no per-screen window OR host canvas churn at all.
         // Focus-steal still falls back to the classic windows (the host is NOACTIVATE).
         private Compositor.SubliminalLayer? _layer;
+        // SUPER AFTERGLOW: words popping near the mouse while the ambient scheduler runs (switch off = idle).
+        private Super.AfterglowDriver? _afterglow;
         private static bool UseCompositor => App.CompositorEnabled;
         // One ref-counted hold on the shared host while any card could be up — NOT per show
         // (host churn is exactly what solid mode exists to remove). Released on Stop/Dispose,
@@ -115,6 +117,8 @@ namespace ConditioningControlPanel.Services
             
             _isRunning = true;
             ScheduleNext();
+            // Take two (2026-11-15): Afterglow is the ghost line fed from FlashSubliminal. The
+            // October near-cursor words (AfterglowDriver) are no longer started.
             
             App.Logger?.Information("SubliminalService started");
 
@@ -129,6 +133,8 @@ namespace ConditioningControlPanel.Services
         {
             _isRunning = false;
             _timer.Stop();
+            _afterglow?.Stop();
+            DispatcherHelper.RunOnUI(Compositor.AfterglowLineLayer.StopAll);
             _visibleOneShotGen = null;
 
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
@@ -265,7 +271,10 @@ namespace ConditioningControlPanel.Services
             if (!_isRunning || !App.Settings.Current.SubliminalEnabled)
                 return;
 
-            FlashSubliminal();
+            // Super Afterglow picked as "Super only": the ambient cards rest, the near-cursor words carry on.
+            // Asked per tick, so a pick change applies at the next card with no restart.
+            if (!Super.SuperAccess.ReplacesBase(Super.SuperEffect.Afterglow))
+                FlashSubliminal();
             ScheduleNext();
         }
 
@@ -285,6 +294,7 @@ namespace ConditioningControlPanel.Services
             }
             
             var text = activeTexts[_random.Next(activeTexts.Count)];
+            Compositor.AfterglowLineLayer.WordShown(text);   // Super Afterglow: this word leaves a ghost
             
             // Check for linked audio
             string? audioPath = FindLinkedAudio(text);
@@ -1282,6 +1292,9 @@ namespace ConditioningControlPanel.Services
                 // metrics it measured at Flash time.
                 if (_layer?.IsActive == true)
                     rects.AddRange(_layer.GetActiveTextRectsPx());
+                // Super Afterglow words are drawn text too.
+                if (_afterglow?.Layer is { IsActive: true } glow)
+                    rects.AddRange(glow.GetActiveTextRectsPx());
             }
             catch (Exception ex)
             {
@@ -1532,6 +1545,7 @@ namespace ConditioningControlPanel.Services
             _disposed = true;
 
             Stop();
+            _afterglow?.Dispose();
             try { _layer?.Clear(); } catch { }
             // App shutdown: the only place the keep-alive windows actually close.
             foreach (var win in _screenWindows.Values)

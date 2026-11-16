@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Features
         /// <inheritdoc/>
         public void RebindToCurrentSettings()
         {
+            LoadScrawlRows();     // the gold box's rows show the new settings too
             (_settingsHook ??= new SettingsHook(OnSettingsPropertyChanged)).Rebind();
             LoadFromSettings();
         }
