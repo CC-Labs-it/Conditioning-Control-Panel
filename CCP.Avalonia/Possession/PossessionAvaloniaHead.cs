@@ -10,8 +10,7 @@
 // context fields (BarkService.cs:398-416).
 //
 // Not on this head yet (honest no-ops, recorded in docs/avalonia-parity.html shell-possession):
-// the scenes (Scenes = none), the reactive adapter (WPF PossessionEvents), the warden (Warden stays
-// null, so every warden verb is skipped as WPF does when the tube is unavailable).
+// the scenes (Scenes = none) and the reactive adapter (WPF PossessionEvents).
 
 using System;
 using System.Collections.Generic;
@@ -217,7 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal static PossessionDirector Install(LockdownService lockdown)
         {
             HookShutdown();
-            var director = new PossessionDirector(lockdown, CreateEffects(), CreateDirectorHead());
+            var director = new PossessionDirector(lockdown, CreateEffects(), CreateDirectorHead()) { Warden = new Warden(lockdown) };
             PossessionAudio.Install(lockdown, director);
             InstallRemember(lockdown);
             global::ConditioningControlPanel.Services.Companion.Brain.PromptAssembler.PossessionState = () =>
