@@ -30,7 +30,7 @@ public class VaultCompareTests
     private static string?[] Texts(Window window) => window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
 
     [Fact]
-    public Task TicketsSwitchPricesAndReturnToOffer() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task TicketsSwitchPricesAndReturnToOffer() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var dialog = VaultGateDialog.ShowOffer(null, null, 1, () => { });
         try
@@ -51,11 +51,11 @@ public class VaultCompareTests
             Click(dialog, Loc.Get("vaultgate_billing_monthly"));
             Assert.Contains(monthly, Texts(dialog));
             Click(dialog, Loc.Get("vaultgate_back"));
-            await Task.Delay(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeMs(190) + 150);
             Assert.Equal(460, dialog.Width);
             Assert.Contains(Loc.Get("vaultgate_signin"), Texts(dialog));
         }
         finally { dialog.Close(); }
+        return Task.CompletedTask;
     });
 
     [Theory]
