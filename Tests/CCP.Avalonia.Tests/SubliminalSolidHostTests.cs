@@ -147,7 +147,7 @@ public sealed class SubliminalSolidHostTests
         finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.Raise = raise; }
     });
     [Fact]
-    public void Pinned_chaos_raises_hosted_card_with_bubbles_below_flashes_and_stops_after_close() => AvaloniaTestDispatcher.Run(() =>
+    public void Pinned_chaos_tick_does_not_re_raise_the_hosted_card() => AvaloniaTestDispatcher.Run(() =>
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
@@ -171,11 +171,9 @@ public sealed class SubliminalSolidHostTests
             spawning.SetValue(null, true);
             ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = true;
             ChaosRunHost.KeepChromeTopmost();
-            // WPF ChaosModeService.cs:801-805: the card's host rides with bubbles, flashes go above it.
-            Assert.Equal(new[] { "bubbles", "card", "flash" }, order);
-            SubliminalOverlay.CloseAll();
-            order.Clear();
-            ChaosRunHost.KeepChromeTopmost();
+            // WPF ChaosModeService.cs:788-806 never raises ChaosBubbleHostOverlay: BringAllToFront skips
+            // host-borne bubbles (BubbleService.cs:5551, :3584), so the tick lifts chrome, bubbles and
+            // flashes over a live card. The card host is raised only on show (SubliminalService.cs:829).
             Assert.Equal(new[] { "bubbles", "flash" }, order);
         }
         finally

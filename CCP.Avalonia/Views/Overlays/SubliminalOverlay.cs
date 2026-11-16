@@ -98,13 +98,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return true;
         }
 
-        // Pinned Chaos: hosted cards sit with the bubble layer, below GIFs and flashes (WPF ChaosModeService.cs:801-805).
-        internal static void RaiseHosted()
-        {
-            if (HostedCards.Count == 0) return;
-            foreach (var lease in Hosts.Values) lease.Raise();
-        }
-
         private static void ClearCards()
         {
             foreach (var retire in RetireHosted) retire();

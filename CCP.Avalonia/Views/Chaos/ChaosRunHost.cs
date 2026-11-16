@@ -875,7 +875,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Raise(_boonBar);
             foreach (var toy in _toyButtons) Raise(toy);
             RaiseBubbles();
-            SubliminalOverlay.RaiseHosted();   // WPF cards ride the bubble host, under the attention windows
             ChaosGifCascadeOverlay.RaiseActive();
             ChaosFlashOverlay.RaiseActive(RaiseOverlayWindow);
             FlashOverlay.RaiseAll(RaiseOverlayWindow);
