@@ -173,10 +173,8 @@ public sealed class VoiceCommandsTests
         await Until(() => mic.Starts > starts && engine.IsListening, 10);   // the wake loop listens again
     });
 
-    // Keep the wake mic active in a silent room: the WAV's wake phrase can start another command
-    // and add a separate Lockdown tripwire while this test injects its own inline command.
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(new byte[32000], async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
