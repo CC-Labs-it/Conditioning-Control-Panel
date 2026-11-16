@@ -81,6 +81,69 @@ public class LightsDownOverlayTests
     });
 
     [Fact]
+    public void SwitchOffClosesWindowsImmediatelyAndUnhooksOnStop() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var settings = new TestSettingsScope();
+        ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
+        var trying = SuperAccess.TryingProvider;
+        SuperAccess.TryingProvider = () => null;
+        var video = new MandatoryVideoOverlay(null);
+        var owner = new Window();
+        try
+        {
+            LightsDownOverlay.StartVideo(video);
+            Assert.True(LightsDownOverlay.TryOpen(owner, new PixelRect(0, 0, 100, 100), 1,
+                _ => true, _ => true, _ => true, (_, _) => true));
+            SuperAccess.RaiseChanged(SuperEffect.FlickerDeck);
+            Assert.Equal(1, LightsDownOverlay.Count);
+            SuperAccess.RaiseChanged(SuperEffect.LightsDown);
+            Assert.Equal(0, LightsDownOverlay.Count);
+            Assert.True(LightsDownOverlay.VideoTimerRunning);
+            LightsDownOverlay.CloseAll();
+            Assert.True(LightsDownOverlay.TryOpen(owner, new PixelRect(0, 0, 100, 100), 1,
+                _ => true, _ => true, _ => true, (_, _) => true));
+            SuperAccess.RaiseChanged(SuperEffect.LightsDown);
+            Assert.Equal(1, LightsDownOverlay.Count);
+        }
+        finally
+        {
+            SuperAccess.TryingProvider = trying;
+            LightsDownOverlay.CloseAll();
+            video.CloseAll();
+            owner.Close();
+        }
+    });
+
+    [Fact]
+    public void StutterPaintsRedAndCyanAcrossThePicture() => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var frame = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(200, 100), new Vector(96, 96));
+        var light = new LightsDownOverlay.VideoLight(new Image { Source = frame });
+        light.Measure(new Size(100, 100));
+        light.Arrange(new Rect(0, 0, 100, 100));
+        light.SetFrame(new LightsDownFrame { SplitAlpha = 0.8, LockRun = -1 });
+        using var rendered = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(100, 100));
+        rendered.Render(light);
+        var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try
+        {
+            (byte B, byte R, byte A) Pixel(int x)
+            {
+                rendered.CopyPixels(new PixelRect(x, 50, 1, 1), buffer, 4, 4);
+                return (System.Runtime.InteropServices.Marshal.ReadByte(buffer, 0),
+                        System.Runtime.InteropServices.Marshal.ReadByte(buffer, 2),
+                        System.Runtime.InteropServices.Marshal.ReadByte(buffer, 3));
+            }
+            var left = Pixel(2);
+            var right = Pixel(97);
+            Assert.True(left.A > 0 && left.R > left.B);
+            Assert.True(right.A > 0 && right.B > right.R);
+            Assert.True(Pixel(50).A > 0);
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+    });
+
+    [Fact]
     public void VideoFrameDrawsDimOutsidePictureAndStreakInside() => AvaloniaTestDispatcher.Run(() =>
     {
         using var frame = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(200, 100), new Vector(96, 96));

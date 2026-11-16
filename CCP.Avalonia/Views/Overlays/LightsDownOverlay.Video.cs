@@ -35,6 +35,7 @@ internal static partial class LightsDownOverlay
     {
         CloseAll();
         _video = video;
+        SuperAccess.Changed += SuperChanged;
         _refused = false;
         WebcamTracker.Instance.OnGazeMove += OnGaze;
         _gaze = null;
@@ -48,7 +49,11 @@ internal static partial class LightsDownOverlay
     private static void StopVideo()
     {
         if (_timer != null) { _timer.Stop(); _timer.Tick -= VideoTick; _timer = null; }
-        if (_video != null) WebcamTracker.Instance.OnGazeMove -= OnGaze;
+        if (_video != null)
+        {
+            SuperAccess.Changed -= SuperChanged;
+            WebcamTracker.Instance.OnGazeMove -= OnGaze;
+        }
         _gaze = null;
         _video = null;
         _state = null;
@@ -64,6 +69,24 @@ internal static partial class LightsDownOverlay
         foreach (var w in Windows.ToArray()) w.Close();
         Windows.Clear();
         _state = null;
+    }
+
+    // WPF LightsDownService.cs:39-44: close on the switch event, without waiting for a frame.
+    private static void SuperChanged(SuperEffect effect)
+    {
+        if (effect != SuperEffect.LightsDown) return;
+        void Update()
+        {
+            if (_video == null) return;
+            try
+            {
+                if (!SuperAccess.IsOn(SuperEffect.LightsDown)) ClearVideoWindows();
+                else AdvanceVideo();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Lights Down: stopping after switch change"); CloseAll(); }
+        }
+        if (Dispatcher.UIThread.CheckAccess()) Update();
+        else Dispatcher.UIThread.Post(Update);
     }
 
     private static void VideoTick(object? sender, EventArgs e)
@@ -166,10 +189,14 @@ internal static partial class LightsDownOverlay
             context.DrawRectangle(dim, null, new Rect(r.Right, r.Top, Math.Max(0, Bounds.Width - r.Right), r.Height));
             var glow = new SolidColorBrush(Color.FromArgb((byte)(255 * Math.Clamp(Frame.GlowAlpha * Frame.GlowPulse, 0, 1)), 255, 100, 210));
             context.DrawRectangle(null, new Pen(glow, 3), r, 10, 10);
+            // WPF LightsDownOverlay.cs:376: displaced red and cyan fills over the picture.
             if (Frame.SplitAlpha > 0)
             {
-                var split = new SolidColorBrush(Color.FromArgb((byte)(255 * Math.Clamp(Frame.SplitAlpha, 0, 1)), 255, 0, 90));
-                context.DrawRectangle(null, new Pen(split, 3), r.Inflate(4), 10, 10);
+                var alpha = (byte)(255 * Math.Clamp(Frame.SplitAlpha * 0.8, 0, 1));
+                var left = new Rect(r.X - 4, r.Y, r.Width, r.Height);
+                var right = new Rect(r.X + 4, r.Y, r.Width, r.Height);
+                context.DrawRectangle(new SolidColorBrush(Color.FromArgb(alpha, 255, 0, 90)), null, left, 10, 10);
+                context.DrawRectangle(new SolidColorBrush(Color.FromArgb(alpha, 0, 210, 255)), null, right, 10, 10);
             }
             if (Frame.StreakAlpha > 0)
             {
