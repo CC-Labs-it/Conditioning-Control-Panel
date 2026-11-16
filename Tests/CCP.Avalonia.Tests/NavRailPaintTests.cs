@@ -107,6 +107,26 @@ public sealed class NavRailPaintTests
     });
 
     [Fact]
+    public void LauncherLobbySnapshotsFeedAndClearSocialBadge() => Run(MotionLevel.Off, w =>
+    {
+        var launcher = new LauncherWindow();
+        try
+        {
+            var row = new ConditioningControlPanel.Services.Lobby.LobbyRow { Key = "one", Game = ConditioningControlPanel.Services.Lobby.LobbyGame.Chess };
+            var empty = ConditioningControlPanel.Services.Lobby.LobbySnapshot.Empty;
+            launcher.PaintLobby(empty with { Open = new[] { row, row with { Key = "two" } } });
+            Dispatcher.UIThread.RunJobs();
+            var social = Row(w, NavSections.Social);
+            Assert.True(social.Badge!.IsVisible);
+            Assert.Equal("2", social.BadgeText!.Text);
+            launcher.PaintLobby(empty);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(social.Badge.IsVisible);
+        }
+        finally { launcher.Close(); }
+    });
+
+    [Fact]
     public void Hover_NudgesTheMedallionArt() => Run(MotionLevel.Off, w =>
     {
         var home = Row(w, NavSections.Home);
