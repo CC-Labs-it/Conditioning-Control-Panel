@@ -41,6 +41,7 @@ public sealed class FlickerDeckOverlayTests
         var saved = (s.FlashShatterEnabled, s.FlashDraggable, s.MotionLevel, s.GentleVisuals, s.CorruptionMode, s.FlashExitStyle);
         var old = (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.Rng, PrizeOwnership.IsGranted,
             UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp);
+        var (oldInput, oldAssets) = (FlashOverlay.DeckInput, CorePaths.EffectiveAssetsProvider);
         var clock = new Clock();
         FlashOverlay.Clock = clock;
         FlashOverlay.DeckOn = () => true;
@@ -58,6 +59,7 @@ public sealed class FlickerDeckOverlayTests
             (s.FlashShatterEnabled, s.FlashDraggable, s.MotionLevel, s.GentleVisuals, s.CorruptionMode, s.FlashExitStyle) = saved;
             (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.Rng, PrizeOwnership.IsGranted,
                 UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp) = old;
+            (FlashOverlay.DeckInput, CorePaths.EffectiveAssetsProvider) = (oldInput, oldAssets);
         }
         return Task.CompletedTask;
     });
@@ -275,5 +277,40 @@ public sealed class FlickerDeckOverlayTests
         deck.SinceSwap = 99;
         Tick(clock, 0.001);
         Assert.True(NotRed(w.CaptureRenderedFrame()!) > 0, "the cracks draw on the face");
+    });
+
+    [Fact]
+    public Task A_flip_to_an_animated_gif_plays_its_frames() => OnUi((s, clock) =>
+    {
+        var gif = FlashDecodeBudgetTests.WriteGif(40, 30, 3, _ => 5, out var dir);
+        try
+        {
+            var images = System.IO.Directory.CreateDirectory(System.IO.Path.Combine(dir, "images")).FullName;
+            System.IO.File.Move(gif, System.IO.Path.Combine(images, "clip.gif"));
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            FlashOverlay.DeckPicture = w => Task.FromResult(FlashOverlay.LoadDeckPicture(w).Result);   // the real draw, finished in place
+            var (w, _) = Card();
+            w.Deck!.BreakAt = 4;
+            Assert.Null(w.GifFrameDelay);
+            w.MouseDown(new Point(w.Width / 2, w.Height / 2), MouseButton.Left);
+            for (var i = 0; i < 40; i++) Tick(clock, 0.02);
+            Assert.EndsWith("clip.gif", w.SourcePath);
+            Assert.Equal(TimeSpan.FromMilliseconds(50), w.GifFrameDelay);   // WPF ApplyDeckSwap: frames and clock come along
+            w.Close();
+        }
+        finally { System.IO.Directory.Delete(dir, true); }
+    });
+
+    [Fact]
+    public Task Only_the_picture_takes_the_mouse_each_tick_never_the_grown_margin() => OnUi((_, clock) =>
+    {
+        var asked = new System.Collections.Generic.List<PixelRect>();
+        FlashOverlay.DeckInput = (_, r) => { asked.Add(r[0]); return true; };
+        var (w, pad) = Card();
+        Tick(clock, 0.02);
+        Assert.Equal(new PixelRect(pad, pad, W, H), Assert.Single(asked));
+        w.ClearDeck();   // the switch went off: still a grown window
+        Tick(clock, 0.02);
+        Assert.Equal(2, asked.Count);
     });
 }
