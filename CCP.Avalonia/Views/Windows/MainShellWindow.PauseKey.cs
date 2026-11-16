@@ -103,12 +103,16 @@ public partial class MainShellWindow
     }
 
     /// <summary>WPF OnGlobalKeyPressed: the panic key wins a shared binding (by keysym, as the portal
-    /// sees it), Lockdown and either key capture refuse the press.</summary>
-    internal static bool PauseKeyRefused(AppSettings s) =>
-        string.IsNullOrWhiteSpace(s.PauseKey)
-        || PanicPolicy.PauseKeyIsShadowedByPanicKey(s.PanicKey, s.PanicKeyEnabled, s.PauseKey)
-        || (s.PanicKeyEnabled && !string.IsNullOrWhiteSpace(s.PanicKey) && string.Equals(X11PanicKey.XKeyName(s.PanicKey), X11PanicKey.XKeyName(s.PauseKey), StringComparison.OrdinalIgnoreCase))
-        || LockdownActive || CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey;
+    /// sees it), Lockdown and either key capture refuse the press. A leash keeps the panic key ahead
+    /// of pause even with panic off (WPF MainWindow.xaml.cs:968, LeashPanicKeyWhilePanicOff).</summary>
+    internal static bool PauseKeyRefused(AppSettings s)
+    {
+        var panicRoute = s.PanicKeyEnabled || LeashHoldLeashed;
+        return string.IsNullOrWhiteSpace(s.PauseKey)
+            || PanicPolicy.PauseKeyIsShadowedByPanicKey(s.PanicKey, panicRoute, s.PauseKey)
+            || (panicRoute && !string.IsNullOrWhiteSpace(s.PanicKey) && string.Equals(X11PanicKey.XKeyName(s.PanicKey), X11PanicKey.XKeyName(s.PauseKey), StringComparison.OrdinalIgnoreCase))
+            || LockdownActive || CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey;
+    }
 
     internal void ApplyPauseKeyPortal()
     {

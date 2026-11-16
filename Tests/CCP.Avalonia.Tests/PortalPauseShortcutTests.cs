@@ -135,6 +135,26 @@ public class PortalPauseShortcutTests
         return Task.CompletedTask;
     });
 
+    // WPF MainWindow.xaml.cs:968: with panic off, a leash still takes the panic key before pause.
+    [Fact]
+    public void LeashKeepsAPanicOffSharedKeyAwayFromPause()
+    {
+        var s = new ConditioningControlPanel.Models.AppSettings { PanicKeyEnabled = false, PanicKey = "F9", PauseKey = "F9" };
+        var (oldSvc, oldLockdown) = (LeashHead.Service, LockdownService.Current);
+        try
+        {
+            (LeashHead.Service, LockdownService.Current) = (null, null);
+            Assert.False(MainShellWindow.PauseKeyRefused(s));
+            var svc = new ConditioningControlPanel.Services.Leash.LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+            LeashHead.Service = svc;
+            Assert.True(MainShellWindow.PauseKeyRefused(s));
+            s.PauseKey = "F10";
+            Assert.False(MainShellWindow.PauseKeyRefused(s));
+        }
+        finally { (LeashHead.Service, LockdownService.Current) = (oldSvc, oldLockdown); }
+    }
+
     private sealed class Registration : IDisposable
     {
         internal bool Disposed;
