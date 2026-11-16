@@ -25,10 +25,16 @@ public sealed class BubbleCountSchedulerTests
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public Action? Skipped;
+        public Action<double>? Duration;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped)
         {
             Skipped = onSkipped;
             Show(path, difficulty, strict, onComplete);
+        }
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration)
+        {
+            Duration = onDuration;
+            Show(path, difficulty, strict, onComplete, onSkipped);
         }
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
         public void CloseAll() { Closes++; Closing?.Invoke(); }
@@ -74,7 +80,7 @@ public sealed class BubbleCountSchedulerTests
     [Fact]
     public void Scheduled_video_waits_without_consuming_library_then_rearms() => With(true, false, true, () =>
     {
-        var clock = new FakeClock(); var host = new Host();
+        var clock = new FakeClock(); var host = new Host { LastVideoDurationSeconds = 7200 };
         var b = new BubbleCountScheduler(host, clock, () => Clips);
         var videoHost = new VideoHost(); var reads = 0;
         var v = new MandatoryVideoScheduler(videoHost, clock, () => { reads++; return Clips; });
@@ -110,7 +116,7 @@ public sealed class BubbleCountSchedulerTests
     [InlineData(true)]
     public void Deferred_video_selection_failure_recovers_without_latching(bool running) => With(true, false, true, () =>
     {
-        var clock = new FakeClock(); var host = new Host();
+        var clock = new FakeClock(); var host = new Host { LastVideoDurationSeconds = 7200 };
         var b = new BubbleCountScheduler(host, clock, () => Clips);
         var videoHost = new VideoHost(); var reads = 0; var inaccessible = true;
         var v = new MandatoryVideoScheduler(videoHost, clock, () =>
@@ -260,6 +266,64 @@ public sealed class BubbleCountSchedulerTests
         Assert.Empty(host.Messages);
         clock.Advance(TimeSpan.FromSeconds(10));
         Assert.Single(host.Shown);
+    });
+
+    [Fact]
+    public void Stuck_game_expires_after_duration_and_buffer_without_xp() => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { LastVideoDurationSeconds = 300 };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        var xp = new List<double>(); CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        clock.Advance(TimeSpan.FromSeconds(449));
+        Assert.True(b.IsBusy); Assert.Equal(0, host.Closes);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.False(b.IsBusy); Assert.Equal(1, host.Closes); Assert.Empty(xp);
+        host.Shown[0].Done(true); Assert.Empty(xp);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Late_duration_extends_only_its_active_game(bool strict) => With(true, strict, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { LastVideoDurationSeconds = 30 };
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        var oldDuration = host.Duration!;
+        clock.Advance(TimeSpan.FromSeconds(100)); oldDuration(600);
+        clock.Advance(TimeSpan.FromSeconds(749)); Assert.True(b.IsBusy); Assert.Equal(0, host.Closes);
+        clock.Advance(TimeSpan.FromSeconds(1)); Assert.False(b.IsBusy); Assert.Equal(1, host.Closes);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        oldDuration(600); // the previous game's late event cannot extend this round
+        clock.Advance(TimeSpan.FromSeconds(300)); Assert.False(b.IsBusy); Assert.Equal(2, host.Closes);
+    });
+
+    [Fact]
+    public void Strict_retry_rearms_ceiling() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        clock.Advance(TimeSpan.FromSeconds(290)); host.Shown[0].Done(false);
+        host.Messages[0].Then();
+        clock.Advance(TimeSpan.FromSeconds(299)); Assert.True(b.IsBusy);
+        clock.Advance(TimeSpan.FromSeconds(1)); Assert.False(b.IsBusy); Assert.Equal(1, host.Closes);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Ended_round_cannot_expire_its_replacement(bool panic) => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        clock.Advance(TimeSpan.FromSeconds(290));
+        if (panic) b.ForceCleanup(); else host.Shown[0].Done(true);
+        b.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        clock.Advance(TimeSpan.FromSeconds(11)); Assert.True(b.IsBusy);
+        b.ForceCleanup();
     });
 
     [Fact]
