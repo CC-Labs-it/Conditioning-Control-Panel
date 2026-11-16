@@ -348,11 +348,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
-            LightsDownOverlay.StartVideo(this);
             BeginEnhancement(path);
             // WPF VideoService.cs:3410: discover the companion script only after playback starts.
             try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
             catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
+            LightsDownOverlay.StartVideo(this); // WPF LightsDownService.cs:38 starts from VideoStarted via a UI post
             _sinceReady.Restart();
             _guard = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _guard.Tick += (_, _) => GuardTick();
