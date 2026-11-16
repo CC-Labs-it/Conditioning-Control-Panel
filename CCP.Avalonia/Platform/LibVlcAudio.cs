@@ -219,7 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 Volatile.Write(ref playing, 1);
                 // The bug report's last section (#4076): every sound, engine on or off.
-                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning, false, DateTime.Now);
+                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning || ConditioningControlPanel.CoreSession.IsSessionRunning, false, DateTime.Now);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { if (volume != 0f) ApplyPreferredDevice(player); player.Volume = vol; } });
