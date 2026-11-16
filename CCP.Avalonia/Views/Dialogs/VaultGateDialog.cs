@@ -421,13 +421,16 @@ public sealed partial class VaultGateDialog : Window
         var ticket = slot.Tag is ValueTuple<IBrush, StackPanel> pair ? pair : ((IBrush?)null, (StackPanel?)null);
         var ticketInk = ticket.Item1 ?? slot.Tag as IBrush;
         var saleSlot = ticket.Item2 ?? slot; if (ticket.Item2 != null) saleSlot.Children.Clear();
-        line.Children.Add(new TextBlock
+        var amount = new TextBlock
         {
             Text = VaultOffer.Money(sale != null ? VaultSale.FirstMonthCents(price.MonthlyCents, sale.Percent)
                 : yearly ? price.YearlyCents : price.MonthlyCents, _currency),
             FontFamily = FriendsDrawer.Display, FontWeight = compact ? FontWeight.Bold : FontWeight.SemiBold, FontSize = compact ? 30 : 28, Foreground = ticketInk ?? Brushes.White,
             Margin = new Thickness(0, 0, 8, 0),
-        });
+        };
+        // WPF Compare.cs:418: the ticket amount sits in a clipped window so it can roll.
+        if (compact) { amount.RenderTransform = new TranslateTransform(); line.Children.Add(new Grid { Name = "AmountWindow", ClipToBounds = true, Children = { amount } }); }
+        else line.Children.Add(amount);
         if (sale != null)
             line.Children.Add(new TextBlock
             {

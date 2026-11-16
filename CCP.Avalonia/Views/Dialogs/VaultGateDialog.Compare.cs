@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Animation;
@@ -199,14 +200,42 @@ public sealed partial class VaultGateDialog
             else if (animate && CompareMotion != MotionLevel.Off && off > 0) _ = Tween(saving, OpacityProperty, 0.9, 0, GentleVisuals.FadeMs(140), token);
             var slotIndex = _priceSlots.FindIndex(s => ReferenceEquals(s.Slot, price));
             if (slotIndex >= 0) _priceSlots[slotIndex] = (price, tier, true, _yearly, false);
+            var oldAmount = (price.Children.FirstOrDefault() as WrapPanel)?.Children.OfType<Grid>().FirstOrDefault()?.Children.OfType<TextBlock>().LastOrDefault();
+            var oldSub = (price.Children.ElementAtOrDefault(1) as TextBlock)?.Text;
             PaintPrice(price, tier, true, _yearly, false);
-            if (animate && CompareMotion != MotionLevel.Off)
-            {
-                _ = Tween(price, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), token);
-                if (CompareMotion == MotionLevel.Full)
-                    _ = Tween(price, TranslateTransform.YProperty, _yearly ? 22 : -22, 0, 260, token);
-            }
+            if (animate && CompareMotion != MotionLevel.Off) _ = RollAmount(price, oldAmount, oldSub, token);
         }
+    }
+
+    // WPF Compare.cs:478-486, 528-552: the old amount leaves one way and the new one arrives from the
+    // other inside the clipped window while the subline fades separately. Reduced: a plain crossfade.
+    private async Task RollAmount(StackPanel price, TextBlock? old, string? oldSub, CancellationToken token)
+    {
+        var window = (Grid)((WrapPanel)price.Children[0]).Children[0];
+        var next = (TextBlock)window.Children[0];
+        var full = CompareMotion == MotionLevel.Full;
+        var dir = _yearly ? 1 : -1;
+        if (old != null && old.Text != next.Text)
+        {
+            (old.Parent as Panel)?.Children.Remove(old);
+            window.Children.Insert(0, old);
+            _ = Tween(next, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), token, full ? 40 : 0);
+            if (full)
+            {
+                _ = Tween(old, TranslateTransform.YProperty, 0, -20 * dir, 130, token);
+                _ = Tween(next, TranslateTransform.YProperty, 22 * dir, 0, 260, token, 40);
+            }
+            old.Opacity = 0;
+            _ = Tween(old, OpacityProperty, 1, 0, GentleVisuals.FadeMs(130), token).ContinueWith(_ => window.Children.Remove(old), TaskScheduler.FromCurrentSynchronizationContext());
+        }
+        if (price.Children.ElementAtOrDefault(1) is not TextBlock sub || oldSub == null || sub.Text == oldSub) return;
+        var subText = sub.Text;
+        sub.Text = oldSub;
+        sub.Opacity = 0;
+        await Tween(sub, OpacityProperty, 1, 0, GentleVisuals.FadeMs(90), token);
+        sub.Text = subText;
+        sub.Opacity = 1;
+        if (!token.IsCancellationRequested) await Tween(sub, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(180)), token);
     }
 
     private Control Ticket(int tier)

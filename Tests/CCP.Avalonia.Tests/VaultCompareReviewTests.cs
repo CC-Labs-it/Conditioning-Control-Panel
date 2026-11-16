@@ -264,6 +264,55 @@ public class VaultCompareReviewTests
         finally { dialog.Close(); CoreSettings.ServiceProvider = provider; UiMotionPreference.OsProbe = os; UiMotionPreference.CacheStamp = long.MinValue; }
     });
 
+    // WPF VaultGateDialog.Compare.cs:478-486, 528-552: the amount rolls in a clipped window, the subline fades on its own.
+    [Theory]
+    [InlineData(MotionLevel.Full, false)]
+    [InlineData(MotionLevel.Reduced, true)]
+    [InlineData(MotionLevel.Off, false)]
+    public Task BillingRollsTheAmount(MotionLevel level, bool gentle) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var os = UiMotionPreference.OsProbe;
+        var service = new SettingsService();
+        service.Current.MotionLevel = level;
+        service.Current.GentleVisuals = gentle;
+        service.Current.GentleFadeSeconds = 0.5;
+        CoreSettings.ServiceProvider = () => service;
+        UiMotionPreference.OsProbe = () => true;
+        UiMotionPreference.CacheStamp = long.MinValue;
+        var dialog = new VaultGateDialog();
+        try
+        {
+            dialog.Show();
+            Click(dialog, Loc.Get("vaultgate_compare"));
+            var ticket = Named<Border>(dialog, "BasicTicket");
+            var window = ticket.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "AmountWindow");
+            var monthly = window.Children.OfType<TextBlock>().Single().Text;
+            var stamp = ticket.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PriceStamp");
+            var subs = () => stamp.GetVisualDescendants().OfType<TextBlock>().Where(t => t.FontSize == 11).Select(t => t.Text).ToList();
+            var monthSub = Assert.Single(subs());
+            Click(dialog, Loc.Get("vaultgate_billing_yearly"));
+            window = ticket.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "AmountWindow");
+            Assert.True(window.ClipToBounds);
+            var rolling = window.Children.OfType<TextBlock>().Select(t => t.Text).ToList();
+            if (level == MotionLevel.Off)
+            {
+                Assert.NotEqual(monthly, Assert.Single(rolling));
+                Assert.NotEqual(monthSub, Assert.Single(subs()));
+                return;
+            }
+            Assert.Equal(2, rolling.Count);
+            Assert.Equal(monthly, rolling[0]);
+            Assert.Equal(monthSub, Assert.Single(subs()));
+            var price = window.GetVisualAncestors().OfType<StackPanel>().First();
+            Assert.Equal(1, price.Opacity);
+            for (var i = 0; i < 100 && (window.Children.Count > 1 || subs()[0] == monthSub); i++) await Task.Delay(20);
+            Assert.NotEqual(monthly, window.Children.OfType<TextBlock>().Single().Text);
+            Assert.NotEqual(monthSub, Assert.Single(subs()));
+        }
+        finally { dialog.Close(); CoreSettings.ServiceProvider = provider; UiMotionPreference.OsProbe = os; UiMotionPreference.CacheStamp = long.MinValue; }
+    });
+
     // WPF VaultGateDialog.Compare.cs:112: the offer fades in after the tickets leave.
     [Fact]
     public Task BackFadesTheOfferIn() => AvaloniaTestDispatcher.RunAsync(async () =>
