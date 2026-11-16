@@ -20,11 +20,22 @@ internal static class SuperStageHost
     private static double _speed;
     internal static TimeProvider Clock = TimeProvider.System;
     internal static Func<(PixelPoint Position, double Dip, double ShortSide)?> Pointer = ReadPointer;
-    internal static bool IsStepping => _timer != null;
+    internal static bool IsStepping => _timer?.IsEnabled == true;
+    /// <summary>True while a surface draws the pool. WPF steps the stage from WhirlpoolLayer.Update
+    /// (WhirlpoolLayer.cs:70) and only with the compositor up (SuperStageHost.cs:54), so with nothing
+    /// drawing it the pool stays dormant here too. The Whirlpool surface sets it and calls Sync.</summary>
+    internal static Func<bool> PoolDrawn = () => false;
+
+    private static readonly bool Wayland = OperatingSystem.IsLinux()
+        && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
 
     private static (PixelPoint Position, double Dip, double ShortSide)? ReadPointer()
     {
-        var point = X11Pointer.Read()?.At;
+        // XWayland keeps the last X position while the pointer is over a native Wayland window:
+        // only a root child (an X surface under the pointer) makes the position current.
+        PixelPoint? point;
+        if (OperatingSystem.IsWindows()) point = X11Pointer.Read()?.At;
+        else { point = X11Pointer.Read(out var overX)?.At; if (Wayland && !overX) point = null; }
         if (point is not { } p) return null;
         var window = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
         var screen = window?.Screens.ScreenFromPoint(p);
@@ -40,7 +51,7 @@ internal static class SuperStageHost
         if (dt <= 0) return;
         _lastStep = now;
         var sample = Pointer();
-        if (sample is not { } at) { _lastCursor = null; _speed = 0; return; }
+        if (sample is not { } at) { _lastCursor = null; _speed = 0; Stage.Pool.Reset(); return; }   // no position: no pool
         if (_lastCursor is { } before)
         {
             double dx = at.Position.X - before.X, dy = at.Position.Y - before.Y;
@@ -82,13 +93,24 @@ internal static class SuperStageHost
             Stage.PoolOn = pool;
             Stage.Pool.Reset();
         }
-        if (pool && _timer == null)
+        if (pool && PoolDrawn() && _timer == null)
         {
             _lastStep = Clock.GetTimestamp();
             _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Step());
             _timer.Start();
         }
-        else if (!pool) StopClock();
+        else if (!pool || !PoolDrawn()) StopClock();
+    }
+
+    // Tests: the stage, its clock and cursor history; the returned action puts them back.
+    internal static Action SnapshotForTests()
+    {
+        var saved = (Stage, _timer, _lastStep, _lastCursor, _speed);
+        return () =>
+        {
+            if (!ReferenceEquals(_timer, saved._timer)) { _timer?.Stop(); saved._timer?.Start(); }
+            (Stage, _timer, _lastStep, _lastCursor, _speed) = saved;
+        };
     }
 
     private static void OnChanged(SuperEffect effect)

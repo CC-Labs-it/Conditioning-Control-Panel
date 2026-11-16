@@ -235,6 +235,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 FlashShatter.TakeOverHangingRect(state, pend.PivotX, pend.PivotY, pend.Rope, pend.AngleRad, pend.MediaW, pend.MediaH);
             (x, y, fit) = (state.RectX, state.RectY, new Size(state.RectW / scale, state.RectH / scale));
             Shatter = state;
+            _lifetimeTimer?.Stop(); _lifetimeTimer = null;   // WPF PoolAte/OnFlashClicked cancel the lifetime first
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
             // WPF draws across its full-screen compositor. Give this short-lived break the same room.

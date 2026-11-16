@@ -693,6 +693,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            Dismiss(w, rect, s);
+        }
+
+        /// <summary>WPF SafeCloseFlashWindow (FlashService.cs:5211-5254) for a flash already out of
+        /// <see cref="Active"/>: a card break, the Gentle fade, an owned shatter or the exit style.</summary>
+        private static void Dismiss(FlashOverlayWindow w, PixelRect rect, AppSettings s)
+        {
             // WPF FlashService.cs:5225-5240: the click that reached BreakAt breaks the card, ahead of Gentle and the exit picker.
             if (w.DeckBreak)
             {

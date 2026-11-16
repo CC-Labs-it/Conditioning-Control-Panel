@@ -37,7 +37,7 @@ public sealed class FlickerDeckOverlayTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var oldStage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
+        var restoreStage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.SnapshotForTests();
         ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage = new ConditioningControlPanel.SuperCore.SuperStage();
         var s = CoreSettings.Current;
         var saved = (s.FlashShatterEnabled, s.FlashDraggable, s.MotionLevel, s.GentleVisuals, s.CorruptionMode, s.FlashExitStyle);
@@ -58,7 +58,7 @@ public sealed class FlickerDeckOverlayTests
         finally
         {
             FlashOverlay.CloseAll(final: false);
-            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage = oldStage;
+            restoreStage();
             (s.FlashShatterEnabled, s.FlashDraggable, s.MotionLevel, s.GentleVisuals, s.CorruptionMode, s.FlashExitStyle) = saved;
             (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.Rng, PrizeOwnership.IsGranted,
                 UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp) = old;
@@ -274,6 +274,7 @@ public sealed class FlickerDeckOverlayTests
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Pointer,
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EngineRunning,
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EffectOn,
+            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn,
             s.WhirlpoolDragsPictures);
         var host = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
         try
@@ -283,6 +284,10 @@ public sealed class FlickerDeckOverlayTests
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EngineRunning = () => true;
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EffectOn = e => e == ConditioningControlPanel.Services.Super.SuperEffect.Vortex;
             s.WhirlpoolDragsPictures = true;
+            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn = () => false;
+            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Sync();
+            Assert.False(ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.IsStepping);   // nothing draws the pool: it stays dormant (WPF SuperStageHost.cs:54)
+            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn = () => true;
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Sync();
             Assert.True(ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.IsStepping);
             var (w, _) = Card();
@@ -295,6 +300,10 @@ public sealed class FlickerDeckOverlayTests
             }
             Assert.True(host.PoolLive);
             Assert.NotEqual(start, w.Position);
+            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Pointer = () => null;   // Wayland pointer over a native window: no stale pull
+            clock.Now += TimeSpan.TicksPerSecond / 10;
+            ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Step();
+            Assert.Equal(0, host.Pool.Size);
             ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stop();
             Assert.False(ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.IsStepping);
             Assert.False(host.PoolLive);
@@ -306,6 +315,7 @@ public sealed class FlickerDeckOverlayTests
                 ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Pointer,
                 ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EngineRunning,
                 ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EffectOn,
+                ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn,
                 s.WhirlpoolDragsPictures) = old;
         }
     });
@@ -317,21 +327,42 @@ public sealed class FlickerDeckOverlayTests
         var sentinel = new ConditioningControlPanel.SuperCore.SuperStage { PoolOn = true, DragsPictures = false };
         sentinel.Pool.Step(5, 70, 80, 0, 1, 800);
         ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage = sentinel;
+        var old = (ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Clock, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EngineRunning, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EffectOn, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn);
         try
         {
+            // A prior stage that is stepping, on a frozen clock so its own steps change nothing.
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                (ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Clock, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EngineRunning, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EffectOn, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn) =
+                    (new Clock(), () => true, e => e == ConditioningControlPanel.Services.Super.SuperEffect.Vortex, () => true);
+                ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Sync();
+                return Task.CompletedTask;
+            });
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.IsStepping);
             await OnUi((_, _) =>
             {
                 var stage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
                 Assert.NotSame(sentinel, stage);
                 stage.PoolOn = true; stage.Pool.Step(14, 0, 0, 0, 1, 1000); stage.Reset();
+                ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stop();
             });
             Assert.Same(sentinel, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage);
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.IsStepping);
             Assert.True(sentinel.PoolOn);
             Assert.False(sentinel.DragsPictures);
             Assert.Equal(5.0 / 14, sentinel.Pool.Size, 6);
             Assert.Equal(70, sentinel.Pool.X);
         }
-        finally { ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage = original; }
+        finally
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stop();
+                (ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Clock, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EngineRunning, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.EffectOn, ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.PoolDrawn) = old;
+                ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage = original;
+                return Task.CompletedTask;
+            });
+        }
     }
 
     [Fact]
@@ -383,6 +414,49 @@ public sealed class FlickerDeckOverlayTests
             stage.Blasted -= OnBlast; stage.PoolOn = false; stage.Pool.Reset();
             (s.WhirlpoolDragsPictures, stage.DragsPictures, FlashOverlay.Multiply, s.CorruptionMode) = saved;
         }
+    });
+
+    [Fact]
+    public Task Pool_eye_dismisses_a_plain_flash_as_a_pop_would_and_stops_its_lifetime() => OnUi((s, clock) =>
+    {
+        var stage = ConditioningControlPanel.Avalonia.Platform.Super.SuperStageHost.Stage;
+        var saved = (s.WhirlpoolDragsPictures, stage.DragsPictures);
+        FlashOverlayWindow Eaten()
+        {
+            var w = new FlashOverlayWindow(Solid(255, 0, 0), "plain.png");
+            FlashOverlay.Active.Add((w, new PixelRect(400, 300, W, H)));
+            w.Closed += (_, _) => FlashOverlay.Active.RemoveAll(e => e.Window == w);
+            w.Show();
+            w.Run(1, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+            stage.Pool.Reset(); stage.Pool.Step(14, 600, 450, 0, 1, 1080);
+            Tick(clock, 0);   // no card started the deck clock: start it here
+            Tick(clock, 0.05);
+            Assert.DoesNotContain(FlashOverlay.Active, e => e.Window == w);
+            return w;
+        }
+        try
+        {
+            FlashOverlay.DeckOn = () => false;
+            s.WhirlpoolDragsPictures = true; stage.DragsPictures = true; stage.PoolOn = true;
+            // WPF FlashService.cs:5246-5251: Gentle Visuals fades, unowned shatter takes the exit style.
+            (s.GentleVisuals, s.FlashShatterEnabled) = (true, true);
+            PrizeOwnership.IsGranted = _ => true;
+            var gentle = Eaten();
+            Assert.True(gentle.Exit is { Reduced: true });
+            Assert.Null(gentle.Shatter);
+            (s.GentleVisuals, s.FlashExitStyle) = (false, FlashExitStyle.Pop);
+            PrizeOwnership.IsGranted = _ => false;
+            var styled = Eaten();
+            Assert.Equal(FlashExitStyle.Pop, styled.Exit?.Style);
+            Assert.Null(styled.Shatter);
+            PrizeOwnership.IsGranted = _ => true;
+            var shattered = Eaten();
+            Assert.NotNull(shattered.Shatter);
+            var expires = shattered.ExpiresAt;
+            shattered.BoostLifetime(60_000);   // a stopped lifetime takes no boost
+            Assert.Equal(expires, shattered.ExpiresAt);
+        }
+        finally { stage.PoolOn = false; stage.Pool.Reset(); (s.WhirlpoolDragsPictures, stage.DragsPictures) = saved; }
     });
 
     [Fact]

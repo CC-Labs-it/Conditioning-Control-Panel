@@ -160,20 +160,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Position = new PixelPoint(w.Position.X + dx, w.Position.Y + dy);
             w.SetPoolScale(w.PoolScale + ((pull.Inside ? pull.Scale : 1) - w.PoolScale) * (1 - Math.Exp(-8 * dt)));
             if (!pull.Eaten) return false;
-            Active.RemoveAt(i); // no click reward, haptics or hydra
-            Exiting.Add(w);
-            w.Closed += (_, _) => Exiting.Remove(w);
-            if (w.Deck != null)
-            {
-                var side = Math.Max(rect.Width, rect.Height);
-                var small = Math.Clamp(w.PoolScale, 0.35, 1);
-                stage.Blast(new ConditioningControlPanel.SuperCore.Blast(moved.X + rect.Width / 2.0, moved.Y + rect.Height / 2.0,
-                    side * ConditioningControlPanel.SuperCore.DeckOptions.ReachSides(CoreSettings.Current.DeckBreakReach) * small,
-                    side * 0.8 * small, ConditioningControlPanel.SuperCore.BlastKind.CardBreak));
-                if (!w.IsVisible) return true;
-                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return true; }
-            }
-            else if (!w.TryBeginShatter(CoreSettings.Current.MotionLevel, Rng)) { w.Close(); return true; }
+            // WPF PoolAte (FlashService.cs:2817-2825): no click reward, haptics or hydra, then the normal dismissal.
+            Active.RemoveAt(i);
+            if (w.Deck != null) w.DeckBreak = true;
+            Dismiss(w, moved, CoreSettings.Current);
             return true;
         }
 
