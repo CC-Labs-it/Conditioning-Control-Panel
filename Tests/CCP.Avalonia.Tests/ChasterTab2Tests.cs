@@ -142,6 +142,23 @@ public sealed class ChasterTab2Tests
         Dispatcher.UIThread.RunJobs();
     }
 
+    [Fact]
+    public Task EndsTooltipNamesChastersEndAndPendingAdd() => AvaloniaTestDispatcher.RunAsync(() => Run((_, _, _) =>
+    {
+        var tab = new ChasterTabView();
+        var end = DateTime.UtcNow.AddDays(2);
+        var snapshot = new LockSnapshot("l1", "Cage", end, false, false, false, end);
+        var line = tab.FindControl<TextBlock>("TxtHeroEnds")!;
+        tab.PaintHeroEnds(snapshot, 3600);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("chaster_hero_ends_tip",
+            end.ToLocalTime().ToString("ddd d MMM HH:mm"), CircesTab.Format(3600)), ToolTip.GetTip(line));
+        tab.PaintHeroEnds(snapshot, 0);
+        Assert.Null(ToolTip.GetTip(line));
+        tab.PaintHeroEnds(null, 3600);
+        Assert.Null(ToolTip.GetTip(line));
+        return Task.CompletedTask;
+    }));
+
     // WPF ChasterTabView.xaml.cs:99: the ticks run only while the page is on screen.
     [Fact]
     public Task HidingTheTabStopsBothTicksAndShowingResumesThem() => AvaloniaTestDispatcher.RunAsync(() => Run((_, _, _) =>
