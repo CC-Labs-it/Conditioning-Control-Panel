@@ -83,14 +83,15 @@ public class LightsDownOverlayTests
     [Fact]
     public void SwitchOffClosesWindowsImmediatelyAndUnhooksOnStop() => AvaloniaTestDispatcher.Run(() =>
     {
-        using var settings = new TestSettingsScope();
-        ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
-        var trying = SuperAccess.TryingProvider;
-        SuperAccess.TryingProvider = () => null;
+        // No service means the base is off without binding SuperAccess to a temporary service.
+        var settingsProvider = ConditioningControlPanel.CoreSettings.ServiceProvider;
+        var tierHook = SuperAccess.TierEventsHook;
         var video = new MandatoryVideoOverlay(null);
         var owner = new Window();
         try
         {
+            ConditioningControlPanel.CoreSettings.ServiceProvider = null;
+            SuperAccess.TierEventsHook = null;
             LightsDownOverlay.StartVideo(video);
             Assert.True(LightsDownOverlay.TryOpen(owner, new PixelRect(0, 0, 100, 100), 1,
                 _ => true, _ => true, _ => true, (_, _) => true));
@@ -107,7 +108,8 @@ public class LightsDownOverlayTests
         }
         finally
         {
-            SuperAccess.TryingProvider = trying;
+            SuperAccess.TierEventsHook = tierHook;
+            ConditioningControlPanel.CoreSettings.ServiceProvider = settingsProvider;
             LightsDownOverlay.CloseAll();
             video.CloseAll();
             owner.Close();
