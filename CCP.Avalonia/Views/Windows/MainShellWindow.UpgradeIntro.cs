@@ -18,6 +18,7 @@ public partial class MainShellWindow
     private bool _upgradeCancelled;
     private WhatsNewDialog? _upgradeDialog;
     internal Func<TimeSpan, Task> UpgradeDelay = Task.Delay;
+    internal Action<string, object?> UpgradeMoment = (moment, context) => EmiDesk.EmiDeskService.Instance.Fire(moment, context);
 
     private void ArmUpgradeIntro()
     {
@@ -41,6 +42,8 @@ public partial class MainShellWindow
         var version = CoreReleaseContent.AppVersion;
         var previous = CoreSettings.Current.LastSeenVersion;
         if (previous == version) return;
+        // WPF Marquee.cs:331: fire before notes are queued or the version is stamped.
+        if (!string.IsNullOrEmpty(previous)) UpgradeMoment("afterUpdate", new { target = version });
         var notes = CoreReleaseContent.PatchNotes;
         Platform.StartupLadder.ModalPending = true;
         try
