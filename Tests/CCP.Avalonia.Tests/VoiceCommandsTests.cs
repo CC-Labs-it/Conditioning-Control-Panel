@@ -174,27 +174,14 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => RunUi(async shell =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
-        var saved = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.PanicKeyEnabled,
-            s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled);
-        var premium = CoreEntitlement.HasPremiumProvider;
-        var previousLockdown = LockdownService.Current;
-        using var ld = new LockdownService();
+        s.AutonomyConsentGiven = true;
+        s.PanicKeyEnabled = true;
+        using var ld = LockdownService.Current = new LockdownService();
         try
         {
-            // Directly injected commands do not need a wake listener replaying the WAV on the
-            // same dispatcher while this test counts lockdown tripwires.
-            (s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled) = (false, false, false);
-            shell.StopVoiceInput();
-            shell.RefreshVoiceInputModes();
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(shell.UserDrivenVoiceArmed);
-            CoreEntitlement.HasPremiumProvider = () => true;
-            s.AutonomyConsentGiven = true;
-            s.PanicKeyEnabled = true;
-            LockdownService.Current = ld;
             Assert.True(shell.SetAutonomyEnabled(true));
             ld.Activate(TimeSpan.FromMinutes(30));
             var escapes = new System.Collections.Generic.List<string>();
@@ -222,11 +209,8 @@ public sealed class VoiceCommandsTests
         finally
         {
             shell.Autonomy.Stop();
-            ld.Deactivate();
-            LockdownService.Current = previousLockdown;
-            CoreEntitlement.HasPremiumProvider = premium;
-            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.PanicKeyEnabled,
-                s.MicConsentGiven, s.SpeechWakeWordEnabled, s.SpeechPushToTalkEnabled) = saved;
+            LockdownService.Current = null;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven) = (false, false);
         }
         await Task.CompletedTask;
     });
