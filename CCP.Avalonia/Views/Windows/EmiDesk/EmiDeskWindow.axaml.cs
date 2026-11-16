@@ -2791,8 +2791,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// and the dock chip cannot disagree with the screen.</summary>
         private void Dismiss() => EmiDeskService.Instance.Dismiss();
 
-        /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
-        private void ResetOnboarding() { }
+        /// <summary>WPF EmiDeskWindow.xaml.cs:1606: the QA gesture replays onboarding through the service.</summary>
+        private void ResetOnboarding() => EmiDeskService.Instance.ResetOnboarding();
 
         /// <summary>WPF EmiDeskService.cs:661: widget moments feed the shared line engine.</summary>
         private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);
