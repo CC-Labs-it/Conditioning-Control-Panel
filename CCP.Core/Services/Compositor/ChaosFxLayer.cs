@@ -82,7 +82,7 @@ public sealed class ChaosFxLayer : BaseLayer
     private static readonly SKColorFilter GoldCF = SKColorFilter.CreateBlendMode(GoldCore, SKBlendMode.Modulate);
     private static readonly SKColorFilter CursorCF = SKColorFilter.CreateBlendMode(CursorPink, SKBlendMode.Modulate);
     private static readonly SKColorFilter WhiteCF = SKColorFilter.CreateBlendMode(SKColors.White, SKBlendMode.Modulate);  // identity → bright white core
-    private readonly SKPaint _paint = new() { BlendMode = SKBlendMode.Plus, IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
+    private readonly SKPaint _paint = new() { BlendMode = SKBlendMode.Plus, IsAntialias = true };   // was FilterQuality.Medium: SkSampling.Medium on the draw
     private static SKImage? _dot;
 
     // Per-colour tint filters for pop bursts (keyed 0xRRGGBB) so arbitrary payload colours don't alloc per frame.
@@ -515,6 +515,6 @@ public sealed class ChaosFxLayer : BaseLayer
         _paint.ColorFilter = tint;
         _paint.Color = new SKColor(255, 255, 255, alpha);   // global opacity multiplier for the image draw
         var dest = new SKRect(cx - radius, cy - radius, cx + radius, cy + radius);
-        canvas.DrawImage(img, dest, _paint);
+        canvas.DrawImage(img, dest, SkSampling.Medium, _paint);
     }
 }

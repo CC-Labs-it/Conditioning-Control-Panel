@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Services.Transfer
                 {
                     scaled = src.Resize(
                         new SKImageInfo(tw, th, SKColorType.Bgra8888, SKAlphaType.Premul),
-                        SKFilterQuality.High);
+                        SkSampling.High);
                     if (scaled != null) bmp = scaled;
                     else { tw = src.Width; th = src.Height; }   // resize refused: ship full size rather than nothing
                 }

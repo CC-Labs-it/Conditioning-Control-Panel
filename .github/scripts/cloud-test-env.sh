@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: bash .github/scripts/cloud-test-env.sh <command> [args...]
-# The cloud image's 52-orbit-os.conf prefers OpenAI Sans (WOFF2). SkiaSharp 3.119.4
+# The cloud image's 52-orbit-os.conf prefers OpenAI Sans (WOFF2). SkiaSharp 3.119.4 (now 4.156.1, not re-checked)
 # cannot load it: SKTypeface.Default has zero glyphs, so unconfigured headless
 # builders cannot even build text geometry. Exclude those unsupported files and
 # retain the distro's normal fallback order. The shipped builder bundles Inter.

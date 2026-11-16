@@ -53,7 +53,7 @@
     <PackageReference Include="Vosk" Version="0.3.38" />
     <!-- libSkiaSharp for Linux (Core's SkiaSharp brings only the win/mac natives): compositor layer tests and
          GlyphFallbackRunTests. The full package (not .NoDependencies) so fontconfig glyph fallback works. -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.156.1" />
   </ItemGroup>
 
   <ItemGroup>

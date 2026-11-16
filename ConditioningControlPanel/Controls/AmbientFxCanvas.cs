@@ -355,8 +355,7 @@ namespace ConditioningControlPanel.Controls
 
         private readonly SKPaint _paint = new()
         {
-            IsAntialias = true,
-            FilterQuality = SKFilterQuality.Medium,
+            IsAntialias = true,   // was FilterQuality.Medium: SkSampling.Medium on the draw
             BlendMode = SKBlendMode.Plus,
         };
 
@@ -1410,7 +1409,7 @@ namespace ConditioningControlPanel.Controls
         private void DrawSprite(SKCanvas canvas, SKImage? img, float cx, float cy, float w, float h)
         {
             if (img == null) return;
-            canvas.DrawImage(img, new SKRect(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f), _paint);
+            canvas.DrawImage(img, new SKRect(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f), SkSampling.Medium, _paint);
         }
 
         // ============================== helpers ==============================

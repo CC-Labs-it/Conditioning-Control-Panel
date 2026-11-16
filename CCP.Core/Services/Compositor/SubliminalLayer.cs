@@ -149,12 +149,11 @@ public sealed class SubliminalLayer : BaseLayer
     private int _lastAlpha = -1;
     // Reused paints, only touched under _sync (no per-frame allocations).
     private readonly SKPaint _bgPaint = new();
-    private readonly SKPaint _textPaint = new()
-    {
-        IsAntialias = true,
-        TextAlign = SKTextAlign.Center,
-        Typeface = BoldArial
-    };
+    private readonly SKPaint _textPaint = new() { IsAntialias = true };
+    // SkiaSharp 4: text size/face moved off SKPaint (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html);
+    // SKFont's default edging (antialias) is what the IsAntialias paint gave its text. Centre align: DrawCentered.
+    // LinearMetrics: the legacy paint's font had it on (https://github.com/mono/skia/blob/v3.119.4/src/xamarin/SkCompatPaint.cpp), so widths stay identical.
+    private readonly SKFont _textFont = new(BoldArial) { LinearMetrics = true };
 
     public SubliminalLayer(Action wake) : base(wake) { }
 
@@ -207,13 +206,13 @@ public sealed class SubliminalLayer : BaseLayer
             for (int i = 0; i < placements.Count; i++)
             {
                 item.Placements[i] = placements[i];
-                _textPaint.TextSize = FontDip * placements[i].Scale;
+                _textFont.Size = FontDip * placements[i].Scale;
                 // #615/#717: measure with the faces we will draw with, and take the vertical
                 // extents across ALL of them (a CJK fallback face is not metric-compatible with
                 // Arial, so centring on Arial's metrics alone would sit the card off-centre).
                 var widths = new float[runs.Length];
                 item.RunWidthsPx[i] = widths;
-                item.TextWidthPx[i] = GlyphFallback.Measure(runs, _textPaint, widths,
+                item.TextWidthPx[i] = GlyphFallback.Measure(runs, _textFont, widths,
                     out var ascent, out var descent);
                 item.TextHeightPx[i] = descent - ascent;
                 item.BaselineOffsetPx[i] = -(ascent + descent) / 2f;
@@ -322,7 +321,7 @@ public sealed class SubliminalLayer : BaseLayer
 
                 // #615/#717: the same faces and advances the card was measured with - metrics AND
                 // glyphs must agree, or the line mis-centres and the OCR skip rect is wrong.
-                _textPaint.TextSize = FontDip * p.Scale;
+                _textFont.Size = FontDip * p.Scale;
                 var cx = p.BoundsPx.MidX;
                 var baseline = p.BoundsPx.MidY + item.BaselineOffsetPx[i];
                 var widths = item.RunWidthsPx[i];
@@ -336,10 +335,10 @@ public sealed class SubliminalLayer : BaseLayer
                 _textPaint.Color = item.Border.WithAlpha(alpha);
                 foreach (var (ox, oy) in SubliminalCard.OutlineOffsets)
                     GlyphFallback.DrawCentered(canvas, item.Runs, cx + (float)ox * p.Scale,
-                        baseline + (float)oy * p.Scale, _textPaint, widths, total);
+                        baseline + (float)oy * p.Scale, _textFont, _textPaint, widths, total);
 
                 _textPaint.Color = item.TextColor.WithAlpha(alpha);
-                GlyphFallback.DrawCentered(canvas, item.Runs, cx, baseline, _textPaint, widths, total);
+                GlyphFallback.DrawCentered(canvas, item.Runs, cx, baseline, _textFont, _textPaint, widths, total);
             }
         }
     }

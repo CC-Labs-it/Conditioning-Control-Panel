@@ -124,15 +124,14 @@ public sealed class FlashLayer : BaseLayer
 
     private readonly List<FlashItem> _items = new();
     // Reused paints (no per-frame allocations).
-    private readonly SKPaint _imagePaint = new() { FilterQuality = SKFilterQuality.Low };
+    private readonly SKPaint _imagePaint = new();
     private readonly SKPaint _fillPaint = new();
     private readonly SKPaint _ringPaint = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
-    private readonly SKPaint _creditPaint = new()
-    {
-        IsAntialias = true,
-        TextAlign = SKTextAlign.Right,
-        Typeface = SKTypeface.FromFamilyName("Segoe UI") ?? SKTypeface.Default,
-    };
+    private readonly SKPaint _creditPaint = new() { IsAntialias = true };
+    // SkiaSharp 4: size/face live on SKFont, align on DrawText (https://mono.github.io/SkiaSharp/docs/releases/4.148.0.html).
+    // LinearMetrics: the legacy paint's font had it on (https://github.com/mono/skia/blob/v3.119.4/src/xamarin/SkCompatPaint.cpp), so widths stay identical.
+    // FromFamilyName never returns null in 4.x: it falls back to SKTypeface.Default (4.148.0 breaking changes).
+    private readonly SKFont _creditFont = new(SKTypeface.FromFamilyName("Segoe UI")) { LinearMetrics = true };
 
     public FlashLayer(CompositorEngine engine) : base(engine.Wake) { }
 
@@ -404,7 +403,7 @@ public sealed class FlashLayer : BaseLayer
                 fit = new SKRect(inner.MidX - fw / 2, inner.MidY - fh / 2,
                     inner.MidX + fw / 2, inner.MidY + fh / 2);
                 _imagePaint.Color = new SKColor(255, 255, 255, alpha);
-                canvas.DrawImage(image, fit, _imagePaint);
+                canvas.DrawImage(image, fit, SkSampling.Low, _imagePaint);
                 canvas.RestoreToCount(saves);
                 continue;
             }
@@ -461,7 +460,7 @@ public sealed class FlashLayer : BaseLayer
             if (exit is { Glitch: > 0 } && item.Exit is { } glitchState)
                 DrawGlitch(canvas, image, fit, alpha, glitchState, exit.Value.Glitch);
             else
-                canvas.DrawImage(image, fit, _imagePaint);
+                canvas.DrawImage(image, fit, SkSampling.Low, _imagePaint);
             if (exit is { Whiten: > 0 } lit)
             {
                 // TV off: the picture burns bright as it collapses to its line.
@@ -494,14 +493,14 @@ public sealed class FlashLayer : BaseLayer
         var scale = (float)(dpiScale > 0 ? dpiScale : 1.0);
         var size = 11f * scale;
         if (fit.Width < size * 8 || fit.Height < size * 3) return;   // too small to carry it
-        _creditPaint.TextSize = size;
+        _creditFont.Size = size;
         var x = fit.Right - 8f * scale;
         var y = fit.Bottom - 7f * scale;
         var a = alpha * 0.75f;
         _creditPaint.Color = new SKColor(0, 0, 0, (byte)Math.Clamp(a * 0.8f, 0, 255));
-        canvas.DrawText(Video.ScrolllerCredit.Mark, x + scale, y + scale, _creditPaint);
+        canvas.DrawText(Video.ScrolllerCredit.Mark, x + scale, y + scale, SKTextAlign.Right, _creditFont, _creditPaint);
         _creditPaint.Color = new SKColor(255, 255, 255, (byte)Math.Clamp(a, 0, 255));
-        canvas.DrawText(Video.ScrolllerCredit.Mark, x, y, _creditPaint);
+        canvas.DrawText(Video.ScrolllerCredit.Mark, x, y, SKTextAlign.Right, _creditFont, _creditPaint);
     }
 
     private static readonly SKColor SparkPink = new(0xFF, 0x69, 0xB4);
@@ -555,9 +554,9 @@ public sealed class FlashLayer : BaseLayer
             using var red = SKColorFilter.CreateBlendMode(new SKColor(255, 40, 90, (byte)(alpha / 2)), SKBlendMode.Modulate);
             using var cyan = SKColorFilter.CreateBlendMode(new SKColor(40, 230, 255, (byte)(alpha / 2)), SKBlendMode.Modulate);
             _imagePaint.ColorFilter = red;
-            canvas.DrawImage(image, new SKRect(fit.Left - split, fit.Top, fit.Right - split, fit.Bottom), _imagePaint);
+            canvas.DrawImage(image, new SKRect(fit.Left - split, fit.Top, fit.Right - split, fit.Bottom), SkSampling.Low, _imagePaint);
             _imagePaint.ColorFilter = cyan;
-            canvas.DrawImage(image, new SKRect(fit.Left + split, fit.Top, fit.Right + split, fit.Bottom), _imagePaint);
+            canvas.DrawImage(image, new SKRect(fit.Left + split, fit.Top, fit.Right + split, fit.Bottom), SkSampling.Low, _imagePaint);
             _imagePaint.ColorFilter = null;
         }
         _imagePaint.Color = new SKColor(255, 255, 255, alpha);
@@ -567,7 +566,7 @@ public sealed class FlashLayer : BaseLayer
             var src = new SKRect(0, image.Height * t0, image.Width, image.Height * t1);
             float dx = (float)(FlashExit.SliceOffset(state, k) * fit.Width);
             var dst = new SKRect(fit.Left + dx, fit.Top + fit.Height * t0, fit.Right + dx, fit.Top + fit.Height * t1);
-            canvas.DrawImage(image, src, dst, _imagePaint);
+            canvas.DrawImage(image, src, dst, SkSampling.Low, _imagePaint);
         }
     }
 
@@ -657,7 +656,7 @@ public sealed class FlashLayer : BaseLayer
                 canvas.DrawRect(dest, _fillPaint);
             }
             _imagePaint.Color = new SKColor(255, 255, 255, shardAlpha);
-            canvas.DrawImage(image, src, dest, _imagePaint);
+            canvas.DrawImage(image, src, dest, SkSampling.Low, _imagePaint);
             canvas.RestoreToCount(shardSaves);
         }
         canvas.RestoreToCount(saves);
