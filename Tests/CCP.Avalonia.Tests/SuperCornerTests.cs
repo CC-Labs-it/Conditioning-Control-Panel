@@ -267,6 +267,40 @@ public class SuperCornerTests
         Assert.Equal("super_corner_tip_inverted", ConditioningControlPanel.Localization.Loc.Get("super_corner_tip_inverted"));
     }
 
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-CN")]
+    [InlineData("ja")]
+    [InlineData("ko")]
+    [InlineData("es")]
+    [InlineData("pt-BR")]
+    [InlineData("fr")]
+    [InlineData("it")]
+    [InlineData("de")]
+    [InlineData("ru")]
+    public void HintsAndWpfFallbackFollowSelectedLanguage(string language) => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage(language);
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", language + ".json");
+            var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(path));
+            var corner = new SuperCorner(SuperEffect.Scrawl, false);
+            foreach (bool inverted in new[] { false, true })
+            {
+                var oldKey = "super_corner_tip" + (inverted ? "_inverted" : "");
+                Assert.Equal(oldKey, loc.Get(oldKey));
+                var expected = (string?)json["avalonia_" + oldKey];
+                Assert.False(string.IsNullOrWhiteSpace(expected));
+                corner.Inverted = () => inverted;
+                Assert.Equal(expected, ((TextBlock)((StackPanel)corner.BuildTip()).Children[2]).Text);
+            }
+        }
+        finally { loc.SetLanguage(previous); }
+    });
+
     [Fact]
     public void BadgeInsetTracksTheMappedFeature() => WithTile(
         () => new FeatureCard { Width = 180, Height = 180, HelpSectionId = "FlashImages" },
