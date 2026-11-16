@@ -47,7 +47,7 @@ public class VaultCompareTests
             Assert.Contains(monthly, Texts(dialog));
             Click(dialog, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
             Assert.Contains(yearly, Texts(dialog));
-            Assert.Equal(1, dialog.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Loc.Get("vaultgate_yearly_note")).Opacity);
+            Assert.Equal(1, dialog.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Loc.Get("vaultgate_yearly_note")).GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(0.0));
             Click(dialog, Loc.Get("vaultgate_billing_monthly"));
             Assert.Contains(monthly, Texts(dialog));
             Click(dialog, Loc.Get("vaultgate_back"));

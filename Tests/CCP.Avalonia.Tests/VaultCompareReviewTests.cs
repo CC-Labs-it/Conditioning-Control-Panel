@@ -361,6 +361,50 @@ public class VaultCompareReviewTests
         Assert.Equal(level != MotionLevel.Off && !gentle, moved);
     }, level, gentle);
 
+    private static async Task<System.Collections.Generic.List<double>> Sample(Func<double> read, int ms)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var seen = new System.Collections.Generic.List<double>();
+        while (clock.ElapsedMilliseconds < ms)
+        {
+            global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            seen.Add(read());
+            await Task.Delay(5);
+        }
+        return seen;
+    }
+
+    // WPF Compare.cs:231-232, 569-570: deal-in and knob use BackEase EaseOut (0.3), so both pass the rest point.
+    [Fact]
+    public Task DealAndKnobSettleWithOvershoot() => WithDialog(async dialog =>
+    {
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        var deal = (TranslateTransform)Named<Border>(dialog, "BasicTicket").RenderTransform!;
+        Assert.True((await Sample(() => deal.Y, 600)).Min() < -0.3);
+        var knob = (TranslateTransform)dialog.GetVisualDescendants().OfType<Border>().Single(b => b.Width == 25 && b.Height == 20).RenderTransform!;
+        Click(dialog, Loc.Get("vaultgate_billing_yearly"));
+        Assert.True((await Sample(() => knob.X, 400)).Max() > 26.2);
+    }, MotionLevel.Full);
+
+    // WPF Compare.cs:241, 622-635: the yearly note fades both ways; Off snaps.
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Off)]
+    public Task YearlyNoteFadesWithBilling(MotionLevel level) => WithDialog(async dialog =>
+    {
+        Click(dialog, Loc.Get("vaultgate_compare"));
+        var note = dialog.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == Loc.Get("vaultgate_yearly_note"));
+        foreach (var (word, end) in new[] { ("vaultgate_billing_yearly", 1.0), ("vaultgate_billing_monthly", 0.0) })
+        {
+            Click(dialog, Loc.Get(word));
+            Assert.Equal(end, note.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1.0));
+            var seen = await Sample(() => note.Opacity, 450);
+            Assert.Equal(level != MotionLevel.Off, seen.Any(o => o is > 0.02 and < 0.98));
+            Assert.Equal(end, seen[^1]);
+        }
+    }, level);
+
     // Avalonia asks owned windows first, so the compare fade must not cancel the shell's own X.
     [Fact]
     public Task OwnerCloseIsNotCancelledByTheCompareFade() => WithDialog(dialog =>

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Collections;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -174,8 +175,12 @@ public sealed partial class VaultGateDialog
         var slide = _knobSlide!;
         var oldX = slide.X;
         slide.X = _yearly ? 26 : 0;
-        if (animate && Moving) _ = Tween(_knob, TranslateTransform.XProperty, oldX, slide.X, 160, token);
+        if (animate && Moving) _ = Tween(_knob, TranslateTransform.XProperty, oldX, slide.X, 160, new BackOut(0.3), token);
+        // WPF Compare.cs:241, 622-635: the note fades with the billing change; a rise gets the gentle floor.
+        var noteFrom = _yearNote.Opacity;
         _yearNote.Opacity = _yearly ? 1 : 0;
+        if (animate && CompareMotion != MotionLevel.Off && noteFrom != _yearNote.Opacity)
+            _ = Tween(_yearNote, OpacityProperty, noteFrom, _yearNote.Opacity, _yearly ? GentleVisuals.RiseMs(GentleVisuals.FadeMs(220)) : GentleVisuals.FadeMs(220), new QuadraticEaseOut(), token);
         for (var i = 0; i < _comparePrices.Count; i++)
         {
             var (tier, price, saving) = _comparePrices[i];
@@ -186,12 +191,12 @@ public sealed partial class VaultGateDialog
             // WPF Compare.cs:509-521: the round stamp thumps in after the roll or lifts off.
             if (animate && CompareMotion != MotionLevel.Off && show)
             {
-                _ = Tween(saving, OpacityProperty, 0, 0.9, GentleVisuals.RiseMs(GentleVisuals.FadeMs(120)), token, 150);
+                _ = Tween(saving, OpacityProperty, 0, 0.9, GentleVisuals.RiseMs(GentleVisuals.FadeMs(120)), new QuadraticEaseOut(), token, 150);
                 if (Moving)
                     foreach (var axis in new[] { ScaleTransform.ScaleXProperty, ScaleTransform.ScaleYProperty })
-                        _ = Tween(saving, axis, 1.45, 1, 230, token, 150);
+                        _ = Tween(saving, axis, 1.45, 1, 230, new BackOut(0.35), token, 150);
             }
-            else if (animate && CompareMotion != MotionLevel.Off && off > 0) _ = Tween(saving, OpacityProperty, 0.9, 0, GentleVisuals.FadeMs(140), token);
+            else if (animate && CompareMotion != MotionLevel.Off && off > 0) _ = Tween(saving, OpacityProperty, 0.9, 0, GentleVisuals.FadeMs(140), new QuadraticEaseOut(), token);
             var slotIndex = _priceSlots.FindIndex(s => ReferenceEquals(s.Slot, price));
             if (slotIndex >= 0) _priceSlots[slotIndex] = (price, tier, true, _yearly, false);
             var oldAmount = (price.Children.FirstOrDefault() as WrapPanel)?.Children.OfType<Grid>().FirstOrDefault()?.Children.OfType<TextBlock>().LastOrDefault();
@@ -213,23 +218,23 @@ public sealed partial class VaultGateDialog
         {
             (old.Parent as Panel)?.Children.Remove(old);
             window.Children.Insert(0, old);
-            _ = Tween(next, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), token, full ? 40 : 0);
+            _ = Tween(next, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), new QuadraticEaseOut(), token, full ? 40 : 0);
             if (full)
             {
-                _ = Tween(old, TranslateTransform.YProperty, 0, -20 * dir, 130, token);
-                _ = Tween(next, TranslateTransform.YProperty, 22 * dir, 0, 260, token, 40);
+                _ = Tween(old, TranslateTransform.YProperty, 0, -20 * dir, 130, new QuadraticEaseIn(), token);
+                _ = Tween(next, TranslateTransform.YProperty, 22 * dir, 0, 260, new BackOut(0.4), token, 40);
             }
             old.Opacity = 0;
-            _ = Tween(old, OpacityProperty, 1, 0, GentleVisuals.FadeMs(130), token).ContinueWith(_ => window.Children.Remove(old), TaskScheduler.FromCurrentSynchronizationContext());
+            _ = Tween(old, OpacityProperty, 1, 0, GentleVisuals.FadeMs(130), new QuadraticEaseOut(), token).ContinueWith(_ => window.Children.Remove(old), TaskScheduler.FromCurrentSynchronizationContext());
         }
         if (price.Children.ElementAtOrDefault(1) is not TextBlock sub || oldSub == null || sub.Text == oldSub) return;
         var subText = sub.Text;
         sub.Text = oldSub;
         sub.Opacity = 0;
-        await Tween(sub, OpacityProperty, 1, 0, GentleVisuals.FadeMs(90), token);
+        await Tween(sub, OpacityProperty, 1, 0, GentleVisuals.FadeMs(90), new QuadraticEaseOut(), token);
         sub.Text = subText;
         sub.Opacity = 1;
-        if (!token.IsCancellationRequested) await Tween(sub, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(180)), token);
+        if (!token.IsCancellationRequested) await Tween(sub, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(180)), new QuadraticEaseOut(), token);
     }
 
     private Control Ticket(int tier)
@@ -337,14 +342,24 @@ public sealed partial class VaultGateDialog
         return ticket;
     }
     // WPF Compare.cs:525-594: full motion translates, reduced motion fades, off settles at once.
-    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, CancellationToken token = default, int delayMs = 0, bool hold = false)
+    private static async Task Tween(Control target, AvaloniaProperty property, double from, double to, int ms, Easing easing, CancellationToken token = default, int delayMs = 0, bool hold = false)
     {
         // Backward fill holds the start value through the delay, as WPF BeginTime does. The value
         // after the run is the base value, so callers set the base to the end state first.
-        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 || hold ? FillMode.Backward : FillMode.None,
+        var animation = new Animation { Duration = TimeSpan.FromMilliseconds(ms), Easing = easing, Delay = TimeSpan.FromMilliseconds(delayMs), FillMode = delayMs > 0 || hold ? FillMode.Backward : FillMode.None,
             Children = { new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } }, new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } } } };
         try { await animation.RunAsync(target, token); }
         catch (OperationCanceledException) { }
+    }
+
+    // WPF BackEase EaseOut with its Amplitude; Avalonia's BackEaseOut has a fixed one.
+    internal sealed class BackOut(double amplitude) : Easing
+    {
+        public override double Ease(double progress)
+        {
+            var t = 1 - progress;
+            return 1 - (t * t * t - amplitude * t * Math.Sin(Math.PI * t));
+        }
     }
 
     // WPF Compare.cs:560-571: both tweens start now; Backward fill holds each ticket hidden (and when
@@ -356,8 +371,8 @@ public sealed partial class VaultGateDialog
         for (var i = 0; i < _compareTickets.Count; i++)
         {
             var ticket = _compareTickets[i];
-            _ = Tween(ticket, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(240)), delayMs: i * 80, hold: true);
-            if (Moving) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340, delayMs: i * 80, hold: true);
+            _ = Tween(ticket, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(240)), new QuadraticEaseOut(), delayMs: i * 80, hold: true);
+            if (Moving) _ = Tween(ticket, TranslateTransform.YProperty, 26, 0, 340, new BackOut(0.3), delayMs: i * 80, hold: true);
         }
     }
 
@@ -388,7 +403,7 @@ public sealed partial class VaultGateDialog
         if (!Moving || from == transform.Y) return;
         var next = new CancellationTokenSource();
         _hoverMotion[ticket] = next;
-        _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, pressed ? 90 : 160, next.Token);
+        _ = Tween(ticket, TranslateTransform.YProperty, from, transform.Y, pressed ? 90 : 160, new CubicEaseOut(), next.Token);
     }
 
     private async void LeaveCompare()
@@ -406,16 +421,16 @@ public sealed partial class VaultGateDialog
             _ = FillAsyncBits();
             // WPF Compare.cs:112: the offer fades back in; Off stays immediate.
             _body.Opacity = 1;
-            if (CompareMotion != MotionLevel.Off) _ = Tween(_body, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), hold: true);
+            if (CompareMotion != MotionLevel.Off) _ = Tween(_body, OpacityProperty, 0, 1, GentleVisuals.RiseMs(GentleVisuals.FadeMs(200)), new QuadraticEaseOut(), hold: true);
         }
         if (CompareMotion == MotionLevel.Off) { Finish(); return; }
         _leaving = true;
         _card.IsHitTestVisible = false;
         var fadeMs = GentleVisuals.FadeMs(190);
         if (Moving)
-            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
+            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170, new QuadraticEaseIn());
         _body.Opacity = 0;
-        await Tween(_body, OpacityProperty, 1, 0, fadeMs);
+        await Tween(_body, OpacityProperty, 1, 0, fadeMs, new QuadraticEaseOut());
         Finish();
     }
 
@@ -432,9 +447,9 @@ public sealed partial class VaultGateDialog
         _card.IsHitTestVisible = false;
         var fadeMs = GentleVisuals.FadeMs(190);
         _card.Opacity = 0;
-        _ = Tween(_card, OpacityProperty, 1, 0, fadeMs);
+        _ = Tween(_card, OpacityProperty, 1, 0, fadeMs, new QuadraticEaseOut());
         if (Moving)
-            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170);
+            foreach (var ticket in _compareTickets) _ = Tween(ticket, TranslateTransform.YProperty, 0, 16, 170, new QuadraticEaseIn());
         DispatcherTimer.RunOnce(() =>
         {
             _closingAnimation = false;
