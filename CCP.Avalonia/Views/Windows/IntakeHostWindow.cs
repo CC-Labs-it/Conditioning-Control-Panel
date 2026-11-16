@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Width = 1280;
             Height = 800;
             Content = Web;
+            Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required";
             Web.WebMessage += OnPageMessage;
             Web.BrowserProcessFailed += OnBrowserProcessFailed;
             // WPF DisposeAll: a closed window never leaves the mic open.

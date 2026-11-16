@@ -411,6 +411,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly Panel _webSlot;
         private readonly Border _fallback;
         private readonly TextBlock _txtReason, _txtSource;
+        // WPF ChaosWebViewHost.cs:1102-1119,1169-1172: a native re-show can leave
+        // WebView2's controller hidden even though the window is visible.
+        internal Func<IntPtr>? WindowsRenderControllerForTests { get; set; }
+        internal void RepairWindowsRenderVisibility()
+        {
+            try
+            {
+                var controller = WindowsRenderControllerForTests?.Invoke() ??
+                    (OperatingSystem.IsWindows() && _web?.TryGetPlatformHandle() is IWindowsWebView2PlatformHandle win
+                        ? win.CoreWebView2Controller : IntPtr.Zero);
+                if (controller == IntPtr.Zero) return;
+                var vtable = System.Runtime.InteropServices.Marshal.ReadIntPtr(controller);
+                var setter = System.Runtime.InteropServices.Marshal.ReadIntPtr(vtable, 4 * IntPtr.Size);
+                System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(
+                    System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WindowsVisibleSetter>(setter)(controller, 1));
+            }
+            catch (Exception ex) { Log.Debug("WebHost: render visibility repair failed: {Error}", ex.Message); }
+        }
+
+        // ICoreWebView2Controller: IUnknown, get_IsVisible, put_IsVisible (BOOL).
+        [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.StdCall)]
+        internal delegate int WindowsVisibleSetter(IntPtr controller, int visible);
+
         private NativeWebView? _web;
 
         // Per-instance factory seam for headless recovery tests.
