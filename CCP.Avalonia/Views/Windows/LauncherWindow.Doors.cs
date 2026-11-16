@@ -34,6 +34,8 @@ public partial class LauncherWindow
     private const double DoorSwapSeconds = 0.13, DoorOpenSeconds = 0.23, DoorHoverSeconds = 0.18;
     private const double DoorEnterSeconds = 0.52, DoorEnterStagger = 0.09, DoorEnterFromX = 46, DoorEnterFromScale = 0.94;
     private const double DoorReelHoldSeconds = 4.6, DoorReelFadeSeconds = 1.1, DoorReelZoom = 1.05;
+    // WPF LauncherDoorCard.cs:50 (ReelDriftSeconds), :361-363 (hover zoom, 420 ms), :413 (odometer, 0.6 s).
+    private const double DoorDriftSeconds = 7.5 + DoorReelHoldSeconds, DoorDriftPan = 5, DoorLensSeconds = 0.42, DoorTallySeconds = 0.6;
     private static readonly FontFamily DoorFont = new("Fredoka, Segoe UI");
 
     /// <summary>Null while the doors are showing; otherwise the door whose page is up.</summary>
@@ -46,6 +48,7 @@ public partial class LauncherWindow
     private double _doorThenIn = -1;
     private Action? _doorThen;
     private DispatcherTimer? _doorReelTimer;
+    private ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner? _doorSheen;
 
     /// <summary>The door a coming show opens on (<see cref="ShowDoor"/>), read once by the window.</summary>
     private static LauncherDoor? _pendingDoor;
@@ -287,11 +290,22 @@ public partial class LauncherWindow
         public readonly TranslateTransform RootSlide = new(), ChevronSlide = new();
         public readonly Image[] Layers = new Image[2];
         public readonly ScaleTransform[] Zoom = { new(1, 1), new(1, 1) };
+        public readonly TranslateTransform[] Pan = { new(), new() };
+        public readonly ScaleTransform Lens = new(1, 1);
+        public readonly Tween[] Drift = new Tween[2];
+        public readonly bool[] DriftLeft = new bool[2];
+        public bool NextLeft;
+        public SolidColorBrush Title = null!;
+        public Color TitleRest;
+        public TextBlock Count = null!;
+        public string CountFormat = "";
+        public int CountTo;
         public readonly List<IImage> Arts = new();
         public int ArtAt, Front;
-        public Tween Scale, X, Y, Fade, Hover, Back, Pop, ReelIn;
+        public Tween Scale, X, Y, Fade, Hover, Back, Pop, ReelIn, Zoomed, Ink, Tally;
         public double Wait, StampWait = -1;
-        public bool Busy => Wait > 0 || StampWait >= 0 || Scale.On || X.On || Y.On || Fade.On || Hover.On || Back.On || Pop.On || ReelIn.On;
+        public bool Busy => Wait > 0 || StampWait >= 0 || Scale.On || X.On || Y.On || Fade.On || Hover.On || Back.On || Pop.On || ReelIn.On
+            || Zoomed.On || Ink.On || Tally.On || Drift[0].On || Drift[1].On;
     }
 
     /// <summary>The title shrinks to fit the room the stamp leaves (never grows): the stamp is
@@ -347,7 +361,11 @@ public partial class LauncherWindow
         view.Arts.AddRange(DoorArts(page));
         var surface = ((ISolidColorBrush)Res("SurfaceBgBrush")).Color;
         string title = DoorTitle(door);
-        string count = SafeFormat(Loc.Get(door == LauncherDoor.Tools ? "launcher_door_count_tools" : "launcher_door_count_games"), page.Count);
+        view.CountFormat = Loc.Get(door == LauncherDoor.Tools ? "launcher_door_count_tools" : "launcher_door_count_games");
+        view.CountTo = page.Count;
+        view.TitleRest = ((ISolidColorBrush)Res("TextLightBrush")).Color;
+        view.Title = new SolidColorBrush(view.TitleRest);
+        string count = SafeFormat(view.CountFormat, page.Count);
 
         view.Root = new Panel
         {
@@ -378,7 +396,12 @@ public partial class LauncherWindow
 
         // --- the reel: the picture shown WHOLE, as tall as the card, hugging its right edge; the
         // left side of every picture melts away so no picture shows a hard side.
-        var reel = new Panel { IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Right };
+        // WPF LauncherDoorCard.cs:143-148: the hover zoom scales the whole reel about (0.7, 0.5).
+        var reel = new Panel
+        {
+            IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Right,
+            RenderTransformOrigin = new RelativePoint(0.7, 0.5, RelativeUnit.Relative), RenderTransform = view.Lens,
+        };
         body.SizeChanged += (_, _) =>
         {
             if (body.Bounds.Height > 0) reel.Width = Math.Min(body.Bounds.Width, body.Bounds.Height * 16.0 / 9.0);
@@ -399,7 +422,7 @@ public partial class LauncherWindow
                 Opacity = 0,
                 // The zoom grows away from the card's right edge.
                 RenderTransformOrigin = new RelativePoint(1, 0.5, RelativeUnit.Relative),
-                RenderTransform = view.Zoom[i],
+                RenderTransform = new TransformGroup { Children = { view.Zoom[i], view.Pan[i] } },
             };
             reel.Children.Add(view.Layers[i]);
         }
@@ -464,7 +487,7 @@ public partial class LauncherWindow
             Child = new TextBlock
             {
                 Text = title, FontFamily = DoorFont, FontSize = 60, FontWeight = FontWeight.SemiBold,
-                Foreground = Res("TextLightBrush"),
+                Foreground = view.Title,
             },
         });
         int fresh = LauncherDoorRules.NewCount(RuleCards(), door, CoreSettings.Current.LauncherSeenNewIds);
@@ -501,7 +524,8 @@ public partial class LauncherWindow
             RenderTransform = view.BarScale,
             IsHitTestVisible = false,
         });
-        text.Children.Add(new TextBlock { Text = count, FontSize = 16, Margin = new Thickness(3, 12, 0, 0), Foreground = Res("TextSecondaryBrush") });
+        view.Count = new TextBlock { Text = count, FontSize = 16, Margin = new Thickness(3, 12, 0, 0), Foreground = Res("TextSecondaryBrush") };
+        text.Children.Add(view.Count);
         if (door == LauncherDoor.Games
             && LauncherCards.FindAny(LauncherDoorRules.ContinuePick(RuleCards(), CoreSettings.Current.LauncherLastPlayedId)) is { } last)
         {
@@ -604,6 +628,14 @@ public partial class LauncherWindow
             if (on && _doorHover != null && !ReferenceEquals(_doorHover, view)) DoorHover(_doorHover, false);
             double secs = Env.AllowTransitions ? GentleVisuals.FadeMs((int)(DoorHoverSeconds * 1000)) / 1000.0 : 0;
             view.Hover.Go(view.Hover.Step(0), on ? 1 : 0, secs);
+            // WPF LauncherDoorCard.SetHover (:361-371): the reel zooms (1.06, 1.03 without ambient loops) and the
+            // title takes the hue; transitions off snaps both.
+            bool anim = Env.AllowTransitions;
+            view.Zoomed.Go(view.Zoomed.Step(0), on ? (DoorLively ? 1.06 : 1.03) : 1, anim ? DoorLensSeconds : 0);
+            view.Ink.Go(view.Ink.Step(0), on ? 1 : 0, anim ? GentleVisuals.FadeMs(220) / 1000.0 : 0, Ease.Linear);
+            // WPF LauncherWindow.Doors.cs:377-383: a sheen pass over the hovered door.
+            ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner.Detach(_doorSheen); _doorSheen = null;
+            if (on && !PerfLow && FxLive && Env.AllowAmbientLoops) _doorSheen = ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner.Attach(view.Button, DoorRadius);
             foreach (var other in _doorViews)
                 if (!ReferenceEquals(other, view)) other.Back.Go(other.Back.Step(0), on ? 1 : 0, secs);
             if (on) { _doorHover = view; BleedGlow(view.Hue); }
@@ -616,6 +648,19 @@ public partial class LauncherWindow
             EnsureFxClock();
         }
         catch (Exception ex) { Log.Debug(ex, "[Launcher] door hover failed"); }
+    }
+
+    /// <summary>Test seam: hover (or leave) the door card <paramref name="door"/>.</summary>
+    internal void DoorHover(Button door, bool on)
+    {
+        foreach (var v in _doorViews) if (ReferenceEquals(v.Button, door)) DoorHover(v, on);
+    }
+
+    /// <summary>Test seam: a door's title colour, reel zoom and front picture's drift scale.</summary>
+    internal (Color Title, double Zoom, double Drift) DoorPose(int index)
+    {
+        var v = _doorViews[index];
+        return (v.Title.Color, v.Lens.ScaleX, v.Zoom[v.Front].ScaleX);
     }
 
     /// <summary>The doors arrive: staggered, settling; the stamp pops once its door has landed.
@@ -631,6 +676,9 @@ public partial class LauncherWindow
         v.Hover.Go(0, 0, 0);
         v.Back.Go(0, 0, 0);
         if (v.Stamp != null) { v.StampWait = v.Wait + secs * 0.7; v.StampScale.ScaleX = v.StampScale.ScaleY = 0; }
+        v.Zoomed.Go(1, 1, 0); v.Ink.Go(0, 0, 0);
+        // WPF LauncherDoorCard.cs:413: the count ticks up from 0 (MotionFx.Odometer, 0.6 s, quad out).
+        v.Tally.Go(0, v.CountTo, v.CountTo >= 1 ? DoorTallySeconds : 0);
         PaintDoor(v);
     }
 
@@ -640,6 +688,7 @@ public partial class LauncherWindow
         v.StampWait = -1;
         v.Scale.Go(1, 1, 0); v.X.Go(0, 0, 0); v.Y.Go(0, 0, 0); v.Fade.Go(1, 1, 0);
         v.Hover.Go(0, 0, 0); v.Back.Go(0, 0, 0); v.Pop.Go(1, 1, 0);
+        v.Zoomed.Go(1, 1, 0); v.Ink.Go(0, 0, 0); v.Tally.Go(v.CountTo, v.CountTo, 0);
         v.StampScale.ScaleX = v.StampScale.ScaleY = 1;
         PaintDoor(v);
     }
@@ -691,6 +740,30 @@ public partial class LauncherWindow
         v.ChevronSlide.X = 6 * h;
         v.Tint.Opacity = 0.45 + 0.55 * h;
         v.Mask.Opacity = 1 - 0.28 * h;
+        v.Lens.ScaleX = v.Lens.ScaleY = v.Zoomed.Step(0);
+        double u = v.Ink.Step(0);
+        var to = Lighten(v.Hue, 0.55);
+        v.Title.Color = Color.FromRgb((byte)(v.TitleRest.R + (to.R - v.TitleRest.R) * u),
+            (byte)(v.TitleRest.G + (to.G - v.TitleRest.G) * u), (byte)(v.TitleRest.B + (to.B - v.TitleRest.B) * u));
+        string count = SafeFormat(v.CountFormat, (int)Math.Round(v.Tally.Step(0)));
+        if (v.Count.Text != count) v.Count.Text = count;
+    }
+
+    /// <summary>WPF LauncherDoorCard.Drift (:595-614): a slow push 1.0 to 1.05 with a 0..5 px pan,
+    /// alternating direction, over the hold plus the drift (about 12 s).</summary>
+    private static void DriftLayer(DoorView v, int layer)
+    {
+        v.NextLeft = !v.NextLeft;
+        v.DriftLeft[layer] = v.NextLeft;
+        v.Drift[layer].Go(0, 1, DoorDriftSeconds, Ease.Linear);
+        PaintDrift(v, layer);
+    }
+
+    private static void PaintDrift(DoorView v, int layer)
+    {
+        double u = v.Drift[layer].Step(0);
+        v.Zoom[layer].ScaleX = v.Zoom[layer].ScaleY = 1 + (DoorReelZoom - 1) * u;
+        v.Pan[layer].X = v.DriftLeft[layer] ? DoorDriftPan * (1 - u) : DoorDriftPan * u;
     }
 
     /// <summary>One frame of every door tween; true while anything still moves.</summary>
@@ -712,6 +785,7 @@ public partial class LauncherWindow
             else
             {
                 v.Scale.Step(dt); v.X.Step(dt); v.Y.Step(dt); v.Fade.Step(dt); v.Hover.Step(dt); v.Back.Step(dt);
+                v.Zoomed.Step(dt); v.Ink.Step(dt); v.Tally.Step(dt);
                 PaintDoor(v);
             }
             if (v.StampWait >= 0 && (v.StampWait -= dt) < 0)
@@ -726,13 +800,14 @@ public partial class LauncherWindow
                 double k = GentleVisuals.On ? u : u < 0.6 ? 1.18 * u / 0.6 : 1.18 - 0.18 * (u - 0.6) / 0.4;
                 v.StampScale.ScaleX = v.StampScale.ScaleY = k;
             }
+            for (int i = 0; i < 2; i++)
+                if (v.Drift[i].On) { v.Drift[i].Step(dt); PaintDrift(v, i); }
             if (v.ReelIn.On)
             {
                 double u = v.ReelIn.Step(dt);
                 int back = 1 - v.Front;
                 v.Layers[back].Opacity = u;
-                v.Zoom[back].ScaleX = v.Zoom[back].ScaleY = 1 + (DoorReelZoom - 1) * u;
-                if (!v.ReelIn.On) { v.Layers[v.Front].Opacity = 0; v.Front = back; }
+                if (!v.ReelIn.On) { v.Layers[v.Front].Opacity = 0; v.Drift[v.Front].On = false; v.Front = back; }
             }
         }
         if (runThen) RunDoorThen();
@@ -753,6 +828,7 @@ public partial class LauncherWindow
     private void ParkDoors()
     {
         StopDoorReels();
+        ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner.Detach(_doorSheen); _doorSheen = null;
         if (_doorThen != null) RunDoorThen();
         _doorSwapping = false;
         GamesScroller.Opacity = 1;
@@ -761,11 +837,14 @@ public partial class LauncherWindow
 
     // ------------------------------------------------------------------ the reel
 
-    /// <summary>The reels cross-fade to the next picture now and then, only with ambient loops on and
-    /// never on the software floor (each fade repaints the card).</summary>
+    /// <summary>The reels drift and cross-fade to the next picture now and then, only with ambient loops on
+    /// and never on the software floor (each frame repaints the card). WPF StartReel: the front picture
+    /// drifts from its start again, the first one too; restored from minimised runs this again.</summary>
     private void StartDoorReels()
     {
         if (_door != null || !FxLive || !DoorLively || Env.SoftwareFloorHoldsIdleLoops) return;
+        foreach (var v in _doorViews) if (v.Arts.Count > 0) DriftLayer(v, v.Front);
+        EnsureFxClock();
         if (!_doorViews.Any(v => v.Arts.Count > 1)) return;
         if (_doorReelTimer == null)
         {
@@ -780,6 +859,7 @@ public partial class LauncherWindow
         _doorReelTimer?.Stop();
         foreach (var v in _doorViews)
         {
+            v.Drift[0].On = v.Drift[1].On = false;   // WPF StopReel freezes the drift where it is
             if (!v.ReelIn.On) continue;
             v.ReelIn.On = false;
             int back = 1 - v.Front;
@@ -799,7 +879,7 @@ public partial class LauncherWindow
             int back = 1 - v.Front;
             v.Layers[back].Source = v.Arts[v.ArtAt];
             v.Layers[back].Opacity = 0;
-            v.Zoom[back].ScaleX = v.Zoom[back].ScaleY = 1;
+            DriftLayer(v, back);
             v.ReelIn.Go(0, 1, GentleVisuals.FadeMs((int)(DoorReelFadeSeconds * 1000)) / 1000.0, Ease.Linear);
         }
         EnsureFxClock();
@@ -809,6 +889,7 @@ public partial class LauncherWindow
     private void DropDoorCards()
     {
         StopDoorReels();
+        ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner.Detach(_doorSheen); _doorSheen = null;
         if (_doorHover != null) { _doorHover = null; RestoreGlow(); }
         _doorViews.Clear();
         DoorsHost.Children.Clear();

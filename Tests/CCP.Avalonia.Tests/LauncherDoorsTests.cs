@@ -17,6 +17,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -262,4 +263,78 @@ public sealed class LauncherDoorsTests
         for (int i = 0; i < 40; i++) w.StepFx(0.05);
         Assert.All(w.DoorButtons, b => Assert.Equal(1, ((Control)b.Parent!).Opacity, 3));
     }, MotionLevel.Full);
+
+    // WPF LauncherDoorCard.SetHover: the title takes Lighten(hue, 0.55); GAMES is #FF69B4.
+    private static readonly global::Avalonia.Media.Color GamesTitleLit = global::Avalonia.Media.Color.FromRgb(255, 187, 221);
+
+    [Fact]
+    public void The_panel_door_link_opens_the_named_door_and_Lockdown_opens_nothing() => Run(shell =>
+    {
+        var (hook, fallback, locked) = (PanelDoorLink.OpenLauncherDoor, PanelDoorLink.Fallback, PanelDoorLink.IsLockedDown);
+        try
+        {
+            Assert.True(PanelDoorLink.Open("tools"));
+            shell.StepLauncherFade(1);
+            Dispatcher.UIThread.RunJobs();
+            var w = LauncherWindow.Instance!;
+            Assert.True(w.IsVisible);
+            Assert.Equal(LauncherDoor.Tools, w.OpenDoor);
+
+            w.OpenPanel();
+            Dispatcher.UIThread.RunJobs();
+            var lockdown = LockdownService.Current = new LockdownService();
+            try
+            {
+                lockdown.Activate(TimeSpan.FromMinutes(30));
+                Assert.False(PanelDoorLink.Open("games"));
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(shell.IsVisible);
+                Assert.False(w.IsVisible);
+                Assert.Equal(LauncherDoor.Tools, w.OpenDoor);
+            }
+            finally { lockdown.Deactivate(); }
+        }
+        finally { (PanelDoorLink.OpenLauncherDoor, PanelDoorLink.Fallback, PanelDoorLink.IsLockedDown) = (hook, fallback, locked); }
+    });
+
+    [Fact]
+    public void Hover_lights_the_door_title_and_zooms_its_picture_on_the_clock() => Run(shell =>
+    {
+        var w = OpenLauncher(shell);
+        for (int i = 0; i < 40; i++) w.StepFx(0.05);
+        var rest = w.DoorPose(0);
+        Assert.Equal(1, rest.Zoom, 3);
+        Assert.NotEqual(GamesTitleLit, rest.Title);
+
+        w.DoorHover(w.DoorButtons[0], true);
+        w.StepFx(0.05);
+        var mid = w.DoorPose(0);
+        Assert.InRange(mid.Zoom, 1.0001, 1.0299);   // still moving: a tween, not a snap
+        for (int i = 0; i < 20; i++) w.StepFx(0.05);
+        var lit = w.DoorPose(0);
+        Assert.Equal(GamesTitleLit, lit.Title);
+        Assert.True(lit.Zoom is > 1.029 and < 1.061, "zoom " + lit.Zoom);
+
+        w.DoorHover(w.DoorButtons[0], false);
+        for (int i = 0; i < 20; i++) w.StepFx(0.05);
+        Assert.Equal(1, w.DoorPose(0).Zoom, 3);
+        Assert.Equal(rest.Title, w.DoorPose(0).Title);
+    }, MotionLevel.Full);
+
+    [Fact]
+    public void Motion_off_hover_snaps_and_the_pictures_stay_still() => Run(shell =>
+    {
+        var w = OpenLauncher(shell);
+        Assert.Equal(1, w.DoorPose(0).Drift, 3);
+        w.DoorHover(w.DoorButtons[0], true);
+        var lit = w.DoorPose(0);
+        Assert.Equal(GamesTitleLit, lit.Title);
+        Assert.Equal(1.03, lit.Zoom, 3);
+        for (int i = 0; i < 100; i++) w.StepFx(0.1);
+        Assert.Equal(1.03, w.DoorPose(0).Zoom, 3);
+        Assert.Equal(1, w.DoorPose(0).Drift, 3);
+        Assert.Equal(1, w.DoorPose(1).Drift, 3);
+        w.DoorHover(w.DoorButtons[0], false);
+        Assert.Equal(1, w.DoorPose(0).Zoom, 3);
+    });
 }
