@@ -99,11 +99,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static GameWindow? Launch(string id, Windows.MainShellWindow? panel = null)
         {
             id = ResolveDoor(id);   // one routing seam for the Racing Thoughts host
-            if (id == "backroom" && !CoreAccount.IsLoggedIn)
-            {
-                _ = (panel ?? Windows.MainShellWindow.Current)?.OpenUnifiedLoginDialog();
-                return null;
-            }
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             if (spec.Id == JustDropId && !JustDropDoorOpen()) return null;
             return spec.Id == GlassroadId ? LaunchRacingThoughts() :
@@ -205,9 +200,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.WebMessage += OnPageMessage;
             PropertyChanged += (_, e) =>
             {
-                if (e.Property != WindowStateProperty) return;
-                if (IsBreakout) RoomMinimizedChanged(WindowState == WindowState.Minimized);
-                else if (Spec.Id == "backroom") BackRoomMinimizedChanged(WindowState == WindowState.Minimized);
+                if (!IsBreakout || e.Property != WindowStateProperty) return;
+                RoomMinimizedChanged(WindowState == WindowState.Minimized);
             };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
@@ -219,8 +213,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnDtrhWindowStateChanged(); };
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
-            Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBackRoomAfterPanic(DateTime.Now); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _roomBridge?.CloseNow(); _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
+            Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
+            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")

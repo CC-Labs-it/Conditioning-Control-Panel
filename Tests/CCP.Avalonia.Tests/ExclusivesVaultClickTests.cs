@@ -143,7 +143,7 @@ public sealed class ExclusivesVaultClickTests
             Dispatcher.UIThread.RunJobs();
             var view = shell.Named<ExclusivesTabView>("ExclusivesTab")!;
             var card = view.GetVisualDescendants().OfType<Control>().First(c => c.Name == "ExCard" &&
-                c.DataContext is ExclusiveCardRow row && row.Feature.Key == "goon");
+                c.DataContext is ExclusiveCardRow row && row.Feature.Key == "backroom");
             card.BringIntoView();
             shell.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
@@ -175,7 +175,7 @@ public sealed class ExclusivesVaultClickTests
     [InlineData("breakout", true)]
     [InlineData("dtrh", true)]
     [InlineData("focusgaze", true)]
-    [InlineData("backroom", true)]
+    [InlineData("backroom", false)]
     [InlineData("arcademy", false)]
     public void PremiumCardsMatchThePlayWallDoors(string key, bool onThisBuild) =>
         Assert.Equal(onThisBuild, ExclusivesTabView.IsOnThisBuild(key));

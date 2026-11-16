@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF MainWindow.Lab.cs:302-313: Back Room is free and reports launch failures.
         internal void LaunchPlayBackRoom()
         {
-            try { if (!CoreAccount.IsLoggedIn) { _ = OpenUnifiedLoginDialog(); return; } Tabs.PlayTabView.LaunchGame("backroom"); }
+            try { Tabs.PlayTabView.LaunchGame("backroom"); }
             catch (System.Exception ex)
             {
                 Serilog.Log.Error(ex, "BtnStartBackRoom_Click failed");

@@ -104,8 +104,7 @@ public sealed class ExclusivesVaultTests
 
                 // No launcher on this head: visible, inert, and it says so.
                 var tip = ConditioningControlPanel.Localization.Loc.Get("exclusives_not_on_this_build");
-                Assert.Equal(tip, rows.Single(r => r.Feature.Key == "goon").UnavailableTip);
-                Assert.Null(rows.Single(r => r.Feature.Key == "backroom").UnavailableTip);
+                Assert.Equal(tip, rows.Single(r => r.Feature.Key == "backroom").UnavailableTip);
                 Assert.Null(rows.Single(r => r.Feature.Key == "haptics").UnavailableTip);
                 Assert.True(view.FindControl<Button>("BtnSpotOpen")!.IsEnabled);   // the fyp spotlight opens the feed (GameWindow.Fyp)
 
