@@ -112,8 +112,9 @@ public sealed class ChaosBackdropTests
                 Assert.True(Diff(mid, depth1) > 1000 && Diff(mid, depth2) > 1000);
 
                 settings.ChaosSkiaFxEnabled = true;
-                for (int i = 0; i < 60; i++) plate.Step();
-                Assert.True(plate.TwinkleCount > 0);
+                int twinkles = 0;   // each lives 0.7-1.15 s and the gap between births reaches 1.07 s, so count any alive
+                for (int i = 0; i < 60; i++) { plate.Step(); twinkles = Math.Max(twinkles, plate.TwinkleCount); }
+                Assert.True(twinkles > 0);
                 Assert.True(Diff(depth2, Frame(w)) > 1000);   // breathing scale, glow and twinkles
                 ChaosBackdropWindow.CloseActive();
                 Assert.False(plate.HasArt);
