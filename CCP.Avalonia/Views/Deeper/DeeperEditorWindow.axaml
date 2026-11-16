@@ -120,6 +120,24 @@
         <Style Selector="MenuItem">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
         </Style>
+        <!-- WPF DeeperEditorWindow.xaml:155-206 (TimelineCtxMenuItem on File rows, :476-486) replaces
+             the shared Inputs.xaml:476 row: square, no row margin, Deeper hover, grey disabled text. -->
+        <Style Selector="Menu MenuItem MenuItem">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Cursor" Value="Arrow"/>
+        </Style>
+        <Style Selector="Menu MenuItem MenuItem:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource DeeperMenuItemHoverBgBrush}"/>
+        </Style>
+        <Style Selector="Menu MenuItem MenuItem:disabled">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Menu MenuItem MenuItem:disabled /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="Foreground" Value="#666666"/>
+        </Style>
         <!-- Fluent icons L6: the items list's Overlay square keeps WPF's violet (🟪). -->
         <Style Selector="fx|IconGlyph.overlay">
             <Setter Property="Foreground" Value="#9B59FF"/>
