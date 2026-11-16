@@ -12,6 +12,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
@@ -163,22 +165,40 @@ public sealed class ChaosHubGateTests
         public long Now;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public override long GetTimestamp() => Now;
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddTicks(Now * 120);
     }
 
-    [Fact]
-    public Task Purchase_during_reveal_keeps_one_loop_and_chimes_each_reveal_once() => InHub(state =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Purchase_during_reveal_restarts_and_restagger_pending_batch(bool newReveal) => InHub(state =>
     {
         state.RunsCompleted = 50;
         state.LessonsComplete.Add("extreme_tier");
+        state.LessonsComplete.Add("slow_fuses");
     }, hub =>
     {
         RevealService.Sync("test");
         foreach (var id in RevealService.PendingIds()) RevealService.MarkSeen(id);
+        ChaosMeta.State.PendingReveals.Clear();
         ChaosMeta.State.PendingReveals.Add(RevealIds.TabLookingGlass);
         var oldTime = BeatLoop.Time;
         var oldSfx = ChaosHubWindow.PlayRevealSfx;
+        var oldEngine = BarkHead.Engine;
+        var oldAvatar = CoreSettings.Current.AvatarEnabled;
         var clock = new RevealClock();
-        int chimes = 0;
+        int chimes = 0, barks = 0;
+        var engine = new BarkEngine(() => new BarkRuleSet(new[]
+        {
+            new BarkRule { Id = "batch", Trigger = "ChaosRevealFlash",
+                Conditions = new() { ["element"] = RevealIds.TabLookingGlass },
+                VariantPool = new() { new BarkVariant("new room") } },
+        }));
+        engine.Speak = _ => barks++;
+        engine.Clock = clock;
+        engine.Start();
+        CoreSettings.Current.AvatarEnabled = true;
+        BarkHead.Engine = engine;
         BeatLoop.Time = clock;
         ChaosHubWindow.PlayRevealSfx = (_, _) => chimes++;
         int Loops() => BeatLoop.Running.Count(loop => ReferenceEquals(loop.Owner, hub));
@@ -188,23 +208,33 @@ public sealed class ChaosHubGateTests
             hub.RunRevealFlashes();
             Assert.Equal(before + 1, Loops());
             Assert.Equal(1, chimes);
+            Assert.Equal(1, barks);
             clock.Now = TimeSpan.FromSeconds(0.5).Ticks;
             BeatLoop.StepAll();
             var first = hub.FindControl<Control>("TabImprove")!;
             Assert.Equal(0.25, first.Opacity, 6);
-            Button(hub, "extreme_tier").RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
+            Button(hub, newReveal ? "extreme_tier" : "slow_fuses").RaiseEvent(
+                new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Controls.Button.ClickEvent));
             Assert.Equal(before + 1, Loops());
             Assert.Equal(2, chimes);
+            Assert.Equal(2, barks);
+            Assert.Equal(1, first.Opacity, 6);
             Assert.True(RevealService.IsPending(RevealIds.TabLookingGlass));
-            Assert.True(RevealService.IsPending(RevealIds.PillInescapable));
+            if (newReveal) Assert.True(RevealService.IsPending(RevealIds.PillInescapable));
+            clock.Now = TimeSpan.FromSeconds(1.2).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(newReveal ? 3 : 2, chimes);
             clock.Now = TimeSpan.FromSeconds(3).Ticks;
             BeatLoop.StepAll();
-            Assert.True(RevealService.IsSeen(RevealIds.TabLookingGlass));
-            Assert.True(RevealService.IsPending(RevealIds.PillInescapable));
+            Assert.True(RevealService.IsPending(RevealIds.TabLookingGlass));
             clock.Now = TimeSpan.FromSeconds(3.5).Ticks;
             BeatLoop.StepAll();
-            Assert.True(RevealService.IsSeen(RevealIds.PillInescapable));
-            Assert.Equal(2, chimes);
+            Assert.True(RevealService.IsSeen(RevealIds.TabLookingGlass));
+            if (newReveal) Assert.True(RevealService.IsPending(RevealIds.PillInescapable));
+            clock.Now = TimeSpan.FromSeconds(4.2).Ticks;
+            BeatLoop.StepAll();
+            if (newReveal) Assert.True(RevealService.IsSeen(RevealIds.PillInescapable));
+            Assert.Equal(newReveal ? 3 : 2, chimes);
             Assert.Equal(before, Loops());
         }
         finally
@@ -212,6 +242,8 @@ public sealed class ChaosHubGateTests
             hub.Close();
             BeatLoop.Time = oldTime;
             ChaosHubWindow.PlayRevealSfx = oldSfx;
+            BarkHead.Engine = oldEngine;
+            CoreSettings.Current.AvatarEnabled = oldAvatar;
         }
     });
 
