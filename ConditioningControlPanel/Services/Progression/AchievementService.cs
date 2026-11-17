@@ -584,7 +584,7 @@ public class AchievementService : IDisposable
             if (settings != null)
             {
                 var previousPoints = settings.SkillPoints;
-                settings.SkillPoints += 1;
+                Services.Prizes.SparklesLedger.Write(settings, settings.SkillPoints + 1, Services.Prizes.SparkleSource.BubbleMilestone);
                 var creditedBalance = settings.SkillPoints;
                 App.Settings?.Save();
                 SparklePointRewards.PublishCredit(previousPoints, creditedBalance, SparklePointSource.BubbleMilestone);
@@ -639,7 +639,7 @@ public class AchievementService : IDisposable
             if (settings != null)
             {
                 var previousPoints = settings.SkillPoints;
-                settings.SkillPoints += milestones;
+                Services.Prizes.SparklesLedger.Write(settings, settings.SkillPoints + milestones, Services.Prizes.SparkleSource.BubbleMilestone);
                 var creditedBalance = settings.SkillPoints;
                 App.Settings?.Save();
                 SparklePointRewards.PublishCredit(previousPoints, creditedBalance, SparklePointSource.BubbleMilestone);

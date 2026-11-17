@@ -16,6 +16,7 @@ public partial class MainWindow
         _sparkleWalletActive = true;
         App.Settings.CurrentReplaced += ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded += OnSparklePointAwarded;
+        InitializeSparkleFly();
         HeaderSparkleWallet.VisitRequested += VisitFromSparkleWallet;
         HeaderSparkleWallet.CounterRequested += OpenCounterFromSparkleWallet;
         Closed += (_, _) => ShutdownSparkleWallet();
@@ -88,7 +89,9 @@ public partial class MainWindow
             if (!_sparkleWalletActive || !ReferenceEquals(App.Settings.Current, creditedSettings)) return;
             // Read the current ledger: another purchase or award may have occurred while queued.
             RefreshSparkleWalletBalance();
-            if (IsVisible && WindowState != WindowState.Minimized) HeaderSparkleWallet.ShowReward(award.Amount);
+            // One cue per credit: when stars fly (or will fly on return) for it, the badge stays quiet.
+            if (IsVisible && WindowState != WindowState.Minimized && !Services.Prizes.SparkleFlightDirector.Covers(award.Balance))
+                HeaderSparkleWallet.ShowReward(award.Amount);
         }
         if (Dispatcher.CheckAccess()) Present();
         else Dispatcher.BeginInvoke(new Action(Present));
@@ -104,6 +107,7 @@ public partial class MainWindow
         _sparkleWalletActive = false;
         App.Settings.CurrentReplaced -= ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded -= OnSparklePointAwarded;
+        ShutdownSparkleFly();
         if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded -= OnSparkleWalletProfileLoaded;
         if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
         _sparkleWalletSettings = null;

@@ -615,7 +615,7 @@ internal static class PrizeCounterHostService
         if (App.Settings?.Current is not { } s) return;
         var same = string.Equals(BackRoomApi.AppIdentity()?.UnifiedId, account, StringComparison.Ordinal);
         if (!Prizes.V2WalletAdoption.Decide(same, fromBuy, sp, s.SkillPoints, out var next)) return;
-        s.SkillPoints = next;
+        Prizes.SparklesLedger.Write(s, next, fromBuy ? Prizes.SparkleSource.CounterBuy : Prizes.SparkleSource.Synced);
         App.Settings.Save();
     });
 

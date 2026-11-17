@@ -1660,6 +1660,8 @@ namespace ConditioningControlPanel
             // arm EMI's silence, the Chaster safety hold or the stop pass.
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
+            // The Sparkles flight and its bells stop, the wallet snaps to its balance, nothing stays owed.
+            try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // The weekly free Super try ends with a cut, before any hand-off below can return early.
             try { Services.Super.SuperPreview.End(panic: true); } catch (Exception ex) { Diag.Swallowed(ex); }
 

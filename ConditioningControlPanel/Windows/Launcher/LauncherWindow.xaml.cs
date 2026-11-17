@@ -62,6 +62,7 @@ public partial class LauncherWindow : Window
         GamesScroller.SizeChanged += (_, _) => FitTiles();
 
         SetUpSoundButton();
+        InitializeSparkleFly();
 
         var mods = App.Mods;
         if (mods != null) mods.ModChanged += OnModChanged;

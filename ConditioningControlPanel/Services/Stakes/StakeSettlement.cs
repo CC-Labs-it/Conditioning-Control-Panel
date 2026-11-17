@@ -195,7 +195,7 @@ public sealed class StakeSettlement
             if (App.Settings?.Current is not { } s) return;
             var same = string.Equals(BackRoom.BackRoomApi.AppIdentity()?.UnifiedId, account, StringComparison.Ordinal);
             if (!V2WalletAdoption.Decide(same, receipt, sp, s.SkillPoints, out var next)) return;
-            s.SkillPoints = next;
+            SparklesLedger.Write(s, next, SparkleSource.Stake);
             App.Settings.Save();
         })),
         () => BackRoom.BackRoomApi.AppIdentity()?.UnifiedId);

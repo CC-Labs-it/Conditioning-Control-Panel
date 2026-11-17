@@ -621,6 +621,10 @@ public partial class LauncherWindow
         bool show = sp >= 0 && App.IsLoggedIn;
         WalletChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _spShown = double.NaN; return; }
+        // Stars are landing or owed: they count the chip up (LauncherWindow.SparkleFly.cs); the
+        // show's count-up stops where they start.
+        if (_spFlightHold) { if (!countUp) return; sp = _spHeldAt; }
+        else if (countUp) sp -= Services.Prizes.SparkleFlightDirector.OwedTo(App.Settings?.Current);
         if (!countUp && double.IsNaN(_spShown)) return;
         double from = countUp ? 0 : _spShown;
         if (!countUp && Math.Abs(from - sp) < 0.5) return;

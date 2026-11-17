@@ -440,7 +440,7 @@ internal static class BackRoomHostService
                     ApplyRoomOption(s, option, _breakoutPage);
                     App.Settings.Save();
                 }),
-                SetSp = sp => { if (generation == _roomGeneration && !_racePage && App.Settings?.Current is { } s) s.SkillPoints = sp; },
+                SetSp = sp => { if (generation == _roomGeneration && !_racePage && App.Settings?.Current is { } s) Prizes.SparklesLedger.Write(s, sp, Prizes.SparkleSource.BackRoom); },
                 OnUi = OnUi,
                 OffUi = work => System.Threading.Tasks.Task.Run(work),
                 Log = msg => App.Logger?.Debug("BackRoom: {Msg}", msg),
