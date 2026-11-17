@@ -11,7 +11,9 @@
   <!-- The sheet on the mock host. By default the full preview wire (mock/preview.js: effects, gift, stamps, goal, ledger,
        places); ?real = today's mock/state.sample.json only, as the real server answers now. Knobs as dev.html: ?tier=2
        ?sp=50 ?tab=kart ?fail=<reason> ?signedout ?sheet (the drop-down mode: no wallet line) ?rain (init.rainV2)
-       ?motion=off|less ?gentle ?platform=web|phone ?pick=<item id> ?ask (the Yes step) ?muted -->
+       ?motion=off|less ?gentle ?platform=web|phone ?pick=<item id> ?ask (the Yes step) ?muted
+       ?lang=de (the shop_ keys of Localization/Languages/de.json as init.lexicon, as the desktop host sends them; needs
+       a server rooted at ConditioningControlPanel/) ?done (the stamp card over, its coupon earned) -->
   <main id="pc"></main>
   <script type="module">
     import { createMockServer } from './server.js';
@@ -29,8 +31,14 @@
     window.mock = server;
     const platform = q.get('platform') || 'desktop';
     const wears = platform === 'desktop' ? ['desk', 'chess', 'profile', 'rain'] : ['chess', 'profile'];
+    if (q.has('done') && server.preview) Object.assign(server.preview.stamps, { done: true, day: 14, stamped: [1, 2, 4, 5, 6, 9, 11], couponReady: true });
+    const lang = q.get('lang'), lexicon = {};
+    if (lang && /^[a-zA-Z-]{2,5}$/.test(lang)) {
+      const all = await (await fetch(`../../../../Localization/Languages/${lang}.json`)).json();
+      for (const [k, v] of Object.entries(all)) if (k.startsWith('shop_')) lexicon[k] = v;
+    }
     const host = createMockHost(server, { tab: q.get('tab'), onSignIn, sheet: q.has('sheet'), rainV2: q.has('rain'),
-      motion: q.get('motion') || 'full', gentle: q.has('gentle'), muted: q.has('muted'), wears, platform });
+      motion: q.get('motion') || 'full', gentle: q.has('gentle'), muted: q.has('muted'), wears, platform, lexicon, locale: lang || 'en' });
     window.page = await mountSheet(host, { root: document.getElementById('pc'), base: '../' });
     if (q.get('pick')) window.page.pick(q.get('pick'));
     if (q.has('ask')) window.page.act('buy', true, true);

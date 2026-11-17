@@ -7,7 +7,7 @@
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
 import { drawBack, drawFront, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf } from './looks.js';
-import { labelOf, locate } from './model.js';
+import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
 
@@ -236,8 +236,8 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     name.tabIndex = -1;
     const dl = el('dl', 'wearing');
     const row = (k, val) => { const r = el('div'); r.append(el('dt', null, k), el('i'), el('dd', null, val)); dl.append(r); };
-    for (const s of FX_SLOTS) { const e = locate(v.state, v.pv.equip[s], v.pv); if (e && !e.id.endsWith('.none')) row(t('shop_sheet_sec_' + s), e.x.name || kindOf(e.id)); }
-    if (v.pv.equip.mix) row(t('shop_sheet_fog_mix'), (locate(v.state, 'fx.fog.twotone', v.pv) || { x: {} }).x.name || 'Two-tone');
+    for (const s of FX_SLOTS) { const e = locate(v.state, v.pv.equip[s], v.pv); if (e && !e.id.endsWith('.none')) row(t('shop_sheet_sec_' + s), nameOf(e, t)); }
+    if (v.pv.equip.mix) row(t('shop_sheet_fog_mix'), t('shop_item_fx_fog_twotone_name'));
     return [mon, name, el('p', 'd-where', t(v.platform === 'desktop' ? 'shop_sheet_wearing_pick' : 'shop_sheet_wearing_pick_away')), dl];
   };
 

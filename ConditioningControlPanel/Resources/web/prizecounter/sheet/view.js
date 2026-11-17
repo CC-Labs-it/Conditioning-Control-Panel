@@ -5,8 +5,9 @@
 import { TAB_ICONS, LOCK } from '../hud/icons.js';
 import { tabKey } from '../state/strings.js';
 import { placeMark, placesOf, isHere, awayLine, PLACES } from './wire.js';
-import { sections, statusOf, statusText, locate, tabLabelKey, nameOf, FEATURED } from './model.js';
+import { sections, statusOf, statusText, locate, tabLabelKey, nameOf, howOf, FEATURED } from './model.js';
 import { itemArt } from './pictures.js';
+import { PREVIEW_SLIP } from './strings.js';
 
 /* The mockup's place icons: a monitor, a globe, a phone (decorative, currentColor). */
 export const PLACE_ICONS = {
@@ -25,7 +26,7 @@ export function createView(doc, { t, sheet, base = './' }) {
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 's-title');
   const head = el('div', 's-head'), title = el('h1', 's-title', t('shop_title'));
   title.id = 's-title'; title.tabIndex = -1;
-  const slip = el('span', 's-slip', t('shop_sheet_preview'));
+  const slip = el('span', 's-slip', PREVIEW_SLIP);
   slip.hidden = true;
   const wallet = el('p', 's-wallet'), walletN = el('span', 'n');
   wallet.append(star(), walletN); wallet.setAttribute('aria-live', 'polite'); wallet.hidden = !!sheet;
@@ -101,7 +102,7 @@ export function createView(doc, { t, sheet, base = './' }) {
     if (bare) { b.setAttribute('aria-label', nameOf(e, t) + (away ? '. ' + awayLine(places, v.platform, t) : '')); return b; }
     const meta = el('span', 'meta');
     meta.append(statusNode(st, v), el('span', 'nm', nameOf(e, t)));
-    if (e.x.how) meta.append(el('span', 'how', e.x.how));
+    if (howOf(e, t)) meta.append(el('span', 'how', howOf(e, t)));
     b.append(meta);
     return b;
   }

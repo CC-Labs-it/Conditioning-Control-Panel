@@ -88,7 +88,7 @@ test('the fitting room: Buy asks twice, pending locks the Yes, owned rows wear b
 
 test('the sheet adds its words beside LEX, never over it, in the house voice', () => {
   for (const [k, v] of Object.entries(SHEET_LEX)) {
-    assert.ok(k.startsWith('shop_sheet_') && !(k in LEX), k);
+    assert.ok((k.startsWith('shop_sheet_') || k.startsWith('shop_item_fx_')) && !(k in LEX), k);
     assert.doesNotMatch(v, /[–—!]/, k);
   }
   assert.equal(sheetT({ shop_sheet_cancel: 'Annulla' })('shop_sheet_cancel'), 'Annulla');

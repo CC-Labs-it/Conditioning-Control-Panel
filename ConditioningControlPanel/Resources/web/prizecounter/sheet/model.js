@@ -8,7 +8,7 @@
  *   frontModel  the Featured page: the spotlight, gift, stamp card, saving for, the receipt, You can buy now */
 
 import { faceOf } from '../state/shop.js';
-import { tabKey, itemName } from '../state/strings.js';
+import { tabKey, itemName, itemKey } from '../state/strings.js';
 import { cardModel } from '../hud/card.js';
 import { readPreview, FX_SLOTS, placesOf, isHere, couponOn, cardGone } from './wire.js';
 
@@ -46,7 +46,11 @@ export const locate = (st, id, pv) => rowsOf(st, pv).find((e) => e.id === id) ||
 const uniq = (list) => { const seen = new Set(); return list.filter((e) => !seen.has(e.id) && seen.add(e.id)); };
 
 /** The name on a card: the wire's name for an effect row ("Heart"), else the item name. label adds the slot's noun ("Heart bubbles"). */
-export const nameOf = (e, t) => (e.fx ? e.x.name || e.id.split('.').pop() : itemName(t, e.id));
+/** An effect row's word from the lexicon (`shop_item_fx_*_name` / `_how`), else the wire's English. */
+const fxWord = (t, id, part, wire) => { const k = itemKey(id).replace(/_name$/, '_' + part), v = t(k); return v !== k ? v : wire; };
+export const nameOf = (e, t) => (e.fx ? fxWord(t, e.id, 'name', e.x.name || e.id.split('.').pop()) : itemName(t, e.id));
+/** An effect row's short how line ("typewriter"), or null. */
+export const howOf = (e, t) => (e.x && e.x.how ? fxWord(t, e.id, 'how', e.x.how) : null);
 export const labelOf = (e, t) => (e.fx ? t('shop_sheet_fx_label', nameOf(e, t), t('shop_sheet_noun_' + e.fx)) : nameOf(e, t));
 /** The words for each ledger code (the server sends codes, never words). buy and coupon name their row. */
 const LEDGER_WORDS = { gift: 'shop_sheet_gift', level: 'shop_sheet_led_level', pops: 'shop_sheet_led_pops', play: 'shop_sheet_led_play' };
@@ -79,7 +83,7 @@ export function sections(st, { tab, query = '', t, pv = NO_PREVIEW, platform = '
   const all = rowsOf(st, pv);
   const q = String(query).trim().toLowerCase();
   if (q) {
-    const hits = uniq(all).filter(keep).filter((e) => `${labelOf(e, t)} ${e.x.how || ''} ${t(sectionTitleKey(e.fx || e.tab))}`.toLowerCase().includes(q));
+    const hits = uniq(all).filter(keep).filter((e) => `${labelOf(e, t)} ${howOf(e, t) || ''} ${t(sectionTitleKey(e.fx || e.tab))}`.toLowerCase().includes(q));
     return [{ key: 'q', title: t('shop_sheet_results', hits.length), meta: t('shop_sheet_for', String(query).trim()), mixed: true,
       planks: hits.length ? [hits] : [], empty: hits.length ? null : t('shop_sheet_no_match') }];
   }
