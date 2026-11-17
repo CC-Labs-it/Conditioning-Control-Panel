@@ -55,13 +55,14 @@ public static class BubbleSkinChoice
 
 /// <summary>Heart: <see cref="HeartBody"/> is the heart itself (R = its scale, Alpha = the beat 0..1);
 /// <see cref="HeartRipple"/> is the small heart a beat sends out (R = its scale).
-/// Disco: <see cref="Glint"/> / <see cref="GlintPink"/> are four-point glints on the ball (R = their size);
-/// <see cref="Fleck"/> / <see cref="FleckPink"/> are the specks of light orbiting outside it.
+/// Disco: <see cref="Glint"/> is a four-point glint on the ball (R = its size), <see cref="Fleck"/> a spot of light
+/// circling outside it, <see cref="Ray"/> a thin ray from the limb straight out (R = its length); colours in Argb.
 /// Frost: <see cref="Speck"/> is a square speck of rime (R = half its side).</summary>
-public enum SkinPrimKind : byte { Bead, Ring, Foam, HeartBody, HeartRipple, Glint, GlintPink, Fleck, FleckPink, Speck }
+public enum SkinPrimKind : byte { Bead, Ring, Foam, HeartBody, HeartRipple, Glint, Ray, Fleck, Speck }
 
-/// <summary>One interior shape in the bubble's unit circle (y down, radius 1 = the glass).</summary>
-public readonly record struct SkinPrim(float X, float Y, float R, float Alpha, SkinPrimKind Kind);
+/// <summary>One interior shape in the bubble's unit circle (y down, radius 1 = the glass). <see cref="Argb"/> is its
+/// colour where the skin picks one (0 = the painter's default for the kind).</summary>
+public readonly record struct SkinPrim(float X, float Y, float R, float Alpha, SkinPrimKind Kind, uint Argb = 0);
 
 /// <summary><see cref="Shard"/>: a Marble shard, corners from <see cref="BubbleSkins.MarbleShard"/> by its Index.
 /// <see cref="Star"/>: a four-point glint whose size twinkles at Grow radians per second.
@@ -117,7 +118,7 @@ public static partial class BubbleSkins
         BubbleSkinIds.Heart => .16,
         BubbleSkinIds.Marble => gentle ? .32 : .2,   // Gentle: the flash becomes a glow that rises over 0.3 s
         BubbleSkinIds.Spiral => .46,
-        BubbleSkinIds.Disco => .09,   // the ball goes white; under Gentle it only holds
+        BubbleSkinIds.Disco => .09,   // every tile flares into its own colour; under Gentle the ball only holds
         BubbleSkinIds.Frost => gentle ? .3 : .1,   // the cracks run out; under Gentle they brighten over 0.3 s
         _ => 0,
     };
@@ -129,10 +130,12 @@ public static partial class BubbleSkins
     public static int SparkCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.2), 6, MaxSparks);
 
     /// <summary>The interior at <paramref name="seconds"/> after spawn. Returns how many shapes it wrote.</summary>
-    public static int Interior(string? skin, int seed, double seconds, double motion, double radiusPx, Span<SkinPrim> dst)
+    /// <paramref name="palette"/> is the Disco ball's hues (null = <see cref="DiscoPalette.Fallback"/>); other skins ignore it.
+    public static int Interior(string? skin, int seed, double seconds, double motion, double radiusPx, Span<SkinPrim> dst,
+                               DiscoPalette? palette = null)
     {
         if (skin == BubbleSkinIds.Heart) return HeartInterior(seed, seconds, motion, radiusPx, dst);
-        if (skin == BubbleSkinIds.Disco) return DiscoInterior(seed, seconds, motion, radiusPx, dst);
+        if (skin == BubbleSkinIds.Disco) return DiscoInterior(seed, seconds, motion, radiusPx, dst, palette);
         if (skin == BubbleSkinIds.Frost) return FrostInterior(seed, seconds, motion, radiusPx, dst);
         if (skin != BubbleSkinIds.Champagne || dst.Length < MaxInterior || radiusPx <= 0) return 0;
         double t = seconds * Math.Clamp(motion, 0, 1);
@@ -190,10 +193,11 @@ public static partial class BubbleSkins
 
     /// <summary>The pop burst of one bubble. Motion 0 (Off) bursts nothing; Reduced flies half as far.
     /// <paramref name="gentle"/> (Gentle visuals) drops or slows anything in a burst that would flash.</summary>
-    public static int Burst(string? skin, int seed, double radiusPx, double motion, Span<SkinParticle> dst, bool gentle = false)
+    public static int Burst(string? skin, int seed, double radiusPx, double motion, Span<SkinParticle> dst, bool gentle = false,
+                            DiscoPalette? palette = null)
     {
         motion = Math.Clamp(motion, 0, 1);
-        if (skin == BubbleSkinIds.Disco) return DiscoBurst(seed, radiusPx, motion, gentle, dst);
+        if (skin == BubbleSkinIds.Disco) return DiscoBurst(seed, radiusPx, motion, gentle, dst, palette);
         if (skin == BubbleSkinIds.Frost) return FrostBurst(seed, radiusPx, motion, dst);
         if (skin == BubbleSkinIds.Heart) return HeartBurst(seed, radiusPx, motion, dst);
         if (skin == BubbleSkinIds.Marble) return MarbleBurst(seed, radiusPx, motion, dst);

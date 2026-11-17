@@ -313,8 +313,43 @@ public class BubbleSkinsTests
     public void Spiral_stills_turn_under_the_film_and_wind_in_before_the_burst()
         => Stills(BubbleSkinIds.Spiral, new[] { .1, .25, .38, .44, .62, .9 }, popCell: 4, outerReach: 0);
 
+    /// <summary>A mod-like palette (Bambi's accent and secondary) for the Disco tests and stills.</summary>
+    private static readonly DiscoPalette ModLike = DiscoPalette.FromMod(0xFF69B4, 0x9B59B6);
+
     [Fact]
-    public void Disco_facets_are_sphere_patches_inside_the_ball_and_its_glints_fade_never_pile()
+    public void Disco_palette_comes_from_the_mod_colours_with_neighbours_and_falls_back()
+    {
+        Assert.Equal(4, DiscoPalette.Fallback.Count);
+        Assert.True(DiscoPalette.FromMod(null, null).SameAs(DiscoPalette.Fallback));
+        Assert.True(DiscoPalette.FromMod(0x808080, 0x7A7A7A).SameAs(DiscoPalette.Fallback), "greys are no party");
+        Assert.Equal(5, ModLike.Count);
+        Assert.True(ModLike.SameAs(DiscoPalette.FromMod(0xFF69B4, 0x9B59B6)), "the same colours give the same palette");
+        // The accent and the secondary lead, in their own hue; every colour is saturated, none grey.
+        Assert.InRange(Math.Abs(DiscoPalette.Hsv(ModLike[0]).H - DiscoPalette.Hsv(0xFF69B4).H), 0, 2);
+        Assert.InRange(Math.Abs(DiscoPalette.Hsv(ModLike[1]).H - DiscoPalette.Hsv(0x9B59B6).H), 0, 2);
+        for (int i = 0; i < ModLike.Count; i++)
+        {
+            var hsv = DiscoPalette.Hsv(ModLike[i]);
+            Assert.True(hsv.S >= .6 && hsv.V >= .88, $"hue {i}: {ModLike[i]:X6}");
+        }
+        Assert.Equal(5, DiscoPalette.FromMod(0x00FF41, null).Count);   // one colour still makes a party
+        Assert.True(DiscoPalette.TryParseHex("#FF69B4", out var rgb) && rgb == 0xFF69B4);
+        Assert.True(DiscoPalette.TryParseHex("#80FF69B4", out rgb) && rgb == 0xFF69B4);
+        Assert.False(DiscoPalette.TryParseHex("pink", out _));
+        Assert.True(DiscoPaletteSource.For(null, null).SameAs(DiscoPalette.Fallback));
+        Assert.True(DiscoPaletteSource.For("#FF69B4", "#9B59B6").SameAs(ModLike));
+        Assert.True(DiscoPaletteSource.Current().Count > 0);   // no mod service here: never throws
+        // A Disco bubble takes the palette when it is made; other skins carry none.
+        var item = new BubbleLayer.BubbleItem();
+        BubbleLayer.ApplySkin(item, BubbleSkinIds.Disco, 7);
+        Assert.NotNull(item.SkinPalette);
+        var champ = new BubbleLayer.BubbleItem();
+        BubbleLayer.ApplySkin(champ, Champ, 7);
+        Assert.Null(champ.SkinPalette);
+    }
+
+    [Fact]
+    public void Disco_facets_are_sphere_patches_inside_the_ball_in_saturated_palette_hues()
     {
         const string D = BubbleSkinIds.Disco;
         Assert.Equal(D, BubbleSkinChoice.Resolve("Disco"));
@@ -324,67 +359,120 @@ public class BubbleSkinsTests
         var a = new SkinQuad[BubbleSkins.MaxDiscoFacets];
         var b = new SkinQuad[BubbleSkins.MaxDiscoFacets];
         double ball = BubbleSkins.DiscoBall + 1e-5;
-        foreach (var r in Radii)
-            for (double t = 0; t < 14; t += 1.7)
-            {
-                int n = BubbleSkins.DiscoFacets(9, t, 1, r, a);
-                Assert.InRange(n, BubbleSkins.DiscoRows(r) * BubbleSkins.DiscoCols(r) / 3, BubbleSkins.DiscoRows(r) * BubbleSkins.DiscoCols(r));
-                Assert.Equal(n, BubbleSkins.DiscoFacets(9, t, 1, r, b));
-                double inner = 0, outer = 0; int ni = 0, no = 0;
-                for (int i = 0; i < n; i++)
+        foreach (var pal in new[] { DiscoPalette.Fallback, ModLike })
+            foreach (var r in Radii)
+                for (double t = 0; t < 14; t += 1.7)
                 {
-                    var q = a[i];
-                    Assert.Equal(q, b[i]);
-                    foreach (var (x, y) in new[] { (q.X0, q.Y0), (q.X1, q.Y1), (q.X2, q.Y2), (q.X3, q.Y3) })
-                        Assert.True(Math.Sqrt(x * x + y * y) <= ball, $"r={r} t={t} i={i}: a facet pokes past the ball");
-                    double mx = (q.X0 + q.X1 + q.X2 + q.X3) / 4, my = (q.Y0 + q.Y1 + q.Y2 + q.Y3) / 4, d = Math.Sqrt(mx * mx + my * my);
-                    double area = Math.Abs((q.X0 * q.Y1 - q.X1 * q.Y0) + (q.X1 * q.Y2 - q.X2 * q.Y1) + (q.X2 * q.Y3 - q.X3 * q.Y2) + (q.X3 * q.Y0 - q.X0 * q.Y3)) / 2;
-                    if (d < .4) { inner += area; ni++; } else if (d > .85) { outer += area; no++; }
-                }
-                Assert.True(ni > 0 && no > 0 && outer / no < inner / ni * .7, $"facets narrow toward the edge (r={r} t={t})");
-            }
-        BubbleSkins.DiscoFacets(9, .4, 0, 60, a);
-        BubbleSkins.DiscoFacets(9, 11, 0, 60, b);
-        Assert.Equal(a[5], b[5]);
-
-        // Glints: two at most, apart when both show, and no glint brightens faster than over 0.3 s.
-        var p0 = new SkinPrim[BubbleSkins.MaxInterior];
-        var p1 = new SkinPrim[BubbleSkins.MaxInterior];
-        double steepest = 0;
-        for (int seed = 1; seed < 200; seed += 13)
-        {
-            int n0 = BubbleSkins.Interior(D, seed, 0, 1, 60, p0);
-            for (double t = 1 / 30.0; t < 40; t += 1 / 30.0)
-            {
-                int n1 = BubbleSkins.Interior(D, seed, t, 1, 60, p1);
-                Assert.Equal(n0, n1);
-                int glints = 0;
-                for (int i = 0; i < n1; i++)
-                {
-                    if (p1[i].Kind is SkinPrimKind.Glint or SkinPrimKind.GlintPink)
+                    int n = BubbleSkins.DiscoFacets(9, t, 1, r, a, pal);
+                    Assert.InRange(n, BubbleSkins.DiscoRows(r) * BubbleSkins.DiscoCols(r) / 3, BubbleSkins.DiscoRows(r) * BubbleSkins.DiscoCols(r));
+                    Assert.Equal(n, BubbleSkins.DiscoFacets(9, t, 1, r, b, pal));
+                    double inner = 0, outer = 0; int ni = 0, no = 0, lit = 0, coloured = 0;
+                    for (int i = 0; i < n; i++)
                     {
-                        glints++;
-                        Assert.True(Math.Sqrt(p1[i].X * p1[i].X + p1[i].Y * p1[i].Y) + p1[i].R <= BubbleSkins.DiscoBall);
-                        steepest = Math.Max(steepest, p1[i].Alpha - p0[i].Alpha);
+                        var q = a[i];
+                        Assert.Equal(q, b[i]);
+                        foreach (var (x, y) in new[] { (q.X0, q.Y0), (q.X1, q.Y1), (q.X2, q.Y2), (q.X3, q.Y3) })
+                            Assert.True(Math.Sqrt(x * x + y * y) <= ball, $"r={r} t={t} i={i}: a facet pokes past the ball");
+                        double mx = (q.X0 + q.X1 + q.X2 + q.X3) / 4, my = (q.Y0 + q.Y1 + q.Y2 + q.Y3) / 4, d = Math.Sqrt(mx * mx + my * my);
+                        double area = Math.Abs((q.X0 * q.Y1 - q.X1 * q.Y0) + (q.X1 * q.Y2 - q.X2 * q.Y1) + (q.X2 * q.Y3 - q.X3 * q.Y2) + (q.X3 * q.Y0 - q.X0 * q.Y3)) / 2;
+                        if (d < .4) { inner += area; ni++; } else if (d > .85) { outer += area; no++; }
+                        var hsv = DiscoPalette.Hsv(q.Argb & 0xFFFFFF);
+                        if (hsv.V > .5) { lit++; if (hsv.S > .3) coloured++; }
                     }
-                    else Assert.True(Math.Sqrt(p1[i].X * p1[i].X + p1[i].Y * p1[i].Y) + p1[i].R <= BubbleSkins.DiscoFleckReach);
+                    Assert.True(ni > 0 && no > 0 && outer / no < inner / ni * .7, $"facets narrow toward the edge (r={r} t={t})");
+                    Assert.True(lit > n * .12, $"tiles catch the light ({lit} of {n})");
+                    Assert.True(coloured >= lit * .6, $"lit tiles carry hue, not grey ({coloured} of {lit})");
                 }
-                Assert.Equal(BubbleSkins.DiscoGlints, glints);
-                if (p1[0].Alpha > .3f && p1[1].Alpha > .3f)
-                    Assert.True(Math.Sqrt(Math.Pow(p1[0].X - p1[1].X, 2) + Math.Pow(p1[0].Y - p1[1].Y, 2)) > .3, $"glints piled (seed {seed}, t {t:0.00})");
-                (p0, p1) = (p1, p0);
+        // Off: one frame whatever the time; Reduced: half speed.
+        BubbleSkins.DiscoFacets(9, .4, 0, 60, a, ModLike);
+        BubbleSkins.DiscoFacets(9, 11, 0, 60, b, ModLike);
+        Assert.Equal(a[5], b[5]);
+        int nr = BubbleSkins.DiscoFacets(9, 4, .5, 60, a, ModLike);
+        Assert.Equal(nr, BubbleSkins.DiscoFacets(9, 2, 1, 60, b, ModLike));
+        // The tiles change in a smooth flow: no tile jumps far between two frames at 30 fps.
+        double jump = 0;
+        for (double t = 0; t < 6; t += 1 / 30.0)
+        {
+            int n0 = BubbleSkins.DiscoFacets(21, t, 1, 60, a, ModLike), n1 = BubbleSkins.DiscoFacets(21, t + 1 / 30.0, 1, 60, b, ModLike);
+            // The same tile a frame later is the one whose middle moved least (the ball turns 0.02 rad a frame).
+            for (int i = 0; i < n1; i++)
+            {
+                double bx = (b[i].X0 + b[i].X2) / 2, by = (b[i].Y0 + b[i].Y2) / 2, best = 9; int at = -1;
+                for (int j = 0; j < n0; j++)
+                {
+                    double ax = (a[j].X0 + a[j].X2) / 2, ay = (a[j].Y0 + a[j].Y2) / 2, dd = (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
+                    if (dd < best) { best = dd; at = j; }
+                }
+                if (at < 0 || best > .02 * .02 || Math.Sqrt(bx * bx + by * by) > .8) continue;   // a tile coming round the limb
+                uint ca = a[at].Argb, cb = b[i].Argb;
+                jump = Math.Max(jump, Math.Max(Math.Abs((int)(ca >> 16 & 255) - (int)(cb >> 16 & 255)),
+                                      Math.Max(Math.Abs((int)(ca >> 8 & 255) - (int)(cb >> 8 & 255)), Math.Abs((int)(ca & 255) - (int)(cb & 255)))));
             }
         }
-        Assert.True(steepest <= .95 / 30 / .3, $"a glint rose {steepest:0.000} in one frame");
+        Assert.True(jump < 60, $"a tile jumped {jump} in one frame");
+    }
 
+    [Fact]
+    public void Disco_glints_rays_and_spots_are_capped_smooth_and_never_leave_their_reach()
+    {
+        const string D = BubbleSkinIds.Disco;
+        var p0 = new SkinPrim[BubbleSkins.MaxInterior];
+        var p1 = new SkinPrim[BubbleSkins.MaxInterior];
+        Assert.True(BubbleSkins.MaxDiscoGlints + BubbleSkins.MaxDiscoSpots + BubbleSkins.MaxDiscoRays <= BubbleSkins.MaxInterior);
+        double steepest = 0;
+        foreach (var r in new[] { 21.6, 80.0 })
+            for (int seed = 1; seed < 200; seed += 13)
+            {
+                int n0 = BubbleSkins.Interior(D, seed, 0, 1, r, p0, ModLike);
+                Assert.Equal(BubbleSkins.DiscoGlintCount(r) + BubbleSkins.DiscoSpotCount(r) + BubbleSkins.DiscoRayCount(r), n0);
+                for (double t = 1 / 30.0; t < 30; t += 1 / 30.0)
+                {
+                    int n1 = BubbleSkins.Interior(D, seed, t, 1, r, p1, ModLike);
+                    Assert.Equal(n0, n1);
+                    for (int i = 0; i < n1; i++)
+                    {
+                        var p = p1[i];
+                        double d = Math.Sqrt(p.X * p.X + p.Y * p.Y);
+                        Assert.InRange(p.Alpha, 0f, 1f);
+                        Assert.NotEqual(0u, p.Argb);
+                        if (p.Kind == SkinPrimKind.Glint) Assert.True(d + p.R <= BubbleSkins.DiscoBall + 1e-5, "a glint stays on the ball");
+                        else Assert.True(d + p.R <= BubbleSkins.DiscoFleckReach + 1e-5, $"{p.Kind} past its reach");
+                        if (p.Kind == SkinPrimKind.Ray) Assert.True(d >= BubbleSkins.DiscoBall - .05, "a ray leaves from the limb");
+                        // Rising slower than full over 0.3 s: smooth, never an on/off blink.
+                        steepest = Math.Max(steepest, p.Alpha - p0[i].Alpha);
+                    }
+                    (p0, p1) = (p1, p0);
+                }
+            }
+        Assert.True(steepest <= .95 / 30 / .3, $"something rose {steepest:0.000} in one frame");
+        int na = BubbleSkins.Interior(D, 5, .4, 0, 60, p0, ModLike);
+        BubbleSkins.Interior(D, 5, 9.1, 0, 60, p1, ModLike);
+        for (int i = 0; i < na; i++) Assert.Equal(p0[i], p1[i]);
+    }
+
+    [Fact]
+    public void Disco_pops_into_palette_shards_and_glint_stars_within_the_old_caps()
+    {
+        const string D = BubbleSkinIds.Disco;
         BurstRules(D, 1 + BubbleSkins.DiscoBeams + BubbleSkins.MaxDiscoSquares + BubbleSkins.MaxDiscoStars);
         var parts = new SkinParticle[BubbleSkins.BurstCapacity];
-        int full = BubbleSkins.Burst(D, 4, 80, 1, parts), beams = 0, squares = 0;
-        for (int i = 0; i < full; i++) { if (parts[i].Kind == SkinParticleKind.Beam) beams++; if (parts[i].Kind == SkinParticleKind.Square) squares++; }
+        int full = BubbleSkins.Burst(D, 4, 80, 1, parts, palette: ModLike), beams = 0, squares = 0, stars = 0;
+        var hues = new System.Collections.Generic.HashSet<uint>();
+        for (int i = 0; i < full; i++)
+        {
+            if (parts[i].Kind == SkinParticleKind.Beam) beams++;
+            if (parts[i].Kind == SkinParticleKind.Star) stars++;
+            if (parts[i].Kind == SkinParticleKind.Square) { squares++; hues.Add(parts[i].Argb & 0xFFFFFF); }
+        }
         Assert.Equal(BubbleSkins.DiscoBeams, beams);
         Assert.Equal(BubbleSkins.MaxDiscoSquares, squares);
-        // Gentle visuals: no beams, squares never catch the light white, stars twinkle slowly.
-        int gentle = BubbleSkins.Burst(D, 4, 80, 1, parts, gentle: true);
+        Assert.Equal(BubbleSkins.MaxDiscoStars, stars);
+        Assert.Equal(ModLike.Count, hues.Count);
+        for (int i = 0; i < ModLike.Count; i++) Assert.Contains(ModLike[i], hues);
+        int again = BubbleSkins.Burst(D, 4, 80, 1, new SkinParticle[BubbleSkins.BurstCapacity], palette: ModLike);
+        Assert.Equal(full, again);
+        // Gentle visuals: no beams, shards never catch the light, stars twinkle slowly.
+        int gentle = BubbleSkins.Burst(D, 4, 80, 1, parts, gentle: true, palette: ModLike);
         Assert.Equal(full - BubbleSkins.DiscoBeams, gentle);
         for (int i = 0; i < gentle; i++)
         {
@@ -396,7 +484,12 @@ public class BubbleSkinsTests
 
     [Fact]
     public void Disco_stills_draw_a_mirror_ball_in_place_of_the_sprite_and_scatter_mirrors()
-        => Stills(BubbleSkinIds.Disco, new[] { .04, .08, .14, .24, .5, .9 }, popCell: 3, outerReach: .3);
+    {
+        Stills(BubbleSkinIds.Disco, new[] { .04, .08, .14, .24, .5, .9 }, popCell: 3, outerReach: .3, palette: DiscoPalette.Fallback);
+        Stills(BubbleSkinIds.Disco, new[] { .04, .08, .14, .24, .5, .9 }, popCell: 3, outerReach: .3, palette: ModLike, tag: "-mod");
+        Stills(BubbleSkinIds.Disco, new[] { .04, .08, .14, .24, .5, .9 }, popCell: 3, outerReach: .3,
+               palette: DiscoPalette.FromMod(0x00FF41, 0x00B8C4), tag: "-drone");
+    }
 
     [Fact]
     public void Frost_freezes_with_age_inside_the_glass_and_its_pop_snows_down()
@@ -483,21 +576,22 @@ public class BubbleSkinsTests
     /// &lt;dir&gt;/&lt;skin&gt;/&lt;skin&gt;-interior.png (four times, a small bubble, an Off frame) and -pop.png.
     /// <paramref name="outerReach"/> is how far past the glass the live body may draw (0 = inside it).
     /// </summary>
-    private static void Stills(string skin, double[] popAges, int popCell, double outerReach, double[]? times = null)
+    private static void Stills(string skin, double[] popAges, int popCell, double outerReach, double[]? times = null,
+                               DiscoPalette? palette = null, string tag = "")
     {
         using var sprite = LoadSprite();
         using var paint = new BubbleLayer.SkinPainter();
         const int seed = 20261117;
         times ??= new[] { 0, 0.6, 1.3, 2.5 };
         using var strip = Canvas(Cell * 6, out var c);
-        for (int i = 0; i < times.Length; i++) Bubble(c, sprite, paint, skin, seed, times[i], 1, i, Side, 1f, 1f);
-        Bubble(c, sprite, paint, skin, seed + 1, 1.0, 1, 4, 90f, 1f, 1f);
-        Bubble(c, sprite, paint, skin, seed, 7.0, 0, 5, Side, 1f, 1f);
+        for (int i = 0; i < times.Length; i++) Bubble(c, sprite, paint, skin, seed, times[i], 1, i, Side, 1f, 1f, palette);
+        Bubble(c, sprite, paint, skin, seed + 1, 1.0, 1, 4, 90f, 1f, 1f, palette);
+        Bubble(c, sprite, paint, skin, seed, 7.0, 0, 5, Side, 1f, 1f, palette);
         // Pop. Without a pre-burst the base pop grows 0.04 and fades 0.066 a step at 30 fps while the burst flies;
         // with one, the skin's burst draws the dying body for the pre-burst, then its particles fly.
         var parts = new SkinParticle[BubbleSkins.BurstCapacity];
         float glass = Side * 0.5f * BubbleLayer.GlassOfHalf;
-        int n = BubbleSkins.Burst(skin, seed, glass, 1, parts);
+        int n = BubbleSkins.Burst(skin, seed, glass, 1, parts, palette: palette);
         double pre = BubbleSkins.PreBurst(skin, false);
         using var popArt = skin == BubbleSkinIds.Spiral ? BubbleLayer.SkinPainter.SpiralArt(seed, glass) : null;
         using var pop = Canvas(Cell * popAges.Length, out var pc);
@@ -508,10 +602,10 @@ public class BubbleSkinsTests
             if (pre <= 0)
             {
                 float f = (float)(age * 30);
-                if (1 - .066f * f > 0) Bubble(pc, sprite, paint, skin, seed, 2.5 + age, 1, i, Side, 1 + .04f * f, 1 - .066f * f);
+                if (1 - .066f * f > 0) Bubble(pc, sprite, paint, skin, seed, 2.5 + age, 1, i, Side, 1 + .04f * f, 1 - .066f * f, palette);
                 paint.DrawBurst(pc, parts.AsSpan(0, n), age, px, py, glass, 1f);
             }
-            else if (age < pre) paint.DrawDying(pc, skin, seed, 2.5 + age, 1, age / pre, false, px, py, glass, sprite, popArt);
+            else if (age < pre) paint.DrawDying(pc, skin, seed, 2.5 + age, 1, age / pre, false, px, py, glass, sprite, popArt, palette);
             else paint.DrawBurst(pc, parts.AsSpan(0, n), age - pre, px, py, glass, 1f);
         }
         var dump = Environment.GetEnvironmentVariable("CCP_SKIN_DUMP");
@@ -519,14 +613,28 @@ public class BubbleSkinsTests
         {
             var dir = Path.Combine(dump, skin);
             Directory.CreateDirectory(dir);
-            Save(strip, Path.Combine(dir, skin + "-interior.png"));
-            Save(pop, Path.Combine(dir, skin + "-pop.png"));
+            Save(strip, Path.Combine(dir, skin + tag + "-interior.png"));
+            Save(pop, Path.Combine(dir, skin + tag + "-pop.png"));
+            // Shelf size: a 60 px bubble at six moments, drawn small and shown three times larger.
+            using var small = new SKBitmap(new SKImageInfo(6 * 80, 80, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using (var sc0 = new SKCanvas(small))
+            {
+                sc0.Clear(Bg);
+                for (int i = 0; i < 6; i++)
+                {
+                    sc0.Save(); sc0.Translate(80 * i - Cell * i + 40 - Cell / 2f, 40 - Cell / 2f);
+                    Bubble(sc0, sprite, paint, skin, seed, .4 + i * .7, 1, i, 60f, 1f, 1f, palette);
+                    sc0.Restore();
+                }
+            }
+            using var big = small.Resize(new SKImageInfo(6 * 240, 240, SKColorType.Rgba8888, SKAlphaType.Premul), SKFilterQuality.None);
+            Save(big, Path.Combine(dir, skin + tag + "-shelf.png"));
         }
 
         Assert.True(Diff(strip, 0, 1) > 200, "the interior moves");
         using var still = Canvas(Cell * 2, out var sc);
-        Bubble(sc, sprite, paint, skin, seed, 0.2, 0, 0, Side, 1f, 1f);
-        Bubble(sc, sprite, paint, skin, seed, 5.2, 0, 1, Side, 1f, 1f);
+        Bubble(sc, sprite, paint, skin, seed, 0.2, 0, 0, Side, 1f, 1f, palette);
+        Bubble(sc, sprite, paint, skin, seed, 5.2, 0, 1, Side, 1f, 1f, palette);
         // The real art and the shaders resample a few edge pixels per cell by a step or two of a channel.
         int offDiff = Diff(still, 0, 1, 3);
         Assert.True(offDiff <= 8, $"Off is a still frame ({offDiff} pixels, {Diff(still, 0, 1)} exact)");
@@ -552,7 +660,7 @@ public class BubbleSkinsTests
     /// <summary>The order and transform of BubbleLayer.Render: the sprite (tinted, or none for a skin with its own
     /// body), then the interior under its scale.</summary>
     private static void Bubble(SKCanvas c, SKImage sprite, BubbleLayer.SkinPainter paint, string skin, int seed, double t, double motion,
-                               int cell, float side, float scale, float opacity)
+                               int cell, float side, float scale, float opacity, DiscoPalette? palette = null)
     {
         float cx = Cell * cell + Cell / 2f, cy = Cell / 2f, half = side / 2f;
         int save = c.Save();
@@ -567,7 +675,7 @@ public class BubbleSkinsTests
             c.DrawImage(sprite, new SKRect(cx - half, cy - half, cx + half, cy + half), img);
             img.ColorFilter = null;   // the shared filter is app-lifetime: never disposed with this paint
         }
-        if (!under) paint.DrawInterior(c, skin, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity);
+        if (!under) paint.DrawInterior(c, skin, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity, null, palette);
         c.RestoreToCount(save);
     }
 

@@ -35,11 +35,12 @@ test('the preview body: Featured and Screen effects first, effect rows by slot, 
   const fx = sections(st, { tab: EFFECTS, t, pv });
   assert.deepEqual(fx.map((s) => s.title), ['Bubble skins', 'Card backs', 'Words behind the card', 'Fog colours', 'Word styles']);
   assert.deepEqual(fx[0].places, ['desktop']);
-  assert.equal(fx[0].planks[0].length, 13);
+  assert.equal(fx[0].planks[0].length, 10);
   assert.equal(pv.equip.bubble, 'fx.bubble.soap');
   assert.deepEqual(pv.stamps.stamped, [1, 2, 4]);
   assert.equal(pv.goal, 'fx.bubble.spiral');
-  assert.equal(labelOf(locate(st, 'fx.bubble.rose', pv), t), 'Rose bubbles');
+  assert.equal(labelOf(locate(st, 'fx.bubble.heart', pv), t), 'Heart bubbles');
+  assert.equal(locate(st, 'fx.bubble.rose', pv), null, 'the tint skins are gone');
   assert.equal(ledgerText(st, pv, t, 'desk.toy.rubber-duck'), 'The Suggestible Duck');
   assert.equal(ledgerText(st, pv, t, 'Won at chess'), 'Won at chess');
 });

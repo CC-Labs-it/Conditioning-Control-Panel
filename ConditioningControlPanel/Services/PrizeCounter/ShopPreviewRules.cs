@@ -80,9 +80,6 @@ internal static class ShopPreviewRules
     public static readonly IReadOnlyList<PreviewEffect> Effects = new PreviewEffect[]
     {
         new("fx.bubble.soap", "bubble", "Soap", 0, "the default"),
-        new("fx.bubble.rose", "bubble", "Rose", 120, "tint"),
-        new("fx.bubble.mint", "bubble", "Mint", 120, "tint"),
-        new("fx.bubble.lilac", "bubble", "Lilac", 120, "tint"),
         new("fx.bubble.marble", "bubble", "Marble", 360, IsNew: true),
         new("fx.bubble.heart", "bubble", "Heart", 360, IsNew: true),
         new("fx.bubble.champagne", "bubble", "Champagne", 360),
@@ -137,6 +134,20 @@ internal static class ShopPreviewRules
         d.Ledger.Add(new PreviewLedgerLine { T = "Session finished", N = 12 });
         d.Ledger.Add(new PreviewLedgerLine { T = "Rubber duck", N = -120 });
         return d;
+    }
+
+    /// <summary>A preview file from an older catalogue (the Rose, Mint and Lilac bubble tints are gone):
+    /// a worn row that is no longer a row of its slot puts back the slot's free row, and a goal that is no
+    /// longer in stock is cleared. Owned marks for gone rows stay in the file and do nothing.</summary>
+    public static void Heal(ShopPreviewData d, JObject? sample)
+    {
+        foreach (var slot in Prizes.WornLooks.EffectSlots.Append(Prizes.WornLooks.Fog2))
+        {
+            string want = slot == Prizes.WornLooks.Fog2 ? "fog" : slot;
+            if (!d.Equip.TryGetValue(slot, out var id) || Effect(id) is not { Special: false } e || e.Slot != want)
+                d.Equip[slot] = Prizes.WornLooks.DefaultOf(slot)!;
+        }
+        if (d.Goal != null && Row(sample, d.Goal) == null) d.Goal = null;
     }
 
     private static IEnumerable<JObject> SampleRows(JObject? sample)

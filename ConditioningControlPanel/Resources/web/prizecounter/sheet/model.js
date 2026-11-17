@@ -45,7 +45,7 @@ export function rowsOf(st, pv = NO_PREVIEW) {
 export const locate = (st, id, pv) => rowsOf(st, pv).find((e) => e.id === id) || null;
 const uniq = (list) => { const seen = new Set(); return list.filter((e) => !seen.has(e.id) && seen.add(e.id)); };
 
-/** The name on a card: the wire's name for an effect row ("Rose"), else the item name. label adds the slot's noun ("Rose bubbles"). */
+/** The name on a card: the wire's name for an effect row ("Heart"), else the item name. label adds the slot's noun ("Heart bubbles"). */
 export const nameOf = (e, t) => (e.fx ? e.x.name || e.id.split('.').pop() : itemName(t, e.id));
 export const labelOf = (e, t) => (e.fx ? t('shop_sheet_fx_label', nameOf(e, t), t('shop_sheet_noun_' + e.fx)) : nameOf(e, t));
 /** The ledger's line: an item id reads as its name, anything else is the host's own words. */

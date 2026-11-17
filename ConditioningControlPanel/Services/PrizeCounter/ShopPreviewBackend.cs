@@ -194,7 +194,12 @@ internal sealed class ShopPreviewBackend
         try
         {
             if (File.Exists(_path) && JsonConvert.DeserializeObject<ShopPreviewData>(File.ReadAllText(_path)) is { V: 1 } read)
+            {
+                read.Owned ??= new(StringComparer.Ordinal);
+                read.Equip ??= new(StringComparer.Ordinal);
+                ShopPreviewRules.Heal(read, _sample);
                 return _data = read;
+            }
         }
         catch (Exception ex) { App.Logger?.Warning("ShopPreview: {File} unreadable, starting a fresh one: {E}", FileName, ex.Message); }
         _data = ShopPreviewRules.Seed(_clock(), _sample);

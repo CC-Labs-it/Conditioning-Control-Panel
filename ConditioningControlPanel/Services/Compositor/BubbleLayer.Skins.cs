@@ -32,6 +32,8 @@ public sealed partial class BubbleLayer
         /// <summary>The bubble's baked pictures (owned from the pop on, freed with the burst) and its shared sprite.</summary>
         public SkinArt? Art;
         public SKImage? Sprite;
+        /// <summary>The Disco ball's hues, kept from the bubble.</summary>
+        public DiscoPalette? Palette;
         public SkinParticle[] Parts = System.Array.Empty<SkinParticle>();
         public int Count;
     }
@@ -52,6 +54,8 @@ public sealed partial class BubbleLayer
         item.Skin = skin;
         item.SkinSeed = seed;
         item.SkinStartMs = System.Environment.TickCount64;
+        // Disco wears the mod's colours as they are now: a mod switch reaches the next bubbles.
+        if (skin == BubbleSkinIds.Disco) item.SkinPalette = DiscoPaletteSource.Current();
     }
 
     /// <summary>MotionFx (Gentle visuals included) as a scale: Full 1, Reduced half, Off a still frame.
@@ -81,7 +85,7 @@ public sealed partial class BubbleLayer
         if (item.SkinBodyHanded) return;   // the burst draws the dying body
         double seconds = (System.Environment.TickCount64 - item.SkinStartMs) / 1000.0;
         if (item.Skin == BubbleSkinIds.Spiral) item.SkinArt ??= SkinPainter.SpiralArt(item.SkinSeed, half * GlassOfHalf);   // once per bubble
-        _skinPaint.DrawInterior(canvas, item.Skin!, item.SkinSeed, seconds, SkinMotion(), cx, cy, half * GlassOfHalf, item.Opacity, item.SkinArt);
+        _skinPaint.DrawInterior(canvas, item.Skin!, item.SkinSeed, seconds, SkinMotion(), cx, cy, half * GlassOfHalf, item.Opacity, item.SkinArt, item.SkinPalette);
     }
 
     /// <summary>The bubble started its pop: its burst joins the layer once. Off motion bursts nothing.</summary>
@@ -92,7 +96,7 @@ public sealed partial class BubbleLayer
         float r = item.SizeDip * 0.5f * item.DpiScale * item.FrothScale * GlassOfHalf * Math.Max(1f, item.Scale);
         var parts = new SkinParticle[BubbleSkins.BurstCapacity];
         double motion = SkinMotion();
-        int n = BubbleSkins.Burst(item.Skin, item.SkinSeed, r, motion, parts, _skinGentle);
+        int n = BubbleSkins.Burst(item.Skin, item.SkinSeed, r, motion, parts, _skinGentle, item.SkinPalette);
         if (n == 0) return;
         if (_skinFx.Count >= MaxLiveSkinBursts) { _skinFx[0].Art?.Dispose(); _skinFx.RemoveAt(0); }
         long now = System.Environment.TickCount64;
@@ -104,7 +108,7 @@ public sealed partial class BubbleLayer
             Life = pre + BubbleSkins.LifeOf(new ReadOnlySpan<SkinParticle>(parts, 0, n)),
             Skin = item.Skin, Seed = item.SkinSeed, Pre = pre, Motion = motion, Gentle = _skinGentle,
             BodySeconds = (now - item.SkinStartMs) / 1000.0,
-            Art = pre > 0 ? item.SkinArt : null, Sprite = item.Sprite,
+            Art = pre > 0 ? item.SkinArt : null, Sprite = item.Sprite, Palette = item.SkinPalette,
         });
         // A skin with a pre-burst takes over drawing the dying bubble (and its pictures); game logic is not delayed.
         if (pre > 0) { item.SkinBodyHanded = true; item.SkinArt = null; }
@@ -131,7 +135,7 @@ public sealed partial class BubbleLayer
             if (age >= fx.Life) { fx.Art?.Dispose(); _skinFx.RemoveAt(i); continue; }
             if (age < fx.Pre)
                 _skinPaint.DrawDying(c, fx.Skin, fx.Seed, fx.BodySeconds + age, fx.Motion, age / fx.Pre, fx.Gentle, fx.X, fx.Y, fx.R,
-                                     fx.Sprite, fx.Art);
+                                     fx.Sprite, fx.Art, fx.Palette);
             else
                 _skinPaint.DrawBurst(c, new ReadOnlySpan<SkinParticle>(fx.Parts, 0, fx.Count), age - fx.Pre, fx.X, fx.Y, fx.R, 1f, fx.Seed);
         }
@@ -149,6 +153,8 @@ public sealed partial class BubbleLayer
         internal bool SkinBurst;
         /// <summary>Set when the burst took over drawing the dying body (a skin with a pre-burst).</summary>
         internal bool SkinBodyHanded;
+        /// <summary>The Disco ball's hues, taken from the mod when the bubble was made; null for other skins.</summary>
+        public DiscoPalette? SkinPalette;
     }
 
     /// <summary>The Skia draw of a skin, apart from the layer so a test can render it offscreen. Paints,
@@ -173,12 +179,12 @@ public sealed partial class BubbleLayer
                 : skin == BubbleSkinIds.Frost ? IceShell() : null;
 
         public void DrawInterior(SKCanvas c, string skin, int seed, double seconds, double motion,
-                                 float cx, float cy, float r, float alpha, SkinArt? art = null)
+                                 float cx, float cy, float r, float alpha, SkinArt? art = null, DiscoPalette? palette = null)
         {
             if (r < 2f || alpha <= .003f) return;
             if (skin == BubbleSkinIds.Spiral) { DrawSpiral(c, seed, seconds, motion, cx, cy, r, alpha, 0, false, art, null); return; }
             if (skin == BubbleSkinIds.Marble) { DrawMarble(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
-            if (skin == BubbleSkinIds.Disco) { DrawDisco(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
+            if (skin == BubbleSkinIds.Disco) { DrawDisco(c, seed, seconds, motion, cx, cy, r, alpha, 0, false, palette); return; }
             if (skin == BubbleSkinIds.Frost) { DrawFrost(c, seed, seconds, motion, cx, cy, r, alpha, 0, null); return; }
             int n = BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims);
             if (n == 0) return;
@@ -222,12 +228,12 @@ public sealed partial class BubbleLayer
         /// <summary>The dying body during the skin's pre-burst, k 0..1 through it (squeeze, cracks, wind-in).
         /// Under Gentle visuals nothing flashes white.</summary>
         public void DrawDying(SKCanvas c, string skin, int seed, double seconds, double motion, double k, bool gentle,
-                              float cx, float cy, float r, SKImage? sprite = null, SkinArt? art = null)
+                              float cx, float cy, float r, SKImage? sprite = null, SkinArt? art = null, DiscoPalette? palette = null)
         {
             if (r < 2f) return;
             if (skin == BubbleSkinIds.Spiral) DrawSpiral(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle, art, sprite);
             if (skin == BubbleSkinIds.Marble) DrawMarble(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
-            if (skin == BubbleSkinIds.Disco) DrawDisco(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
+            if (skin == BubbleSkinIds.Disco) DrawDisco(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle, palette);
             if (skin == BubbleSkinIds.Frost) DrawFrost(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, sprite);
             if (skin == BubbleSkinIds.Heart)
             {
