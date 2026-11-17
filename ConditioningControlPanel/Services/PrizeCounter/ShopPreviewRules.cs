@@ -330,10 +330,12 @@ internal static class ShopPreviewRules
     }
 
     /// <summary>Where a real row shows: the desk and Rain live in the desktop app, the rest everywhere.
-    /// Chess finishes are desktop only until website + phone support for them lands (then drop the chess.finish. line).</summary>
+    /// Chess finishes, boards and Emi are desktop only until website and phone support lands.</summary>
     public static string[] PlacesOf(string id)
         => id.StartsWith("desk.", StringComparison.Ordinal) || id.StartsWith("rain.", StringComparison.Ordinal)
-            || id.StartsWith("chess.finish.", StringComparison.Ordinal) ? DesktopOnly : Everywhere;
+            || id.StartsWith("chess.finish.", StringComparison.Ordinal)
+            || id.StartsWith("chess.board.", StringComparison.Ordinal)
+            || id.StartsWith("chess.companion.", StringComparison.Ordinal) ? DesktopOnly : Everywhere;
 
     /// <summary>The <c>shop-state</c> body: the server's shape plus the preview wire's additions.</summary>
     public static JObject BuildState(ShopPreviewData d, JObject? sample, DateTimeOffset now)

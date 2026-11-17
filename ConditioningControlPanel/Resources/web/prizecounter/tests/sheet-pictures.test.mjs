@@ -7,6 +7,7 @@ import { PICTURED, pictureOf, itemArt } from '../sheet/pictures.js';
 import { artOf } from '../sheet/model.js';
 import { previewSample } from '../mock/preview.js';
 import { FINISH_IDS } from '../../piecebypiece/skins/finish-ids.js';
+import { BOARD_THEME_IDS } from '../../piecebypiece/board/theme-ids.js';
 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
 const INDEX = JSON.parse(readFileSync(new URL('../assets/preview/index.json', import.meta.url), 'utf8'));
@@ -30,7 +31,7 @@ test('every shop item in the mock state has a picture, its own flat art, or the 
   }
 });
 
-test('every picture in the map is a real WebP on disk, small, and named after a shelf model', () => {
+test('every picture is a small WebP from a shelf model or the real chess renderer', () => {
   const models = new Set(MANIFEST.items.map((i) => i.id));
   assert.equal(new Set(PICTURED).size, PICTURED.length, 'no id twice');
   let total = 0;
@@ -43,6 +44,8 @@ test('every picture in the map is a real WebP on disk, small, and named after a 
     assert.ok(size < 40 * 1024, `${id} is ${size} bytes`);
     // a chess finish has no shelf model: it paints the game's own sculpt (piecebypiece/board/finishes.js)
     if (id.startsWith('chess.finish.')) assert.ok(FINISH_IDS.includes(id), id + ' is a finish the game knows');
+    else if (id.startsWith('chess.board.')) assert.ok(BOARD_THEME_IDS.includes(id), id + ' is a board the game knows');
+    else if (id === 'chess.companion.emi') assert.ok(existsSync(new URL('../../piecebypiece/assets/cheerleader/emi-racing.glb', import.meta.url)), 'Emi uses the approved game model');
     else assert.ok(models.has(id), id + ' has a model in assets/manifest.json to render from');
     total += size;
   }
@@ -59,6 +62,21 @@ test('every chess finish the game knows is in the shop with a picture, an L pric
     assert.deepEqual(row.grants, ['cos.' + id], id);
   }
   assert.equal(FINISH_IDS.length, 5);
+});
+
+test('each board and Emi has one priced shelf row, its own grant and a real product picture', () => {
+  const chess = SAMPLE.tabs.find(tab => tab.id === 'chess').shelves.flatMap(s => s.rows).filter(Boolean);
+  const items = [...BOARD_THEME_IDS, 'chess.companion.emi'];
+  assert.equal(items.length, 5);
+  for (const id of items) {
+    const rows = chess.filter(row => row.id === id), companion = id === 'chess.companion.emi';
+    assert.equal(rows.length, 1, id);
+    assert.equal(rows[0].tier, companion ? 'XL' : 'L');
+    assert.equal(rows[0].priceSp, companion ? 2540 : 730);
+    assert.deepEqual(rows[0].grants, ['cos.' + id]);
+    assert.equal(rows[0].sale, 'on');
+    assert.ok(PICTURED.includes(id));
+  }
 });
 
 test('an unknown id falls back to artOf, and base prefixes the picture path', () => {

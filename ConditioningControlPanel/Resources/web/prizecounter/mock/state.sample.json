@@ -97,6 +97,15 @@
       {"id":"chess.finish.opal","tier":"L","priceSp":730,"grants":["cos.chess.finish.opal"],"owned":null,"sale":"on"},
       {"id":"chess.finish.kintsugi","tier":"L","priceSp":730,"grants":["cos.chess.finish.kintsugi"],"owned":null,"sale":"on"}
      ]
+    },
+    {
+     "rows": [
+      {"id":"chess.board.observatory","tier":"L","priceSp":730,"grants":["cos.chess.board.observatory"],"owned":null,"sale":"on"},
+      {"id":"chess.board.conservatory","tier":"L","priceSp":730,"grants":["cos.chess.board.conservatory"],"owned":null,"sale":"on"},
+      {"id":"chess.board.theatre","tier":"L","priceSp":730,"grants":["cos.chess.board.theatre"],"owned":null,"sale":"on"},
+      {"id":"chess.board.arcade","tier":"L","priceSp":730,"grants":["cos.chess.board.arcade"],"owned":null,"sale":"on"},
+      {"id":"chess.companion.emi","tier":"XL","priceSp":2540,"grants":["cos.chess.companion.emi"],"owned":null,"sale":"on"}
+     ]
     }
    ]
   },

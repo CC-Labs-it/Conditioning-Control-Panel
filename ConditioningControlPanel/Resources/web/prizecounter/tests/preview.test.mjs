@@ -15,9 +15,9 @@ const ASSETS = path.join(here, '..', 'assets');
 const read = (f) => JSON.parse(fs.readFileSync(path.join(ASSETS, f), 'utf8'));
 const index = read('preview/index.json'), manifest = read('manifest.json');
 const state = JSON.parse(fs.readFileSync(path.join(here, '..', 'mock', 'state.sample.json'), 'utf8'));
-// Chess finishes are 2D-sheet only (they paint the game's own sculpts, no shelf model): the old 3D window shows an
+// Chess finishes, boards and Emi use the actual game for their 2D product pictures, with no shelf model: the old 3D window shows an
 // empty slot with its price tag for them (scene/index.js warns and moves on), and no preview.
-const SHEET_ONLY = (id) => id.startsWith('chess.finish.');
+const SHEET_ONLY = (id) => id.startsWith('chess.finish.') || id.startsWith('chess.board.') || id === 'chess.companion.emi';
 const rowIds = state.tabs.flatMap((t) => t.shelves.flatMap((s) => s.rows.map((r) => r.id))).filter((id) => !SHEET_ONLY(id));
 
 // glTF JSON chunk: the names of every node (scenes[i] picks one scene's subtree).

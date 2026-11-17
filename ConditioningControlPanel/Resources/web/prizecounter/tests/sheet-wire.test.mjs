@@ -45,6 +45,18 @@ test('the preview body: Featured and Screen effects first, effect rows by slot, 
   assert.equal(ledgerText(st, pv, t, 'Won at chess'), 'Won at chess');
 });
 
+test('new chess boards and Emi show desktop availability without restricting existing chess items', async () => {
+  const { st, pv } = await preview();
+  for (const id of ['chess.board.observatory','chess.board.conservatory','chess.board.theatre','chess.board.arcade','chess.companion.emi']) {
+    assert.ok(locate(st,id,pv), id + ' appears in the catalogue');
+    assert.deepEqual(placesOf(pv,id), ['desktop']);
+    assert.equal(isHere(placesOf(pv,id),'web'), false);
+    assert.equal(isHere(placesOf(pv,id),'phone'), false);
+    assert.equal(placeMark(placesOf(pv,id),t).text, 'Desktop app only');
+  }
+  assert.deepEqual(placesOf(pv,'chess.banner.crest'), ['desktop','web','phone']);
+});
+
 test('places: absent = everywhere, the mark reads plainly, the away line says where it does show', () => {
   assert.deepEqual(readPlaces(undefined), ['desktop', 'web', 'phone']);
   assert.deepEqual(readPlaces(['phone', 'desktop', 'moon']), ['desktop', 'phone']);

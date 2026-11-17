@@ -102,7 +102,7 @@ export function wearFamily(id) {
   const s = String(id || ''), p = (x) => s.startsWith(x);
   if (p('rain.')) return 'rain';
   if (p('desk.hat.') || p('desk.toy.')) return 'desk';
-  if (p('chess.set.') || p('chess.finish.') || p('chess.banner.') || p('chess.insignia.') || p('prime.banner.')) return 'chess';
+  if (p('chess.set.') || p('chess.finish.') || p('chess.board.') || p('chess.companion.') || p('chess.banner.') || p('chess.insignia.') || p('prime.banner.')) return 'chess';
   if (p('profile.frame.') || p('profile.avatar.') || p('prime.frame.')) return 'profile';
   if (p('kart.') || p('prime.paint.') || p('prime.trail.')) return 'kart';
   return null;
