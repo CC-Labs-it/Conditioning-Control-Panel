@@ -76,6 +76,16 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
 Mounted inside a game (`mountPrizeCounter(host, opts)`), the same seam is an object; standalone it is `postMessage`.
 Standalone frames (`host.js`): out `{type:'ready', protocol:1}`, `{type:'request', reqId, op, body, idem}`, `{type:'wallet', sp}`,
 `{type:'close', reason}`, `{type:'signin'}`, `{type:'log', level, msg}`; in `{type:'init', ...}`, `{type:'reply', reqId, body}` (body = the server body).
+
+Sheet additions (shop frame lane, 2026-11-17; all optional, absent = today's behaviour):
+- in: `init.walletAt { x, y }` (sheet only): the centre of the host's wallet star in the page's CSS pixels, measured
+  from the page's top-left once the sheet is down (usually a negative `y`: the chip sits in the bar above). The page's
+  stars fly there instead of the page's top-right corner. A resize sends the new point as `{type:'wallet-at', x, y}`.
+- in: `init.disco ['#rrggbb', ...]` (at most six): the active mod's Disco hues, the desktop ball's own palette
+  (`DiscoPaletteSource`). The page's Disco preview wears them; absent or unreadable = the fallback four.
+- out: `{type:'wallet-land', k}` (sheet only): the page's stars reached the host's wallet (a gain, k = share landed so
+  far, 1 = the last) or left it (a spend, one frame with k = 1). The WPF host counts and kicks its chip; with the DEBUG
+  shop preview on, the last one puts the chip back on the preview wallet.
 `stock_changed` / `catalog_changed` carry the fresh state as `state` (the page also reads it inline).
 
 ## Rules

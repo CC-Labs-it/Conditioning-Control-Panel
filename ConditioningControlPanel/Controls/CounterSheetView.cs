@@ -57,18 +57,24 @@ internal sealed class CounterSheetView : Grid
     /// <summary>sheet.css <c>--gold</c>, the wallet's gold: the sheet's edge.</summary>
     private static readonly Color Gold = Color.FromRgb(0xFF, 0xD2, 0x4A);
 
+    /// <summary>The cartoon page's ink (near-black plum): the outline, the tongue's sides and the hard shadow.</summary>
+    private static readonly Color Ink = Color.FromRgb(0x1C, 0x0A, 0x22);
+
     private static Task<CoreWebView2Environment>? _env;
 
     private readonly FrameworkElement _bar;
     private readonly string _from;
     private readonly Border _scrim;
     private readonly Grid _slot;
-    private readonly Border _frame;
+    private readonly Border _frame, _shadow, _tongue;
     private readonly FrameClock _clock = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly Stopwatch _watch = new();
     private WebView2? _web;
     private CoreWebView2? _core;
     private bool _disposed, _noRuntime;
+    private Func<FrameworkElement?>? _walletChip;
+    private FrameworkElement? WalletStarNow => _walletChip?.Invoke() is { } chip ? (FrameworkElement?)SparkleWallet.FindStar(chip) ?? chip : null;
+    private (int X, int Y)? _walletSent;
 
     // The page: which document, whether it said ready, whether a counter owns it.
     private string? _pageUrl;
@@ -80,7 +86,7 @@ internal sealed class CounterSheetView : Grid
     private readonly List<string> _pending = new();
 
     // The slide.
-    private double _p, _from0, _to, _scrim0, _scrimP;
+    private double _p, _from0, _to, _scrim0, _scrimP, _settleOff = double.NaN;
     private bool _openOnHandOver;
     private int _slideMs, _scrimMs, _leadMs;
     private (int, int, int, int) _region = (-1, -1, -1, -1);
@@ -115,19 +121,38 @@ internal sealed class CounterSheetView : Grid
         // once the page has landed and goes out as the close starts: WPF composes behind a moving HWND
         // (measured about 40 DIP behind mid-slide in the launcher), so an edge that moved with the page
         // would trail it. The page itself, rounded and on the same night ground, does the slide.
+        // Cartoon frame (shop frame lane): ink outline, gold band, night ground; a hard ink shadow down-right
+        // and a gold tongue from the wallet chip into the sheet, all IN with the edge and OUT at once with it.
+        var ink = new SolidColorBrush(Ink);
         _frame = new Border
         {
             Background = new SolidColorBrush(Night),
-            BorderBrush = new SolidColorBrush(Gold),
-            BorderThickness = new Thickness(CounterSheetRules.BorderDip),
+            BorderBrush = ink,
+            BorderThickness = new Thickness(CounterSheetRules.InkDip),
             CornerRadius = new CornerRadius(CounterSheetRules.CornerRadiusDip),
             Margin = new Thickness(0, CounterSheetRules.GapUnderBarDip, 0, 0),
             Opacity = 0,
             IsHitTestVisible = false,
+            Child = new Border
+            {
+                BorderBrush = new SolidColorBrush(Gold),
+                BorderThickness = new Thickness(CounterSheetRules.BorderDip - CounterSheetRules.InkDip),
+                CornerRadius = new CornerRadius(CounterSheetRules.CornerRadiusDip - CounterSheetRules.InkDip),
+            },
+        };
+        _shadow = new Border { Background = ink, CornerRadius = new CornerRadius(CounterSheetRules.CornerRadiusDip), Opacity = 0, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
+        _tongue = new Border
+        {
+            Background = new SolidColorBrush(Gold), BorderBrush = ink,
+            BorderThickness = new Thickness(CounterSheetRules.InkDip, 0, CounterSheetRules.InkDip, 0),
+            Width = 22, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            Opacity = 0, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
         };
         _slot = new Grid { ClipToBounds = true, Visibility = Visibility.Collapsed };
         _slot.Children.Add(_frame);
         Children.Add(_scrim);
+        Children.Add(_shadow);
+        Children.Add(_tongue);
         Children.Add(_slot);
         SizeChanged += (_, _) => OnResized();
         _clock.Tick += (_, _) => Step();
@@ -138,9 +163,10 @@ internal sealed class CounterSheetView : Grid
     /// <summary>Lay a sheet over <paramref name="host"/> (the window's root grid) under <paramref name="bar"/>,
     /// and warm its page a few seconds after the window is up. <paramref name="insertAt"/> keeps the
     /// window's own top layers (veil, edge) above the scrim; -1 adds it on top with <paramref name="zIndex"/>.</summary>
-    public static CounterSheetView Mount(Window door, Panel host, FrameworkElement bar, string from, int insertAt = -1, int zIndex = 0)
+    public static CounterSheetView Mount(Window door, Panel host, FrameworkElement bar, string from, int insertAt = -1, int zIndex = 0,
+        Func<FrameworkElement?>? walletChip = null)
     {
-        var view = new CounterSheetView(door, bar, from);
+        var view = new CounterSheetView(door, bar, from) { _walletChip = walletChip };
         if (zIndex != 0) Panel.SetZIndex(view, zIndex);
         if (insertAt >= 0 && insertAt <= host.Children.Count) host.Children.Insert(insertAt, view);
         else host.Children.Add(view);
@@ -261,6 +287,7 @@ internal sealed class CounterSheetView : Grid
     {
         if (session == 0 || session != _session || !_pageReady || _live || _core == null) return;
         _live = true;
+        _walletSent = WalletAt();   // init carried it
         foreach (var json in _pending)
             try { _core.PostWebMessageAsJson(json); } catch (Exception ex) { Diag.Swallowed(ex); }
         _pending.Clear();
@@ -413,6 +440,11 @@ internal sealed class CounterSheetView : Grid
     {
         double ms = Math.Max(0, _watch.Elapsed.TotalMilliseconds - _leadMs);
         _p = _slideMs <= 0 ? _to : _from0 + (_to - _from0) * CounterSheetRules.EaseOut(ms / _slideMs);
+        // Opening from closed: a soft overshoot and settle (Full; half at Reduced; none for Gentle or Off).
+        _settleOff = _to > 0 && _from0 <= 0 && _slideMs > 0
+            ? CounterSheetRules.OpenOffset(ms / _slideMs, _slot.ActualHeight,
+                CounterSheetRules.OvershootDip(Services.MotionFx.Level, Services.Safety.GentleVisuals.On, _slot.ActualHeight))
+            : double.NaN;
         _scrimP = _scrimMs <= 0 ? _to : _scrim0 + (_to - _scrim0) * Math.Clamp(ms / _scrimMs, 0, 1);
         ApplyProgress();
         if (ms >= Math.Max(_slideMs, _scrimMs)) Finish(_to);
@@ -422,10 +454,12 @@ internal sealed class CounterSheetView : Grid
     {
         _clock.Stop();
         _p = _scrimP = to;
-        if (to > 0) { ApplyProgress(); ShowEdge(true); return; }
+        _settleOff = double.NaN;
+        if (to > 0) { ApplyProgress(); ShowEdge(true); PostWalletAt(); return; }
         ApplyProgress();   // an empty band: nothing of the HWND shows
         _slot.Visibility = Visibility.Collapsed;
         _scrim.Visibility = Visibility.Collapsed;
+        _shadow.Visibility = _tongue.Visibility = Visibility.Collapsed;
         try { if (FocusDoorOnClose && DoorWindow.IsActive) DoorWindow.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
         // The next open finds a page loaded and waiting for its init.
         if (_core != null && _session == 0) Navigate(CounterSheetRules.SheetUrl);
@@ -437,7 +471,7 @@ internal sealed class CounterSheetView : Grid
     private void ApplyProgress()
     {
         double h = _slot.ActualHeight;
-        double off = CounterSheetRules.SlideOffset(_p, h);
+        double off = double.IsNaN(_settleOff) ? CounterSheetRules.SlideOffset(_p, h) : _settleOff;
         double inset = CounterSheetRules.BorderDip + CounterSheetRules.PaddingDip;
         double top = CounterSheetRules.GapUnderBarDip + inset - off;
         _scrim.Opacity = _scrimP;
@@ -450,10 +484,13 @@ internal sealed class CounterSheetView : Grid
     /// <summary>The gold edge: IN once the page has landed (a short fade, Gentle's floor), OUT at once.</summary>
     private void ShowEdge(bool on)
     {
-        _frame.BeginAnimation(OpacityProperty, null);
         int ms = on ? CounterSheetRules.EdgeFadeMs(Services.MotionFx.Level, Services.Safety.GentleVisuals.On) : 0;
-        if (ms <= 0) { _frame.Opacity = on ? 1 : 0; return; }
-        _frame.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms)));
+        foreach (var part in new UIElement[] { _frame, _shadow, _tongue })
+        {
+            part.BeginAnimation(OpacityProperty, null);
+            if (ms <= 0) { part.Opacity = on ? 1 : 0; continue; }
+            part.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(ms)));
+        }
     }
 
     /// <summary>Shape the page's HWND: rounded like the frame's inside (no square corner past the curve),
@@ -505,8 +542,28 @@ internal sealed class CounterSheetView : Grid
                     CounterSheetRules.BottomInsetDip, CounterSheetRules.MinWidthDip, CounterSheetRules.MinHeightDip) is not { } f) return false;
             var slot = new Thickness(f.Left, f.Top, ActualWidth - f.Right, ActualHeight - f.Bottom);
             if (_slot.Margin != slot) _slot.Margin = slot;
-            var scrim = new Thickness(0, f.Top, 0, 0);
+            // The scrim covers the window's whole content from the bar's top (the panel's rail and header too),
+            // with a hole where the wallet chip is: the chip reads as the door, and a press on it is the second press.
+            var scrim = new Thickness(0, _walletChip == null ? f.Top : Math.Max(0, tl.Y), 0, 0);   // a game sheet's strip dims itself
             if (_scrim.Margin != scrim) _scrim.Margin = scrim;
+            var chip = _walletChip?.Invoke() is { IsVisible: true } c && PresentationSource.FromVisual(c) != null
+                ? new Rect(c.TranslatePoint(new Point(0, 0), this), c.TranslatePoint(new Point(c.ActualWidth, c.ActualHeight), this)) : Rect.Empty;
+            var all = new RectangleGeometry(new Rect(0, 0, Math.Max(0, ActualWidth), Math.Max(0, ActualHeight - scrim.Top)));
+            _scrim.Clip = chip.IsEmpty ? null : new CombinedGeometry(GeometryCombineMode.Exclude, all,
+                new RectangleGeometry(new Rect(chip.X - 3, chip.Y - scrim.Top - 3, chip.Width + 6, chip.Height + 6), 10, 10));
+            double sd = CounterSheetRules.ShadowDip, gap = CounterSheetRules.GapUnderBarDip;
+            _shadow.Margin = new Thickness(f.Left + sd, f.Top + gap + sd, Math.Max(0, ActualWidth - f.Right - sd), Math.Max(0, ActualHeight - f.Bottom - sd));
+            _shadow.Visibility = Visibility.Visible;
+            // The tongue: from under the chip down into the sheet's gold band, when the chip sits over the sheet.
+            double cx = chip.IsEmpty ? double.NaN : chip.X + chip.Width / 2;
+            bool tongue = !chip.IsEmpty && cx - 11 > f.Left + CounterSheetRules.CornerRadiusDip && cx + 11 < f.Right - CounterSheetRules.CornerRadiusDip
+                && f.Top + gap - chip.Bottom > 1;
+            _tongue.Visibility = tongue ? Visibility.Visible : Visibility.Collapsed;
+            if (tongue)
+            {
+                _tongue.Margin = new Thickness(cx - 11, chip.Bottom - 1, 0, 0);
+                _tongue.Height = f.Top + gap + CounterSheetRules.BorderDip - chip.Bottom + 1;
+            }
             return true;
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeSheet: place failed: {E}", ex.Message); return false; }
@@ -518,6 +575,29 @@ internal sealed class CounterSheetView : Grid
         if (!PlaceSlot()) { _wantsClose?.Invoke("no-room"); return; }
         _region = (-1, -1, -1, -1);
         ApplyProgress();
+        PostWalletAt();
+    }
+
+    /// <summary>The host's wallet star in the page's CSS pixels, measured against where the page sits once
+    /// it is down (so it holds mid-slide too). Null: this door has no wallet star on screen (a game window).</summary>
+    public (int X, int Y)? WalletAt()
+    {
+        try
+        {
+            if (WalletStarNow is not { IsVisible: true } star || PresentationSource.FromVisual(star) == null || PresentationSource.FromVisual(_slot) == null) return null;
+            var c = star.TranslatePoint(new Point(star.ActualWidth / 2, star.ActualHeight / 2), _slot);
+            double inset = CounterSheetRules.BorderDip + CounterSheetRules.PaddingDip;
+            return SheetHostRules.WalletAt(c, inset, CounterSheetRules.GapUnderBarDip + inset);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); return null; }
+    }
+
+    /// <summary>Tell a live page where the wallet star moved to (the window was resized or the sheet landed).</summary>
+    private void PostWalletAt()
+    {
+        if (!_live || _session == 0 || WalletAt() is not { } at || at == _walletSent) return;
+        _walletSent = at;
+        Post(_session, new { type = "wallet-at", x = at.X, y = at.Y });
     }
 
     private void OnDoorVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)

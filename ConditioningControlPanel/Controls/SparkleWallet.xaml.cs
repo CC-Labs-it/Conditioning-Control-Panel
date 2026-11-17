@@ -175,6 +175,10 @@ public partial class SparkleWallet : UserControl
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(RefreshText)); return; }
         WalletLabel.Text = Loc.Get("sparkle_wallet_label");
+#if DEBUG
+        // DEBUG shop preview: the number is the preview's pretend wallet, marked so (plain literal, DEBUG chrome only).
+        if (Services.PrizeCounter.ShopPreviewBackend.Enabled) WalletLabel.Text = "Preview wallet";
+#endif
         // One line on hover for both the count and the help circle; the card carries the rest.
         var hint = Loc.Get("sparkle_help_tooltip");
         WalletButton.ToolTip = hint;

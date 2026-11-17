@@ -617,8 +617,12 @@ public partial class LauncherWindow
     /// </summary>
     private void RefreshSpReadout(bool countUp)
     {
-        int sp = App.Settings?.Current?.SkillPoints ?? -1;
-        bool show = sp >= 0 && App.IsLoggedIn;
+        var wallet = MainWindow.HeaderWalletValue(App.Settings?.Current?.SkillPoints ?? -1);
+        int sp = wallet.Value;
+        bool show = wallet.Show;
+#if DEBUG
+        if (wallet.PreviewMark) WalletChip.ToolTip = "Preview wallet";   // DEBUG shop preview chrome, plain literal
+#endif
         WalletChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _spShown = double.NaN; return; }
         // Stars are landing or owed: they count the chip up (LauncherWindow.SparkleFly.cs); the

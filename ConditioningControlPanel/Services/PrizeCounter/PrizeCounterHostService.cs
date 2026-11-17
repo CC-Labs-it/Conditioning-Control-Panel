@@ -520,6 +520,11 @@ internal static partial class PrizeCounterHostService
                     OnUi(() => { if (generation == _generation) _host?.Post(new { type = "reply", reqId, body = reply }); });
                 });
                 break;
+            case "wallet-land":
+                // The page's stars reached (a gain) or left (a spend) the host's wallet: it counts and kicks.
+                if (_isSheet && _sheetView?.DoorWindow is { } door && m["k"] is JValue { Type: JTokenType.Float or JTokenType.Integer } k)
+                    OnUi(() => Prizes.SparkleFlightDirector.PageLanded(door, k.Value<double>()));
+                break;
             case "wallet":
                 if (m["sp"] is JValue { Type: JTokenType.Integer } sp && _relay?.HandleWalletFrame(sp.Value<int>()) != true)
                     App.Logger?.Debug("PrizeCounter: wallet frame {Sp} names no receipt, ignored", sp);
@@ -593,6 +598,17 @@ internal static partial class PrizeCounterHostService
     {
         var init = JObject.FromObject(BuildInitBody());
         if (_isSheet) init["sheet"] = true;
+        // Where the host's wallet star sits, in the page's CSS pixels (CONTRACT.md, sheet additions): the page's stars fly there.
+        if (_isSheet && _sheetView?.WalletAt() is { } at) init["walletAt"] = new JObject { ["x"] = at.X, ["y"] = at.Y };
+        // The active mod's Disco hues (CONTRACT.md, sheet additions), the desktop ball's own palette.
+        try
+        {
+            var pal = Compositor.DiscoPaletteSource.Current();
+            var rgb = new uint[pal.Count];
+            for (int i = 0; i < rgb.Length; i++) rgb[i] = pal[i];
+            if (SheetHostRules.DiscoWire(rgb) is { } disco) init["disco"] = new JArray(disco);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
         return init;
     }
 

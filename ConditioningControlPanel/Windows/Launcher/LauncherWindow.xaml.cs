@@ -67,7 +67,7 @@ public partial class LauncherWindow : Window, ConditioningControlPanel.Services.
         // The Prize Counter sheet slides down under the title bar, inside this window; the veil and
         // the window edge stay above its scrim.
         _counterSheet = ConditioningControlPanel.Controls.CounterSheetView.Mount(this, RootGrid, TitleBar,
-            Services.PrizeCounter.CounterSheetRules.FromLauncher, insertAt: RootGrid.Children.IndexOf(LockdownVeil));
+            Services.PrizeCounter.CounterSheetRules.FromLauncher, insertAt: RootGrid.Children.IndexOf(LockdownVeil), walletChip: () => WalletChip);
 
         var mods = App.Mods;
         if (mods != null) mods.ModChanged += OnModChanged;

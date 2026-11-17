@@ -96,8 +96,16 @@ function loomTex(l, glow, size, doc) {
 }
 
 /* ---------- Disco: the tipped mirror sphere and its palette (as CCP.Core/Bubbles/BubbleSkins.Disco.cs) ---------- */
-/** The page has no mod colours (init carries none): the ball wears the desktop's fallback, pink, gold, cyan, lilac. */
+/** The desktop's fallback, pink, gold, cyan, lilac: the ball wears it when the host sends no `init.disco`. */
 export const DISCO = [0xff3d9e, 0xffc229, 0x29d9ff, 0x9e6bff];
+let discoPal = DISCO;
+/** The host's Disco hues (`init.disco`, "#rrggbb" strings from the active mod, the desktop ball's own palette). Anything
+ * unreadable or empty keeps the fallback. Answers the palette in use. */
+export function setDiscoPalette(list) {
+  const hues = Array.isArray(list) ? list.slice(0, 6).map((h) => (typeof h === 'string' && /^#[0-9a-f]{6}$/i.test(h) ? parseInt(h.slice(1), 16) : NaN)).filter((n) => n >= 0) : [];
+  discoPal = hues.length ? hues : DISCO;
+  return discoPal;
+}
 const DISCO_BALL = 0.98, TILT = 0.38, ROLL = -0.2;
 const hump = (ph) => { const s = Math.sin(ph); return s <= 0 ? 0 : s * s * s; };   // swells and settles, never a step
 const unit = (x, y, z) => { const n = Math.hypot(x, y, z); return [x / n, y / n, z / n]; };
@@ -343,7 +351,7 @@ export const SKINS = {
     } },
 
   disco: { pre: 0.09, rise: 0.9,
-    init(b) { b.pal = b.pal || DISCO; },
+    init(b) { b.pal = b.pal || discoPal; },
     draw(c, b, t, k) {
       const r = b.r, R = r * DISCO_BALL, pal = b.pal || DISCO, amp = b.gentle ? 0.78 : 1, flare = b.gentle ? 0 : k;
       t *= b.gentle ? 0.5 : 1;   // Gentle: slower and softer, as the desktop's Reduced scale

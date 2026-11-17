@@ -16,9 +16,10 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
   const post = (m) => { try { if (webview) webview.postMessage(m); else if (parent) parent.postMessage(m, '*'); } catch (e) { /* host gone */ } };
   const waiting = new Map();
   let init = null, initWaiters = [];
-  const wornHears = [];
+  const wornHears = [], atHears = [];
   const onFrame = (m) => {
     if (!m || typeof m.type !== 'string') return;
+    if (m.type === 'wallet-at') { atHears.forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } }); return; }
     if (m.type === 'init') { init = m; initWaiters.forEach((f) => f(m)); initWaiters = []; }
     else if (m.type === 'worn') wornHears.forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } });
     else if (m.type === 'reply' && waiting.has(m.reqId)) { waiting.get(m.reqId)(m.body || OFFLINE); waiting.delete(m.reqId); }
@@ -48,6 +49,8 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     signIn() { post({ type: 'signin' }); },
     wear(id) { if (typeof id === 'string' && id) post({ type: 'wear', id }); },
     onWorn(f) { if (typeof f === 'function') wornHears.push(f); },
+    onWalletAt(f) { if (typeof f === 'function') atHears.push(f); },
+    walletLand(k) { if (Number.isFinite(k)) post({ type: 'wallet-land', k: Math.max(0, Math.min(1, k)) }); },
     log(msg) { post({ type: 'log', level: 'debug', msg: String(msg).slice(0, 400) }); },
   };
 }
@@ -63,6 +66,8 @@ export function asHost(o = {}) {
     signIn: () => call(o.signIn),
     wear: (id) => call(o.wear, id),
     onWorn: (f) => call(o.onWorn, f),
+    onWalletAt: (f) => call(o.onWalletAt, f),
+    walletLand: (k) => call(o.walletLand, k),
     log: (msg) => call(o.log, msg),
   };
 }

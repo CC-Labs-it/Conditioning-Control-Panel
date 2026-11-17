@@ -31,7 +31,7 @@ public partial class MainWindow
         public FrameworkElement? OriginFor(SparkleSource source) => source == SparkleSource.LevelUp ? _w.BtnProfileBubble : null;
         public void HoldCount(int value) => _w.HeaderSparkleWallet?.HoldShown(value);
         // The header readout has no tween: a release is always a snap.
-        public void ReleaseCount(bool snap = false) => _w.HeaderSparkleWallet?.ReleaseShown();
+        public void ReleaseCount(bool snap = false) { _w.HeaderSparkleWallet?.ReleaseShown(); _w.RefreshSparkleWalletBalance(); }
         public void Kick(bool settle) => _w.HeaderSparkleWallet?.Kick(settle);
     }
 }

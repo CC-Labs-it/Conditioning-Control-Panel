@@ -5,14 +5,17 @@
  * at / ink / confetti serve sheet/juice.js (the OWNED stamp's hit, a stamp press, the coupon); Gentle gets no confetti.
  * Uses Web Animations; a page without them (the tests' fake DOM) gets no flight and the same outcome. */
 
-export function createFx({ root, doc, base = './', motion = 'full', gentle = false, sound, wallet }) {
+export function createFx({ root, doc, base = './', motion = 'full', gentle = false, sound, wallet, walletAt = () => null, onWallet = () => {} }) {
   const can = (n) => motion !== 'off' && n && typeof n.animate === 'function' && typeof n.getBoundingClientRect === 'function';
+  // In a sheet the host says where its wallet star is (init.walletAt / wallet-at, page CSS pixels) and hears the
+  // stars reach or leave it (onWallet(k), k = share so far, 1 = the last): its chip counts and kicks.
+  const hostWallet = (h) => { const p = walletAt(); return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? { x: p.x - h.left - 13, y: p.y - h.top - 13 } : null; };
   const few = motion === 'less' || gentle ? 0.5 : 1;
   const el = (tag, cls) => { const n = doc.createElement(tag); n.className = cls; return n; };
   const host = () => root.getBoundingClientRect();
   function centre(node) {
     const h = host();
-    if (!node || node.hidden || !node.getBoundingClientRect().width) return { x: h.width - 70 - 13, y: 4 };   // the host's wallet, above the sheet
+    if (!node || node.hidden || !node.getBoundingClientRect().width) return hostWallet(h) || { x: h.width - 70 - 13, y: 4 };   // the host's wallet, above the sheet
     const a = node.getBoundingClientRect();
     return { x: a.left + a.width / 2 - h.left - 13, y: a.top + a.height / 2 - h.top - 13 };
   }
@@ -57,6 +60,7 @@ export function createFx({ root, doc, base = './', motion = 'full', gentle = fal
     /** A spend: stars leave the wallet in a dense stream, arc high and land on the item, each with a small pop where it
      * lands (the owner: "slower, more dense, a small animation when they land"). Answers how long that takes (0 = none). */
     flyOut(toEl, amount) {
+      if (amount > 0) onWallet(1);   // a spend: the number goes down as the stars leave
       if (!can(toEl) || !can(root)) return 0;
       const s0 = centre(walletStar()), box = toEl.getBoundingClientRect(), e0 = centre(toEl);
       const n = Math.max(8, Math.round(Math.max(16, Math.min(32, Math.round(amount / 20))) * few));
@@ -83,7 +87,7 @@ export function createFx({ root, doc, base = './', motion = 'full', gentle = fal
     },
     /** A gain: stars puff out of `fromEl`, mostly upward, then stream into the wallet; onLand(k) after each (k = 0..1). */
     fly(fromEl, amount, onLand = () => {}) {
-      if (!can(fromEl) || !can(root)) { sound.bell(sound.NOTES[3], 0.12, 1); onLand(1); return 0; }
+      if (!can(fromEl) || !can(root)) { sound.bell(sound.NOTES[3], 0.12, 1); onLand(1); onWallet(1); return 0; }
       const s0 = centre(fromEl), e0 = centre(walletStar());
       const n = Math.max(6, Math.round(Math.max(10, Math.min(30, 8 + Math.round(amount * 0.9))) * few));
       let landed = 0, longest = 0;
@@ -102,6 +106,7 @@ export function createFx({ root, doc, base = './', motion = 'full', gentle = fal
           s.remove(); landed++;
           if (landed === n) { sparkAt(e0.x + 13, e0.y + 13, true); sound.chord(); } else { if (landed % 2) sparkAt(e0.x + 13, e0.y + 13, false); sound.tick(landed / n); }
           onLand(landed / n);
+          if (landed === n || landed % 3 === 0) onWallet(landed / n);
         };
       }
       return longest;

@@ -97,6 +97,8 @@ internal static partial class PrizeCounterHostService
         _inGame = game != null;
         _startUrl = CounterSheetRules.SheetUrl;
         _host = surface;
+        // While a wallet door's sheet is down its page flies the stars, aimed at this window's wallet.
+        Prizes.SparkleFlightDirector.PageFliesOver ??= w => _isSheet && _host != null && _sheetView is { } v && ReferenceEquals(v.DoorWindow, w);
         game?.Freeze();
         // A door behind the user's other apps (EMI's options) comes forward first, so the sheet is never
         // left behind someone else's app.

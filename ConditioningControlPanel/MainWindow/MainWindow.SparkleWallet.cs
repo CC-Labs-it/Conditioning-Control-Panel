@@ -18,7 +18,7 @@ public partial class MainWindow : Services.PrizeCounter.ICounterSheetDoor
     {
         if (_counterSheet != null || (HeaderSparkleWallet.Parent as FrameworkElement)?.Parent is not FrameworkElement bar) return;
         _counterSheet = Controls.CounterSheetView.Mount(this, RootGrid, bar,
-            Services.PrizeCounter.CounterSheetRules.FromWallet, zIndex: 9990);
+            Services.PrizeCounter.CounterSheetRules.FromWallet, zIndex: 9990, walletChip: () => HeaderSparkleWallet);
     }
 
     private AppSettings? _sparkleWalletSettings;
@@ -92,7 +92,18 @@ public partial class MainWindow : Services.PrizeCounter.ICounterSheetDoor
     private void RefreshSparkleWalletBalance()
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(RefreshSparkleWalletBalance)); return; }
-        if (_sparkleWalletActive) HeaderSparkleWallet.SetBalance(App.Settings.Current.SkillPoints);
+        if (_sparkleWalletActive) HeaderSparkleWallet.SetBalance(HeaderWalletValue(App.Settings.Current.SkillPoints).Value);
+    }
+
+    /// <summary>What a header wallet shows (<see cref="Services.PrizeCounter.SheetHostRules.HeaderWallet"/>): the
+    /// real balance, or in the DEBUG shop preview the preview's own wallet.</summary>
+    internal static (bool Show, int Value, bool PreviewMark) HeaderWalletValue(int real)
+    {
+        bool preview = false; int previewSp = 0;
+#if DEBUG
+        if (Services.PrizeCounter.ShopPreviewBackend.Enabled) { preview = true; previewSp = Services.PrizeCounter.ShopPreviewBackend.Shared.Sp; }
+#endif
+        return Services.PrizeCounter.SheetHostRules.HeaderWallet(preview, App.IsLoggedIn, real, previewSp);
     }
 
     private void OnSparklePointAwarded(object? sender, SparklePointAward award)

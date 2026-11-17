@@ -29,7 +29,11 @@ internal static class CounterSheetRules
     /// (DIPs). The page's HWND gets a window region rounded at <see cref="InnerRadiusDip"/>, concentric
     /// with the frame, so no square corner shows past the curve; the page's own gold bottom line then
     /// sits on the frame's.</summary>
-    public const double CornerRadiusDip = 14, BorderDip = 2, PaddingDip = 0;
+    public const double CornerRadiusDip = 16, BorderDip = 5, PaddingDip = 0;
+
+    /// <summary>The cartoon frame (shop frame lane): an ink outline, then a gold band, then the page; a hard ink
+    /// shadow falls down-right (one lamp top-left).</summary>
+    public const double InkDip = 2, ShadowDip = 6;
     public const double InnerRadiusDip = CornerRadiusDip - BorderDip - PaddingDip;
 
     /// <summary>Smaller than this and the door window has no room for a sheet: the counter window opens instead (DIPs).</summary>
@@ -136,6 +140,30 @@ internal static class CounterSheetRules
         t = Math.Clamp(double.IsFinite(t) ? t : 1, 0, 1);
         double u = 1 - t;
         return 1 - u * u * u;
+    }
+
+    /// <summary>How far past its open place the opening slide carries before it settles (a share of the slot's
+    /// height, capped in DIPs): full motion only, half at Reduced, none for Gentle or Off.</summary>
+    public static double OvershootDip(MotionLevel level, bool gentle, double height)
+    {
+        if (gentle || level == MotionLevel.Off || !double.IsFinite(height) || height <= 0) return 0;
+        double full = Math.Min(14, height * 0.025);
+        return level == MotionLevel.Reduced ? full / 2 : full;
+    }
+
+    /// <summary>The opening slide with a soft overshoot and settle: ease out to the open place by 70 percent of
+    /// the time while already leaning past it, then a dip of <paramref name="overshootDip"/> below it that eases
+    /// home. Returns the offset ABOVE the open place (negative = below it, the settle).</summary>
+    public static double OpenOffset(double t, double height, double overshootDip)
+    {
+        t = Math.Clamp(double.IsFinite(t) ? t : 1, 0, 1);
+        height = double.IsFinite(height) ? Math.Max(0, height) : 0;
+        overshootDip = double.IsFinite(overshootDip) ? Math.Max(0, overshootDip) : 0;
+        if (overshootDip <= 0) return SlideOffset(EaseOut(t), height);
+        const double land = 0.7;
+        if (t < land) return SlideOffset(EaseOut(t / land), height) - overshootDip * Math.Pow(t / land, 6);
+        double u = (t - land) / (1 - land);
+        return -overshootDip * (1 - u) * (1 - u);
     }
 
     /// <summary>How far above its open place the sheet sits at progress <paramref name="p"/> (0 closed,

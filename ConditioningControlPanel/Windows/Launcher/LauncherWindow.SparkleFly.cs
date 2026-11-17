@@ -58,7 +58,7 @@ public partial class LauncherWindow
     private void ReleaseChipCount(bool snap)
     {
         _spFlightHold = false;
-        var sp = App.Settings?.Current?.SkillPoints ?? -1;
+        var sp = MainWindow.HeaderWalletValue(App.Settings?.Current?.SkillPoints ?? -1).Value;
         // Panic: straight onto the balance, no tween.
         if (snap && sp >= 0 && !double.IsNaN(_spShown)) { MotionFx.Odometer(SpReadout, sp, sp); _spShown = sp; return; }
         RefreshSpReadout(countUp: false);

@@ -102,6 +102,7 @@ internal static class SparkleFlightDirector
         var d = Application.Current?.Dispatcher;
         if (d != null && !d.CheckAccess()) { d.BeginInvoke(new Action(Stop)); return; }
         Owed.Clear();
+        if (_pageGain is { } pg) { _pageGain = null; pg.Host.ReleaseCount(snap: true); }
         CancelReturn(keep: null, snap: true);
         Abort(snap: true);
         foreach (var layer in Layers.Values) layer.Clear();   // the last landing's ring and motes too
@@ -136,11 +137,44 @@ internal static class SparkleFlightDirector
         if (host == null) return false;
         Abort();
         CancelReturn(keep: host);
+        if (PageFliesOver?.Invoke(host.Window) == true)
+        {
+            // The counter sheet is down over this window: its page flies the stars to this wallet
+            // (init.walletAt), and the wallet only counts and kicks as they land (PageLanded).
+            if (!change.IsGain) { host.ReleaseCount(); host.Kick(settle: false); return true; }
+            var start = Owed.Take(owner, change.Before) is { } o ? o.From : change.Before;
+            _pageGain = (host, start, change.Balance);
+            host.HoldCount(start);
+            return true;
+        }
         if (!change.IsGain) { FlySpend(host, change.Amount); return true; }
         // Stars still owed from before ride along with this one.
         var from = Owed.Take(owner, change.Before) is { } owed ? owed.From : change.Before;
         FlyGain(host, from, change.Balance, host.OriginFor(change.Source));
         return true;
+    }
+
+    /// <summary>True while the counter sheet is down over that window (set by the counter host): its page flies.</summary>
+    internal static Func<Window, bool>? PageFliesOver { get; set; }
+
+    private static (ISparkleFlightHost Host, int From, int To)? _pageGain;
+
+    /// <summary>The sheet's page says its stars reached (or, for a spend, left) the wallet of <paramref name="window"/>:
+    /// <paramref name="k"/> of them so far (1 = the last). The wallet counts and kicks; with no ledger change waiting
+    /// (the DEBUG preview's pretend wallet) the last one just puts the readout right.</summary>
+    internal static void PageLanded(Window window, double k)
+    {
+        var host = Hosts.FirstOrDefault(h => ReferenceEquals(h.Window, window));
+        if (host == null || !double.IsFinite(k)) return;
+        k = Math.Clamp(k, 0, 1);
+        bool last = k >= 1;
+        if (_pageGain is { } g && ReferenceEquals(g.Host, host))
+        {
+            if (last) { _pageGain = null; host.ReleaseCount(); }
+            else host.HoldCount((int)Math.Round(g.From + (g.To - g.From) * k));
+        }
+        else if (last) host.ReleaseCount();
+        host.Kick(settle: last);
     }
 
     /// <summary>The launcher or the panel came to the front: hold the number where the owed stars
