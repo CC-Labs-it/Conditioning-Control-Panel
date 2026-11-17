@@ -40,7 +40,9 @@ export function createView(doc, { t, sheet, base = './' }) {
   const list = el('div', 's-list'), room = el('aside', 's-detail'), main = el('div', 's-main');
   room.setAttribute('aria-live', 'polite');
   main.append(list, room);
-  root.append(head, tabs, main);
+  const nudge = el('div', 'nudge');
+  nudge.setAttribute('role', 'status'); nudge.hidden = true;
+  root.append(head, tabs, main, nudge);
 
   function artNode(art, big) {
     const box = el('span', 'art art-' + art.kind + (big ? ' big' : ''));
@@ -149,8 +151,21 @@ export function createView(doc, { t, sheet, base = './' }) {
     if (m.note) { const n = el('p', 'd-note', m.note); n.setAttribute('role', 'status'); room.append(n); }
   }
 
+  /** A paper slip under the head: a goal reached, something newly affordable, or a refusal. */
+  function paintNudge(v, on) {
+    const n = v.nudge;
+    nudge.hidden = !n;
+    if (!n) { nudge.replaceChildren(); return; }
+    nudge.replaceChildren(star(), el('span', null, n.text));
+    if (n.id) nudge.append(button('', t('shop_sheet_view'), 'nudge-view', () => on.nudgeView(n.id)));
+    const x = button('x', '×', 'nudge-x', () => on.nudgeClose());
+    x.setAttribute('aria-label', t('shop_sheet_dismiss'));
+    nudge.append(x);
+  }
+
   const view = {
-    root, title, search, list, room, wallet, close, head, el, button, star, statusNode, itemNode, sectionHead: null, artNode,
+    root, title, search, list, room, wallet, close, head, nudge,
+    walletShown(n) { walletN.textContent = String(n); }, el, button, star, statusNode, itemNode, sectionHead: null, artNode,
     // Hooks the later parts fill (sheet/front.js, sheet/live.js, sheet/places.js); these defaults draw slice 1.
     front: null,
     thumb: (e, v) => artNode(artOf(e.id, v.index, e.fx || e.tab, base)),
@@ -174,7 +189,7 @@ export function createView(doc, { t, sheet, base = './' }) {
       wallet.hidden = !!sheet || v.status === 'signed_out';
       search.hidden = v.status !== 'ready';
       slip.hidden = !(v.pv && v.pv.preview);
-      paintTabs(v, on); paintList(v, on); paintRoom(v, on);
+      paintTabs(v, on); paintList(v, on); paintRoom(v, on); paintNudge(v, on);
     },
     roomHeading: () => room.children.find ? room.children.find((n) => n.tagName === 'H2') : room.querySelector('h2'),
   };

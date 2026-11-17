@@ -1,7 +1,8 @@
 /* mock/preview.js - the preview wire on the mock (BRIEF "The preview wire"): what the DEBUG desktop backend
  * (CCP_SHOP_PREVIEW=1) answers, for mock/sheet.html and the tests. NOT that backend: same body shapes, same ops.
  *   previewSample(sample)   today's sample plus the effects tab, places on every row, 410 Sparkles, the rubber duck owned
- *   createPreviewServer(s)  createMockServer plus shop-equip, shop-gift, shop-stamp, shop-goal and the coupon buy;
+ *   createPreviewServer(s)  createMockServer plus shop-equip, shop-gift, shop-stamp, shop-goal and the coupon buy; a buy
+ *                           answers its receipt AND the fresh state (as the desktop backend does);
  *                           shop-state carries preview, fresh, equip, gift, stamps, goal and ledger */
 
 import { createMockServer } from './server.js';
@@ -97,13 +98,13 @@ export function createPreviewServer(sample, opts = {}) {
       r.owned = { at: new Date().toISOString(), paidSp: 0 };
       pv.stamps.couponReady = false; pv.stamps.couponUsed = true;
       note(r.id, 0); wearOnBuy(r); if (pv.goal === r.id) pv.goal = null;
-      return { ok: true, idem, itemId: r.id, paidSp: 0, spBefore: st.sp, sp: st.sp, catalogVersion: st.catalogVersion, prizes: structuredClone(st.prizes) };
+      return { ...full(), idem, itemId: r.id, paidSp: 0, spBefore: st.sp };
     }
     const res = await base.handle(op, body, idem);
     if (op === 'shop-buy' && res.ok && !booked.has(idem)) {
       booked.add(idem); note(res.itemId, -res.paidSp); wearOnBuy(row(res.itemId)); if (pv.goal === res.itemId) pv.goal = null;
     }
-    return res;
+    return op === 'shop-buy' && res.ok ? { ...full(), ...res } : res;   // as the desktop preview backend: the receipt and the fresh state
   }
 
   return { ...base, handle, preview: pv,

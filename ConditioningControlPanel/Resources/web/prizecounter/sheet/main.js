@@ -12,15 +12,20 @@ import { asHost } from '../host.js';
 import { createPressGuard, keyName } from '../state/press-guard.js';
 import { sheetT } from './strings.js';
 import { readPreview, platformOf, placesOf, isHere } from './wire.js';
-import { roomModel, fxRoom, locate, slotOf, OWNED, FEATURED, groupOf, sheetTabs, badgeCount } from './model.js';
+import { roomModel, fxRoom, locate, slotOf, OWNED, FEATURED, groupOf, sheetTabs, badgeCount, goalEntry, labelOf, rowsOf, buyable } from './model.js';
 import { createView } from './view.js';
+import { createSound } from './sound.js';
+import { createFx } from './fx.js';
 import { installFront } from './front.js';
 import { installLive } from './live.js';
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const pressKey = (e) => e.key === 'Enter' || e.key === ' ' || e.code === 'Space' || e.code === 'NumpadEnter';
-const SOLD_MS = 1700;
-const sfx = { pop() {} };   // sheet/sound.js fills this in
+const SOLD_MS = 1700, NUDGE_MS = 7000;
+/** A refusal's line: retry words for the host's own answers, one plain line for anything else (the preview backend's
+ * not_owned, not_ready, stamped, unavailable included). */
+const REFUSAL = { offline: 'shop_note_retry', timeout: 'shop_note_retry', busy: 'shop_note_retry', signed_out: 'shop_note_signed_out' };
+const refusalKey = (res) => REFUSAL[(res && res.reason) || 'offline'] || 'shop_sheet_refused';
 
 export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win = globalThis.window, now = () => performance.now(),
   frame = (f) => requestAnimationFrame(f), base = './', later = (f, ms) => setTimeout(f, ms), newIdem = mintIdem,
@@ -35,19 +40,27 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   if (init.gentle) root.dataset.gentle = 'on';
   // The raw shop-state body: state/shop.js reads today's rows from it, sheet/wire.js the rest. A body the page already
   // holds (an op's answer) is handed to shop.load() through `queued`, so both read the same body with no second trip.
-  let raw = null, queued = null, rawRead = undefined;
+  // A preview op (and the preview's buy) answers the whole fresh state: that becomes the raw body too.
+  let raw = null, queued = null, rawRead = undefined, buyHadState = false;
+  const fresh = (res) => !!(res && res.ok === true && Array.isArray(res.tabs));
   const request = (op, body, idem) => {
     if (op === 'shop-state' && queued) { const b = queued; queued = null; raw = b; return Promise.resolve(b); }
-    return Promise.resolve(host.request(op, body, idem)).then((res) => { if (op === 'shop-state') raw = res; return res; });
+    return Promise.resolve(host.request(op, body, idem)).then((res) => {
+      if (op === 'shop-state' || fresh(res)) raw = res;
+      if (op === 'shop-buy') buyHadState = fresh(res);
+      return res;
+    });
   };
   const shop = createShop({ request, newIdem, tab: init.tab || null, wears: init.wears, rain: init.rainV2 === true });
   const guard = createPressGuard({ now, focused: typeof doc.hasFocus === 'function' ? doc.hasFocus() : true });
   const view = createView(doc, { t, sheet: init.sheet === true, base, platform });
   installFront(view, { t, locale: init.locale });
-  installLive(view, { t, base, motion, gentle: !!init.gentle, doc, win, onPop: (b) => sfx.pop(b) });
+  const sound = createSound({ muted: motion === 'off' || init.muted === true, win });
+  installLive(view, { t, base, motion, gentle: !!init.gentle, doc, win, onPop: (b) => { sound.unlock(); sound.pop(b); } });
+  const fx = createFx({ root: view.root, doc, base, motion, gentle: !!init.gentle, sound, wallet: () => view.wallet });
   root.replaceChildren(view.root);
-  const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title',
-    pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false, spot: null, freshStamp: 0, fog2Try: null };
+  const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title', busy: false, idem: null,
+    pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false, spot: null, freshStamp: 0, fog2Try: null, nudge: null };
 
   const st = () => shop.state();
   const pv = () => { if (raw !== rawRead) { rawRead = raw; ui.pv = readPreview(raw); } return ui.pv; };
@@ -60,7 +73,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     const room = fxe ? fxRoom(fxe, { sp, t, pv: p, asking: ui.asking, pending: ui.fxPending, note: ui.fxNote, away: away(fxe.id) })
       : roomModel(card, { sp, t, wearing: ui.wearing, asking: ui.asking, pv: p, row: card && (locate(s, card.itemId, p) || {}).row, away: !!card && away(card.itemId) });
     view.paint({ status: shop.status(), state: s, sp, tier: s ? s.tier : 0, tabs: sheetTabs(shop.tabs(), p), tab: ui.tab, query: ui.query,
-      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, fog2Try: ui.fog2Try, platform, hereOnly: ui.hereOnly, room }, on);
+      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, fog2Try: ui.fog2Try, nudge: ui.nudge, platform, hereOnly: ui.hereOnly, room }, on);
     const to = ui.focusTo;
     ui.focusTo = null;
     if (to === 'title') view.title.focus();
@@ -70,10 +83,66 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   /** A new confirm step: presses that began before it never count, and focus sits on a heading, never an action. */
   const step = () => { guard.card(); ui.focusTo = 'room'; };
 
+  /** The receipt's wallet goes to the host, except in the preview: preview Sparkles are never the real wallet's. */
+  const wallet = (sp) => { if (!pv().preview) host.wallet(sp); };
+  /** The buy moment: stars leave the wallet and land on the fitting room, then the OWNED stamp lands with its knock. */
+  function celebrate(id) {
+    const e = locate(st(), id, pv()), paid = e && e.row.owned ? e.row.owned.paidSp : 0;
+    const wait = paid > 0 ? fx.flyOut(view.room.children[0], paid) : 0;
+    const stamp = () => { ui.sold = id; sound.thud(); paint(); if (motion !== 'off') later(() => { if (ui.sold === id) { ui.sold = null; paint(); } }, SOLD_MS); };
+    if (wait) later(stamp, wait); else stamp();
+  }
+  function showNudge(text, id = null) {
+    const n = ui.nudge = { text, id };
+    later(() => { if (ui.nudge === n) { ui.nudge = null; paint(); } }, NUDGE_MS);
+  }
+  /** After a gain: the goal reached, else the first thing that just became affordable (the mockup's nudgeAfter). */
+  function nudgeAfter(before) {
+    const s = st(), p = pv(), sp = shop.sp(), g = goalEntry(s, p);
+    if (g && !g.row.owned && before < g.row.priceSp && sp >= g.row.priceSp) { showNudge(t('shop_sheet_nudge_goal', labelOf(g, t)), g.id); return; }
+    const hit = rowsOf(s, p).find((e) => buyable(e, { sp, tier: s.tier, pv: p }) && e.row.priceSp > before);
+    if (hit) showNudge(t('shop_sheet_nudge_can', labelOf(hit, t)), hit.id);
+  }
+  /** A body the page already holds (an op's answer) becomes the state; without one, ask again. */
+  async function adopt(res) { if (fresh(res)) queued = res; return shop.load(); }
+  /** One preview op (shop-equip, shop-gift, shop-stamp, shop-goal): the answer is the fresh state, or a refusal line. */
+  async function op(name, body) {
+    if (ui.busy) return null;
+    ui.busy = true;
+    const res = await request(name, body);
+    ui.busy = false;
+    if (res && res.ok === true) await adopt(res);
+    else if (ui.fx) ui.fxNote = t(refusalKey(res)); else showNudge(t(refusalKey(res)));
+    paint();
+    return res && res.ok === true ? res : null;
+  }
+  /** A buy the page makes itself: an effect row, or the stamp card's coupon on any 120 row. One idem per pick. */
+  async function directBuy(id, coupon) {
+    const s = st();
+    if (ui.fxPending || !locate(s, id, pv())) return;
+    ui.fxPending = true; ui.fxNote = null; paint();
+    ui.idem = ui.idem || newIdem();
+    const res = await request('shop-buy', { itemId: id, catalogVersion: s.catalogVersion, week: s.week, ...(coupon ? { coupon: true } : {}) }, ui.idem);
+    ui.fxPending = false; ui.asking = false;
+    if (res && res.ok === true && res.itemId === id) {
+      ui.idem = null;
+      await adopt(res);
+      if (Number.isFinite(Number(res.sp))) wallet(Number(res.sp));
+      step(); paint(); celebrate(id);
+      return;
+    }
+    if (res && (res.reason === 'owned' || res.reason === 'stock_changed' || res.reason === 'catalog_changed')) await adopt(res.state || null);
+    if (ui.fx) ui.fxNote = t(refusalKey(res)); else showNudge(t(refusalKey(res)));
+    step(); paint();
+  }
+
   function apply(ch) {
     if (!ch) return;
-    for (const e of ch.effects || []) if (e.type === 'wallet') host.wallet(e.sp);
-    if (ch.owned) { ui.asking = false; ui.sold = ch.owned; step(); if (motion !== 'off') later(() => { if (ui.sold === ch.owned) { ui.sold = null; paint(); } }, SOLD_MS); }
+    for (const e of ch.effects || []) if (e.type === 'wallet') wallet(e.sp);
+    if (ch.owned) {
+      ui.asking = false; step();
+      if (pv().preview && !buyHadState) adopt(null).then(() => { paint(); celebrate(ch.owned); });
+    }
     if ('card' in ch && (!ch.card || ch.card.face !== 'buy')) ui.asking = false;
     if (ch.close) host.close(ch.close.reason);
     if (ch.signIn) host.signIn();
@@ -83,6 +152,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     }
     if (ch.buy) ch.buy.then(apply);
     paint();
+    if (ch.owned && !(pv().preview && !buyHadState)) celebrate(ch.owned);
   }
 
   /** Open an item in the fitting room; the picked item again puts it back. An effect row is the sheet's own (ui.fx);
@@ -90,7 +160,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   function pick(id) {
     const open = shop.card(), was = ui.fx || (open && open.itemId);
     if (open) shop.intent({ type: 'back' });
-    ui.fx = null; ui.asking = false; ui.sold = null; ui.fxNote = null;
+    ui.fx = null; ui.asking = false; ui.sold = null; ui.fxNote = null; ui.idem = null; ui.fog2Try = null;
     const at = was === id ? null : locate(st(), id, pv());
     if (at && at.fx) { ui.fx = at.id; step(); }
     else if (at) {
@@ -104,7 +174,16 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     if (main && !viaKey && !guard.ready()) return;   // a fresh step: a click lands only after it has been up a moment
     if (id === 'buy' || id === 'claim') { ui.asking = true; step(); paint(); return; }
     if (id === 'cancel') { ui.asking = false; step(); paint(); return; }
-    if (ui.fx) { if (id === 'back') { ui.fx = null; ui.asking = false; step(); paint(); } return; }
+    const picked = ui.fx || (shop.card() || {}).itemId, e = picked && locate(st(), picked, pv());
+    if (id === 'yesclaim') return void directBuy(picked, true);
+    if (id === 'save') return void op('shop-goal', { itemId: picked });
+    if (ui.fx) {
+      if (id === 'yes') return void directBuy(picked, false);
+      const wear = { fxwear: [e.fx, picked], takeoff: [e.fx, null], mixon: ['mix', picked], mixoff: ['mix', null] }[id];
+      if (wear) { sound.bell(sound.NOTES[3], 0.08, 0.6); return void op('shop-equip', { slot: wear[0], itemId: wear[1] }); }
+      if (id === 'back') { ui.fx = null; ui.asking = false; ui.fog2Try = null; step(); paint(); }
+      return;
+    }
     if (id === 'yes' || id === 'wear') return apply(shop.intent({ type: 'select' }));
     ui.asking = false;
     apply(shop.intent({ type: 'back' }));
@@ -113,8 +192,31 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     tab(id) { ui.tab = id; paint(); },
     pick, act,
     spotlight(id) { ui.spot = id; if ((ui.fx || (shop.card() || {}).itemId) !== id) pick(id); else paint(); },
-    gift() {}, stamp() {},
-    fog2(id) { ui.fog2Try = id; paint(); },
+    /** The Monday gift: the stars puff out of the box and count into the wallet. */
+    async gift(viaKey) {
+      if (!viaKey && !guard.ready()) return;
+      const before = shop.sp();
+      if (!(await op('shop-gift', {}))) return;
+      const gain = shop.sp() - before;
+      view.walletShown(before);
+      fx.fly(view.giftBox, gain, (k) => view.walletShown(Math.round(before + gain * k)));
+      nudgeAfter(before);
+      if (ui.nudge) paint();
+    },
+    async stamp(viaKey) {
+      if (!viaKey && !guard.ready()) return;
+      ui.freshStamp = (pv().stamps || {}).day || 0;
+      const ok = await op('shop-stamp', {});
+      ui.freshStamp = 0;
+      if (ok) sound.thud();
+    },
+    /** Two-tone's second colour: worn when Two-tone is owned, else only tried on here. */
+    fog2(id) {
+      const tw = locate(st(), 'fx.fog.twotone', pv());
+      if (tw && tw.row.owned) { ui.fog2Try = null; op('shop-equip', { slot: 'fog2', itemId: id }); } else { ui.fog2Try = id; paint(); }
+    },
+    nudgeView(id) { ui.nudge = null; ui.tab = (locate(st(), id, pv()) || {}).group || ui.tab; if ((ui.fx || (shop.card() || {}).itemId) !== id) pick(id); else paint(); },
+    nudgeClose() { ui.nudge = null; paint(); },
     close: () => host.close('back'),
     signIn: () => host.signIn(),
   };
@@ -143,13 +245,14 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     e.preventDefault();
     if (!guard.up(keyName(e))) return;
     const b = doc.activeElement;
-    if (b && b.tagName === 'BUTTON' && !b.disabled && view.root.contains(b) && typeof b.onpress === 'function') b.onpress(true);
+    if (b && b.tagName === 'BUTTON' && !b.disabled && view.root.contains(b) && typeof b.onpress === 'function') { sound.unlock(); b.onpress(true); }
   };
   // Pointer clicks: a key's synthetic click (detail 0) never acts, keys go through the guarded release above.
   view.root.addEventListener('click', (e) => {
     let b = e.target;
     while (b && b !== view.root && b.tagName !== 'BUTTON') b = b.parentNode;
     if (!b || b === view.root || b.disabled || typeof b.onpress !== 'function' || e.detail === 0) return;
+    sound.unlock();   // the only door to sound: a click
     b.onpress(false);
   });
   view.search.addEventListener('input', () => { ui.query = view.search.value || ''; paint(); });

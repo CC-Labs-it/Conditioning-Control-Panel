@@ -123,6 +123,7 @@ export const SHEET_LEX = {
   shop_sheet_nudge_can: 'You can afford {0} now.',
   shop_sheet_view: 'View',
   shop_sheet_dismiss: 'Dismiss',
+  shop_sheet_refused: 'That did not go through.',
   // where things show
   shop_sheet_works_here: 'Works here',
   shop_sheet_works_on: 'Works on',
