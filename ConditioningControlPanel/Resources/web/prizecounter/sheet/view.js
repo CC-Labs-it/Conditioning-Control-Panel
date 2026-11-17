@@ -5,7 +5,8 @@
 import { TAB_ICONS, LOCK } from '../hud/icons.js';
 import { tabKey } from '../state/strings.js';
 import { placeMark, placesOf, isHere, awayLine, PLACES } from './wire.js';
-import { sections, statusOf, statusText, locate, tabLabelKey, nameOf, howOf, FEATURED } from './model.js';
+import { sections, statusOf, statusText, locate, tabLabelKey, tabShortKey, nameOf, howOf, FEATURED } from './model.js';
+import { tabEmblem } from './tab-art.js';
 import { itemArt } from './pictures.js';
 import { sectionEmblem, lendEmblems } from './section-art.js';
 import { PREVIEW_SLIP } from './strings.js';
@@ -93,7 +94,10 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     tabs.replaceChildren(...v.tabs.map((id) => {
       const b = button('s-tab' + (id === 'prime' ? ' prime' : ''), null, 'tab:' + id, () => on.tab(id));
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === v.tab));
-      b.append(el('span', null, t(tabLabelKey(id))));
+      const emb = tabEmblem(doc, id), short = tabShortKey(id);   // Karts, Chess, Bubbles and effects, Accessories wear a small emblem
+      if (emb) b.append(emb);
+      b.append(el('span', short ? 'lbl-long' : null, t(tabLabelKey(id))));
+      if (short) { const s = el('span', 'lbl-short', t(short)); s.setAttribute('aria-hidden', 'true'); b.append(s); b.setAttribute('aria-label', t(tabLabelKey(id))); }
       if (id === FEATURED && v.badge) { const c = el('span', 'cnt', String(v.badge)); c.setAttribute('aria-label', t('shop_sheet_waiting', v.badge)); b.append(c); }
       return TAB_TIPS[id] ? tips.bind(b, t(TAB_TIPS[id])) : b;
     }));

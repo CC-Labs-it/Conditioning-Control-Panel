@@ -70,7 +70,7 @@ test('a card tip says why it cannot be bought; the tabs, signs and mechanics all
   assert.match(tipText(e, t, { kind: 'prime' }), /Prime members can buy it/);
   assert.match(tipText(e, t, { kind: 'todo', prime: true }), /Not on sale yet/);
   for (const k of [...Object.values(TAB_TIPS), ...Object.values(SIGN_TIPS), ...Object.values(HELP)]) assert.notEqual(t(k), k, k);
-  for (const id of ['featured', 'effects', 'games', 'you', 'prime', 'backroom', 'owned']) assert.ok(TAB_TIPS[id], id);
+  for (const id of ['featured', 'kart', 'chess', 'effects', 'accessories', 'games', 'you', 'prime', 'backroom', 'owned']) assert.ok(TAB_TIPS[id], id);
 });
 
 test('boards and Emi explain the item, the desktop game and how to wear it', () => {

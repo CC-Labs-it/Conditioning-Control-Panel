@@ -165,6 +165,9 @@ export function installJuice(view, { motion = 'full', gentle = false, doc, win =
   function swap(dir) {
     const tb = q(root, '.s-tab[aria-selected="true"]');
     play(tb, [{ scale: `${1 - 0.1 * A} ${1 - 0.06 * A}` }, { scale: `${1 + 0.08 * A} ${1 + 0.1 * A}`, offset: 0.45 }, { scale: `${1 - 0.02 * A}`, offset: 0.75 }, { scale: '1' }], TIMING.tabPopMs, { easing: EASE.inOut });
+    // its emblem (sheet/tab-art.js) hops and wiggles once, a beat behind the tab, and lands back where it rests
+    const emb = tb && q(tb, '.tab-emb');
+    if (emb) play(emb, [{ translate: '0 0', rotate: '0deg' }, { translate: `0 ${-5 * A}px`, rotate: `${-12 * A}deg`, offset: 0.4 }, { translate: '0 0', rotate: `${5 * A}deg`, offset: 0.7 }, { translate: '0 0', rotate: '0deg' }], TIMING.tabPopMs + 120, { delay: 40, easing: EASE.inOut });
     Array.from(view.list.children).slice(0, 6).forEach((c, i) => play(c,
       [{ translate: `${dir * TIMING.swapShift * A}px 0`, opacity: 0 }, { translate: `${-dir * 3 * A}px 0`, opacity: 1, offset: 0.75 }, { translate: '0 0', opacity: 1 }],
       TIMING.swapMs, { delay: i * TIMING.swapStep }));

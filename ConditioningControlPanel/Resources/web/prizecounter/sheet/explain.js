@@ -90,7 +90,8 @@ export const ITEM = {
 
 /** The top tabs (sheet/model.js sheetTabs ids). */
 export const TAB_TIPS = {
-  featured: 'shop_sheet_tip_tab_featured', effects: 'shop_sheet_tip_tab_effects', games: 'shop_sheet_tip_tab_games', you: 'shop_sheet_tip_tab_you',
+  featured: 'shop_sheet_tip_tab_featured', kart: 'shop_sheet_tip_tab_kart', chess: 'shop_sheet_tip_tab_chess', effects: 'shop_sheet_tip_tab_effects',
+  accessories: 'shop_sheet_tip_tab_accessories', games: 'shop_sheet_tip_tab_games', you: 'shop_sheet_tip_tab_you',
   prime: 'shop_sheet_tip_tab_prime', backroom: 'shop_sheet_tip_tab_backroom', owned: 'shop_sheet_tip_tab_owned',
   'rain-clothes': 'shop_sheet_tip_rain_clothes', 'rain-hair': 'shop_sheet_tip_rain_hair',
 };
@@ -262,6 +263,9 @@ export const EXPLAIN_LEX = {
   shop_sheet_tip_tab_effects: 'Looks for the effects on your desktop screen',
   shop_sheet_tip_tab_games: 'Karts for Racing Thoughts, looks for chess',
   shop_sheet_tip_tab_you: 'Profile frames, and hats and toys for EMI\'s desk',
+  shop_sheet_tip_tab_kart: 'Kart skins for Racing Thoughts',
+  shop_sheet_tip_tab_chess: 'Piece looks, finishes and boards for chess',
+  shop_sheet_tip_tab_accessories: 'Profile frames, and hats and toys for EMI\'s desk',
   shop_sheet_tip_tab_prime: 'Looks only Prime members can buy',
   shop_sheet_tip_tab_backroom: 'New effect options, race tracks and a Discord role',
   shop_sheet_tip_tab_owned: 'Everything you own, to wear again',
