@@ -391,47 +391,49 @@ namespace ConditioningControlPanel.Controls.HelpLoops
         }
     }
 
-    /// <summary>Lights Down: the room falls away while you watch; look away and the lights stutter back.</summary>
+    /// <summary>Lights Down (reworked 2026-11-17): a full-screen video, its edges dim while the mouse
+    /// rests; the mouse moves and the dim pulls back into the edges.</summary>
     internal sealed class SuperLightsDownLoop : HelpLoopScene
     {
-        private static readonly Rect Video = new(150, 56, 180, 104);
+        private static readonly Rect Stage = new(0, 0, LoopFrame.StageWidth, LoopFrame.StageHeight);
         private static readonly (double T, double V)[] Dark =
+            { (0, 0), (1200, 0), (4200, 1), (4500, 1), (4850, 0), (6300, 0), (7200, 0) };
+        private static readonly (double, double, double)[] CursorPath =
+            { (4300, 352, 206), (4900, 268, 150), (5500, 318, 118), (7200, 318, 118) };
+        // The edge dim: clear in the middle, soft into the corners. The reach rides the level, so it
+        // slides back into the edges as it fades (the real effect's retract).
+        private static readonly GradientStopCollection DimStops = LoopPalette.Freeze(new GradientStopCollection
         {
-            (0, 0), (900, 0), (4300, .86), (4600, .86), (4700, .3), (4800, .7), (4950, .2), (5100, .55),
-            (5300, .1), (5500, .3), (5700, 0), (7200, 0),
-        };
-        private static readonly Brush Black = LoopPalette.Solid("#05030b");
+            new GradientStop(Color.FromArgb(0, 5, 3, 11), 0),
+            new GradientStop(Color.FromArgb(0, 5, 3, 11), 0.62),
+            new GradientStop(Color.FromArgb(200, 5, 3, 11), 1),
+        });
 
         public override string Id => "SuperLightsDown";
         public override double DurationMs => 7200;
-        public override double StillMs => 3600;
+        public override double StillMs => 3900;
         public override IReadOnlyList<HelpLoopStep> Steps { get; } = SuperLoopKit.Steps("help_loop_superlightsdown", 200, 1200, 4500, 6600);
 
         public override void Draw(LoopFrame f, double t)
         {
             f.Desktop();
             var dc = f.Front;
-            f.Photo(dc, Video, PhotoLook.Sea);
-            var play = new StreamGeometry();
-            using (var ctx = play.Open())
-            {
-                ctx.BeginFigure(new Point(232, 94), true, true);
-                ctx.LineTo(new Point(254, 108), true, false);
-                ctx.LineTo(new Point(232, 122), true, false);
-            }
-            using (f.Fade(dc, .8)) dc.DrawGeometry(f.P.White, null, play);
+            f.Photo(dc, Stage, PhotoLook.Sea);
 
-            double d = Schedule(Dark, t);
+            double d = EaseInOut(Schedule(Dark, t));
             if (d > 0.005)
             {
-                var room = new CombinedGeometry(GeometryCombineMode.Exclude,
-                    new RectangleGeometry(new Rect(0, 0, LoopFrame.StageWidth, LoopFrame.StageHeight)),
-                    new RectangleGeometry(Video, 6, 6));
-                using (f.Fade(dc, d)) dc.DrawGeometry(Black, null, room);
+                double grow = 1.18 - 0.22 * d;   // pulled back = the clear middle reaches the edges
+                var dim = new RadialGradientBrush(DimStops) { RadiusX = 0.5 * grow * 1.12, RadiusY = 0.5 * grow * 1.28 };
+                dim.Freeze();
+                using (f.Fade(dc, d)) dc.DrawRectangle(dim, null, Stage);
             }
 
-            double away = EaseInOut(Seg(t, 4350, 4650)) * (1 - EaseInOut(Seg(t, 6300, 6700)));
-            f.Eye(240, 214, 1, away, -(1 - away), 1.25);
+            if (t > 4300)
+            {
+                var c = Path(CursorPath, t);
+                f.Cursor(c.X, c.Y, false);
+            }
         }
     }
 

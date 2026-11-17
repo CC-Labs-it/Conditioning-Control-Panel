@@ -67,7 +67,15 @@ namespace ConditioningControlPanel.Features
                 ChkVideoLoopShort.IsChecked = s.MandatoryVideoLoopShortClips;
                 ChkVideoFillShort.IsChecked = s.MandatoryVideoFillShortWithOthers;
                 ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
-                ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
+                // Floating videos have no mini game (owner, 2026-11-17): it reads as off and its rows
+                // grey out while Floating is the pick. Only the view changes, never the saved setting.
+                ChkMiniGame.IsChecked = VideoShow.MiniGameShownOn(s.AttentionChecksEnabled, s.MandatoryVideoFloating);
+                bool miniGameEditable = VideoShow.MiniGameEditable(s.MandatoryVideoFloating);
+                // The parents carry the grey-out: SessionLock owns the toggle's own IsEnabled.
+                RowMiniGame.IsEnabled = miniGameEditable;
+                SectionMiniGame.IsEnabled = miniGameEditable;
+                RowMiniGame.Opacity = SectionMiniGame.Opacity = miniGameEditable ? 1.0 : 0.5;
+                TxtMiniGameFloatNote.Visibility = miniGameEditable ? Visibility.Collapsed : Visibility.Visible;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
                 ChkRandomize.IsChecked = s.RandomizeAttentionTargets;
