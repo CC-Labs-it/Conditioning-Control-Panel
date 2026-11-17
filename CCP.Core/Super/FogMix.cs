@@ -4,8 +4,8 @@ namespace ConditioningControlPanel.SuperCore;
 /// Two-tone fog (owner, 2026-11-17: "mix 2 colors, provided we can have a cool visual eff on the fog"):
 /// the second colour moves through the first like ink in water. A few soft blobs drift on their own
 /// slow paths over a plane that slowly bends, so they stretch into bands that fold; where they meet the
-/// colour walks the hue wheel the short way (pink to mint passes violet), so the seam glows instead of
-/// going grey. Pure maths in screen units (height = 1); the pink filter and Steam draw it.
+/// colour walks the hue wheel the short way in OKLCH (pink to mint passes violet), so the seam glows instead
+/// of going grey or brown, and each colour keeps a clean region of its own. Pure maths in screen units (height = 1); the pink filter and Steam draw it.
 /// </summary>
 public static class FogMix
 {
@@ -45,35 +45,122 @@ public static class FogMix
         return k * k * (3 - 2 * k);
     }
 
-    /// <summary>The ramp from <paramref name="a"/> to <paramref name="b"/>: hue the short way round, saturation
-    /// and value straight across, then lifted toward white wherever the walk is darker than the two ends
-    /// (pink to mint passes blue, which would read as a dark outline). Ends are exact. A grey end borrows
-    /// the other end's hue.</summary>
+    /// <summary>Where along the ramp the walk between the two colours happens: each end holds its own colour
+    /// for this share, so the fog reads as two clean colours with a seam, not one averaged tint. Kept moderate:
+    /// the drawn grid is stretched, and too sharp a seam would let the stretch average the two in RGB again.</summary>
+    public const double WalkLow = 0.16, WalkHigh = 0.84;
+
+    /// <summary>The most the middle of a long hue walk gives up of its chroma (opposite colours), 0..1.</summary>
+    public const double MidSoften = 0.28;
+
+    /// <summary>The ramp from <paramref name="a"/> to <paramref name="b"/> in OKLCH (a perceptual space, Ottosson's
+    /// OKLab in polar form): lightness and chroma straight across, hue the short way round, so the seam keeps its
+    /// colour and lightness instead of going brown or grey the way an RGB or HSV average does (teal and amber met
+    /// as a murky brown and dark green, 2026-11-17). Each end holds its colour for a stretch (<see cref="WalkLow"/>,
+    /// <see cref="WalkHigh"/>); a colour past the screen's gamut loses chroma, never hue or lightness. Ends are
+    /// exact. A grey end borrows the other end's hue. The page preview (prizecounter sheet/fogmix.js) runs the
+    /// same maths.</summary>
     public static (byte R, byte G, byte B)[] Ramp((byte R, byte G, byte B) a, (byte R, byte G, byte B) b)
     {
         var ramp = new (byte R, byte G, byte B)[RampSize];
-        var (ha, sa, va) = ToHsv(a);
-        var (hb, sb, vb) = ToHsv(b);
-        if (sa < 0.05) ha = hb;
-        if (sb < 0.05) hb = ha;
+        var (la, ca, ha) = ToOklch(a);
+        var (lb, cb, hb) = ToOklch(b);
+        if (ca < 0.02) ha = hb;
+        if (cb < 0.02) hb = ha;
         double dh = hb - ha;
         if (dh > 180) dh -= 360;
         if (dh < -180) dh += 360;
+        // Two colours far apart on the wheel pass a third on the way (pink to mint, sky to amber): the middle of
+        // that walk is softened a little so the seam stays a seam and never reads as a third colour of its own.
+        double far = Math.Clamp((Math.Abs(dh) - 90) / 90, 0, 1);
         for (int i = 0; i < RampSize; i++)
         {
-            double k = i / (double)(RampSize - 1);
-            var c = FromHsv(ha + dh * k, sa + (sb - sa) * k, va + (vb - va) * k);
-            double want = Luma(a) + (Luma(b) - Luma(a)) * k, have = Luma(c);
-            if (have < want && have < 1)
-            {
-                double m = (want - have) / (1 - have);
-                c = ((byte)Math.Round(c.R + (255 - c.R) * m), (byte)Math.Round(c.G + (255 - c.G) * m), (byte)Math.Round(c.B + (255 - c.B) * m));
-            }
-            ramp[i] = c;
+            double u = Walk(i / (double)(RampSize - 1));
+            double soften = 1 - MidSoften * far * Math.Sin(Math.PI * u);
+            ramp[i] = FromOklch(la + (lb - la) * u, (ca + (cb - ca) * u) * soften, ha + dh * u);
         }
         ramp[0] = a;
         ramp[RampSize - 1] = b;
         return ramp;
+    }
+
+    /// <summary>How far along the walk a ramp position (0..1) is: 0 before <see cref="WalkLow"/>, 1 after
+    /// <see cref="WalkHigh"/>, smooth between.</summary>
+    public static double Walk(double k)
+    {
+        double x = Math.Clamp((k - WalkLow) / (WalkHigh - WalkLow), 0, 1);
+        return x * x * (3 - 2 * x);
+    }
+
+    /// <summary>sRGB to OKLCH: lightness 0..1, chroma (about 0..0.37), hue in degrees.</summary>
+    public static (double L, double C, double H) ToOklch((byte R, byte G, byte B) c)
+    {
+        var (l, a, b) = ToOklab(c);
+        double h = Math.Atan2(b, a) * 180 / Math.PI;
+        if (h < 0) h += 360;
+        return (l, Math.Sqrt(a * a + b * b), h);
+    }
+
+    /// <summary>OKLCH to sRGB. A colour the screen cannot show keeps its lightness and hue and loses chroma
+    /// until it fits.</summary>
+    public static (byte R, byte G, byte B) FromOklch(double l, double c, double h)
+    {
+        double rad = h * Math.PI / 180, cos = Math.Cos(rad), sin = Math.Sin(rad);
+        l = Math.Clamp(l, 0, 1);
+        c = Math.Max(0, c);
+        var rgb = OklabToLinear(l, c * cos, c * sin);
+        if (!InGamut(rgb))
+        {
+            double lo = 0, hi = c;
+            for (int i = 0; i < 18; i++)
+            {
+                double mid = (lo + hi) / 2;
+                if (InGamut(OklabToLinear(l, mid * cos, mid * sin))) lo = mid; else hi = mid;
+            }
+            rgb = OklabToLinear(l, lo * cos, lo * sin);
+        }
+        return (Encode(rgb.R), Encode(rgb.G), Encode(rgb.B));
+    }
+
+    public static (double L, double A, double B) ToOklab((byte R, byte G, byte B) c)
+    {
+        double r = Linear(c.R), g = Linear(c.G), b = Linear(c.B);
+        double l = Math.Cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+        double m = Math.Cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+        double s = Math.Cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+        return (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+            1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+            0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s);
+    }
+
+    private static (double R, double G, double B) OklabToLinear(double l, double a, double b)
+    {
+        double l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+        double m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+        double s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+        double ll = l_ * l_ * l_, mm = m_ * m_ * m_, ss = s_ * s_ * s_;
+        return (4.0767416621 * ll - 3.3077115913 * mm + 0.2309699292 * ss,
+            -1.2684380046 * ll + 2.6097574011 * mm - 0.3413193965 * ss,
+            -0.0041960863 * ll - 0.7034186147 * mm + 1.7076147010 * ss);
+    }
+
+    private static bool InGamut((double R, double G, double B) c)
+    {
+        const double e = 1e-4;
+        return c.R >= -e && c.R <= 1 + e && c.G >= -e && c.G <= 1 + e && c.B >= -e && c.B <= 1 + e;
+    }
+
+    private static double Linear(byte v)
+    {
+        double c = v / 255.0;
+        return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+    }
+
+    private static byte Encode(double c)
+    {
+        c = Math.Clamp(c, 0, 1);
+        double s = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.Pow(c, 1 / 2.4) - 0.055;
+        return (byte)Math.Round(Math.Clamp(s, 0, 1) * 255);
     }
 
     /// <summary>Rough brightness 0..1 as the eye sees it (Rec. 709 weights on the stored values).</summary>
