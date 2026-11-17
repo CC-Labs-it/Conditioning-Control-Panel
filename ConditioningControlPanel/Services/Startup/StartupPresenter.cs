@@ -367,6 +367,7 @@ namespace ConditioningControlPanel.Services.Startup
             // routed away from the launcher was handed straight back by Route, which opened it
             // owned by a MainWindow sitting in the tray.
             LauncherHolding = Held,
+            CounterSheetUp = SafeCounterSheetUp(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = DateTime.UtcNow,
         };
@@ -386,6 +387,11 @@ namespace ConditioningControlPanel.Services.Startup
         /// <c>AnyHostActive</c>, which also counts the For You feed, the Loom editor, the codex
         /// and the Bureau - windows people leave open for hours, and the park below has no
         /// clock.</summary>
+        private static bool SafeCounterSheetUp()
+        {
+            try { return PrizeCounter.PrizeCounterHostService.IsSheetOpen; } catch { return false; }
+        }
+
         private static bool SafeGameHostUp()
         {
             try { return ChaosWebViewHost.AnyGameActive; } catch { return false; }

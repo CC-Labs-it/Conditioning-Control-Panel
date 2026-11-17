@@ -113,8 +113,8 @@ public class FlickerDeckTests
         {
             FlickerDeck.Step(s, Dt, true, MotionLevel.Full);
             var p = FlickerDeck.Sample(s, MotionLevel.Full);
-            // Juice: the opening half pops a few percent wide, the press and the landing nudge the scale.
-            Assert.InRange(p.ScaleX, FlickerDeck.MinScaleX, 1 + FlickerDeck.FlipOvershoot + 0.002);
+            // The turn never draws wider than the card (the press's anticipation aside); the landing nudges the scale.
+            Assert.InRange(p.ScaleX, FlickerDeck.MinScaleX, 1 + FlickerDeck.AnticipationSquash);
             Assert.InRange(p.Scale, 1 - FlickerDeck.LandAmp, 1 + FlickerDeck.LiftScale + 1e-9);
             min = Math.Min(min, p.ScaleX);
         }
@@ -129,11 +129,11 @@ public class FlickerDeckTests
         s.Flips = 4;
         s.SinceFlip = 99;
         s.Clock = 0.37;
-        var a = Math.Pow(4.0 / 5, 1.4) * 0.15;
-        Assert.Equal(Math.Sin(0.37 * (9 + 1.3)) * a, FlickerDeck.Wobble(s), 9);
-        // After a flip the 40 rad/s ring rides on top and is gone after 0.7 s.
+        var a = Math.Pow(4.0 / 5, 1.4) * FlickerDeck.WobbleMaxRad;
+        Assert.Equal(Math.Sin(0.37 * (FlickerDeck.WobbleRate + FlickerDeck.WobbleRatePerIndex)) * a, FlickerDeck.Wobble(s), 9);
+        // After a flip a short ring rides on top and is gone after RingSec.
         s.SinceFlip = 0.1;
-        Assert.Equal(Math.Sin(0.37 * 10.3) * a + Math.Sin(0.1 * 40) * a * 0.9 * (1 - 0.1 / 0.7), FlickerDeck.Wobble(s), 9);
+        Assert.Equal(Math.Sin(0.37 * (FlickerDeck.WobbleRate + FlickerDeck.WobbleRatePerIndex)) * a + Math.Sin(0.1 * FlickerDeck.RingRadPerSec) * a * FlickerDeck.RingShare * (1 - 0.1 / FlickerDeck.RingSec), FlickerDeck.Wobble(s), 9);
     }
 
     [Fact]
@@ -200,7 +200,10 @@ public class FlickerDeckTests
         Assert.False(FlickerDeck.Applies(true, true, true, false, true, false, false, false));  // remix
         Assert.False(FlickerDeck.Applies(true, true, true, false, false, true, false, false));  // natasha
         Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, true, false));   // owned drag keeps the card: a tap flips
-        Assert.False(FlickerDeck.Applies(true, true, true, false, false, false, false, true));  // owned shatter
+        // Owned Shatter no longer stands the Deck down: a lit star with Shatter on showed no
+        // Deck at all (7.3.0 testers). The card flips; its last click breaks the Deck way.
+        Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, false, true));
+        Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, true, true));
     }
 
     [Fact]

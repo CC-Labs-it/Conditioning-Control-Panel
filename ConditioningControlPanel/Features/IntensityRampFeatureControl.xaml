@@ -20,6 +20,8 @@
                         Background="{StaticResource SectionHueStudioBrush}"/>
                 <StackPanel Margin="16,8,16,8">
 
+                    <feat:OptionSection Key="ramp.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
+
                     <!-- Enable -->
                     <Grid Height="34">
                         <Grid.ColumnDefinitions>
@@ -44,7 +46,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str setting_duration}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderDuration" Minimum="10" Maximum="180" Value="60"
+                        <Slider Grid.Column="1" x:Name="SliderDuration" feat:OptionSection.Setting="RampDurationMinutes" Minimum="10" Maximum="180" Value="60"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderDuration_Changed"/>
                         <TextBlock Grid.Column="2" x:Name="TxtDuration" Text="60 min" HorizontalAlignment="Right"
@@ -65,7 +67,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_mode}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbRampMode"
+                        <ComboBox Grid.Column="1" x:Name="CmbRampMode" feat:OptionSection.Setting="RampMode"
                                   Height="26" MaxWidth="220" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   SelectionChanged="CmbRampMode_Changed">
                             <ComboBoxItem Content="{loc:Str ramp_mode_multiplier}" Tag="Multiplier"/>
@@ -82,7 +84,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str setting_multiplier}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderMultiplier" Minimum="1" Maximum="3" Value="1.5"
+                        <Slider Grid.Column="1" x:Name="SliderMultiplier" feat:OptionSection.Setting="SchedulerMultiplier" Minimum="1" Maximum="3" Value="1.5"
                                 SmallChange="0.1" LargeChange="0.5"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderMultiplier_Changed"/>
@@ -103,7 +105,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_start}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderRangeStart" Minimum="0" Maximum="300" Value="100"
+                        <Slider Grid.Column="1" x:Name="SliderRangeStart" feat:OptionSection.Setting="RampStartPercent" Minimum="0" Maximum="300" Value="100"
                                 SmallChange="5" LargeChange="25" TickFrequency="5" IsSnapToTickEnabled="True"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderRangeStart_Changed"/>
@@ -121,7 +123,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_end}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderRangeEnd" Minimum="0" Maximum="300" Value="100"
+                        <Slider Grid.Column="1" x:Name="SliderRangeEnd" feat:OptionSection.Setting="RampEndPercent" Minimum="0" Maximum="300" Value="100"
                                 SmallChange="5" LargeChange="25" TickFrequency="5" IsSnapToTickEnabled="True"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderRangeEnd_Changed"/>
@@ -130,7 +132,9 @@
                                    Foreground="{DynamicResource PinkBrush}"/>
                     </Grid>
 
-                    <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
+                    </feat:OptionSection>
+
+                    <feat:OptionSection Key="ramp.options" Title="{loc:Str studio_section_options}" Theme="Timing">
 
                     <!-- Ramp curve.
                          THE ONLY OWNED CONTROL IN THIS POPUP, and it is not obvious why.
@@ -151,7 +155,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_curve}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbRampCurve" feat:SessionLock.Owned="True"
+                        <ComboBox Grid.Column="1" x:Name="CmbRampCurve" feat:OptionSection.Setting="RampCurve" feat:SessionLock.Owned="True"
                                   Height="26" MaxWidth="220" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   SelectionChanged="CmbRampCurve_Changed">
                             <ComboBoxItem Content="{loc:Str ramp_curve_linear}" Tag="Linear"/>
@@ -206,6 +210,8 @@
                                   Checked="ChkEndAt_Changed" Unchecked="ChkEndAt_Changed"/>
                     </Grid>
 
+                    </feat:OptionSection>
+
                 </StackPanel>
             </Grid>
         </Border>
@@ -217,9 +223,7 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueStudioBrush}"/>
                 <StackPanel Margin="16,8,16,8">
-                    <helpers:EmojiTextBlock Text="{loc:Str label_link_to_ramp}"
-                                            Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"
-                                            Margin="0,0,0,6"/>
+                    <feat:OptionSection Key="ramp.links" Title="{loc:Str label_link_to_ramp}" Theme="Interaction">
                     <!-- Every chip carries a tooltip naming the dial it moves. "Master" and "Sub"
                          read as two mystery words sitting next to four visual effects (general
                          chat 2026-09-16), and a ramp quietly pulling the master volume down is the
@@ -271,6 +275,7 @@
                                        FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </WrapPanel>
+                    </feat:OptionSection>
                 </StackPanel>
             </Grid>
         </Border>

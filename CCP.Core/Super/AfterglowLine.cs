@@ -80,9 +80,24 @@ public sealed class AfterglowLine
             _finale = 0;
             var parts = new string[_ghosts.Count];
             for (int i = 0; i < parts.Length; i++) parts[i] = _ghosts[i].Text;
-            return string.Join(" ", parts);
+            return Join(parts);
         }
         return null;
+    }
+
+    /// <summary>The stop between two phrases in a finished line.</summary>
+    public const string PhraseStop = "  ·  ";
+
+    /// <summary>
+    /// The finished line as one string. Single words read as a sentence, so they keep a plain
+    /// space. Once any ghost is a phrase of its own ("thank her", "no key for you") a space
+    /// ran the phrases together (7.3.0 testers), so every ghost is set apart by a stop.
+    /// </summary>
+    public static string Join(IReadOnlyList<string> parts)
+    {
+        bool phrases = false;
+        foreach (var p in parts) if (p.Contains(' ')) { phrases = true; break; }
+        return string.Join(phrases ? PhraseStop : " ", parts);
     }
 
     /// <summary>0 where the word flashed, 1 in its place in the line.</summary>

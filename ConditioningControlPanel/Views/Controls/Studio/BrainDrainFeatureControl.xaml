@@ -144,6 +144,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="braindrain.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <!-- AUDIO trigger rate, NOT the blur (#1 support cost, two suggestion
                                  threads). This row used to be labelled with the generic
                                  setting_intensity, so everyone read it as the strength of the screen
@@ -159,7 +160,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_audio_rate}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderIntensity" x:FieldModifier="internal"
+                                <Slider Grid.Column="1" x:Name="SliderIntensity" feat:OptionSection.Setting="BrainDrainIntensity" x:FieldModifier="internal"
                                         feat:SessionLock.Owned="True"
                                         Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="10,0"
@@ -168,8 +169,6 @@
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
                             </Grid>
-
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Blur strength. The VISUAL half's dial (BrainDrainBlurStrength) - the
                                  dial above is the AUDIO trigger probability, this one is how hard the
@@ -186,7 +185,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_blur_strength}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderBlurStrength" x:FieldModifier="internal"
+                                <Slider Grid.Column="1" x:Name="SliderBlurStrength" feat:OptionSection.Setting="BrainDrainBlurStrength" x:FieldModifier="internal"
                                         feat:SessionLock.Owned="True"
                                         Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="10,0"
@@ -195,8 +194,6 @@
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
                             </Grid>
-
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Melting mode. Same overlay, melt variant (BrainDrainMeltEnabled):
                                  blur + slow Perlin displacement warp. Prescribed dose. -->
@@ -212,9 +209,9 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkMelt_Changed" Unchecked="ChkMelt_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
+                            <feat:OptionSection Key="braindrain.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                             <!-- Keep pictures clear (BrainDrainKeepPicturesClear): the blur tucks under
                                  CCP's own windows, so flashes, videos, lock cards and words stay sharp.
                                  Comfort knob, editable mid-session. -->
@@ -230,8 +227,6 @@
                                           Checked="ChkKeepClear_Changed" Unchecked="ChkKeepClear_Changed"/>
                             </Grid>
 
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
                             <!-- High refresh. Comfort/perf knob, NOT prescribed dose: deliberately
                                  unmarked so it stays editable mid-session, exactly as in the dead XAML. -->
                             <Grid Height="34" ToolTip="{loc:Str st4_braindrain_high_refresh_hint}">
@@ -245,8 +240,6 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkHighRefresh_Changed" Unchecked="ChkHighRefresh_Changed"/>
                             </Grid>
-
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Show in screenshots (AllowOverlayCapture). The brain-drain surface
                                  is the app's ONLY capture-excluded overlay, so screenshots and OBS
@@ -279,7 +272,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_volume}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderVolume" x:FieldModifier="internal"
+                                    <Slider Grid.Column="1" x:Name="SliderVolume" feat:OptionSection.Setting="BrainDrainVolume" x:FieldModifier="internal"
                                             Minimum="0" Maximum="100" Value="100"
                                             VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderVolume_Changed"/>
@@ -288,6 +281,7 @@
                                                FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
                                 </Grid>
                             </feat:MoreFold>
+                            </feat:OptionSection>
 
                         </StackPanel>
                     </Grid>

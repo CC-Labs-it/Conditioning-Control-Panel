@@ -55,7 +55,7 @@ public sealed class LobbyRowView
 
     private static ImageSource? SafeFrame(string? id)
     {
-        try { return Services.CosmeticsCatalog.GetFrameImage(id); } catch { return null; }
+        try { return Services.CosmeticsCatalog.GetFrameImage(id, FaceSize / Services.ShopCosmetics.FrameWindowRatio); } catch { return null; }
     }
     public string ButtonText { get; }
     public bool HasButton { get; }

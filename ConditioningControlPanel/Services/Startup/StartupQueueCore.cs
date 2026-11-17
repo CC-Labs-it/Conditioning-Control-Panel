@@ -88,6 +88,10 @@ namespace ConditioningControlPanel.Services.Startup
         /// </summary>
         public bool LauncherHolding { get; init; }
 
+        /// <summary>The Prize Counter sheet is down inside the launcher or the panel: the player is shopping,
+        /// and anything that opened would float over the sheet. Parks like a game until it goes up.</summary>
+        public bool CounterSheetUp { get; init; }
+
         /// <summary>
         /// End of the first-launch grace window, or null when no such window was ever opened.
         /// The wizard's far side opens it (10 minutes); nothing else does.
@@ -253,7 +257,7 @@ namespace ConditioningControlPanel.Services.Startup
         /// parking, not waiting, so the surface's five minutes are not spent while a player is an
         /// hour into a descent.</para>
         /// </summary>
-        public static bool IsParked(in QuietInputs w) => w.GameHostUp || w.LauncherHolding;
+        public static bool IsParked(in QuietInputs w) => w.GameHostUp || w.LauncherHolding || w.CounterSheetUp;
 
         /// <summary>How long a passive surface counts as on its way after it was opened: a feature
         /// card opens on the next dispatcher turn, so its window is not there yet when the next

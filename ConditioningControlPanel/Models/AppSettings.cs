@@ -4038,6 +4038,14 @@ namespace ConditioningControlPanel.Models
             get => _bubbleSharedHost;
             set { _bubbleSharedHost = value; OnPropertyChanged(); }
         }
+        private bool _bubbleClassicPop;
+        /// <summary>Every bubble plays the original pop, whatever skin it wears (owner 2026-11-17: an opt-out
+        /// for people who do not like the skins' own pops). The lucky chime is untouched.</summary>
+        public bool BubbleClassicPop
+        {
+            get => _bubbleClassicPop;
+            set { _bubbleClassicPop = value; OnPropertyChanged(); }
+        }
         private int _bubblesVolume = 50;
         public int BubblesVolume
         {
@@ -10687,6 +10695,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _superPreviewUsedWeek;
             set { _superPreviewUsedWeek = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, bool> _studioSectionsOpen = new();
+        /// <summary>
+        /// Which Studio option sections (Features/OptionSection) this PC left open or closed, by
+        /// section id. A view preference of this PC only: never in a preset, the session journal,
+        /// sync or a cloud backup (ProfileSyncService.ExcludedBackupProperties).
+        /// </summary>
+        [JsonProperty]
+        public Dictionary<string, bool> StudioSectionsOpen
+        {
+            get => _studioSectionsOpen;
+            set => _studioSectionsOpen = value ?? new Dictionary<string, bool>();
         }
 
         private bool _companionAsksEnabled = true;

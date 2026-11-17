@@ -160,6 +160,7 @@ namespace ConditioningControlPanel.Features
                 SliderSpeed.Value = s.BubbleSpeedBoost;
                 TxtSpeed.Text = $"+{s.BubbleSpeedBoost}%";
                 ChkSolidMode.IsChecked = s.BubbleSharedHost;
+                ChkClassicPop.IsChecked = s.BubbleClassicPop;
                 SelectMotion(s.BubbleMotionStyle);
                 ChkBubbleGazePop.IsChecked = s.BubbleGazePopEnabled;
                 ChkBrainDrainBubble.IsChecked = s.BubbleBrainDrainEnabled;
@@ -403,6 +404,15 @@ namespace ConditioningControlPanel.Features
             if (CmbMotion.SelectedItem is not ComboBoxItem { Tag: Models.BubbleMotionStyle style }) return;
             if (s.BubbleMotionStyle == style) return;
             s.BubbleMotionStyle = style;
+            App.Settings?.Save();
+        }
+
+        private void ChkClassicPop_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.BubbleClassicPop = ChkClassicPop.IsChecked ?? false;
             App.Settings?.Save();
         }
 

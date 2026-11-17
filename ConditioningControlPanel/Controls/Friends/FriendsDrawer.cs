@@ -300,7 +300,7 @@ public sealed partial class FriendsDrawer : Border
 
         var name = MeName();
         // Your own dot tells the truth: mint while friends can see you, grey while hidden.
-        var avatar = FriendsLook.Avatar(name, null, 40, PresenceDot());
+        var avatar = FriendsLook.Avatar(name, null, 40, PresenceDot(), MeLook());
         avatar.Margin = new Thickness(0, 0, 10, 0);
         g.Children.Add(avatar);
 
@@ -1223,6 +1223,14 @@ public sealed partial class FriendsDrawer : Border
     {
         try { return (int)(App.Patreon?.CurrentTier ?? Models.PatreonTier.None) switch { >= 2 => 2, 1 => 1, _ => 0 }; }
         catch { return 0; }
+    };
+
+    /// <summary>Your own frame and picture (Services/Profile/OwnProfileLook: the DEBUG shop preview's in preview).
+    /// Overridable by the suite.</summary>
+    internal Func<PlayerLook?> MeLook { get; set; } = () =>
+    {
+        try { return App.IsLoggedIn ? OwnProfileLook.Look : null; }
+        catch { return null; }
     };
 }
 

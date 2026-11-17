@@ -43,6 +43,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="visuals.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_scale_of_flash_images_100_original_size_200_d}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -51,7 +52,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_size}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderSize" Minimum="50" Maximum="250" Value="100"
+                                <Slider Grid.Column="1" x:Name="SliderSize" feat:OptionSection.Setting="ImageScale" Minimum="50" Maximum="250" Value="100"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderSize_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtSize" Text="100%" HorizontalAlignment="Right"
@@ -67,7 +68,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_opacity}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderOpacity" Minimum="10" Maximum="100" Value="100"
+                                <Slider Grid.Column="1" x:Name="SliderOpacity" feat:OptionSection.Setting="FlashOpacity" Minimum="10" Maximum="100" Value="100"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderOpacity_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtOpacity" Text="100%" HorizontalAlignment="Right"
@@ -83,7 +84,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_fade}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderFade" Minimum="0" Maximum="100" Value="50"
+                                <Slider Grid.Column="1" x:Name="SliderFade" feat:OptionSection.Setting="FadeDuration" Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFade_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtFade" Text="50%" HorizontalAlignment="Right"
@@ -99,7 +100,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_duration}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderDuration" Minimum="1" Maximum="30" Value="5"
+                                <Slider Grid.Column="1" x:Name="SliderDuration" feat:OptionSection.Setting="FlashDuration" Minimum="1" Maximum="30" Value="5"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderDuration_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtDuration" Text="5s" HorizontalAlignment="Right"
@@ -117,7 +118,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_gif_speed}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderGifSpeed" Minimum="0.25" Maximum="4" Value="1"
+                                <Slider Grid.Column="1" x:Name="SliderGifSpeed" feat:OptionSection.Setting="FlashGifSpeedMultiplier" Minimum="0.25" Maximum="4" Value="1"
                                         SmallChange="0.25" LargeChange="0.25" TickFrequency="0.25" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderGifSpeed_Changed"/>
@@ -125,9 +126,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="visuals.sound" Title="{loc:Str studio_section_sound}" Theme="Sound">
                             <!-- Link to Audio.
                                  Deliberately NOT SessionLock.Owned, even though SessionSettings.FlashAudioEnabled
                                  is a session-prescribed enable. Killing sound is the one change a user most
@@ -144,6 +145,7 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkAudio_Changed" Unchecked="ChkAudio_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>

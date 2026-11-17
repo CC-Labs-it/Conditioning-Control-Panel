@@ -2595,6 +2595,7 @@ namespace ConditioningControlPanel.Services
                             glowOpacity, luckyPulse, motionState);
                         window.LayerItem.Credit = Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath);
                         window.LayerItem.NatashaCue = window.IsNatasha;
+                        window.LayerItem.DeckBounds = new SkiaSharp.SKRect((float)bx, (float)by, (float)(bx + bw), (float)(by + bh));
                         window.LayerItem.DodgeUntilMs = window.NatashaDodged ? 0 : window.NatashaDodgeUntilMs;
                         if (imageData.BubbleOriginPx is { } origin)
                         {
@@ -2833,7 +2834,9 @@ namespace ConditioningControlPanel.Services
                 case FlickerPress.Flip:
                     // Keep the card alive through its lift and the longest edge-on wait.
                     window.BoostLifetime((int)((FlickerDeck.LiftSpanSec + FlickerDeck.MaxHoldSec) * 1000) + 250);
-                    _ = LoadDeckPictureAsync(window, item);
+                    // Words behind the card worn: every other flip turns to the spiral back, no picture to fetch.
+                    if (_flashLayer?.PrepareDeckBack(item) != true)
+                        _ = LoadDeckPictureAsync(window, item);
                     break;
             }
         }

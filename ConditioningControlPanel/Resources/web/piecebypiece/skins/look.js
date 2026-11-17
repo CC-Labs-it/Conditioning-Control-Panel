@@ -2,13 +2,13 @@
  * skins/look.js - what a player's men wear, as plain data (no three.js here,
  * so node can test it).
  *
- * A look is three slots, each one Prize Counter item id or null:
+ * A look carries three attachment slots and an optional piece finish:
  *
  *   { set: 'chess.set.royal-capes', banner: 'chess.banner.crest', insignia: null }
  *
- * The art for every id is an attachment per piece type (assets/skins/, from
- * Astra's preview/chess tree): it hangs off the approved sculpted piece at its
- * socket and never replaces it. The pink/white silicone stays the side colour.
+ * Clothes and insignias hang off each approved sculpt at its socket. Banners
+ * stand on their side's two outer board corners. Art lives in assets/skins/;
+ * finishes color the sculpted body independently of those attachments.
  *
  * Ownership is the account's grants, `cos.<itemId>` (Prize Counter contract 2).
  * Prime items stay usable after Prime ends: only buying needs Prime, so a
@@ -16,13 +16,20 @@
  * (contract 4); this side only refuses ids it has no art for.
  * ==========================================================================*/
 
-export const SLOTS = Object.freeze(['set', 'banner', 'insignia']);
+import { FINISH_IDS, FINISH_NAMES } from './finish-ids.js';
+import { BOARD_THEME_IDS, BOARD_THEME_NAMES } from '../board/theme-ids.js';
+
+const ATTACHMENT_SLOTS = Object.freeze(['set', 'banner', 'insignia']);
+export const SLOTS = Object.freeze([...ATTACHMENT_SLOTS, 'finish', 'board', 'companion']);
 
 /** Every id this page can draw, by slot. Order is the picker's order. */
 export const CATALOG = Object.freeze({
   set: Object.freeze(['chess.set.royal-capes', 'chess.set.velvet-court']),
   banner: Object.freeze(['chess.banner.house-pink', 'chess.banner.crest', 'prime.banner.arena']),
   insignia: Object.freeze(['chess.insignia.heart', 'chess.insignia.star']),
+  finish: FINISH_IDS,
+  board: BOARD_THEME_IDS,
+  companion: Object.freeze(['chess.companion.emi']),
 });
 
 /** Shelf names, the Prize Counter's own words (prizecounter/state/strings.js). */
@@ -34,9 +41,15 @@ export const NAMES = Object.freeze({
   'prime.banner.arena': 'Arena Banner',
   'chess.insignia.heart': 'Heart Insignia',
   'chess.insignia.star': 'Star Insignia',
+  ...FINISH_NAMES,
+  ...BOARD_THEME_NAMES,
+  'chess.companion.emi': 'Emi cheerleader',
 });
 
-export const SLOT_WORDS = Object.freeze({ set: 'Clothes', banner: 'Banner', insignia: 'Insignia' });
+export const SLOT_WORDS = Object.freeze({
+  set: 'Clothes', banner: 'Banner', insignia: 'Insignia',
+  finish: 'Piece finish', board: 'Board', companion: 'Cheerleader',
+});
 
 /** Items the counter sells only to Prime. Owned ones stay usable after Prime ends. */
 export const PRIME_ONLY = Object.freeze(['prime.banner.arena']);
@@ -51,16 +64,18 @@ export function slotOf(id) {
   return null;
 }
 
-/** Any input to a whole look: unknown ids, wrong slots and junk become null. */
-export function normalLook(raw) {
-  const out = { set: null, banner: null, insignia: null };
+/** Missing or invalid finishes preserve the original three-slot shape on disk and on the wire. */
+function readLook(raw, owned) {
+  const out = { ...EMPTY };
   if (!raw || typeof raw !== 'object') return out;
   for (const s of SLOTS) {
     const id = raw[s];
-    if (typeof id === 'string' && CATALOG[s].includes(id)) out[s] = id;
+    if (CATALOG[s].includes(id) && (!owned || owned.has(id))) out[s] = id;
   }
   return out;
 }
+
+export const normalLook = (raw) => readLook(raw, null);
 
 /** The item ids the grants own, catalog ids only. */
 export function ownedIds(grants) {
@@ -74,10 +89,7 @@ export function ownedIds(grants) {
 
 /** The look with every unowned slot taken off. */
 export function clampLook(look, grants) {
-  const have = ownedIds(grants);
-  const n = normalLook(look);
-  for (const s of SLOTS) if (n[s] && !have.has(n[s])) n[s] = null;
-  return n;
+  return readLook(look, ownedIds(grants));
 }
 
 export const isEmpty = (look) => SLOTS.every((s) => !look || !look[s]);
@@ -87,8 +99,11 @@ export function sameLook(a, b) {
   return SLOTS.every((s) => x[s] === y[s]);
 }
 
-/** The ids a look draws, set first (it sits under the banner and insignia). */
-export const lookIds = (look) => SLOTS.map((s) => normalLook(look)[s]).filter(Boolean);
+/** Only these ids have attachment GLBs. Finishes are painted on the body. */
+export function lookIds(look) {
+  const n = normalLook(look);
+  return ATTACHMENT_SLOTS.map((s) => n[s]).filter(Boolean);
+}
 
 /** The seat/join body's `look`, or nothing for a bare look (an old server never sees the field). */
 export function wireLook(look) {

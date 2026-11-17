@@ -221,7 +221,7 @@
                         IsHitTestVisible="False"
                         Visibility="Collapsed">
                     <TextBlock x:Name="TxtV2Badge"
-                               Text="{loc:Str badge_v2}"
+                               Text="{loc:Str badge_extra}"
                                FontSize="9"
                                FontWeight="Bold"/>
                 </Border>

@@ -110,7 +110,7 @@ public sealed partial class BubbleLayer : BaseLayer
     // UI thread only, like every other member of this class (see the Threading note above).
     private bool _dirty = true;
 
-    public override bool Dirty => _dirty || _bloomFx.Count > 0;
+    public override bool Dirty => _dirty || _bloomFx.Count > 0 || SkinFxDue;
     public override void ClearDirty() => _dirty = false;
 
     /// <summary>A live bubble's draw state just changed (Bubble.SyncLayerItem's per-step copy).
@@ -130,9 +130,10 @@ public sealed partial class BubbleLayer : BaseLayer
         item.ReleaseFrothPictures();
         item.ReleaseTeaseFrames();
         item.ReleaseEffectCaches();
+        item.ReleaseSkinArt();
         _items.Remove(item);
         _dirty = true;      // the survivors must be repainted without this one
-        if (_items.Count == 0 && _bloomFx.Count == 0) SetActive(false);
+        if (_items.Count == 0 && _bloomFx.Count == 0 && _skinFx.Count == 0) SetActive(false);
     }
 
     public void Clear()
@@ -143,11 +144,13 @@ public sealed partial class BubbleLayer : BaseLayer
             it.ReleaseFrothPictures();
             it.ReleaseTeaseFrames();
             it.ReleaseEffectCaches();
+            it.ReleaseSkinArt();
         }
         _items.Clear();
         foreach (var fx in _dashCache.Values) { try { fx.Dispose(); } catch { } }
         _dashCache.Clear();
         ClearBlooms();
+        ClearSkinFx();
         SetActive(false);
     }
 
@@ -220,10 +223,16 @@ public sealed partial class BubbleLayer : BaseLayer
                 canvas.Translate(-cx, -cy);
             }
             var body = new SKRect(cx - half, cy - half, cx + half, cy + half);
-            if (item.Sprite != null)
+            // ---- Bubble skin under the film (Spiral): inside the glass, under the sprite ----
+            if (item.Skin != null && BubbleCore.BubbleSkins.UnderShell(item.Skin)) DrawSkinInterior(canvas, item, cx, cy, half);
+            if (item.Skin != null && SkinDrawsBody(item)) { /* Heart, Marble: the skin's own body (below), or its burst draws the pop */ }
+            else if (item.Sprite != null)
             {
                 _img.Color = SKColors.White.WithAlpha(ga);
+                var shell = item.Skin != null ? SkinPainter.ShellTint(item.Skin) : null;   // soap: null, untouched
+                if (shell != null) _img.ColorFilter = shell;
                 canvas.DrawImage(item.Sprite, Fit(item.Sprite, body), _img);
+                if (shell != null) _img.ColorFilter = null;
             }
             else
             {
@@ -235,6 +244,8 @@ public sealed partial class BubbleLayer : BaseLayer
                 _stroke.StrokeWidth = 2f * s;
                 canvas.DrawCircle(cx, cy, half, _stroke);
             }
+            // ---- Bubble skin interior: inside the glass, under the same scale and squash ----
+            if (item.Skin != null && !BubbleCore.BubbleSkins.UnderShell(item.Skin)) DrawSkinInterior(canvas, item, cx, cy, half);
             canvas.RestoreToCount(saved);
 
             // ---- Super Froth: the gold rim of a ripe bubble ----
@@ -404,6 +415,7 @@ public sealed partial class BubbleLayer : BaseLayer
                 DrawHint(canvas, item, cx, cy, s);
         }
         if (_bloomFx.Count > 0) DrawBloomFx(canvas);
+        if (_skinFx.Count > 0) DrawSkinFx(canvas);
     }
 
     private void DrawHint(SKCanvas canvas, BubbleItem item, float cx, float cy, float s)
@@ -456,7 +468,7 @@ public sealed partial class BubbleLayer : BaseLayer
     /// dynamic fields are rewritten every frame by Bubble.SyncLayerItem from the (unshown) WPF
     /// tree's computed values, so the layer never re-derives animation - it just draws.
     /// </summary>
-    public sealed class BubbleItem
+    public sealed partial class BubbleItem
     {
         // ---- static (spawn) ----
         public float DpiScale = 1f;

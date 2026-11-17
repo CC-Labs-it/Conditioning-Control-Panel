@@ -3388,7 +3388,7 @@ namespace ConditioningControlPanel.Services
                 {
                     App.Logger?.Information("Skill tree sync: Skill points server={Server}, local={Local} — taking max ({Max})",
                         cloudProfile.SkillPoints.Value, settings.SkillPoints, maxPoints);
-                    settings.SkillPoints = maxPoints;
+                    Services.Prizes.SparklesLedger.Write(settings, maxPoints, Services.Prizes.SparkleSource.Synced);
                     needsSave = true;
                 }
             }
@@ -4009,7 +4009,7 @@ namespace ConditioningControlPanel.Services
             {
                 App.Logger?.Information("V2 Sync: Skill points server={Server}, local={Local}, net={Net}, stored net={Seen} -> {Next}",
                     serverSp, live.SkillPoints, replyNet, seen, step.NextSp);
-                live.SkillPoints = step.NextSp;
+                Services.Prizes.SparklesLedger.Write(live, step.NextSp, Services.Prizes.SparkleSource.Synced);
                 changed = true;
             }
             if (same && step.StoreNet is { } net && seen != net)
@@ -4034,7 +4034,7 @@ namespace ConditioningControlPanel.Services
                 settings.UnlockedSkills?.Count ?? 0, refundedPoints);
 
             settings.UnlockedSkills = new List<string>();
-            settings.SkillPoints = refundedPoints;
+            Services.Prizes.SparklesLedger.Write(settings, refundedPoints, Services.Prizes.SparkleSource.SkillTree);
             App.Settings?.Save();
         }
 
@@ -4099,7 +4099,7 @@ namespace ConditioningControlPanel.Services
         internal static void ApplyPurchaseResult(AppSettings settings, int? serverSkillPoints, List<string>? serverSkills)
         {
             if (serverSkillPoints.HasValue)
-                settings.SkillPoints = serverSkillPoints.Value;
+                Services.Prizes.SparklesLedger.Write(settings, serverSkillPoints.Value, Services.Prizes.SparkleSource.SkillTree);
             if (serverSkills != null)
             {
                 // Merge: take union to never lose skills
@@ -4250,7 +4250,7 @@ namespace ConditioningControlPanel.Services
                         {
                             App.Logger?.Information("Skill purchase: adopting server balance {Server} over local {Local} after a balance refusal",
                                 adopted.Value, settings.SkillPoints);
-                            settings.SkillPoints = adopted.Value;
+                            Services.Prizes.SparklesLedger.Write(settings, adopted.Value, Services.Prizes.SparkleSource.SkillTree);
                             App.Settings?.Save();
                         }
                     }
@@ -4804,6 +4804,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // The weekly free Super try is machine-wide: a restore must not hand back a spent week.
             nameof(AppSettings.SuperPreviewUsedWeek),
+            // Which Studio option sections are open: how this PC's screen looks, nobody's setting.
+            nameof(AppSettings.StudioSectionsOpen),
         };
 
         /// <summary>
@@ -4875,6 +4877,7 @@ namespace ConditioningControlPanel.Services
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             restored.WalletNetSeen = current.WalletNetSeen;
             restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
+            restored.StudioSectionsOpen = new Dictionary<string, bool>(current.StudioSectionsOpen);
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

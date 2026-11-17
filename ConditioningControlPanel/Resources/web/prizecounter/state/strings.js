@@ -3,6 +3,9 @@
 
 export const LEX = {
   shop_title: 'Prize Counter',
+  // the host's door into the shop (Controls/ShopTag.cs, the gold tag on every wallet chip and shop link); the page only carries them
+  shop_door_label: 'SHOP',
+  shop_door_tip: 'Open the shop',
   shop_loading: 'Opening the counter.',
   shop_offline: 'The counter did not answer. Try again in a moment.',
   shop_signed_out: 'Sign in to shop at the counter.',
@@ -69,8 +72,8 @@ const ITEM_NAMES = {
   'profile.avatar.rain-portrait': '{companion} Portrait', 'desk.hat.top-hat': 'The Pompous Topper', 'desk.hat.party': 'The Giddy Cone',
   'desk.toy.rubber-duck': 'The Suggestible Duck', 'desk.toy.snow-globe': 'The Foggy Forecast', 'prime.paint.host-gold': 'Host Gold Paint',
   'prime.trail.podium': 'Podium Ribbons', 'prime.frame.room-host': 'Room Host Frame', 'prime.banner.arena': 'Arena Banner',
-  jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Flashes V2',
-  bubbles_v2: 'Bubbles V2', rt_bundle_1: 'Racing Thoughts Vol. 1', rt_bundle_2: 'Racing Thoughts Vol. 2',
+  jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Extra Flashes',
+  bubbles_v2: 'Extra Bubbles', rt_bundle_1: 'Racing Thoughts Vol. 1', rt_bundle_2: 'Racing Thoughts Vol. 2',
   rt_bundle_3: 'Racing Thoughts Vol. 3',
   // Catalog revision 2 (Astra's art pass 2, names as on her tags).
   'kart.body.petal': 'The Blushing Petal', 'kart.body.trinket': 'The Precious Trinket',
@@ -80,6 +83,11 @@ const ITEM_NAMES = {
   'kart.body.reverie': 'The Drowsy Reverie', 'kart.body.house-edge': 'The Lucky House Edge',
   'kart.paint.pattern-bundle': 'The Pattern Parade', 'rain.suit.action-yellow': 'The Vengeful Bride',
   'rain.acc.hazmat-mask': 'The Lab Partner', 'rain.acc.back-katana': 'The Last Word',
+  // Chess finishes (chess lane 2026-11-17, piecebypiece/skins/finish-ids.js FINISH_NAMES).
+  'chess.finish.polka': 'Candy lacquer', 'chess.finish.marble': 'Mineral strata', 'chess.finish.contour': 'Liquid ribbons',
+  'chess.finish.opal': 'Oil slick', 'chess.finish.kintsugi': 'Gold faultlines',
+  'chess.board.observatory': 'Midnight Observatory', 'chess.board.conservatory': 'Glasshouse',
+  'chess.board.theatre': 'Velvet Theatre', 'chess.board.arcade': 'After Hours Arcade', 'chess.companion.emi': 'Emi cheerleader',
 };
 for (const [id, name] of Object.entries(ITEM_NAMES)) LEX[itemKey(id)] = name;
 
@@ -118,10 +126,16 @@ const ITEM_DESCS = {
   "shop_item_chess_banner_crest_desc": "Cobalt and gold banner with a star crest for your chess pieces.",
   "shop_item_chess_insignia_heart_desc": "Heart badge for your chess pieces.",
   "shop_item_chess_insignia_star_desc": "Star badge for your chess pieces.",
-  "shop_item_profile_frame_lace_desc": "Lace frame for your profile picture. The portrait is an example.",
-  "shop_item_profile_frame_ink_stamp_desc": "Postage stamp frame for your profile picture. The portrait is an example.",
-  "shop_item_profile_frame_gilt_desc": "Gold frame for your profile picture. The portrait is an example.",
-  "shop_item_profile_frame_polaroid_desc": "Instant photo frame for your profile picture. The portrait is an example.",
+  "shop_item_chess_finish_desc": "One buy paints all six pieces, on the white side and the black side. Wear one finish at a time, with clothes, a badge and a banner.",
+  "shop_item_chess_board_observatory_desc": "Lapis and ivory squares, brass trim, a turning astrolabe and drifting stars.",
+  "shop_item_chess_board_conservatory_desc": "Limestone and green glazed squares, copper trim, swaying ferns and drifting petals.",
+  "shop_item_chess_board_theatre_desc": "Pink and oxblood squares, velvet drapes, warm footlights and confetti.",
+  "shop_item_chess_board_arcade_desc": "Cool gray and slate squares, cyan and pink light rails and pixel sparks.",
+  "shop_item_chess_companion_emi_desc": "Animated Emi sits on the board edge and cheers for your moves. Visible to both players.",
+  "shop_item_profile_frame_lace_desc": "Pink lace with a satin bow. The scallops ripple round and the bow sways. The portrait is an example.",
+  "shop_item_profile_frame_ink_stamp_desc": "A postage stamp with a mint field. The postmark turns and the heart stamps a beat. The portrait is an example.",
+  "shop_item_profile_frame_gilt_desc": "A gold laurel wreath. A shine climbs the leaves and a twinkle hops between them. The portrait is an example.",
+  "shop_item_profile_frame_polaroid_desc": "An instant photo, taped up. The tape lifts and a scribble writes itself. The portrait is an example.",
   "shop_item_profile_avatar_emi_pixel_desc": "Pixel-art EMI for your profile picture.",
   "shop_item_profile_avatar_rain_portrait_desc": "{companion} portrait for your profile picture.",
   "shop_item_desk_hat_top_hat_desc": "Top hat for EMI on your desktop.",
@@ -130,7 +144,7 @@ const ITEM_DESCS = {
   "shop_item_desk_toy_snow_globe_desc": "Snow globe with a tiny EMI, for EMI on your desktop.",
   "shop_item_prime_paint_host_gold_desc": "Gold paint with a diamond pattern for EMI in Racing Thoughts.",
   "shop_item_prime_trail_podium_desc": "Ribbon trail for your kart in Racing Thoughts.",
-  "shop_item_prime_frame_room_host_desc": "Host profile frame with gold trim. The portrait is an example.",
+  "shop_item_prime_frame_room_host_desc": "A velvet marquee with a gold crown. The bulbs chase round and gold rays turn behind. The portrait is an example.",
   "shop_item_prime_banner_arena_desc": "Gold banner with a crown crest for your chess pieces.",
   "shop_item_jackpot_remix_desc": "Jackpot Remix kaleidoscope from the Back Room.",
   "shop_item_high_roller_desc": "High Roller badge from the Back Room.",

@@ -682,6 +682,9 @@
          prompt with no angle cards and no persona digest.
          See Services\Awareness\AwarenessAngleCards.cs. -->
     <EmbeddedResource Include="Resources\sounds\companion_audio\awareness_angles.json" />
+    <!-- DEBUG shop preview only (CCP_SHOP_PREVIEW=1, Services\PrizeCounter\ShopPreviewBackend.cs): the
+         real tabs behind the preview's effects tab. Never in a Release build. -->
+    <EmbeddedResource Include="Resources\web\prizecounter\mock\state.sample.json" LogicalName="ShopPreview.state.sample.json" Condition="'$(Configuration)' == 'Debug'" />
     <!-- Endless three.js "rabbit hole" tunnel background (HTML/JS + vendored three.js) and the
          DtRH browser game (Resources\web\dtrh). Served to a WebView2 via virtual hosts, so they
          must live on disk in the output. Remove from the default None glob first so a no-copy

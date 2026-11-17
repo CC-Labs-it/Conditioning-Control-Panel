@@ -81,6 +81,10 @@ public sealed class WhirlpoolLayer : BaseLayer
         SuperStageHost.NoteScreen(new System.Drawing.Rectangle(boundsPx.Left, boundsPx.Top, boundsPx.Width, boundsPx.Height), dpiScale);
         var stage = SuperStageHost.Stage;
         if (!stage.PoolOn) return;
+        // A monitor the pool does not reach has nothing to draw.
+        var pool = stage.Pool;
+        double reach = pool.Radius + 2;
+        if (pool.X + reach < boundsPx.Left || pool.X - reach > boundsPx.Right || pool.Y + reach < boundsPx.Top || pool.Y - reach > boundsPx.Bottom) return;
         double strength = Math.Clamp((App.Settings?.Current?.SpiralOpacity ?? 10) / 100.0, 0, 1);
         _draw.Draw(canvas, stage.Pool, strength, _morph.From, _morph.To, _morph.Mix, _phase);
     }

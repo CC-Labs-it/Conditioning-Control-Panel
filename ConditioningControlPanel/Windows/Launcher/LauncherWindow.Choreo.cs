@@ -617,16 +617,42 @@ public partial class LauncherWindow
     /// </summary>
     private void RefreshSpReadout(bool countUp)
     {
-        int sp = App.Settings?.Current?.SkillPoints ?? -1;
-        bool show = sp >= 0 && App.IsLoggedIn;
+        var wallet = MainWindow.HeaderWalletValue(App.Settings?.Current?.SkillPoints ?? -1);
+        int sp = wallet.Value;
+        bool show = wallet.Show;
+#if DEBUG
+        // DEBUG shop preview chrome, plain literal: the chip's face shows the SHOP door (owner: SHOP instead of preview),
+        // the preview mark rides on its hover line
+        if (wallet.PreviewMark) WalletChip.ToolTip = "Preview wallet";
+#endif
         WalletChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _spShown = double.NaN; return; }
+        // Stars are landing or owed: they count the chip up (LauncherWindow.SparkleFly.cs); the
+        // show's count-up stops where they start.
+        if (_spFlightHold) { if (!countUp) return; sp = _spHeldAt; }
+        else if (countUp) sp -= Services.Prizes.SparkleFlightDirector.OwedTo(App.Settings?.Current);
         if (!countUp && double.IsNaN(_spShown)) return;
         double from = countUp ? 0 : _spShown;
         if (!countUp && Math.Abs(from - sp) < 0.5) return;
         MotionFx.Odometer(SpReadout, from, sp, "{0:N0}", countUp ? 0.9 : 0.6);
         _spShown = sp;
     }
+
+#if DEBUG
+    /// <summary>DEBUG shop preview: a small visible mark after a wallet number (the chip, the stat card), by the
+    /// same rule as the panel wallet's label (<see cref="Services.PrizeCounter.SheetHostRules.PreviewMarkText"/>).</summary>
+    private static void MarkPreview(Panel? host, bool on)
+    {
+        if (host == null) return;
+        var mark = host.Children.OfType<TextBlock>().FirstOrDefault(t => Equals(t.Tag, "preview-mark"));
+        var text = Services.PrizeCounter.SheetHostRules.PreviewMarkText(on);
+        if (text == null) { if (mark != null) host.Children.Remove(mark); return; }
+        if (mark != null) return;
+        mark = new TextBlock { Text = text, Tag = "preview-mark", FontSize = 10, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.75 };
+        mark.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        host.Children.Add(mark);
+    }
+#endif
 
     // ------------------------------------------------------------------ helpers
 

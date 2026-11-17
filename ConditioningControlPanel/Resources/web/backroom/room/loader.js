@@ -161,6 +161,8 @@ export function createLoader(room) {
       /** The host's hypno toggles, frozen { flash, subliminal, spiral, brainDrain, tunnel }, live on every read (10.13.A). */
       get gates() { return s.gates; },
       get breakout() { return s.breakout; },
+      /** The worn bubble skin id from init/settings.bubbleSkin (optional; absent = soap). */
+      get bubbleSkin() { return s.bubbleSkin; },
       /** Subscribe to { motion, intensity, reduced, gates } on every settings frame. Returns an unsubscribe. */
       onSettings(fn) {
         if (typeof fn !== 'function' || typeof room.onSettings !== 'function' || subs.closed) return () => {};
