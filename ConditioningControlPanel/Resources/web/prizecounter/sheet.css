@@ -451,3 +451,34 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .scard.done .scard-h span { color: var(--stamp); border: 2.5px solid currentColor; border-radius: 6px; padding: 3px 8px 2px; transform: rotate(-4deg); letter-spacing: .14em; }
 .scard.done .dots span:not(.on) { border-style: dotted; opacity: .55; }
 .scard-over { margin: 0; font: 700 13px/1.35 var(--f-body); color: var(--ink-soft); }
+
+/* ---------- explanations: the hover tip, the small "?" marks, the fitting room's "What it does" (sheet/tips.js, explain.js) ---------- */
+/* a paper slip with an ink outline and a tail pointing at the thing it describes; never catches the mouse, never takes focus */
+.s-tip { position: absolute; z-index: 60; left: 0; top: 0; max-width: 300px; width: max-content; pointer-events: none;
+  font: 700 13px/1.35 var(--f-body); color: var(--ink); background: var(--paper); border: 2.5px solid var(--ink); border-radius: 12px;
+  padding: 7px 11px 8px; box-shadow: 3px 4px 0 var(--ink); word-break: auto-phrase; text-wrap: pretty; animation: tip-in .14s ease-out both; }
+.s-tip::after { content: ""; position: absolute; left: calc(var(--tail, 50%) - 7px); bottom: -9px; width: 12px; height: 12px; background: var(--paper);
+  border: 2.5px solid var(--ink); border-top: 0; border-left: 0; transform: rotate(45deg); }
+.s-tip.below::after { bottom: auto; top: -9px; transform: rotate(225deg); }
+@keyframes tip-in { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
+.s-tip.below { animation-name: tip-in-below; }
+@keyframes tip-in-below { from { opacity: 0; translate: 0 -3px; } to { opacity: 1; translate: 0 0; } }
+.shroot[data-gentle="on"] .s-tip { animation-name: sold-fade; animation-direction: reverse; animation-duration: .3s; }
+@media (prefers-reduced-motion: reduce) { .s-tip, .s-tip.below { animation: none; } }
+.s-tipbank { display: none; }
+/* the "?" beside a mechanic: a small ink coin; the glyph is CSS so the page's words never carry it */
+.qm { flex: none; width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--bean), var(--paper); color: var(--ink);
+  font: 900 13px/1 var(--f-body); display: inline-grid; place-items: center; box-shadow: 2px 2px 0 var(--ink); }
+.qm::before { content: "?"; }
+.qm:active { transform: translate(1px, 2px); box-shadow: 0 0 0 var(--ink); }
+.s-head .qm { margin-left: -6px; }
+.scard-h .qm { margin-right: auto; align-self: center; }
+/* the fitting room: what it does, where it shows, how to turn it on */
+.d-tip { margin: -2px 0 0; font: 700 14px/1.35 var(--f-body); color: var(--gold-hi); }
+.d-what { display: grid; gap: 4px; margin: 2px 0 0; padding: 9px 12px 10px; background: #ffffff0d; border: 2px solid #ffffff1f; border-radius: 14px; }
+.d-what h3 { margin: 0 0 1px; font: 900 11px/1.2 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.d-what p { margin: 0; font: 600 13.5px/1.4 var(--f-body); color: var(--tx); }
+.d-what .d-where, .d-what .d-how { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: baseline; }
+.d-what b { min-width: 46px; font: 800 11.5px/1.4 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--tx-3); }
+.d-what .d-where, .d-what .d-how { font-size: 13px; color: var(--tx-2); }
+@media (max-width: 860px) { .s-detail .d-what { grid-column: 2; } }

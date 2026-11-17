@@ -6,6 +6,10 @@
 
 import { frontModel, labelOf, statusOf, ledgerText, badgeCount, sectionShowsKey } from './model.js';
 import { placesOf, isHere } from './wire.js';
+import { SIGN_TIPS, tipText } from './explain.js';
+
+/** The front signs that carry a "?" about the shop's own mechanics (sheet/explain.js HELP), and the one that is hover only. */
+const HELP_OF = { gift: 'gift', save: 'saving', can: 'can' };
 
 /* Scissors on the coupon's cut line (decorative, currentColor). */
 const SCISSORS = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.7 10.1L12.2 1.6M10.3 10.1L3.8 1.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
@@ -22,7 +26,11 @@ export function installFront(view, { t, locale }) {
   const { el, button, star } = view;
   const head = (title, meta, tone) => {
     const h = el('div', 'sh' + (tone ? ' tone-' + tone : ''));   // tone = the sign's candy colour (sheet.css .tone-*)
-    h.append(el('span', 'sq'), el('h2', null, title), el('span', 'rule'));
+    const sign = el('h2', null, title);
+    h.append(el('span', 'sq'), sign);
+    if (HELP_OF[tone] && !view.tips.touch()) h.append(view.helpMark(HELP_OF[tone]));
+    else if (SIGN_TIPS[tone]) view.tips.bind(sign, t(SIGN_TIPS[tone]), { focus: false });
+    h.append(el('span', 'rule'));
     if (meta) h.append(el('span', 'meta', meta));
     return h;
   };
@@ -58,6 +66,7 @@ export function installFront(view, { t, locale }) {
       for (const o of f.also) {
         const m = button('mini fam-' + (o.fx || o.tab), null, 'also:' + o.id, () => on.spotlight(o.id));
         m.append(view.mini(o, v), el('span', null, labelOf(o, t)));
+        view.tips.bind(m, tipText(o, t));
         also.append(m);
       }
       copy.append(also);
@@ -87,7 +96,9 @@ export function installFront(view, { t, locale }) {
    * card with its stamps and no Stamp button while an earned coupon waits; sheet/model.js frontModel drops it after. */
   function stampCard(s, v, on) {
     const done = s.done, stamped = s.stamped.includes(s.day), c = el('div', 'scard on-paper' + (done ? ' done' : '')), h = el('div', 'scard-h');
-    h.append(el('b', null, t('shop_sheet_stamp_card')), el('span', null, t(done ? 'shop_sheet_stamp_finished' : 'shop_sheet_stamp_days')));
+    h.append(el('b', null, t('shop_sheet_stamp_card')));
+    if (!view.tips.touch()) h.append(view.helpMark('stamps'));
+    h.append(el('span', null, t(done ? 'shop_sheet_stamp_finished' : 'shop_sheet_stamp_days')));
     const dots = el('div', 'dots');
     for (let d = 1; d <= 14; d++) {
       const on1 = s.stamped.includes(d), today = !done && d === s.day, sp = el('span', on1 ? 'on' + (v.freshStamp === d ? ' fresh' : '') : today ? 'today' : null);

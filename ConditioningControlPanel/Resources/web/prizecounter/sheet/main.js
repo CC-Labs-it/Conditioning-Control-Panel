@@ -51,7 +51,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   };
   const shop = createShop({ request, newIdem, tab: init.tab || null, wears: init.wears, rain: init.rainV2 === true });
   const guard = createPressGuard({ now, focused: typeof doc.hasFocus === 'function' ? doc.hasFocus() : true });
-  const view = createView(doc, { t, sheet: init.sheet === true, base, platform });
+  const view = createView(doc, { t, sheet: init.sheet === true, base, platform, win, later });
   installFront(view, { t, locale: init.locale });
   const sound = createSound({ muted: motion === 'off' || init.muted === true, win });
   installLive(view, { t, base, motion, gentle: !!init.gentle, doc, win, onPop: (b) => { sound.unlock(); sound.pop(b); } });
@@ -240,6 +240,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const focusables = () => all(view.root).filter((n) => (n.tagName === 'BUTTON' || n.tagName === 'INPUT') && !n.disabled && visible(n));
   const isField = (e) => !!(e.target && e.target.tagName === 'INPUT');
   const onKeyDown = (e) => {
+    view.tips.key(e);   // a key puts a hover tip away; Tab lets the next focus show one (sheet/tips.js)
     if (e.key === 'Escape') { e.preventDefault(); ladder(); return; }
     if (e.key === 'Tab') {
       const list = focusables(), i = list.indexOf(doc.activeElement);
@@ -266,7 +267,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     b.onpress(false);
   });
   view.search.addEventListener('input', () => { ui.query = view.search.value || ''; paint(); });
-  const onFocus = () => guard.focus(true), onBlur = () => guard.focus(false);
+  const onFocus = () => guard.focus(true), onBlur = () => { guard.focus(false); view.tips.hide(); };
   win.addEventListener('keydown', onKeyDown);
   win.addEventListener('keyup', onKeyUp);
   win.addEventListener('focus', onFocus);

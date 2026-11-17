@@ -5,6 +5,7 @@
  * stays the default for a host that sends nothing. Names follow the owner's mockup. */
 
 import { makeT } from '../state/strings.js';
+import { EXPLAIN_LEX } from './explain.js';
 
 /** DEBUG preview only (CCP_SHOP_PREVIEW=1): stays English, no loc key. */
 export const PREVIEW_SLIP = 'Preview: nothing here is real';
@@ -40,7 +41,7 @@ export const SHEET_LEX = {
   shop_sheet_shows_card: 'A border on every Deck card',
   shop_sheet_shows_behind: 'Each flip lets one of your own words out from behind it',
   shop_sheet_shows_fog: 'Steam and the pink filter, in your colour and a second',
-  shop_sheet_shows_word: 'Subliminals and fog words. Each style moves its own way',
+  shop_sheet_shows_word: 'Your subliminals. Each style moves its own way',
   shop_sheet_shows_kart: 'Racing Thoughts',
   shop_sheet_shows_chess: 'Piece by Piece. Your opponent sees it too',
   shop_sheet_shows_profile: 'Your card, friends list and name tags',
@@ -208,6 +209,8 @@ export const SHEET_LEX = {
   shop_item_fx_word_echo_how: 'ghost copies',
   shop_item_fx_word_marquee_name: 'Marquee',
   shop_item_fx_word_marquee_how: 'lights up',
+  // what each thing does: hover tips, the fitting room's block, the shelf signs (sheet/explain.js)
+  ...EXPLAIN_LEX,
 };
 
 export const sheetT = (lexicon, companion) => makeT({ ...SHEET_LEX, ...(lexicon && typeof lexicon === 'object' ? lexicon : {}) }, companion);

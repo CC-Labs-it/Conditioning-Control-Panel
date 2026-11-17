@@ -21,7 +21,9 @@ export const tabLabelKey = (id) => TAB_WORDS[id] || tabKey(id);
 /** The section a row hangs in: its effect slot, or its state tab. */
 const SECTION_WORDS = new Set(['kart', 'chess', 'profile', 'desk', 'prime', ...FX_SLOTS]);
 export const sectionTitleKey = (k) => (SECTION_WORDS.has(k) ? `shop_sheet_sec_${k}` : tabKey(k));
-export const sectionShowsKey = (k) => (SECTION_WORDS.has(k) ? `shop_sheet_shows_${k}` : null);
+/** The Back Room and Rain shelves keep their tab titles but get a shows line too (sheet/explain.js). */
+const SHOWS_MORE = { backroom: 'shop_sheet_shows_backroom', 'rain-clothes': 'shop_sheet_shows_rain', 'rain-hair': 'shop_sheet_shows_rain' };
+export const sectionShowsKey = (k) => (SECTION_WORDS.has(k) ? `shop_sheet_shows_${k}` : SHOWS_MORE[k] || null);
 
 export function sheetTabs(tabIds, pv = NO_PREVIEW) {
   const out = [];

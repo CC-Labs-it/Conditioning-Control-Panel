@@ -8,6 +8,8 @@ import { placeMark, placesOf, isHere, awayLine, PLACES } from './wire.js';
 import { sections, statusOf, statusText, locate, tabLabelKey, nameOf, howOf, FEATURED } from './model.js';
 import { itemArt } from './pictures.js';
 import { PREVIEW_SLIP } from './strings.js';
+import { createTips } from './tips.js';
+import { tipText, roomExplain, placesTip, TAB_TIPS, SIGN_TIPS, HELP } from './explain.js';
 
 /* The mockup's place icons: a monitor, a globe, a phone (decorative, currentColor). */
 export const PLACE_ICONS = {
@@ -17,7 +19,7 @@ export const PLACE_ICONS = {
 };
 const TICK = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M2 6.5l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-export function createView(doc, { t, sheet, base = './' }) {
+export function createView(doc, { t, sheet, base = './', win = globalThis.window, later, cancel }) {
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const star = () => { const i = el('img', 'star'); i.src = `${base}star.png`; i.alt = ''; return i; };
   const button = (cls, text, key, onpress) => { const b = el('button', cls, text); b.type = 'button'; b.dataset.key = key; b.onpress = onpress; return b; };
@@ -47,6 +49,17 @@ export function createView(doc, { t, sheet, base = './' }) {
   const nudge = el('div', 'nudge');
   nudge.setAttribute('role', 'status'); nudge.hidden = true;
   root.append(head, tabs, main, nudge);
+  // the hover tips (sheet/tips.js) and the shop's own "?" marks; the wallet's sits beside it and hides with it
+  const tips = createTips({ doc, root, win, ...(later ? { later } : {}), ...(cancel ? { cancel } : {}) });
+  /** A small "?" that shows one line about the shop's own mechanics: hover, keyboard focus or a press. None on touch. */
+  const helpMark = (k, keep = false) => {
+    const b = button('qm', null, 'help:' + k, null);   // the "?" is drawn by sheet.css (.qm::before): no text in the page's words
+    b.setAttribute('aria-label', t('shop_sheet_help_mark'));
+    b.onpress = () => tips.showNow(b);
+    return tips.bind(b, t(HELP[k]), { keep });
+  };
+  const walletHelp = helpMark('wallet', true);
+  head.insertBefore ? head.insertBefore(walletHelp, search) : head.append(walletHelp);
 
   function artNode(art, big) {
     const box = el('span', 'art art-' + art.kind + (big ? ' big' : ''));
@@ -80,7 +93,7 @@ export function createView(doc, { t, sheet, base = './' }) {
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === v.tab));
       b.append(el('span', null, t(tabLabelKey(id))));
       if (id === FEATURED && v.badge) { const c = el('span', 'cnt', String(v.badge)); c.setAttribute('aria-label', t('shop_sheet_waiting', v.badge)); b.append(c); }
-      return b;
+      return TAB_TIPS[id] ? tips.bind(b, t(TAB_TIPS[id])) : b;
     }));
   }
 
@@ -99,6 +112,7 @@ export function createView(doc, { t, sheet, base = './' }) {
     if (away) { b.classList.add('elsewhere'); if (mixed) niche.append(view.placeMark(places, true)); }   // a shelf head carries the mark; a mixed list marks each away item
     stand.append(niche);
     b.append(stand);
+    tips.bind(b, tipText(e, t, st));
     if (bare) { b.setAttribute('aria-label', nameOf(e, t) + (away ? '. ' + awayLine(places, v.platform, t) : '')); return b; }
     const meta = el('span', 'meta');
     meta.append(statusNode(st, v), el('span', 'nm', nameOf(e, t)));
@@ -107,8 +121,9 @@ export function createView(doc, { t, sheet, base = './' }) {
     return b;
   }
   function sectionHead(title, meta, fam) {
-    const h = el('div', 'sh' + (fam ? ' fam-' + fam : ''));
-    h.append(el('span', 'sq'), el('h2', null, title), el('span', 'rule'));
+    const h = el('div', 'sh' + (fam ? ' fam-' + fam : '')), sign = el('h2', null, title);
+    h.append(el('span', 'sq'), sign, el('span', 'rule'));
+    if (SIGN_TIPS[fam]) tips.bind(sign, t(SIGN_TIPS[fam]), { focus: false });   // a sign takes no focus: hover, and screen readers
     if (meta) h.append(el('span', 'meta', meta));
     return h;
   }
@@ -145,7 +160,11 @@ export function createView(doc, { t, sheet, base = './' }) {
     const name = el('h2', 'd-name', m.name);
     name.tabIndex = -1;
     room.replaceChildren(mon, name);
-    if (m.desc) room.append(el('p', 'd-where', m.desc));
+    // on touch there is no hover: the card's tip line sits under the name
+    const tip = at && tips.touch() ? tipText(at, t) : null;
+    if (tip) room.append(el('p', 'd-tip', tip));
+    const what = at ? view.explainBlock(at) : null;
+    if (what) room.append(what); else if (m.desc) room.append(el('p', 'd-where', m.desc));
     room.append(...view.placeRow(at, v));
     if (at && !at.row.owned) { const pr = el('div', 'd-price'); pr.append(statusNode(statusOf(at, ctx(v)), v, true)); room.append(pr); }
     for (const l of m.lines) room.append(el('p', 'd-line d-' + l.cls, l.text));
@@ -203,6 +222,22 @@ export function createView(doc, { t, sheet, base = './' }) {
       return [el('p', 'd-away', awayLine(at, v.platform, t) + ' ' + t(e.row.owned ? 'shop_sheet_away_owned' : 'shop_sheet_away_buy'))];
     },
     roomExtra: () => [],
+    tips, helpMark,
+    /** The fitting room's "What it does": what it does, where it shows, how to turn it on or wear it (each when known). */
+    explainBlock(e) {
+      const x = roomExplain(e, t);
+      if (!x.does && !x.at && !x.use) return null;
+      const box = el('div', 'd-what');
+      box.append(el('h3', null, t('shop_sheet_what_it_does')));
+      if (x.does) box.append(el('p', 'd-does', x.does));
+      for (const [k, text] of [['where', x.at], ['how', x.use]]) {
+        if (!text) continue;
+        const p = el('p', 'd-' + k);
+        p.append(el('b', null, t('shop_sheet_lead_' + k)), el('span', null, text));
+        box.append(p);
+      }
+      return box;
+    },
     stage(e, v) { const s = el('div', 'stage'); s.append(view.thumb(e, v)); return s; },
     mini(e, v) { const s = el('span', 'mini-art'); s.append(view.thumb(e, v)); return s; },
     /** The place mark: the place icons and plain words; away = the paper tab an item wears where it does not show. */
@@ -214,11 +249,13 @@ export function createView(doc, { t, sheet, base = './' }) {
     },
     hostNote() { const p = el('p', 'hostnote'); p.append(el('span', null, t('shop_sheet_host_note')), view.placeMark(['desktop'], false), el('span', null, t('shop_sheet_host_note_end'))); return [p]; },
     paint(v, on) {
+      tips.reset();
       close.onpress = on.close;
       walletN.textContent = String(v.sp);
       wallet.setAttribute('aria-label', t('shop_wallet', v.sp));
       // In a sheet the host's own wallet shows the balance; the preview wallet is not the host's, so it shows here.
       wallet.hidden = (!!sheet && !(v.pv && v.pv.preview)) || v.status === 'signed_out';
+      walletHelp.hidden = wallet.hidden || tips.touch();
       search.hidden = v.status !== 'ready';
       here.hidden = v.status !== 'ready' || v.platform === 'desktop' || !(v.pv && v.pv.places.size);
       here.setAttribute('aria-pressed', String(!!v.hereOnly));
@@ -228,7 +265,11 @@ export function createView(doc, { t, sheet, base = './' }) {
     },
     roomHeading: () => room.children.find ? room.children.find((n) => n.tagName === 'H2') : room.querySelector('h2'),
   };
-  view.sectionHead = (s, v) => { const h = sectionHead(s.title, s.meta, s.key); if (s.places && v.pv && v.pv.places.size) h.append(view.placeMark(s.places, false)); return h; };
+  view.sectionHead = (s, v) => {
+    const h = sectionHead(s.title, s.meta, s.key);
+    if (s.places && v.pv && v.pv.places.size) h.append(tips.bind(view.placeMark(s.places, false), placesTip(s.places, t), { focus: false }));
+    return h;
+  };
   return view;
 }
 
