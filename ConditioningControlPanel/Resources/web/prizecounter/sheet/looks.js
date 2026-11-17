@@ -1,6 +1,6 @@
 /* sheet/looks.js - the screen-effect looks drawn on canvas, ported from the owner's mockup (prize-counter-v4.html): card
- * frames and backs, the Deck card front, word styles with their own motion, fog colours (and the two-tone swirl), the whisper that
- * leaves from behind a flipping card. Pure drawing on a 2D context; time goes in, nothing is kept here. */
+ * frames and backs, the Deck card front, word styles with their own motion, fog colours (and the two-tone swirl), the spiral
+ * back with its phrase coming at you. Pure drawing on a 2D context; time goes in, nothing is kept here. */
 
 /* The fog wears the user's own pink filter colour (owner 2026-11-17: the shop sells no fog colours). Two-tone adds a
  * second colour from this palette, in this order (CCP.Core FogLooks.Palette): one too close to the user's own would
@@ -109,25 +109,43 @@ export function drawFogBlobs(k, cols, t, w, h, alpha = 0.55) {
   }
   k.globalAlpha = 1;
 }
-/** The shelf's small Whisper picture, readable at thumbnail size (owner 2026-11-17: the two thumbnails looked like the
- * same pink card): the card stands left of centre and a faded word slides out from behind its right edge, splitting
- * into a pink and a blue ghost as it goes. k = 0..1 through one slide (motion off: a still at 0.55). Draws the card too. */
-export function drawWhisperThumb(g, word, k, x, y, cw, ch) {
-  const px = Math.max(11, ch * 0.3), e = ease(Math.min(1, k / 0.8)), a = k < 0.15 ? k / 0.15 : k > 0.8 ? Math.max(0, (1 - k) / 0.2) : 1;
-  const wx = x + cw * 0.55 + e * cw * 1.05, wy = y + ch * 0.46, split = e * px * 0.12;
-  g.save(); g.font = wordFont('classic', px); g.textAlign = 'left'; g.textBaseline = 'middle';
-  g.globalAlpha = 0.45 * a; g.fillStyle = '#ff9cc8'; g.fillText(word, wx - split, wy);
-  g.fillStyle = '#9ce8ff'; g.fillText(word, wx + split, wy);
-  g.globalAlpha = 0.85 * a; g.fillStyle = '#ffffff'; g.fillText(word, wx, wy); g.restore();
-  drawBack(g, 'plain', x, y, cw, ch);
+/* The spiral back (owner 2026-11-17, desktop CCP.Core DeckSpiralBack): with words behind the card worn, a Deck card is a
+ * picture on the front and a spiral on the back, and on every flip to the back one of the player's own phrases comes at
+ * the viewer from the spiral's centre: small and far, a quick zoom to full size with a little tilt, a breath, then on
+ * past the viewer as it fades into a pink and a blue ghost (the Back Room slot's word beat). */
+export const BACK_ZOOM = 1.1, BACK_HOLD = 0.35, BACK_OUT = 0.45, BACK_LIFE = BACK_ZOOM + BACK_HOLD + BACK_OUT;
+/** The phrase's pose `age` seconds after the back landed: { a, s, rot, split } (still = motion off: it fades in place). */
+export function backWord(age, still = false) {
+  if (age < 0 || age >= BACK_LIFE) return null;
+  if (still) return { a: Math.min(1, age / 0.35, (BACK_LIFE - age) / 0.5), s: 1, rot: 0, split: 0 };
+  if (age < BACK_ZOOM) { const u = age / BACK_ZOOM, bump = (c, w) => { const d = Math.abs(u - c) / w; return d >= 1 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * d); }; return { a: Math.min(1, u / 0.12), s: 0.14 + 0.86 * ease(u), rot: -0.052 * bump(0.4, 0.3) + 0.035 * bump(0.72, 0.22), split: 0 }; }
+  if (age < BACK_ZOOM + BACK_HOLD) return { a: 1, s: 1 - 0.03 * Math.sin(Math.PI * (age - BACK_ZOOM) / BACK_HOLD), rot: 0, split: 0 };
+  const u = (age - BACK_ZOOM - BACK_HOLD) / BACK_OUT;
+  return { a: 1 - u * u * (3 - 2 * u), s: 1 + 0.14 * (1 - (1 - u) * (1 - u)), rot: 0, split: 0.3 * (1 - (1 - u) * (1 - u)) };
 }
-/** The whisper: small behind the card as it turns, then past it and thinning out toward you. front = draw the near half. */
-export function drawWhisper(g, word, age, x, y, cw, ch, front, style = 'classic') {
-  const dur = 1.9;
-  if (age > dur || (age >= 0.75) !== front) return;
-  const s = 0.55 + ease(age / dur) * 0.95, a = age < 0.3 ? age / 0.3 * 0.6 : age < 1.1 ? 0.6 : 0.6 * (1 - (age - 1.1) / 0.8);
-  const txt = style === 'marquee' ? word.toUpperCase() : word;
-  g.save(); g.translate(x + cw / 2, y + ch / 2); g.scale(s, s); g.font = wordFont(style, Math.max(9, ch * 0.15)); g.textAlign = 'center'; g.textBaseline = 'middle';
-  if (age > 1.1) { const sm = (age - 1.1) * 14; g.globalAlpha = a * 0.5; g.fillStyle = '#ff9cc8'; g.fillText(txt, -sm, 0); g.fillStyle = '#9ce8ff'; g.fillText(txt, sm, 0); }
-  g.globalAlpha = a; g.fillStyle = wordColour(style); g.fillText(txt, 0, 0); g.restore();
+/** A spiral back filling the card (x, y, w, h), turned by `turn`, with `word` at `age` seconds; the frame look on top. */
+export function drawSpiralBack(g, word, age, x, y, w, h, turn = 0, frame = 'plain', still = false) {
+  const r = Math.min(w, h) * 0.08, cx = x + w / 2, cy = y + h / 2, R = Math.hypot(w, h) / 2;
+  g.save(); g.beginPath(); rrect(g, x, y, w, h, r); g.clip();
+  g.fillStyle = '#24091a'; g.fillRect(x, y, w, h);
+  const cols = ['#ff69b4', '#c77dff', '#ffffff'];
+  g.lineCap = 'round'; g.lineWidth = Math.max(1.5, R * 0.1);
+  for (let arm = 0; arm < 3; arm++) {
+    g.strokeStyle = cols[arm]; g.beginPath();
+    for (let i = 0; i <= 48; i++) { const k = i / 48, ang = k * TAU * 2 + arm * TAU / 3 + turn, px = cx + Math.cos(ang) * R * k, py = cy + Math.sin(ang) * R * k; if (i) g.lineTo(px, py); else g.moveTo(px, py); }
+    g.stroke();
+  }
+  const dim = g.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.62); dim.addColorStop(0, 'rgba(0,0,0,.55)'); dim.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = dim; g.fillRect(x, y, w, h);
+  const p = word ? backWord(age, still) : null;
+  if (p && p.a > 0.01) {
+    const px = Math.max(8, Math.min(h * 0.22, w * 0.9 / 1.14 / (word.length * 0.58)));
+    g.translate(cx, cy); g.rotate(p.rot); g.scale(p.s, p.s);
+    g.font = `900 ${px}px "Segoe UI", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (p.split > 0.01) { const off = p.split * px; g.globalAlpha = 0.6 * p.a; g.fillStyle = '#ff3d8f'; g.fillText(word, -off, 0); g.fillStyle = '#5fb0ff'; g.fillText(word, off, 0); }
+    g.globalAlpha = p.a; g.lineJoin = 'round'; g.lineWidth = Math.max(2, px * 0.17); g.strokeStyle = '#2a0b30'; g.strokeText(word, 0, px * 0.06);
+    g.strokeText(word, 0, 0); g.fillStyle = '#ffd6f4'; g.fillText(word, 0, 0);
+  }
+  g.restore();
+  drawFrame(g, frame, x, y, w, h, r);
 }

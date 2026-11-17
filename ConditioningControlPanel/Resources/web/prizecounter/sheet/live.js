@@ -6,7 +6,7 @@
  * repaint never restarts an animation. A click on a bubble in "Your screen" pops it with its own sound (opts.onPop). */
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
-import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawWhisper, drawWhisperThumb, FOGS, WORDS, hueOf, secondFog } from './looks.js';
+import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawSpiralBack, BACK_LIFE, FOGS, WORDS, hueOf, secondFog } from './looks.js';
 import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
@@ -78,9 +78,9 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
       if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); g.restore(); }   // the same picture on every thumb: only the frame differs
       else if (slot === 'behind') {
         const cw = h * 0.42, ch = h * 0.72, y = (h - ch) / 2;
-        // Whisper: the card steps left and a word visibly slides out from behind it; Nothing: the plain card, centred
-        if (kind === 'whisper') drawWhisperThumb(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.55 : (tt % 3.2) / 3.2, w * 0.3 - cw / 2, y, cw, ch);
-        else drawBack(g, 'plain', (w - cw) / 2, y, cw, ch);
+        // Whisper: the card's spiral back with a word coming at you (one per 2.6 s); Nothing: the plain card
+        if (kind === 'whisper') drawSpiralBack(g, WORDS[Math.floor(tt / 2.6) % WORDS.length], motion === 'off' ? 1.2 : tt % 2.6, (w - cw) / 2, y, cw, ch, motion === 'off' ? 0 : tt * 0.9, 'plain', motion === 'off');
+        else drawCard(g, 'plain', (w - cw) / 2, y, cw, ch, 200);
       } else if (slot === 'fog') drawFogBlobs(g, fogPair(), tt, w, h, 0.7);
       else if (slot === 'word') drawWord(g, kind, 'sink', w / 2, h * 0.52, h * 0.33, motion === 'off' ? 2 : tt % 4, 1);
     };
@@ -135,10 +135,9 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
         stepParts(W, dt); drawParts(W);
       } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); k.restore(); }
       else if (slot === 'behind') {
-        const cw = h * 0.38, ch = h * 0.56, x = cx - cw / 2, y = h * 0.16 + bob * 0.5, age = motion === 'off' ? 0.9 : tt % 3.2, word = WORDS[Math.floor(tt / 3.2) % WORDS.length];
-        if (kind === 'whisper') drawWhisper(k, word, age, x, y, cw, ch, false);
-        drawBack(k, 'plain', x, y, cw, ch);
-        if (kind === 'whisper') drawWhisper(k, word, age, x, y, cw, ch, true);
+        const cw = h * 0.38, ch = h * 0.56, x = cx - cw / 2, y = h * 0.16 + bob * 0.5, age = motion === 'off' ? 1.2 : tt % 2.6, word = WORDS[Math.floor(tt / 2.6) % WORDS.length];
+        if (kind === 'whisper') drawSpiralBack(k, word, age, x, y, cw, ch, still ? 0 : tt * (gentle ? 0.35 : 0.9), 'plain', motion === 'off');
+        else drawCard(k, 'plain', x, y, cw, ch, 200);
       } else if (slot === 'fog') drawFogBlobs(k, fogPair(), tt, w, h);
       else if (slot === 'word') drawWord(k, kind, WORDS[Math.floor(tt / 4) % WORDS.length], cx, h * 0.45, h * 0.2, motion === 'off' ? 2 : tt % 4, 1);
     };
@@ -167,11 +166,11 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
       if (kk < 0.5) sx = Math.cos(kk / 0.5 * Math.PI); else if (kk < 2.2) sx = -1; else if (kk < 2.7) sx = -Math.cos((kk - 2.2) / 0.5 * Math.PI);
       if (still) sx = c.off ? -1 : 1;
       if (cyc !== c.cyc) { c.cyc = cyc; c.born = tt; c.word = WORDS[screen.wi++ % WORDS.length]; }
-      const whisper = L.behind === 'whisper', age = still ? 0.9 : tt - (c.born || 0);
-      if (whisper) drawWhisper(g, c.word || WORDS[0], age, c.x * W, c.y * H, cw, ch, false, L.word);
+      const whisper = L.behind === 'whisper', age = still ? 1.2 : (tt + c.off) % 5.2 - 0.25;
       const w = Math.max(2, Math.abs(sx) * cw), x = c.x * W + (cw - w) / 2;
-      if (sx < 0) { drawBack(g, L.card, x, c.y * H, w, ch); drawFrame(g, L.card, x, c.y * H, w, ch, Math.min(w, ch) * 0.08); } else drawCard(g, L.card, x, c.y * H, w, ch, c.hue);   // the frame stays on through the flip
-      if (whisper) drawWhisper(g, c.word || WORDS[0], age, c.x * W, c.y * H, cw, ch, true, L.word);
+      // The back: with words behind the card worn, a spiral with the word coming at you; else the next picture
+      if (sx < 0) { if (whisper) drawSpiralBack(g, c.word || WORDS[0], age, x, c.y * H, w, ch, still ? 0 : tt * 0.9, L.card, still); else drawCard(g, L.card, x, c.y * H, w, ch, (c.hue + 140) % 360); }
+      else drawCard(g, L.card, x, c.y * H, w, ch, c.hue);   // the frame stays on through the flip
     }
     if (!screen.fog) screen.fog = doc.createElement('canvas');
     const fog = screen.fog, d = item.cv.width / W;
