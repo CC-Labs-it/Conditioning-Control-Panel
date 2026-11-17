@@ -2274,7 +2274,7 @@ namespace ConditioningControlPanel
                     var same = string.Equals(Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
                         account, StringComparison.Ordinal);
                     if (!Services.Prizes.V2WalletAdoption.Decide(same, fromBuy, sp, s.SkillPoints, out var next)) return;
-                    s.SkillPoints = next;
+                    Services.Prizes.SparklesLedger.Write(s, next, fromBuy ? Services.Prizes.SparkleSource.CounterBuy : Services.Prizes.SparkleSource.Synced);
                     Settings.Save();
                 })));
             // Sparkles by place (B1). Pure constructor: nothing is sent until a game host claims.
