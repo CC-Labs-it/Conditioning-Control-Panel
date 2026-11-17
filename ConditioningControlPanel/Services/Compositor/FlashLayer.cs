@@ -1,5 +1,7 @@
 ﻿using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.SuperCore;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -173,6 +175,8 @@ public sealed class FlashLayer : BaseLayer
     // Super Flicker Deck: one reused path for cracks and shard clips, one rng for the breaks.
     private readonly SKPath _deckPath = new();
     private readonly Random _deckRng = new();
+    // Shop looks worn by the Deck (backs, the whisper): rules in CCP.Core DeckLooks.
+    private readonly Super.Draw.DeckLookDraw _deckLook = new();
 
     public FlashLayer(CompositorEngine engine) : base(engine) { }
 
@@ -614,8 +618,15 @@ public sealed class FlashLayer : BaseLayer
             }
 
             _imagePaint.Color = new SKColor(255, 255, 255, alpha);
+            // Shop look, slot "card": mid-flip the card wears its back. Plain (the default) never
+            // shows one, so the stock card draws its picture exactly as before.
+            var back = DeckLookChoice.Back;
+            var wearsBack = pose != null && exit == null && item.Deck is { } turning
+                && DeckLooks.BackShows(back, turning.FlipT, FlickerDeck.FlipSec, MotionFx.Level == MotionLevel.Off);
             if (exit is { Glitch: > 0 } && item.Exit is { } glitchState)
                 DrawGlitch(canvas, image, fit, alpha, glitchState, exit.Value.Glitch);
+            else if (wearsBack)
+                _deckLook.DrawBack(canvas, fit, back, alpha);
             else
                 canvas.DrawImage(image, fit, _imagePaint);
             if (exit is { Whiten: > 0 } lit)
