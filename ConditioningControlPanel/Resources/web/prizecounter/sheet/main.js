@@ -225,7 +225,11 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     /** Two-tone's second colour: worn when Two-tone is owned, else only tried on here. */
     fog2(id) {
       const tw = locate(st(), 'fx.fog.twotone', pv());
-      if (tw && tw.row.owned) { ui.fog2Try = null; op('shop-equip', { slot: 'fog2', itemId: id }); } else { ui.fog2Try = id; paint(); }
+      if (!(tw && tw.row.owned)) { ui.fog2Try = id; paint(); return; }
+      ui.fog2Try = null;
+      // The server takes a second colour only while Two-tone is ON (not_worn otherwise): picking a colour switches it on first.
+      const on = ((pv() || {}).equip || {}).mix;
+      (on ? Promise.resolve() : op('shop-equip', { slot: 'mix', itemId: 'fx.fog.twotone' })).then(() => op('shop-equip', { slot: 'fog2', itemId: id }));
     },
     nudgeView(id) { ui.nudge = null; ui.tab = (locate(st(), id, pv()) || {}).group || ui.tab; if ((ui.fx || (shop.card() || {}).itemId) !== id) pick(id); else paint(); },
     nudgeClose() { ui.nudge = null; paint(); },
