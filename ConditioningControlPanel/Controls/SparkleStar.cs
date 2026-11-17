@@ -19,6 +19,9 @@ public sealed class SparkleStar : Image
 
     private static readonly Lazy<ImageSource?> Picture = new(Load);
 
+    /// <summary>The shared frozen picture, for surfaces that draw the star themselves (the flight).</summary>
+    internal static ImageSource? Shared => Picture.Value;
+
     public SparkleStar()
     {
         Source = Picture.Value;
