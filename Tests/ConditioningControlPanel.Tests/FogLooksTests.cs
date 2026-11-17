@@ -123,6 +123,47 @@ public class FogLooksTests
         }
     }
 
+    /// <summary>The pairs the owner looked at (teal + amber went murky brown, 2026-11-17): in OKLab the walk never
+    /// drops below the darker end, never loses most of its chroma, and a colour paired with itself stays itself.</summary>
+    [Fact]
+    public void The_ramp_stays_two_clean_colours_in_a_perceptual_space()
+    {
+        var teal = ((byte)64, (byte)200, (byte)190);
+        var pairs = new[]
+        {
+            (teal, FogLooks.ColourOf(FogLooks.Amber)!.Value),
+            (FogLooks.ColourOf(FogLooks.Pink)!.Value, FogLooks.ColourOf(FogLooks.Mint)!.Value),
+            (FogLooks.ColourOf(FogLooks.Lilac)!.Value, FogLooks.ColourOf(FogLooks.Peach)!.Value),
+            (FogLooks.ColourOf(FogLooks.Sky)!.Value, FogLooks.ColourOf(FogLooks.Amber)!.Value),
+        };
+        foreach (var (a, b) in pairs)
+        {
+            var ramp = FogMix.Ramp(a, b);
+            var (la, ca, _) = FogMix.ToOklch(a);
+            var (lb, cb, _) = FogMix.ToOklch(b);
+            Assert.Equal(a, ramp[0]);
+            Assert.Equal(b, ramp[^1]);
+            Assert.Equal(a, ramp[(int)(FogMix.WalkLow * (FogMix.RampSize - 1))]);   // each colour holds a clean stretch
+            foreach (var c in ramp)
+            {
+                var (l, ch, _) = FogMix.ToOklch(c);
+                Assert.True(l >= Math.Min(la, lb) - 0.01, $"{a}->{b}: {c} darker than both ends");
+                Assert.True(ch >= 0.7 * Math.Min(ca, cb), $"{a}->{b}: {c} loses its colour (chroma {ch:0.000})");
+            }
+        }
+        foreach (var (_, same) in FogLooks.Palette)
+            foreach (var c in FogMix.Ramp(same, same))
+            {
+                Assert.InRange(Math.Abs(c.R - same.R), 0, 1);
+                Assert.InRange(Math.Abs(c.G - same.G), 0, 1);
+                Assert.InRange(Math.Abs(c.B - same.B), 0, 1);
+            }
+        // the page preview (prizecounter sheet/fogmix.js) pins the same numbers: tests/sheet-fogmix.test.mjs
+        Assert.Equal(RampProbe, FogMix.Ramp(teal, FogLooks.ColourOf(FogLooks.Amber)!.Value)[FogMix.RampSize / 2]);
+    }
+
+    private static readonly (byte, byte, byte) RampProbe = (164, 202, 114);
+
     [Fact]
     public void Both_colours_always_show_and_the_mix_moves_but_holds_still_at_motion_off()
     {

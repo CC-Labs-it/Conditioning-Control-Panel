@@ -217,6 +217,19 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .prev::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 16%; background: repeating-linear-gradient(90deg, #ffb347 0 30px, #f0962a 30px 33px); border-top: var(--o) solid var(--ink); }
 .prev .art { inset: 6% 10% 12%; z-index: 1; }
 .prev .art-swatch { inset: 14% 18% 22%; border: var(--o) solid var(--ink); border-radius: 8px; box-shadow: 4px 5px 0 #000a; transform: rotate(-2deg); }
+/* the TV's dock: pinned to the top of the fitting room while the words, pickers and places scroll under it (the dots
+   are fixed to the window on both, so the dock's backing lines up with the room's wall) */
+.s-detail { background-attachment: fixed; }
+.tvdock { position: sticky; top: -16px; z-index: 2; margin: -16px -16px 0; padding: 0 16px 12px; min-width: 0;
+  background: var(--room) radial-gradient(circle at 2px 2px, #ffffff0d 1.3px, #fff0 1.8px) 0 0 / 18px 18px fixed; box-shadow: 0 9px 8px -5px var(--room); }
+.tvdock > .mon { margin-top: 32px; }
+/* a short sheet (the desktop sheet is about 560 high): a wider, shorter screen so the words keep room under the dock */
+@media (min-width: 861px) and (max-height: 700px) {
+  .tvdock { padding-bottom: 9px; }
+  .tvdock > .mon { margin-top: 28px; padding: 9px 9px 0; }
+  .tvdock .prev { aspect-ratio: 16 / 7.4; }
+  .tvdock .mon-foot { padding: 6px 2px 7px 4px; }
+}
 .mon-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 900 11px/1 var(--f-body); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); padding: 8px 2px 9px 4px; }
 /* two knobs on the set */
 .mon-foot::after { content: ""; flex: none; width: 36px; height: 15px; margin-left: auto;
@@ -403,7 +416,10 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
   .sec > .sh { top: 0; }
   .s-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; overflow-y: auto; align-content: start; }
   .s-detail { border-left: 0; border-bottom: var(--o) solid var(--ink); order: -1; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); column-gap: 14px; overflow: visible; padding: 12px 14px 0; }
-  .s-detail .mon { grid-row: span 6; align-self: start; }
+  .s-detail > .mon, .s-detail > .tvdock { grid-row: span 6; align-self: start; }
+  /* the TV rides down beside the words while the page scrolls, so the swatches and their preview stay together */
+  .s-detail > .tvdock { position: sticky; top: 10px; z-index: 2; margin: 0; padding: 0; background: none; box-shadow: none; }
+  .s-detail > .tvdock > .mon { margin-top: 16px; }
   .d-act { margin: 0 -14px; padding: 10px 14px 14px; grid-column: 1 / -1; }
   .nopick .s-detail { display: none; }
 }
@@ -498,6 +514,14 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .sec.fam-chess::before, .sec.fam-kart::before { inset: -10px -12px 0; border: var(--o) solid var(--ink); border-radius: 22px; box-shadow: 3px 4px 0 var(--black); }
 /* the sign sits inside the place, on its ground, with the place's trim under it (it carries the trim when it sticks) */
 .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin: -7px -9px 0; padding: 16px 10px 22px; border-radius: 19px 19px 0 0; box-shadow: 0 8px 7px -6px #0000008c; }
+/* stuck under the tabs, the sign carries the place's top edge with it: the ink rim and its round corners, the night
+   outside the curve. Without it the kerbs and the board peeked past the corners and the head read as cut off. At rest
+   this sits exactly on the place's own rim, so nothing changes there. The head sticks 3px lower so the rim shows. */
+.sec.fam-chess > .sh, .sec.fam-kart > .sh { top: -17px; }
+.sec.fam-chess > .sh::before, .sec.fam-kart > .sh::before { content: ""; position: absolute; z-index: -1; left: calc(-1 * var(--o)); right: calc(-1 * var(--o)); top: calc(-1 * var(--o)); height: 22px; pointer-events: none;
+  background: radial-gradient(circle at 22px 22px, #0000 18.6px, var(--ink) 19px 21.6px, var(--night) 22px) 0 0 / 22px 22px no-repeat,
+    radial-gradient(circle at 0 22px, #0000 18.6px, var(--ink) 19px 21.6px, var(--night) 22px) 100% 0 / 22px 22px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 50% 0 / calc(100% - 44px) var(--o) no-repeat; }
 /* Chess: a pink and cream board. A board band under the sign, a faint big board behind, the board floor in perspective */
 .sec.fam-chess::before { background: repeating-conic-gradient(#ffd8ec0d 0 25%, #0000 0 50%) 0 0 / 64px 64px, var(--ground); }
 .sec.fam-chess > .sh { background: repeating-conic-gradient(#ff8cc6 0 25%, #fff3df 0 50%) 0 100% / 14px 14px repeat-x, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 14px) / 100% 3px no-repeat, var(--ground); }
@@ -524,7 +548,7 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .sec.fam-chess .it .niche::after, .sec.fam-kart .it .niche::after { content: none; }
 @media (max-width: 860px) {
   .sec.fam-chess::before, .sec.fam-kart::before { left: -10px; right: -10px; }
-  .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin-left: -7px; margin-right: -7px; }
+  .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin-left: -7px; margin-right: -7px; top: var(--o); }
   .sec.fam-chess::after { left: -7px; right: -7px; }
 }
 @media (max-width: 640px) {

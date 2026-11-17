@@ -162,7 +162,11 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     mon.append(prev, foot);
     const name = el('h2', 'd-name', m.name);
     name.tabIndex = -1;
-    room.replaceChildren(mon, name);
+    // the TV sits in a dock that stays at the top of the room while the rest scrolls under it, so a picker (Two-tone's
+    // swatches) or a long "What it does" never pushes the preview out of view
+    const dock = el('div', 'tvdock');
+    dock.append(mon);
+    room.replaceChildren(dock, name);
     // on touch there is no hover: the card's tip line sits under the name
     const tip = at && tips.touch() ? tipText(at, t) : null;
     if (tip) room.append(el('p', 'd-tip', tip));

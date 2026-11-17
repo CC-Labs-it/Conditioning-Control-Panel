@@ -50,6 +50,13 @@ public class ShopPreviewBackendTests
     }
 
     [Fact]
+    public void Chess_finishes_say_desktop_only_until_the_website_and_phone_can_wear_them()
+    {
+        Assert.Equal(new[] { "desktop" }, ShopPreviewRules.PlacesOf("chess.finish.polka"));
+        Assert.Equal(new[] { "desktop", "web", "phone" }, ShopPreviewRules.PlacesOf("chess.banner.crest"));
+    }
+
+    [Fact]
     public void The_backend_answers_every_op_and_keeps_the_file()
     {
         var path = TempFile();

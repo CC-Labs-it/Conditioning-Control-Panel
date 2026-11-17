@@ -67,6 +67,33 @@ internal static class LookThumbs
     public static Brush CardGround(SuperCore.DeckBack back) => Frozen(SuperCore.DeckLooks.Ground(back));
     public static Brush CardMark(SuperCore.DeckBack back) => Frozen(SuperCore.DeckLooks.Mark(back));
 
+    /// <summary>The Plain chip, so it reads as "no frame" rather than a pink card: a dim picture card with a thin neutral
+    /// edge and a small "none" mark (a ring with a slash) over it.</summary>
+    public static FrameworkElement PlainCard(double w, double h)
+    {
+        var sky = new LinearGradientBrush(Color.FromRgb(0x6A, 0x86, 0xB0), Color.FromRgb(0x2E, 0x3A, 0x55), 90);
+        sky.Freeze();
+        var card = new System.Windows.Controls.Border
+        {
+            Width = w, Height = h, CornerRadius = new CornerRadius(3),
+            Background = sky, BorderBrush = Frozen(0x99FFFFFF), BorderThickness = new Thickness(1),
+        };
+        double d = Math.Min(w, h) * 0.75, r = d / 2 - 0.9, k = r * 0.7071;
+        var mark = new GeometryGroup();
+        mark.Children.Add(new EllipseGeometry(new Point(d / 2, d / 2), r, r));
+        mark.Children.Add(new LineGeometry(new Point(d / 2 - k, d / 2 + k), new Point(d / 2 + k, d / 2 - k)));
+        mark.Freeze();
+        var none = new System.Windows.Shapes.Path
+        {
+            Data = mark, Width = d, Height = d, Stroke = Frozen(0xF2FFFFFF), StrokeThickness = 1.6,
+            Fill = Frozen(0x661D0C26), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        var g = new System.Windows.Controls.Grid { Width = w, Height = h };
+        g.Children.Add(card);
+        g.Children.Add(none);
+        return g;
+    }
+
     /// <summary>The font of a word style's "Aa", with the face's own fallbacks.</summary>
     public static FontFamily WordFont(global::ConditioningControlPanel.Looks.WordStyle style)
     {

@@ -63,6 +63,18 @@ export function drawCard(g, kind, x, y, w, h, hue) {
   g.save(); g.beginPath(); rrect(g, x, y, w, h, r); g.clip(); drawFront(g, x, y, w, h, hue); g.restore();
   drawFrame(g, kind, x, y, w, h, r);
 }
+/** The Plain frame's picture on a chip or the stage: the bare card with a thin neutral edge and a small "none" mark (a
+ * ring with a slash), so "no frame" never reads as one more card. Pictures only: the Deck on "Your screen" stays bare. */
+export function drawNoFrame(g, x, y, w, h) {
+  const r = Math.min(w, h) * 0.08, s = Math.max(8, Math.min(w, h) * 0.27), cx = x + w - s * 0.95, cy = y + s * 0.95, lw = Math.max(1.2, s * 0.16);
+  g.save();
+  g.strokeStyle = '#ffffffa6'; g.lineWidth = Math.max(1, lw * 0.6); g.beginPath(); rrect(g, x + 0.5, y + 0.5, w - 1, h - 1, r); g.stroke();
+  g.fillStyle = '#1d0c26d9'; g.beginPath(); g.arc(cx, cy, s * 0.72, 0, TAU); g.fill();
+  g.strokeStyle = '#f4ecf7'; g.lineWidth = lw; g.lineCap = 'round';
+  g.beginPath(); g.arc(cx, cy, s * 0.48, 0, TAU); g.stroke();
+  const k = s * 0.48 * 0.7071; g.beginPath(); g.moveTo(cx - k, cy + k); g.lineTo(cx + k, cy - k); g.stroke();
+  g.restore();
+}
 /* Local or system fonts only: Segoe Print for chalk, Consolas for the typewriter, Rockwell for the marquee. */
 export function wordFont(kind, px) {
   if (kind === 'chalk') return `600 ${px * 1.15}px "Segoe Print", "Comic Sans MS", cursive`;

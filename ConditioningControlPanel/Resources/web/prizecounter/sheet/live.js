@@ -6,9 +6,10 @@
  * repaint never restarts an animation. A click on a bubble in "Your screen" pops it with its own sound (opts.onPop). */
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
-import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawSpiralBack, BACK_LIFE, FOGS, WORDS, hueOf, secondFog } from './looks.js';
+import { drawBack, drawFront, drawFrame, drawCard, drawNoFrame, drawWord, drawSpiralBack, BACK_LIFE, FOGS, WORDS, hueOf, secondFog } from './looks.js';
 import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
+import { makeFogMix } from './fogmix.js';
 import { FX_SLOTS } from './wire.js';
 
 const kindOf = (id) => String(id || '').split('.').pop();
@@ -60,6 +61,9 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
 
   /** Two-tone on a shelf: the user's own colour and the second colour they would wear. */
   const fogPair = () => { const L = looks(v0 || {}); return [L.own, FOGS[L.fog2]]; };
+  /** Two-tone as the desktop draws it (sheet/fogmix.js): the user's colour with the second as clean drifting regions.
+   * Motion off holds one moment. Each canvas keeps its own small grid. */
+  const fogMix = (world, g, tt, w, h, alpha) => { const [a, b] = fogPair(); (world.mix = world.mix || makeFogMix(doc))(g, a, b || FOGS.lilac, motion === 'off' ? 12 : tt, w, h, alpha); };
 
   /* ---------- one item's little live picture ---------- */
   function painter(e) {
@@ -75,13 +79,13 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     }
     return (item, tt) => {
       const g = item.c, w = item.w, h = item.h; g.clearRect(0, 0, w, h);
-      if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); g.restore(); }   // the same picture on every thumb: only the frame differs
+      if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); if (kind === 'plain') drawNoFrame(g, -cw / 2, -ch / 2, cw, ch); g.restore(); }   // the same picture on every thumb: only the frame differs
       else if (slot === 'behind') {
         const cw = h * 0.42, ch = h * 0.72, y = (h - ch) / 2;
         // Whisper: the card's spiral back with a word coming at you (one per 2.6 s); Nothing: the plain card
         if (kind === 'whisper') drawSpiralBack(g, WORDS[Math.floor(tt / 2.6) % WORDS.length], motion === 'off' ? 1.2 : tt % 2.6, (w - cw) / 2, y, cw, ch, motion === 'off' ? 0 : tt * 0.9, 'plain', motion === 'off');
         else drawCard(g, 'plain', (w - cw) / 2, y, cw, ch, 200);
-      } else if (slot === 'fog') drawFogBlobs(g, fogPair(), tt, w, h, 0.7);
+      } else if (slot === 'fog') fogMix(item.world, g, tt, w, h, 0.7);
       else if (slot === 'word') drawWord(g, kind, 'sink', w / 2, h * 0.52, h * 0.33, motion === 'off' ? 2 : tt % 4, 1);
     };
   }
@@ -133,12 +137,12 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
         W.next = (W.next || 3) - dt;
         if (motion !== 'off' && W.next <= 0) { W.next = 3.2; const b = W.bs[W.turn = ((W.turn || 0) + 1) % 3]; if (b) popBubble(b); }
         stepParts(W, dt); drawParts(W);
-      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); k.restore(); }
+      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); if (kind === 'plain') drawNoFrame(k, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6); k.restore(); }
       else if (slot === 'behind') {
         const cw = h * 0.38, ch = h * 0.56, x = cx - cw / 2, y = h * 0.16 + bob * 0.5, age = motion === 'off' ? 1.2 : tt % 2.6, word = WORDS[Math.floor(tt / 2.6) % WORDS.length];
         if (kind === 'whisper') drawSpiralBack(k, word, age, x, y, cw, ch, still ? 0 : tt * (gentle ? 0.35 : 0.9), 'plain', motion === 'off');
         else drawCard(k, 'plain', x, y, cw, ch, 200);
-      } else if (slot === 'fog') drawFogBlobs(k, fogPair(), tt, w, h);
+      } else if (slot === 'fog') fogMix(item.world, k, tt, w, h, 0.6);
       else if (slot === 'word') drawWord(k, kind, WORDS[Math.floor(tt / 4) % WORDS.length], cx, h * 0.45, h * 0.2, motion === 'off' ? 2 : tt % 4, 1);
     };
   }
@@ -177,16 +181,9 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     if (fog.width !== item.cv.width || fog.height !== item.cv.height) { fog.width = item.cv.width; fog.height = item.cv.height; }
     const fg = fog.getContext('2d');
     fg.setTransform(d, 0, 0, d, 0, 0); fg.globalCompositeOperation = 'source-over'; fg.clearRect(0, 0, W, H);
-    fg.globalAlpha = 0.32; fg.fillStyle = L.own; fg.fillRect(0, 0, W, H); fg.globalAlpha = 1;
-    if (L.mix) {   // the second colour moves through the first like ink in water
-      fg.globalCompositeOperation = 'source-atop'; const st = still ? 3 : tt;
-      for (let i = 0; i < 5; i++) {
-        const bx = (0.5 + 0.42 * Math.sin(st * (0.11 + i * 0.023) + i * 2.1)) * W, by = (0.5 + 0.4 * Math.cos(st * (0.09 + i * 0.031) + i * 1.3)) * H, rr = W * (0.22 + 0.07 * Math.sin(st * 0.2 + i));
-        const bl = fg.createRadialGradient(bx, by, 0, bx, by, rr); bl.addColorStop(0, FOGS[L.fog2] || FOGS.lilac); bl.addColorStop(1, 'rgba(0,0,0,0)');
-        fg.globalAlpha = 0.85; fg.fillStyle = bl; fg.fillRect(0, 0, W, H);
-      }
-      fg.globalAlpha = 1;
-    }
+    // the flat tint in the user's colour; Two-tone moves the second colour through it at the same strength
+    if (L.mix) fogMix(screen.world || (screen.world = {}), fg, still ? 3 : tt, W, H, 0.32);
+    else { fg.globalAlpha = 0.32; fg.fillStyle = L.own; fg.fillRect(0, 0, W, H); fg.globalAlpha = 1; }
     const m = screen.mouse;
     if (m.x > -1) { fg.globalCompositeOperation = 'destination-out'; const rg = fg.createRadialGradient(m.x, m.y, 0, m.x, m.y, W * 0.2); rg.addColorStop(0, 'rgba(0,0,0,1)'); rg.addColorStop(1, 'rgba(0,0,0,0)'); fg.fillStyle = rg; fg.fillRect(0, 0, W, H); }
     g.drawImage(fog, 0, 0, W, H);

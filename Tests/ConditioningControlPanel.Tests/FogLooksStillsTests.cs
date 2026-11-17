@@ -71,6 +71,66 @@ public class FogLooksStillsTests
         }
     }
 
+    /// <summary>Two-tone pairs (teal + amber, pink + mint, lilac + peach, sky + amber, amber + amber): the ramp as a
+    /// strip, the flat tint over the dark stand-in desktop and over a light one, and Steam, one moment each.</summary>
+    [Fact]
+    public void Dump_two_tone_pairs_when_asked()
+    {
+        var dir = Environment.GetEnvironmentVariable("CCP_FOG_DUMP");
+        if (string.IsNullOrEmpty(dir)) return;
+        Directory.CreateDirectory(dir);
+        using var bmp = new SKBitmap(new SKImageInfo(W, H, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bmp);
+        using var steam = new SteamDraw();
+        using var tint = new FogMixDraw();
+        var mix = new FogMixField();
+        var bounds = new SKRect(0, 0, W, H);
+        var field = Fog();
+        var amber = FogLooks.ColourOf(FogLooks.Amber)!.Value;
+        var pairs = new[]
+        {
+            ("teal-amber", Teal, amber),
+            ("pink-mint", FogLooks.ColourOf(FogLooks.Pink)!.Value, FogLooks.ColourOf(FogLooks.Mint)!.Value),
+            ("lilac-peach", FogLooks.ColourOf(FogLooks.Lilac)!.Value, FogLooks.ColourOf(FogLooks.Peach)!.Value),
+            ("sky-amber", FogLooks.ColourOf(FogLooks.Sky)!.Value, amber),
+            ("amber-amber", amber, amber),
+        };
+        const double t = 12;
+        using var strip = new SKBitmap(new SKImageInfo(FogMix.RampSize * 8, 40 * pairs.Length, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var sc = new SKCanvas(strip);
+        using var p = new SKPaint();
+        for (int n = 0; n < pairs.Length; n++)
+        {
+            var (name, main, second) = pairs[n];
+            var ramp = FogMix.Ramp(main, second);
+            for (int i = 0; i < ramp.Length; i++)
+            {
+                p.Color = new SKColor(ramp[i].R, ramp[i].G, ramp[i].B);
+                sc.DrawRect(i * 8, n * 40, 8, 40, p);
+            }
+
+            Desktop(canvas);
+            tint.Draw(canvas, bounds, main, second, 0.3, t);
+            canvas.Flush();
+            Save(bmp, dir, $"pair-tint-{name}");
+
+            canvas.Clear(new SKColor(206, 212, 222));
+            using (var win = new SKPaint { Color = new SKColor(250, 250, 252) })
+                for (int k = 0; k < 3; k++) canvas.DrawRect(90 + k * 400, 120, 320, 420, win);
+            tint.Draw(canvas, bounds, main, second, 0.3, t);
+            canvas.Flush();
+            Save(bmp, dir, $"pair-tint-light-{name}");
+
+            Desktop(canvas);
+            mix.Fill(48, 27, W / (double)H, t);
+            steam.Draw(canvas, bounds, field, new SKColor(main.R, main.G, main.B), 0.62, Array.Empty<string>(), null, SKTypeface.Default, t, mix, ramp);
+            canvas.Flush();
+            Save(bmp, dir, $"pair-steam-{name}");
+        }
+        sc.Flush();
+        Save(strip, dir, "pair-ramps");
+    }
+
     /// <summary>Two-tone: five frames three seconds apart for two users (hot pink picking lilac; teal picking
     /// mint, which is too close and steps on to amber), on Steam and on the flat tint, plus the cost of a
     /// frame with and without the mix.</summary>
