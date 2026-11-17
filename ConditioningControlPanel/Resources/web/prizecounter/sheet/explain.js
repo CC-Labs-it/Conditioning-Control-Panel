@@ -260,7 +260,7 @@ export const EXPLAIN_LEX = {
   // the tabs
   shop_sheet_tip_tab_featured: 'New looks, your gift, stamps and what you can afford',
   shop_sheet_tip_tab_effects: 'Looks for the effects on your desktop screen',
-  shop_sheet_tip_tab_games: 'Karts for Racing Thoughts, outfits for chess',
+  shop_sheet_tip_tab_games: 'Karts for Racing Thoughts, looks for chess',
   shop_sheet_tip_tab_you: 'Profile frames, and hats and toys for EMI\'s desk',
   shop_sheet_tip_tab_prime: 'Looks only Prime members can buy',
   shop_sheet_tip_tab_backroom: 'New effect options, race tracks and a Discord role',
@@ -272,7 +272,7 @@ export const EXPLAIN_LEX = {
   shop_sheet_sign_fog: 'Needs the pink filter or Steam on',
   shop_sheet_sign_word: 'One style at a time, on every subliminal',
   shop_sheet_sign_kart: 'Worn in the Racing Thoughts garage',
-  shop_sheet_sign_chess: 'Clothes, finishes, banners and badges for your pieces',
+  shop_sheet_sign_chess: 'Looks for your pieces, themed boards and Emi',
   shop_sheet_sign_profile: 'Frames and pictures for your profile card',
   shop_sheet_sign_desk: 'Hats and toys for EMI\'s desk, desktop app only',
   shop_sheet_sign_prime: 'Prime members can buy these. Anyone can look',

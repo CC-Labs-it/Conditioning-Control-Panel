@@ -37,7 +37,7 @@ test('every card face wears one status', () => {
 test('a group tab is one section per state tab with a plank per server shelf; Owned groups by shelf; search finds by name', () => {
   const st = readState(SAMPLE, { rain: false });
   const games = sections(st, { tab: 'games', t });
-  assert.deepEqual(games.map((s) => s.title), ['Kart skins', 'Chess outfits']);
+  assert.deepEqual(games.map((s) => s.title), ['Kart skins', 'Chess looks']);
   assert.equal(games[0].meta, 'Racing Thoughts');
   assert.equal(games[0].planks.length, st.tabs.find((x) => x.id === 'kart').shelves.filter((s) => s.rows.some(Boolean)).length);
   assert.deepEqual(sections(st, { tab: 'you', t }).map((s) => s.title), ['Profile frames', 'Desk toys']);
