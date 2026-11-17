@@ -6072,6 +6072,8 @@
   "tooltip_super_afterglow_hold": "Quanto brilla la riga completa prima di scendere.",
   "super_afterglow_ghost": "Opacità fantasmi",
   "tooltip_super_afterglow_ghost": "Quanto si vede una parola fantasma mentre aspetta nella riga.",
+  "super_afterglow_also_base": "Mostra anche i subliminali normali",
+  "tooltip_super_afterglow_also_base": "Con la V2 attiva, le schede subliminali normali restano a riposo. Attiva questa opzione per usarle entrambe.",
   "super_froth_size": "Bolla massima",
   "tooltip_super_froth_size": "Quanto possono crescere le bolle unite. Una bolla unita paga sempre la somma delle sue parti.",
   "super_froth_reach": "Raggio scoppio",

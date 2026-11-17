@@ -5353,6 +5353,8 @@
   "tooltip_super_afterglow_hold": "完成的一行在下沉前发光多久。",
   "super_afterglow_ghost": "幽灵不透明度",
   "tooltip_super_afterglow_ghost": "幽灵词在行中等待时的可见程度。",
+  "super_afterglow_also_base": "同时显示普通潜意识字卡",
+  "tooltip_super_afterglow_also_base": "V2 开启时，普通潜意识字卡会暂停。打开此项可让两者同时运行。",
   "super_froth_size": "最大泡泡",
   "tooltip_super_froth_size": "合并的泡泡最多能长多大。合并的泡泡总是支付各部分之和。",
   "super_froth_reach": "爆破范围",

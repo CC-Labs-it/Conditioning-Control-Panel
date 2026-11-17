@@ -274,14 +274,34 @@ namespace ConditioningControlPanel.Services
             // Super Afterglow picked as "Super only": the ambient cards rest, the near-cursor words carry on.
             // Asked per tick, so a pick change applies at the next card with no restart.
             if (!Super.SuperAccess.ReplacesBase(Super.SuperEffect.Afterglow))
-                FlashSubliminal();
+                FlashSubliminal(restCard: AfterglowRestsCard());
             ScheduleNext();
         }
 
         /// <summary>
-        /// Display a subliminal flash
+        /// Owner 2026-11-17: while Afterglow (the Subliminals V2) runs, the ambient card rests and
+        /// the word comes up as its ghost only, unless "Also show the normal subliminals" is on.
+        /// The whisper, the haptic and the XP still follow the word. Rule: SuperCore.AfterglowBase.
         /// </summary>
-        public void FlashSubliminal()
+        private static bool AfterglowRestsCard()
+        {
+            try
+            {
+                bool runs = Super.SuperAccess.IsOn(Super.SuperEffect.Afterglow)
+                            && App.CompositorEnabled && App.Compositor != null;
+                return SuperCore.AfterglowBase.CardRests(runs,
+                    Super.SuperPreview.Trying == Super.SuperEffect.Afterglow,
+                    App.Settings?.Current?.AfterglowAlsoBase ?? SuperCore.AfterglowBase.AlsoBaseDefault);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Display a subliminal flash. <paramref name="restCard"/> (the ambient tick only, while
+        /// Afterglow runs alone): the word still leaves its ghost and keeps its whisper, haptic and
+        /// XP, but no card is drawn.
+        /// </summary>
+        public void FlashSubliminal(bool restCard = false)
         {
             if (!_isRunning) _oneShotActive = true; // Allow display from remote control
             var pool = App.Settings.Current.SubliminalPool;
@@ -312,7 +332,7 @@ namespace ConditioningControlPanel.Services
                     _ = App.Haptics?.TriggerSubliminalPatternAsync(text);
                     Task.Delay(250).ContinueWith(__ =>
                     {
-                        DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text));
+                        DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text, restCard: restCard));
                     });
                 });
 
@@ -325,7 +345,7 @@ namespace ConditioningControlPanel.Services
             }
             else
             {
-                TriggerSubliminalWithHapticPattern(text);
+                TriggerSubliminalWithHapticPattern(text, restCard: restCard);
                 App.Progression?.AddXP(10, XPSource.Subliminal);
             }
         }
@@ -678,7 +698,7 @@ namespace ConditioningControlPanel.Services
         /// Buttplug.io has ~1.3s latency so we trigger haptics earlier for that provider
         /// </summary>
         private async void TriggerSubliminalWithHapticPattern(string text, int? opacity = null, int? overrideDurationMs = null, bool suppressHaptic = false, int? oneShotGen = null,
-            int? fadeInMs = null, int? fadeOutMs = null)
+            int? fadeInMs = null, int? fadeOutMs = null, bool restCard = false)
         {
             try
             {
@@ -700,7 +720,7 @@ namespace ConditioningControlPanel.Services
                     await Task.Delay(anticipationMs);
 
                 // Now show on UI thread
-                DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text, opacity, overrideDurationMs, oneShotGen, fadeInMs, fadeOutMs));
+                DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text, opacity, overrideDurationMs, oneShotGen, fadeInMs, fadeOutMs, restCard));
             }
             catch (Exception ex)
             {
@@ -712,7 +732,7 @@ namespace ConditioningControlPanel.Services
         private const int DefaultFadeMs = 50;
 
         private void ShowSubliminalVisuals(string text, int? opacity = null, int? overrideDurationMs = null, int? oneShotGen = null,
-            int? fadeInMs = null, int? fadeOutMs = null)
+            int? fadeInMs = null, int? fadeOutMs = null, bool restCard = false)
         {
             // #1045: this show belongs to a point-fired subliminal that has since been cancelled.
             // Checked FIRST because the pair below is inert while the ambient scheduler runs.
@@ -734,6 +754,9 @@ namespace ConditioningControlPanel.Services
             // Increment counter and fire event
             _subliminalCount++;
             SubliminalDisplayed?.Invoke(this, EventArgs.Empty);
+
+            // Afterglow runs alone: the word is on screen as its ghost, so the card rests.
+            if (restCard) return;
 
             // Duration in frames * ~16.6ms per frame, minimum 100ms.
             // Caller may override (Deeper engine passes the timeline segment width).

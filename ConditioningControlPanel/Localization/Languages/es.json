@@ -4596,6 +4596,8 @@
   "tooltip_super_afterglow_hold": "Cuánto brilla la línea completa antes de hundirse.",
   "super_afterglow_ghost": "Opacidad fantasma",
   "tooltip_super_afterglow_ghost": "Qué tan visible es una palabra fantasma mientras espera en la línea.",
+  "super_afterglow_also_base": "Mostrar también los subliminales normales",
+  "tooltip_super_afterglow_also_base": "Con la V2 activada, las tarjetas subliminales normales descansan. Actívalo para usar ambas.",
   "super_froth_size": "Burbuja máxima",
   "tooltip_super_froth_size": "Cuánto pueden crecer las burbujas unidas. Una burbuja unida siempre paga la suma de sus partes.",
   "super_froth_reach": "Alcance del estallido",

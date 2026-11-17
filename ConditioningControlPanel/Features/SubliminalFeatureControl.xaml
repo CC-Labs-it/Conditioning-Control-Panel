@@ -215,6 +215,20 @@
                         <StackPanel x:Name="AfterglowRows" Visibility="Collapsed"
                                     Loaded="AfterglowRows_Loaded" Unloaded="AfterglowRows_Unloaded">
                             <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                            <!-- Owner 2026-11-17: with the V2 on, the normal cards rest; this brings them back. -->
+                            <Grid x:Name="AfterglowAlsoBaseRow" Height="36" Background="Transparent"
+                                  ToolTip="{loc:Str tooltip_super_afterglow_also_base}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_also_base}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkAfterglowAlsoBase" feat:OptionSection.Setting="AfterglowAlsoBase"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                          Checked="ChkAfterglowAlsoBase_Changed" Unchecked="ChkAfterglowAlsoBase_Changed"/>
+                            </Grid>
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_words}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
