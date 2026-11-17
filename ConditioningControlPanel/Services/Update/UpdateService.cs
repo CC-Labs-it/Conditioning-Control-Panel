@@ -42,7 +42,7 @@ the Prize Counter is rebuilt. it is a sheet that drops down from your wallet now
 - a weekly gift, a stamp card for your first two weeks, and a ""saving for"" bar you can pin to one item.
 
 LOOKS FOR YOUR EFFECTS
-- Bubbles: ten skins. Soap, Marble, Heart, Champagne, Spiral, Disco, Frost, Bubblegum, Latex, Oil slick. each has its own movement inside, its own pop and its own sound. the old pop is still there as a switch.
+- Bubbles: seven skins. Soap, Marble, Heart, Champagne, Spiral, Disco, Frost. each has its own movement inside, its own pop and its own sound. the old pop is still there as a switch.
 - Deck cards: backs in Ink, Check and Lace, and Whisper, which puts a spiral with words coming at you on the back of every flip.
 - Subliminals: word styles. Typed, Chalk, Drift, Echo, Marquee.
 - Pink Filter: Two-tone, a second colour blended into the first.
@@ -61,7 +61,12 @@ V2, AFTER YOUR FEEDBACK
 - the old Back Room ""Flashes v2"" and ""Bubbles v2"" are called Extra Flashes and Extra Bubbles now. the Super effects are the V2.
 - Deck: the card takes the shape of the picture, so tall pictures no longer sit in an empty frame. the flip is quicker and steadier.
 - Deck keeps its cards when you own Shatter.
-- Steam: a pause between fog phrases.
+- Steam: a pause between fog phrases, and a Reach slider for how far in the fog comes, from the edges only to the centre.
+- Two-tone moved into Steam's gold box, with a colour of your own next to the palette.
+- the V2 subliminals and the words in the fog wear your word style.
+- Subliminals: with the V2 on, the normal cards rest. ""Also show the normal subliminals"" runs both.
+- Lights Down is reworked. fullscreen: a soft dim around the screen that pulls back when you move the mouse or look away. floating videos: the whole screen dims from the edges and the videos stay lit, with a glow in your mod's colour.
+- the attention target does not run with floating videos. the page says so now and switches it off.
 - fog and the Whirlpool are much lighter on the processor.
 - the V2 star and three other icons no longer show as empty boxes.
 
