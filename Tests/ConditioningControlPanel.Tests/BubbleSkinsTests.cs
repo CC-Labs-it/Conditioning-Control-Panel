@@ -18,9 +18,10 @@ public class BubbleSkinsTests
     [Fact]
     public void Choice_is_soap_unless_a_drawn_skin_is_named()
     {
-        foreach (var s in new[] { null, "", "glitter", BubbleSkinIds.Heart })
+        foreach (var s in new[] { null, "", "glitter", BubbleSkinIds.Disco })
             Assert.Equal(BubbleSkinIds.Soap, BubbleSkinChoice.Resolve(s));
         Assert.Equal(Champ, BubbleSkinChoice.Resolve(" Champagne "));
+        Assert.Equal(BubbleSkinIds.Heart, BubbleSkinChoice.Resolve("HEART"));
     }
 
     [Fact]
@@ -79,10 +80,91 @@ public class BubbleSkinsTests
         Assert.Equal(0, BubbleSkins.Burst(BubbleSkinIds.Soap, 42, 60, 1, a));
     }
 
+    /// <summary>Shared burst rules for every skin: deterministic for a seed, capped, born inside the glass, dies,
+    /// Off bursts nothing, Reduced flies slower.</summary>
+    private static void BurstRules(string skin, int maxCount)
+    {
+        var a = new SkinParticle[BubbleSkins.BurstCapacity];
+        var b = new SkinParticle[BubbleSkins.BurstCapacity];
+        Assert.True(maxCount <= BubbleSkins.BurstCapacity);
+        foreach (var r in Radii)
+            for (int seed = 1; seed < 30; seed += 7)
+            {
+                int n = BubbleSkins.Burst(skin, seed, r, 1, a);
+                Assert.InRange(n, 1, maxCount);
+                Assert.Equal(n, BubbleSkins.Burst(skin, seed, r, 1, b));
+                for (int i = 0; i < n; i++)
+                {
+                    Assert.Equal(a[i], b[i]);
+                    Assert.True(Math.Sqrt(a[i].X * a[i].X + a[i].Y * a[i].Y) <= 1.0, $"{skin} r={r} i={i}");
+                    Assert.False(BubbleSkins.At(a[i], a[i].Life + .01).Alive);
+                }
+                Assert.Equal(n, BubbleSkins.Burst(skin, seed, r, .5, b));
+                for (int i = 0; i < n; i++) Assert.True(Math.Abs(b[i].Vx) <= Math.Abs(a[i].Vx) + 1e-6);
+            }
+        Assert.Equal(0, BubbleSkins.Burst(skin, 42, 60, 0, a));
+    }
+
+    [Fact]
+    public void Heart_beats_lub_dub_is_still_under_off_and_its_pop_squeezes_then_throws_rising_hearts()
+    {
+        const string H = BubbleSkinIds.Heart;
+        Assert.True(BubbleSkins.OwnsBody(H));
+        Assert.False(BubbleSkins.OwnsBody(Champ));
+        Assert.InRange(BubbleSkins.PreBurst(H, false), .1, .3);
+        Assert.Equal(0, BubbleSkins.PreBurst(Champ, false));
+
+        var a = new SkinPrim[BubbleSkins.MaxInterior];
+        var b = new SkinPrim[BubbleSkins.MaxInterior];
+        double lo = 9, hi = 0;
+        for (double t = 0; t < 3; t += 1 / 30.0)
+        {
+            Assert.Equal(2, BubbleSkins.Interior(H, 77, t, 1, 60, a));
+            Assert.Equal(SkinPrimKind.HeartBody, a[0].Kind);
+            Assert.InRange(a[0].R, 1f, (float)(1 + BubbleSkins.HeartPulse) + 1e-4f);
+            Assert.InRange(a[1].R, .15f, .97f);
+            lo = Math.Min(lo, a[0].R); hi = Math.Max(hi, a[0].R);
+        }
+        Assert.True(hi - lo > .06, "the heart swells on the beat");
+        BubbleSkins.Interior(H, 77, .3, 0, 60, a);
+        BubbleSkins.Interior(H, 77, 8.8, 0, 60, b);
+        Assert.Equal(a[0], b[0]);
+        BubbleSkins.Interior(H, 77, 2.2, .5, 60, a);
+        BubbleSkins.Interior(H, 77, 1.1, 1, 60, b);
+        Assert.Equal(a[0], b[0]);
+
+        // The outline: plump, soft tip at the bottom, cleft at the top, inside the unit circle.
+        var o = BubbleSkins.HeartOutline();
+        double maxY = -9, cleft = 9;
+        for (int i = 0; i < o.Length; i += 2)
+        {
+            Assert.True(Math.Sqrt(o[i] * o[i] + o[i + 1] * o[i + 1]) <= 1.0);
+            maxY = Math.Max(maxY, o[i + 1]);
+            if (Math.Abs(o[i]) < .05) cleft = Math.Min(cleft, o[i + 1]);
+        }
+        Assert.True(maxY > .7, "a tip at the bottom");
+        Assert.True(cleft > -.6 && cleft < -.3, $"a cleft at the top: {cleft}");
+
+        Assert.True(BubbleSkins.HeartSqueeze(.5) < BubbleSkins.HeartSqueeze(0));
+        Assert.True(BubbleSkins.HeartSqueeze(1) > 1);
+        BurstRules(H, 1 + BubbleSkins.MaxHearts + BubbleSkins.MaxHeartDust);
+        var p = new SkinParticle[BubbleSkins.BurstCapacity];
+        int n = BubbleSkins.Burst(H, 9, 60, 1, p), hearts = 0;
+        double y0 = 0, y1 = 0;
+        for (int i = 0; i < n; i++)
+            if (p[i].Kind == SkinParticleKind.Heart && p[i].Life > 1.2f)
+            { hearts++; y0 += BubbleSkins.At(p[i], .6).Y; y1 += BubbleSkins.At(p[i], 1.15).Y; }
+        Assert.True(hearts > 0 && y1 < y0, "the hearts rise");
+    }
+
+    [Fact]
+    public void Heart_stills_draw_a_heart_in_place_of_the_sprite_and_pop_outside_it()
+        => Stills(BubbleSkinIds.Heart, new[] { .05, .12, .2, .34, .6, 1.0 }, popCell: 3, outerReach: .2);
+
     [Fact]
     public void Soap_and_reserved_skins_leave_the_item_untouched()
     {
-        foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Heart, "nope" })
+        foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Disco, "nope" })
         {
             var fresh = new BubbleLayer.BubbleItem();
             var item = new BubbleLayer.BubbleItem();
@@ -102,67 +184,111 @@ public class BubbleSkinsTests
 
     [Fact]
     public void Champagne_stills_draw_inside_the_glass_and_pop_outside_it()
+        => Stills(Champ, new[] { 2 / 30.0, 6 / 30.0, 12 / 30.0, 22 / 30.0, 34 / 30.0 }, popCell: 2, outerReach: 0);
+
+    /// <summary>
+    /// Offscreen stills of one skin on the real bubble.png from the tree (CCP_SKIN_SPRITE overrides it; the
+    /// stand-in is used only when the tree holds an LFS pointer). CCP_SKIN_DUMP=&lt;dir&gt; writes
+    /// &lt;dir&gt;/&lt;skin&gt;/&lt;skin&gt;-interior.png (four times, a small bubble, an Off frame) and -pop.png.
+    /// <paramref name="outerReach"/> is how far past the glass the live body may draw (0 = inside it).
+    /// </summary>
+    private static void Stills(string skin, double[] popAges, int popCell, double outerReach)
     {
-        // CCP_SKIN_SPRITE=<path to the real bubble.png> draws the stills on the shipped art (an LFS pointer here).
-        var real = Environment.GetEnvironmentVariable("CCP_SKIN_SPRITE");
-        using var sprite = (!string.IsNullOrEmpty(real) && System.IO.File.Exists(real) ? SKImage.FromEncodedData(real) : null) ?? StandInSprite();
+        using var sprite = LoadSprite();
         using var paint = new BubbleLayer.SkinPainter();
         const int seed = 20261117;
-        // Four times, a small bubble, and an Off frame.
         double[] times = { 0, 0.6, 1.3, 2.5 };
         using var strip = Canvas(Cell * 6, out var c);
-        for (int i = 0; i < times.Length; i++) Bubble(c, sprite, paint, seed, times[i], 1, i, Side, 1f, 1f);
-        Bubble(c, sprite, paint, seed + 1, 1.0, 1, 4, 90f, 1f, 1f);
-        Bubble(c, sprite, paint, seed, 7.0, 0, 5, Side, 1f, 1f);
-        // Pop: the base pop grows 0.04 and fades 0.066 a step at 30 fps; the burst flies from frame 0.
-        var parts = new SkinParticle[BubbleSkins.MaxBurst];
+        for (int i = 0; i < times.Length; i++) Bubble(c, sprite, paint, skin, seed, times[i], 1, i, Side, 1f, 1f);
+        Bubble(c, sprite, paint, skin, seed + 1, 1.0, 1, 4, 90f, 1f, 1f);
+        Bubble(c, sprite, paint, skin, seed, 7.0, 0, 5, Side, 1f, 1f);
+        // Pop. Without a pre-burst the base pop grows 0.04 and fades 0.066 a step at 30 fps while the burst flies;
+        // with one, the skin's burst draws the dying body for the pre-burst, then its particles fly.
+        var parts = new SkinParticle[BubbleSkins.BurstCapacity];
         float glass = Side * 0.5f * BubbleLayer.GlassOfHalf;
-        int n = BubbleSkins.Burst(Champ, seed, glass, 1, parts);
-        int[] frames = { 2, 6, 12, 22, 34 };
-        using var pop = Canvas(Cell * frames.Length, out var pc);
-        for (int i = 0; i < frames.Length; i++)
+        int n = BubbleSkins.Burst(skin, seed, glass, 1, parts);
+        double pre = BubbleSkins.PreBurst(skin, false);
+        using var pop = Canvas(Cell * popAges.Length, out var pc);
+        for (int i = 0; i < popAges.Length; i++)
         {
-            int f = frames[i];
-            if (1 - .066f * f > 0) Bubble(pc, sprite, paint, seed, 2.5 + f / 30.0, 1, i, Side, 1 + .04f * f, 1 - .066f * f);
-            paint.DrawBurst(pc, parts.AsSpan(0, n), f / 30.0, Cell * i + Cell / 2f, Cell / 2f, glass, 1f);
+            double age = popAges[i];
+            float px = Cell * i + Cell / 2f, py = Cell / 2f;
+            if (pre <= 0)
+            {
+                float f = (float)(age * 30);
+                if (1 - .066f * f > 0) Bubble(pc, sprite, paint, skin, seed, 2.5 + age, 1, i, Side, 1 + .04f * f, 1 - .066f * f);
+                paint.DrawBurst(pc, parts.AsSpan(0, n), age, px, py, glass, 1f);
+            }
+            else if (age < pre) paint.DrawDying(pc, skin, seed, 2.5 + age, 1, age / pre, false, px, py, glass);
+            else paint.DrawBurst(pc, parts.AsSpan(0, n), age - pre, px, py, glass, 1f);
         }
         var dump = Environment.GetEnvironmentVariable("CCP_SKIN_DUMP");
         if (!string.IsNullOrEmpty(dump))
         {
-            Directory.CreateDirectory(dump);
-            Save(strip, Path.Combine(dump, "champagne-interior.png"));
-            Save(pop, Path.Combine(dump, "champagne-pop.png"));
+            var dir = Path.Combine(dump, skin);
+            Directory.CreateDirectory(dir);
+            Save(strip, Path.Combine(dir, skin + "-interior.png"));
+            Save(pop, Path.Combine(dir, skin + "-pop.png"));
         }
 
         Assert.True(Diff(strip, 0, 1) > 200, "the interior moves");
         using var still = Canvas(Cell * 2, out var sc);
-        Bubble(sc, sprite, paint, seed, 0.2, 0, 0, Side, 1f, 1f);
-        Bubble(sc, sprite, paint, seed, 5.2, 0, 1, Side, 1f, 1f);
-        Assert.True(Diff(still, 0, 1) <= 8, "Off is a still frame");   // the real art resamples a few edge pixels per cell
-        Assert.Equal(Bg, strip.GetPixel(Cell + 8, 8));   // nothing lands outside the glass
+        Bubble(sc, sprite, paint, skin, seed, 0.2, 0, 0, Side, 1f, 1f);
+        Bubble(sc, sprite, paint, skin, seed, 5.2, 0, 1, Side, 1f, 1f);
+        // The real art and the shaders resample a few edge pixels per cell by a step or two of a channel.
+        int offDiff = Diff(still, 0, 1, 3);
+        Assert.True(offDiff <= 8, $"Off is a still frame ({offDiff} pixels, {Diff(still, 0, 1)} exact)");
+        Assert.Equal(Bg, strip.GetPixel(Cell + 8, 8));   // nothing lands in the cell's corner
+        float bound = glass * (float)(1 + outerReach) + 2;
+        for (int y = 0; y < Cell; y += 3)
+            for (int x = Cell; x < Cell * 2; x += 3)
+            {
+                float dx = x - Cell * 1.5f, dy = y - Cell / 2f;
+                if (dx * dx + dy * dy > (Side / 2 + 2) * (Side / 2 + 2)) Assert.Equal(Bg, strip.GetPixel(x, y));   // never past the sprite
+                else if (outerReach > 0 && dx * dx + dy * dy > bound * bound) Assert.Equal(Bg, strip.GetPixel(x, y));
+            }
         int lit = 0;
         for (int y = 0; y < Cell; y += 2)
-            for (int x = Cell * 2; x < Cell * 3; x += 2)
+            for (int x = Cell * popCell; x < Cell * (popCell + 1); x += 2)
             {
-                float dx = x - Cell * 2.5f, dy = y - Cell / 2f;
+                float dx = x - Cell * (popCell + .5f), dy = y - Cell / 2f;
                 if (dx * dx + dy * dy > glass * glass * 1.6f && pop.GetPixel(x, y) != Bg) lit++;
             }
         Assert.True(lit > 20, $"burst pixels outside the glass: {lit}");
     }
 
-    /// <summary>The order and transform of BubbleLayer.Render: tinted sprite, then the interior under its scale.</summary>
-    private static void Bubble(SKCanvas c, SKImage sprite, BubbleLayer.SkinPainter paint, int seed, double t, double motion,
+    /// <summary>The order and transform of BubbleLayer.Render: the sprite (tinted, or none for a skin with its own
+    /// body), then the interior under its scale.</summary>
+    private static void Bubble(SKCanvas c, SKImage sprite, BubbleLayer.SkinPainter paint, string skin, int seed, double t, double motion,
                                int cell, float side, float scale, float opacity)
     {
         float cx = Cell * cell + Cell / 2f, cy = Cell / 2f, half = side / 2f;
         int save = c.Save();
         c.Translate(cx, cy); c.Scale(scale, scale); c.Translate(-cx, -cy);
-        using var img = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium, Color = SKColors.White.WithAlpha((byte)(opacity * 255)),
-                                      ColorFilter = BubbleLayer.SkinPainter.ShellTint(Champ) };
-        c.DrawImage(sprite, new SKRect(cx - half, cy - half, cx + half, cy + half), img);
-        img.ColorFilter = null;   // the shared filter is app-lifetime: never disposed with this paint
-        paint.DrawInterior(c, Champ, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity);
+        if (!BubbleSkins.OwnsBody(skin))
+        {
+            using var img = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium, Color = SKColors.White.WithAlpha((byte)(opacity * 255)),
+                                          ColorFilter = BubbleLayer.SkinPainter.ShellTint(skin) };
+            c.DrawImage(sprite, new SKRect(cx - half, cy - half, cx + half, cy + half), img);
+            img.ColorFilter = null;   // the shared filter is app-lifetime: never disposed with this paint
+        }
+        paint.DrawInterior(c, skin, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity);
         c.RestoreToCount(save);
+    }
+
+    /// <summary>The shipped art from the tree (a plain git blob), else CCP_SKIN_SPRITE, else the stand-in.</summary>
+    private static SKImage LoadSprite()
+    {
+        var path = Environment.GetEnvironmentVariable("CCP_SKIN_SPRITE");
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources", "bubble.png"))) dir = dir.Parent;
+            path = dir == null ? null : Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources", "bubble.png");
+        }
+        SKImage? img = null;
+        try { if (path != null) img = SKImage.FromEncodedData(path); } catch { }   // an LFS pointer decodes to null
+        return img ?? StandInSprite();
     }
 
     /// <summary>A soap stand-in with the shipped art's proportions: a rim at 0.36 of the side and a highlight.</summary>
@@ -189,12 +315,17 @@ public class BubbleSkinsTests
         return bmp;
     }
 
-    private static int Diff(SKBitmap bmp, int a, int b)
+    /// <summary>Pixels that differ between two cells by more than <paramref name="tol"/> in any channel.</summary>
+    private static int Diff(SKBitmap bmp, int a, int b, int tol = 0)
     {
         int d = 0;
         for (int y = 0; y < Cell; y++)
             for (int x = 0; x < Cell; x++)
-                if (bmp.GetPixel(a * Cell + x, y) != bmp.GetPixel(b * Cell + x, y)) d++;
+            {
+                SKColor p = bmp.GetPixel(a * Cell + x, y), q = bmp.GetPixel(b * Cell + x, y);
+                if (Math.Abs(p.Red - q.Red) > tol || Math.Abs(p.Green - q.Green) > tol || Math.Abs(p.Blue - q.Blue) > tol
+                    || Math.Abs(p.Alpha - q.Alpha) > tol) d++;
+            }
         return d;
     }
 

@@ -15,7 +15,7 @@ public static class BubbleSkinIds
     public static readonly IReadOnlyList<string> All = new[] { Soap, Champagne, Heart, Spiral, Marble, Disco, Frost };
 
     /// <summary>True for a skin that has a draw today (soap draws nothing extra).</summary>
-    public static bool IsDrawn(string? id) => id == Champagne;
+    public static bool IsDrawn(string? id) => id is Champagne or Heart;
 }
 
 /// <summary>The one place a new bubble learns its skin. Soap, unless a DEBUG build names a drawn
@@ -41,21 +41,26 @@ public static class BubbleSkinChoice
     }
 }
 
-public enum SkinPrimKind : byte { Bead, Ring, Foam }
+/// <summary>Heart: <see cref="HeartBody"/> is the heart itself (R = its scale, Alpha = the beat 0..1);
+/// <see cref="HeartRipple"/> is the small heart a beat sends out (R = its scale).</summary>
+public enum SkinPrimKind : byte { Bead, Ring, Foam, HeartBody, HeartRipple }
 
 /// <summary>One interior shape in the bubble's unit circle (y down, radius 1 = the glass).</summary>
 public readonly record struct SkinPrim(float X, float Y, float R, float Alpha, SkinPrimKind Kind);
 
-public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist }
+public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist, Heart, HeartWave }
 
 /// <summary>One pop particle at birth, in glass radii (position) and radii per second (velocity).
 /// <see cref="Rise"/> is a constant pull (negative = up), <see cref="Drag"/> slows it per second,
-/// <see cref="Grow"/> widens a wave or a mist over its life.</summary>
+/// <see cref="Grow"/> widens a wave or a mist over its life. <see cref="Rot"/> and <see cref="Spin"/>
+/// turn a shaped particle (radians, radians per second); <see cref="Argb"/> is its colour (0 = the
+/// painter's default for the kind).</summary>
 public readonly record struct SkinParticle(float X, float Y, float Vx, float Vy, float Life, float Size,
-    SkinParticleKind Kind, float Rise = 0, float Drag = 0, float SwayAmp = 0, float SwayFreq = 0, float SwayPhase = 0, float Grow = 0);
+    SkinParticleKind Kind, float Rise = 0, float Drag = 0, float SwayAmp = 0, float SwayFreq = 0, float SwayPhase = 0, float Grow = 0,
+    float Rot = 0, float Spin = 0, uint Argb = 0);
 
 /// <summary>Where a particle is <c>age</c> seconds after the pop. Alive = false once its life is spent.</summary>
-public readonly record struct SkinParticleState(float X, float Y, float Size, float Alpha, bool Alive);
+public readonly record struct SkinParticleState(float X, float Y, float Size, float Alpha, bool Alive, float Rot = 0);
 
 /// <summary>
 /// Skin rules: pure and deterministic. Given a skin, a per-bubble seed, a time and a motion scale
@@ -63,7 +68,7 @@ public readonly record struct SkinParticleState(float X, float Y, float Size, fl
 /// a seed they return the pop burst. Counts scale with the bubble's glass radius in pixels and are
 /// capped, so a field of 40 bubbles at 30 fps stays cheap. Interior shapes never leave the glass.
 /// </summary>
-public static class BubbleSkins
+public static partial class BubbleSkins
 {
     private const double Tau = Math.PI * 2;
     /// <summary>Interior shapes sit inside this share of the glass (the lab clips at 0.93).</summary>
@@ -75,6 +80,19 @@ public static class BubbleSkins
     public const int MaxInterior = MaxBeads + MaxRings + MaxFoam + Nozzles;
     public const int MaxFizz = 48, MaxSparks = 12, Mists = 3;
     public const int MaxBurst = 1 + MaxFizz + MaxSparks + Mists;
+    /// <summary>Room for the largest burst of any skin: the layer sizes every burst buffer by it.</summary>
+    public const int BurstCapacity = 96;
+
+    /// <summary>True for a skin that draws its own body in place of the soap sprite (the hit area stays the circle).</summary>
+    public static bool OwnsBody(string? skin) => skin is BubbleSkinIds.Heart;
+
+    /// <summary>Seconds the skin's burst spends on the dying body (squeeze, cracks, wind-in) before its
+    /// particles fly. The pop itself pays and sounds at once; this is drawing only. 0 = no pre-burst.</summary>
+    public static double PreBurst(string? skin, bool gentle) => skin switch
+    {
+        BubbleSkinIds.Heart => .16,
+        _ => 0,
+    };
 
     public static int BeadCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.7), 16, MaxBeads);
     public static int FoamCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.32), 8, MaxFoam);
@@ -85,6 +103,7 @@ public static class BubbleSkins
     /// <summary>The interior at <paramref name="seconds"/> after spawn. Returns how many shapes it wrote.</summary>
     public static int Interior(string? skin, int seed, double seconds, double motion, double radiusPx, Span<SkinPrim> dst)
     {
+        if (skin == BubbleSkinIds.Heart) return HeartInterior(seed, seconds, motion, radiusPx, dst);
         if (skin != BubbleSkinIds.Champagne || dst.Length < MaxInterior || radiusPx <= 0) return 0;
         double t = seconds * Math.Clamp(motion, 0, 1);
         double minR = MinPx / radiusPx;
@@ -143,6 +162,7 @@ public static class BubbleSkins
     public static int Burst(string? skin, int seed, double radiusPx, double motion, Span<SkinParticle> dst)
     {
         motion = Math.Clamp(motion, 0, 1);
+        if (skin == BubbleSkinIds.Heart) return HeartBurst(seed, radiusPx, motion, dst);
         if (skin != BubbleSkinIds.Champagne || dst.Length < MaxBurst || radiusPx <= 0 || motion <= 0) return 0;
         var rnd = new Mulberry((uint)seed);
         float m = (float)motion, minS = (float)(MinPx / radiusPx);
@@ -207,10 +227,10 @@ public static class BubbleSkins
         double size = p.Kind switch
         {
             SkinParticleKind.Wave => p.Size * (1 + p.Grow * (1 - (1 - u) * (1 - u))),
-            SkinParticleKind.Mist => p.Size * (1 + p.Grow * u),
+            SkinParticleKind.Mist or SkinParticleKind.HeartWave => p.Size * (1 + p.Grow * u),
             _ => p.Size,
         };
-        return new SkinParticleState((float)x, (float)y, (float)size, (float)alpha, true);
+        return new SkinParticleState((float)x, (float)y, (float)size, (float)alpha, true, (float)(p.Rot + p.Spin * age));
     }
 
     /// <summary>Longest life in a burst: the layer keeps it until then.</summary>

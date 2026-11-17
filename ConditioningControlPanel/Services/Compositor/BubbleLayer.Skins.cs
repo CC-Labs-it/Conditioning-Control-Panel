@@ -23,6 +23,12 @@ public sealed partial class BubbleLayer
     {
         public float X, Y, R, Life;
         public long StartMs;
+        /// <summary>The skin's pre-burst: the first <see cref="Pre"/> seconds draw the dying body, then the particles fly.</summary>
+        public string Skin = BubbleSkinIds.Soap;
+        public int Seed;
+        public float Pre;
+        public double BodySeconds, Motion;
+        public bool Gentle;
         public SkinParticle[] Parts = System.Array.Empty<SkinParticle>();
         public int Count;
     }
@@ -32,6 +38,7 @@ public sealed partial class BubbleLayer
     private long _skinDrawnMs;
     private double _skinMotion = 1;
     private long _skinMotionAt = long.MinValue;
+    private bool _skinGentle;
 
     private bool SkinFxDue => _skinFx.Count > 0 && System.Environment.TickCount64 - _skinDrawnMs >= SkinFxStepMs;
 
@@ -57,13 +64,18 @@ public sealed partial class BubbleLayer
                 Models.MotionLevel.Reduced => .5,
                 _ => 1,
             };
+            _skinGentle = Safety.GentleVisuals.On;
             _skinMotionAt = now;
         }
         return _skinMotion;
     }
 
+    /// <summary>The skin draws this bubble's body in place of the soap sprite: a shaped skin, or a pop its burst now draws.</summary>
+    private static bool SkinDrawsBody(BubbleItem item) => item.SkinBodyHanded || BubbleSkins.OwnsBody(item.Skin);
+
     private void DrawSkinInterior(SKCanvas canvas, BubbleItem item, float cx, float cy, float half)
     {
+        if (item.SkinBodyHanded) return;   // the burst draws the dying body
         double seconds = (System.Environment.TickCount64 - item.SkinStartMs) / 1000.0;
         _skinPaint.DrawInterior(canvas, item.Skin!, item.SkinSeed, seconds, SkinMotion(), cx, cy, half * GlassOfHalf, item.Opacity);
     }
@@ -74,16 +86,23 @@ public sealed partial class BubbleLayer
         if (item.Skin == null || item.SkinBurst) return;
         item.SkinBurst = true;
         float r = item.SizeDip * 0.5f * item.DpiScale * item.FrothScale * GlassOfHalf * Math.Max(1f, item.Scale);
-        var parts = new SkinParticle[BubbleSkins.MaxBurst];
-        int n = BubbleSkins.Burst(item.Skin, item.SkinSeed, r, SkinMotion(), parts);
+        var parts = new SkinParticle[BubbleSkins.BurstCapacity];
+        double motion = SkinMotion();
+        int n = BubbleSkins.Burst(item.Skin, item.SkinSeed, r, motion, parts);
         if (n == 0) return;
         if (_skinFx.Count >= MaxLiveSkinBursts) _skinFx.RemoveAt(0);
+        long now = System.Environment.TickCount64;
+        float pre = (float)BubbleSkins.PreBurst(item.Skin, _skinGentle);
         _skinFx.Add(new SkinFx
         {
             X = (float)item.CenterXPx, Y = (float)item.CenterYPx, R = r,
-            StartMs = System.Environment.TickCount64, Parts = parts, Count = n,
-            Life = BubbleSkins.LifeOf(new ReadOnlySpan<SkinParticle>(parts, 0, n)),
+            StartMs = now, Parts = parts, Count = n,
+            Life = pre + BubbleSkins.LifeOf(new ReadOnlySpan<SkinParticle>(parts, 0, n)),
+            Skin = item.Skin, Seed = item.SkinSeed, Pre = pre, Motion = motion, Gentle = _skinGentle,
+            BodySeconds = (now - item.SkinStartMs) / 1000.0,
         });
+        // A skin with a pre-burst takes over drawing the dying bubble; game logic is not delayed.
+        if (pre > 0) item.SkinBodyHanded = true;
         _dirty = true;
         SetActive(true);
     }
@@ -104,7 +123,10 @@ public sealed partial class BubbleLayer
             var fx = _skinFx[i];
             double age = (now - fx.StartMs) / 1000.0;
             if (age >= fx.Life) { _skinFx.RemoveAt(i); continue; }
-            _skinPaint.DrawBurst(c, new ReadOnlySpan<SkinParticle>(fx.Parts, 0, fx.Count), age, fx.X, fx.Y, fx.R, 1f);
+            if (age < fx.Pre)
+                _skinPaint.DrawDying(c, fx.Skin, fx.Seed, fx.BodySeconds + age, fx.Motion, age / fx.Pre, fx.Gentle, fx.X, fx.Y, fx.R);
+            else
+                _skinPaint.DrawBurst(c, new ReadOnlySpan<SkinParticle>(fx.Parts, 0, fx.Count), age - fx.Pre, fx.X, fx.Y, fx.R, 1f);
         }
         if (_skinFx.Count == 0) _dirty = true;   // one last clean frame without the burst
         if (_skinFx.Count == 0 && _items.Count == 0 && _bloomFx.Count == 0) SetActive(false);
@@ -118,11 +140,13 @@ public sealed partial class BubbleLayer
         public long SkinStartMs;
         /// <summary>Set once the pop burst was handed to the layer.</summary>
         internal bool SkinBurst;
+        /// <summary>Set when the burst took over drawing the dying body (a skin with a pre-burst).</summary>
+        internal bool SkinBodyHanded;
     }
 
     /// <summary>The Skia draw of a skin, apart from the layer so a test can render it offscreen. Paints,
     /// the shape buffer and the unit-space shaders are built once and reused: nothing native per frame.</summary>
-    internal sealed class SkinPainter : IDisposable
+    internal sealed partial class SkinPainter : IDisposable
     {
         private static SKColorFilter? s_goldShell;
 
@@ -147,6 +171,7 @@ public sealed partial class BubbleLayer
             if (r < 2f || alpha <= .003f) return;
             int n = BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims);
             if (n == 0) return;
+            if (skin == BubbleSkinIds.Heart) { DrawHeart(c, _prims[0], _prims[1], cx, cy, r, alpha, 1, 0); return; }
             int save = c.Save();
             c.Translate(cx, cy);
             c.Scale(r, r);
@@ -181,6 +206,20 @@ public sealed partial class BubbleLayer
                 }
             }
             c.RestoreToCount(save);
+        }
+
+        /// <summary>The dying body during the skin's pre-burst, k 0..1 through it (squeeze, cracks, wind-in).
+        /// Under Gentle visuals nothing flashes white.</summary>
+        public void DrawDying(SKCanvas c, string skin, int seed, double seconds, double motion, double k, bool gentle,
+                              float cx, float cy, float r)
+        {
+            if (r < 2f) return;
+            if (skin == BubbleSkinIds.Heart)
+            {
+                if (BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims) < 2) return;
+                float white = gentle ? 0 : (float)Math.Max(0, (k - .5) * 1.2);
+                DrawHeart(c, _prims[0], _prims[1], cx, cy, r, 1f, (float)BubbleSkins.HeartSqueeze(k), white);
+            }
         }
 
         public void DrawBurst(SKCanvas c, ReadOnlySpan<SkinParticle> parts, double age, float cx, float cy, float r, float alpha)
@@ -224,8 +263,12 @@ public sealed partial class BubbleLayer
                         _fill.Color = new SKColor(255, 236, 190, A(.9f * a));
                         c.DrawCircle(x, y, s, _fill);
                         break;
+                    case SkinParticleKind.Heart:
+                    case SkinParticleKind.HeartWave:
+                        DrawHeartParticle(c, p, st, age, x, y, s, a);
+                        break;
                     default:
-                        _fill.Color = new SKColor(255, 244, 214, A(.9f * a));
+                        _fill.Color = p.Argb != 0 ? Tone(p.Argb, a) : new SKColor(255, 244, 214, A(.9f * a));
                         c.DrawCircle(x, y, s, _fill);
                         break;
                 }
@@ -233,6 +276,9 @@ public sealed partial class BubbleLayer
         }
 
         private static byte A(float a) => (byte)Math.Clamp(a * 255f, 0f, 255f);
+
+        /// <summary>A skin colour (0xAARRGGBB) with its own alpha times <paramref name="a"/>.</summary>
+        private static SKColor Tone(uint argb, float a) => new SKColor(argb).WithAlpha(A((argb >> 24) / 255f * a));
 
         public void Dispose()
         {

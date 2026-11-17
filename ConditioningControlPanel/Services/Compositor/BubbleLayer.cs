@@ -221,7 +221,8 @@ public sealed partial class BubbleLayer : BaseLayer
                 canvas.Translate(-cx, -cy);
             }
             var body = new SKRect(cx - half, cy - half, cx + half, cy + half);
-            if (item.Sprite != null)
+            if (item.Skin != null && SkinDrawsBody(item)) { /* Heart, Marble: the skin's own body (below), or its burst draws the pop */ }
+            else if (item.Sprite != null)
             {
                 _img.Color = SKColors.White.WithAlpha(ga);
                 var shell = item.Skin != null ? SkinPainter.ShellTint(item.Skin) : null;   // soap: null, untouched
