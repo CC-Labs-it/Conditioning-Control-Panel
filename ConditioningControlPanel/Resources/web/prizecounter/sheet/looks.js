@@ -1,8 +1,20 @@
 /* sheet/looks.js - the screen-effect looks drawn on canvas, ported from the owner's mockup (prize-counter-v4.html): card
- * backs, the Deck card front, word styles with their own motion, fog colours (and the two-tone swirl), the whisper that
+ * frames and backs, the Deck card front, word styles with their own motion, fog colours (and the two-tone swirl), the whisper that
  * leaves from behind a flipping card. Pure drawing on a 2D context; time goes in, nothing is kept here. */
 
-export const FOGS = { pink: '#ff5fa8', lilac: '#a98bff', mint: '#5fe0b8', amber: '#ffb347' };
+/* The fog wears the user's own pink filter colour (owner 2026-11-17: the shop sells no fog colours). Two-tone adds a
+ * second colour from this palette, in this order (CCP.Core FogLooks.Palette): one too close to the user's own would
+ * make the swirl vanish, so the next one stands in (secondFog). */
+export const FOGS = { pink: '#ff5fa8', lilac: '#a98bff', mint: '#5fe0b8', amber: '#ffb347', sky: '#5fc0ff', peach: '#ff937a' };
+export const FOG_CLOSE = 48;
+const rgbOf = (hex) => { const m = String(hex || '').replace('#', ''); return m.length === 6 ? [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16)) : null; };
+export const fogClose = (a, b) => { const x = rgbOf(a), y = rgbOf(b); return !!(x && y) && Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < FOG_CLOSE; };
+/** The second colour shown for the pick over the user's own colour: { kind, skipped } (skipped = the pick was too close). */
+export function secondFog(pick, own) {
+  const keys = Object.keys(FOGS), want = keys.includes(pick) ? pick : 'lilac', at = keys.indexOf(want);
+  for (let k = 0; k < keys.length; k++) { const kind = keys[(at + k) % keys.length]; if (!fogClose(FOGS[kind], own)) return { kind, skipped: kind !== want }; }
+  return { kind: want, skipped: false };
+}
 export const WORDS = ['let go', 'sink', 'good', 'deeper', 'soft', 'obey', 'blank'];
 const TAU = Math.PI * 2;
 export const ease = (x) => { x = Math.max(0, Math.min(1, x)); return 1 - Math.pow(1 - x, 3); };
@@ -22,6 +34,34 @@ export function drawFront(g, x, y, w, h, hue) {
   g.fillStyle = gr; g.fillRect(x, y, w, h);
   g.fillStyle = '#ffffff8c'; g.beginPath(); g.arc(x + w * 0.72, y + h * 0.3, Math.min(w, h) * 0.11, 0, TAU); g.fill();
   g.beginPath(); g.moveTo(x, y + h); g.lineTo(x + w * 0.38, y + h * 0.5); g.lineTo(x + w * 0.62, y + h * 0.78); g.lineTo(x + w * 0.8, y + h * 0.6); g.lineTo(x + w, y + h); g.closePath(); g.fillStyle = '#14101973'; g.fill();
+}
+/* Card frames (owner 2026-11-17): the patterns as a border round every Deck card, as the desktop draws them
+ * (CCP.Core DeckLooks.Frame*: the band is a small share of the shorter side, an ink line on both its edges). The page's
+ * cards are small, so the band is a little bolder here than the desktop's 5.5%. Plain = no frame. */
+const rrect = (g, x, y, w, h, r) => { r = Math.max(0, Math.min(r, w / 2, h / 2)); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+export const frameBand = (w, h) => Math.max(5, Math.min(26, Math.min(w, h) * 0.09));
+export function drawFrame(g, kind, x, y, w, h, r) {
+  if (kind === 'plain' || !kind) return 0;
+  const b = frameBand(w, h), ink = Math.max(1.2, b * 0.2), ir = Math.max(r - b, b * 0.5);
+  g.save(); g.beginPath(); rrect(g, x, y, w, h, r); rrect(g, x + b, y + b, w - 2 * b, h - 2 * b, ir); g.clip('evenodd');
+  g.fillStyle = kind === 'lace' ? '#f6e9f0' : kind === 'ink' ? '#f1efe6' : '#17202b'; g.fillRect(x, y, w, h);
+  if (kind === 'ink') { const s = Math.max(3, b * 0.5); g.strokeStyle = '#17202b'; g.lineWidth = Math.max(1, s * 0.24); g.beginPath(); for (let i = -h; i < w; i += s) { g.moveTo(x + i, y + h); g.lineTo(x + i + h, y); } g.stroke(); }
+  else if (kind === 'check') { const s = Math.max(2, b / 2); g.fillStyle = '#ff5fa8'; for (let cy = 0; cy * s < h; cy++) for (let cx = 0; cx * s < w; cx++) if ((cx + cy) % 2 === 0) g.fillRect(x + cx * s, y + cy * s, s, s); }
+  else if (kind === 'lace') {
+    const s = Math.max(3, b * 0.55), d = Math.max(0.9, s * 0.24); g.fillStyle = '#d98bb0'; g.beginPath();
+    for (let ly = s / 2, row = 0; ly < h; ly += s, row++) for (let lx = (row % 2) * s / 2 + s / 2; lx < w; lx += s) { g.moveTo(x + lx + d, y + ly); g.arc(x + lx, y + ly, d, 0, TAU); }
+    g.fill(); g.strokeStyle = '#d98bb0'; g.lineWidth = Math.max(0.8, ink * 0.5); g.beginPath(); rrect(g, x + b / 2, y + b / 2, w - b, h - b, Math.max(0, r - b / 2)); g.stroke();
+  }
+  g.restore();
+  g.save(); g.strokeStyle = '#17202b'; g.lineWidth = ink; g.beginPath(); rrect(g, x + ink / 2, y + ink / 2, w - ink, h - ink, Math.max(0, r - ink / 2)); g.stroke();
+  g.beginPath(); rrect(g, x + b - ink / 2, y + b - ink / 2, w - 2 * b + ink, h - 2 * b + ink, ir + ink / 2); g.stroke(); g.restore();
+  return b;
+}
+/** A Deck card as the desktop shows it: the picture with rounded corners and the worn frame round it. */
+export function drawCard(g, kind, x, y, w, h, hue) {
+  const r = Math.min(w, h) * 0.08;
+  g.save(); g.beginPath(); rrect(g, x, y, w, h, r); g.clip(); drawFront(g, x, y, w, h, hue); g.restore();
+  drawFrame(g, kind, x, y, w, h, r);
 }
 /* Local or system fonts only: Segoe Print for chalk, Consolas for the typewriter, Rockwell for the marquee. */
 export function wordFont(kind, px) {

@@ -111,6 +111,33 @@ public class ShopPreviewBackendTests
     }
 
     [Fact]
+    public void A_file_that_owns_and_wears_the_gone_fog_colours_loads_cleanly()
+    {
+        // The single fog colours left the shop (owner, 2026-11-17): only Two-tone is sold.
+        var path = TempFile();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "{ \"v\": 1, \"sp\": 500, \"cardStart\": \"2026-11-13\", \"stamped\": [1], \"mix\": true,"
+                + " \"owned\": { \"fx.fog.pink\": { \"at\": \"x\", \"paidSp\": 0 }, \"fx.fog.amber\": { \"at\": \"x\", \"paidSp\": 360 },"
+                + " \"fx.fog.twotone\": { \"at\": \"x\", \"paidSp\": 730 } },"
+                + " \"equip\": { \"fog\": \"fx.fog.amber\", \"fog2\": \"fx.fog.mint\" }, \"goal\": \"fx.fog.lilac\" }");
+            var b = new ShopPreviewBackend(path, Sample(), () => Now);
+            Assert.Equal("fx.fog.pink", b.Worn("fog"));            // the worn colour falls back to the user's own
+            Assert.Equal("fx.fog.mint", b.Worn("fog2"));           // still a palette colour: kept
+            Assert.Equal(ShopPreviewRules.Twotone, b.Worn("mix"));
+            var s = b.Handle("shop-state", null, null);
+            Assert.Null(s["goal"]!.Value<string>());
+            var fog = s.SelectTokens("tabs[0].shelves[*].rows[*]").Where(r => (string?)r["slot"] == "fog").Select(r => (string?)r["id"]).ToArray();
+            Assert.Equal(new[] { ShopPreviewRules.Twotone }, fog);
+            Assert.Equal("not_in_stock", (string?)b.Handle("shop-buy", new JObject { ["itemId"] = "fx.fog.lilac" }, "f1")["reason"]);
+            Assert.Equal("fx.fog.sky", (string?)b.Handle("shop-equip", new JObject { ["slot"] = "fog2", ["itemId"] = "fx.fog.sky" }, null)["equip"]!["fog2"]);
+            Assert.Equal("bad_input", (string?)b.Handle("shop-equip", new JObject { ["slot"] = "fog", ["itemId"] = "fx.fog.amber" }, null)["reason"]);
+        }
+        finally { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } }
+    }
+
+    [Fact]
     public void A_file_that_still_wears_a_gone_tint_falls_back_to_soap()
     {
         // The Rose, Mint and Lilac bubble tints were taken out of the shop (owner, 2026-11-17).
@@ -125,7 +152,7 @@ public class ShopPreviewBackendTests
             var b = new ShopPreviewBackend(path, Sample(), () => Now);
             Assert.Equal(90, b.Sp);
             Assert.Equal("fx.bubble.soap", b.Worn("bubble"));
-            Assert.Equal("fx.fog.mint", b.Worn("fog"));            // the fog colour of the same name stays
+            Assert.Equal("fx.fog.pink", b.Worn("fog"));            // fog colours are not sold any more: back to the user's own
             Assert.Equal("fx.fog.lilac", b.Worn("fog2"));
             Assert.Equal("fx.card.plain", b.Worn("card"));
             var s = b.Handle("shop-state", null, null);

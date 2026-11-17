@@ -171,6 +171,9 @@ public class ShopPreviewRulesTests
         // The coupon follows the tier letter: every effect row it takes is the cheapest priced tier.
         Assert.All(ShopPreviewRules.Effects.Where(e => e.Price > 0 && ShopPreviewRules.TierOf(e.Price) == ShopPreviewRules.CouponTier),
             e => Assert.Equal(ShopPreviewRules.Effects.Where(x => x.Price > 0).Min(x => x.Price), e.Price));
+        // After the fog colours and bubble tints left, the coupon still has effect rows to take (2026-11-17).
+        Assert.Equal(new[] { "fx.card.ink", "fx.card.check", "fx.word.type" },
+            ShopPreviewRules.Effects.Where(e => !e.Todo && ShopPreviewRules.TierOf(e.Price) == ShopPreviewRules.CouponTier).Select(e => e.Id).ToArray());
     }
 
     [Fact]
@@ -297,9 +300,15 @@ public class ShopPreviewRulesTests
         d.Owned[ShopPreviewRules.Twotone] = new PreviewOwned();
         Assert.True(ShopPreviewRules.Equip(d, "fog", ShopPreviewRules.Twotone).Ok);
         Assert.True(d.Mix);
-        Assert.Equal("fx.fog.pink", d.Equip["fog"]);   // the first colour stays
-        Assert.True(ShopPreviewRules.Equip(d, "fog2", "fx.fog.amber").Ok);   // any colour, owned or not
+        Assert.Equal("fx.fog.pink", d.Equip["fog"]);   // colour one stays the user's own
+        foreach (var (row, _) in ConditioningControlPanel.SuperCore.FogLooks.Palette)
+            Assert.True(ShopPreviewRules.Equip(d, "fog2", row).Ok);           // every palette colour, free
+        Assert.Equal("fx.fog.peach", d.Equip["fog2"]);
         Assert.Equal("bad_input", ShopPreviewRules.Equip(d, "fog2", ShopPreviewRules.Twotone).Reason);
+        Assert.Equal("bad_input", ShopPreviewRules.Equip(d, "fog2", "fx.fog.teal").Reason);
+        Assert.Equal("bad_input", ShopPreviewRules.Equip(d, "fog", "fx.fog.lilac").Reason);   // no fog colour rows
+        Assert.True(ShopPreviewRules.Equip(d, "fog2", null).Ok);
+        Assert.Equal("fx.fog.lilac", d.Equip["fog2"]);
         Assert.True(ShopPreviewRules.Equip(d, "mix", null).Ok);
         Assert.False(d.Mix);
         Assert.True(ShopPreviewRules.Equip(d, "mix", ShopPreviewRules.Twotone).Ok);

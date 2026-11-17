@@ -14,10 +14,13 @@ const FX = {
     ['frost', 360, {}], ['gum', 360, { todo: true, name: 'Bubblegum' }], ['latex', 730, { todo: true }], ['oil', 730, { todo: true, name: 'Oil slick' }]],
   card: [['plain', 0, {}], ['ink', 120, {}], ['check', 120, {}], ['lace', 360, {}]],
   behind: [['none', 0, { name: 'Nothing' }], ['whisper', 360, { how: 'a new word each flip', isNew: true }]],
-  fog: [['pink', 0, {}], ['lilac', 120, {}], ['mint', 120, {}], ['amber', 360, {}], ['twotone', 730, { special: true, how: 'two colours swirl', name: 'Two-tone' }]],
+  // one fog product (owner 2026-11-17): the fog wears the user's own filter colour, Two-tone adds a free second one
+  fog: [['twotone', 730, { special: true, how: 'your colour and a second swirl', name: 'Two-tone' }]],
   word: [['classic', 0, { how: 'fades' }], ['type', 120, { how: 'typewriter', name: 'Typed' }], ['chalk', 360, { how: 'written on' }],
     ['drift', 360, { how: 'letters rise' }], ['echo', 360, { how: 'ghost copies' }], ['marquee', 730, { how: 'lights up' }]],
 };
+/** The second colours two-tone may take (sheet/looks.js FOGS, CCP.Core FogLooks.Palette). */
+const FOG2 = ['pink', 'lilac', 'mint', 'amber', 'sky', 'peach'].map((k) => 'fx.fog.' + k);
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const OWNED0 = { at: '2026-11-01T00:00:00Z', paidSp: 0 };
 const PLACES = { desk: ['desktop'], 'rain-clothes': ['desktop'], 'rain-hair': ['desktop'], backroom: ['desktop', 'web'] };
@@ -65,8 +68,8 @@ export function createPreviewServer(sample, opts = {}) {
       if (itemId !== null && !(row(itemId) && row(itemId).owned && row(itemId).special)) return no('not_owned');
       pv.equip.mix = itemId !== null; return full();
     }
-    if (slot === 'fog2') {   // the second colour of the two-tone fog: any fog colour, the two-tone row itself excepted
-      if (fxSlot(itemId) !== 'fog' || row(itemId).special) return no('bad_input');
+    if (slot === 'fog2') {   // the second colour of the two-tone fog: a palette colour (FOG2), never a shop row
+      if (!FOG2.includes(itemId)) return no('bad_input');
       pv.equip.fog2 = itemId; return full();
     }
     if (!(slot in pv.equip)) return no('bad_input');

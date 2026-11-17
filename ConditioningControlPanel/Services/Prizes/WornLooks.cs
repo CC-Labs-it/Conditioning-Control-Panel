@@ -5,7 +5,7 @@ namespace ConditioningControlPanel.Services.Prizes;
 
 /// <summary>
 /// THE WORN LOOKS: the one place the desktop asks "what is worn in slot X" for the screen effects the
-/// shop sells (bubble skin, Deck card back, the word behind the card, fog colour, the two-tone mix and its
+/// shop sells (bubble skin, Deck card frame, the word behind the card, fog colour, the two-tone mix and its
 /// second colour, word style). Answers counter row ids (<c>fx.bubble.champagne</c>); the effect asks at
 /// the moment it starts something new and may listen to <see cref="Changed"/> to restyle what is on screen.
 ///
@@ -21,7 +21,9 @@ public static class WornLooks
     /// <summary>The five slots that wear one row each, in shelf order.</summary>
     public static readonly IReadOnlyList<string> EffectSlots = new[] { Bubble, Card, Behind, Fog, Word };
 
-    /// <summary>The free row of a slot (today's look). <see cref="Mix"/> defaults to off (null).</summary>
+    /// <summary>The free row of a slot (today's look). <see cref="Mix"/> defaults to off (null). <see cref="Fog"/>
+    /// never wears a colour any more (the fog is always the user's own filter colour, owner 2026-11-17): its
+    /// shelf sells only Two-tone, which is the <see cref="Mix"/> switch, and <see cref="Fog2"/> is a palette colour.</summary>
     public static string? DefaultOf(string? slot) => slot switch
     {
         Bubble => "fx.bubble.soap",

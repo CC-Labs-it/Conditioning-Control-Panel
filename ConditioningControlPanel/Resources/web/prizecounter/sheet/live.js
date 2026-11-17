@@ -1,12 +1,12 @@
 /* sheet/live.js - every moving picture on the sheet: the effect thumbnails on the shelves (the bubble skins alive, the
- * card backs, fog and word styles moving), the spotlight stage, the "Also new" chips, and the fitting room's "Your
+ * card frames, fog and word styles moving), the spotlight stage, the "Also new" chips, and the fitting room's "Your
  * screen", a small copy of the desktop that wears the picked look (port of the mockup's frame()). One clock for all of
  * them, at most 30 frames a second, only for canvases on screen. Motion off: one still frame per paint. Less: half speed.
  * installLive(view, opts) fills view.thumb / mini / stage / monitor / idleRoom / roomExtra; canvases are kept per item so a
  * repaint never restarts an animation. A click on a bubble in "Your screen" pops it with its own sound (opts.onPop). */
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
-import { drawBack, drawFront, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf } from './looks.js';
+import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf, secondFog } from './looks.js';
 import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
@@ -50,9 +50,16 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     const e = v.pick && locate(v.state, v.pick, v.pv);
     if (e && e.fx) { if (e.x.special) out.mix = true; else out[e.fx] = kindOf(e.id); }
     if (v.fog2Try) out.fog2 = kindOf(v.fog2Try);
-    if (out.fog2 === out.fog) out.fog2 = out.fog === 'pink' ? 'lilac' : 'pink';
+    // Colour one is the user's own filter colour. The host does not send it yet (host lane: init.fogColour, handed to
+    // the view as v.fogColour); until then pink stands in. A second colour too close to it steps on to the next.
+    out.own = /^#[0-9a-f]{6}$/i.test(v.fogColour || '') ? v.fogColour : FOGS.pink;
+    const second = secondFog(out.fog2, out.own);
+    out.fog2Picked = out.fog2; out.fog2 = second.kind; out.fog2Skipped = second.skipped;
     return out;
   }
+
+  /** Two-tone on a shelf: the user's own colour and the second colour they would wear. */
+  const fogPair = () => { const L = looks(v0 || {}); return [L.own, FOGS[L.fog2]]; };
 
   /* ---------- one item's little live picture ---------- */
   function painter(e) {
@@ -68,13 +75,13 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     }
     return (item, tt) => {
       const g = item.c, w = item.w, h = item.h; g.clearRect(0, 0, w, h);
-      if (slot === 'card') { const cw = h * 0.5, ch = h * 0.78; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawBack(g, kind, -cw / 2, -ch / 2, cw, ch); g.restore(); }
+      if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); g.restore(); }   // the same picture on every thumb: only the frame differs
       else if (slot === 'behind') {
         const cw = h * 0.42, ch = h * 0.72, x = (w - cw) / 2, y = (h - ch) / 2, age = (tt % 3.2);
         if (kind === 'whisper') drawWhisper(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.9 : age, x, y, cw, ch, false);
         drawBack(g, 'plain', x, y, cw, ch);
         if (kind === 'whisper') drawWhisper(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.9 : age, x, y, cw, ch, true);
-      } else if (slot === 'fog') drawFogBlobs(g, e.x.special ? [FOGS.pink, FOGS.lilac, FOGS.mint] : [FOGS[kind] || FOGS.pink], tt, w, h, 0.7);
+      } else if (slot === 'fog') drawFogBlobs(g, fogPair(), tt, w, h, 0.7);
       else if (slot === 'word') drawWord(g, kind, 'sink', w / 2, h * 0.52, h * 0.33, motion === 'off' ? 2 : tt % 4, 1);
     };
   }
@@ -126,13 +133,13 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
         W.next = (W.next || 3) - dt;
         if (motion !== 'off' && W.next <= 0) { W.next = 3.2; const b = W.bs[W.turn = ((W.turn || 0) + 1) % 3]; if (b) popBubble(b); }
         stepParts(W, dt); drawParts(W);
-      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawBack(k, kind, -h * 0.2, -h * 0.3, h * 0.4, h * 0.6); k.restore(); }
+      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); k.restore(); }
       else if (slot === 'behind') {
         const cw = h * 0.38, ch = h * 0.56, x = cx - cw / 2, y = h * 0.16 + bob * 0.5, age = motion === 'off' ? 0.9 : tt % 3.2, word = WORDS[Math.floor(tt / 3.2) % WORDS.length];
         if (kind === 'whisper') drawWhisper(k, word, age, x, y, cw, ch, false);
         drawBack(k, 'plain', x, y, cw, ch);
         if (kind === 'whisper') drawWhisper(k, word, age, x, y, cw, ch, true);
-      } else if (slot === 'fog') drawFogBlobs(k, e.x.special ? [FOGS.pink, FOGS.lilac, FOGS.mint] : [FOGS[kind] || FOGS.pink], tt, w, h);
+      } else if (slot === 'fog') drawFogBlobs(k, fogPair(), tt, w, h);
       else if (slot === 'word') drawWord(k, kind, WORDS[Math.floor(tt / 4) % WORDS.length], cx, h * 0.45, h * 0.2, motion === 'off' ? 2 : tt % 4, 1);
     };
   }
@@ -163,7 +170,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
       const whisper = L.behind === 'whisper', age = still ? 0.9 : tt - (c.born || 0);
       if (whisper) drawWhisper(g, c.word || WORDS[0], age, c.x * W, c.y * H, cw, ch, false, L.word);
       const w = Math.max(2, Math.abs(sx) * cw), x = c.x * W + (cw - w) / 2;
-      if (sx < 0) drawBack(g, L.card, x, c.y * H, w, ch); else drawFront(g, x, c.y * H, w, ch, c.hue);
+      if (sx < 0) { drawBack(g, L.card, x, c.y * H, w, ch); drawFrame(g, L.card, x, c.y * H, w, ch, Math.min(w, ch) * 0.08); } else drawCard(g, L.card, x, c.y * H, w, ch, c.hue);   // the frame stays on through the flip
       if (whisper) drawWhisper(g, c.word || WORDS[0], age, c.x * W, c.y * H, cw, ch, true, L.word);
     }
     if (!screen.fog) screen.fog = doc.createElement('canvas');
@@ -171,7 +178,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     if (fog.width !== item.cv.width || fog.height !== item.cv.height) { fog.width = item.cv.width; fog.height = item.cv.height; }
     const fg = fog.getContext('2d');
     fg.setTransform(d, 0, 0, d, 0, 0); fg.globalCompositeOperation = 'source-over'; fg.clearRect(0, 0, W, H);
-    fg.globalAlpha = 0.32; fg.fillStyle = FOGS[L.fog] || FOGS.pink; fg.fillRect(0, 0, W, H); fg.globalAlpha = 1;
+    fg.globalAlpha = 0.32; fg.fillStyle = L.own; fg.fillRect(0, 0, W, H); fg.globalAlpha = 1;
     if (L.mix) {   // the second colour moves through the first like ink in water
       fg.globalCompositeOperation = 'source-atop'; const st = still ? 3 : tt;
       for (let i = 0; i < 5; i++) {
@@ -245,15 +252,16 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
   view.roomExtra = (e, v, on) => {
     const eq = (v.pv && v.pv.equip) || {}, tw = v.state && locate(v.state, 'fx.fog.twotone', v.pv);
     if (!e || e.fx !== 'fog' || !(e.x.special || (tw && tw.row.owned && eq.mix))) return [];
-    const L = looks(v), box = el('div', 'mix');
+    // Colour one is the user's own filter colour; the second is free, from the palette. Every swatch is offered; one
+    // too close to the user's own colour hands over to the next, and one short line says so.
+    const L = looks(v), box = el('div', 'mix'), name = (k) => t('shop_item_fx_fog_' + k + '_name');
     box.append(el('span', null, t('shop_sheet_second_colour')));
     for (const k of Object.keys(FOGS)) {
-      if (k === L.fog) continue;
       const b = view.button('', null, 'fog2:' + k, () => on.fog2('fx.fog.' + k));
-      b.setAttribute('style', 'background:' + FOGS[k]); b.setAttribute('aria-label', k); b.setAttribute('aria-pressed', String(L.fog2 === k));
+      b.setAttribute('style', 'background:' + FOGS[k]); b.setAttribute('aria-label', name(k)); b.setAttribute('aria-pressed', String(L.fog2Picked === k));
       box.append(b);
     }
-    return [box];
+    return L.fog2Skipped ? [box, el('p', 'd-where fog2-skip', t('shop_sheet_fog2_close', name(L.fog2Picked), name(L.fog2)))] : [box];
   };
 
   /* ---------- the clock ---------- */

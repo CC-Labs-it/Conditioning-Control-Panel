@@ -93,7 +93,7 @@ test('the ledger reads codes as words, an unknown code as a neutral line, an old
   assert.equal(words({ code: 'buy', n: -360, id: 'fx.bubble.heart' }), 'Heart bubbles');
   assert.equal(words({ code: 'buy', n: -120, id: 'desk.toy.rubber-duck' }), 'The Suggestible Duck');
   assert.equal(words({ code: 'buy', n: -120, id: 'gone.item' }), 'Bought an item');
-  assert.equal(words({ code: 'coupon', n: 0, id: 'fx.card.ink' }), 'Stamp card: Ink card back');
+  assert.equal(words({ code: 'coupon', n: 0, id: 'fx.card.ink' }), 'Stamp card: Ink card frame');
   assert.equal(words({ code: 'coupon', n: 0 }), 'Stamp card item');
   assert.equal(words({ code: 'gift', n: 25 }), 'Monday gift');
   assert.deepEqual(['level', 'pops', 'play'].map((code) => words({ code, n: 1 })), ['Level up', 'Bubble pops', 'Earned playing']);

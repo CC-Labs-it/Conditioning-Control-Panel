@@ -87,7 +87,7 @@ internal static class ShopPreviewRules
     public const int LedgerMax = 6, ReceiptsMax = 20, SpCap = 9_999_999;
     public const string CatalogVersion = "preview-1";
     public const string TabEffects = "effects";
-    public const string Twotone = "fx.fog.twotone";
+    public const string Twotone = SuperCore.FogLooks.Twotone;
 
     public static readonly string[] Everywhere = { "desktop", "web", "phone" };
     public static readonly string[] DesktopOnly = { "desktop" };
@@ -111,11 +111,9 @@ internal static class ShopPreviewRules
         new("fx.card.lace", "card", "Lace", 360),
         new("fx.behind.none", "behind", "Nothing", 0),
         new("fx.behind.whisper", "behind", "Whisper", 360, "a new word each flip", IsNew: true),
-        new("fx.fog.pink", "fog", "Pink", 0),
-        new("fx.fog.lilac", "fog", "Lilac", 120),
-        new("fx.fog.mint", "fog", "Mint", 120),
-        new("fx.fog.amber", "fog", "Amber", 360),
-        new(Twotone, "fog", "Two-tone", 730, "two colours swirl", Special: true),
+        // The fog shelf sells ONE thing (owner 2026-11-17): the fog already wears the user's own filter colour, so
+        // the single colours are gone; Two-tone adds a free second colour (slot fog2, FogLooks.Palette).
+        new(Twotone, "fog", "Two-tone", 730, "your colour and a second swirl", Special: true),
         new("fx.word.classic", "word", "Classic", 0, "fades"),
         new("fx.word.type", "word", "Typed", 120, "typewriter"),
         new("fx.word.chalk", "word", "Chalk", 360, "written on"),
@@ -153,7 +151,8 @@ internal static class ShopPreviewRules
         return d;
     }
 
-    /// <summary>A preview file from an older catalogue (the Rose, Mint and Lilac bubble tints are gone):
+    /// <summary>A preview file from an older catalogue (the Rose, Mint and Lilac bubble tints are gone, and the
+    /// single fog colours: a worn fog colour goes back to the user's own, fog2 keeps a palette colour):
     /// a worn row that is no longer a row of its slot puts back the slot's free row, and a goal that is no
     /// longer in stock is cleared. Owned marks for gone rows stay in the file and do nothing.
     /// A file from the old stamp rules (a card that restarted after day 14) reads as the one card: missing
@@ -169,9 +168,10 @@ internal static class ShopPreviewRules
         if (Start(d) == null) { d.CardStart = ""; d.Stamped.Clear(); }
         foreach (var slot in Prizes.WornLooks.EffectSlots.Append(Prizes.WornLooks.Fog2))
         {
-            string want = slot == Prizes.WornLooks.Fog2 ? "fog" : slot;
-            if (!d.Equip.TryGetValue(slot, out var id) || Effect(id) is not { Special: false } e || e.Slot != want)
-                d.Equip[slot] = Prizes.WornLooks.DefaultOf(slot)!;
+            bool kept = d.Equip.TryGetValue(slot, out var id) && (slot == Prizes.WornLooks.Fog2
+                ? SuperCore.FogLooks.IsPalette(id)                          // a second colour still on the palette
+                : Effect(id) is { Special: false } e && e.Slot == slot);
+            if (!kept) d.Equip[slot] = Prizes.WornLooks.DefaultOf(slot)!;
         }
         if (d.Goal != null && Row(sample, d.Goal) == null) d.Goal = null;
     }
@@ -264,11 +264,18 @@ internal static class ShopPreviewRules
     /// <summary>
     /// Wear or take off. Slots bubble, card, behind, fog, word take an owned row of that slot (null = the
     /// slot's free row). Two-tone is a switch, not a colour: <c>fog</c> or <c>mix</c> with its id turns the
-    /// mix on, <c>mix</c> with null turns it off. <c>fog2</c> is the mix's second colour: any fog colour,
-    /// once Two-tone is owned (the mockup offers every colour there).
+    /// mix on, <c>mix</c> with null turns it off. <c>fog2</c> is the mix's second colour: a palette colour
+    /// (FogLooks.Palette, never a shop row), free once Two-tone is owned; null puts back lilac.
     /// </summary>
     public static PreviewOutcome Equip(ShopPreviewData d, string? slot, string? itemId)
     {
+        if (slot == Prizes.WornLooks.Fog2)
+        {
+            if (itemId != null && !SuperCore.FogLooks.IsPalette(itemId)) return PreviewOutcome.No("bad_input");
+            if (!d.Owned.ContainsKey(Twotone)) return PreviewOutcome.No("not_owned");
+            d.Equip[slot] = itemId ?? Prizes.WornLooks.DefaultOf(slot)!;
+            return PreviewOutcome.Done;
+        }
         var e = Effect(itemId);
         if (itemId != null && e == null) return PreviewOutcome.No("bad_input");
         if (e is { Todo: true }) return PreviewOutcome.No("unavailable");
@@ -279,11 +286,6 @@ internal static class ShopPreviewRules
                 if (itemId != Twotone) return PreviewOutcome.No("bad_input");
                 if (!d.Owned.ContainsKey(Twotone)) return PreviewOutcome.No("not_owned");
                 d.Mix = true;
-                return PreviewOutcome.Done;
-            case Prizes.WornLooks.Fog2:
-                if (e != null && (e.Slot != "fog" || e.Special)) return PreviewOutcome.No("bad_input");
-                if (!d.Owned.ContainsKey(Twotone)) return PreviewOutcome.No("not_owned");
-                d.Equip[slot] = itemId ?? Prizes.WornLooks.DefaultOf(slot)!;
                 return PreviewOutcome.Done;
         }
         if (slot == null || !Prizes.WornLooks.EffectSlots.Contains(slot)) return PreviewOutcome.No("bad_input");

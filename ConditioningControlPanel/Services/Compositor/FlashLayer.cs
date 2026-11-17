@@ -569,6 +569,9 @@ public sealed class FlashLayer : BaseLayer
                     inner.MidX + fw / 2, inner.MidY + fh / 2);
                 _imagePaint.Color = new SKColor(255, 255, 255, alpha);
                 canvas.DrawImage(image, fit, _imagePaint);
+                // Shop look "card": a worn frame grows in with the card (it follows the morphing corner).
+                if (item.Deck != null && DeckLookChoice.Back is var entering && DeckLooks.FrameShows(entering))
+                    _deckLook.DrawFrame(canvas, inner, radius, entering, (byte)(alpha * item.EntranceProgress));
                 canvas.RestoreToCount(saves);
                 continue;
             }
@@ -635,6 +638,14 @@ public sealed class FlashLayer : BaseLayer
                 _deckLook.DrawBack(canvas, fit, back, alpha);
             else
                 canvas.DrawImage(image, fit, _imagePaint);
+            // Shop look "card" (sold as Card frames): the worn frame round every Deck card, the whole time
+            // the picture is up. Plain draws nothing; badges below then keep inside the band.
+            var badgeBox = fit;
+            if (item.Deck != null && DeckLooks.FrameShows(back))
+            {
+                var band = _deckLook.DrawFrame(canvas, fit, item.CornerRadiusPx, back, alpha);
+                if (band > 0) badgeBox = SKRect.Inflate(fit, -band, -band);
+            }
             if (exit is { Whiten: > 0 } lit)
             {
                 // TV off: the picture burns bright as it collapses to its line.
@@ -656,8 +667,8 @@ public sealed class FlashLayer : BaseLayer
             if (pose is { Sheen: > 0.004 } lit2) DrawDeckSheen(canvas, fit, lit2.Sheen, lit2.SheenPos, alpha);
             if (pose is { Crack: > 0 } cracked && item.Deck is { } crackDeck)
                 DrawCracks(canvas, crackDeck, fit, cracked.Crack, cracked.CrackReach, alpha);
-            if (item.DodgeUntilMs > 0 && item.Exit == null) DrawDodgeRing(canvas, fit, alpha, item.DodgeUntilMs);
-            if (item.Credit && item.Exit == null) DrawCredit(canvas, fit, alpha, dpiScale);
+            if (item.DodgeUntilMs > 0 && item.Exit == null) DrawDodgeRing(canvas, badgeBox, alpha, item.DodgeUntilMs);
+            if (item.Credit && item.Exit == null) DrawCredit(canvas, badgeBox, alpha, dpiScale);
             canvas.RestoreToCount(saves);
             if (whisper is { Front: true } pastCard) DrawWhisper(canvas, item, pastCard, alpha);
             if (item.Exit != null) DrawSparks(canvas, item);

@@ -19,7 +19,7 @@ public class PinkTintLayer : BaseLayer
     private readonly CompositorEngine _engine;
     private int _sortedZ;
 
-    /// <summary>The pink filter's own tint wears the shop's fog colour (<see cref="Prizes.WornFog"/>).
+    /// <summary>The pink filter's own tint wears the shop's Two-tone fog (<see cref="Prizes.WornFog"/>); colour one stays the filter's own.
     /// Off for other users of the layer (the welcome show paints its own pink).</summary>
     internal bool WearsLooks { get; init; }
     private long _wornStamp;
@@ -104,7 +104,7 @@ public class PinkTintLayer : BaseLayer
     {
         if (WearsLooks)
         {
-            // A worn fog colour changed, or is still cross-fading in: repaint.
+            // Two-tone switched or its second colour changed, or still cross-fading: repaint.
             long stamp = Prizes.WornFog.Stamp;
             if (stamp != _wornStamp || Prizes.WornFog.Easing) { _wornStamp = stamp; _dirty = true; }
             // Two-tone moves: 30 pictures a second, none with motion Off (a still frame).
