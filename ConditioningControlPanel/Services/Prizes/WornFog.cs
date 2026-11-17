@@ -41,8 +41,17 @@ internal static class WornFog
         WornLooks.Changed += OnChanged;
     }
 
-    /// <summary>The picked second colour while two-tone is on, else null.</summary>
-    private static string? SecondWorn() => Read(WornLooks.Mix) != null ? Read(WornLooks.Fog2) ?? FogLooks.DefaultSecond : null;
+    /// <summary>The user's own second colour (#RRGGBB) or nothing. Tests swap it.</summary>
+    internal static Func<string?> OwnSecond = () => { try { return App.Settings?.Current?.FogSecondOwnColor; } catch { return null; } };
+
+    /// <summary>The picked second colour while two-tone is on, else null: the user's own (#RRGGBB) when set,
+    /// else the palette row.</summary>
+    private static string? SecondWorn()
+    {
+        if (Read(WornLooks.Mix) == null) return null;
+        var own = OwnSecond();
+        return FogLooks.TryHex(own) != null ? own : Read(WornLooks.Fog2) ?? FogLooks.DefaultSecond;
+    }
 
     private static void OnChanged(string slot)
     {
@@ -105,7 +114,7 @@ internal static class WornFog
 
     private static FogShown At(Look look, (byte R, byte G, byte B) own, double now)
     {
-        var toSecond = look.Second != null ? FogLooks.SecondColour(look.Second, own) : own;
+        var toSecond = look.Second != null ? FogLooks.TryHex(look.Second) ?? FogLooks.SecondColour(look.Second, own) : own;
         if (look.FromSecond is not { } fromSecond) return new FogShown(own, toSecond, look.Second != null);
         // A clock that reads earlier than the fade's start (a swapped test clock) is a finished fade, never a stuck one.
         double dt = now - look.T0, k = dt < 0 ? 1 : FogLooks.EaseAt(dt, EaseSeconds());

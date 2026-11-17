@@ -122,12 +122,19 @@ public class PinkTintLayer : BaseLayer
         _dirty = true;
     }
 
+    /// <summary>Steam on: the fog wears Two-tone and this tint stays one flat colour under it. Two moving
+    /// colours over the whole screen read as fog everywhere (owner, 2026-11-17).</summary>
+    private static bool SteamCarriesMix()
+    {
+        try { return Super.SuperStageHost.Stage.SteamOn; } catch { return false; }
+    }
+
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
     {
         double o = _opacity * Super.SuperStepAside.Ease(_veil);
         if (o <= 0) return;
         var worn = WearsLooks ? Prizes.WornFog.Shown((_r, _g, _b)) : new Prizes.WornFog.FogShown((_r, _g, _b), (_r, _g, _b), false);
-        if (worn.TwoTone)
+        if (worn.TwoTone && !SteamCarriesMix())
         {
             _mix ??= new Super.Draw.FogMixDraw();
             _mix.Draw(canvas, new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom), worn.Main, worn.Second, o,
