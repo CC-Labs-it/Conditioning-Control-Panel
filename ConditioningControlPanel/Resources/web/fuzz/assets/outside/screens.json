@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "size": [
+    1200,
+    896
+  ],
+  "screens": {
+    "sissy": {
+      "quad": [
+        [
+          764.6,
+          360.6
+        ],
+        [
+          919.7,
+          349.7
+        ],
+        [
+          888.7,
+          620.2
+        ],
+        [
+          731.0,
+          593.4
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 9/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "bimbo": {
+      "quad": [
+        [
+          764.4,
+          360.2
+        ],
+        [
+          919.8,
+          349.0
+        ],
+        [
+          888.6,
+          620.2
+        ],
+        [
+          731.3,
+          593.4
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 13/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "goon": {
+      "quad": [
+        [
+          764.4,
+          361.9
+        ],
+        [
+          919.8,
+          348.2
+        ],
+        [
+          888.7,
+          619.7
+        ],
+        [
+          731.0,
+          593.9
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 11/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "chastity": {
+      "quad": [
+        [
+          764.4,
+          361.3
+        ],
+        [
+          919.9,
+          348.9
+        ],
+        [
+          888.6,
+          619.8
+        ],
+        [
+          731.1,
+          593.8
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 8/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "drone": {
+      "quad": [
+        [
+          765.0,
+          360.2
+        ],
+        [
+          919.7,
+          349.7
+        ],
+        [
+          888.7,
+          619.8
+        ],
+        [
+          730.7,
+          593.7
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 24/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "trance": {
+      "quad": [
+        [
+          763.2,
+          362.0
+        ],
+        [
+          920.0,
+          348.5
+        ],
+        [
+          888.7,
+          620.3
+        ],
+        [
+          732.2,
+          593.4
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 37/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "infection": {
+      "quad": [
+        [
+          764.6,
+          362.2
+        ],
+        [
+          920.0,
+          347.9
+        ],
+        [
+          888.6,
+          619.9
+        ],
+        [
+          730.8,
+          593.6
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 10/720 rays interpolated; quad encloses the hole + 3 px"
+    },
+    "censored": {
+      "quad": [
+        [
+          763.8,
+          362.2
+        ],
+        [
+          920.2,
+          347.9
+        ],
+        [
+          888.4,
+          620.2
+        ],
+        [
+          730.8,
+          593.2
+        ]
+      ],
+      "notes": "traced inner bezel edge, pulled in ~2.5 px; 103/720 rays interpolated; quad encloses the hole + 3 px; the black bar touches the bezel: two tiny bar ends (about 2 px) stay on the drawing at mid-left and mid-right"
+    }
+  }
+}

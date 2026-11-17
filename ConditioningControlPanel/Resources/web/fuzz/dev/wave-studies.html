@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ribbon comparison · Terms &amp; Conditioning</title>
+<style>
+:root{color-scheme:light;--paper:#f7f1f5;--ink:#281f32;--faint:#675b70;--line:#cfc1cf;--plum:#4a2954;--stage:#facfe3}
+*{box-sizing:border-box}
+body{margin:0;color:var(--ink);background:var(--paper);font:15px/1.4 "Segoe UI",Arial,sans-serif}
+main{max-width:1240px;margin:auto;padding:clamp(16px,3vw,38px) clamp(14px,3.5vw,40px) 24px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font:650 clamp(28px,4vw,42px)/1.05 "Segoe UI",Arial,sans-serif;letter-spacing:-.055em;margin:0 0 7px}
+header p{margin:0;color:var(--faint)}
+button,a{font:inherit}button{cursor:pointer;touch-action:manipulation}
+button:focus-visible,a:focus-visible{outline:3px solid #804abe;outline-offset:3px}
+.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tools button{border:1px solid #a48da8;color:var(--plum);background:transparent;border-radius:6px;padding:7px 12px;font-weight:650}
+.tools button:first-child{background:var(--plum);color:white;border-color:var(--plum)}
+.tools button:active{transform:translateY(1px)}button:disabled{cursor:default;opacity:.5}
+.activity{display:flex;align-items:center;gap:9px;margin:18px 0 13px;color:var(--faint);font-size:12px;font-weight:600}
+.track{height:5px;border-radius:4px;background:#dfd2de;overflow:hidden;flex:1}
+.fill{height:100%;width:100%;transform:scaleX(0);transform-origin:left;background:linear-gradient(90deg,#745484,#cb6592 68%,#e08f54)}
+.amount{font-variant-numeric:tabular-nums;text-align:right;width:3em}
+#studies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px}
+.study{min-width:0;padding:15px 0;border-top:1px solid var(--line)}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0 0 6px}
+h2{font:650 20px/1.2 "Segoe UI",Arial,sans-serif;margin:0;letter-spacing:-.035em}
+.top a{color:var(--plum);text-underline-offset:3px;white-space:nowrap;font-size:12px;font-weight:650}
+.study p{margin:6px 0 0;color:var(--faint);font-size:13px}
+.field{display:block;width:100%;height:clamp(120px,16vw,164px);padding:0;overflow:hidden;position:relative;cursor:crosshair;border:1px solid #d3adc6;border-radius:9px;background:var(--stage)}
+canvas{display:block;width:100%;height:100%;pointer-events:none}
+.sources{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:12px;font-size:12px;color:var(--faint)}
+.sources a{color:var(--plum);text-underline-offset:3px}
+.earlier{display:inline-block;margin-top:10px;font-size:12px;color:var(--plum);text-underline-offset:3px}
+@media(max-width:720px){main{padding-top:16px}header{gap:10px}#studies{grid-template-columns:1fr}.tools button{min-height:38px}.activity{margin:10px 0 7px}.study{padding:7px 0}.study p{font-size:12px;margin:3px 0 0}.field{height:clamp(72px,10vh,99px)}h2{font-size:17px}.top{margin-bottom:4px}}
+@media(prefers-reduced-motion:reduce){.tools button:active{transform:none}}
+</style>
+</head>
+<body>
+<main>
+  <header><div><h1>Ribbon comparison</h1><p>Tap any ribbon to play the same press on all four.</p></div>
+    <div class="tools"><button id="tap" type="button">Tap or hold</button><button id="burst" type="button">Burst ×6</button><button id="pause" type="button">Pause</button></div>
+  </header>
+  <div class="activity"><span>Tap energy</span><div class="track"><div class="fill"></div></div><span class="amount">0%</span></div>
+  <div id="studies"></div>
+  <nav class="sources" aria-label="Original animations"><span>Originals</span></nav>
+  <a class="earlier" href="./dancing-waves.html">Earlier Dancing waves study</a>
+</main>
+<script type="module">
+import { KINETIC_STUDIES, IMPULSE_LIFE, addWavePress, waveEnergy, drawKineticWave } from '../ui/kinetic-waves.js';
+
+const studies=document.getElementById('studies');
+const tap=document.getElementById('tap'),burst=document.getElementById('burst'),pause=document.getElementById('pause');
+const fill=document.querySelector('.fill'),amount=document.querySelector('.amount');
+const motion=matchMedia('(prefers-reduced-motion: reduce)');
+const events=[],samples=[];
+let now=1.35, paused=false, frame=0, idleTimer=0, reduced=motion.matches, stamp=null, lastPaint=-1, queued=0, nextTap=0;
+let held=null, nextHeld=0;
+
+function press(u=.5){
+  if(paused || motion.matches)return;
+  addWavePress(events,now,u);
+  paint();
+}
+for(const design of KINETIC_STUDIES){
+  const row=document.createElement('section');row.className='study';
+  const top=document.createElement('div');top.className='top';
+  const title=document.createElement('h2');title.textContent=design.name;
+  const link=document.createElement('a');link.textContent='Try on button ↗';
+  const game=new URL('/fuzz/index.html',location.protocol==='file:'?'http://localhost:8807':location.origin);
+  game.search=new URLSearchParams({preview:'waves',pictures:'none',waveStudy:design.id});
+  link.href=game.href;link.setAttribute('aria-label','Try '+design.name+' on the game button');
+  top.append(title,link);
+  const text=document.createElement('p');text.textContent=design.description;
+  const field=document.createElement('button');field.type='button';field.className='field';field.setAttribute('aria-label','Tap '+design.name);
+  const canvas=document.createElement('canvas');canvas.setAttribute('aria-hidden','true');field.append(canvas);
+  field.addEventListener('pointerdown',e=>{
+    if(!e.isPrimary||e.button!==0)return;
+    const r=field.getBoundingClientRect();press((e.clientX-r.left)/r.width);
+  });
+  field.addEventListener('click',e=>{if(e.detail===0)press();});
+  samples.push({canvas,field,g:canvas.getContext('2d'),style:design.id});
+  row.append(top,field,text);studies.append(row);
+  if(design.source){
+    const original=document.createElement('a');
+    original.href=design.source;original.textContent=design.name;
+    original.setAttribute('aria-label',design.name+' by '+design.artist);
+    document.querySelector('.sources').append(original);
+  }
+}
+function paint(){
+  const dpr=Math.min(2,devicePixelRatio||1);
+  for(const {canvas,g,style} of samples){
+    const w=canvas.clientWidth,h=canvas.clientHeight;
+    if(w<1||h<1)continue;
+    if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){
+      canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
+      g.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);
+    }
+    drawKineticWave(g,w,h,{style,time:now,hits:events,preview:true});
+  }
+  const energy=waveEnergy(events,now);
+  fill.style.transform='scaleX('+energy+')';
+  const value=Math.round(energy*100)+'%';if(amount.textContent!==value)amount.textContent=value;
+  lastPaint=now;
+}
+function tick(stampNow){
+  frame=0;
+  if(reduced!==motion.matches){playback();return;}
+  if(document.hidden||paused)return;
+  if(reduced){idleTimer=setTimeout(()=>tick(performance.now()),400);return;}
+  if(stamp!==null)now+=Math.min(.08,(stampNow-stamp)/1000);
+  stamp=stampNow;
+  if(queued && now>=nextTap){
+    addWavePress(events,now,.5);
+    queued--;nextTap=now+.115;
+    if(!queued)burst.disabled=false;
+  }
+  if(held!==null && now>=nextHeld){
+    addWavePress(events,now,.5);
+    nextHeld=now+.095;
+  }
+  while(events.length && now-events[0].time>=IMPULSE_LIFE)events.shift();
+  if(now-lastPaint>=1/30)paint();
+  frame=requestAnimationFrame(tick);
+}
+function playback(){
+  if(frame)cancelAnimationFrame(frame);clearTimeout(idleTimer);frame=0;stamp=null;reduced=motion.matches;
+  if(motion.matches){events.length=0;queued=0;}
+  if(motion.matches||paused||document.hidden)held=null;
+  tap.disabled=paused||motion.matches;burst.disabled=paused||motion.matches||queued>0;
+  pause.disabled=motion.matches;
+  pause.textContent=motion.matches?'Reduced motion':paused?'Resume':'Pause';
+  for(const {field} of samples)field.setAttribute('aria-disabled',String(paused||motion.matches));
+  paint();
+  if(!paused&&!document.hidden)frame=requestAnimationFrame(tick);
+}
+function startHold(id){
+  if(held!==null||paused||motion.matches)return;
+  held=id;nextHeld=now+.32;press();
+}
+tap.onpointerdown=e=>{
+  if(!e.isPrimary||e.button!==0)return;
+  tap.setPointerCapture(e.pointerId);startHold(e.pointerId);
+};
+tap.onpointerup=tap.onpointercancel=tap.onlostpointercapture=e=>{if(held===e.pointerId)held=null;};
+tap.onkeydown=e=>{
+  if(e.key===' '||e.key==='Enter'){e.preventDefault();if(!e.repeat)startHold('keyboard');}
+};
+tap.onkeyup=e=>{if((e.key===' '||e.key==='Enter')&&held==='keyboard'){e.preventDefault();held=null;}};
+tap.onblur=()=>{held=null;};
+window.addEventListener('blur',()=>{held=null;});
+tap.onclick=e=>{if(e.detail===0 && held===null)press();};
+burst.onclick=()=>{press();queued=5;nextTap=now+.115;burst.disabled=true;};
+pause.onclick=()=>{paused=!paused;playback();};
+document.addEventListener('visibilitychange',playback);motion.addEventListener('change',playback);
+new ResizeObserver(paint).observe(studies);
+playback();
+</script>
+</body></html>

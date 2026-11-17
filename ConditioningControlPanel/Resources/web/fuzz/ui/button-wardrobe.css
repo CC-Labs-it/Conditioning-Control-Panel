@@ -1,0 +1,56 @@
+@import url('button-face-art.css');
+
+.fz-face {display:inline-grid;place-items:center;font:400 14px/1.15 "Segoe UI",Arial,sans-serif;color:#252229;letter-spacing:normal;white-space:normal;text-align:center;text-transform:none;-webkit-text-stroke:0;text-shadow:none;box-sizing:border-box;pointer-events:none}
+.fz-face * {box-sizing:border-box}
+#world #btn[data-art-face] {position:relative;display:grid;place-items:center;width:max-content;max-width:calc(100vw - 24px);height:auto;min-height:44px;margin:0;padding:0;color:transparent;background:none;border:0;box-shadow:none;clip-path:none;border-radius:6px;overflow:visible}
+#world #btn[data-art-face]::before,#world #btn[data-art-face]::after,#btn[data-art-face] #btn-label {display:none}
+#world #btn[data-art-face].down {transform:scale(.97);border:0;box-shadow:none;filter:none}
+#btn[data-art-face=tr-pendulum] .tc-oracle {width:310px;zoom:.85}
+#btn-zone:has(#btn[data-art-face=tr-pendulum]) {height:148px}
+.fz-face .tc-oracle {width:310px;display:grid;text-align:left}
+.fz-face .tc-recover,.fz-face .tc-spoiler {width:min(251px,calc(100vw - 34px))}
+.fz-face .tc-spoiler {color:white}
+.fz-face .tc-dlarrow {flex:none}
+.fz-face .tc-check.done .tc-box {display:grid;place-content:center}
+.fz-face .tc-playerbox {display:block}
+/* EMI: the pixel body is the press target; her screen face sits on it (FACE_CSS .xe-f), the paper tag says what a tap does. */
+.fz-face .tc-emi {position:relative;display:grid;justify-items:center;width:96px}
+.fz-face .tc-emi-art {position:relative;display:block;width:84px;height:85px;transform-origin:50% 100%}
+.fz-face .tc-emi-body {position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;-webkit-user-drag:none;filter:drop-shadow(0 0 1.5px #fffa)}
+.fz-face .tc-emi-tag {margin-top:-7px;padding:1px 7px;font:700 11px/1.3 "Segoe UI",Arial,sans-serif;color:#282130;background:#fffaf2;border:1px solid #28213066;border-radius:3px;box-shadow:0 1px 0 #28213033;white-space:nowrap;transform:rotate(-2deg)}
+.fz-face .tc-emi-art[data-mood=rage]+.tc-emi-tag {background:#ffd9d9}
+/* The bell curve's sweet spot (sim/tap-rate.js): a warm glow on her body and a gold tag. Gentle: the tag colour only. */
+.fz-face .tc-emi-body {transition:filter .25s ease-out}
+.fz-face .tc-emi-art[data-sweet] .tc-emi-body {filter:drop-shadow(0 0 1.5px #fffa) drop-shadow(0 0 7px #ffc94d)}
+.fz-face .tc-emi-art[data-sweet]+.tc-emi-tag {background:#ffe7a3}
+.gentle .fz-face .tc-emi-art[data-sweet] .tc-emi-body {filter:drop-shadow(0 0 1.5px #fffa)}
+.gentle .fz-face .tc-emi-body {transition:none}
+.fz-face .tc-emi-heart {position:absolute;top:8px;font:700 16px/1 Arial,sans-serif;color:#f06aa6;text-shadow:0 1px 0 #7a2a52;pointer-events:none;font-style:normal}
+#world #btn[data-art-face=emi] {cursor:pointer}
+#world #btn[data-art-face=emi].down .tc-emi-art {filter:brightness(1.08)}
+.fz-face.fz-bubble,[data-bounce-art=bubble],.dm-btn.bubble {background:transparent url('../assets/img/bubble.png') center/139% 139% no-repeat;border:0;border-radius:50%;box-shadow:none}
+.fz-face.fz-bubble {width:84px;height:84px}
+#world #btn[data-art-face=bubble].down .fz-bubble {opacity:.6;transform:scale(1.06,.91)}
+.gentle #btn[data-art-face=bubble].down .fz-bubble {transform:none}
+.gentle .fz-face .tc-meter,.gentle .fz-face .tc-window {transition:none}
+[data-bounce-art] {position:relative;display:grid;place-items:center;align-content:center;box-sizing:border-box;pointer-events:none;user-select:none}
+[data-bounce-art=dvd] {background:none;border:0;color:var(--bounce-ink,var(--ink));line-height:1;text-shadow:0 1px 2px #1118}
+[data-bounce-art=dvd] strong {font:italic 900 1em/.79 "Arial Black",Arial,sans-serif;letter-spacing:-.055em;transform:skew(-10deg);color:inherit;white-space:nowrap}
+[data-bounce-art=dvd] i {display:block;position:relative;background:currentColor;width:77%;height:.18em;margin-top:.08em;border-radius:50%;transform:skew(-20deg)}
+[data-bounce-art=dvd] i::after {content:"";position:absolute;inset:32% 37%;background:var(--page,#222);border-radius:50%}
+[data-bounce-art=dvd] small {font:800 .22em/1.2 Arial,sans-serif;letter-spacing:.14em;color:inherit}
+[data-bounce-art=emi]>img {position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.button-bounce-options {display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.button-bounce-options button {display:grid;place-items:center;gap:2px;min-width:72px;min-height:58px;padding:4px 8px;border:1px solid var(--line);border-radius:5px;color:var(--ink);background:var(--btn);cursor:pointer}
+.button-bounce-options button[aria-pressed=true] {outline:2px solid var(--niche);outline-offset:-2px;font-weight:700}
+.button-bounce-options button[aria-pressed=true]::after,.button-skin-options button[aria-pressed=true]::after {content:" ✓";font:700 12px/1 Arial,sans-serif}
+.button-bounce-options button {position:relative}
+.button-bounce-options button[aria-pressed=true]::after {position:absolute;right:3px;top:3px;display:grid;place-items:center;width:14px;height:14px;border-radius:50%;background:#282130;color:#fff}
+.button-bounce-options [data-bounce-art] {width:38px;height:30px;font-size:14px}
+.button-bounce-options [data-bounce-art=bubble] {width:28px;height:28px}
+.button-bounce-options [data-bounce-art=emi] {width:38px;height:38px}
+.button-bounce-options [data-bounce-art=dvd] {color:var(--ink)}
+.wardrobe-sample {height:120px;display:grid;place-items:center;margin:0 0 8px;background:var(--panel);border-radius:5px;overflow:hidden}
+.wardrobe-sample .tc-oracle,.tip-demo .tc-oracle {zoom:.67}
+.tip-demo.wardrobe-tip {display:grid;place-items:center;height:114px}
+.tip-demo.wardrobe-tip .fz-face {zoom:.85}

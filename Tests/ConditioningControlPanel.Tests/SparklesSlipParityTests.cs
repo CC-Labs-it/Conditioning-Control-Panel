@@ -24,6 +24,7 @@ public class SparklesSlipParityTests
         "piecebypiece",
         "intake",
         "glassroad",
+        "fuzz",
     };
 
     private const string File_ = "sparkles-slip.js";

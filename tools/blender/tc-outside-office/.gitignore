@@ -1,0 +1,12 @@
+*.blend
+*.blend1
+gen/
+stills/
+contact-frames/
+final-frames/
+*-render.json
+final-log.txt
+office-track.json
+office-pull.mp4
+office-hold.jpg
+assets/rough-linen/
