@@ -7198,6 +7198,7 @@
   "studio_section_effects": "Effects",
   "studio_section_extras": "Extras",
   "studio_section_count_on": "{0} on",
+  "studio_section_count_changed": "{0} changed",
   "label_stare_to_pop": "Stare to pop",
   "tooltip_bubble_gaze_pop": "Look at a bubble for about 1 second to pop it, no clicking. Covers bubbles only; flashes have their own switch on the Flashes page.",
   "label_gaze_needs_calibration": "Needs the webcam running and eye tracking calibrated. Set it up under Play, Focus Gaze.",

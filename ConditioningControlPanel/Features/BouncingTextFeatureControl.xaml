@@ -90,7 +90,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_speed}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderSpeed" Minimum="1" Maximum="10" Value="5"
+                                    <Slider Grid.Column="1" x:Name="SliderSpeed" feat:OptionSection.Setting="BouncingTextSpeed" Minimum="1" Maximum="10" Value="5"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderSpeed_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtSpeed" Text="5" HorizontalAlignment="Right"
@@ -107,7 +107,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_size}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderSize" Minimum="50" Maximum="300" Value="100"
+                                    <Slider Grid.Column="1" x:Name="SliderSize" feat:OptionSection.Setting="BouncingTextSize" Minimum="50" Maximum="300" Value="100"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderSize_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtSize" Text="100%" HorizontalAlignment="Right"
@@ -124,7 +124,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_opacity}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderOpacity" Minimum="10" Maximum="100" Value="100"
+                                    <Slider Grid.Column="1" x:Name="SliderOpacity" feat:OptionSection.Setting="BouncingTextOpacity" Minimum="10" Maximum="100" Value="100"
                                             VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderOpacity_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtOpacity" Text="100%" HorizontalAlignment="Right"
@@ -142,7 +142,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_color_mode}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" x:Name="CmbColorMode" Height="26" MaxWidth="220"
+                                    <ComboBox Grid.Column="1" x:Name="CmbColorMode" feat:OptionSection.Setting="BouncingTextColorMode" Height="26" MaxWidth="220"
                                               HorizontalAlignment="Right" VerticalAlignment="Center"
                                               Style="{DynamicResource DarkComboBoxStyle}"
                                               SelectionChanged="CmbColorMode_Changed">
@@ -180,7 +180,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str label_font}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" x:Name="CmbFont" Height="26" MaxWidth="220"
+                                    <ComboBox Grid.Column="1" x:Name="CmbFont" feat:OptionSection.Setting="BouncingTextFont" Height="26" MaxWidth="220"
                                               HorizontalAlignment="Right" VerticalAlignment="Center"
                                               Style="{DynamicResource DarkComboBoxStyle}"
                                               SelectionChanged="CmbFont_Changed"/>
@@ -330,7 +330,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_scrawl_life}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderScrawlLife" Minimum="3" Maximum="60" Value="14"
+                                <Slider Grid.Column="1" x:Name="SliderScrawlLife" feat:OptionSection.Setting="ScrawlStampSeconds" Minimum="3" Maximum="60" Value="14"
                                         SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="10,0"
                                         ValueChanged="SliderScrawlLife_Changed"/>
@@ -346,7 +346,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_scrawl_cap}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderScrawlCap" Minimum="6" Maximum="80" Value="44"
+                                <Slider Grid.Column="1" x:Name="SliderScrawlCap" feat:OptionSection.Setting="ScrawlStampCap" Minimum="6" Maximum="80" Value="44"
                                         SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="10,0"
                                         ValueChanged="SliderScrawlCap_Changed"/>
@@ -362,7 +362,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_scrawl_slam}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderScrawlSlam" Minimum="0" Maximum="200" Value="100"
+                                <Slider Grid.Column="1" x:Name="SliderScrawlSlam" feat:OptionSection.Setting="ScrawlSlam" Minimum="0" Maximum="200" Value="100"
                                         SmallChange="25" LargeChange="25" TickFrequency="25" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="10,0"
                                         ValueChanged="SliderScrawlSlam_Changed"/>

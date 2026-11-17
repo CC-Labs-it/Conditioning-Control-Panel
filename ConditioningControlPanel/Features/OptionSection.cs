@@ -143,6 +143,10 @@ namespace ConditioningControlPanel.Features
             // A toggle inside flips the closed summary live.
             AddHandler(ToggleButton.CheckedEvent, new RoutedEventHandler((_, _) => RefreshSummary()));
             AddHandler(ToggleButton.UncheckedEvent, new RoutedEventHandler((_, _) => RefreshSummary()));
+            // A slider or picker moved (a preset loaded while it was shut): the "changed" count follows. The row's own
+            // handler runs first (it sits on the row), so the setting is already written when this reads it.
+            AddHandler(RangeBase.ValueChangedEvent, new RoutedPropertyChangedEventHandler<double>((_, _) => { if (!IsOpen) RefreshSummary(); }));
+            AddHandler(Selector.SelectionChangedEvent, new SelectionChangedEventHandler((_, _) => { if (!IsOpen) RefreshSummary(); }));
             Loaded += (_, _) => { RestoreOnce(); OpenForChangedFold(); UpdateRule(); RefreshSummary(); };
             Initialized += (_, _) => RestoreOnce();
 
@@ -309,16 +313,113 @@ namespace ConditioningControlPanel.Features
             if (_header.Padding != pad) _header.Padding = pad;
         }
 
-        /// <summary>Closed: how many switches inside are on ("2 on"), so a changed switch is never hidden.</summary>
+        /// <summary>Closed: how many switches inside are on ("2 on") and how many sliders or pickers are off their
+        /// default ("1 changed"), so a changed setting is never hidden behind a closed title.</summary>
         private void RefreshSummary()
         {
             if (_summary == null) return;
             int on = IsOpen ? 0 : SwitchesOn;
-            if (on <= 0) { _summary.Text = string.Empty; return; }
-            string fmt = LocalizationManager.Instance?["studio_section_count_on"] ?? "{0} on";
-            try { _summary.Text = string.Format(fmt, on); }
-            catch (FormatException) { _summary.Text = on + " on"; }
+            int changed = IsOpen ? 0 : ValuesChanged;
+            _summary.Text = SummaryText(on, changed,
+                LocalizationManager.Instance?["studio_section_count_on"], LocalizationManager.Instance?["studio_section_count_changed"]);
         }
+
+        /// <summary>The closed summary: "2 on", "1 changed", "2 on · 1 changed", or nothing.</summary>
+        internal static string SummaryText(int on, int changed, string? onFormat, string? changedFormat)
+        {
+            static string Fmt(string? f, string fallback, int n)
+            {
+                try { return string.Format(string.IsNullOrEmpty(f) ? fallback : f, n); }
+                catch (FormatException) { return string.Format(fallback, n); }
+            }
+            var parts = new List<string>(2);
+            if (on > 0) parts.Add(Fmt(onFormat, "{0} on", on));
+            if (changed > 0) parts.Add(Fmt(changedFormat, "{0} changed", changed));
+            return string.Join(" · ", parts);
+        }
+
+        // ---------------------------------------------------------------- changed values
+
+        /// <summary>
+        /// The <see cref="Models.AppSettings"/> property a slider or picker row writes, e.g.
+        /// <c>features:OptionSection.Setting="PinkFilterTargetMonitor"</c>. A closed section counts the rows whose
+        /// setting differs from a fresh <c>new AppSettings()</c> (the real defaults, never the control's XAML value).
+        /// </summary>
+        public static readonly DependencyProperty SettingProperty = DependencyProperty.RegisterAttached(
+            "Setting", typeof(string), typeof(OptionSection), new PropertyMetadata(null));
+
+        public static string? GetSetting(DependencyObject d) => (string?)d.GetValue(SettingProperty);
+        public static void SetSetting(DependencyObject d, string? value) => d.SetValue(SettingProperty, value);
+
+        private static readonly Lazy<Models.AppSettings?> Defaults = new(() =>
+        {
+            try { return new Models.AppSettings(); } catch { return null; }
+        });
+
+        private static readonly Dictionary<string, System.Reflection.PropertyInfo?> Props = new();
+
+        /// <summary>How many tagged rows in the body are off their default right now.</summary>
+        internal int ValuesChanged
+        {
+            get
+            {
+                try { return CountChanged(_body, CurrentSettings(), Defaults.Value); }
+                catch { return 0; }
+            }
+        }
+
+        /// <summary>The live settings (a seam for the offscreen tests, which have no App.Settings).</summary>
+        internal static Func<object?> CurrentSettings = () => App.Settings?.Current;
+
+        /// <summary>Recount the closed summary now (tests; a page whose rows changed without a routed event).</summary>
+        internal void Recount() => RefreshSummary();
+
+        /// <summary>The closed summary as shown.</summary>
+        internal string SummaryShown => _summary.Text;
+
+        /// <summary>Rows (tagged with <see cref="SettingProperty"/>) whose setting in <paramref name="current"/> differs from
+        /// <paramref name="defaults"/>, skipping rows hidden by the host. An unknown name counts as unchanged.</summary>
+        internal static int CountChanged(DependencyObject root, object? current, object? defaults)
+        {
+            if (current == null || defaults == null) return 0;
+            int n = 0;
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is not DependencyObject d) continue;
+                if (d is UIElement el && el.Visibility == Visibility.Collapsed) continue;
+                if (GetSetting(d) is { Length: > 0 } name && Prop(current.GetType(), name) is { } p
+                    && !SameValue(p.GetValue(current), p.GetValue(defaults))) n++;
+                n += CountChanged(d, current, defaults);
+            }
+            return n;
+        }
+
+        private static System.Reflection.PropertyInfo? Prop(Type t, string name)
+        {
+            lock (Props)
+            {
+                if (Props.TryGetValue(name, out var p)) return p;
+                p = t.GetProperty(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+                if (p != null && (!p.CanRead || p.GetIndexParameters().Length > 0)) p = null;
+                return Props[name] = p;
+            }
+        }
+
+        /// <summary>Equal, with numbers compared as numbers (a slider writes 0.30000000000000004 for 0.3).</summary>
+        internal static bool SameValue(object? a, object? b)
+        {
+            if (a is null || b is null) return a is null && b is null;
+            if (IsNumber(a) && IsNumber(b))
+            {
+                double x = Convert.ToDouble(a, System.Globalization.CultureInfo.InvariantCulture);
+                double y = Convert.ToDouble(b, System.Globalization.CultureInfo.InvariantCulture);
+                return Math.Abs(x - y) <= 1e-6 * Math.Max(1, Math.Max(Math.Abs(x), Math.Abs(y)));
+            }
+            if (a is string sa && b is string sb) return string.Equals(sa, sb, StringComparison.Ordinal);
+            return a.Equals(b);
+        }
+
+        private static bool IsNumber(object o) => o is double or float or decimal or int or long or short or byte or uint or ulong or ushort or sbyte;
 
         /// <summary>How many switches in the body are on.</summary>
         internal int SwitchesOn => CountOn(_body);

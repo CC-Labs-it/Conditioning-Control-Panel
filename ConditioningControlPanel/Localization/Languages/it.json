@@ -6909,6 +6909,7 @@
   "studio_section_effects": "Effetti",
   "studio_section_extras": "Extra",
   "studio_section_count_on": "{0} attivi",
+  "studio_section_count_changed": "{0} modificati",
   "label_stare_to_pop": "Fissa per scoppiare",
   "tooltip_bubble_gaze_pop": "Guarda una bolla per circa un secondo e scoppia, senza cliccare. Solo per le bolle: i flash hanno un interruttore loro nella pagina Flash.",
   "label_gaze_needs_calibration": "Servono la webcam attiva e il tracciamento oculare calibrato. Si imposta in Gioca, Focus Gaze.",
