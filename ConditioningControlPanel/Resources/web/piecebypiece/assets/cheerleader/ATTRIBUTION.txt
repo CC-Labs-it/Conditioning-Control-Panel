@@ -1,0 +1,16 @@
+Robot Emi and her face atlas are reused from the existing Racing Thoughts 3D assets.
+
+emi-racing.glb derives from the approved seated R4 emi-teacup-kart.glb:
+SHA256 7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1.
+Only triangles belonging to cup_body and saucer_body are removed. Emi's retained
+geometry, UVs, palette, skin weights, 15-joint rig, inverse bind matrices, node
+transforms, and all 26 authored animations are preserved. Textures are the source
+PNG images corresponding to the packed model. No new limbs or body geometry.
+
+emi-racing-faces.png is the approved revision 5 master atlas: sixteen cells in a
+4 by 4 grid, using the existing classic Emi expressions. Its packed Racing
+Thoughts counterpart has SHA256
+591d9d8dfcf74b95e23035961e0781bdaae8dcabc717fdd4c299c68866cb7b08.
+
+Extraction is reproducible with handoff-1117/chess-boards/extract-emi-racing.mjs.
+Existing project asset terms apply. No additional third-party assets are introduced.
