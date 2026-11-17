@@ -25,8 +25,15 @@ public class DeckCardShotTests
     private static readonly SKColor Desk = new(0x1D, 0x22, 0x30);
     private static readonly Dictionary<string, bool> Pool = new() { ["good girls obey"] = true, ["Sink"] = true, ["deeper and deeper for me"] = true };
 
+    /// <summary>A layer on an engine that was never built and reads as disposed, so Wake returns at once even
+    /// when another test has a WPF Application up (it would post the wake to that dispatcher otherwise).</summary>
     private static FlashLayer NewLayer()
-        => new((CompositorEngine)RuntimeHelpers.GetUninitializedObject(typeof(CompositorEngine)));
+    {
+        var engine = (CompositorEngine)RuntimeHelpers.GetUninitializedObject(typeof(CompositorEngine));
+        typeof(CompositorEngine).GetField("_disposed", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(engine, true);
+        return new(engine);
+    }
 
     /// <summary>A stand-in picture: a gradient with a ring and a border, so crops and bars both show.</summary>
     private static SKImage Picture(int w, int h, float hue)
