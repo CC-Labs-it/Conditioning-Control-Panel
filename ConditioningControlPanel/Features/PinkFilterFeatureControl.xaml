@@ -71,6 +71,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="pinkfilter.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_filter_opacity_5_50}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -86,9 +87,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="pinkfilter.look" Title="{loc:Str studio_section_look}" Theme="Look">
                             <Grid Height="40" Background="Transparent" ToolTip="{loc:Str tooltip_pink_filter_color}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -111,7 +112,9 @@
                             <!-- Two-tone fog beside the colour it mixes with (pink filter and Steam both wear it):
                                  the switch and the second colour when owned, a locked chip to the shop when not. -->
                             <ctl:FogTwoToneBlock x:Name="FogTwoTone"/>
+                            </feat:OptionSection>
 
+                            <feat:OptionSection Key="pinkfilter.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_effect_monitor}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -138,6 +141,7 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkUnderEffects_Changed" Unchecked="ChkUnderEffects_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>

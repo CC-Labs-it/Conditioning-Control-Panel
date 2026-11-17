@@ -73,6 +73,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="spiral.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_spiral_opacity_5_100}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -89,9 +90,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="spiral.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_spiral_randomize}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -138,6 +139,7 @@
                                           DropDownOpened="CmbMonitor_DropDownOpened"
                                           SelectionChanged="CmbMonitor_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>
