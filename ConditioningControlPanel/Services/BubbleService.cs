@@ -1124,7 +1124,7 @@ public partial class BubbleService : IDisposable
         bubble.SetLucky(paidLucky && perkFx, hasSparkleBoost && perkFx);
 
         // Play appropriate sound (the avatar easter-egg pop comes through 50% louder)
-        PlayPopSound(paidLucky, bubble.AvatarPopVolumeMult);
+        PlayPopSound(paidLucky, bubble.AvatarPopVolumeMult, bubble.Skin);
 
         // Don't remove here - let the pop animation play, removal happens in OnDestroy
         OnBubblePopped?.Invoke();
@@ -2255,7 +2255,7 @@ public partial class BubbleService : IDisposable
         AnimateAllBubbles(sender, e);
     }
 
-    private void PlayPopSound(bool isLucky = false, float volumeMult = 1f)
+    private void PlayPopSound(bool isLucky = false, float volumeMult = 1f, string? skin = null)
     {
         try
         {
@@ -2280,10 +2280,15 @@ public partial class BubbleService : IDisposable
                 }
             }
 
-            // Normal pop sound
-            var popFiles = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" };
-            var chosenPop = popFiles[_random.Next(popFiles.Length)];
-            var popPath = ModResourceResolver.ResolveAudioPath("bubbles/" + chosenPop);
+            // Normal pop sound. A skinned bubble plays one of its own three clips (BubbleSkinSounds);
+            // soap and unknown skins get today's pops, and a skin clip missing on disk falls back to them.
+            var popFiles = BubbleCore.BubbleSkinSounds.PopClips(skin);
+            var popPath = ModResourceResolver.ResolveAudioPath(popFiles[_random.Next(popFiles.Count)]);
+            if (!File.Exists(popPath) && BubbleCore.BubbleSkinSounds.HasOwnPop(skin))
+            {
+                var soap = BubbleCore.BubbleSkinSounds.SoapPops;
+                popPath = ModResourceResolver.ResolveAudioPath(soap[_random.Next(soap.Count)]);
+            }
 
             if (File.Exists(popPath))
             {
@@ -3119,6 +3124,8 @@ internal partial class Bubble
     internal string EffectKindId => _spec?.VariantId ?? "";
     /// <summary>Loudness multiplier the benign-pop path applies to the pop sound (1 for user pops).</summary>
     internal float AvatarPopVolumeMult => _avatarPopVolumeMult;
+    /// <summary>This bubble's skin id (soap = today's look); picks its pop sound.</summary>
+    internal string Skin => _skin;
 
     /// <summary>Companion claims this bubble: pause its treat-life + freeze its drift + ignore user pops.
     /// Also clears the death-telegraph ramp (a 5s treat is already fading at the 4s claim point) so the
