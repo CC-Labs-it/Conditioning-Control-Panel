@@ -27,7 +27,8 @@ kbd { font-family: var(--f-mono); font-size: 12px; border: 1px solid currentColo
 
 /* ---------- the sheet ---------- */
 .sheet { position: absolute; inset: 0; background: var(--night); display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
-.sheet.from-wallet { border-bottom: 3px solid var(--gold); transform: translateY(-104%); transition: transform var(--slide) cubic-bezier(.2, .8, .2, 1); box-shadow: 0 24px 60px #000c; }
+/* in a sheet the host draws the frame (rounded, gold): no edge line or shadow of the page's own */
+.sheet.from-wallet { transform: translateY(-104%); transition: transform var(--slide) cubic-bezier(.2, .8, .2, 1); }
 .sheet.from-wallet.open { transform: translateY(0); }
 .s-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px 10px; }
 .s-title { font: 700 26px/1 var(--f-display); letter-spacing: -.01em; margin: 0; margin-right: auto; }
