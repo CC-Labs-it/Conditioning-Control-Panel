@@ -6,7 +6,7 @@
  * repaint never restarts an animation. A click on a bubble in "Your screen" pops it with its own sound (opts.onPop). */
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
-import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawSpiralBack, BACK_LIFE, FOGS, WORDS, hueOf, secondFog } from './looks.js';
+import { drawBack, drawFront, drawFrame, drawCard, drawNoFrame, drawWord, drawFogBlobs, drawSpiralBack, BACK_LIFE, FOGS, WORDS, hueOf, secondFog } from './looks.js';
 import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
@@ -75,7 +75,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     }
     return (item, tt) => {
       const g = item.c, w = item.w, h = item.h; g.clearRect(0, 0, w, h);
-      if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); g.restore(); }   // the same picture on every thumb: only the frame differs
+      if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); if (kind === 'plain') drawNoFrame(g, -cw / 2, -ch / 2, cw, ch); g.restore(); }   // the same picture on every thumb: only the frame differs
       else if (slot === 'behind') {
         const cw = h * 0.42, ch = h * 0.72, y = (h - ch) / 2;
         // Whisper: the card's spiral back with a word coming at you (one per 2.6 s); Nothing: the plain card
@@ -133,7 +133,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
         W.next = (W.next || 3) - dt;
         if (motion !== 'off' && W.next <= 0) { W.next = 3.2; const b = W.bs[W.turn = ((W.turn || 0) + 1) % 3]; if (b) popBubble(b); }
         stepParts(W, dt); drawParts(W);
-      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); k.restore(); }
+      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); if (kind === 'plain') drawNoFrame(k, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6); k.restore(); }
       else if (slot === 'behind') {
         const cw = h * 0.38, ch = h * 0.56, x = cx - cw / 2, y = h * 0.16 + bob * 0.5, age = motion === 'off' ? 1.2 : tt % 2.6, word = WORDS[Math.floor(tt / 2.6) % WORDS.length];
         if (kind === 'whisper') drawSpiralBack(k, word, age, x, y, cw, ch, still ? 0 : tt * (gentle ? 0.35 : 0.9), 'plain', motion === 'off');

@@ -94,12 +94,13 @@ public class LookRow : StackPanel
                 return img == null ? null : new Image { Source = img, Width = 22, Height = 22, SnapsToDevicePixels = true };
             case WornLooks.Card:
                 var back = SuperCore.DeckLooks.BackOf(c.Id);
+                if (back == SuperCore.DeckBack.Plain) return LookThumbs.PlainCard(16, 22);   // "no frame", never a pink card
                 return new Border
                 {
                     Width = 16, Height = 22, CornerRadius = new CornerRadius(3),
                     Background = LookThumbs.CardGround(back),
-                    BorderBrush = back == SuperCore.DeckBack.Plain ? LookThumbs.Frozen(0x80FFFFFF) : LookThumbs.CardMark(back),
-                    BorderThickness = new Thickness(back == SuperCore.DeckBack.Plain ? 1 : 3),
+                    BorderBrush = LookThumbs.CardMark(back),
+                    BorderThickness = new Thickness(3),
                 };
             case WornLooks.Word:
                 var style = global::ConditioningControlPanel.Looks.WordStyles.Of(c.Id);
