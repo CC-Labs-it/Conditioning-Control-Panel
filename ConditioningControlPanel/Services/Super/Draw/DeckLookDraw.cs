@@ -148,9 +148,16 @@ public sealed class DeckLookDraw : IDisposable
     /// <paramref name="turnRad"/> and sized to cover the whole card <paramref name="r"/> (its round edge sits past
     /// the corners), then a soft dim at the centre for the phrase. The caller clips to the card.
     /// </summary>
-    public void DrawSpiralBack(SKCanvas canvas, SKRect r, SKBitmap spiral, uint ground, double turnRad, byte alpha)
+    public void DrawSpiralBack(SKCanvas canvas, SKRect r, SKBitmap spiral, uint ground, double turnRad, byte alpha, SpiralBackCache? cache = null)
     {
         if (alpha == 0 || r.Width < 2 || r.Height < 2) return;
+        if (cache != null && cache.Draw(this, canvas, r, spiral, ground, turnRad, alpha)) return;
+        Compose(canvas, r, spiral, ground, turnRad, alpha);
+    }
+
+    /// <summary>Ground, turned spiral and dim straight into <paramref name="canvas"/> over <paramref name="r"/>.</summary>
+    internal void Compose(SKCanvas canvas, SKRect r, SKBitmap spiral, uint ground, double turnRad, byte alpha, SKImage? spiralImage = null, bool dim = true)
+    {
         _fill.Color = Colour(ground, alpha);
         canvas.DrawRect(r, _fill);
         float half = (float)Math.Sqrt(r.Width * r.Width + r.Height * r.Height) / 2f;
@@ -158,10 +165,18 @@ public sealed class DeckLookDraw : IDisposable
         canvas.Translate(r.MidX, r.MidY);
         if (turnRad != 0) canvas.RotateRadians((float)turnRad);
         _spiral.Color = new SKColor(255, 255, 255, alpha);
-        canvas.DrawBitmap(spiral, new SKRect(-half, -half, half, half), _spiral);
+        if (spiralImage != null) canvas.DrawImage(spiralImage, new SKRect(-half, -half, half, half), _spiral);
+        else canvas.DrawBitmap(spiral, new SKRect(-half, -half, half, half), _spiral);
         canvas.RestoreToCount(save);
+        if (dim) DrawDim(canvas, r, alpha);
+    }
+
+    /// <summary>The soft dim at the centre of the card (the phrase reads on any spiral colour). It never turns, so a
+    /// cached back draws it once per card size (SpiralBackCache).</summary>
+    internal void DrawDim(SKCanvas canvas, SKRect r, byte alpha)
+    {
         float dimR = Math.Min(r.Width, r.Height) * 0.62f;
-        save = canvas.Save();
+        int save = canvas.Save();
         canvas.Translate(r.MidX, r.MidY);
         canvas.Scale(dimR * Math.Max(1f, r.Width / r.Height), dimR * Math.Max(1f, r.Height / r.Width));
         _dim.Color = new SKColor(255, 255, 255, alpha);

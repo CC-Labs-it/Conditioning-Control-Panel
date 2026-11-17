@@ -105,6 +105,8 @@ public sealed class FlashLayer : BaseLayer
         internal bool DeckOnBack;
         /// <summary>The back's spiral picture (Bgra8888, rolled once per flip to the back), its ground and its turn.</summary>
         internal SKBitmap? DeckSpiral;
+        /// <summary>The back drawn at half size and stretched once (SpiralBackCache: about 3x cheaper than at full size).</summary>
+        internal Super.Draw.SpiralBackCache? DeckBackCache;
         internal uint DeckSpiralGround;
         internal double DeckSpiralTurn;
         internal LoomSpec? DeckSpiralSpec;
@@ -170,6 +172,8 @@ public sealed class FlashLayer : BaseLayer
             BlurCache = null;
             DropDeckPending();
             DropDeckFade();
+            DeckBackCache?.Dispose();
+            DeckBackCache = null;
             DeckSpiral?.Dispose();
             DeckSpiral = null;
             DeckShadowCache?.Dispose();
@@ -1166,6 +1170,7 @@ public sealed class FlashLayer : BaseLayer
         item.DeckSpiral ??= new SKBitmap(new SKImageInfo(BackSpiralPx, BackSpiralPx, SKColorType.Bgra8888, SKAlphaType.Premul));
         System.Runtime.InteropServices.Marshal.Copy(_backPx, 0, item.DeckSpiral.GetPixels(), _backPx.Length);
         item.DeckSpiral.NotifyPixelsChanged();
+        item.DeckBackCache?.Invalidate();   // same bitmap, new pixels: the half-size back draws again
         item.DeckSpiralSpec = spec;
         item.DeckSpiralGround = ground;
         item.DeckSpiralTurn = _deckRng.NextDouble() * Math.PI * 2;
@@ -1200,7 +1205,7 @@ public sealed class FlashLayer : BaseLayer
     private void DrawBackFace(SKCanvas canvas, FlashItem item, SKRect r, byte alpha, bool word = true)
     {
         if (item.DeckSpiral == null) return;
-        _deckLook.DrawSpiralBack(canvas, r, item.DeckSpiral, item.DeckSpiralGround, item.DeckSpiralTurn, alpha);
+        _deckLook.DrawSpiralBack(canvas, r, item.DeckSpiral, item.DeckSpiralGround, item.DeckSpiralTurn, alpha, item.DeckBackCache ??= new());
         if (!word || item.Deck is not { } deck || item.WhisperLines == null || item.Exit != null) return;
         var level = MotionFx.Level;
         var p = DeckSpiralBack.Word(deck.SinceSwap, level == MotionLevel.Reduced ? 0.5 : 1.0, level == MotionLevel.Off, Safety.GentleVisuals.On);

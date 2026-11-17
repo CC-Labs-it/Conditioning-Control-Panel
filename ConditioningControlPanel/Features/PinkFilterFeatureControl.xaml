@@ -80,7 +80,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_opacity}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderOpacity" Minimum="5" Maximum="50" Value="10"
+                                <Slider Grid.Column="1" x:Name="SliderOpacity" feat:OptionSection.Setting="PinkFilterOpacity" Minimum="5" Maximum="50" Value="10"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderOpacity_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtOpacity" Text="10%" HorizontalAlignment="Right"
@@ -122,7 +122,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_effect_monitor}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1" x:Name="CmbMonitor"
+                                <ComboBox Grid.Column="1" x:Name="CmbMonitor" feat:OptionSection.Setting="PinkFilterTargetMonitor"
                                           Width="180" VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           DropDownOpened="CmbMonitor_DropDownOpened"
@@ -175,7 +175,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_steam_creep}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbCreepSpeed" Width="180" VerticalAlignment="Center"
+                        <ComboBox Grid.Column="1" x:Name="CmbCreepSpeed" feat:OptionSection.Setting="SuperCreepSpeed" Width="180" VerticalAlignment="Center"
                                   Style="{DynamicResource DarkComboBoxStyle}"
                                   SelectionChanged="CmbCreepSpeed_Changed"/>
                     </Grid>
@@ -188,7 +188,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_steam_size}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderSteamSize" Minimum="40" Maximum="300" Value="100"
+                        <Slider Grid.Column="1" x:Name="SliderSteamSize" feat:OptionSection.Setting="SteamWipeSize" Minimum="40" Maximum="300" Value="100"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderSteamSize_Changed"/>
                         <TextBlock Grid.Column="2" x:Name="TxtSteamSize" Text="100%" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
@@ -204,7 +204,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_steam_return}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderSteamReturn" Minimum="25" Maximum="300" Value="100"
+                        <Slider Grid.Column="1" x:Name="SliderSteamReturn" feat:OptionSection.Setting="SteamFogReturn" Minimum="25" Maximum="300" Value="100"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderSteamReturn_Changed"/>
                         <TextBlock Grid.Column="2" x:Name="TxtSteamReturn" Text="100%" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
@@ -220,7 +220,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_steam_drift}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderSteamDrift" Minimum="0" Maximum="200" Value="100"
+                        <Slider Grid.Column="1" x:Name="SliderSteamDrift" feat:OptionSection.Setting="SteamDrift" Minimum="0" Maximum="200" Value="100"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderSteamDrift_Changed"/>
                         <TextBlock Grid.Column="2" x:Name="TxtSteamDrift" Text="100%" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
@@ -239,7 +239,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_creep_cap}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderCreepCap" Minimum="20" Maximum="90" Value="90"
+                                <Slider Grid.Column="1" x:Name="SliderCreepCap" feat:OptionSection.Setting="SuperCreepCap" Minimum="20" Maximum="90" Value="90"
                                         VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderCreepCap_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtCreepCap" Text="90%" HorizontalAlignment="Right"
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"

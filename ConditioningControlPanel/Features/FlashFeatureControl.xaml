@@ -80,7 +80,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_per_hour}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderFrequency" Minimum="1" Maximum="180" Value="10"
+                                <Slider Grid.Column="1" x:Name="SliderFrequency" feat:OptionSection.Setting="FlashFrequency" Minimum="1" Maximum="180" Value="10"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFrequency_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtFrequency" Text="10" HorizontalAlignment="Right"
@@ -96,7 +96,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_images}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderImages" Minimum="1" Maximum="20" Value="5"
+                                <Slider Grid.Column="1" x:Name="SliderImages" feat:OptionSection.Setting="SimultaneousImages" Minimum="1" Maximum="20" Value="5"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderImages_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtImages" Text="5" HorizontalAlignment="Right"
@@ -127,7 +127,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_flash_fewest_images}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderImagesMin" Minimum="1" Maximum="20" Value="1"
+                                <Slider Grid.Column="1" x:Name="SliderImagesMin" feat:OptionSection.Setting="SimultaneousImagesMin" Minimum="1" Maximum="20" Value="1"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderImagesMin_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtImagesMin" Text="1" HorizontalAlignment="Right"
@@ -143,7 +143,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_max_on_screen}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderMaxOnScreen" Minimum="2" Maximum="20" Value="20"
+                                <Slider Grid.Column="1" x:Name="SliderMaxOnScreen" feat:OptionSection.Setting="HydraLimit" Minimum="2" Maximum="20" Value="20"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderMaxOnScreen_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtMaxOnScreen" Text="20" HorizontalAlignment="Right"
@@ -188,7 +188,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_flash_exit}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1" x:Name="CmbExit" Width="170"
+                                <ComboBox Grid.Column="1" x:Name="CmbExit" feat:OptionSection.Setting="FlashExitStyle" Width="170"
                                           VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           SelectionChanged="CmbExit_Changed"/>
@@ -276,7 +276,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_center_zone}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderCenterExclusion" Minimum="5" Maximum="60" Value="25"
+                                <Slider Grid.Column="1" x:Name="SliderCenterExclusion" feat:OptionSection.Setting="FlashCenterExclusionPercent" Minimum="5" Maximum="60" Value="25"
                                         IsEnabled="{Binding IsChecked, ElementName=ChkFlashAvoidCenter}"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderCenterExclusion_Changed"/>
@@ -330,7 +330,7 @@
                                              ComboBox text is about the STOCK template's light popup;
                                              DarkComboBoxStyle is a dark box over a dark popup, where
                                              black is the one colour that cannot be read. -->
-                                        <ComboBox Grid.Column="1" x:Name="CmbMotion" Width="170"
+                                        <ComboBox Grid.Column="1" x:Name="CmbMotion" feat:OptionSection.Setting="FlashMotionStyle" Width="170"
                                                   VerticalAlignment="Center"
                                                   Style="{DynamicResource DarkComboBoxStyle}"
                                                   SelectionChanged="CmbMotion_Changed"/>
@@ -347,7 +347,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="{loc:Str setting_flash_drift_speed}" FontSize="13" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        <Slider Grid.Column="1" x:Name="SliderDriftSpeed" Minimum="0.25" Maximum="3" Value="1"
+                                        <Slider Grid.Column="1" x:Name="SliderDriftSpeed" feat:OptionSection.Setting="FlashDriftSpeed" Minimum="0.25" Maximum="3" Value="1"
                                                 TickFrequency="0.25" IsSnapToTickEnabled="True"
                                                 VerticalAlignment="Center" Margin="14,0"
                                                 ValueChanged="SliderDriftSpeed_Changed"/>
@@ -464,7 +464,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_linger_boost}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderFlashLingerMs" Minimum="500" Maximum="5000" Value="1500"
+                                <Slider Grid.Column="1" x:Name="SliderFlashLingerMs" feat:OptionSection.Setting="FlashGazeLingerExtensionMs" Minimum="500" Maximum="5000" Value="1500"
                                         TickFrequency="250" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFlashLingerMs_Changed"/>
@@ -491,7 +491,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_deck_flips}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderDeckFlips" Minimum="1" Maximum="7" Value="4" TickFrequency="1" IsSnapToTickEnabled="True"
+                            <Slider Grid.Column="1" x:Name="SliderDeckFlips" feat:OptionSection.Setting="DeckFlips" Minimum="1" Maximum="7" Value="4" TickFrequency="1" IsSnapToTickEnabled="True"
                                     feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderDeckFlips_Changed"/>
                             <TextBlock Grid.Column="2" x:Name="TxtDeckFlips" Text="4" HorizontalAlignment="Right"
@@ -506,7 +506,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_deck_reach}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderDeckReach" Minimum="0" Maximum="200" Value="100"
+                            <Slider Grid.Column="1" x:Name="SliderDeckReach" feat:OptionSection.Setting="DeckBreakReach" Minimum="0" Maximum="200" Value="100"
                                     feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderDeckReach_Changed"/>
                             <TextBlock Grid.Column="2" x:Name="TxtDeckReach" Text="100%" HorizontalAlignment="Right"

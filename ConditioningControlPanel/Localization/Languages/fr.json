@@ -6595,6 +6595,7 @@
   "studio_section_effects": "Effets",
   "studio_section_extras": "Extras",
   "studio_section_count_on": "{0} actifs",
+  "studio_section_count_changed": "{0} modifiés",
   "label_stare_to_pop": "Fixer pour éclater",
   "tooltip_bubble_gaze_pop": "Regardez une bulle pendant environ 1 seconde pour la faire éclater, sans cliquer. Ne concerne que les bulles ; les flashs ont leur propre interrupteur sur la page Flashes.",
   "label_gaze_needs_calibration": "Nécessite la webcam active et le suivi oculaire calibré. Configurez-le dans Play, Regard Focalisé.",

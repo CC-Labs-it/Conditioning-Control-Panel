@@ -62,7 +62,9 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   if (typeof host.onWalletAt === 'function') host.onWalletAt((m) => { walletAt = { x: m.x, y: m.y }; });
   setDiscoPalette(init.disco);
   const onWallet = (k) => { if (init.sheet === true && typeof host.walletLand === 'function') host.walletLand(k); };
-  const fx = createFx({ root: view.root, doc, base, motion, gentle: !!init.gentle, sound, wallet: () => view.wallet, walletAt: () => walletAt, onWallet });
+  // The host draws the stars over its own bar and counts its chip itself (init.walletFly, CONTRACT "Sheet additions").
+  const onStars = init.sheet === true && init.walletFly === true && typeof host.walletStars === 'function' ? (plan) => { host.walletStars(plan); return true; } : null;
+  const fx = createFx({ root: view.root, doc, base, motion, gentle: !!init.gentle, sound, wallet: () => view.wallet, walletAt: () => walletAt, onWallet, onStars });
   // ---- juice (Lane MOTION): movement, feedback and sound over each paint; decides nothing (sheet/juice.js) ----
   const juice = installJuice(view, { motion, gentle: !!init.gentle, doc, win, sound, fx, sheet: init.sheet === true, later });
   // ---- end juice ----

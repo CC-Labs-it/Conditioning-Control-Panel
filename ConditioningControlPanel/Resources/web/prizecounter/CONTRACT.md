@@ -89,6 +89,14 @@ Sheet additions (shop frame lane, 2026-11-17; all optional, absent = today's beh
 - out: `{type:'wallet-land', k}` (sheet only): the page's stars reached the host's wallet (a gain, k = share landed so
   far, 1 = the last) or left it (a spend, one frame with k = 1). The WPF host counts and kicks its chip; with the DEBUG
   shop preview on, the last one puts the chip back on the preview wallet.
+- in: `init.walletFly true` (WPF sheet with a wallet chip, star flight lane 2026-11-17): the host draws the stars over its
+  bar. The page then sends, once as each flight starts, out `{type:'wallet-stars', dir:'in'|'out', n, e:[x1,y1,x2,y2],
+  stars:[{d, ms, k:[[offset, x, y, scale, deg, opacity], ...]}]}`: every star's whole path (its centre in the page's
+  CSS pixels, the same frames and `cubic-bezier(e)` the page animates, delay `d` and length `ms`). The host draws the
+  same paths in its own layer (the part over the page is hidden under the page's HWND, so the two read as one motion),
+  counts its chip as its copies land (`in`, a gain) or leave (`out`, a spend), pops it per star and settles it on the
+  last. The page sends no `wallet-land` for a flight it handed off; with no flight (motion off) it sends `wallet-land`
+  as before. Absent = today's behaviour.
 `stock_changed` / `catalog_changed` carry the fresh state as `state` (the page also reads it inline).
 
 Reuse (open speed lane, 2026-11-17; additive, a host that never sends it loads the page per open as before):

@@ -78,7 +78,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str label_per_min}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderPerMin" Minimum="1" Maximum="30" Value="5"
+                                <Slider Grid.Column="1" x:Name="SliderPerMin" feat:OptionSection.Setting="SubliminalFrequency" Minimum="1" Maximum="30" Value="5"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderPerMin_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtPerMin" Text="5" HorizontalAlignment="Right"
@@ -94,7 +94,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str label_frames}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderFrames" Minimum="1" Maximum="10" Value="2"
+                                <Slider Grid.Column="1" x:Name="SliderFrames" feat:OptionSection.Setting="SubliminalDuration" Minimum="1" Maximum="10" Value="2"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFrames_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtFrames" Text="2" HorizontalAlignment="Right"
@@ -110,7 +110,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_opacity}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderOpacity" Minimum="10" Maximum="100" Value="80"
+                                <Slider Grid.Column="1" x:Name="SliderOpacity" feat:OptionSection.Setting="SubliminalOpacity" Minimum="10" Maximum="100" Value="80"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderOpacity_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtOpacity" Text="80%" HorizontalAlignment="Right"
@@ -128,7 +128,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_volume}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderWhisperVol" Minimum="0" Maximum="100" Value="50"
+                                <Slider Grid.Column="1" x:Name="SliderWhisperVol" feat:OptionSection.Setting="SubAudioVolume" Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderWhisperVol_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtWhisperVol" Text="50%" HorizontalAlignment="Right"
@@ -176,7 +176,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str label_font}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1" x:Name="CmbFont" Height="26" MaxWidth="220"
+                                <ComboBox Grid.Column="1" x:Name="CmbFont" feat:OptionSection.Setting="SubliminalFont" Height="26" MaxWidth="220"
                                           HorizontalAlignment="Right" VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           SelectionChanged="CmbFont_Changed"/>
@@ -223,7 +223,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_words}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderAfterglowWords" Minimum="2" Maximum="6" Value="4"
+                                <Slider Grid.Column="1" x:Name="SliderAfterglowWords" feat:OptionSection.Setting="AfterglowLineWords" Minimum="2" Maximum="6" Value="4"
                                         SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderAfterglowWords_Changed"/>
@@ -239,7 +239,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_hold}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderAfterglowHold" Minimum="0.5" Maximum="6" Value="1.2"
+                                <Slider Grid.Column="1" x:Name="SliderAfterglowHold" feat:OptionSection.Setting="AfterglowLineHold" Minimum="0.5" Maximum="6" Value="1.2"
                                         SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderAfterglowHold_Changed"/>
@@ -255,7 +255,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_ghost}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderAfterglowGhost" Minimum="15" Maximum="90" Value="42"
+                                <Slider Grid.Column="1" x:Name="SliderAfterglowGhost" feat:OptionSection.Setting="AfterglowGhostOpacity" Minimum="15" Maximum="90" Value="42"
                                         SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderAfterglowGhost_Changed"/>

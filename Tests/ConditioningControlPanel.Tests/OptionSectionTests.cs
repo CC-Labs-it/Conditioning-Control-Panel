@@ -143,6 +143,90 @@ public class OptionSectionTests
         });
     }
 
+    // ---------------------------------------------------------------- changed values in a closed section
+
+    [Fact]
+    public void The_closed_summary_reads_switches_and_changed_values()
+    {
+        Assert.Equal("", OptionSection.SummaryText(0, 0, "{0} on", "{0} changed"));
+        Assert.Equal("2 on", OptionSection.SummaryText(2, 0, "{0} on", "{0} changed"));
+        Assert.Equal("1 changed", OptionSection.SummaryText(0, 1, "{0} on", "{0} changed"));
+        Assert.Equal("2 on · 1 changed", OptionSection.SummaryText(2, 1, "{0} on", "{0} changed"));
+        Assert.Equal("1 changed", OptionSection.SummaryText(0, 1, null, "{oops"));   // a broken translation falls back
+    }
+
+    [Fact]
+    public void Numbers_compare_as_numbers()
+    {
+        Assert.True(OptionSection.SameValue(0.3, 0.1 + 0.2));
+        Assert.True(OptionSection.SameValue(10, 10.0));
+        Assert.False(OptionSection.SameValue(10, 11));
+        Assert.True(OptionSection.SameValue(MotionLevel.Full, MotionLevel.Full));
+        Assert.False(OptionSection.SameValue("Arial", "Segoe UI"));
+        Assert.True(OptionSection.SameValue(null, null));
+        Assert.False(OptionSection.SameValue(null, 0));
+    }
+
+    [Fact]
+    public void A_closed_section_marks_a_monitor_picker_off_its_default()
+    {
+        var keep = OptionSection.CurrentSettings;
+        try
+        {
+            WpfRenderHarness.OnStaThread(() =>
+            {
+                var live = new AppSettings();
+                OptionSection.CurrentSettings = () => live;
+                var page = new PinkFilterFeatureControl();
+                var host = Realize(page);
+                var picker = (ComboBox)page.FindName("CmbMonitor");
+                var section = Ancestors(picker).OfType<OptionSection>().First();
+                section.IsOpen = false;
+                section.Recount();
+                Assert.Equal(0, section.ValuesChanged);
+                live.PinkFilterTargetMonitor = 1;
+                section.Recount();
+                Assert.Equal(1, section.ValuesChanged);
+                Assert.Contains("1", section.SummaryShown);
+                // A host-hidden row never counts.
+                picker.Visibility = Visibility.Collapsed;
+                Assert.Equal(0, section.ValuesChanged);
+                picker.Visibility = Visibility.Visible;
+                section.Recount();
+                host.UpdateLayout();
+                Dump(host, "pinkfilter-extras-closed-changed");
+                // Open: no summary.
+                section.IsOpen = true;
+                Assert.Equal("", section.SummaryShown);
+            });
+        }
+        finally { OptionSection.CurrentSettings = keep; }
+    }
+
+    [Theory]
+    [MemberData(nameof(Pages))]
+    public void Every_tagged_row_names_a_real_setting(string name)
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var page = PageFactories[name]();
+            Realize(page);
+            var tagged = Descendants(page).Where(d => OptionSection.GetSetting(d) is { Length: > 0 }).ToList();
+            foreach (var d in tagged)
+            {
+                var setting = OptionSection.GetSetting(d)!;
+                var p = typeof(AppSettings).GetProperty(setting);
+                Assert.True(p is { CanRead: true }, $"{name}: {setting} is not an AppSettings property");
+            }
+            // Every slider and picker inside a section is tagged, or listed here as left out on purpose.
+            var untagged = Descendants(page).OfType<OptionSection>()
+                .SelectMany(s => Descendants(s)).Where(d => d is Slider or ComboBox)
+                .Where(d => OptionSection.GetSetting(d) is not { Length: > 0 })
+                .Select(d => ((FrameworkElement)d).Name).ToList();
+            Assert.True(untagged.Count == 0, $"{name}: untagged {string.Join(", ", untagged)}");
+        });
+    }
+
     public static IEnumerable<object[]> Pages() => PageFactories.Keys.Select(k => new object[] { k });
 
     private static readonly Dictionary<string, Func<FrameworkElement>> PageFactories = new()
@@ -157,6 +241,8 @@ public class OptionSectionTests
         ["bouncingtext"] = () => new BouncingTextFeatureControl(),
         ["visuals"] = () => new VisualsFeatureControl(),
         ["braindrain"] = () => new ConditioningControlPanel.Views.Controls.Studio.BrainDrainFeatureControl(),
+        // The Scheduler page is left whole on purpose: three rows (switch, time range, days), nothing to fold.
+        ["ramp"] = () => new IntensityRampFeatureControl(),
     };
 
     [Theory]

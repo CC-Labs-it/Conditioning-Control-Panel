@@ -66,6 +66,8 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     /** The host's { type:'reset' } (sheet/reuse.js listens; a reset never clears this list). */
     onReset(f) { if (typeof f === 'function') resetHears.push(f); },
     walletLand(k) { if (Number.isFinite(k)) post({ type: 'wallet-land', k: Math.max(0, Math.min(1, k)) }); },
+    /** The stars' whole paths, once per flight (sheet/fx.js handOff): the host draws them over its bar. */
+    walletStars(plan) { if (plan && Array.isArray(plan.stars)) post({ type: 'wallet-stars', dir: plan.dir === 'out' ? 'out' : 'in', n: plan.n, e: plan.e, stars: plan.stars }); },
     log(msg) { post({ type: 'log', level: 'debug', msg: String(msg).slice(0, 400) }); },
   };
 }
@@ -83,6 +85,7 @@ export function asHost(o = {}) {
     onWorn: (f) => call(o.onWorn, f),
     onWalletAt: (f) => call(o.onWalletAt, f),
     walletLand: (k) => call(o.walletLand, k),
+    walletStars: (plan) => call(o.walletStars, plan),
     log: (msg) => call(o.log, msg),
   };
 }

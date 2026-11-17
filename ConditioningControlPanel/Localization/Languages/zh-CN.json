@@ -7107,6 +7107,7 @@
   "studio_section_effects": "效果",
   "studio_section_extras": "其他",
   "studio_section_count_on": "已开 {0} 项",
+  "studio_section_count_changed": "已改 {0} 项",
   "label_stare_to_pop": "注视即可戳破",
   "tooltip_bubble_gaze_pop": "注视泡泡约 1 秒即可戳破，无需点击。仅对泡泡有效；闪图在闪图页面有独立开关。",
   "label_gaze_needs_calibration": "需要打开摄像头并完成视线追踪校准。请在 Play 的聚焦注视中设置。",

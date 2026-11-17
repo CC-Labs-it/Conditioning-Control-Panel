@@ -24,7 +24,10 @@ public sealed class SparkleFlightLayer : FrameworkElement
     private static readonly Pen RingPen = FrozenPen(Color.FromRgb(0xFF, 0xD5, 0x80), 2);
     private static readonly Pen BigRingPen = FrozenPen(Color.FromRgb(0xFF, 0xE8, 0xA9), 2.5);
 
-    private sealed record Star(SparkleStarPath Path, Action<int> Landed, int Index) { public bool Done; }
+    /// <summary>A star in the air: where it is at a moment (ms since its flight started), when it leaves and lands.
+    /// <see cref="Left"/> runs once as it leaves (a sheet spend counts the chip down then), <see cref="Landed"/> as it lands.</summary>
+    private sealed record Star(Func<double, SparkleStarPose?> PoseAt, double StartMs, double EndMs, double FlightStart,
+        Action<int>? Left, Action<int>? Landed, int Index) { public bool Gone, Done; }
     private readonly record struct Ring(double X, double Y, double T0, bool Big);
     private readonly record struct Mote(double X, double Y, double Dx, double Dy, double T0, double Life, double R);
 
@@ -35,7 +38,6 @@ public sealed class SparkleFlightLayer : FrameworkElement
     private readonly List<Ring> _rings = new();
     private readonly List<Mote> _motes = new();
     private readonly Random _rng = new();
-    private double _flightStart;
 
     public SparkleFlightLayer()
     {
@@ -48,16 +50,40 @@ public sealed class SparkleFlightLayer : FrameworkElement
 
     public bool IsBusy => _stars.Count > 0;
 
-    private double Now => _time.Elapsed.TotalMilliseconds;
+    private double Now => _time.Elapsed.TotalMilliseconds + _skew;
 
     /// <summary>Flies <paramref name="paths"/>; <paramref name="landed"/> runs per star as it arrives
     /// (its index), on the UI thread.</summary>
     public void Fly(IReadOnlyList<SparkleStarPath> paths, Action<int> landed)
     {
-        _flightStart = Now;
-        for (var i = 0; i < paths.Count; i++) _stars.Add(new Star(paths[i], landed, i));
+        var t0 = Now;
+        for (var i = 0; i < paths.Count; i++)
+        {
+            var path = paths[i];
+            _stars.Add(new Star(ms => SparkleFlightPlan.Pose(path, ms), path.DelayMs, path.DelayMs + path.DurMs, t0, null, landed, i));
+        }
         Wake();
     }
+
+    /// <summary>Flies a sheet page's own star paths (<see cref="SheetStarPlan"/>): <paramref name="left"/> runs per
+    /// star as it leaves, <paramref name="landed"/> as it lands (either may be null), on the UI thread.</summary>
+    public void Fly(SheetStarFlight flight, Action<int>? left, Action<int>? landed)
+    {
+        var t0 = Now;
+        for (var i = 0; i < flight.Stars.Count; i++)
+        {
+            var s = flight.Stars[i];
+            _stars.Add(new Star(ms => SheetStarPlan.Pose(flight, s, ms), s.DelayMs, s.EndMs, t0, left, landed, i));
+        }
+        Wake();
+    }
+
+    /// <summary>Stars still in the air (tests).</summary>
+    internal int StarsInAir => _stars.Count;
+
+    /// <summary>Draws the frame <paramref name="msAhead"/> ms later than now (offscreen stills).</summary>
+    internal void FrameAt(double msAhead) { _skew = msAhead; Frame(); }
+    private double _skew;
 
     /// <summary>A landing: a gold ring and a few motes (a dozen for the last one).</summary>
     public void Ping(Point at, bool big)
@@ -98,9 +124,15 @@ public sealed class SparkleFlightLayer : FrameworkElement
         // Landings first, so a callback that pings is drawn this frame.
         foreach (var s in _stars.ToArray())
         {
-            if (s.Done || now - _flightStart < s.Path.DelayMs + s.Path.DurMs) continue;
+            var age = now - s.FlightStart;
+            if (!s.Gone && age >= s.StartMs)
+            {
+                s.Gone = true;
+                if (s.Left != null) try { s.Left(s.Index); } catch (Exception ex) { App.Logger?.Debug("Sparkle leaving: {E}", ex.Message); }
+            }
+            if (s.Done || age < s.EndMs) continue;
             s.Done = true;
-            try { s.Landed(s.Index); } catch (Exception ex) { App.Logger?.Debug("Sparkle landing: {E}", ex.Message); }
+            if (s.Landed != null) try { s.Landed(s.Index); } catch (Exception ex) { App.Logger?.Debug("Sparkle landing: {E}", ex.Message); }
         }
         _stars.RemoveAll(s => s.Done);
         _rings.RemoveAll(r => now - r.T0 > 800);
@@ -110,8 +142,8 @@ public sealed class SparkleFlightLayer : FrameworkElement
         {
             foreach (var s in _stars)
             {
-                if (picture == null || SparkleFlightPlan.Pose(s.Path, now - _flightStart) is not { } p) continue;
-                var alpha = gentle ? Math.Min(p.Alpha, (now - _flightStart - s.Path.DelayMs) / GentleVisuals.RiseFloorMs) : p.Alpha;
+                if (picture == null || s.PoseAt(now - s.FlightStart) is not { } p) continue;
+                var alpha = gentle ? Math.Min(p.Alpha, (now - s.FlightStart - s.StartMs) / GentleVisuals.RiseFloorMs) : p.Alpha;
                 if (alpha <= 0.01) continue;
                 var half = SparkleFlightPlan.StarPx * p.Scale / 2;
                 var m = Matrix.Identity;

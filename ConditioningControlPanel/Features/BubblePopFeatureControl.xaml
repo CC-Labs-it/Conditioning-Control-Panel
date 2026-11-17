@@ -85,7 +85,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str label_per_min}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderFreq" Minimum="1" Maximum="60" Value="5"
+                                <Slider Grid.Column="1" x:Name="SliderFreq" feat:OptionSection.Setting="BubblesFrequency" Minimum="1" Maximum="60" Value="5"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFreq_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="5" HorizontalAlignment="Right"
@@ -101,7 +101,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Speed" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderSpeed" Minimum="0" Maximum="500" Value="0"
+                                <Slider Grid.Column="1" x:Name="SliderSpeed" feat:OptionSection.Setting="BubbleSpeedBoost" Minimum="0" Maximum="500" Value="0"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderSpeed_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtSpeed" Text="+0%" HorizontalAlignment="Right"
@@ -124,7 +124,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str label_size}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderSize" Minimum="50" Maximum="150" Value="100"
+                                <Slider Grid.Column="1" x:Name="SliderSize" feat:OptionSection.Setting="BubblesSize" Minimum="50" Maximum="150" Value="100"
                                         SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderSize_Changed"/>
@@ -143,7 +143,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_volume}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderVolume" Minimum="0" Maximum="100" Value="50"
+                                <Slider Grid.Column="1" x:Name="SliderVolume" feat:OptionSection.Setting="BubblesVolume" Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderVolume_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtVolume" Text="50%" HorizontalAlignment="Right"
@@ -264,7 +264,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Trigger chance" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderTriggerChance" Minimum="0" Maximum="50" Value="10"
+                                    <Slider Grid.Column="1" x:Name="SliderTriggerChance" feat:OptionSection.Setting="BubbleTriggerChance" Minimum="0" Maximum="50" Value="10"
                                             VerticalAlignment="Center" Margin="14,0"
                                             ValueChanged="SliderTriggerChance_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtTriggerChance" Text="10%" HorizontalAlignment="Right"
@@ -310,7 +310,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_froth_size}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderFrothSize" Minimum="2.5" Maximum="6" Value="4.5"
+                            <Slider Grid.Column="1" x:Name="SliderFrothSize" feat:OptionSection.Setting="FrothMaxSize" Minimum="2.5" Maximum="6" Value="4.5"
                                     SmallChange="0.5" LargeChange="0.5" TickFrequency="0.5" IsSnapToTickEnabled="True"
                                     VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderFrothSize_Changed"/>
@@ -326,7 +326,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_froth_reach}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderFrothReach" Minimum="0" Maximum="200" Value="100"
+                            <Slider Grid.Column="1" x:Name="SliderFrothReach" feat:OptionSection.Setting="FrothPopReach" Minimum="0" Maximum="200" Value="100"
                                     SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True"
                                     VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderFrothReach_Changed"/>
@@ -342,7 +342,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_froth_push}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderFrothPush" Minimum="0" Maximum="200" Value="100"
+                            <Slider Grid.Column="1" x:Name="SliderFrothPush" feat:OptionSection.Setting="FrothCursorPush" Minimum="0" Maximum="200" Value="100"
                                     SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True"
                                     VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderFrothPush_Changed"/>
@@ -373,7 +373,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_motion}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" x:Name="CmbMotion" Width="150" feat:SessionLock.Owned="True"
+                            <ComboBox Grid.Column="1" x:Name="CmbMotion" feat:OptionSection.Setting="BubbleMotionStyle" Width="150" feat:SessionLock.Owned="True"
                                       VerticalAlignment="Center"
                                       Style="{DynamicResource DarkComboBoxStyle}"
                                       SelectionChanged="CmbMotion_Changed"/>
