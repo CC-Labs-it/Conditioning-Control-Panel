@@ -22,13 +22,15 @@ import { createDirector } from './board/director.js';
 import { createDriverSwitch, startOnlineMatch, startWatchMatch } from './net/online.js';
 import { setWatchPolicy, setLookSource } from './net/api.js';
 import { createAttachments } from './board/attachments.js';
+import { createBoardOrnaments } from './board/ornaments.js';
+import { setFinishTime } from './board/finishes.js';
 import { createWear } from './skins/wear.js';
 import { DEFAULT_MS } from './game/clock.js';
 import { postToHost, onHostMessage, onIdentity, signalReady, isHosted } from './bridge.js';
 import { showSlip } from './sparkles-slip.js';
 import { createPauseHush } from './ui/pause-hush.js';
 import { createHostEscape, HOST_ESCAPE } from './ui/host-escape.js';
-import { presentation } from './game/preferences.js';
+import { presentation, onPresentation, boardMotionScale } from './game/preferences.js';
 import { pictureChoice } from './ui/pictures.js';
 import { createIqLive } from './game/iq.js';
 import { readSolo, setSoloIq, patchSoloIq } from './game/save.js';
@@ -76,16 +78,25 @@ function main() {
   // spring out of it when pieces.js builds it.
   const jiggle = createJiggle();
   const anim = createAnim({ group: view.pieceGroup, jiggle });
-  const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle, attachments: createAttachments() });
+  const attachments = createAttachments();
+  const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle, attachments });
+  const ornaments = createBoardOrnaments({ scene: view.scene, attachments });
   // The wardrobe (skins/wear.js): who wears what, and the player's own pick. The pick rides
   // every seat and join (contract 4); the server clamps it and hands both looks back.
-  const wear = createWear({ bus, pieces, post: postToHost, onHost: onHostMessage, hosted: isHosted,
+  const wear = createWear({ bus, pieces: { setLooks(looks) {
+    pieces.setLooks(looks);
+    ornaments.setLooks(looks);
+  } }, post: postToHost, onHost: onHostMessage, hosted: isHosted,
     storage: (() => { try { return window.localStorage; } catch { return null; } })() });
+  let finishMotion = 1;
+  const stopFinishPreference = onPresentation(p => { finishMotion = p.reducedMotion ? 0 : boardMotionScale(p); });
+  { const dispose = view.dispose; view.dispose = () => { stopFinishPreference(); ornaments.dispose(); wear.dispose(); dispose(); }; }
   setLookSource(() => wear.mine());
   // The board API the effects layer drives. Keep this surface stable.
   const board = {
     view,
     pieces,
+    ornaments,
     anim,
     jiggle: pieces.jiggle,
     buzzCheck(square) { anim.buzz(pieces.pieceAt(square)); },
@@ -464,6 +475,7 @@ function main() {
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    setFinishTime(now / 1000, pausedGame || document.hidden ? 0 : finishMotion);
     view.update(dt);
     pieces.update(dt);
     anim.update(dt);

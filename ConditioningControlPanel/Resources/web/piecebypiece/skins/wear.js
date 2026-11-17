@@ -70,10 +70,14 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   function choose(slot, id) {
     if (!SLOTS.includes(slot)) return false;
     if (id !== null && !(CATALOG[slot].includes(id) && ownedIds(grants || []).has(id))) return false;
-    if (picked[slot] === id) return true;
-    picked = { ...picked, [slot]: id };
+    if ((picked[slot] ?? null) === id) return true;
+    picked = normalLook({ ...picked, [slot]: id });
     writeSaved(storage, picked);
-    if (hosted) post({ type: 'pbp:look', look: normalLook(picked) });
+    if (hosted) {
+      const look = { ...picked };
+      if (slot === 'finish' && id === null) look.finish = null;
+      post({ type: 'pbp:look', look });
+    }
     changed();
     return true;
   }
