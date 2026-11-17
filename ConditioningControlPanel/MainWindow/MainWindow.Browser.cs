@@ -1532,6 +1532,7 @@ namespace ConditioningControlPanel
 
             var isLoggedIn = App.Discord.IsAuthenticated;
             var s = App.Settings?.Current;
+            RefreshProfileLinkDiscord();
 
             // Update login status in Community Settings section
             if (DiscordTab.TxtDiscordTabStatus != null && DiscordTab.TxtDiscordTabInfo != null && DiscordTab.BtnDiscordTabLogin != null)

@@ -703,6 +703,13 @@
                                                  SetProfileViewingSelf (MainWindow.ProfileCard.cs) collapses the
                                                  pair while somebody else's card is on screen, so neither can
                                                  read as an offer to edit a stranger's profile (bug #1113). -->
+                                            <!-- Own card, no Discord linked: the short way to a real picture. Self-only
+                                                 like the pair below (SetProfileViewingSelf). Blurple is Discord's. -->
+                                            <Button x:Name="BtnProfileLinkDiscord" x:FieldModifier="internal" Visibility="Collapsed"
+                                                    Content="{loc:Str btn_link_discord_2}"
+                                                    Background="#5865F2" Foreground="White" BorderThickness="0"
+                                                    Padding="14,6" Margin="0,0,8,0" FontSize="11" FontWeight="SemiBold"
+                                                    Cursor="Hand" Click="BtnDiscordTabLogin_Click"/>
                                             <Button x:Name="BtnProfileCustomize" x:FieldModifier="internal"
                                                     Content="{loc:Str profile_btn_customize}"
                                                     Background="#33B478FF" Foreground="#E7DEFF" BorderThickness="0"

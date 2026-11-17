@@ -121,6 +121,26 @@ public class OwnProfileLookTests
         });
     }
 
+    [Fact]
+    public void A_preview_with_no_picture_of_its_own_keeps_the_accounts_picture()
+    {
+        // Owner, 2026-11-17: a frame bought in the preview showed round an empty hole, because the preview's
+        // missing picture replaced the account's free preset.
+        WithSeam(writes =>
+        {
+            var p = new FakePreview();
+            p.Owned.Add("profile.frame.ink-stamp");
+            p.Owned.Add("profile.avatar.emi-pixel");
+            p.Frame = "profile.frame.ink-stamp";
+            OwnProfileLook.Preview = p;
+            Assert.Equal(new ProfileSlots("profile.frame.ink-stamp", "avatar_sissy_1"), OwnProfileLook.Current);
+            Assert.Equal("avatar_sissy_1", OwnProfileLook.Overlay(new ProfileCosmetics { AvatarId = "avatar_sissy_1" }).AvatarId);
+            p.Avatar = "profile.avatar.emi-pixel";   // a picture worn in the preview still wins
+            Assert.Equal("profile.avatar.emi-pixel", OwnProfileLook.Current.AvatarId);
+            Assert.Empty(writes);
+        }, real: new ProfileCosmetics { AvatarId = "avatar_sissy_1" });
+    }
+
 #if DEBUG
     [Fact]
     public void The_preview_file_keeps_the_worn_frame_across_restarts_and_heals_one_no_longer_owned()

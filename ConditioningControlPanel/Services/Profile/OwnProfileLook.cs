@@ -78,7 +78,11 @@ namespace ConditioningControlPanel.Services
                     var p = _preview;
                     if (p == null) return ProfileSlots.Of(RealOwn());
                     var (frame, avatar) = p.Worn();
-                    return new ProfileSlots(Known(p, frame, frame: true), Known(p, avatar, frame: false));
+                    // A preview that wears no picture of its own keeps the account's picture (a free preset is
+                    // never a shop row, so the preview cannot hold it): buying a frame blanked the face inside it
+                    // (owner, 2026-11-17). Read only, nothing real is written.
+                    return new ProfileSlots(Known(p, frame, frame: true),
+                        Known(p, avatar, frame: false) ?? ProfileSlots.Of(RealOwn()).AvatarId);
                 }
                 catch { return default; }
             }
