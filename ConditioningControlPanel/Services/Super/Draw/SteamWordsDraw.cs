@@ -34,7 +34,7 @@ public sealed class SteamWordsDraw : IDisposable
     private SKBitmap? _mask;
     private byte[] _maskPx = Array.Empty<byte>();
     private float[] _raw = Array.Empty<float>(), _row = Array.Empty<float>();
-    private readonly SKPaint _paint = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+    private readonly SKPaint _paint = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Low };
 
     /// <summary>How many times a word has been laid out (tests: a held word is laid out once).</summary>
     public int Layouts { get; private set; }

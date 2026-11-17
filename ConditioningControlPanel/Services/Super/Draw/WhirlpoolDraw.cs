@@ -52,15 +52,33 @@ public sealed class WhirlpoolDraw : IDisposable
         if (from != null)
         {
             _loom ??= new LoomSpiral(LoomSize);
-            _loomBmp ??= new SKBitmap(new SKImageInfo(LoomSize, LoomSize, SKColorType.Rgba8888, SKAlphaType.Premul));
+            _loomBmp ??= new SKBitmap(new SKImageInfo(LoomSize, LoomSize, SKColorType.Bgra8888, SKAlphaType.Premul));
             _loomPx ??= new byte[LoomSize * LoomSize * 4];
             double k = to == null ? 0 : Math.Clamp(mix, 0, 1);
-            _loom.Clear();
-            _loom.Add(from, p.Angle, phase, 1 - k);
-            if (to != null) _loom.Add(to, p.Angle, phase, k);
-            _loom.CopyTo(_loomPx);
-            System.Runtime.InteropServices.Marshal.Copy(_loomPx, 0, _loomBmp.GetPixels(), _loomPx.Length);
-            _loomBmp.NotifyPixelsChanged();
+            // The same picture is asked for once per monitor and again on every present another layer
+            // causes: work it out only when what goes into it has moved.
+            var made = (from, to, k, p.Angle, phase);
+            if (!_loomMade.HasValue || !_loomMade.Value.Equals(made))
+            {
+                _loomMade = made;
+                _loom.Clear();
+                _loom.Add(from, p.Angle, phase, 1 - k);
+                if (to != null) _loom.Add(to, p.Angle, phase, k);
+                _loom.CopyTo(_loomPx);
+                // The rim fade goes into the pixels, so the picture needs no offscreen layer to fade out.
+                var rim = RimFade;
+                for (int q = 0, c = 0; q < _loomPx.Length; q += 4, c++)
+                {
+                    int f = rim[c];
+                    if (f == 255) continue;
+                    _loomPx[q] = (byte)(_loomPx[q] * f / 255); _loomPx[q + 1] = (byte)(_loomPx[q + 1] * f / 255);
+                    _loomPx[q + 2] = (byte)(_loomPx[q + 2] * f / 255); _loomPx[q + 3] = (byte)(_loomPx[q + 3] * f / 255);
+                }
+                // The compositor's fast stretch wants Bgra8888: swap red and blue.
+                for (int q = 0; q < _loomPx.Length; q += 4) (_loomPx[q], _loomPx[q + 2]) = (_loomPx[q + 2], _loomPx[q]);
+                System.Runtime.InteropServices.Marshal.Copy(_loomPx, 0, _loomBmp.GetPixels(), _loomPx.Length);
+                _loomBmp.NotifyPixelsChanged();
+            }
             DrawPicture(canvas, _loomBmp, r, master, (float)e);
             canvas.Restore();
             return;
@@ -111,34 +129,37 @@ public sealed class WhirlpoolDraw : IDisposable
     private LoomSpiral? _loom;
     private SKBitmap? _loomBmp;
     private byte[]? _loomPx;
-    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
-    private readonly SKPaint _rim = new() { BlendMode = SKBlendMode.DstIn };
-    private SKShader? _rimShader; private float _rimR;
+    private (LoomSpec From, LoomSpec? To, double Mix, double Angle, double Phase)? _loomMade;
+    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Low };
+    // The disc's fade over its outer part, per pixel of the small picture: full to 55% of the reach,
+    // 120/255 at 80%, nothing at the rim.
+    private static readonly byte[] RimFade = MakeRimFade();
 
-    /// <summary>The picture as a disc that fades out over its outer third. The canvas is already
-    /// centred on the pool.</summary>
+    private static byte[] MakeRimFade()
+    {
+        var a = new byte[LoomSize * LoomSize];
+        double half = LoomSize / 2.0;
+        for (int y = 0, i = 0; y < LoomSize; y++)
+            for (int x = 0; x < LoomSize; x++, i++)
+            {
+                double dx = (x + 0.5 - half) / half, dy = (y + 0.5 - half) / half, t = Math.Sqrt(dx * dx + dy * dy);
+                double v = t <= 0.55 ? 1 : t <= 0.8 ? 1 + (120 / 255.0 - 1) * (t - 0.55) / 0.25 : t < 1 ? 120 / 255.0 * (1 - (t - 0.8) / 0.2) : 0;
+                a[i] = (byte)Math.Round(v * 255);
+            }
+        return a;
+    }
+
+    /// <summary>The picture as a disc that fades out over its outer part (the fade is already in its
+    /// pixels). The canvas is already centred on the pool.</summary>
     private void DrawPicture(SKCanvas canvas, SKBitmap picture, float r, float master, float e)
     {
-        var dst = new SKRect(-r, -r, r, r);
-        if (_rimShader == null || Math.Abs(_rimR - r) > 1.5f)
-        {
-            _rimShader?.Dispose();
-            _rimShader = SKShader.CreateRadialGradient(new SKPoint(0, 0), r,
-                new[] { SKColors.White, SKColors.White, SKColors.White.WithAlpha(120), SKColors.Transparent },
-                new[] { 0f, 0.55f, 0.8f, 1f }, SKShaderTileMode.Clamp);
-            _rimR = r;
-        }
-        canvas.SaveLayer(dst, null);
         _pic.Color = SKColors.White.WithAlpha((byte)(255 * master * (0.55f + 0.45f * e)));
-        canvas.DrawBitmap(picture, dst, _pic);
-        _rim.Shader = _rimShader;
-        canvas.DrawRect(dst, _rim);
-        canvas.Restore();
+        canvas.DrawBitmap(picture, new SKRect(-r, -r, r, r), _pic);
     }
 
     public void Dispose()
     {
-        _rimShader?.Dispose(); _rimShader = null; _pic.Dispose(); _rim.Dispose();
+        _pic.Dispose();
         _loomBmp?.Dispose(); _loomBmp = null;
         _glowShader?.Dispose(); _glowShader = null;
         _armShader?.Dispose(); _armShader = null;
