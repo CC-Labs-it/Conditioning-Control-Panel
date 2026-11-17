@@ -18,20 +18,32 @@ public static class BubbleSkinIds
     public static bool IsDrawn(string? id) => id == Champagne;
 }
 
-/// <summary>The one place a new bubble learns its skin. Soap, unless a DEBUG build names a drawn
-/// skin in CCP_BUBBLE_SKIN. No shop, ownership or setting feeds it yet.</summary>
+/// <summary>The one place a new bubble learns its skin: the worn look (<see cref="Worn"/>, the desktop's
+/// WornLooks), unless a DEBUG build names a skin in CCP_BUBBLE_SKIN, which wins. Anything not drawn is soap.</summary>
 public static class BubbleSkinChoice
 {
     public const string EnvVar = "CCP_BUBBLE_SKIN";
 
+    /// <summary>The worn bubble skin id, set by the head at startup. Null (or a throw) = soap.</summary>
+    public static Func<string?>? Worn { get; set; }
+
     public static string Current()
     {
+        string? forced = null;
 #if DEBUG
-        return Resolve(Environment.GetEnvironmentVariable(EnvVar));
-#else
-        return BubbleSkinIds.Soap;
+        forced = Environment.GetEnvironmentVariable(EnvVar);
 #endif
+        string? worn = null;
+        if (string.IsNullOrWhiteSpace(forced))
+        {
+            try { worn = Worn?.Invoke(); } catch { worn = null; }
+        }
+        return Choose(forced, worn);
     }
+
+    /// <summary>A forced id (the DEBUG env var) beats the worn one; either way only a drawn skin counts.</summary>
+    public static string Choose(string? forced, string? worn)
+        => Resolve(string.IsNullOrWhiteSpace(forced) ? worn : forced);
 
     /// <summary>A drawn skin id (any case, trimmed), else soap.</summary>
     public static string Resolve(string? requested)
