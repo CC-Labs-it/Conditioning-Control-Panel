@@ -73,6 +73,26 @@ test('a card tip says why it cannot be bought; the tabs, signs and mechanics all
   for (const id of ['featured', 'effects', 'games', 'you', 'prime', 'backroom', 'owned']) assert.ok(TAB_TIPS[id], id);
 });
 
+test('boards and Emi explain the item, the desktop game and how to wear it', () => {
+  const rows = mockRows();
+  for (const name of ['observatory', 'conservatory', 'theatre', 'arcade']) {
+    const entry = rows.find(row => row.id === 'chess.board.' + name);
+    assert.equal(familyOf(entry), 'chess_board');
+    assert.equal(explainKeys(entry).tip, 'shop_sheet_tip_chess_board_' + name);
+    const words = roomExplain(entry, t);
+    assert.ok(words.does && !words.does.startsWith('shop_'));
+    assert.match(words.at, /Piece by Piece.*desktop/);
+    assert.match(words.use, /piece finish stays separate/);
+  }
+  const emi = rows.find(row => row.id === 'chess.companion.emi');
+  assert.equal(familyOf(emi), 'chess_companion');
+  const words = roomExplain(emi, t);
+  assert.match(words.does, /Emi sits on the board edge/);
+  assert.match(words.does, /Visible to both players/);
+  assert.match(words.at, /desktop/);
+  assert.match(words.use, /Wardrobe/);
+});
+
 test('tips fit a two-line paper slip in every language (about 90 Latin letters, CJK counted double)', () => {
   const tipKeys = Object.keys(EXPLAIN_LEX).filter((k) => /_(tip|sign|help)_/.test(k));
   const width = (s) => [...s].reduce((n, c) => n + (/[　-鿿가-힯＀-￯]/.test(c) ? 2 : 1), 0);

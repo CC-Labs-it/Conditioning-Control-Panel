@@ -102,6 +102,8 @@ internal static partial class PieceByPieceHostService
         "banner" => look.Banner == id,
         "insignia" => look.Insignia == id,
         "finish" => look.Finish == id,
+        "board" => look.Board == id,
+        "companion" => look.Companion == id,
         _ => false,
     };
 

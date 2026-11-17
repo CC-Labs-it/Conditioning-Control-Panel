@@ -56,6 +56,27 @@ public class ShopPreviewBackendTests
         Assert.Equal(new[] { "desktop", "web", "phone" }, ShopPreviewRules.PlacesOf("chess.banner.crest"));
     }
 
+    [Theory]
+    [InlineData("chess.board.observatory", 730, "L")]
+    [InlineData("chess.board.conservatory", 730, "L")]
+    [InlineData("chess.board.theatre", 730, "L")]
+    [InlineData("chess.board.arcade", 730, "L")]
+    [InlineData("chess.companion.emi", 2540, "XL")]
+    public void Chess_boards_and_Emi_sell_with_their_grants_and_desktop_place(string id, int price, string tier)
+    {
+        var sample = Sample();
+        var data = ShopPreviewRules.Seed(Now, sample);
+        Assert.Equal((price, "on", (string?)null, (string?)tier), ShopPreviewRules.Row(sample, id));
+        data.Sp = price + 100;
+        Assert.True(ShopPreviewRules.Buy(data, sample, id, "chess-new-" + id, coupon: false, Now).Ok);
+        Assert.Equal(100, data.Sp);
+        var state = ShopPreviewRules.BuildState(data, sample, Now);
+        Assert.Contains("cos." + id, state["prizes"]!["grants"]!.Values<string>());
+        Assert.Equal(new[] { "desktop" }, ShopPreviewRules.PlacesOf(id));
+        var row = state.SelectTokens("tabs[*].shelves[*].rows[*]").OfType<JObject>().Single(r => (string?)r["id"] == id);
+        Assert.Equal(new[] { "desktop" }, row["places"]!.Values<string>().ToArray());
+    }
+
     [Fact]
     public void The_backend_answers_every_op_and_keeps_the_file()
     {

@@ -7,8 +7,8 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.PieceByPiece;
 
 /// <summary>
-/// A chess look has four independent slots for clothes, a corner banner, an insignia and a piece
-/// finish. Each stores a Prize Counter item id or null. The page draws the art and the host checks
+/// A chess look has independent slots for clothes, a banner, an insignia, a finish, a board and a
+/// cheerleader. Each stores a Prize Counter item id or null. The page draws the art and the host checks
 /// the account's grants before sending the player's choice to the page or server.
 ///
 /// <para>Frames (piecebypiece/skins/wear.js):
@@ -35,9 +35,11 @@ internal static class PbpLookRules
         ["banner"] = new[] { "chess.banner.house-pink", "chess.banner.crest", "prime.banner.arena" },
         ["insignia"] = new[] { "chess.insignia.heart", "chess.insignia.star" },
         ["finish"] = new[] { "chess.finish.polka", "chess.finish.marble", "chess.finish.contour", "chess.finish.opal", "chess.finish.kintsugi" },
+        ["board"] = new[] { "chess.board.observatory", "chess.board.conservatory", "chess.board.theatre", "chess.board.arcade" },
+        ["companion"] = new[] { "chess.companion.emi" },
     };
 
-    public static readonly string[] Slots = { "set", "banner", "insignia", "finish" };
+    public static readonly string[] Slots = { "set", "banner", "insignia", "finish", "board", "companion" };
 
     public static string GrantOf(string itemId) => "cos." + itemId;
 
@@ -62,7 +64,7 @@ internal static class PbpLookRules
             var v = raw is JObject o && o[slot]?.Type == JTokenType.String ? (string?)o[slot] : null;
             return v != null && Catalog[slot].Contains(v, StringComparer.Ordinal) ? v : null;
         }
-        return new ChessLook(Read("set"), Read("banner"), Read("insignia"), Read("finish"));
+        return new ChessLook(Read("set"), Read("banner"), Read("insignia"), Read("finish"), Read("board"), Read("companion"));
     }
 
     /// <summary>An older page can change clothes without clearing a finish it cannot see.</summary>
@@ -70,6 +72,8 @@ internal static class PbpLookRules
     {
         var pick = Normal(raw);
         if (!raw.ContainsKey("finish")) pick = pick with { Finish = saved.Finish };
+        if (!raw.ContainsKey("board")) pick = pick with { Board = saved.Board };
+        if (!raw.ContainsKey("companion")) pick = pick with { Companion = saved.Companion };
         return Clamp(pick, grants);
     }
 
@@ -79,7 +83,7 @@ internal static class PbpLookRules
     {
         var held = new HashSet<string>(grants ?? Array.Empty<string>(), StringComparer.Ordinal);
         string? Keep(string? id) => id != null && held.Contains(GrantOf(id)) ? id : null;
-        return new ChessLook(Keep(look.Set), Keep(look.Banner), Keep(look.Insignia), Keep(look.Finish));
+        return new ChessLook(Keep(look.Set), Keep(look.Banner), Keep(look.Insignia), Keep(look.Finish), Keep(look.Board), Keep(look.Companion));
     }
 
     public static JObject LookFrame(ChessLook look) => new() { ["type"] = LookType, ["look"] = look.ToJObject() };
@@ -145,6 +149,8 @@ internal static class PbpLookRules
         "banner" => look with { Banner = itemId },
         "insignia" => look with { Insignia = itemId },
         "finish" => look with { Finish = itemId },
+        "board" => look with { Board = itemId },
+        "companion" => look with { Companion = itemId },
         _ => look,
     };
 
@@ -190,7 +196,8 @@ internal static class PbpLookRules
 }
 
 /// <summary>One look: each slot an item id or null.</summary>
-internal readonly record struct ChessLook(string? Set, string? Banner, string? Insignia, string? Finish = null)
+internal readonly record struct ChessLook(string? Set, string? Banner, string? Insignia, string? Finish = null,
+    string? Board = null, string? Companion = null)
 {
     public static ChessLook Empty => new(null, null, null);
 
@@ -200,5 +207,7 @@ internal readonly record struct ChessLook(string? Set, string? Banner, string? I
         ["banner"] = Banner is null ? JValue.CreateNull() : Banner,
         ["insignia"] = Insignia is null ? JValue.CreateNull() : Insignia,
         ["finish"] = Finish is null ? JValue.CreateNull() : Finish,
+        ["board"] = Board is null ? JValue.CreateNull() : Board,
+        ["companion"] = Companion is null ? JValue.CreateNull() : Companion,
     };
 }

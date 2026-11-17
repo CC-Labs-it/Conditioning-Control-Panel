@@ -83,6 +83,8 @@ const ITEM_NAMES = {
   // Chess finishes (chess lane 2026-11-17, piecebypiece/skins/finish-ids.js FINISH_NAMES).
   'chess.finish.polka': 'Candy lacquer', 'chess.finish.marble': 'Mineral strata', 'chess.finish.contour': 'Liquid ribbons',
   'chess.finish.opal': 'Oil slick', 'chess.finish.kintsugi': 'Gold faultlines',
+  'chess.board.observatory': 'Midnight Observatory', 'chess.board.conservatory': 'Glasshouse',
+  'chess.board.theatre': 'Velvet Theatre', 'chess.board.arcade': 'After Hours Arcade', 'chess.companion.emi': 'Emi cheerleader',
 };
 for (const [id, name] of Object.entries(ITEM_NAMES)) LEX[itemKey(id)] = name;
 
@@ -122,6 +124,11 @@ const ITEM_DESCS = {
   "shop_item_chess_insignia_heart_desc": "Heart badge for your chess pieces.",
   "shop_item_chess_insignia_star_desc": "Star badge for your chess pieces.",
   "shop_item_chess_finish_desc": "One buy paints all six pieces, on the white side and the black side. Wear one finish at a time, with clothes, a badge and a banner.",
+  "shop_item_chess_board_observatory_desc": "Lapis and ivory squares, brass trim, a turning astrolabe and drifting stars.",
+  "shop_item_chess_board_conservatory_desc": "Limestone and green glazed squares, copper trim, swaying ferns and drifting petals.",
+  "shop_item_chess_board_theatre_desc": "Pink and oxblood squares, velvet drapes, warm footlights and confetti.",
+  "shop_item_chess_board_arcade_desc": "Cool gray and slate squares, cyan and pink light rails and pixel sparks.",
+  "shop_item_chess_companion_emi_desc": "Animated Emi sits on the board edge and cheers for your moves. Visible to both players.",
   "shop_item_profile_frame_lace_desc": "Lace frame for your profile picture. The portrait is an example.",
   "shop_item_profile_frame_ink_stamp_desc": "Postage stamp frame for your profile picture. The portrait is an example.",
   "shop_item_profile_frame_gilt_desc": "Gold frame for your profile picture. The portrait is an example.",

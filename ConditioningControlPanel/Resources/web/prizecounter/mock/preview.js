@@ -25,14 +25,14 @@ const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const OWNED0 = { at: '2026-11-01T00:00:00Z', paidSp: 0 };
 const PLACES = { desk: ['desktop'], 'rain-clothes': ['desktop'], 'rain-hair': ['desktop'], backroom: ['desktop', 'web'] };
 const ROW_PLACES = { 'prime.paint.host-gold': ['desktop', 'web'] };
-// Chess finishes are desktop only until website + phone support for them lands (then drop this, as in ShopPreviewRules.PlacesOf)
-const FINISH = 'chess.finish.';
+// Match ShopPreviewRules.PlacesOf until these chess items reach the website and phone.
+const CHESS_DESKTOP = ['chess.finish.', 'chess.board.', 'chess.companion.'];
 
 export function previewSample(sample) {
   const s = structuredClone(sample);
   for (const tab of s.tabs) for (const sh of tab.shelves) for (const r of sh.rows) {
     if (!r) continue;
-    r.places = ROW_PLACES[r.id] || (r.id.startsWith(FINISH) ? ['desktop'] : null) || PLACES[tab.id] || ALL;
+    r.places = ROW_PLACES[r.id] || (CHESS_DESKTOP.some(prefix => r.id.startsWith(prefix)) ? ['desktop'] : null) || PLACES[tab.id] || ALL;
     if (r.id === 'kart.outfit.ringmaster') r.isNew = true;
     if (r.id === 'desk.toy.rubber-duck') r.owned = { at: '2026-11-10T09:00:00Z', paidSp: 120 };
   }

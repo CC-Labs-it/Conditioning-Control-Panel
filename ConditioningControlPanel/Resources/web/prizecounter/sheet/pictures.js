@@ -12,6 +12,7 @@ export const PICTURED = Object.freeze([
   'chess.set.royal-capes', 'chess.set.velvet-court', 'chess.banner.house-pink', 'chess.banner.crest',
   'chess.insignia.heart', 'chess.insignia.star',
   'chess.finish.polka', 'chess.finish.marble', 'chess.finish.contour', 'chess.finish.opal', 'chess.finish.kintsugi',
+  'chess.board.observatory', 'chess.board.conservatory', 'chess.board.theatre', 'chess.board.arcade', 'chess.companion.emi',
   'desk.hat.top-hat', 'desk.hat.party', 'desk.toy.rubber-duck', 'desk.toy.snow-globe',
   'prime.trail.podium', 'prime.banner.arena',
   'jackpot_remix', 'rt_demo', 'high_roller', 'flashes_v2', 'bubbles_v2', 'rt_bundle_1', 'rt_bundle_2', 'rt_bundle_3',

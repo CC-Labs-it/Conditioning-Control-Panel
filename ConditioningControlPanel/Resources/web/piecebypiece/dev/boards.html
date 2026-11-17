@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Chess board atelier</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#151820;color:#f3ede4;font:14px/1.4 "Segoe UI",sans-serif}header{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 18px}label{display:flex;gap:8px;align-items:center}select,button{font:inherit;color:inherit;background:#242a36;border:1px solid #5c6068;border-radius:5px;padding:7px 10px}button{cursor:pointer}button:focus-visible,select:focus-visible{outline:2px solid #ebc16d;outline-offset:3px}iframe{display:block;border:0;width:100%;height:calc(100dvh - 110px);min-height:550px}.actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}#status{padding:0 18px 10px;margin:0;color:#ccc2b4}@media(max-width:700px){.actions{margin-left:0}iframe{height:72dvh;min-height:440px}}
+</style>
+</head>
+<body>
+<header>
+<label>Board <select id="board"><option value="">Original</option><option value="observatory" selected>Midnight Observatory</option><option value="conservatory">Glasshouse</option><option value="theatre">Velvet Theatre</option><option value="arcade">After Hours Arcade</option></select></label>
+<label>Finish <select id="finish"><option value="">Original pieces</option><option value="polka">Candy lacquer</option><option value="marble">Mineral strata</option><option value="contour">Liquid ribbons</option><option value="opal">Oil slick</option><option value="kintsugi">Gold faultlines</option></select></label>
+<label><input id="emi" type="checkbox" checked>Emi on both edges</label>
+<div class="actions"><button id="move">Play next move</button><button id="reset">New game</button><button id="pause">Pause</button></div>
+</header>
+<p id="status" role="status">Loading the game and its models.</p>
+<iframe id="game" title="Playable chessboard with test cosmetics"></iframe>
+<script type="module" src="./board-studio.js"></script>
+</body>
+</html>

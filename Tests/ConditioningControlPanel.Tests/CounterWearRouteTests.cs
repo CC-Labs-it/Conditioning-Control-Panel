@@ -23,6 +23,8 @@ public class CounterWearRouteTests
     [InlineData("chess.set.royal-capes", "chess")]
     [InlineData("chess.insignia.heart", "chess")]
     [InlineData("chess.finish.marble", "chess")]
+    [InlineData("chess.board.observatory", "chess")]
+    [InlineData("chess.companion.emi", "chess")]
     [InlineData("prime.banner.arena", "chess")]
     [InlineData("profile.frame.lace", "profile")]
     [InlineData("profile.avatar.emi-pixel", "profile")]
@@ -63,10 +65,12 @@ public class CounterWearRouteTests
             Assert.Equal("desk", PrizeCounterHostService.RouteWear("desk.hat.party", "wallet"));
             Assert.Equal("chess", PrizeCounterHostService.RouteWear("chess.banner.crest", "wallet"));
             Assert.Equal("chess", PrizeCounterHostService.RouteWear("chess.finish.opal", "wallet"));
+            Assert.Equal("chess", PrizeCounterHostService.RouteWear("chess.board.arcade", "wallet"));
+            Assert.Equal("chess", PrizeCounterHostService.RouteWear("chess.companion.emi", "wallet"));
             Assert.Equal("refused", PrizeCounterHostService.RouteWear("profile.frame.gilt", "wallet"));
             Assert.Equal("garage", PrizeCounterHostService.RouteWear("kart.outfit.pit-crew", "wallet"));
             Assert.Equal("refused", PrizeCounterHostService.RouteWear("jackpot_remix", "wallet"));
-            Assert.Equal(new[] { "desk:desk.hat.party", "chess:chess.banner.crest", "chess:chess.finish.opal", "profile:profile.frame.gilt" }, seen);
+            Assert.Equal(new[] { "desk:desk.hat.party", "chess:chess.banner.crest", "chess:chess.finish.opal", "chess:chess.board.arcade", "chess:chess.companion.emi", "profile:profile.frame.gilt" }, seen);
             Assert.Null(PrizeCounterHostService.WornItem);
         }
         finally

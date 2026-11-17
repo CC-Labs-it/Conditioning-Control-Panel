@@ -93,6 +93,24 @@ public class PbpLookRulesTests
     }
 
     [Fact]
+    public void Board_and_cheerleader_are_owned_independently_and_survive_legacy_picks()
+    {
+        var saved = new ChessLook(null, null, null, null, "chess.board.theatre", "chess.companion.emi");
+        var grants = new[] { "cos.chess.board.theatre", "cos.chess.companion.emi" };
+        Assert.Equal(saved, PbpLookRules.PagePick(new JObject(), saved, grants));
+        Assert.Equal(ChessLook.Empty, PbpLookRules.Clamp(saved, Array.Empty<string>()));
+        Assert.Equal(saved, PbpLookRules.Read(PbpLookRules.Write(saved, 60)).Look);
+        Assert.Equal("board", PbpLookRules.SlotOf(saved.Board));
+        Assert.Equal("companion", PbpLookRules.SlotOf(saved.Companion));
+        Assert.Equal(saved, PbpLookRules.With(PbpLookRules.With(ChessLook.Empty, saved.Board!), saved.Companion!));
+        var page = new JObject { ["companion"] = JValue.CreateNull() };
+        Assert.Equal(saved with { Companion = null }, PbpLookRules.PagePick(page, saved, grants));
+        page["board"] = JValue.CreateNull();
+        Assert.Equal(ChessLook.Empty, PbpLookRules.PagePick(page, saved, grants));
+        Assert.Equal(ChessLook.Empty, PbpLookRules.Normal(new JObject { ["companion"] = "chess.companion.unknown" }));
+    }
+
+    [Fact]
     public void Reconcile_newer_server_wins_else_local_is_pushed_when_different()
     {
         var local = new ChessLook("chess.set.royal-capes", null, null);
@@ -147,10 +165,11 @@ public class PbpLookRulesTests
         var src = File.ReadAllText(Path.Combine(PageDir(), "skins", "look.js"));
         foreach (var (slot, ids) in PbpLookRules.Catalog)
         {
-            if (slot == "finish")
+            if (slot is "finish" or "board")
             {
-                var finishes = File.ReadAllText(Path.Combine(PageDir(), "skins", "finish-ids.js"));
-                var pageIds = Regex.Matches(finishes, @"'(chess\.finish\.[a-z]+)'\s*:")
+                var file = slot == "finish" ? Path.Combine("skins", "finish-ids.js") : Path.Combine("board", "theme-ids.js");
+                var source = File.ReadAllText(Path.Combine(PageDir(), file));
+                var pageIds = Regex.Matches(source, @"'(chess\." + slot + @"\.[a-z]+)'\s*:")
                     .Select(x => x.Groups[1].Value);
                 Assert.Equal(ids, pageIds);
                 continue;
@@ -166,7 +185,7 @@ public class PbpLookRulesTests
     public void Every_attachment_item_ships_art_for_all_six_pieces()
     {
         var reg = JObject.Parse(File.ReadAllText(Path.Combine(PageDir(), "assets", "skins", "registry.json")));
-        foreach (var id in PbpLookRules.Catalog.Where(row => row.Key != "finish").SelectMany(row => row.Value))
+        foreach (var id in new[] { "set", "banner", "insignia" }.SelectMany(slot => PbpLookRules.Catalog[slot]))
             foreach (var piece in new[] { "pawn", "knight", "bishop", "rook", "queen", "king" })
             {
                 var row = reg["items"]!.FirstOrDefault(i => (string?)i["id"] == id && (string?)i["piece"] == piece);

@@ -52,8 +52,9 @@ test('every mock row has art (or is a retired id) and lands on a real slot and t
   const ids = new Set(manifest.items.map((i) => i.id));
   for (const tab of state.tabs) {
     for (const p of layoutTab(tab.shelves)) {
-      // chess finishes are 2D-sheet only: the old 3D window shows their slot empty with its tag (scene/index.js)
-      assert.ok(ids.has(p.id) || p.id in manifest.retired || p.id.startsWith('chess.finish.'), `${tab.id}: no art for ${p.id}`);
+      // Game-rendered chess products use 2D pictures; the old 3D window keeps an empty slot and tag.
+      const sheetOnly = p.id.startsWith('chess.finish.') || p.id.startsWith('chess.board.') || p.id === 'chess.companion.emi';
+      assert.ok(ids.has(p.id) || p.id in manifest.retired || sheetOnly, `${tab.id}: no art for ${p.id}`);
       assert.ok(manifest.shelf.nodes.includes(p.slotNode));
       assert.ok(manifest.shelf.nodes.includes(p.tagNode));
     }

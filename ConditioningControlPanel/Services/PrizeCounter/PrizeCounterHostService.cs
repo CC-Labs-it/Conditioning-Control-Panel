@@ -157,7 +157,7 @@ internal static partial class PrizeCounterHostService
         bool P(string prefix) => id.StartsWith(prefix, StringComparison.Ordinal);
         if (P("rain.")) return FamilyRain;
         if (P("desk.hat.") || P("desk.toy.")) return FamilyDesk;
-        if (P("chess.set.") || P("chess.finish.") || P("chess.banner.") || P("chess.insignia.") || P("prime.banner.")) return FamilyChess;
+        if (P("chess.set.") || P("chess.finish.") || P("chess.board.") || P("chess.companion.") || P("chess.banner.") || P("chess.insignia.") || P("prime.banner.")) return FamilyChess;
         if (P("profile.frame.") || P("profile.avatar.") || P("prime.frame.")) return FamilyProfile;
         if (P("kart.") || P("prime.paint.") || P("prime.trail.")) return FamilyKart;
         return null;

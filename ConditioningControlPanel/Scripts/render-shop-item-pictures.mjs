@@ -126,6 +126,29 @@ window.renderFinish = async (finish, name, size, maxKb, yaw, pitch) => {
   return shoot(pair, size, maxKb, yaw, pitch);
 };
 
+window.renderBoard = async (id, size, maxKb) => {
+  const { createScene } = await import('/piecebypiece/board/scene.js');
+  const { createBoardTheme } = await import('/piecebypiece/board/themes.js');
+  const boardCanvas = document.createElement('canvas');
+  const view = createScene({ canvas: boardCanvas });
+  view.scene.environment = scene.environment;
+  const theme = createBoardTheme({ view });
+  theme.setTheme(id); theme.update(.1);
+  const result = shoot(view.boardGroup, size, maxKb, -.42, .84);
+  theme.dispose(); view.dispose();
+  return result;
+};
+
+window.renderEmi = async (size, maxKb) => {
+  const { createCheerleaders } = await import('/piecebypiece/board/cheerleader.js');
+  const cheer = createCheerleaders({ view: { scene, camera } });
+  await cheer.setLooks({ w: { companion:'chess.companion.emi' } });
+  for (let n=0;n<12;n++) cheer.update(.05);
+  const result = shoot(cheer.group, size, maxKb, Math.PI-.25, .24);
+  cheer.dispose();
+  return result;
+};
+
 function shoot(g, size, maxKb, yaw, pitch) {
   scene.add(g); g.updateMatrixWorld(true);
   const box = new T.Box3().setFromObject(g), c = box.getCenter(new T.Vector3()), s = box.getSize(new T.Vector3());
@@ -182,7 +205,11 @@ try {
   for (const id of IDS) {
     const [yaw, pitch] = viewOf(id);
     const finish = id.startsWith('chess.finish.') ? id.slice('chess.finish.'.length) : null;
-    const r = finish
+    const r = id.startsWith('chess.board.')
+      ? await ev(`window.renderBoard(${JSON.stringify(id)}, ${SIZE}, ${MAX_KB})`)
+      : id === 'chess.companion.emi'
+      ? await ev(`window.renderEmi(${SIZE}, ${MAX_KB})`)
+      : finish
       ? await ev(`window.renderFinish(${JSON.stringify(finish)}, ${JSON.stringify(FINISH_PIECE)}, ${SIZE}, ${MAX_KB}, 0, 0.22)`)
       : await ev(`window.render(${JSON.stringify(id)}, ${SIZE}, ${MAX_KB}, ${yaw}, ${pitch})`);
     if (!r || r.err) throw new Error(`${id}: ${r ? r.err : 'no answer'}`);
