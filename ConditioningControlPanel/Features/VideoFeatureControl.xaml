@@ -198,7 +198,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_size}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
-                                    <Slider Grid.Column="1" x:Name="SliderFloatingSize" feat:OptionSection.Setting="MandatoryVideoFloatingSizePercent" Minimum="15" Maximum="60" Value="33"
+                                    <Slider Grid.Column="1" feat:OptionSection.Setting="MandatoryVideoFloatingSizePercent" x:Name="SliderFloatingSize" Minimum="15" Maximum="60" Value="33"
                                             VerticalAlignment="Center" Margin="14,0"
                                             ToolTip="{loc:Str tooltip_video_appearance_size}"
                                             ValueChanged="SliderFloatingSize_Changed"/>
@@ -214,7 +214,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_speed}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
-                                    <Slider Grid.Column="1" x:Name="SliderFloatingSpeed" feat:OptionSection.Setting="MandatoryVideoFloatingSpeedPercent" Minimum="10" Maximum="100" Value="35"
+                                    <Slider Grid.Column="1" feat:OptionSection.Setting="MandatoryVideoFloatingSpeedPercent" x:Name="SliderFloatingSpeed" Minimum="10" Maximum="100" Value="35"
                                             VerticalAlignment="Center" Margin="14,0"
                                             ToolTip="{loc:Str tooltip_video_appearance_speed}"
                                             ValueChanged="SliderFloatingSpeed_Changed"/>
