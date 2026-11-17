@@ -301,7 +301,7 @@
                                         <Border Padding="6,2,7,3" CornerRadius="7" Background="#D91A1A2E"
                                                 BorderBrush="#FFE08A" BorderThickness="1"
                                                 VerticalAlignment="Center" IsHitTestVisible="False">
-                                            <TextBlock Text="{loc:Str badge_v2}" FontSize="9" FontWeight="Bold"
+                                            <TextBlock Text="{loc:Str badge_extra}" FontSize="9" FontWeight="Bold"
                                                        Foreground="#FFE08A"/>
                                         </Border>
                                         <TextBlock Text="{loc:Str section_flash_v2}" Margin="8,0,0,0" FontSize="12"

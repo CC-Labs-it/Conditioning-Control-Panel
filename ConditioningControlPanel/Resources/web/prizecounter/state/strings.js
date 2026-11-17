@@ -69,8 +69,8 @@ const ITEM_NAMES = {
   'profile.avatar.rain-portrait': '{companion} Portrait', 'desk.hat.top-hat': 'The Pompous Topper', 'desk.hat.party': 'The Giddy Cone',
   'desk.toy.rubber-duck': 'The Suggestible Duck', 'desk.toy.snow-globe': 'The Foggy Forecast', 'prime.paint.host-gold': 'Host Gold Paint',
   'prime.trail.podium': 'Podium Ribbons', 'prime.frame.room-host': 'Room Host Frame', 'prime.banner.arena': 'Arena Banner',
-  jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Flashes V2',
-  bubbles_v2: 'Bubbles V2', rt_bundle_1: 'Racing Thoughts Vol. 1', rt_bundle_2: 'Racing Thoughts Vol. 2',
+  jackpot_remix: 'Jackpot Remix', rt_demo: 'Racing Thoughts Demo', high_roller: 'High Roller', flashes_v2: 'Extra Flashes',
+  bubbles_v2: 'Extra Bubbles', rt_bundle_1: 'Racing Thoughts Vol. 1', rt_bundle_2: 'Racing Thoughts Vol. 2',
   rt_bundle_3: 'Racing Thoughts Vol. 3',
   // Catalog revision 2 (Astra's art pass 2, names as on her tags).
   'kart.body.petal': 'The Blushing Petal', 'kart.body.trinket': 'The Precious Trinket',

@@ -83,7 +83,7 @@ namespace ConditioningControlPanel.Features
             _chevron = new Path
             {
                 Data = Geometry.Parse("M 0,0 L 4.5,4.5 L 0,9"),
-                StrokeThickness = 1.8,
+                StrokeThickness = 2.2,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
                 StrokeLineJoin = PenLineJoin.Round,
@@ -95,8 +95,8 @@ namespace ConditioningControlPanel.Features
                 RenderTransform = _chevronTurn,
             };
 
-            _title.FontSize = 13.5;
-            _title.FontWeight = FontWeights.Bold;
+            _title.FontSize = 17;   // rows are 13: the section name leads (owner 2026-11-17, "bigger compared to the options so we got hierarchy")
+            _title.FontWeight = FontWeights.ExtraBold;
             _title.VerticalAlignment = VerticalAlignment.Center;
             _title.TextTrimming = TextTrimming.CharacterEllipsis;
 
@@ -120,7 +120,7 @@ namespace ConditioningControlPanel.Features
             {
                 Child = row,
                 Background = Brushes.Transparent,   // the whole strip is the hit target
-                Padding = new Thickness(0, 8, 0, 6),
+                Padding = new Thickness(0, 11, 0, 8),
                 Cursor = Cursors.Hand,
                 Focusable = true,
             };
@@ -305,7 +305,7 @@ namespace ConditioningControlPanel.Features
             }
             var vis = above ? Visibility.Visible : Visibility.Collapsed;
             if (_rule.Visibility != vis) _rule.Visibility = vis;
-            var pad = new Thickness(0, above ? 8 : 2, 0, 6);
+            var pad = new Thickness(0, above ? 11 : 4, 0, 8);
             if (_header.Padding != pad) _header.Padding = pad;
         }
 
