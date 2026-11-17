@@ -130,6 +130,7 @@ public sealed partial class BubbleLayer : BaseLayer
         item.ReleaseFrothPictures();
         item.ReleaseTeaseFrames();
         item.ReleaseEffectCaches();
+        item.ReleaseSkinArt();
         _items.Remove(item);
         _dirty = true;      // the survivors must be repainted without this one
         if (_items.Count == 0 && _bloomFx.Count == 0 && _skinFx.Count == 0) SetActive(false);
@@ -143,6 +144,7 @@ public sealed partial class BubbleLayer : BaseLayer
             it.ReleaseFrothPictures();
             it.ReleaseTeaseFrames();
             it.ReleaseEffectCaches();
+            it.ReleaseSkinArt();
         }
         _items.Clear();
         foreach (var fx in _dashCache.Values) { try { fx.Dispose(); } catch { } }
@@ -221,6 +223,8 @@ public sealed partial class BubbleLayer : BaseLayer
                 canvas.Translate(-cx, -cy);
             }
             var body = new SKRect(cx - half, cy - half, cx + half, cy + half);
+            // ---- Bubble skin under the film (Spiral): inside the glass, under the sprite ----
+            if (item.Skin != null && BubbleCore.BubbleSkins.UnderShell(item.Skin)) DrawSkinInterior(canvas, item, cx, cy, half);
             if (item.Skin != null && SkinDrawsBody(item)) { /* Heart, Marble: the skin's own body (below), or its burst draws the pop */ }
             else if (item.Sprite != null)
             {
@@ -241,7 +245,7 @@ public sealed partial class BubbleLayer : BaseLayer
                 canvas.DrawCircle(cx, cy, half, _stroke);
             }
             // ---- Bubble skin interior: inside the glass, under the same scale and squash ----
-            if (item.Skin != null) DrawSkinInterior(canvas, item, cx, cy, half);
+            if (item.Skin != null && !BubbleCore.BubbleSkins.UnderShell(item.Skin)) DrawSkinInterior(canvas, item, cx, cy, half);
             canvas.RestoreToCount(saved);
 
             // ---- Super Froth: the gold rim of a ripe bubble ----

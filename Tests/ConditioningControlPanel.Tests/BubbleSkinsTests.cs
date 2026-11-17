@@ -234,6 +234,73 @@ public class BubbleSkinsTests
         => Stills(BubbleSkinIds.Marble, new[] { .05, .12, .19, .26, .45, .8 }, popCell: 4, outerReach: .05);
 
     [Fact]
+    public void Spiral_is_a_turning_loom_spiral_of_its_own_and_its_pop_winds_in_then_flings_along_the_arms()
+    {
+        const string S = BubbleSkinIds.Spiral;
+        Assert.False(BubbleSkins.OwnsBody(S));
+        Assert.True(BubbleSkins.UnderShell(S));
+        Assert.InRange(BubbleSkins.PreBurst(S, false), .3, .6);
+
+        // Different for each bubble, the same for a seed, and only the turning weaves.
+        var looks = new System.Collections.Generic.HashSet<string>();
+        for (int seed = 0; seed < 40; seed++)
+        {
+            var a = BubbleSkins.SpiralSpec(seed * 7919);
+            var b = BubbleSkins.SpiralSpec(seed * 7919);
+            Assert.Equal(a.Layer.Arms, b.Layer.Arms);
+            Assert.Equal(a.Layer.Colors, b.Layer.Colors);
+            Assert.InRange(a.Layer.Style, 0, 3);
+            looks.Add($"{a.Layer.Arms}/{a.Layer.Turns}/{a.Layer.Style}/{string.Join(",", a.Layer.Colors)}");
+        }
+        Assert.True(looks.Count > 30, $"distinct spirals: {looks.Count}");
+
+        // Baked once, fading toward the rim, nothing outside the circle.
+        int size = BubbleSkins.SpiralArtSize(79);
+        Assert.InRange(size, BubbleSkins.MinSpiralArt, BubbleSkins.MaxSpiralArt);
+        Assert.Equal(BubbleSkins.MaxSpiralArt, BubbleSkins.SpiralArtSize(400));
+        var rgba = new byte[size * size * 4];
+        Assert.True(BubbleSkins.SpiralBake(BubbleSkins.SpiralSpec(3), false, size, rgba));
+        int lit = 0;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                double px = (x + .5) / size * 2 - 1, py = (y + .5) / size * 2 - 1, r = Math.Sqrt(px * px + py * py);
+                byte al = rgba[(y * size + x) * 4 + 3];
+                if (r >= 1) Assert.Equal(0, al);
+                else if (r > .97) Assert.True(al <= 60, $"rim alpha {al}");
+                if (r < .7 && al > 128) lit++;
+            }
+        Assert.True(lit > size * size / 20, $"the spiral shows: {lit}");
+
+        // Turning, still under Off, half speed when Reduced; the wind-in turns faster and shrinks it.
+        Assert.NotEqual(BubbleSkins.SpiralTurn(3, 0, 1, 0, 0, false), BubbleSkins.SpiralTurn(3, 1, 1, 0, 0, false));
+        Assert.Equal(BubbleSkins.SpiralTurn(3, .4, 0, 0, 0, false), BubbleSkins.SpiralTurn(3, 9, 0, 0, 0, false));
+        Assert.Equal(BubbleSkins.SpiralTurn(3, 4, .5, 0, 0, true), BubbleSkins.SpiralTurn(3, 2, 1, 0, 0, true), 9);
+        Assert.True(BubbleSkins.SpiralTurn(3, 1, 1, 1, 0, false) - BubbleSkins.SpiralTurn(3, 1, 1, 0, 0, false) > 15);
+        Assert.True(BubbleSkins.SpiralScale(3, 1, 1, 1) < .06);
+        Assert.True(BubbleSkins.SpiralEchoScale(1, .14) > BubbleSkins.SpiralScale(3, 1, 1, 1));
+
+        BurstRules(S, 1 + BubbleSkins.MaxSpiralOrbits + BubbleSkins.MaxSpiralDust);
+        var p = new SkinParticle[BubbleSkins.BurstCapacity];
+        int n = BubbleSkins.Burst(S, 11, 60, 1, p), orbits = 0;
+        var spec = BubbleSkins.SpiralSpec(11);
+        for (int i = 0; i < n; i++)
+        {
+            if (p[i].Kind != SkinParticleKind.Orbit) continue;
+            orbits++;
+            var s0 = BubbleSkins.At(p[i], 0); var s1 = BubbleSkins.At(p[i], .3);
+            Assert.True(s1.X * s1.X + s1.Y * s1.Y > s0.X * s0.X + s0.Y * s0.Y, "out along the arms");
+            uint rgb = p[i].Argb & 0xFFFFFF;
+            Assert.True(Array.IndexOf(spec.Layer.Colors, rgb) >= 0 || (spec.Layer2On && Array.IndexOf(spec.Layer2.Colors, rgb) >= 0));
+        }
+        Assert.True(orbits >= 32);
+    }
+
+    [Fact]
+    public void Spiral_stills_turn_under_the_film_and_wind_in_before_the_burst()
+        => Stills(BubbleSkinIds.Spiral, new[] { .1, .25, .38, .44, .62, .9 }, popCell: 4, outerReach: 0);
+
+    [Fact]
     public void Soap_and_reserved_skins_leave_the_item_untouched()
     {
         foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Disco, "nope" })
@@ -280,6 +347,7 @@ public class BubbleSkinsTests
         float glass = Side * 0.5f * BubbleLayer.GlassOfHalf;
         int n = BubbleSkins.Burst(skin, seed, glass, 1, parts);
         double pre = BubbleSkins.PreBurst(skin, false);
+        using var popArt = skin == BubbleSkinIds.Spiral ? BubbleLayer.SkinPainter.SpiralArt(seed, glass) : null;
         using var pop = Canvas(Cell * popAges.Length, out var pc);
         for (int i = 0; i < popAges.Length; i++)
         {
@@ -291,7 +359,7 @@ public class BubbleSkinsTests
                 if (1 - .066f * f > 0) Bubble(pc, sprite, paint, skin, seed, 2.5 + age, 1, i, Side, 1 + .04f * f, 1 - .066f * f);
                 paint.DrawBurst(pc, parts.AsSpan(0, n), age, px, py, glass, 1f);
             }
-            else if (age < pre) paint.DrawDying(pc, skin, seed, 2.5 + age, 1, age / pre, false, px, py, glass);
+            else if (age < pre) paint.DrawDying(pc, skin, seed, 2.5 + age, 1, age / pre, false, px, py, glass, sprite, popArt);
             else paint.DrawBurst(pc, parts.AsSpan(0, n), age - pre, px, py, glass, 1f);
         }
         var dump = Environment.GetEnvironmentVariable("CCP_SKIN_DUMP");
@@ -337,6 +405,9 @@ public class BubbleSkinsTests
         float cx = Cell * cell + Cell / 2f, cy = Cell / 2f, half = side / 2f;
         int save = c.Save();
         c.Translate(cx, cy); c.Scale(scale, scale); c.Translate(-cx, -cy);
+        using var art = skin == BubbleSkinIds.Spiral ? BubbleLayer.SkinPainter.SpiralArt(seed, half * BubbleLayer.GlassOfHalf) : null;
+        bool under = BubbleSkins.UnderShell(skin);
+        if (under) paint.DrawInterior(c, skin, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity, art);
         if (!BubbleSkins.OwnsBody(skin))
         {
             using var img = new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium, Color = SKColors.White.WithAlpha((byte)(opacity * 255)),
@@ -344,7 +415,7 @@ public class BubbleSkinsTests
             c.DrawImage(sprite, new SKRect(cx - half, cy - half, cx + half, cy + half), img);
             img.ColorFilter = null;   // the shared filter is app-lifetime: never disposed with this paint
         }
-        paint.DrawInterior(c, skin, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity);
+        if (!under) paint.DrawInterior(c, skin, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity);
         c.RestoreToCount(save);
     }
 
