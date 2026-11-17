@@ -9810,6 +9810,10 @@ namespace ConditioningControlPanel.Models
         /// presents it once, replay lives in Help).</summary>
         public int WhatMovedCardShown { get; set; }
 
+        /// <summary>True once the first-run "Start here" card has opened (the ladder offers it
+        /// once, after the first-run show; replay lives in Help and does not touch this).</summary>
+        public bool StartHereShown { get; set; }
+
         /// <summary>Old tab keys followed to their new home. The "Moved: Section > Page" toast
         /// shows for the first three hits, then retires itself.</summary>
         public int NavMovedToastHits { get; set; }
