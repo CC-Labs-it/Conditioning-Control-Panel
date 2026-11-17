@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services.PrizeCounter;
 /// confirm card, preview, leave); a second inside 2 s is a full panic (PanicPolicy). The window
 /// itself never fades, so Gentle visuals is only the page's to honour (<c>init.gentle</c>).</para>
 /// </summary>
-internal static class PrizeCounterHostService
+internal static partial class PrizeCounterHostService
 {
     public const string ProductName = "Prize Counter";
     public const string StartUrl = "https://ccp.game/prizecounter/index.html";
@@ -37,7 +37,8 @@ internal static class PrizeCounterHostService
     /// <summary>The page plays this as its own Escape unless the real key reached it too (host-escape.js).</summary>
     internal const string KeptEscapeType = "kept-escape";
 
-    private static ChaosWebViewHost? _host;
+    /// <summary>The page's surface: the counter window or the in-window sheet (CounterSurface.cs).</summary>
+    private static ICounterSurface? _host;
     private static PrizeCounterRelay? _relay;
     private static string _from = "wallet";
     private static string? _tab;
@@ -339,6 +340,11 @@ internal static class PrizeCounterHostService
     public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
         tab = CounterTab(tab);
+        // A wallet door slides the 2D sheet down inside its window (PrizeCounterHostService.Sheet.cs):
+        // its second press closes it; a game door replaces an open sheet with the window, one counter at a time.
+        bool wantSheet = CounterSheetRules.GetsSheet(from, onClosed != null);
+        if (wantSheet && SheetPressHandled()) return;
+        if (!wantSheet && IsSheetOpen) CloseFor(CloseBack);
         if (_host == null) WornItem = null;
         if (onClosed != null) _onClosed.Add(onClosed);
         if (_host != null)
@@ -362,6 +368,11 @@ internal static class PrizeCounterHostService
             // the page's own "Sign in to shop" moves the pin (SignInFromPage), and it reloads the page.
             _opener = BackRoomApi.AppIdentity()?.UnifiedId;
             _relay = NewRelay();
+            // The sheet slides down inside the door window (PrizeCounterHostService.Sheet.cs); with no
+            // door on screen, or no room under its wallet bar, the window opens instead.
+            if (wantSheet && TryLaunchSheet(generation)) return;
+            _isSheet = false;
+            _startUrl = StartUrl;
 
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             var mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
@@ -370,9 +381,9 @@ internal static class PrizeCounterHostService
                 ("ccp.game", webRoot, CoreWebView2HostResourceAccessKind.Deny),
                 ChaosWebViewHost.ContentMapping(),
             };
-            _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
+            var window = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
-                StartUrl = StartUrl,
+                StartUrl = _startUrl,
                 PrimaryHost = "ccp.game",
                 Mappings = mappings,
                 UserDataFolderName = "browser_data_prizecounter",
@@ -388,8 +399,9 @@ internal static class PrizeCounterHostService
                 OnMessage = m => OnPageMessage(m, generation),
                 OnProcessFailed = kind => { App.Logger?.Warning("PrizeCounter: process failed ({Kind}), closing", kind); OnUi(() => CloseFor(CloseFailed)); },
             });
-            _host.Show();
-            if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
+            _host = new WindowCounterSurface(window);
+            window.Show();
+            if (window.Window != null) window.Window.Closed += (_, _) => Close();
             _host.FocusWeb();
             App.Logger?.Information("PrizeCounterHostService: launched from {From} on {Tab}", _from, _tab ?? "(first)");
         }
@@ -408,7 +420,7 @@ internal static class PrizeCounterHostService
         var generation = ++_generation;
         try
         {
-            _host.NavigatePage(StartUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+            _host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
             App.Logger?.Information("PrizeCounterHostService: reloaded ({Why})", why);
         }
         catch (Exception ex)
@@ -446,10 +458,13 @@ internal static class PrizeCounterHostService
         {
             ++_generation;
             bool had = _host != null;
-            try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // The sheet slides back up on a calm close; panic, app exit and a dead page cut.
+            try { _host?.Close(animate: reason == CloseBack || reason == CloseWear); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             _relay = null;
             _opener = null;
+            _isSheet = false;
+            _startUrl = StartUrl;
             if (had) App.Logger?.Information("PrizeCounterHostService: closed ({Reason})", reason);
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounterHostService.Close: {E}", ex.Message); }
@@ -555,7 +570,7 @@ internal static class PrizeCounterHostService
         var generation = ++_generation;
         try
         {
-            _host.NavigatePage(StartUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+            _host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
             _host.FocusWeb();
             App.Logger?.Information("PrizeCounterHostService: signed in, counter reloaded");
         }
@@ -566,8 +581,16 @@ internal static class PrizeCounterHostService
         }
     }
 
-    /// <summary>The <c>init</c> frame (CONTRACT "Host seam"). Never the token.</summary>
+    /// <summary>The <c>init</c> frame (CONTRACT "Host seam"). Never the token. The sheet adds one field,
+    /// <c>sheet: true</c> (the page draws no wallet line of its own); the window leaves it out.</summary>
     private static object BuildInit()
+    {
+        var init = JObject.FromObject(BuildInitBody());
+        if (_isSheet) init["sheet"] = true;
+        return init;
+    }
+
+    private static object BuildInitBody()
     {
         var s = App.Settings?.Current;
         var id = BackRoomApi.AppIdentity();

@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Launcher;
 /// <para>The decoration (particles, comets, sheen, the mascot) lives in the Fx partial and is
 /// gated there. Everything in this file must read and work with all of it switched off.</para>
 /// </summary>
-public partial class LauncherWindow : Window
+public partial class LauncherWindow : Window, ConditioningControlPanel.Services.PrizeCounter.ICounterSheetDoor
 {
     private const double TileRadius = 16;
 
@@ -63,6 +63,11 @@ public partial class LauncherWindow : Window
 
         SetUpSoundButton();
         InitializeSparkleFly();
+
+        // The Prize Counter sheet slides down under the title bar, inside this window; the veil and
+        // the window edge stay above its scrim.
+        _counterSheet = ConditioningControlPanel.Controls.CounterSheetView.Mount(this, RootGrid, TitleBar,
+            Services.PrizeCounter.CounterSheetRules.FromLauncher, insertAt: RootGrid.Children.IndexOf(LockdownVeil));
 
         var mods = App.Mods;
         if (mods != null) mods.ModChanged += OnModChanged;
@@ -253,8 +258,11 @@ public partial class LauncherWindow : Window
 
     private void AccountChip_Click(object sender, RoutedEventArgs e) => OpenPanelTab("appsettings");
 
-    /// <summary>The wallet chip opens the Prize Counter over the launcher: the same door as the
-    /// panel's SparkleWallet (owner, 2026-10-29). The counter is its own window; the launcher stays.</summary>
+    private readonly ConditioningControlPanel.Controls.CounterSheetView _counterSheet;
+    ConditioningControlPanel.Controls.CounterSheetView? Services.PrizeCounter.ICounterSheetDoor.CounterSheet => _counterSheet;
+
+    /// <summary>The wallet chip slides the Prize Counter sheet down under the title bar, inside this
+    /// window (owner, 2026-11-17; PrizeCounterHostService.Sheet.cs); a second press closes it.</summary>
     private void WalletChip_Click(object sender, RoutedEventArgs e)
     {
         LauncherSfx.Click();

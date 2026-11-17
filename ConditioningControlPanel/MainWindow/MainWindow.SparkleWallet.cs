@@ -6,14 +6,28 @@ using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel;
 
-public partial class MainWindow
+public partial class MainWindow : Services.PrizeCounter.ICounterSheetDoor
 {
+    // The counter sheet slides down under the header bar the wallet sits in (the wallet's Grid, inside
+    // the row-1 header Border; render tests pin that Border's text, so it carries no name). It lives on
+    // the root grid, outside the Viewbox, so the page gets native pixels; under the toasts and the edge.
+    private Controls.CounterSheetView? _counterSheet;
+    Controls.CounterSheetView? Services.PrizeCounter.ICounterSheetDoor.CounterSheet => _counterSheet;
+
+    private void MountCounterSheet()
+    {
+        if (_counterSheet != null || (HeaderSparkleWallet.Parent as FrameworkElement)?.Parent is not FrameworkElement bar) return;
+        _counterSheet = Controls.CounterSheetView.Mount(this, RootGrid, bar,
+            Services.PrizeCounter.CounterSheetRules.FromWallet, zIndex: 9990);
+    }
+
     private AppSettings? _sparkleWalletSettings;
     private bool _sparkleWalletActive;
 
     private void InitializeSparkleWallet()
     {
         _sparkleWalletActive = true;
+        MountCounterSheet();
         App.Settings.CurrentReplaced += ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded += OnSparklePointAwarded;
         InitializeSparkleFly();
