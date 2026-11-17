@@ -113,8 +113,8 @@ public class FlickerDeckTests
         {
             FlickerDeck.Step(s, Dt, true, MotionLevel.Full);
             var p = FlickerDeck.Sample(s, MotionLevel.Full);
-            // Juice: the opening half pops a few percent wide, the press and the landing nudge the scale.
-            Assert.InRange(p.ScaleX, FlickerDeck.MinScaleX, 1 + FlickerDeck.FlipOvershoot + 0.002);
+            // The turn never draws wider than the card (the press's anticipation aside); the landing nudges the scale.
+            Assert.InRange(p.ScaleX, FlickerDeck.MinScaleX, 1 + FlickerDeck.AnticipationSquash);
             Assert.InRange(p.Scale, 1 - FlickerDeck.LandAmp, 1 + FlickerDeck.LiftScale + 1e-9);
             min = Math.Min(min, p.ScaleX);
         }
