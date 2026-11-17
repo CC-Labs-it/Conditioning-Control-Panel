@@ -38,7 +38,7 @@ test('the shelves draw effect items on live canvases, and the fitting room shows
   const page = await mountSheet(host, { root, doc, win: { addEventListener() {}, removeEventListener() {} }, now: () => 1e6, frame: (f) => f(), later() {}, loadIndex: () => null });
   const item = (id) => page.view.root.all().find((n) => n.dataset && n.dataset.key === 'it:' + id);
   for (const id of ['fx.bubble.heart', 'fx.card.lace', 'fx.fog.amber', 'fx.word.chalk', 'fx.behind.whisper']) assert.ok(item(id).all().some((n) => n.tagName === 'CANVAS'), id);
-  assert.match(page.view.room.text(), /Wearing now Pick an item and this screen tries it on\. Bubble skins Soap Card backs Plain Fog colours Pink Word styles Classic/);
+  assert.match(page.view.room.text(), /Wearing now Pick an item and this screen tries it on\. Bubble skins Soap Card frames Plain Fog colours Pink Word styles Classic/);
   assert.ok(page.view.room.all().some((n) => n.tagName === 'CANVAS'));
   page.pick('fx.bubble.heart');
   assert.equal(page.view.live.looks({ ...page.view.live, pv: page.pv(), state: page.shop.state(), pick: 'fx.bubble.heart' }).bubble, 'heart');

@@ -10,8 +10,9 @@ using Xunit;
 namespace ConditioningControlPanel.Tests;
 
 /// <summary>
-/// Shop looks on the Deck (lane J1): the four card backs (slot <c>card</c>). The default row draws
-/// no back, so the stock card is today's. Set <c>CCP_DECK_DUMP</c> to a folder to write stills.
+/// Shop looks on the Deck (lane J1, frames 2026-11-17): the card frames and their backs (slot <c>card</c>).
+/// The default row draws no frame and no back, so the stock card is today's. Set <c>CCP_DECK_DUMP</c> to a
+/// folder to write stills.
 /// </summary>
 public class DeckLooksTests
 {
@@ -103,6 +104,88 @@ public class DeckLooksTests
         }
         // The edge-on frame wears the back: some pink checks in the middle column.
         Assert.NotEqual(Bg, Pixel(flip, Cell * 2 + Cell / 2, Cell / 2));
+    }
+
+    // ---- card frames (owner 2026-11-17): the same patterns as a border round every Deck card ----
+
+    [Fact]
+    public void A_frame_is_a_small_margin_that_scales_with_the_card()
+    {
+        Assert.False(DeckLooks.FrameShows(DeckBack.Plain));
+        Assert.True(DeckLooks.FrameShows(DeckBack.Lace));
+        Assert.Equal(0, DeckLooks.FrameBand(30, 200));                       // too small to carry one
+        Assert.Equal(DeckLooks.FrameMinPx, DeckLooks.FrameBand(60, 80));
+        Assert.Equal(DeckLooks.FrameMaxPx, DeckLooks.FrameBand(2000, 2000));
+        double small = DeckLooks.FrameBand(160, 200), big = DeckLooks.FrameBand(480, 600);
+        Assert.True(big > small);
+        foreach (var (w, h) in new[] { (60.0, 80.0), (160.0, 200.0), (480.0, 600.0), (1200.0, 900.0) })
+            Assert.InRange(DeckLooks.FrameBand(w, h) / Math.Min(w, h), 0.02, 0.09);   // never more than a margin
+        Assert.True(DeckLooks.FrameInnerRadius(0, 10) > 0);                 // round inside even on a square card
+        Assert.Equal(14, DeckLooks.FrameInnerRadius(24, 10));
+    }
+
+    [Fact]
+    public void Plain_draws_no_frame_and_a_frame_leaves_the_picture_past_its_band()
+    {
+        using var draw = new DeckLookDraw();
+        var r = new SKRect(40, 10, 40 + CardW, 10 + CardH);
+        using var plain = Surface(Cell, out var pc);
+        Face(pc, r, 320);
+        using var before = plain.Snapshot();
+        Assert.Equal(0f, draw.DrawFrame(pc, r, 12, DeckBack.Plain, 255));
+        using var after = plain.Snapshot();
+        Assert.Equal(before.Encode().ToArray(), after.Encode().ToArray());   // byte for byte today's card
+
+        foreach (var back in new[] { DeckBack.Ink, DeckBack.Check, DeckBack.Lace })
+        {
+            using var s = Surface(Cell, out var c);
+            Face(c, r, 320);
+            var want = Pixel(s, (int)r.MidX, (int)r.MidY);
+            var edgeBefore = Pixel(s, (int)r.Left + 2, (int)r.MidY);
+            float band = draw.DrawFrame(c, r, 12, back, 255);
+            Assert.Equal((float)DeckLooks.FrameBand(CardW, CardH), band);
+            Assert.Equal(want, Pixel(s, (int)r.MidX, (int)r.MidY));                       // the picture stays
+            Assert.Equal(Pixel(s, (int)(r.Left + band + 3), (int)r.MidY), PixelOfFace(r, (int)(r.Left + band + 3), (int)r.MidY));
+            Assert.NotEqual(edgeBefore, Pixel(s, (int)r.Left + 2, (int)r.MidY));           // the band is there
+            Assert.Equal(Bg, Pixel(s, (int)r.Left - 2, (int)r.MidY));                     // nothing past the card
+        }
+    }
+
+    [Fact]
+    public void Stills_of_every_frame_small_and_large()
+    {
+        using var draw = new DeckLookDraw();
+        var backs = new[] { DeckBack.Plain, DeckBack.Ink, DeckBack.Check, DeckBack.Lace };
+        float[] hues = { 320, 190, 40, 270 };
+        var sizes = new[] { ("small", 120, 150, 140, 8f), ("large", 480, 600, 520, 18f) };
+        var dir = Environment.GetEnvironmentVariable("CCP_DECK_DUMP");
+        foreach (var (name, w, h, cell, radius) in sizes)
+        {
+            using var s = Surface(cell * backs.Length, out var c, h + 40);
+            for (int i = 0; i < backs.Length; i++)
+            {
+                var r = new SKRect(cell * i + (cell - w) / 2f, 20, cell * i + (cell + w) / 2f, 20 + h);
+                int save = c.Save();
+                c.ClipRoundRect(new SKRoundRect(r, radius), antialias: true);   // the layer's rounded card
+                Face(c, r, hues[i]);
+                draw.DrawFrame(c, r, radius, backs[i], 255);
+                c.RestoreToCount(save);
+            }
+            if (!string.IsNullOrEmpty(dir)) { Directory.CreateDirectory(dir); Save(s, Path.Combine(dir, $"frames-{name}.png")); }
+        }
+        // a frame on the back mid-flip too: the turning card keeps its border
+        using var flip = Surface(Cell, out var fc);
+        var fr = Box(0);
+        draw.DrawBack(fc, fr, DeckBack.Check, 255);
+        draw.DrawFrame(fc, fr, 12, DeckBack.Check, 255);
+        if (!string.IsNullOrEmpty(dir)) Save(flip, Path.Combine(dir, "frame-on-back.png"));
+    }
+
+    private static SKColor PixelOfFace(SKRect r, int x, int y)
+    {
+        using var s = Surface(Cell, out var c);
+        Face(c, r, 320);
+        return Pixel(s, x, y);
     }
 
     // ---- the flash layer's order, offscreen: squash about the centre, then the face or the back ----

@@ -6,8 +6,8 @@ namespace ConditioningControlPanel.Services.Super.Draw;
 
 /// <summary>
 /// Draws the Deck's worn looks (rules in CCP.Core <see cref="DeckLooks"/> and <see cref="DeckWhisper"/>):
-/// the four card backs, painted procedurally into the card's picture box, no art files, and the
-/// word behind the card. The caller has already squashed,
+/// the card frames round the picture (the product, there the whole time), the same patterns on the
+/// back mid-flip, painted procedurally, no art files, and the word behind the card. The caller has already squashed,
 /// lifted and clipped the canvas exactly as it does for the picture, so a back turns with the card.
 /// Skia only, no WPF and no App. One instance per layer; it owns its paints.
 /// </summary>
@@ -72,6 +72,94 @@ public sealed class DeckLookDraw : IDisposable
         canvas.DrawRect(r.Left + rim / 2, r.Top + rim / 2, w - rim, h - rim, _line);
     }
 
+    // ---- card frames: the pattern band round every Deck card (rules: DeckLooks.Frame*) ----
+    private readonly SKPaint _band = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
+    /// <summary>One repeating tile per (look, tile size), built once and reused; a handful at most.</summary>
+    private readonly System.Collections.Generic.Dictionary<(DeckBack, int), (SKBitmap Tile, SKShader Shader)> _tiles = new();
+
+    /// <summary>
+    /// The worn frame round a card's picture box <paramref name="r"/> whose corners round by
+    /// <paramref name="radius"/>: a patterned band over the picture's own edge, an ink line along both
+    /// sides of it. Plain, or a card too small for a band, draws nothing. Returns the band's width (0 = none),
+    /// so a caller can keep a badge inside it.
+    /// </summary>
+    public float DrawFrame(SKCanvas canvas, SKRect r, float radius, DeckBack back, byte alpha)
+    {
+        if (!DeckLooks.FrameShows(back) || alpha == 0) return 0;
+        float band = (float)DeckLooks.FrameBand(r.Width, r.Height);
+        if (band <= 0) return 0;
+        float w = r.Width, h = r.Height, ink = (float)DeckLooks.FrameInk(band);
+        float outerR = Math.Max(0, radius), innerR = (float)DeckLooks.FrameInnerRadius(outerR, band);
+        int save = canvas.Save();
+        canvas.Translate(r.Left, r.Top);   // the pattern starts at the card's own corner
+        using (var outer = new SKRoundRect(new SKRect(0, 0, w, h), outerR))
+        using (var inner = new SKRoundRect(new SKRect(band, band, w - band, h - band), innerR))
+        {
+            _band.Shader = Tile(back, DeckLooks.FrameTile(back, band));
+            _band.Color = new SKColor(255, 255, 255, alpha);
+            canvas.DrawRoundRectDifference(outer, inner, _band);
+            _band.Shader = null;
+        }
+        if (back == DeckBack.Lace)
+        {
+            // a fine thread down the middle of the lace band
+            float mid = band / 2;
+            _line.Color = Colour(DeckLooks.LaceThread, alpha);
+            _line.StrokeWidth = Math.Max(1f, ink * 0.5f);
+            canvas.DrawRoundRect(new SKRect(mid, mid, w - mid, h - mid), Math.Max(0, outerR - mid), Math.Max(0, outerR - mid), _line);
+        }
+        // ink along both edges of the band, inside it, so the picture keeps everything past the band
+        _line.Color = Colour(DeckLooks.InkBlack, alpha);
+        _line.StrokeWidth = ink;
+        float o = ink / 2;
+        canvas.DrawRoundRect(new SKRect(o, o, w - o, h - o), Math.Max(0, outerR - o), Math.Max(0, outerR - o), _line);
+        canvas.DrawRoundRect(new SKRect(band - o, band - o, w - band + o, h - band + o), innerR + o, innerR + o, _line);
+        canvas.RestoreToCount(save);
+        return band;
+    }
+
+    private SKShader Tile(DeckBack back, int s)
+    {
+        if (_tiles.TryGetValue((back, s), out var kept)) return kept.Shader;
+        if (_tiles.Count >= 8) ClearTiles();   // sizes only move with the card; never let them pile up
+        int tw = back == DeckBack.Check ? s * 2 : s, th = back == DeckBack.Ink ? s : s * 2;
+        var bmp = new SKBitmap(new SKImageInfo(tw, th, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var c = new SKCanvas(bmp))
+        using (var p = new SKPaint { IsAntialias = true })
+        {
+            c.Clear(new SKColor(DeckLooks.Ground(back)));
+            p.Color = new SKColor(DeckLooks.Mark(back));
+            switch (back)
+            {
+                case DeckBack.Ink:
+                    // one hatch line per tile, lower left to upper right; the corner pieces make it seamless
+                    p.Style = SKPaintStyle.Stroke;
+                    p.StrokeWidth = Math.Max(1f, s * 0.24f);
+                    for (int k = 0; k <= 2; k++) c.DrawLine(-1, k * s + 1, k * s + 1, -1, p);
+                    break;
+                case DeckBack.Check:
+                    c.DrawRect(0, 0, s, s, p);
+                    c.DrawRect(s, s, s, s, p);
+                    break;
+                case DeckBack.Lace:
+                    float dot = Math.Max(1f, s * 0.24f);
+                    c.DrawCircle(s / 2f, s / 2f, dot, p);
+                    c.DrawCircle(0, s * 1.5f, dot, p);
+                    c.DrawCircle(s, s * 1.5f, dot, p);
+                    break;
+            }
+        }
+        var shader = SKShader.CreateBitmap(bmp, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
+        _tiles[(back, s)] = (bmp, shader);
+        return shader;
+    }
+
+    private void ClearTiles()
+    {
+        foreach (var (tile, shader) in _tiles.Values) { shader.Dispose(); tile.Dispose(); }
+        _tiles.Clear();
+    }
+
     /// <summary>The whisper's ghosts (mockup drawWhisper): pink to one side, blue to the other.</summary>
     public static readonly SKColor GhostPink = new(0xFF, 0x9C, 0xC8), GhostBlue = new(0x9C, 0xE8, 0xFF);
 
@@ -125,5 +213,7 @@ public sealed class DeckLookDraw : IDisposable
         _fill.Dispose();
         _line.Dispose();
         _word.Dispose();
+        _band.Dispose();
+        ClearTiles();
     }
 }

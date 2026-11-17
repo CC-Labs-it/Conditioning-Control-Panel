@@ -33,7 +33,7 @@ test('the preview body: Featured and Screen effects first, effect rows by slot, 
   assert.equal(pv.preview, true);
   assert.deepEqual(sheetTabs(st.tabs.map((x) => x.id), pv), [FEATURED, EFFECTS, 'games', 'you', 'prime', 'backroom', OWNED]);
   const fx = sections(st, { tab: EFFECTS, t, pv });
-  assert.deepEqual(fx.map((s) => s.title), ['Bubble skins', 'Card backs', 'Words behind the card', 'Fog colours', 'Word styles']);
+  assert.deepEqual(fx.map((s) => s.title), ['Bubble skins', 'Card frames', 'Words behind the card', 'Fog colours', 'Word styles']);
   assert.deepEqual(fx[0].places, ['desktop']);
   assert.equal(fx[0].planks[0].length, 10);
   assert.equal(pv.equip.bubble, 'fx.bubble.soap');

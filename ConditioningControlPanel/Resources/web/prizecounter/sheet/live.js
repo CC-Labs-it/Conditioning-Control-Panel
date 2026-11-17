@@ -1,12 +1,12 @@
 /* sheet/live.js - every moving picture on the sheet: the effect thumbnails on the shelves (the bubble skins alive, the
- * card backs, fog and word styles moving), the spotlight stage, the "Also new" chips, and the fitting room's "Your
+ * card frames, fog and word styles moving), the spotlight stage, the "Also new" chips, and the fitting room's "Your
  * screen", a small copy of the desktop that wears the picked look (port of the mockup's frame()). One clock for all of
  * them, at most 30 frames a second, only for canvases on screen. Motion off: one still frame per paint. Less: half speed.
  * installLive(view, opts) fills view.thumb / mini / stage / monitor / idleRoom / roomExtra; canvases are kept per item so a
  * repaint never restarts an animation. A click on a bubble in "Your screen" pops it with its own sound (opts.onPop). */
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
-import { drawBack, drawFront, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf } from './looks.js';
+import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf } from './looks.js';
 import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
@@ -68,7 +68,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     }
     return (item, tt) => {
       const g = item.c, w = item.w, h = item.h; g.clearRect(0, 0, w, h);
-      if (slot === 'card') { const cw = h * 0.5, ch = h * 0.78; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawBack(g, kind, -cw / 2, -ch / 2, cw, ch); g.restore(); }
+      if (slot === 'card') { const cw = h * 0.6, ch = h * 0.8; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); g.restore(); }   // the same picture on every thumb: only the frame differs
       else if (slot === 'behind') {
         const cw = h * 0.42, ch = h * 0.72, x = (w - cw) / 2, y = (h - ch) / 2, age = (tt % 3.2);
         if (kind === 'whisper') drawWhisper(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.9 : age, x, y, cw, ch, false);
@@ -126,7 +126,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
         W.next = (W.next || 3) - dt;
         if (motion !== 'off' && W.next <= 0) { W.next = 3.2; const b = W.bs[W.turn = ((W.turn || 0) + 1) % 3]; if (b) popBubble(b); }
         stepParts(W, dt); drawParts(W);
-      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawBack(k, kind, -h * 0.2, -h * 0.3, h * 0.4, h * 0.6); k.restore(); }
+      } else if (slot === 'card') { k.save(); k.translate(cx, h * 0.44 + bob); k.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9) * 0.09); drawCard(k, kind, -h * 0.22, -h * 0.3, h * 0.44, h * 0.6, 200); k.restore(); }
       else if (slot === 'behind') {
         const cw = h * 0.38, ch = h * 0.56, x = cx - cw / 2, y = h * 0.16 + bob * 0.5, age = motion === 'off' ? 0.9 : tt % 3.2, word = WORDS[Math.floor(tt / 3.2) % WORDS.length];
         if (kind === 'whisper') drawWhisper(k, word, age, x, y, cw, ch, false);
@@ -163,7 +163,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
       const whisper = L.behind === 'whisper', age = still ? 0.9 : tt - (c.born || 0);
       if (whisper) drawWhisper(g, c.word || WORDS[0], age, c.x * W, c.y * H, cw, ch, false, L.word);
       const w = Math.max(2, Math.abs(sx) * cw), x = c.x * W + (cw - w) / 2;
-      if (sx < 0) drawBack(g, L.card, x, c.y * H, w, ch); else drawFront(g, x, c.y * H, w, ch, c.hue);
+      if (sx < 0) { drawBack(g, L.card, x, c.y * H, w, ch); drawFrame(g, L.card, x, c.y * H, w, ch, Math.min(w, ch) * 0.08); } else drawCard(g, L.card, x, c.y * H, w, ch, c.hue);   // the frame stays on through the flip
       if (whisper) drawWhisper(g, c.word || WORDS[0], age, c.x * W, c.y * H, cw, ch, true, L.word);
     }
     if (!screen.fog) screen.fog = doc.createElement('canvas');
