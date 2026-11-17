@@ -8,19 +8,18 @@ using Xunit;
 namespace ConditioningControlPanel.Tests;
 
 /// <summary>
-/// Proof in pictures for the fog looks (lane J2), only when CCP_FOG_DUMP names a folder: Steam and the
-/// flat pink filter in every worn colour, drawn with the real SteamDraw over a stand-in desktop.
+/// Proof in pictures for the fog look (lane J2, owner notes 2026-11-17), only when CCP_FOG_DUMP names a
+/// folder: Steam and the flat pink filter in the user's own colour, and Two-tone over two different user
+/// colours, drawn with the real SteamDraw over a stand-in desktop.
 /// </summary>
 public class FogLooksStillsTests
 {
     private const int W = 1280, H = 720;
     private const double Dt = 1 / 30.0;
-    private static readonly (byte R, byte G, byte B) HotPink = (255, 105, 180);
+    private static readonly (byte R, byte G, byte B) HotPink = (255, 105, 180), Teal = (64, 200, 190);
 
-    private static readonly (string Name, string Row)[] Looks =
-    {
-        ("pink", FogLooks.Pink), ("lilac", FogLooks.Lilac), ("mint", FogLooks.Mint), ("amber", FogLooks.Amber),
-    };
+    /// <summary>Two users' own filter colours (the fog wears these, never a shop colour).</summary>
+    private static readonly (string Name, (byte R, byte G, byte B) Own)[] Owns = { ("hotpink", HotPink), ("teal", Teal) };
 
     internal static void Desktop(SKCanvas canvas)
     {
@@ -57,9 +56,8 @@ public class FogLooksStillsTests
         using var canvas = new SKCanvas(bmp);
         using var draw = new SteamDraw();
         var field = Fog();
-        foreach (var (name, row) in Looks)
+        foreach (var (name, c) in Owns)
         {
-            var c = FogLooks.Wear(row, HotPink);
             Desktop(canvas);
             draw.Draw(canvas, new SKRect(0, 0, W, H), field, new SKColor(c.R, c.G, c.B), 0.62, Array.Empty<string>(), null, SKTypeface.Default, 4);
             canvas.Flush();
@@ -73,8 +71,9 @@ public class FogLooksStillsTests
         }
     }
 
-    /// <summary>Two-tone: five frames three seconds apart for two colour pairs, on Steam and on the flat
-    /// tint, plus the cost of a frame with and without the mix.</summary>
+    /// <summary>Two-tone: five frames three seconds apart for two users (hot pink picking lilac; teal picking
+    /// mint, which is too close and steps on to amber), on Steam and on the flat tint, plus the cost of a
+    /// frame with and without the mix.</summary>
     [Fact]
     public void Dump_two_tone_when_asked()
     {
@@ -87,11 +86,10 @@ public class FogLooksStillsTests
         using var tint = new FogMixDraw();
         var mix = new FogMixField();
         var bounds = new SKRect(0, 0, W, H);
-        var pairs = new[] { ("pink-mint", FogLooks.Pink, FogLooks.Mint), ("amber-lilac", FogLooks.Amber, FogLooks.Lilac) };
-        foreach (var (name, a, b) in pairs)
+        var pairs = new[] { ("hotpink-lilac", HotPink, FogLooks.Lilac), ("teal-mint", Teal, FogLooks.Mint) };
+        foreach (var (name, main, fog2) in pairs)
         {
-            var main = FogLooks.Wear(a, HotPink);
-            var second = FogLooks.Wear(FogLooks.SecondRow(a, b), HotPink);
+            var second = FogLooks.SecondColour(fog2, main);
             var ramp = FogMix.Ramp(main, second);
             var field = Fog();
             double t = 9;

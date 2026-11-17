@@ -2,7 +2,19 @@
  * frames and backs, the Deck card front, word styles with their own motion, fog colours (and the two-tone swirl), the whisper that
  * leaves from behind a flipping card. Pure drawing on a 2D context; time goes in, nothing is kept here. */
 
-export const FOGS = { pink: '#ff5fa8', lilac: '#a98bff', mint: '#5fe0b8', amber: '#ffb347' };
+/* The fog wears the user's own pink filter colour (owner 2026-11-17: the shop sells no fog colours). Two-tone adds a
+ * second colour from this palette, in this order (CCP.Core FogLooks.Palette): one too close to the user's own would
+ * make the swirl vanish, so the next one stands in (secondFog). */
+export const FOGS = { pink: '#ff5fa8', lilac: '#a98bff', mint: '#5fe0b8', amber: '#ffb347', sky: '#5fc0ff', peach: '#ff937a' };
+export const FOG_CLOSE = 48;
+const rgbOf = (hex) => { const m = String(hex || '').replace('#', ''); return m.length === 6 ? [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16)) : null; };
+export const fogClose = (a, b) => { const x = rgbOf(a), y = rgbOf(b); return !!(x && y) && Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < FOG_CLOSE; };
+/** The second colour shown for the pick over the user's own colour: { kind, skipped } (skipped = the pick was too close). */
+export function secondFog(pick, own) {
+  const keys = Object.keys(FOGS), want = keys.includes(pick) ? pick : 'lilac', at = keys.indexOf(want);
+  for (let k = 0; k < keys.length; k++) { const kind = keys[(at + k) % keys.length]; if (!fogClose(FOGS[kind], own)) return { kind, skipped: kind !== want }; }
+  return { kind: want, skipped: false };
+}
 export const WORDS = ['let go', 'sink', 'good', 'deeper', 'soft', 'obey', 'blank'];
 const TAU = Math.PI * 2;
 export const ease = (x) => { x = Math.max(0, Math.min(1, x)); return 1 - Math.pow(1 - x, 3); };
@@ -27,7 +39,7 @@ export function drawFront(g, x, y, w, h, hue) {
  * (CCP.Core DeckLooks.Frame*: the band is a small share of the shorter side, an ink line on both its edges). The page's
  * cards are small, so the band is a little bolder here than the desktop's 5.5%. Plain = no frame. */
 const rrect = (g, x, y, w, h, r) => { r = Math.max(0, Math.min(r, w / 2, h / 2)); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
-export const frameBand = (w, h) => Math.max(3.5, Math.min(26, Math.min(w, h) * 0.075));
+export const frameBand = (w, h) => Math.max(5, Math.min(26, Math.min(w, h) * 0.09));
 export function drawFrame(g, kind, x, y, w, h, r) {
   if (kind === 'plain' || !kind) return 0;
   const b = frameBand(w, h), ink = Math.max(1.2, b * 0.2), ir = Math.max(r - b, b * 0.5);

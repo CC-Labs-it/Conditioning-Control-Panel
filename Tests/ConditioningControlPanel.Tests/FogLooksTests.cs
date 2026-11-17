@@ -6,36 +6,43 @@ using Xunit;
 
 namespace ConditioningControlPanel.Tests;
 
-/// <summary>Fog colours from the shop (lane J2): the worn row recolours Steam and the pink filter,
-/// nothing worn draws today's colour, and a change cross-fades instead of jumping.</summary>
+/// <summary>The fog look from the shop (lane J2, owner notes 2026-11-17): only Two-tone is sold. Colour one is
+/// always the user's own filter colour; the second comes from a fixed palette and steps on when it sits too
+/// close to the user's own; nothing worn draws today's colour, and a change cross-fades instead of jumping.</summary>
 public class FogLooksTests
 {
     private static readonly (byte, byte, byte) Own = (255, 105, 180);
 
     [Fact]
-    public void The_colours_are_the_mockup_s_and_pink_is_the_filter_s_own()
+    public void The_palette_is_the_mockup_s_plus_sky_and_peach_and_no_two_swirl_into_one()
     {
         Assert.Equal(((byte)0xA9, (byte)0x8B, (byte)0xFF), FogLooks.ColourOf(FogLooks.Lilac));
         Assert.Equal(((byte)0x5F, (byte)0xE0, (byte)0xB8), FogLooks.ColourOf(FogLooks.Mint));
         Assert.Equal(((byte)0xFF, (byte)0xB3, (byte)0x47), FogLooks.ColourOf(FogLooks.Amber));
-        foreach (var row in new[] { FogLooks.Pink, null, "fx.fog.bogus", "fx.fog.twotone", "" })
-        {
-            Assert.Null(FogLooks.ColourOf(row));
-            Assert.Equal(Own, FogLooks.Wear(row, Own));
-        }
-        // A user's own pick stays theirs under the free row.
-        Assert.Equal(((byte)10, (byte)20, (byte)30), FogLooks.Wear(WornLooks.DefaultOf(WornLooks.Fog), (10, 20, 30)));
+        Assert.Equal(((byte)0xFF, (byte)0x5F, (byte)0xA8), FogLooks.ColourOf(FogLooks.Pink));
+        Assert.Equal(new[] { FogLooks.Pink, FogLooks.Lilac, FogLooks.Mint, FogLooks.Amber, FogLooks.Sky, FogLooks.Peach },
+            System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(FogLooks.Palette, p => p.Row)));
+        foreach (var row in new[] { null, "fx.fog.bogus", FogLooks.Twotone, "" }) Assert.False(FogLooks.IsPalette(row));
+        foreach (var a in FogLooks.Palette)
+            foreach (var b in FogLooks.Palette)
+                if (a.Row != b.Row) Assert.False(FogLooks.Close(a.Rgb, b.Rgb), $"{a.Row} and {b.Row}");
+        Assert.Equal(FogLooks.Lilac, WornLooks.DefaultOf(WornLooks.Fog2));
     }
 
     [Theory]
-    [InlineData("fx.fog.mint", "fx.fog.amber", "fx.fog.amber")]
-    [InlineData("fx.fog.pink", "fx.fog.lilac", "fx.fog.lilac")]
-    [InlineData("fx.fog.lilac", "fx.fog.lilac", "fx.fog.pink")]
-    [InlineData("fx.fog.pink", "fx.fog.pink", "fx.fog.lilac")]
-    [InlineData(null, null, "fx.fog.lilac")]
-    [InlineData("fx.fog.amber", "bogus", "fx.fog.lilac")]
-    public void The_mix_never_draws_one_colour(string? fog, string? fog2, string expected)
-        => Assert.Equal(expected, FogLooks.SecondRow(fog, fog2));
+    [InlineData("fx.fog.mint", 255, 105, 180, "fx.fog.mint")]
+    [InlineData(null, 255, 105, 180, "fx.fog.lilac")]
+    [InlineData("bogus", 255, 105, 180, "fx.fog.lilac")]
+    [InlineData("fx.fog.amber", 255, 105, 180, "fx.fog.amber")]
+    [InlineData("fx.fog.pink", 255, 105, 180, "fx.fog.lilac")]   // hot pink is too close to pink: the next one
+    [InlineData("fx.fog.lilac", 160, 140, 250, "fx.fog.mint")]   // a lilac filter skips lilac
+    [InlineData("fx.fog.peach", 255, 150, 120, "fx.fog.pink")]   // the last colour wraps round to the first
+    public void The_second_colour_never_swirls_into_the_user_s_own(string? fog2, int r, int g, int b, string expected)
+    {
+        var own = ((byte)r, (byte)g, (byte)b);
+        Assert.Equal(expected, FogLooks.SecondRow(fog2, own));
+        Assert.False(FogLooks.Close(FogLooks.SecondColour(fog2, own), own));
+    }
 
     [Fact]
     public void The_ease_is_smooth_and_slower_under_gentle()
@@ -50,44 +57,21 @@ public class FogLooksTests
     }
 
     [Fact]
-    public void A_worn_colour_cross_fades_in_and_the_default_is_untouched()
+    public void A_worn_fog_colour_never_recolours_the_fog()
     {
+        // An old preview (or account) still naming a fog colour in slot fog: the fog stays the user's own.
         var read = WornFog.Read;
         var clock = WornFog.Clock;
         try
         {
             double now = 100;
-            string? fog = null;
             WornFog.Clock = () => now;
-            WornFog.Read = slot => slot == WornLooks.Fog ? fog ?? WornLooks.DefaultOf(slot) : WornLooks.DefaultOf(slot);
+            WornFog.Read = slot => slot == WornLooks.Fog ? FogLooks.Mint : WornLooks.DefaultOf(slot);
             WornFog.Retarget();
             now += 10;
-            Assert.Equal(Own, WornFog.Over(Own));
+            Assert.Equal(new WornFog.FogShown(Own, Own, false), WornFog.Shown(Own));
+            Assert.Equal(((byte)10, (byte)200, (byte)90), WornFog.Shown((10, 200, 90)).Main);   // the user's pick, whatever it is
             Assert.False(WornFog.Easing);
-
-            long stamp = WornFog.Stamp;
-            fog = FogLooks.Mint;
-            WornFog.Retarget();
-            Assert.NotEqual(stamp, WornFog.Stamp);
-            Assert.True(WornFog.Easing);
-            Assert.Equal(Own, WornFog.Over(Own));                       // starts from what was shown
-            Assert.Equal(FogLooks.ColourOf(FogLooks.Mint), WornFog.Target(Own));
-            now += 0.6;
-            var mid = WornFog.Over(Own);
-            Assert.NotEqual(Own, mid);
-            Assert.NotEqual(FogLooks.ColourOf(FogLooks.Mint)!.Value, mid);
-            now += 5;
-            Assert.False(WornFog.Easing);
-            Assert.Equal(FogLooks.ColourOf(FogLooks.Mint), WornFog.Over(Own));
-
-            // Taking it off fades back to the filter's own colour; the same row again is no change.
-            fog = null;
-            WornFog.Retarget();
-            stamp = WornFog.Stamp;
-            WornFog.Retarget();
-            Assert.Equal(stamp, WornFog.Stamp);
-            now += 5;
-            Assert.Equal(Own, WornFog.Over(Own));
         }
         finally
         {
@@ -103,8 +87,9 @@ public class FogLooksTests
         string app = Path.Combine(Root(), "ConditioningControlPanel");
         var overlay = File.ReadAllText(Path.Combine(app, "Services", "Notifications", "OverlayService.cs"));
         Assert.Contains("new Compositor.PinkTintLayer(App.Compositor!) { WearsLooks = true }", overlay);
-        Assert.Contains("Prizes.WornLooks.Changed += OnWornLookChanged;", overlay);
-        Assert.Contains("Prizes.WornLooks.Changed -= OnWornLookChanged;", overlay);
+        // The filter's colour is the user's own again: no shop colour reaches the window fallback.
+        Assert.DoesNotContain("WornFog", overlay);
+        Assert.DoesNotContain("OnWornLookChanged", overlay);
         var steam = File.ReadAllText(Path.Combine(app, "Services", "Compositor", "SteamLayer.cs"));
         Assert.Contains("Prizes.WornFog.Shown((look.R, look.G, look.B))", steam);
         Assert.Contains("Face, _t, mix, ramp);", steam);
@@ -186,10 +171,11 @@ public class FogLooksTests
             double now = 1000;
             bool mixOn = false;
             WornFog.Clock = () => now;
+            string fog2 = FogLooks.Pink;
             WornFog.Read = slot => slot switch
             {
-                WornLooks.Fog => FogLooks.Mint,
-                WornLooks.Fog2 => FogLooks.Pink,
+                WornLooks.Fog => FogLooks.Mint,                     // ignored: colour one is the user's own
+                WornLooks.Fog2 => fog2,
                 WornLooks.Mix => mixOn ? "fx.fog.twotone" : null,
                 _ => WornLooks.DefaultOf(slot),
             };
@@ -197,7 +183,7 @@ public class FogLooksTests
             now += 10;
             var flat = WornFog.Shown(Own);
             Assert.False(flat.TwoTone);
-            Assert.Equal(FogLooks.ColourOf(FogLooks.Mint), flat.Main);
+            Assert.Equal(Own, flat.Main);
 
             mixOn = true;
             WornFog.Retarget();
@@ -207,7 +193,18 @@ public class FogLooksTests
             now += 10;
             var on = WornFog.Shown(Own);
             Assert.True(on.TwoTone);
-            Assert.Equal(Own, on.Second);                           // pink = the filter's own colour
+            Assert.Equal(Own, on.Main);
+            Assert.Equal(FogLooks.ColourOf(FogLooks.Lilac), on.Second);   // pink is too close to hot pink: lilac stands in
+            Assert.Equal(FogLooks.ColourOf(FogLooks.Pink), WornFog.Shown((95, 224, 184)).Second);   // a mint filter keeps pink
+
+            long stamp = WornFog.Stamp;
+            fog2 = FogLooks.Sky;                                    // a new second colour cross-fades
+            WornFog.Retarget();
+            Assert.NotEqual(stamp, WornFog.Stamp);
+            Assert.True(WornFog.Easing);
+            now += 10;
+            Assert.False(WornFog.Easing);
+            Assert.Equal(FogLooks.ColourOf(FogLooks.Sky), WornFog.Shown(Own).Second);
 
             mixOn = false;
             WornFog.Retarget();
