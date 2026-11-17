@@ -97,13 +97,15 @@ public class BubbleSkinsTests
     }
 
     private const int Cell = 300;
-    private const float Side = 220f;   // sprite side; the glass is 0.45 of it
+    private const float Side = 220f;   // sprite side; the glass radius is 0.36 of it
     private static readonly SKColor Bg = new(22, 26, 38);
 
     [Fact]
     public void Champagne_stills_draw_inside_the_glass_and_pop_outside_it()
     {
-        using var sprite = StandInSprite();
+        // CCP_SKIN_SPRITE=<path to the real bubble.png> draws the stills on the shipped art (an LFS pointer here).
+        var real = Environment.GetEnvironmentVariable("CCP_SKIN_SPRITE");
+        using var sprite = (!string.IsNullOrEmpty(real) && System.IO.File.Exists(real) ? SKImage.FromEncodedData(real) : null) ?? StandInSprite();
         using var paint = new BubbleLayer.SkinPainter();
         const int seed = 20261117;
         // Four times, a small bubble, and an Off frame.
@@ -114,7 +116,7 @@ public class BubbleSkinsTests
         Bubble(c, sprite, paint, seed, 7.0, 0, 5, Side, 1f, 1f);
         // Pop: the base pop grows 0.04 and fades 0.066 a step at 30 fps; the burst flies from frame 0.
         var parts = new SkinParticle[BubbleSkins.MaxBurst];
-        float glass = Side * 0.45f;
+        float glass = Side * 0.5f * BubbleLayer.GlassOfHalf;
         int n = BubbleSkins.Burst(Champ, seed, glass, 1, parts);
         int[] frames = { 2, 6, 12, 22, 34 };
         using var pop = Canvas(Cell * frames.Length, out var pc);
@@ -136,7 +138,7 @@ public class BubbleSkinsTests
         using var still = Canvas(Cell * 2, out var sc);
         Bubble(sc, sprite, paint, seed, 0.2, 0, 0, Side, 1f, 1f);
         Bubble(sc, sprite, paint, seed, 5.2, 0, 1, Side, 1f, 1f);
-        Assert.Equal(0, Diff(still, 0, 1));
+        Assert.True(Diff(still, 0, 1) <= 8, "Off is a still frame");   // the real art resamples a few edge pixels per cell
         Assert.Equal(Bg, strip.GetPixel(Cell + 8, 8));   // nothing lands outside the glass
         int lit = 0;
         for (int y = 0; y < Cell; y += 2)
@@ -159,23 +161,23 @@ public class BubbleSkinsTests
                                       ColorFilter = BubbleLayer.SkinPainter.ShellTint(Champ) };
         c.DrawImage(sprite, new SKRect(cx - half, cy - half, cx + half, cy + half), img);
         img.ColorFilter = null;   // the shared filter is app-lifetime: never disposed with this paint
-        paint.DrawInterior(c, Champ, seed, t, motion, cx, cy, half * 0.9f, opacity);
+        paint.DrawInterior(c, Champ, seed, t, motion, cx, cy, half * BubbleLayer.GlassOfHalf, opacity);
         c.RestoreToCount(save);
     }
 
-    /// <summary>A soap stand-in (bubble.png is an LFS pointer here): a rim at 0.45 of the side and a highlight.</summary>
+    /// <summary>A soap stand-in with the shipped art's proportions: a rim at 0.36 of the side and a highlight.</summary>
     private static SKImage StandInSprite()
     {
         using var surf = SKSurface.Create(new SKImageInfo(256, 256, SKColorType.Rgba8888, SKAlphaType.Premul));
         var c = surf.Canvas;
         c.Clear(SKColors.Transparent);
-        using (var sh = SKShader.CreateRadialGradient(new SKPoint(128, 128), 115,
+        using (var sh = SKShader.CreateRadialGradient(new SKPoint(128, 128), 92,
                    new[] { new SKColor(255, 255, 255, 10), new SKColor(220, 230, 255, 40), new SKColor(255, 255, 255, 170) },
                    new[] { 0f, .8f, 1f }, SKShaderTileMode.Clamp))
         using (var p = new SKPaint { IsAntialias = true, Shader = sh })
-            c.DrawCircle(128, 128, 115, p);
+            c.DrawCircle(128, 128, 92, p);
         using (var p = new SKPaint { IsAntialias = true, Color = new SKColor(255, 255, 255, 150) })
-            c.DrawOval(new SKRect(77, 56, 115, 77), p);
+            c.DrawOval(new SKRect(87, 70, 118, 87), p);
         return surf.Snapshot();
     }
 

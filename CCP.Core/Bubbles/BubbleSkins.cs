@@ -71,13 +71,13 @@ public static class BubbleSkins
     /// <summary>A shape is never drawn smaller than this many pixels, however small the bubble.</summary>
     public const double MinPx = 0.7;
 
-    public const int MaxBeads = 24, MaxRings = 3, MaxFoam = 14, Nozzles = 3;
+    public const int MaxBeads = 44, MaxRings = 3, MaxFoam = 22, Nozzles = 3;
     public const int MaxInterior = MaxBeads + MaxRings + MaxFoam + Nozzles;
     public const int MaxFizz = 48, MaxSparks = 12, Mists = 3;
     public const int MaxBurst = 1 + MaxFizz + MaxSparks + Mists;
 
-    public static int BeadCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.4), 10, MaxBeads);
-    public static int FoamCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.2), 6, MaxFoam);
+    public static int BeadCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.7), 16, MaxBeads);
+    public static int FoamCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.32), 8, MaxFoam);
     public static int RingCount(double radiusPx) => radiusPx < 32 ? 2 : MaxRings;
     public static int FizzCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.8), 18, MaxFizz);
     public static int SparkCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 0.2), 6, MaxSparks);
@@ -103,7 +103,7 @@ public static class BubbleSkins
                 + wd * (.62 * Math.Sin(u * (5 + h3 * 9) + h4 * Tau + t * (.6 + h5))
                       + .38 * Math.Sin(u * (13 + h5 * 14) + h3 * Tau - t * (1.3 + h4)))
                 + (h4 - .5) * .34 * u * u;
-            double s = Math.Max(minR, .008 + .022 * h3 * h3 + .006 * u);
+            double s = Math.Max(minR, .011 + .026 * h3 * h3 + .007 * u);
             double al = (.45 + .55 * h5) * Math.Min(1, u * 8) * Math.Min(1, (1 - u) * 10);
             dst[n++] = Inside(x, y, s, al, SkinPrimKind.Bead);
         }

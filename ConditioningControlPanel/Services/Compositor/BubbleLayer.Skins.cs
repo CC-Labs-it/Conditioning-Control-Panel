@@ -11,8 +11,9 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// </summary>
 public sealed partial class BubbleLayer
 {
-    /// <summary>Glass radius as a share of half the sprite side (the art has a soft margin).</summary>
-    private const float GlassOfHalf = (float)(2 * SuperCore.FrothRules.GlassOfSprite);
+    /// <summary>Glass radius as a share of half the sprite side. Measured on bubble.png: the glass spans 736 of
+    /// 1024 px. Froth's GlassOfSprite (0.45) is its reach and is wider than the glass, so it is not used here.</summary>
+    internal const float GlassOfHalf = 0.72f;
     /// <summary>Most skin pop bursts alive at once; a newer pop retires the oldest.</summary>
     public const int MaxLiveSkinBursts = 12;
     /// <summary>Pop bursts repaint at the field's own cadence (about 30 fps), never at refresh rate.</summary>
