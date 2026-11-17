@@ -54,6 +54,8 @@ kbd { font-family: var(--f-mono); font-size: 12px; border: 1px solid currentColo
 .shroot .s-tab[aria-selected="true"]:focus-visible { outline-color: var(--pink-deep); }
 
 .s-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 350px); min-height: 0; }
+/* scrollbars in the counter's own ink, not the browser's grey */
+.s-list, .s-detail, .s-main { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .s-list { overflow-y: auto; padding: 20px 18px 30px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-content: start; min-width: 0; }
 .s-detail { border-left: 2px solid var(--black); background: var(--night-2); padding: 16px 14px; overflow-y: auto; display: grid; gap: 10px; align-content: start; min-width: 0; }
 .empty { color: var(--tx-2); font-size: 14px; margin: 0; max-width: 46ch; }
