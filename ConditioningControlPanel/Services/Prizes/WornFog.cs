@@ -86,7 +86,8 @@ internal static class WornFog
         get
         {
             var l = Volatile.Read(ref _look);
-            return l.FromMain != null && Clock() - l.T0 < EaseSeconds();
+            double dt = Clock() - l.T0;
+            return l.FromMain != null && dt >= 0 && dt < EaseSeconds();   // a clock behind the fade's start means it is over
         }
     }
 
@@ -117,7 +118,8 @@ internal static class WornFog
         var toMain = FogLooks.Wear(look.Main, own);
         var toSecond = look.Second != null ? FogLooks.Wear(look.Second, own) : toMain;
         if (look.FromMain is not { } fromMain) return new FogShown(toMain, toSecond, look.Second != null);
-        double k = FogLooks.EaseAt(now - look.T0, EaseSeconds());
+        // A clock that reads earlier than the fade's start (a swapped test clock) is a finished fade, never a stuck one.
+        double dt = now - look.T0, k = dt < 0 ? 1 : FogLooks.EaseAt(dt, EaseSeconds());
         return new FogShown(FogLooks.Lerp(fromMain, toMain, k), FogLooks.Lerp(look.FromSecond, toSecond, k),
             look.Second != null || (k < 1 && look.FromMix));
     }
