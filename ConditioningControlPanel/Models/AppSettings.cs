@@ -10697,6 +10697,19 @@ namespace ConditioningControlPanel.Models
             set { _superPreviewUsedWeek = value; OnPropertyChanged(); }
         }
 
+        private Dictionary<string, bool> _studioSectionsOpen = new();
+        /// <summary>
+        /// Which Studio option sections (Features/OptionSection) this PC left open or closed, by
+        /// section id. A view preference of this PC only: never in a preset, the session journal,
+        /// sync or a cloud backup (ProfileSyncService.ExcludedBackupProperties).
+        /// </summary>
+        [JsonProperty]
+        public Dictionary<string, bool> StudioSectionsOpen
+        {
+            get => _studioSectionsOpen;
+            set => _studioSectionsOpen = value ?? new Dictionary<string, bool>();
+        }
+
         private bool _companionAsksEnabled = true;
         /// <summary>The companion now and then asks a question with a few answer buttons.</summary>
         [JsonProperty]

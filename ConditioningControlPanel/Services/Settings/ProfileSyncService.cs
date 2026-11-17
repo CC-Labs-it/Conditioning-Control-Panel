@@ -4804,6 +4804,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
             // The weekly free Super try is machine-wide: a restore must not hand back a spent week.
             nameof(AppSettings.SuperPreviewUsedWeek),
+            // Which Studio option sections are open: how this PC's screen looks, nobody's setting.
+            nameof(AppSettings.StudioSectionsOpen),
         };
 
         /// <summary>
@@ -4875,6 +4877,7 @@ namespace ConditioningControlPanel.Services
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             restored.WalletNetSeen = current.WalletNetSeen;
             restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
+            restored.StudioSectionsOpen = new Dictionary<string, bool>(current.StudioSectionsOpen);
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)
