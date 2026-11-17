@@ -7,7 +7,15 @@
 import { frontModel, labelOf, statusOf, ledgerText, badgeCount, sectionShowsKey } from './model.js';
 import { placesOf, isHere } from './wire.js';
 
-export function installFront(view, { t }) {
+/** The gift's next day: an ISO date reads as its weekday in the host's language, plain words stay as sent. */
+export function nextDay(next, locale, t) {
+  if (!next) return t('shop_sheet_gift_next');
+  if (!/^\d{4}-\d{2}-\d{2}/.test(next)) return next;
+  const d = new Date(next);
+  try { return isNaN(d) ? t('shop_sheet_gift_next') : new Intl.DateTimeFormat(locale || 'en', { weekday: 'long', timeZone: 'UTC' }).format(d); } catch (e) { return t('shop_sheet_gift_next'); }
+}
+
+export function installFront(view, { t, locale }) {
   const { el, button, star } = view;
   const head = (title, meta) => {
     const h = el('div', 'sh');
@@ -55,7 +63,7 @@ export function installFront(view, { t }) {
     art.setAttribute('aria-hidden', 'true');
     view.giftBox = art;
     const b = el('div');
-    b.append(el('h3', null, t('shop_sheet_gift')), el('p', null, g.ready ? t('shop_sheet_gift_ready') : t('shop_sheet_gift_opened', g.next && !/^\d/.test(g.next) ? g.next : t('shop_sheet_gift_next'))));
+    b.append(el('h3', null, t('shop_sheet_gift')), el('p', null, g.ready ? t('shop_sheet_gift_ready') : t('shop_sheet_gift_opened', nextDay(g.next, locale, t))));
     const btn = button('btn gold', null, 'gift', (viaKey) => on.gift(viaKey));
     if (g.ready) btn.append(el('span', null, t('shop_sheet_gift_open', g.amount)), star());
     else btn.textContent = t('shop_sheet_gift_done');

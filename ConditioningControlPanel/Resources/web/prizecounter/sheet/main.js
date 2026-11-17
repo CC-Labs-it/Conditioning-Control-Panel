@@ -15,10 +15,12 @@ import { readPreview, platformOf, placesOf, isHere } from './wire.js';
 import { roomModel, fxRoom, locate, slotOf, OWNED, FEATURED, groupOf, sheetTabs, badgeCount } from './model.js';
 import { createView } from './view.js';
 import { installFront } from './front.js';
+import { installLive } from './live.js';
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const pressKey = (e) => e.key === 'Enter' || e.key === ' ' || e.code === 'Space' || e.code === 'NumpadEnter';
 const SOLD_MS = 1700;
+const sfx = { pop() {} };   // sheet/sound.js fills this in
 
 export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win = globalThis.window, now = () => performance.now(),
   frame = (f) => requestAnimationFrame(f), base = './', later = (f, ms) => setTimeout(f, ms), newIdem = mintIdem,
@@ -41,10 +43,11 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const shop = createShop({ request, newIdem, tab: init.tab || null, wears: init.wears, rain: init.rainV2 === true });
   const guard = createPressGuard({ now, focused: typeof doc.hasFocus === 'function' ? doc.hasFocus() : true });
   const view = createView(doc, { t, sheet: init.sheet === true, base, platform });
-  installFront(view, { t });
+  installFront(view, { t, locale: init.locale });
+  installLive(view, { t, base, motion, gentle: !!init.gentle, doc, win, onPop: (b) => sfx.pop(b) });
   root.replaceChildren(view.root);
   const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title',
-    pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false, spot: null, freshStamp: 0 };
+    pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false, spot: null, freshStamp: 0, fog2Try: null };
 
   const st = () => shop.state();
   const pv = () => { if (raw !== rawRead) { rawRead = raw; ui.pv = readPreview(raw); } return ui.pv; };
@@ -57,7 +60,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     const room = fxe ? fxRoom(fxe, { sp, t, pv: p, asking: ui.asking, pending: ui.fxPending, note: ui.fxNote, away: away(fxe.id) })
       : roomModel(card, { sp, t, wearing: ui.wearing, asking: ui.asking, pv: p, row: card && (locate(s, card.itemId, p) || {}).row, away: !!card && away(card.itemId) });
     view.paint({ status: shop.status(), state: s, sp, tier: s ? s.tier : 0, tabs: sheetTabs(shop.tabs(), p), tab: ui.tab, query: ui.query,
-      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, platform, hereOnly: ui.hereOnly, room }, on);
+      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, fog2Try: ui.fog2Try, platform, hereOnly: ui.hereOnly, room }, on);
     const to = ui.focusTo;
     ui.focusTo = null;
     if (to === 'title') view.title.focus();
@@ -111,6 +114,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     pick, act,
     spotlight(id) { ui.spot = id; if ((ui.fx || (shop.card() || {}).itemId) !== id) pick(id); else paint(); },
     gift() {}, stamp() {},
+    fog2(id) { ui.fog2Try = id; paint(); },
     close: () => host.close('back'),
     signIn: () => host.signIn(),
   };

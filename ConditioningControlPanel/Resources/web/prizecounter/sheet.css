@@ -150,6 +150,22 @@ kbd { font-family: var(--f-mono); font-size: 12px; border: 1px solid currentColo
 .d-ask { flex: 1 1 100%; margin: 0; font-size: 13px; font-weight: 600; color: var(--gold); }
 .d-note { margin: 0; font-size: 13px; color: var(--tx); border-left: 3px solid var(--gold); padding-left: 8px; }
 .btn.ink { background: var(--ink); color: var(--paper); }
+/* live pictures: the effect thumbnails, "Your screen", the two-tone swatches, what is worn */
+.niche > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fam-bubble { --fam: #5ad1e6; } .fam-card { --fam: #ff5fa8; } .fam-behind { --fam: #a98bff; } .fam-fog { --fam: #ff9a7a; } .fam-word { --fam: #f1e3b6; }
+.prev.screen { background: #120d1c; }
+.prev.screen::before, .prev.screen::after { display: none; }
+.prev.screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: pointer; }
+.mon-foot { display: flex; justify-content: space-between; gap: 8px; }
+.mon-foot b { color: var(--gold); font-weight: 600; }
+.stage > .art.lit { inset: 12% 24% 22%; z-index: 2; filter: drop-shadow(4px 5px 0 #000a); }
+.mix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--tx-2); }
+.mix button { width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid var(--black); padding: 0; }
+.mix button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--night-2), 0 0 0 4.5px var(--gold); }
+.wearing { margin: 6px 0 0; display: grid; gap: 4px; font: 500 12.5px/1.4 var(--f-mono); }
+.wearing div { display: flex; gap: 6px; align-items: baseline; }
+.wearing dt { color: var(--tx-3); } .wearing dd { margin: 0; color: var(--tx); font-weight: 600; text-align: right; }
+.wearing i { flex: 1; border-bottom: 1.5px dotted var(--line); transform: translateY(-3px); min-width: 10px; }
 .btn .star { width: 16px; height: 16px; filter: drop-shadow(0 0 .6px var(--ink)) drop-shadow(0 0 .6px var(--ink)); }
 .on-paper .btn[disabled] { color: var(--ink-soft); border-color: var(--ink-soft); }
 
