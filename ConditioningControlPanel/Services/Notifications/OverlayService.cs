@@ -182,6 +182,9 @@ public class OverlayService : IDisposable
 
         // Super Vortex rides the spiral: a switch flip or a tier change starts or tears it down.
         Super.SuperAccess.Changed += OnSuperChanged;
+
+        // Fog colours from the shop (WornLooks): the window fallback repaints on a change.
+        Prizes.WornLooks.Changed += OnWornLookChanged;
     }
 
     private void HookSettings(Models.AppSettings? settings)
@@ -249,7 +252,7 @@ public class OverlayService : IDisposable
     {
         if (_pinkLayer == null)
         {
-            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!);
+            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!) { WearsLooks = true };
             App.Compositor!.RegisterLayer(_pinkLayer);
             PushStepAside();   // a first show under Super only starts hidden, no flash of tint
         }
@@ -1010,12 +1013,29 @@ public class OverlayService : IDisposable
 
     private static (byte R, byte G, byte B) GetFilterRgb()
     {
+        var own = GetOwnFilterRgb();
+        // The fog colour worn from the shop: the compositor tint and Steam wear it themselves
+        // (cross-faded, two-tone), so they get the filter's own colour; the window fallback has no
+        // layer to do that and takes the settled worn colour here. Nothing worn = own.
+        return UseCompositor ? own : Prizes.WornFog.Target(own);
+    }
+
+    private static (byte R, byte G, byte B) GetOwnFilterRgb()
+    {
         // A user-picked color (suggestion #643) wins over the mod/default retint.
         // Empty setting defers to the active mod's filter color, then hot pink.
         var custom = App.Settings?.Current?.PinkFilterColor;
         if (TryParseHexColor(custom, out var rgb))
             return rgb;
         return App.Mods?.GetFilterColorRgb() ?? (255, 105, 180);
+    }
+
+    /// <summary>A fog look was put on or taken off (any thread). The compositor layers follow on their
+    /// own; the window fallback repaints its brushes.</summary>
+    private void OnWornLookChanged(string slot)
+    {
+        if (slot is not (Prizes.WornLooks.Fog or Prizes.WornLooks.Fog2 or Prizes.WornLooks.Mix) || UseCompositor) return;
+        DispatcherHelper.RunOnUI(RefreshFilterColor);
     }
 
     /// <summary>Parses a "#RRGGBB" (or "RRGGBB") string. Returns false for null/empty/malformed.</summary>
@@ -4086,6 +4106,7 @@ public class OverlayService : IDisposable
         try { _brainDrainLayer?.Stop(); } catch { /* shutdown path - GDI freed by OS anyway */ }
         // Super Vortex holds a global mouse hook; release it with the service.
         Super.SuperAccess.Changed -= OnSuperChanged;
+        Prizes.WornLooks.Changed -= OnWornLookChanged;
         try { _vortexLayer?.Stop(); } catch { }
 
         // Unsubscribe from settings changes. Detach from the instance we actually hooked, not from
