@@ -7,6 +7,9 @@
 import { frontModel, labelOf, statusOf, ledgerText, badgeCount, sectionShowsKey } from './model.js';
 import { placesOf, isHere } from './wire.js';
 
+/* Scissors on the coupon's cut line (decorative, currentColor). */
+const SCISSORS = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.7 10.1L12.2 1.6M10.3 10.1L3.8 1.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+
 /** The gift's next day: an ISO date reads as its weekday in the host's language, plain words stay as sent. */
 export function nextDay(next, locale, t) {
   if (!next) return t('shop_sheet_gift_next');
@@ -17,8 +20,8 @@ export function nextDay(next, locale, t) {
 
 export function installFront(view, { t, locale }) {
   const { el, button, star } = view;
-  const head = (title, meta) => {
-    const h = el('div', 'sh');
+  const head = (title, meta, tone) => {
+    const h = el('div', 'sh' + (tone ? ' tone-' + tone : ''));   // tone = the sign's candy colour (sheet.css .tone-*)
     h.append(el('span', 'sq'), el('h2', null, title), el('span', 'rule'));
     if (meta) h.append(el('span', 'meta', meta));
     return h;
@@ -30,7 +33,14 @@ export function installFront(view, { t, locale }) {
   function spotlight(f, v, on) {
     const e = f.spot, s = el('section', 'spot fam-' + (e.fx || e.tab));
     s.setAttribute('aria-labelledby', 'spot-h');
-    s.append(view.stage(e, v));
+    // the stage under a striped awning, a marquee of bulbs along its lip (sheet-juice keys on .bulb)
+    const box = el('div', 'stage-box'), lip = el('div', 'marquee');
+    for (let i = 0; i < 13; i++) lip.append(el('span', 'bulb'));
+    lip.setAttribute('aria-hidden', 'true');
+    const awning = el('div', 'awning');
+    awning.setAttribute('aria-hidden', 'true');
+    box.append(awning, view.stage(e, v), lip);
+    s.append(box);
     const copy = el('div', 'spot-copy'), h = el('h2', null, labelOf(e, t));
     h.id = 'spot-h';
     copy.append(el('p', 'kick', t('shop_sheet_new_week')), h);
@@ -59,7 +69,7 @@ export function installFront(view, { t, locale }) {
   function giftBlock(g, on) {
     const box = el('div', 'gift' + (g.ready ? '' : ' opened')), art = el('div', 'gbox'), lid = el('i', 'gl');
     lid.append(el('i', 'gw'), el('i', 'gw'));
-    art.append(lid, el('i', 'gb'));
+    art.append(lid, el('i', 'gb'), el('i', 'gt'));
     art.setAttribute('aria-hidden', 'true');
     view.giftBox = art;
     const b = el('div');
@@ -86,7 +96,9 @@ export function installFront(view, { t, locale }) {
     }
     const n = s.stamped.length;
     const cp = el('div', 'coupon' + (s.couponReady ? ' ready' : s.couponUsed ? ' used' : ''));
-    cp.append(el('b', null, t('shop_sheet_coupon')), el('span', null, t('shop_sheet_coupon_terms', s.couponAt)),
+    const snip = el('span', 'snip');
+    snip.innerHTML = SCISSORS; snip.setAttribute('aria-hidden', 'true');
+    cp.append(snip, el('b', null, t('shop_sheet_coupon')), el('span', null, t('shop_sheet_coupon_terms', s.couponAt)),
       el('em', null, s.couponReady ? t('shop_sheet_coupon_ready') : s.couponUsed ? t('shop_sheet_coupon_used') : t('shop_sheet_coupon_count', Math.min(n, s.couponAt), s.couponAt)));
     const foot = el('div', 'scard-f'), btn = button('btn ink', t(stamped ? 'shop_sheet_stamped_today' : 'shop_sheet_stamp_go', s.day), 'stamp', (viaKey) => on.stamp(viaKey));
     btn.disabled = stamped;
@@ -97,7 +109,7 @@ export function installFront(view, { t, locale }) {
 
   function savingFor(f, v, on) {
     const s = el('section', 'sec save-sec');
-    s.append(head(t('shop_sheet_saving_for'), f.goal ? t('shop_sheet_saving_meta') : null));
+    s.append(head(t('shop_sheet_saving_for'), f.goal ? t('shop_sheet_saving_meta') : null, 'save'));
     if (!f.goal) { s.append(el('p', 'empty', t('shop_sheet_saving_none'))); return s; }
     const g = f.goal, row = el('div', 'save'), b = el('div', 'save-b');
     row.append(view.itemNode(g.entry, v, on, true));
@@ -115,7 +127,7 @@ export function installFront(view, { t, locale }) {
 
   function receipt(f, v) {
     const s = el('section', 'sec'), r = el('div', 'rcpt');
-    s.append(head(t('shop_sheet_receipt')));
+    s.append(head(t('shop_sheet_receipt'), null, 'rcpt'));
     const line = (text, n, cls) => { const d = el('div', cls); d.append(el('span', null, text), el('i'), el('b', n > 0 && !cls ? 'pos' : null, cls ? String(n) : (n > 0 ? '+' : '') + n)); return d; };
     for (const l of f.ledger) r.append(line(ledgerText(v.state, v.pv, t, l.t), l.n));
     r.append(line(t('shop_sheet_in_wallet'), v.sp, 'sum'));
@@ -129,7 +141,7 @@ export function installFront(view, { t, locale }) {
     if (f.spot) out.push(spotlight(f, v, on));
     if (f.gift || f.stamps) {
       const s = el('section', 'sec'), row = el('div', 'today');
-      s.append(head(t('shop_sheet_gifts_stamps'), badgeCount(v.state, v.pv, v.sp) ? null : t('shop_sheet_nothing_waiting')));
+      s.append(head(t('shop_sheet_gifts_stamps'), badgeCount(v.state, v.pv, v.sp) ? null : t('shop_sheet_nothing_waiting'), 'gift'));
       if (f.gift) row.append(giftBlock(f.gift, on));
       if (f.stamps) row.append(stampCard(f.stamps, v, on));
       if (!f.gift || !f.stamps) row.classList.add('one');
@@ -144,7 +156,7 @@ export function installFront(view, { t, locale }) {
     }
     if (f.can.length) {
       const s = el('section', 'sec'), g = el('div', 'grid');
-      s.append(head(t('shop_sheet_can_buy'), t('shop_sheet_can_buy_meta', v.sp)));
+      s.append(head(t('shop_sheet_can_buy'), t('shop_sheet_can_buy_meta', v.sp), 'can'));
       g.append(...f.can.map((e) => view.itemNode(e, v, on, false, true)));
       s.append(g);
       out.push(s);

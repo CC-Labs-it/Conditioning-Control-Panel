@@ -68,6 +68,7 @@ export const SHEET_LEX = {
   shop_sheet_costs_nothing: 'Costs nothing',
   shop_sheet_leaves: 'Leaves you {0}',
   shop_sheet_need_more: 'You need {0} more',
+  shop_sheet_tag_need: 'need {0}',
   shop_sheet_switch_on: 'Switch on',
   shop_sheet_switch_off: 'Switch off',
   shop_sheet_take_off: 'Take off',

@@ -60,6 +60,8 @@ export function createView(doc, { t, sheet, base = './' }) {
       tag.append(star(), el('span', null, String(s.price)));
       w.setAttribute('aria-label', t('shop_price', s.price));
       w.append(tag);
+      // not enough: the pale sticker carries how many Sparkles are missing, readable at a glance (aria-hidden: the room says it in words)
+      if (s.short && s.price > (v.sp || 0)) { const n = el('span', 'need', t('shop_sheet_tag_need', s.price - (v.sp || 0))); n.setAttribute('aria-hidden', 'true'); w.append(n); }
       return w;
     }
     const b = el('span', 'bd bd-' + s.kind);
@@ -86,16 +88,18 @@ export function createView(doc, { t, sheet, base = './' }) {
     const b = button('it fam-' + (e.fx || e.tab), null, 'it:' + row.id, () => on.pick(row.id));
     b.setAttribute('aria-pressed', String(!!picked));
     b.dataset.v = String([...row.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) % 4);   // a hand-placed tilt per item
-    const stand = el('span', 'stand'), niche = el('span', 'niche');
+    const stand = el('span', 'stand'), niche = el('span', 'niche'), st = statusOf(e, ctx(v));
     niche.append(view.thumb(e, v));
     if (e.x.isNew && !row.owned) niche.append(el('span', 'flag', t('shop_sheet_new')));
+    // worn or switched on: a tick pin on the cubby, so the whole grid shows what is on at a glance
+    if (st.kind === 'wearing' || st.kind === 'on') { b.classList.add('is-' + st.kind); const pin = el('span', 'wear-pin'); pin.innerHTML = TICK; pin.setAttribute('aria-hidden', 'true'); niche.append(pin); }
     const places = placesOf(v.pv, e.id), away = !isHere(places, v.platform);
     if (away) { b.classList.add('elsewhere'); if (mixed) niche.append(view.placeMark(places, true)); }   // a shelf head carries the mark; a mixed list marks each away item
     stand.append(niche);
     b.append(stand);
     if (bare) { b.setAttribute('aria-label', nameOf(e, t) + (away ? '. ' + awayLine(places, v.platform, t) : '')); return b; }
     const meta = el('span', 'meta');
-    meta.append(statusNode(statusOf(e, ctx(v)), v), el('span', 'nm', nameOf(e, t)));
+    meta.append(statusNode(st, v), el('span', 'nm', nameOf(e, t)));
     if (e.x.how) meta.append(el('span', 'how', e.x.how));
     b.append(meta);
     return b;
