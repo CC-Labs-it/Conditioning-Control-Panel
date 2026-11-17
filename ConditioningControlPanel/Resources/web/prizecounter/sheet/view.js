@@ -4,7 +4,7 @@
 
 import { TAB_ICONS, LOCK } from '../hud/icons.js';
 import { tabKey } from '../state/strings.js';
-import { placeMark } from './wire.js';
+import { placeMark, placesOf, isHere, awayLine, PLACES } from './wire.js';
 import { sections, statusOf, statusText, artOf, locate, tabLabelKey, nameOf, FEATURED } from './model.js';
 
 /* The mockup's place icons: a monitor, a globe, a phone (decorative, currentColor). */
@@ -34,7 +34,9 @@ export function createView(doc, { t, sheet, base = './' }) {
   close.append(el('kbd', null, 'Esc'));
   const titleBox = el('div', 's-titlebox');
   titleBox.append(title, slip);
-  head.append(titleBox, wallet, search, close);
+  const here = button('herebtn', t('shop_sheet_works_here'), 'here', null);
+  here.hidden = true;
+  head.append(titleBox, here, wallet, search, close);
   const tabs = el('div', 's-tabs');
   tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', t('shop_tabs'));
   const list = el('div', 's-list'), room = el('aside', 's-detail'), main = el('div', 's-main');
@@ -87,9 +89,11 @@ export function createView(doc, { t, sheet, base = './' }) {
     const stand = el('span', 'stand'), niche = el('span', 'niche');
     niche.append(view.thumb(e, v));
     if (e.x.isNew && !row.owned) niche.append(el('span', 'flag', t('shop_sheet_new')));
+    const places = placesOf(v.pv, e.id), away = !isHere(places, v.platform);
+    if (away) { b.classList.add('elsewhere'); if (mixed) niche.append(view.placeMark(places, true)); }   // a shelf head carries the mark; a mixed list marks each away item
     stand.append(niche);
     b.append(stand);
-    if (bare) { b.setAttribute('aria-label', nameOf(e, t)); return b; }
+    if (bare) { b.setAttribute('aria-label', nameOf(e, t) + (away ? '. ' + awayLine(places, v.platform, t) : '')); return b; }
     const meta = el('span', 'meta');
     meta.append(statusNode(statusOf(e, ctx(v)), v), el('span', 'nm', nameOf(e, t)));
     if (e.x.how) meta.append(el('span', 'how', e.x.how));
@@ -116,7 +120,7 @@ export function createView(doc, { t, sheet, base = './' }) {
       const sec = el('section', 'sec fam-' + s.key);
       sec.append(view.sectionHead(s, v));
       if (s.empty) sec.append(el('p', 'empty', s.empty));
-      for (const plank of s.planks) { const g = el('div', 'grid'); g.append(...plank.map((e) => itemNode(e, v, on))); sec.append(g); }
+      for (const plank of s.planks) { const g = el('div', 'grid'); g.append(...plank.map((e) => itemNode(e, v, on, false, !!s.mixed))); sec.append(g); }
       return sec;
     }));
   }
@@ -171,7 +175,28 @@ export function createView(doc, { t, sheet, base = './' }) {
     thumb: (e, v) => artNode(artOf(e.id, v.index, e.fx || e.tab, base)),
     monitor(at, v) { const p = el('div', 'prev'); p.append(artNode(artOf(at ? at.id : '', v.index, at ? at.fx || at.tab : 'backroom', base), true)); return p; },
     idleRoom: () => [el('p', 'd-where', t('shop_sheet_pick'))],
-    placeRow: () => [], awayNote: () => [], roomExtra: () => [],
+    /** Works on: Desktop app, Website, Phone, each on or struck through, the one you are on underlined. */
+    placeRow(e, v) {
+      if (!e || !v.pv || !v.pv.places.size) return [];
+      const at = placesOf(v.pv, e.id), p = el('p', 'd-place');
+      p.append(el('span', null, t('shop_sheet_works_on')));
+      for (const pl of PLACES) {
+        const yes = at.includes(pl), c = el('span', 'pc ' + (yes ? 'on' : 'off') + (pl === v.platform ? ' here' : '')), i = el('span', 'ico');
+        i.innerHTML = PLACE_ICONS[pl];
+        c.append(i, el('span', null, t('shop_sheet_place_' + pl)));
+        c.setAttribute('aria-label', t('shop_sheet_place_' + pl) + ', ' + t(yes ? 'shop_sheet_place_yes' : 'shop_sheet_place_no') + (pl === v.platform ? ', ' + t('shop_sheet_you_are_here') : ''));
+        p.append(c);
+      }
+      return [p];
+    },
+    /** An item that does not show on this host: where it does, and that buying or wearing it here still counts. */
+    awayNote(e, v) {
+      if (!e || e.x.todo || (e.row.needs === 'prime' && v.tier < 2)) return [];
+      const at = placesOf(v.pv, e.id);
+      if (isHere(at, v.platform)) return [];
+      return [el('p', 'd-away', awayLine(at, v.platform, t) + ' ' + t(e.row.owned ? 'shop_sheet_away_owned' : 'shop_sheet_away_buy'))];
+    },
+    roomExtra: () => [],
     stage(e, v) { const s = el('div', 'stage'); s.append(view.thumb(e, v)); return s; },
     mini(e, v) { const s = el('span', 'mini-art'); s.append(view.thumb(e, v)); return s; },
     /** The place mark: the place icons and plain words; away = the paper tab an item wears where it does not show. */
@@ -188,12 +213,15 @@ export function createView(doc, { t, sheet, base = './' }) {
       wallet.setAttribute('aria-label', t('shop_wallet', v.sp));
       wallet.hidden = !!sheet || v.status === 'signed_out';
       search.hidden = v.status !== 'ready';
+      here.hidden = v.status !== 'ready' || v.platform === 'desktop' || !(v.pv && v.pv.places.size);
+      here.setAttribute('aria-pressed', String(!!v.hereOnly));
+      here.onpress = on.here;
       slip.hidden = !(v.pv && v.pv.preview);
       paintTabs(v, on); paintList(v, on); paintRoom(v, on); paintNudge(v, on);
     },
     roomHeading: () => room.children.find ? room.children.find((n) => n.tagName === 'H2') : room.querySelector('h2'),
   };
-  view.sectionHead = (s, v) => sectionHead(s.title, s.meta, s.key);
+  view.sectionHead = (s, v) => { const h = sectionHead(s.title, s.meta, s.key); if (s.places && v.pv && v.pv.places.size) h.append(view.placeMark(s.places, false)); return h; };
   return view;
 }
 

@@ -217,6 +217,8 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     },
     nudgeView(id) { ui.nudge = null; ui.tab = (locate(st(), id, pv()) || {}).group || ui.tab; if ((ui.fx || (shop.card() || {}).itemId) !== id) pick(id); else paint(); },
     nudgeClose() { ui.nudge = null; paint(); },
+    /** Works here (website, phone): only what shows on this host. */
+    here() { ui.hereOnly = !ui.hereOnly; paint(); },
     close: () => host.close('back'),
     signIn: () => host.signIn(),
   };
