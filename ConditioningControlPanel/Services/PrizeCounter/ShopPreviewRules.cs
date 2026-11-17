@@ -18,10 +18,17 @@ internal sealed class PreviewOwned
     [JsonProperty("paidSp")] public int PaidSp { get; set; }
 }
 
+/// <summary>One ledger line. The server sends fixed codes, never words (CCP-Server shop-ledger.js):
+/// <c>buy</c> and <c>coupon</c> name their row in <c>id</c>, <c>gift</c> is the Monday gift. The preview also
+/// mirrors desktop gains as <c>level</c>, <c>pops</c> and <c>play</c>. <c>t</c> is only an older preview
+/// file's English line, read back as it was.</summary>
 internal sealed class PreviewLedgerLine
 {
-    [JsonProperty("t")] public string T { get; set; } = "";
+    [JsonProperty("code", NullValueHandling = NullValueHandling.Ignore)] public string? Code { get; set; }
     [JsonProperty("n")] public int N { get; set; }
+    [JsonProperty("at", NullValueHandling = NullValueHandling.Ignore)] public string? At { get; set; }
+    [JsonProperty("id", NullValueHandling = NullValueHandling.Ignore)] public string? Id { get; set; }
+    [JsonProperty("t", NullValueHandling = NullValueHandling.Ignore)] public string? T { get; set; }
 }
 
 internal sealed class PreviewReceipt
@@ -43,7 +50,7 @@ internal sealed class ShopPreviewData
     [JsonProperty("mix")] public bool Mix { get; set; }
     /// <summary>The ISO week the gift was last opened in; null = never.</summary>
     [JsonProperty("giftWeek")] public string? GiftWeek { get; set; }
-    /// <summary>Day 1 of the stamp card, yyyy-MM-dd.</summary>
+    /// <summary>Day 1 of the stamp card (the day of the first stamp), yyyy-MM-dd; empty = no stamp yet.</summary>
     [JsonProperty("cardStart")] public string CardStart { get; set; } = "";
     [JsonProperty("stamped")] public List<int> Stamped { get; set; } = new();
     [JsonProperty("couponUsed")] public bool CouponUsed { get; set; }
@@ -64,10 +71,19 @@ internal readonly record struct PreviewOutcome(bool Ok, string? Reason, PreviewR
 /// the weekly gift, one stamp a day, the goal, equip. Pure: no file, no network, no app state; every rule
 /// takes the preview data and the time and changes only that data. <c>ShopPreviewBackend</c> keeps
 /// the file and answers the page.
+/// <para>THE STAMP CARD follows the server (CCP-Server shop-stamps.js, owner 2026-11-17): ONE card per
+/// account. Day 1 is the day of the first stamp, the card covers 14 days, one stamp a day, a missed day
+/// stays empty. At 6 stamps the coupon buys one row of tier S (the cheapest priced tier: it follows the
+/// tier, never a number). From day 15 the card is <c>done</c> for good: stamping answers <c>done</c>, no
+/// new card, an earned unused coupon still works.</para>
 /// </summary>
 internal static class ShopPreviewRules
 {
-    public const int StartSp = 410, GiftAmount = 25, CouponAt = 6, CardDays = 14, CouponPrice = 120;
+    public const int StartSp = 410, GiftAmount = 25, CouponAt = 6, CardDays = 14;
+    /// <summary>The tier a coupon buys (server COUPON_TIER).</summary>
+    public const string CouponTier = "S";
+    /// <summary>Ledger codes: the server's three, then the preview's mirrored desktop gains.</summary>
+    public const string CodeBuy = "buy", CodeCoupon = "coupon", CodeGift = "gift", CodeLevel = "level", CodePops = "pops", CodePlay = "play";
     public const int LedgerMax = 6, ReceiptsMax = 20, SpCap = 9_999_999;
     public const string CatalogVersion = "preview-1";
     public const string TabEffects = "effects";
@@ -130,17 +146,27 @@ internal static class ShopPreviewRules
                 d.Owned[(string)row["id"]!] = new PreviewOwned { At = (string?)o["at"] ?? Stamp(now), PaidSp = o.Value<int?>("paidSp") ?? 0 };
         foreach (var slot in Prizes.WornLooks.EffectSlots) d.Equip[slot] = Prizes.WornLooks.DefaultOf(slot)!;
         d.Equip[Prizes.WornLooks.Fog2] = Prizes.WornLooks.DefaultOf(Prizes.WornLooks.Fog2)!;
-        d.Ledger.Add(new PreviewLedgerLine { T = "Won at chess", N = 20 });
-        d.Ledger.Add(new PreviewLedgerLine { T = "Session finished", N = 12 });
-        d.Ledger.Add(new PreviewLedgerLine { T = "Rubber duck", N = -120 });
+        d.Ledger.Add(new PreviewLedgerLine { Code = CodePlay, N = 20, At = Stamp(now.AddHours(-1)) });
+        d.Ledger.Add(new PreviewLedgerLine { Code = CodePops, N = 12, At = Stamp(now.AddHours(-3)) });
+        d.Ledger.Add(new PreviewLedgerLine { Code = CodeBuy, N = -120, Id = "desk.toy.rubber-duck", At = Stamp(now.AddDays(-1)) });
+        if (Row(sample, "desk.toy.rubber-duck") != null) d.Owned["desk.toy.rubber-duck"] = new PreviewOwned { At = Stamp(now.AddDays(-1)), PaidSp = 120 };
         return d;
     }
 
     /// <summary>A preview file from an older catalogue (the Rose, Mint and Lilac bubble tints are gone):
     /// a worn row that is no longer a row of its slot puts back the slot's free row, and a goal that is no
-    /// longer in stock is cleared. Owned marks for gone rows stay in the file and do nothing.</summary>
+    /// longer in stock is cleared. Owned marks for gone rows stay in the file and do nothing.
+    /// A file from the old stamp rules (a card that restarted after day 14) reads as the one card: missing
+    /// lists come back empty, stamps outside days 1 to 14 or twice are dropped, an unreadable day 1 means no
+    /// card yet. Old English ledger lines stay as <c>t</c>; a line with neither code nor words goes.</summary>
     public static void Heal(ShopPreviewData d, JObject? sample)
     {
+        d.Owned ??= new(StringComparer.Ordinal);
+        d.Equip ??= new(StringComparer.Ordinal);
+        d.Receipts ??= new();
+        d.Ledger = (d.Ledger ?? new()).Where(l => l != null && (!string.IsNullOrEmpty(l.Code) || !string.IsNullOrEmpty(l.T))).Take(LedgerMax).ToList();
+        d.Stamped = (d.Stamped ?? new()).Where(n => n >= 1 && n <= CardDays).Distinct().OrderBy(n => n).ToList();
+        if (Start(d) == null) { d.CardStart = ""; d.Stamped.Clear(); }
         foreach (var slot in Prizes.WornLooks.EffectSlots.Append(Prizes.WornLooks.Fog2))
         {
             string want = slot == Prizes.WornLooks.Fog2 ? "fog" : slot;
@@ -153,21 +179,19 @@ internal static class ShopPreviewRules
     private static IEnumerable<JObject> SampleRows(JObject? sample)
         => sample?["tabs"] is JArray tabs ? tabs.SelectTokens("[*].shelves[*].rows[*]").OfType<JObject>() : Enumerable.Empty<JObject>();
 
-    /// <summary>Today's day on the stamp card (1 to 14). A card past day 14 starts again on day 1.</summary>
-    public static int CardDay(ShopPreviewData d, DateTimeOffset now)
-    {
-        if (!DateTime.TryParseExact(d.CardStart, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))
-            start = now.Date;
-        int day = (int)(now.Date - start.Date).TotalDays + 1;
-        if (day > CardDays || day < 1)
-        {
-            d.CardStart = Day(now);
-            d.Stamped.Clear();
-            d.CouponUsed = false;
-            day = 1;
-        }
-        return day;
-    }
+    /// <summary>Day 1 of the card, or null before the first stamp.</summary>
+    private static DateTime? Start(ShopPreviewData d)
+        => DateTime.TryParseExact(d.CardStart, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var s) ? s.Date : null;
+
+    /// <summary>The card's raw day number for <paramref name="now"/> (1 before the first stamp; past 14 once over).</summary>
+    private static int RawDay(ShopPreviewData d, DateTimeOffset now)
+        => Start(d) is { } s ? (int)(now.Date - s).TotalDays + 1 : 1;
+
+    /// <summary>Today's day on the one stamp card, 1 to 14 (day 14 stays shown once the card is over). Reads only.</summary>
+    public static int CardDay(ShopPreviewData d, DateTimeOffset now) => Math.Clamp(RawDay(d, now), 1, CardDays);
+
+    /// <summary>The card is over: day 15 and later. For good, there is no second card.</summary>
+    public static bool CardDone(ShopPreviewData d, DateTimeOffset now) => RawDay(d, now) > CardDays;
 
     public static bool CouponReady(ShopPreviewData d) => d.Stamped.Count >= CouponAt && !d.CouponUsed;
 
@@ -181,40 +205,37 @@ internal static class ShopPreviewRules
         return new DateTimeOffset(now.Date.AddDays(ahead), now.Offset);
     }
 
-    public static void Note(ShopPreviewData d, string text, int n)
+    /// <summary>A ledger line by code (never words), newest first, at most six.</summary>
+    public static void Note(ShopPreviewData d, string code, int n, DateTimeOffset now, string? id = null)
     {
-        d.Ledger.Insert(0, new PreviewLedgerLine { T = text, N = n });
+        d.Ledger.Insert(0, new PreviewLedgerLine { Code = code, N = n, Id = id, At = Stamp(now) });
         if (d.Ledger.Count > LedgerMax) d.Ledger.RemoveRange(LedgerMax, d.Ledger.Count - LedgerMax);
     }
 
-    /// <summary>A gain the desktop banked, mirrored into the preview wallet. A run of the same source
+    /// <summary>A gain the desktop banked, mirrored into the preview wallet. A run of the same code
     /// grows one ledger line instead of pushing the others out.</summary>
-    public static void Credit(ShopPreviewData d, int amount, string text)
+    public static void Credit(ShopPreviewData d, int amount, string code, DateTimeOffset now)
     {
         if (amount <= 0) return;
         d.Sp = (int)Math.Min(SpCap, (long)d.Sp + amount);
-        if (d.Ledger.Count > 0 && d.Ledger[0].T == text && d.Ledger[0].N > 0) d.Ledger[0].N += amount;
-        else Note(d, text, amount);
+        if (d.Ledger.Count > 0 && d.Ledger[0].Code == code && d.Ledger[0].N > 0) { d.Ledger[0].N += amount; d.Ledger[0].At = Stamp(now); }
+        else Note(d, code, amount, now);
     }
+
+    /// <summary>An effect row's tier letter from its price (the server's S, M, L); a free row has none.</summary>
+    internal static string? TierOf(int price) => price >= 730 ? "L" : price >= 360 ? "M" : price > 0 ? "S" : null;
 
     /// <summary>A row by id: an effect row, else a row of the bundled real tabs. Null = not in stock.</summary>
-    public static (int Price, string Sale, string? Needs, string Name)? Row(JObject? sample, string? id)
+    public static (int Price, string Sale, string? Needs, string? Tier)? Row(JObject? sample, string? id)
     {
         if (string.IsNullOrEmpty(id)) return null;
-        if (Effect(id) is { } e) return (e.Price, e.Todo ? "soon" : "on", null, e.Name);
+        if (Effect(id) is { } e) return (e.Price, e.Todo ? "soon" : "on", null, TierOf(e.Price));
         var row = SampleRows(sample).FirstOrDefault(r => (string?)r["id"] == id);
         if (row == null || row["priceSp"] is not JValue { Type: JTokenType.Integer } p) return null;
-        return (p.Value<int>(), (string?)row["sale"] ?? "on", (string?)row["needs"], NameOf(id));
+        return (p.Value<int>(), (string?)row["sale"] ?? "on", (string?)row["needs"], row["tier"]?.Type == JTokenType.String ? (string?)row["tier"] : null);
     }
 
-    /// <summary>A plain name for a ledger line from a real row id (the page names real rows itself).</summary>
-    internal static string NameOf(string id)
-    {
-        var last = id.Split('.').Last().Replace('-', ' ').Replace('_', ' ').Trim();
-        return last.Length == 0 ? id : char.ToUpperInvariant(last[0]) + last[1..];
-    }
-
-    /// <summary>A buy. Same idem again = the same receipt. A coupon buy takes any 120 row free, once per card.</summary>
+    /// <summary>A buy. Same idem again = the same receipt. A coupon buy takes one tier S row free, once per account.</summary>
     public static PreviewOutcome Buy(ShopPreviewData d, JObject? sample, string? itemId, string? idem, bool coupon, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(idem) || string.IsNullOrEmpty(itemId)) return PreviewOutcome.No("bad_input");
@@ -223,8 +244,8 @@ internal static class ShopPreviewRules
         if (Row(sample, itemId) is not { } row || row.Sale != "on") return PreviewOutcome.No("not_in_stock");
         if (d.Owned.ContainsKey(itemId)) return PreviewOutcome.No("owned");
         if (row.Needs == "discord") return PreviewOutcome.No("discord_required");
-        CardDay(d, now);
-        if (coupon && (!CouponReady(d) || row.Price != CouponPrice)) return PreviewOutcome.No("unavailable");
+        if (coupon && row.Tier != CouponTier) return PreviewOutcome.No("unavailable");
+        if (coupon && !CouponReady(d)) return PreviewOutcome.No("not_ready");
         int price = coupon ? 0 : row.Price;
         if (d.Sp < price) return PreviewOutcome.No("insufficient");
 
@@ -234,7 +255,7 @@ internal static class ShopPreviewRules
         d.Revision++;
         if (coupon) d.CouponUsed = true;
         if (d.Goal == itemId) d.Goal = null;
-        Note(d, coupon ? "Stamp card: " + row.Name : row.Name, -price);
+        Note(d, coupon ? CodeCoupon : CodeBuy, -price, now, itemId);
         d.Receipts.Insert(0, receipt);
         if (d.Receipts.Count > ReceiptsMax) d.Receipts.RemoveRange(ReceiptsMax, d.Receipts.Count - ReceiptsMax);
         return new(true, null, receipt);
@@ -279,25 +300,28 @@ internal static class ShopPreviewRules
     {
         if (!GiftReady(d, now)) return PreviewOutcome.No("not_ready");
         d.GiftWeek = IsoWeek(now);
-        Credit(d, GiftAmount, "Monday gift");
+        Note(d, CodeGift, GiftAmount, now);
+        d.Sp = (int)Math.Min(SpCap, (long)d.Sp + GiftAmount);
         return PreviewOutcome.Done;
     }
 
-    /// <summary>One stamp a day, on today's day of the card.</summary>
+    /// <summary>One stamp a day. The first stamp makes today day 1; after day 14 the card answers done.</summary>
     public static PreviewOutcome StampToday(ShopPreviewData d, DateTimeOffset now)
     {
-        int day = CardDay(d, now);
-        if (d.Stamped.Contains(day)) return PreviewOutcome.No("stamped");
-        d.Stamped.Add(day);
+        if (Start(d) == null) { d.CardStart = Day(now); d.Stamped.Clear(); }
+        int raw = RawDay(d, now);
+        if (raw > CardDays) return PreviewOutcome.No("done");
+        if (raw < 1 || d.Stamped.Contains(raw)) return PreviewOutcome.No("stamped");   // a clock behind day 1 stamps nothing
+        d.Stamped.Add(raw);
         d.Stamped.Sort();
         return PreviewOutcome.Done;
     }
 
-    /// <summary>Save for an item (null clears). Unknown ids and owned ones are refused.</summary>
+    /// <summary>Save for an item (null clears). Unknown or unsold ids answer unavailable, owned ones owned (as the server).</summary>
     public static PreviewOutcome SetGoal(ShopPreviewData d, JObject? sample, string? itemId)
     {
         if (itemId == null) { d.Goal = null; return PreviewOutcome.Done; }
-        if (Row(sample, itemId) == null) return PreviewOutcome.No("not_in_stock");
+        if (Row(sample, itemId) is not { Sale: "on" }) return PreviewOutcome.No("unavailable");
         if (d.Owned.ContainsKey(itemId)) return PreviewOutcome.No("owned");
         d.Goal = itemId;
         return PreviewOutcome.Done;
@@ -324,7 +348,7 @@ internal static class ShopPreviewRules
                 if (d.Owned.ContainsKey(e.Id)) grants.Add(grant);
                 var row = new JObject
                 {
-                    ["id"] = e.Id, ["tier"] = e.Price >= 730 ? "L" : e.Price >= 360 ? "M" : "S", ["priceSp"] = e.Price,
+                    ["id"] = e.Id, ["tier"] = TierOf(e.Price), ["priceSp"] = e.Price,
                     ["grants"] = new JArray(grant), ["owned"] = Owned(e.Id), ["sale"] = e.Todo ? "soon" : "on",
                     ["slot"] = e.Slot, ["name"] = e.Name, ["places"] = new JArray(DesktopOnly),
                 };
@@ -372,10 +396,20 @@ internal static class ShopPreviewRules
             ["stamps"] = new JObject
             {
                 ["day"] = day, ["stamped"] = new JArray(d.Stamped), ["couponAt"] = CouponAt,
-                ["couponReady"] = CouponReady(d), ["couponUsed"] = d.CouponUsed,
+                ["couponReady"] = CouponReady(d), ["couponUsed"] = d.CouponUsed, ["done"] = CardDone(d, now),
             },
             ["goal"] = d.Goal,
-            ["ledger"] = new JArray(d.Ledger.Take(LedgerMax).Select(l => new JObject { ["t"] = l.T, ["n"] = l.N })),
+            ["ledger"] = new JArray(d.Ledger.Take(LedgerMax).Select(LedgerJson)),
         };
+    }
+
+    /// <summary>A ledger line on the wire: <c>{ code, n, at, id? }</c> as the server sends it; an older
+    /// preview file's English line goes as <c>{ t, n }</c> (the page reads it only as a fallback).</summary>
+    private static JObject LedgerJson(PreviewLedgerLine l)
+    {
+        if (string.IsNullOrEmpty(l.Code)) return new JObject { ["t"] = l.T, ["n"] = l.N };
+        var o = new JObject { ["code"] = l.Code, ["n"] = l.N, ["at"] = l.At };
+        if (!string.IsNullOrEmpty(l.Id)) o["id"] = l.Id;
+        return o;
     }
 }

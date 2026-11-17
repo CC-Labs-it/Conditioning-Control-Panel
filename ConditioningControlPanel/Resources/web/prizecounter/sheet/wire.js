@@ -3,14 +3,17 @@
  * counter. state/shop.js keeps reading today's tabs; this reads the rest of the same body.
  *   readPreview  the shop-state body -> { preview, fx, extras, places, fresh, equip, gift, stamps, goal, ledger, front }
  *   placesOf / isHere / placeMark / awayParts   where a row shows (absent = everywhere)
- *   couponOn     the stamp card's free 120 item applies to this row */
+ *   couponOn     the stamp card's free item applies to this row (one row of tier S, the cheapest priced tier)
+ * The ledger is fixed codes ({ code, n, at, id? }: buy, coupon, gift on the server; level, pops, play from the preview's
+ * desktop gains); an older body's English { t, n } still reads, as a fallback. stamps.done = the one card is over. */
 
 import { readRow } from '../state/shop.js';
 
 export const PLACES = ['desktop', 'web', 'phone'];
 export const FX_SLOTS = ['bubble', 'card', 'behind', 'fog', 'word'];
 export const EQUIP_KEYS = [...FX_SLOTS, 'fog2'];
-export const COUPON_PRICE = 120;
+/** The tier a coupon buys (server shop-stamps.js COUPON_TIER): it follows the letter, never a number. */
+export const COUPON_TIER = 'S';
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
 const int = (v, d = 0) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d);
 const str = (v) => (typeof v === 'string' && v ? v : null);
@@ -34,16 +37,26 @@ function readExtra(r) {
 }
 
 const EMPTY = Object.freeze({ preview: false, fx: [], extras: new Map(), places: new Map(), fresh: [], equip: null, gift: null,
-  stamps: null, goal: undefined, ledger: null, front: false });
+  stamps: null, goal: undefined, ledger: null, front: false, couponPrice: null });
+
+/** A ledger line: { code, n, id } (server) or { t, n } (an older preview body), else null. */
+function readLine(l) {
+  if (!obj(l) || !Number.isFinite(Number(l.n))) return null;
+  if (str(l.code)) return { code: l.code, n: int(l.n), id: str(l.id) };
+  return str(l.t) ? { t: l.t, n: int(l.n) } : null;
+}
 
 export function readPreview(body) {
   const b = obj(body);
   if (!b || b.ok !== true) return EMPTY;
   const extras = new Map(), places = new Map(), fx = [];
+  let couponPrice = null;
   for (const tab of Array.isArray(b.tabs) ? b.tabs : []) {
     if (!obj(tab)) continue;
     for (const s of Array.isArray(tab.shelves) ? tab.shelves : []) for (const r of (obj(s) && Array.isArray(s.rows) ? s.rows : [])) {
       if (!obj(r) || !str(r.id)) continue;
+      const p = int(r.priceSp);
+      if (r.tier === COUPON_TIER && p > 0 && (couponPrice === null || p < couponPrice)) couponPrice = p;
       if ('places' in r) places.set(r.id, readPlaces(r.places));
       const x = readExtra(r);
       if (x) extras.set(r.id, x);
@@ -55,14 +68,17 @@ export function readPreview(body) {
   const gift = g ? { ready: g.ready === true, amount: Math.max(0, int(g.amount)), next: str(g.next) } : null;
   const stamps = s ? {
     day: Math.min(14, Math.max(1, int(s.day, 1))), stamped: [...new Set((Array.isArray(s.stamped) ? s.stamped : []).map((d) => int(d)).filter((d) => d >= 1 && d <= 14))].sort((x, y) => x - y),
-    couponAt: Math.max(1, int(s.couponAt, 6)), couponReady: s.couponReady === true, couponUsed: s.couponUsed === true,
+    couponAt: Math.max(1, int(s.couponAt, 6)), couponReady: s.couponReady === true, couponUsed: s.couponUsed === true, done: s.done === true,
   } : null;
   const goal = 'goal' in b ? str(b.goal) : undefined;   // undefined = no saving-for on this host; null = nothing picked yet
-  const ledger = Array.isArray(b.ledger) ? b.ledger.filter((l) => obj(l) && str(l.t) && Number.isFinite(Number(l.n))).slice(0, 6).map((l) => ({ t: l.t, n: int(l.n) })) : null;
+  const ledger = Array.isArray(b.ledger) ? b.ledger.map(readLine).filter(Boolean).slice(0, 6) : null;
   const fresh = Array.isArray(b.fresh) ? b.fresh.filter(str) : [];
-  return { preview: b.preview === true, fx, extras, places, fresh, equip, gift, stamps, goal, ledger,
+  return { preview: b.preview === true, fx, extras, places, fresh, equip, gift, stamps, goal, ledger, couponPrice,
     front: fresh.length > 0 || !!gift || !!stamps || goal !== undefined || !!ledger };
 }
+
+/** The stamp card has nothing left to show: over, and its coupon spent or never earned (the front page drops it). */
+export const cardGone = (s) => !!(s && s.done && !s.couponReady);
 
 export const placesOf = (pv, id) => (pv && pv.places.get(id)) || PLACES;
 /** A host that does not say where it runs is the desktop app (WPF sends platform 'desktop'). */
@@ -82,6 +98,7 @@ export function awayLine(places, platform, t) {
   return t('shop_sheet_away', places.map(where).join(t('shop_sheet_and')), where(platform));
 }
 
-/** The stamp card's coupon: a ready coupon makes any unowned, buyable 120 tag free. */
+/** The stamp card's coupon: a ready coupon makes any unowned, buyable tier S row free (a row with no tier letter:
+ * one at the tier's price). */
 export const couponOn = (pv, row) => !!(pv && pv.stamps && pv.stamps.couponReady && row && !row.owned && row.sale === 'on'
-  && row.needs !== 'prime' && row.priceSp === COUPON_PRICE);
+  && row.needs !== 'prime' && row.priceSp > 0 && (row.tier ? row.tier === COUPON_TIER : row.priceSp === pv.couponPrice));

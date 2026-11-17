@@ -105,7 +105,11 @@ export const SHEET_LEX = {
   shop_sheet_stamp_go: 'Stamp day {0}',
   shop_sheet_stamped_today: 'Stamped today',
   shop_sheet_coupon: '1 free item',
-  shop_sheet_coupon_terms: 'any 120 tag, at {0} stamps',
+  shop_sheet_coupon_terms: 'any {1} tag, at {0} stamps',
+  shop_sheet_coupon_terms_any: 'one small item, at {0} stamps',
+  shop_sheet_stamp_finished: 'Finished',
+  shop_sheet_stamp_over: 'Card done, with {0} stamps.',
+  shop_sheet_stamp_over_keep: 'Card done. Your free item still works.',
   shop_sheet_coupon_ready: 'Ready. Pick one.',
   shop_sheet_coupon_used: 'Claimed.',
   shop_sheet_coupon_count: '{0} of {1} stamps',
@@ -125,6 +129,21 @@ export const SHEET_LEX = {
   shop_sheet_view: 'View',
   shop_sheet_dismiss: 'Dismiss',
   shop_sheet_refused: 'That did not go through.',
+  shop_sheet_no_stamped: 'Already stamped today.',
+  shop_sheet_no_done: 'The stamp card is finished.',
+  shop_sheet_no_not_ready: 'Not ready yet.',
+  shop_sheet_no_owned: 'You already own this.',
+  shop_sheet_no_not_owned: 'Buy it first, then wear it.',
+  shop_sheet_no_unavailable: 'Not on offer right now.',
+  shop_sheet_no_short: 'Not enough Sparkles.',
+  // the receipt: the server sends codes, these are their words
+  shop_sheet_led_buy: 'Bought an item',
+  shop_sheet_led_coupon: 'Stamp card: {0}',
+  shop_sheet_led_coupon_any: 'Stamp card item',
+  shop_sheet_led_level: 'Level up',
+  shop_sheet_led_pops: 'Bubble pops',
+  shop_sheet_led_play: 'Earned playing',
+  shop_sheet_led_other: 'Sparkles moved',
   // where things show
   shop_sheet_works_here: 'Works here',
   shop_sheet_works_on: 'Works on',
@@ -148,3 +167,13 @@ export const SHEET_LEX = {
 };
 
 export const sheetT = (lexicon, companion) => makeT({ ...SHEET_LEX, ...(lexicon && typeof lexicon === 'object' ? lexicon : {}) }, companion);
+
+/** A refusal's line, one per reason the server and the host answer (CCP-Server shop-routes.js): retry words for the
+ * host's own answers, a plain line for each shop reason, one plain line for anything else. */
+const REFUSAL = {
+  offline: 'shop_note_retry', timeout: 'shop_note_retry', busy: 'shop_note_retry', too_fast: 'shop_note_retry', signed_out: 'shop_note_signed_out',
+  stamped: 'shop_sheet_no_stamped', done: 'shop_sheet_no_done', not_ready: 'shop_sheet_no_not_ready', owned: 'shop_sheet_no_owned',
+  not_owned: 'shop_sheet_no_not_owned', unavailable: 'shop_sheet_no_unavailable', needs_prime: 'shop_prime_reason', insufficient: 'shop_sheet_no_short',
+  bad_input: 'shop_sheet_refused',
+};
+export const refusalKey = (res) => REFUSAL[(res && res.reason) || 'offline'] || 'shop_sheet_refused';

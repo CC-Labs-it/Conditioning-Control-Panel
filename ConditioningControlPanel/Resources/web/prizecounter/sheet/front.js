@@ -83,26 +83,32 @@ export function installFront(view, { t, locale }) {
     return box;
   }
 
+  /* The one stamp card (one per account, 14 days from the first stamp). Once it is over (s.done) it stays as a finished
+   * card with its stamps and no Stamp button while an earned coupon waits; sheet/model.js frontModel drops it after. */
   function stampCard(s, v, on) {
-    const stamped = s.stamped.includes(s.day), c = el('div', 'scard on-paper'), h = el('div', 'scard-h');
-    h.append(el('b', null, t('shop_sheet_stamp_card')), el('span', null, t('shop_sheet_stamp_days')));
+    const done = s.done, stamped = s.stamped.includes(s.day), c = el('div', 'scard on-paper' + (done ? ' done' : '')), h = el('div', 'scard-h');
+    h.append(el('b', null, t('shop_sheet_stamp_card')), el('span', null, t(done ? 'shop_sheet_stamp_finished' : 'shop_sheet_stamp_days')));
     const dots = el('div', 'dots');
     for (let d = 1; d <= 14; d++) {
-      const on1 = s.stamped.includes(d), sp = el('span', on1 ? 'on' + (v.freshStamp === d ? ' fresh' : '') : d === s.day ? 'today' : null);
+      const on1 = s.stamped.includes(d), today = !done && d === s.day, sp = el('span', on1 ? 'on' + (v.freshStamp === d ? ' fresh' : '') : today ? 'today' : null);
       if (on1) sp.append(el('i')); else sp.textContent = String(d);
       sp.setAttribute('role', 'img');
-      sp.setAttribute('aria-label', t(on1 ? 'shop_sheet_stamp_stamped' : d === s.day ? 'shop_sheet_stamp_today' : 'shop_sheet_stamp_day', d));
+      sp.setAttribute('aria-label', t(on1 ? 'shop_sheet_stamp_stamped' : today ? 'shop_sheet_stamp_today' : 'shop_sheet_stamp_day', d));
       dots.append(sp);
     }
-    const n = s.stamped.length;
+    const n = s.stamped.length, price = v.pv && v.pv.couponPrice;
     const cp = el('div', 'coupon' + (s.couponReady ? ' ready' : s.couponUsed ? ' used' : ''));
     const snip = el('span', 'snip');
     snip.innerHTML = SCISSORS; snip.setAttribute('aria-hidden', 'true');
-    cp.append(snip, el('b', null, t('shop_sheet_coupon')), el('span', null, t('shop_sheet_coupon_terms', s.couponAt)),
+    cp.append(snip, el('b', null, t('shop_sheet_coupon')), el('span', null, price ? t('shop_sheet_coupon_terms', s.couponAt, price) : t('shop_sheet_coupon_terms_any', s.couponAt)),
       el('em', null, s.couponReady ? t('shop_sheet_coupon_ready') : s.couponUsed ? t('shop_sheet_coupon_used') : t('shop_sheet_coupon_count', Math.min(n, s.couponAt), s.couponAt)));
-    const foot = el('div', 'scard-f'), btn = button('btn ink', t(stamped ? 'shop_sheet_stamped_today' : 'shop_sheet_stamp_go', s.day), 'stamp', (viaKey) => on.stamp(viaKey));
-    btn.disabled = stamped;
-    foot.append(btn);
+    const foot = el('div', 'scard-f');
+    if (done) foot.append(el('p', 'scard-over', t(s.couponReady ? 'shop_sheet_stamp_over_keep' : 'shop_sheet_stamp_over', n)));
+    else {
+      const btn = button('btn ink', t(stamped ? 'shop_sheet_stamped_today' : 'shop_sheet_stamp_go', s.day), 'stamp', (viaKey) => on.stamp(viaKey));
+      btn.disabled = stamped;
+      foot.append(btn);
+    }
     c.append(h, dots, cp, foot);
     return c;
   }
@@ -129,7 +135,7 @@ export function installFront(view, { t, locale }) {
     const s = el('section', 'sec'), r = el('div', 'rcpt');
     s.append(head(t('shop_sheet_receipt'), null, 'rcpt'));
     const line = (text, n, cls) => { const d = el('div', cls); d.append(el('span', null, text), el('i'), el('b', n > 0 && !cls ? 'pos' : null, cls ? String(n) : (n > 0 ? '+' : '') + n)); return d; };
-    for (const l of f.ledger) r.append(line(ledgerText(v.state, v.pv, t, l.t), l.n));
+    for (const l of f.ledger) r.append(line(ledgerText(v.state, v.pv, t, l), l.n));
     r.append(line(t('shop_sheet_in_wallet'), v.sp, 'sum'));
     s.append(r);
     return s;

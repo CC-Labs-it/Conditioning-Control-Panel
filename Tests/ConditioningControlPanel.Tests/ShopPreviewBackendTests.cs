@@ -92,7 +92,7 @@ public class ShopPreviewBackendTests
             Assert.False(WornLooks.MixOn);
 
             var b = new ShopPreviewBackend(path, Sample(), () => Now);
-            b.Credit(400, "Level up");
+            b.Credit(400, ShopPreviewRules.CodeLevel);
             b.Handle("shop-buy", new JObject { ["itemId"] = "fx.bubble.champagne" }, "w1");
             WornLooks.Source = b.Worn;
             WornLooks.Changed += Listen;
@@ -140,10 +140,42 @@ public class ShopPreviewBackendTests
     }
 
     [Fact]
-    public void Desktop_credits_get_a_plain_ledger_line()
+    public void Desktop_credits_get_a_ledger_code_never_words()
     {
-        Assert.Equal("Level up", ShopPreviewBackend.CreditText(SparklePointSource.LevelUp));
-        Assert.Equal("Bubble pops", ShopPreviewBackend.CreditText(SparklePointSource.BubbleMilestone));
-        Assert.Equal("Earned elsewhere", ShopPreviewBackend.CreditText(SparklePointSource.Place));
+        Assert.Equal("level", ShopPreviewBackend.CreditCode(SparklePointSource.LevelUp));
+        Assert.Equal("pops", ShopPreviewBackend.CreditCode(SparklePointSource.BubbleMilestone));
+        Assert.Equal("play", ShopPreviewBackend.CreditCode(SparklePointSource.Place));
+    }
+
+    [Fact]
+    public void A_file_from_the_old_stamp_rules_loads_as_the_one_card()
+    {
+        // Written by the earlier preview: English ledger lines, a card that would have restarted after day 14.
+        var path = TempFile();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "{ \"v\": 1, \"sp\": 300, \"cardStart\": \"2026-10-20\", \"stamped\": [1, 2, 3, 4, 5, 6, 6, 19],"
+                + " \"couponUsed\": false, \"ledger\": [ { \"t\": \"Monday gift\", \"n\": 25 }, { \"t\": \"Rubber duck\", \"n\": -120 } ],"
+                + " \"receipts\": null, \"equip\": null, \"owned\": null }");
+            var b = new ShopPreviewBackend(path, Sample(), () => Now);
+            var s = b.Handle("shop-state", null, null);
+            Assert.True((bool)s["ok"]!);
+            var stamps = (JObject)s["stamps"]!;
+            Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, stamps["stamped"]!.Values<int>().ToArray());
+            Assert.Equal((14, true, true), ((int)stamps["day"]!, (bool)stamps["done"]!, (bool)stamps["couponReady"]!));
+            Assert.Equal("Monday gift", (string?)s["ledger"]![0]!["t"]);
+            Assert.Equal("done", (string?)b.Handle("shop-stamp", new JObject(), null)["reason"]);
+            var claim = b.Handle("shop-buy", new JObject { ["itemId"] = "fx.card.ink", ["coupon"] = true }, "old-1");
+            Assert.True((bool)claim["ok"]!);
+            Assert.Equal("coupon", (string?)claim["ledger"]![0]!["code"]);
+            Assert.Equal("not_ready", (string?)b.Handle("shop-buy", new JObject { ["itemId"] = "fx.card.check", ["coupon"] = true }, "old-2")["reason"]);
+
+            File.WriteAllText(path, "{ \"v\": 1, \"sp\": 5, \"stamped\": null, \"ledger\": null }");
+            var bare = new ShopPreviewBackend(path, Sample(), () => Now).Handle("shop-state", null, null);
+            Assert.Equal((1, false), ((int)bare["stamps"]!["day"]!, (bool)bare["stamps"]!["done"]!));
+            Assert.Empty((JArray)bare["ledger"]!);
+        }
+        finally { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } }
     }
 }

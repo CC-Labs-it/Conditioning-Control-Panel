@@ -10,7 +10,7 @@
 import { createShop } from '../state/shop.js';
 import { asHost } from '../host.js';
 import { createPressGuard, keyName } from '../state/press-guard.js';
-import { sheetT } from './strings.js';
+import { sheetT, refusalKey } from './strings.js';
 import { readPreview, platformOf, placesOf, isHere } from './wire.js';
 import { roomModel, fxRoom, locate, slotOf, OWNED, FEATURED, groupOf, sheetTabs, badgeCount, goalEntry, labelOf, rowsOf, buyable } from './model.js';
 import { createView } from './view.js';
@@ -24,10 +24,6 @@ import { installJuice } from './juice.js';   // juice (Lane MOTION)
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const pressKey = (e) => e.key === 'Enter' || e.key === ' ' || e.code === 'Space' || e.code === 'NumpadEnter';
 const SOLD_MS = 1700, NUDGE_MS = 7000;
-/** A refusal's line: retry words for the host's own answers, one plain line for anything else (the preview backend's
- * not_owned, not_ready, stamped, unavailable included). */
-const REFUSAL = { offline: 'shop_note_retry', timeout: 'shop_note_retry', busy: 'shop_note_retry', signed_out: 'shop_note_signed_out' };
-const refusalKey = (res) => REFUSAL[(res && res.reason) || 'offline'] || 'shop_sheet_refused';
 
 export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win = globalThis.window, now = () => performance.now(),
   frame = (f) => requestAnimationFrame(f), base = './', later = (f, ms) => setTimeout(f, ms), newIdem = mintIdem,

@@ -10,7 +10,7 @@
 import { faceOf } from '../state/shop.js';
 import { tabKey, itemName } from '../state/strings.js';
 import { cardModel } from '../hud/card.js';
-import { readPreview, FX_SLOTS, placesOf, isHere, couponOn } from './wire.js';
+import { readPreview, FX_SLOTS, placesOf, isHere, couponOn, cardGone } from './wire.js';
 
 export const OWNED = 'owned', FEATURED = 'featured', EFFECTS = 'effects';
 export const NO_PREVIEW = readPreview(null);
@@ -48,8 +48,21 @@ const uniq = (list) => { const seen = new Set(); return list.filter((e) => !seen
 /** The name on a card: the wire's name for an effect row ("Heart"), else the item name. label adds the slot's noun ("Heart bubbles"). */
 export const nameOf = (e, t) => (e.fx ? e.x.name || e.id.split('.').pop() : itemName(t, e.id));
 export const labelOf = (e, t) => (e.fx ? t('shop_sheet_fx_label', nameOf(e, t), t('shop_sheet_noun_' + e.fx)) : nameOf(e, t));
-/** The ledger's line: an item id reads as its name, anything else is the host's own words. */
-export const ledgerText = (st, pv, t, text) => { const e = locate(st, text, pv); return e ? labelOf(e, t) : text; };
+/** The words for each ledger code (the server sends codes, never words). buy and coupon name their row. */
+const LEDGER_WORDS = { gift: 'shop_sheet_gift', level: 'shop_sheet_led_level', pops: 'shop_sheet_led_pops', play: 'shop_sheet_led_play' };
+/** The ledger's line: a code reads as its words (an unknown code as a neutral line, never the code); an older body's
+ * { t } (or a bare string) reads as an item's name when it is an item id, else as the host's own words. */
+export const ledgerText = (st, pv, t, line) => {
+  const l = typeof line === 'string' ? { t: line } : line || {};
+  if (l.code) {
+    const e = l.id ? locate(st, l.id, pv) : null;
+    if (l.code === 'buy') return e ? labelOf(e, t) : t('shop_sheet_led_buy');
+    if (l.code === 'coupon') return e ? t('shop_sheet_led_coupon', labelOf(e, t)) : t('shop_sheet_led_coupon_any');
+    return t(LEDGER_WORDS[l.code] || 'shop_sheet_led_other');
+  }
+  const e = locate(st, l.t, pv);
+  return e ? labelOf(e, t) : String(l.t || t('shop_sheet_led_other'));
+};
 
 /** A shelf head's place mark: the places every row on it shares, or null when they differ. */
 function sharedPlaces(list, pv) {
@@ -187,7 +200,7 @@ export const goalReady = (st, pv, sp) => { const g = goalEntry(st, pv); return !
 /** What waits on the Featured tab: an unopened gift, today's stamp, a ready coupon, a reached goal. */
 export function badgeCount(st, pv, sp) {
   const s = pv.stamps;
-  return (pv.gift && pv.gift.ready ? 1 : 0) + (s && !s.stamped.includes(s.day) ? 1 : 0) + (s && s.couponReady ? 1 : 0) + (goalReady(st, pv, sp) ? 1 : 0);
+  return (pv.gift && pv.gift.ready ? 1 : 0) + (s && !s.done && !s.stamped.includes(s.day) ? 1 : 0) + (s && s.couponReady ? 1 : 0) + (goalReady(st, pv, sp) ? 1 : 0);
 }
 
 /** The Featured page. ctx: { sp, tier, pv, platform, hereOnly, spot (an "Also new" chip the player put under the light) }. Every part is null (goal: undefined) when the wire did not send it. */
@@ -201,7 +214,7 @@ export function frontModel(st, ctx) {
   return {
     hostNote: platform !== 'desktop',
     spot: fresh[0] || null, also: fresh.slice(1),
-    gift: pv.gift, stamps: pv.stamps,
+    gift: pv.gift, stamps: cardGone(pv.stamps) ? null : pv.stamps,   // a finished card stays while its coupon waits
     goal: pv.goal === undefined ? undefined : g && !g.row.owned ? { entry: g, have: Math.min(sp, g.row.priceSp), price: g.row.priceSp, left: Math.max(0, g.row.priceSp - sp) } : null,
     ledger: pv.ledger, can,
   };

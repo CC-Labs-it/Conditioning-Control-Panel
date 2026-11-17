@@ -154,19 +154,23 @@ public class ShopPreviewRulesTests
     }
 
     [Fact]
-    public void The_coupon_takes_one_120_row_free_at_six_stamps()
+    public void The_coupon_takes_one_tier_S_row_free_at_six_stamps()
     {
         var d = Fresh();
-        Assert.Equal("unavailable", ShopPreviewRules.Buy(d, Sample(), "fx.card.ink", "c0", true, Now).Reason);
+        Assert.Equal("not_ready", ShopPreviewRules.Buy(d, Sample(), "fx.card.ink", "c0", true, Now).Reason);
         d.Stamped.AddRange(new[] { 3, 5, 6 });
         Assert.True(ShopPreviewRules.CouponReady(d));
-        Assert.Equal("unavailable", ShopPreviewRules.Buy(d, Sample(), "fx.card.lace", "c1", true, Now).Reason);   // 360
+        Assert.Equal("unavailable", ShopPreviewRules.Buy(d, Sample(), "fx.card.lace", "c1", true, Now).Reason);   // tier M
         var r = ShopPreviewRules.Buy(d, Sample(), "fx.card.ink", "c2", true, Now);
         Assert.True(r.Ok);
         Assert.Equal(0, r.Receipt!.PaidSp);
         Assert.Equal(410, d.Sp);
         Assert.True(d.CouponUsed);
-        Assert.Equal("unavailable", ShopPreviewRules.Buy(d, Sample(), "fx.card.check", "c3", true, Now).Reason);
+        Assert.Equal(("coupon", "fx.card.ink", 0), (d.Ledger[0].Code, d.Ledger[0].Id, d.Ledger[0].N));
+        Assert.Equal("not_ready", ShopPreviewRules.Buy(d, Sample(), "fx.card.check", "c3", true, Now).Reason);
+        // The coupon follows the tier letter: every effect row it takes is the cheapest priced tier.
+        Assert.All(ShopPreviewRules.Effects.Where(e => e.Price > 0 && ShopPreviewRules.TierOf(e.Price) == ShopPreviewRules.CouponTier),
+            e => Assert.Equal(ShopPreviewRules.Effects.Where(x => x.Price > 0).Min(x => x.Price), e.Price));
     }
 
     [Fact]
@@ -175,22 +179,82 @@ public class ShopPreviewRulesTests
         var d = Fresh();
         Assert.True(ShopPreviewRules.OpenGift(d, Now).Ok);
         Assert.Equal(435, d.Sp);
-        Assert.Equal("Monday gift", d.Ledger[0].T);
+        Assert.Equal(("gift", 25), (d.Ledger[0].Code, d.Ledger[0].N));
+        Assert.Null(d.Ledger[0].T);
         Assert.Equal("not_ready", ShopPreviewRules.OpenGift(d, Now.AddDays(5)).Reason);   // Sunday, same week
         Assert.True(ShopPreviewRules.OpenGift(d, Now.AddDays(6)).Ok);                      // Monday
         Assert.Equal(460, d.Sp);
     }
 
     [Fact]
-    public void One_stamp_a_day_and_the_card_starts_again_after_day_14()
+    public void One_stamp_a_day_one_card_per_account_and_done_after_day_14()
     {
-        var d = Fresh();
+        var d = Fresh();   // day 5, stamps 1, 2, 4
         Assert.True(ShopPreviewRules.StampToday(d, Now).Ok);
         Assert.Equal(new[] { 1, 2, 4, 5 }, d.Stamped);
         Assert.Equal("stamped", ShopPreviewRules.StampToday(d, Now.AddHours(8)).Reason);
-        Assert.True(ShopPreviewRules.StampToday(d, Now.AddDays(1)).Ok);
-        Assert.Equal(1, ShopPreviewRules.CardDay(d, Now.AddDays(10)));   // day 15: a fresh card
+        Assert.True(ShopPreviewRules.StampToday(d, Now.AddDays(1)).Ok);    // day 6
+        Assert.True(ShopPreviewRules.StampToday(d, Now.AddDays(3)).Ok);    // day 8; day 7 stays empty
+        Assert.Equal(new[] { 1, 2, 4, 5, 6, 8 }, d.Stamped);
+        Assert.True(ShopPreviewRules.CouponReady(d));
+
+        Assert.Equal(14, ShopPreviewRules.CardDay(d, Now.AddDays(9)));
+        Assert.False(ShopPreviewRules.CardDone(d, Now.AddDays(9)));
+        var day15 = Now.AddDays(10);
+        Assert.True(ShopPreviewRules.CardDone(d, day15));
+        Assert.Equal(14, ShopPreviewRules.CardDay(d, day15));
+        Assert.Equal("done", ShopPreviewRules.StampToday(d, day15).Reason);
+        Assert.Equal("done", ShopPreviewRules.StampToday(d, Now.AddDays(60)).Reason);   // never a second card
+        Assert.Equal(new[] { 1, 2, 4, 5, 6, 8 }, d.Stamped);
+
+        var s = (JObject)ShopPreviewRules.BuildState(d, Sample(), day15)["stamps"]!;
+        Assert.True((bool)s["done"]!);
+        Assert.True((bool)s["couponReady"]!);                             // an earned coupon outlives the card
+        Assert.True(ShopPreviewRules.Buy(d, Sample(), "fx.word.type", "late", true, Now.AddDays(20)).Ok);
+        s = (JObject)ShopPreviewRules.BuildState(d, Sample(), Now.AddDays(20))["stamps"]!;
+        Assert.Equal((true, false, true), ((bool)s["done"]!, (bool)s["couponReady"]!, (bool)s["couponUsed"]!));
+    }
+
+    [Fact]
+    public void The_first_stamp_is_day_1_and_before_it_there_is_no_card()
+    {
+        var d = Fresh();
+        d.CardStart = "";
+        d.Stamped.Clear();
+        var s = (JObject)ShopPreviewRules.BuildState(d, Sample(), Now)["stamps"]!;
+        Assert.Equal((1, 0, false), ((int)s["day"]!, ((JArray)s["stamped"]!).Count, (bool)s["done"]!));
+        Assert.Equal(1, ShopPreviewRules.CardDay(d, Now.AddDays(30)));   // no stamp yet: still day 1, never done
+        Assert.True(ShopPreviewRules.StampToday(d, Now).Ok);
+        Assert.Equal("2026-11-17", d.CardStart);
+        Assert.Equal(new[] { 1 }, d.Stamped);
+        Assert.Equal("stamped", ShopPreviewRules.StampToday(d, Now.AddDays(-1)).Reason);   // a clock behind day 1
+        Assert.True(ShopPreviewRules.StampToday(d, Now.AddDays(13)).Ok);
+        Assert.Equal(new[] { 1, 14 }, d.Stamped);
+        Assert.Equal("done", ShopPreviewRules.StampToday(d, Now.AddDays(14)).Reason);
+    }
+
+    [Fact]
+    public void An_old_rules_file_heals_into_the_one_card()
+    {
+        var d = Fresh();
+        d.CardStart = "garbage";
+        d.Stamped = null!;
+        d.Ledger = new() { new PreviewLedgerLine { T = "Won at chess", N = 20 }, new PreviewLedgerLine { N = 3 } };
+        d.Receipts = null!;
+        ShopPreviewRules.Heal(d, Sample());
+        Assert.Equal("", d.CardStart);
         Assert.Empty(d.Stamped);
+        Assert.Single(d.Ledger);
+        Assert.NotNull(d.Receipts);
+        var line = (JObject)ShopPreviewRules.BuildState(d, Sample(), Now)["ledger"]![0]!;
+        Assert.Equal("Won at chess", (string?)line["t"]);
+        Assert.Null(line["code"]);
+
+        d.CardStart = "2026-10-01";
+        d.Stamped = new() { 3, 1, 1, 15, 0, 2 };
+        ShopPreviewRules.Heal(d, Sample());
+        Assert.Equal(new[] { 1, 2, 3 }, d.Stamped);
+        Assert.True(ShopPreviewRules.CardDone(d, Now));
     }
 
     [Fact]
@@ -198,7 +262,8 @@ public class ShopPreviewRulesTests
     {
         var d = Fresh();
         Assert.Equal("owned", ShopPreviewRules.SetGoal(d, Sample(), "fx.bubble.soap").Reason);
-        Assert.Equal("not_in_stock", ShopPreviewRules.SetGoal(d, Sample(), "nope").Reason);
+        Assert.Equal("unavailable", ShopPreviewRules.SetGoal(d, Sample(), "nope").Reason);
+        Assert.Equal("unavailable", ShopPreviewRules.SetGoal(d, Sample(), "fx.bubble.gum").Reason);   // not out yet
         Assert.True(ShopPreviewRules.SetGoal(d, Sample(), "fx.card.ink").Ok);
         Assert.Equal("fx.card.ink", d.Goal);
         Assert.True(ShopPreviewRules.Buy(d, Sample(), "fx.card.ink", "g", false, Now).Ok);
@@ -245,13 +310,19 @@ public class ShopPreviewRulesTests
     public void Credits_grow_one_ledger_line_per_run_and_the_ledger_keeps_six()
     {
         var d = Fresh();
-        ShopPreviewRules.Credit(d, 1, "Bubble pops");
-        ShopPreviewRules.Credit(d, 1, "Bubble pops");
-        ShopPreviewRules.Credit(d, 0, "Bubble pops");
+        ShopPreviewRules.Credit(d, 1, ShopPreviewRules.CodePops, Now);
+        ShopPreviewRules.Credit(d, 1, ShopPreviewRules.CodePops, Now);
+        ShopPreviewRules.Credit(d, 0, ShopPreviewRules.CodePops, Now);
         Assert.Equal(412, d.Sp);
-        Assert.Equal(2, d.Ledger[0].N);
-        for (int i = 0; i < 9; i++) ShopPreviewRules.Note(d, "x" + i, 1);
+        Assert.Equal((ShopPreviewRules.CodePops, 2), (d.Ledger[0].Code, d.Ledger[0].N));
+        for (int i = 0; i < 9; i++) ShopPreviewRules.Note(d, "x" + i, 1, Now);
         Assert.Equal(ShopPreviewRules.LedgerMax, d.Ledger.Count);
-        Assert.Equal("x8", d.Ledger[0].T);
+        Assert.Equal("x8", d.Ledger[0].Code);
+        // On the wire every line is a code with its time, never English words.
+        var buy = ShopPreviewRules.Buy(d, Sample(), "fx.bubble.heart", "led", false, Now);
+        Assert.True(buy.Ok);
+        var line = (JObject)ShopPreviewRules.BuildState(d, Sample(), Now)["ledger"]![0]!;
+        Assert.Equal(new[] { "code", "n", "at", "id" }, line.Properties().Select(p => p.Name).ToArray());
+        Assert.Equal(("buy", -360, "fx.bubble.heart"), ((string?)line["code"], (int)line["n"]!, (string?)line["id"]));
     }
 }
