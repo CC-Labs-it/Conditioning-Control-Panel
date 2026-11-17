@@ -8923,5 +8923,15 @@
   "shop_item_bubbles_v2_name": "Bolle v2",
   "shop_item_rt_bundle_1_name": "Pacchetto Racing Thoughts 1",
   "shop_item_rt_bundle_2_name": "Pacchetto Racing Thoughts 2",
-  "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3"
+  "shop_item_rt_bundle_3_name": "Pacchetto Racing Thoughts 3",
+  "starthere_title": "Inizia da qui",
+  "starthere_intro": "Quattro cose da sapere prima di cominciare. Questa scheda resta nell'Aiuto se vuoi rivederla.",
+  "starthere_row_packs": "L'app include solo CCP Default. Altre immagini, video e audio arrivano come pacchetti di contenuti, condivisi ogni giorno in #asset-packs sul nostro Discord.",
+  "starthere_row_first": "Prova prima l'Overlay a spirale in Studio. Le spirali sono incluse e parte al 10% di opacità, facile da alzare dopo.",
+  "starthere_row_settings": "Le Impostazioni sono l'ingranaggio in fondo alla barra laterale: account, audio, monitor, dispositivi.",
+  "starthere_row_panic": "Il tuo tasto panico è {0}. Premilo in qualsiasi momento per fermare tutto. Si cambia in Impostazioni > Dispositivi.",
+  "starthere_show": "Mostrami",
+  "starthere_open": "Apri",
+  "starthere_done": "Ho capito",
+  "help_starthere": "Inizia da qui: pacchetti, primi passi, tasto panico"
 }

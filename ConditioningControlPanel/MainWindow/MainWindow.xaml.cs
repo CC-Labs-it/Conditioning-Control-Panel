@@ -587,7 +587,8 @@ namespace ConditioningControlPanel
                                 && !Dispatcher.HasShutdownStarted)
                             {
                                 EnqueueStartupModal("first-show", 25,
-                                    _ => Services.FirstShow.FirstShowService.Open(this));
+                                    _ => Services.FirstShow.FirstShowService.Open(this,
+                                        onEnded: OfferStartHereIfNeeded));
                             }
                         }
                         finally
