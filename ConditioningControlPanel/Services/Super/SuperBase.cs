@@ -39,6 +39,23 @@ namespace ConditioningControlPanel.Services.Super
         public static SuperEffect? EffectFor(string? propertyName)
             => propertyName != null && ByProperty.TryGetValue(propertyName, out var e) ? e : null;
 
+        /// <summary>
+        /// The effect whose V2 a Studio rack row carries (the row keys of StudioTabView), or null
+        /// for a row with none. The rack lights its "v2" pill from this.
+        /// </summary>
+        public static SuperEffect? EffectForRackKey(string? rackKey) => rackKey?.ToLowerInvariant() switch
+        {
+            "flash" => SuperEffect.FlickerDeck,
+            "bubbles" => SuperEffect.InnerBloom,
+            "subliminal" => SuperEffect.Afterglow,
+            "spiral" => SuperEffect.Vortex,
+            "pinkfilter" => SuperEffect.Creep,
+            "video" => SuperEffect.LightsDown,
+            "bouncingtext" => SuperEffect.Scrawl,
+            "braindrain" => SuperEffect.Undertow,
+            _ => null,
+        };
+
         /// <summary>Is the base feature switched on in <paramref name="s"/>. No settings = off.</summary>
         public static bool IsBaseOn(SuperEffect effect, AppSettings? s)
         {

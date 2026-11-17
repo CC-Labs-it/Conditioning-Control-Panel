@@ -894,7 +894,10 @@ namespace ConditioningControlPanel.Views.Tabs
             // column once this block has added one - and the state dot, added second, drew on top
             // of the pill. Flash and Bubble Pop are the only rows that carry both, and they are
             // exactly the two rows the v2 prizes badge.
-            if (V2PillFamily(e.Key) != null)
+            //
+            // 7.3.1: every row whose effect has a V2 carries the pill, lit while that V2 is on
+            // (testers, 2026-11-15: only Flash Images wore it).
+            if (WearsV2Pill(e.Key))
             {
                 grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 e.V2Pill = Features.FeatureCard.NewV2Badge(new Thickness(6, 0, 0, 0), compact: true);
@@ -995,7 +998,7 @@ namespace ConditioningControlPanel.Views.Tabs
 
             // Same pill as the resting strip, right-anchored just inside the dot's slot so the
             // caption keeps its room. See RefreshV2Pills.
-            if (V2PillFamily(e.Key) != null)
+            if (WearsV2Pill(e.Key))
             {
                 e.TileV2Pill = Features.FeatureCard.NewV2Badge(new Thickness(0, 0, TilePillInset, 0), compact: true);
                 e.TileV2Pill.HorizontalAlignment = HorizontalAlignment.Right;
@@ -1530,11 +1533,17 @@ namespace ConditioningControlPanel.Views.Tabs
             _ => null,
         };
 
+        /// <summary>A row carries the pill when it fronts a v2 prize family or an effect with a V2.</summary>
+        private static bool WearsV2Pill(string? rackKey)
+            => V2PillFamily(rackKey) != null || Services.Super.SuperBase.EffectForRackKey(rackKey) != null;
+
         /// <summary>
-        /// Lights or hides the V2 pill on the flash and bubbles rows from live ownership. One
-        /// rule for every surface: <see cref="Services.Prizes.V2Badges"/>. Called on load and
-        /// from <c>PrizeGrants.GrantsChanged</c>, so a prize bought in the Back Room shows on
-        /// the rack without a restart.
+        /// Lights or hides the V2 pill on each row. Two reasons to light it, either is enough:
+        /// the account owns a Back Room v2 prize for the row (flash and bubbles only, one rule
+        /// for every surface: <see cref="Services.Prizes.V2Badges"/>), or the row's V2 effect is
+        /// switched on and unlocked (<see cref="Services.Super.SuperAccess.IsSelected"/>). Called
+        /// on load, from <c>PrizeGrants.GrantsChanged</c> and from <c>SuperAccess.Changed</c>, so
+        /// a prize bought in the Back Room or a star flipped shows on the rack at once.
         /// </summary>
         private void RefreshV2Pills()
         {
@@ -1543,9 +1552,14 @@ namespace ConditioningControlPanel.Views.Tabs
             try { bubbles = Services.Prizes.V2Badges.BubbleOwned(); } catch { bubbles = false; }
             foreach (var e in _entries)
             {
+                if (e.V2Pill == null && e.TileV2Pill == null) continue;
                 var fam = V2PillFamily(e.Key);
-                if (fam == null) continue;
-                var vis = (fam == "flash" ? flash : bubbles) ? Visibility.Visible : Visibility.Collapsed;
+                bool lit = fam == "flash" ? flash : fam == "bubbles" && bubbles;
+                if (!lit && Services.Super.SuperBase.EffectForRackKey(e.Key) is { } effect)
+                {
+                    try { lit = Services.Super.SuperAccess.IsSelected(effect); } catch { lit = false; }
+                }
+                var vis = lit ? Visibility.Visible : Visibility.Collapsed;
                 if (e.V2Pill != null) e.V2Pill.Visibility = vis;
                 if (e.TileV2Pill != null)
                 {
@@ -1556,11 +1570,14 @@ namespace ConditioningControlPanel.Views.Tabs
         }
 
         private bool _grantsHooked;
+        private bool _superHooked;
 
         private void OnGrantsChanged()
         {
             try { Dispatcher.BeginInvoke(new Action(RefreshV2Pills)); } catch { }
         }
+
+        private void OnSuperChanged(Services.Super.SuperEffect _) => OnGrantsChanged();
 
         private void RefreshDots()
         {
@@ -1647,6 +1664,12 @@ namespace ConditioningControlPanel.Views.Tabs
                 // The rack lives for the whole session, so this is a once-only hook by design.
                 try { Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged; _grantsHooked = true; }
                 catch (Exception ex) { App.Logger?.Debug("StudioTabView grants hook: {E}", ex.Message); }
+            }
+            if (!_superHooked)
+            {
+                // Once only, as the grants hook: a star flipped, a tier change or a preset.
+                Services.Super.SuperAccess.Changed += OnSuperChanged;
+                _superHooked = true;
             }
             RefreshV2Pills();
             // Per-module hosting wiring contributed by the module partials

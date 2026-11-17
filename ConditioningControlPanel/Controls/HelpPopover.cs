@@ -191,7 +191,7 @@ namespace ConditioningControlPanel.Controls
             var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
             line.Children.Add(new TextBlock
             {
-                Text = "\u2605", FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
+                Text = "\u2605", FontFamily = new FontFamily(Services.GlyphFonts.Symbol),
                 Foreground = V2Gold, FontSize = 11, Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center,
             });
             line.Children.Add(new TextBlock
