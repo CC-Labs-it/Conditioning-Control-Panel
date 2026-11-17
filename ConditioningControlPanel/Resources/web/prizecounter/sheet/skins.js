@@ -95,6 +95,22 @@ function loomTex(l, glow, size, doc) {
   return cv;
 }
 
+/* ---------- Disco: the tipped mirror sphere and its palette (as CCP.Core/Bubbles/BubbleSkins.Disco.cs) ---------- */
+/** The page has no mod colours (init carries none): the ball wears the desktop's fallback, pink, gold, cyan, lilac. */
+export const DISCO = [0xff3d9e, 0xffc229, 0x29d9ff, 0x9e6bff];
+const DISCO_BALL = 0.98, TILT = 0.38, ROLL = -0.2;
+const hump = (ph) => { const s = Math.sin(ph); return s <= 0 ? 0 : s * s * s; };   // swells and settles, never a step
+const unit = (x, y, z) => { const n = Math.hypot(x, y, z); return [x / n, y / n, z / n]; };
+function ball(lat, lon) {
+  const x = Math.cos(lat) * Math.sin(lon), y = Math.sin(lat), z = Math.cos(lat) * Math.cos(lon), y1 = y * Math.cos(TILT) + z * Math.sin(TILT), z1 = -y * Math.sin(TILT) + z * Math.cos(TILT);
+  return [x * Math.cos(ROLL) - y1 * Math.sin(ROLL), x * Math.sin(ROLL) + y1 * Math.cos(ROLL), z1];
+}
+const limb = (p) => { if (p[2] >= 0) return p; const d = Math.hypot(p[0], p[1]); return d > 1e-9 ? [p[0] / d, p[1] / d] : p; };
+const mixRgb = (a, b, k) => [16, 8, 0].reduce((o, sh) => o | (Math.round(lerp((a >> sh) & 255, (b >> sh) & 255, k)) << sh), 0);
+const rgba = (n, a) => 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+/** A hue for u in 0..1; in a five-hue mod palette the first two (accent, secondary) come up twice as often. */
+const pick = (pal, u) => { const n = pal.length, slots = n >= 5 ? n + 2 : n, k = clamp(Math.floor(u * slots), 0, slots - 1); return pal[n >= 5 ? (k < 4 ? k >> 1 : k - 2) : k]; };
+
 /* ---------- particles ---------- */
 const P = (w, o) => { o.t = 0; o.rot = o.rot || 0; if (w.p.length < (w.cap || 600)) w.p.push(o); };
 const wave = (w, b, color, grow, life) => P(w, { kind: 'wave', x: b.x, y: b.y, size: b.r, grow: grow || 1.7, life: life || 0.38, color, vx: 0, vy: 0, g: 0, drag: 0 });
@@ -125,7 +141,8 @@ export function drawParts(w) {
       case 'wave': c.strokeStyle = p.color; c.lineWidth = Math.max(0.5, p.size * 0.09 * (1 - u)); c.beginPath(); c.arc(0, 0, p.size * (1 + (p.grow - 1) * (1 - (1 - u) * (1 - u))), 0, TAU); c.stroke(); break;
       case 'shard': c.rotate(p.rot); c.beginPath(); p.pts.forEach((q, i) => (i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]))); c.closePath();
         c.fillStyle = p.color; c.fill(); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 1; c.stroke(); break;
-      case 'square': { c.rotate(p.rot); const f = Math.abs(Math.sin(p.rot * 1.7)); c.globalAlpha = a * (0.35 + 0.65 * f); c.fillStyle = f > 0.8 ? '#ffffff' : p.color; c.fillRect(-p.size / 2, -p.size / 2 * (0.3 + 0.7 * f), p.size, p.size * (0.3 + 0.7 * f)); break; }
+      case 'square': { c.rotate(p.rot); const f = p.soft ? 0.6 : Math.abs(Math.sin(p.rot * 1.7)), hh = p.size * (0.3 + 0.7 * f); c.globalAlpha = a * (0.45 + 0.55 * f); c.fillStyle = p.color; c.fillRect(-p.size / 2, -hh / 2, p.size, hh);
+        if (!p.soft) { c.globalAlpha = a * Math.pow(f, 6) * 0.6; c.fillStyle = '#ffffff'; c.fillRect(-p.size / 2, -hh / 2, p.size, hh); } break; }   // a shard catches the light and lets it go, never switched
       case 'beam': { c.rotate(p.rot + u * p.vr0); const g = c.createLinearGradient(0, 0, p.size, 0); g.addColorStop(0, p.color); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.globalAlpha = a * 0.7;
         c.beginPath(); c.moveTo(0, 0); c.lineTo(p.size * (0.4 + u), -p.size * (p.wd || 0.05)); c.lineTo(p.size * (0.4 + u), p.size * (p.wd || 0.05)); c.closePath(); c.fill(); break; }
       case 'flake': c.rotate(p.rot); c.strokeStyle = p.color; c.lineWidth = Math.max(1, p.size * 0.28); c.beginPath();
@@ -326,48 +343,71 @@ export const SKINS = {
     } },
 
   disco: { pre: 0.09, rise: 0.9,
+    init(b) { b.pal = b.pal || DISCO; },
     draw(c, b, t, k) {
-      const r = b.r, R = r * 0.98, rot = t * 0.55 + b.seed;
-      for (let m = 0; m < 8; m++) { const an = t * 0.5 * (m % 2 ? 1 : -1) + m * 0.8, rr = r * (1.1 + 0.14 * hash(b.seed, m)), al = 0.16 + 0.12 * Math.sin(t * 2 + m);
-        c.fillStyle = m % 2 ? 'rgba(255,90,170,' + al + ')' : 'rgba(255,255,255,' + al + ')'; c.beginPath(); c.arc(Math.cos(an) * rr, Math.sin(an) * rr, r * 0.028 + 0.3, 0, TAU); c.fill(); }
-      c.save(); c.rotate(-0.2);
+      const r = b.r, R = r * DISCO_BALL, pal = b.pal || DISCO, amp = b.gentle ? 0.78 : 1, flare = b.gentle ? 0 : k;
+      t *= b.gentle ? 0.5 : 1;   // Gentle: slower and softer, as the desktop's Reduced scale
+      const rot = t * 0.55 + hash(b.seed, 29) * TAU, sh = b.seed % 89;
+      // Thrown light first: thin rays from behind the limb, light spots circling the way the ball turns.
+      for (let m = 0, n = r < 32 ? 3 : 5; m < n; m++) {
+        const an = hash(b.seed + 51, m) * TAU + rot * 0.5, len = r * (0.16 + 0.1 * hash(b.seed + 53, m));
+        const al = (0.1 + 0.45 * hump(t * (0.7 + 0.5 * hash(b.seed + 57, m)) + hash(b.seed + 59, m) * TAU)) * amp;
+        c.save(); c.rotate(an); c.translate(R - r * 0.02, 0);
+        const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, rgba(pal[(m + 1) % pal.length], al)); g.addColorStop(1, rgba(pal[(m + 1) % pal.length], 0));
+        c.fillStyle = g; c.beginPath(); c.moveTo(0, -len * 0.09); c.lineTo(len, -len * 0.02); c.lineTo(len, len * 0.02); c.lineTo(0, len * 0.09); c.closePath(); c.fill(); c.restore();
+      }
+      for (let m = 0, n = r < 32 ? 8 : 14; m < n; m++) {
+        const an = hash(b.seed + 61, m) * TAU + rot, rr = r * (1.05 + 0.17 * hash(b.seed + 67, m)), s = r * (0.018 + 0.016 * hash(b.seed + 71, m)) + 0.3;
+        const al = 0.1 + 0.55 * hump(t * (0.9 + 0.9 * hash(b.seed + 73, m)) + hash(b.seed + 79, m) * TAU) * amp, col = mixRgb(pal[m % pal.length], 0xffffff, 0.25);
+        c.fillStyle = rgba(col, al * 0.3); c.beginPath(); c.arc(Math.cos(an) * rr, Math.sin(an) * rr, s * 2.2, 0, TAU); c.fill();
+        c.fillStyle = rgba(col, al); c.beginPath(); c.arc(Math.cos(an) * rr, Math.sin(an) * rr, s, 0, TAU); c.fill();
+      }
       const g = c.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.05, 0, 0, r); g.addColorStop(0, '#3a3644'); g.addColorStop(1, '#09080d');
       c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fill();
-      c.save(); c.beginPath(); c.arc(0, 0, R, 0, TAU); c.clip();
-      const rows = r < 30 ? 9 : 13, cols = r < 30 ? 18 : 28, dph = Math.PI / rows, dth = TAU / cols, gp = 0.08, glints = [];   // every facet is a real patch of the sphere
-      const l1 = [Math.cos(t * 0.9 + b.seed) * 0.62, Math.sin(t * 0.7) * 0.45 - 0.3, 0.68], l2 = [-Math.cos(t * 0.6 + 2 + b.seed) * 0.6, Math.sin(t * 0.8 + 1) * 0.5, 0.62];
+      // Every facet is a real patch of the tipped sphere in a palette hue: dark mirror until a light or its own slow
+      // shimmer catches it (so a dim warm hue never turns to brown), then its colour, white only at the key light's core.
+      const rows = clamp(Math.round(r * 0.17), 7, 13), cols = Math.min(28, rows * 2 + 2), dph = Math.PI / rows, dth = TAU / cols, gp = 0.08;
+      const s0 = hash(b.seed, 31) * TAU, l1 = unit(Math.cos(t * 0.9 + s0) * 0.62, Math.sin(t * 0.7) * 0.45 - 0.3, 0.68), l2 = unit(-Math.cos(t * 0.6 + 2 + s0) * 0.6, Math.sin(t * 0.8 + 1) * 0.5, 0.62);
+      const dpos = t * 0.16 + hash(b.seed, 37) * pal.length, di = Math.floor(dpos), drift = mixRgb(pal[((di % pal.length) + pal.length) % pal.length], pal[(((di + 1) % pal.length) + pal.length) % pal.length], smooth(0.55, 1, dpos - di));
+      const dr = (drift >> 16 & 255) / 255, dg = (drift >> 8 & 255) / 255, db = (drift & 255) / 255;
       for (let i = 0; i < rows; i++) {
         const pa = -Math.PI / 2 + (i + gp) * dph, pb = -Math.PI / 2 + (i + 1 - gp) * dph, pm = (pa + pb) / 2;
-        const ya = Math.sin(pa) * R, yb = Math.sin(pb) * R, ca = Math.cos(pa) * R, cb = Math.cos(pb) * R, cm = Math.cos(pm), sm = Math.sin(pm);
         for (let j = 0; j < cols; j++) {
-          const th = j * dth + rot + (i % 2) * dth * 0.5, ta = th + dth * gp, tb = th + dth * (1 - gp), tm = (ta + tb) / 2, cz = Math.cos(tm);
-          if (cz <= 0) continue;
-          const sa = Math.cos(ta) < 0 ? Math.sign(Math.sin(ta)) : Math.sin(ta), sb = Math.cos(tb) < 0 ? Math.sign(Math.sin(tb)) : Math.sin(tb);
-          const h = hash(i * 53 + (b.seed % 89), j), nx = Math.sin(tm) * cm + (h - 0.5) * 0.22, ny = sm + (hash(j + 7, i) - 0.5) * 0.22, nzz = cz * cm;
-          const lam = Math.max(0, -0.45 * nx - 0.55 * ny + 0.7 * nzz);
-          const s1 = Math.pow(Math.max(0, nx * l1[0] + ny * l1[1] + nzz * l1[2]), 18), s2 = Math.pow(Math.max(0, nx * l2[0] + ny * l2[1] + nzz * l2[2]), 14);
-          c.fillStyle = 'rgb(' + Math.min(255, Math.round(26 + 70 * lam + 255 * s1 + 255 * s2)) + ',' + Math.min(255, Math.round(26 + 70 * lam + 255 * s1 + 70 * s2)) + ',' + Math.min(255, Math.round(34 + 82 * lam + 255 * s1 + 170 * s2)) + ')';
-          c.beginPath(); c.moveTo(sa * ca, ya); c.lineTo(sb * ca, ya); c.lineTo(sb * cb, yb); c.lineTo(sa * cb, yb); c.closePath(); c.fill();
-          if (s1 + s2 > 0.8) glints.push([(sa + sb) / 2 * cm * R, (ya + yb) / 2, s1 > s2, s1 + s2]);
+          const th = j * dth + rot + (i % 2) * dth * 0.5, ta = th + dth * gp, tb = th + dth * (1 - gp), tm = (ta + tb) / 2, q = ball(pm, tm);
+          if (q[2] <= 0.02) continue;
+          let nx = q[0] + (hash(i * 53 + sh, j) - 0.5) * 0.22, ny = q[1] + (hash(j + 7, i + sh) - 0.5) * 0.22, nz = q[2];
+          const nn = Math.hypot(nx, ny, nz); nx /= nn; ny /= nn; nz /= nn;
+          const lam = Math.max(0, -0.45 * nx - 0.55 * ny + 0.7 * nz), d1 = Math.max(0, nx * l1[0] + ny * l1[1] + nz * l1[2]), d2 = Math.max(0, nx * l2[0] + ny * l2[1] + nz * l2[2]);
+          const s1 = Math.pow(d1, 16), s2 = Math.pow(d2, 12), w2 = Math.pow(d2, 3) * 0.3;
+          let tw = hump(t * (1.1 + 1.3 * hash(i + sh, j + 11)) + hash(j + 3, i * 7 + sh) * TAU); tw *= tw * amp;
+          const hue = pick(pal, hash(i * 31 + sh, j * 17 + 5)), kk = Math.pow(Math.min(1, 0.1 + 0.14 * lam + 0.95 * tw + 0.85 * s1 + 0.55 * s2 + 0.5 * flare), 1.6);
+          const wh = 0.3 * s1 * s1 + 0.12 * tw * tw + 0.04 * flare, lit = w2 + 0.35 * s2;
+          const ch = (base, sh8, dc) => Math.min(255, Math.round(255 * (base + ((hue >> sh8) & 255) / 255 * kk + wh + dc * lit)));
+          c.fillStyle = 'rgb(' + ch(0.085 + 0.1 * lam, 16, dr) + ',' + ch(0.08 + 0.09 * lam, 8, dg) + ',' + ch(0.13 + 0.15 * lam, 0, db) + ')';
+          const p0 = limb(ball(pa, ta)), p1 = limb(ball(pa, tb)), p2 = limb(ball(pb, tb)), p3 = limb(ball(pb, ta));
+          c.beginPath(); c.moveTo(p0[0] * R, p0[1] * R); c.lineTo(p1[0] * R, p1[1] * R); c.lineTo(p2[0] * R, p2[1] * R); c.lineTo(p3[0] * R, p3[1] * R); c.closePath(); c.fill();
         }
       }
-      const vg = c.createRadialGradient(0, 0, R * 0.5, 0, 0, R); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)');
-      c.fillStyle = vg; c.fillRect(-R, -R, 2 * R, 2 * R);
-      c.restore();
+      const vg = c.createRadialGradient(0, 0, R * 0.55, 0, 0, R); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,' + (0.47 * (1 - 0.3 * flare)) + ')');
+      c.fillStyle = vg; c.beginPath(); c.arc(0, 0, R, 0, TAU); c.fill();
       c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, R, 0, TAU); c.stroke();
-      glints.sort((a, d) => d[3] - a[3]); const lit = [];
-      for (const q of glints) { if (lit.length >= 2) break; if (lit.some((o) => o[2] === q[2] || Math.hypot(o[0] - q[0], o[1] - q[1]) < r * 0.5)) continue; lit.push(q); }
-      for (const q of lit) star4(c, q[0], q[1], r * 0.17 * Math.min(1, q[3]), q[2] ? 'rgba(255,255,255,.95)' : 'rgba(255,150,205,.95)');
-      c.restore();
-      if (k > 0) { c.fillStyle = 'rgba(255,255,255,' + k * (b.gentle ? 0.25 : 0.9) + ')'; c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fill(); }
+      // Star glints ride the tiles round, each swelling and settling on its own clock; never more than seven.
+      for (let gi = 0, n = r < 32 ? 4 : 7; gi < n; gi++) {
+        const q = ball(Math.asin(hash(b.seed + 81, gi) * 1.6 - 0.8), hash(b.seed + 83, gi) * TAU + rot), life = hump(t * (0.6 + 0.5 * hash(b.seed + 87, gi)) + hash(b.seed + 89, gi) * TAU);
+        const al = life * smooth(0.15, 0.65, q[2]) * (0.45 + 0.55 * amp);
+        if (al < 0.01) continue;
+        const s = r * (0.1 + 0.08 * hash(b.seed + 91, gi)) * (0.45 + 0.55 * life), col = gi % 3 ? mixRgb(pal[gi % pal.length], 0xffffff, 0.45) : 0xffffff;
+        let x = q[0] * R, y = q[1] * R; const d = Math.hypot(x, y), mx = R - s; if (d > mx && d > 0) { x *= Math.max(0, mx) / d; y *= Math.max(0, mx) / d; }
+        star4(c, x, y, s, rgba(col, 0.95 * al)); c.fillStyle = 'rgba(255,255,255,' + 0.9 * al + ')'; c.beginPath(); c.arc(x, y, s * 0.16, 0, TAU); c.fill();
+      }
     },
     burst(w, b) {
-      const r = b.r;
-      wave(w, b, 'rgba(255,255,255,.8)', 2, 0.32);
-      for (let i = 0; i < 12; i++) P(w, { kind: 'beam', x: b.x, y: b.y, rot: i / 12 * TAU + b.rnd(), vr0: 0.8, wd: 0.028, size: r * 2.8, life: 0.5, color: i % 2 ? 'rgba(255,90,170,.9)' : 'rgba(255,255,255,.9)', vx: 0, vy: 0 });
+      const r = b.r, pal = b.pal || DISCO;
+      wave(w, b, rgba(mixRgb(pal[0], 0xffffff, 0.5), 0.8), 2, 0.32);
+      if (!b.gentle) for (let i = 0; i < 12; i++) P(w, { kind: 'beam', x: b.x, y: b.y, rot: i / 12 * TAU + b.rnd(), vr0: 0.8, wd: 0.028, size: r * 2.8, life: 0.5, color: i % 3 ? rgba(pal[i % pal.length], 0.9) : 'rgba(255,255,255,.9)', vx: 0, vy: 0 });
       for (let i = 0, n = many(b, 96); i < n; i++) { const an = b.rnd() * TAU, v = r * (1.5 + b.rnd() * 5.5), d = b.rnd() * r * 0.8;
-        P(w, { kind: 'square', x: b.x + Math.cos(an) * d, y: b.y + Math.sin(an) * d, vx: Math.cos(an) * v, vy: Math.sin(an) * v - r, g: r * 5, drag: 1.9, life: 0.7 + b.rnd() * 0.8, size: r * (0.028 + b.rnd() * 0.035) + 0.5, rot: b.rnd() * 6, vr: (b.rnd() - 0.5) * 18, color: i % 4 ? '#b9b6c9' : '#ff4fa8' }); }
-      for (let i = 0, n = many(b, 16); i < n; i++) { const an = b.rnd() * TAU, v = r * (1 + b.rnd() * 4); P(w, { kind: 'star', x: b.x + Math.cos(an) * r * 0.6, y: b.y + Math.sin(an) * r * 0.6, vx: Math.cos(an) * v, vy: Math.sin(an) * v, g: r * 2, drag: 2, life: 0.4 + b.rnd() * 0.6, size: r * (0.07 + b.rnd() * 0.08), tw: 12 + b.rnd() * 12, color: i % 3 ? 'rgba(255,255,255,.95)' : 'rgba(255,150,205,.95)' }); }
+        P(w, { kind: 'square', x: b.x + Math.cos(an) * d, y: b.y + Math.sin(an) * d, vx: Math.cos(an) * v, vy: Math.sin(an) * v - r, g: r * 5, drag: 1.9, life: 0.7 + b.rnd() * 0.8, size: r * (0.028 + b.rnd() * 0.035) + 0.5, rot: b.rnd() * 6, vr: (b.rnd() - 0.5) * (b.gentle ? 5 : 18), color: hex(i < pal.length ? pal[i] : pick(pal, b.rnd())), soft: b.gentle }); }
+      for (let i = 0, n = many(b, 16); i < n; i++) { const an = b.rnd() * TAU, v = r * (1 + b.rnd() * 4); P(w, { kind: 'star', x: b.x + Math.cos(an) * r * 0.6, y: b.y + Math.sin(an) * r * 0.6, vx: Math.cos(an) * v, vy: Math.sin(an) * v, g: r * 2, drag: 2, life: 0.4 + b.rnd() * 0.6, size: r * (0.07 + b.rnd() * 0.08), tw: b.gentle ? 2.5 : 12 + b.rnd() * 12, color: i % 3 ? rgba(mixRgb(pal[i % pal.length], 0xffffff, 0.4), 0.95) : 'rgba(255,255,255,.95)' }); }
     },
     sfx(b, t, au) {
       for (let i = 0; i < 3; i++) au.nz(t + i * 0.012, 0.02, 0.3, 'bandpass', 1500, 0, 1.4); au.nz(t + 0.036, 0.16, 0.22, 'bandpass', 1300, 0, 0.9);

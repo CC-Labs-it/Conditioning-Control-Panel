@@ -54,6 +54,8 @@ public sealed partial class BubbleLayer
         item.Skin = skin;
         item.SkinSeed = seed;
         item.SkinStartMs = System.Environment.TickCount64;
+        // Disco wears the mod's colours as they are now: a mod switch reaches the next bubbles.
+        if (skin == BubbleSkinIds.Disco) item.SkinPalette = DiscoPaletteSource.Current();
     }
 
     /// <summary>MotionFx (Gentle visuals included) as a scale: Full 1, Reduced half, Off a still frame.

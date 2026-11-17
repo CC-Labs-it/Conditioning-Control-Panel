@@ -317,6 +317,38 @@ public class BubbleSkinsTests
     private static readonly DiscoPalette ModLike = DiscoPalette.FromMod(0xFF69B4, 0x9B59B6);
 
     [Fact]
+    public void Disco_palette_comes_from_the_mod_colours_with_neighbours_and_falls_back()
+    {
+        Assert.Equal(4, DiscoPalette.Fallback.Count);
+        Assert.True(DiscoPalette.FromMod(null, null).SameAs(DiscoPalette.Fallback));
+        Assert.True(DiscoPalette.FromMod(0x808080, 0x7A7A7A).SameAs(DiscoPalette.Fallback), "greys are no party");
+        Assert.Equal(5, ModLike.Count);
+        Assert.True(ModLike.SameAs(DiscoPalette.FromMod(0xFF69B4, 0x9B59B6)), "the same colours give the same palette");
+        // The accent and the secondary lead, in their own hue; every colour is saturated, none grey.
+        Assert.InRange(Math.Abs(DiscoPalette.Hsv(ModLike[0]).H - DiscoPalette.Hsv(0xFF69B4).H), 0, 2);
+        Assert.InRange(Math.Abs(DiscoPalette.Hsv(ModLike[1]).H - DiscoPalette.Hsv(0x9B59B6).H), 0, 2);
+        for (int i = 0; i < ModLike.Count; i++)
+        {
+            var hsv = DiscoPalette.Hsv(ModLike[i]);
+            Assert.True(hsv.S >= .6 && hsv.V >= .88, $"hue {i}: {ModLike[i]:X6}");
+        }
+        Assert.Equal(5, DiscoPalette.FromMod(0x00FF41, null).Count);   // one colour still makes a party
+        Assert.True(DiscoPalette.TryParseHex("#FF69B4", out var rgb) && rgb == 0xFF69B4);
+        Assert.True(DiscoPalette.TryParseHex("#80FF69B4", out rgb) && rgb == 0xFF69B4);
+        Assert.False(DiscoPalette.TryParseHex("pink", out _));
+        Assert.True(DiscoPaletteSource.For(null, null).SameAs(DiscoPalette.Fallback));
+        Assert.True(DiscoPaletteSource.For("#FF69B4", "#9B59B6").SameAs(ModLike));
+        Assert.True(DiscoPaletteSource.Current().Count > 0);   // no mod service here: never throws
+        // A Disco bubble takes the palette when it is made; other skins carry none.
+        var item = new BubbleLayer.BubbleItem();
+        BubbleLayer.ApplySkin(item, BubbleSkinIds.Disco, 7);
+        Assert.NotNull(item.SkinPalette);
+        var champ = new BubbleLayer.BubbleItem();
+        BubbleLayer.ApplySkin(champ, Champ, 7);
+        Assert.Null(champ.SkinPalette);
+    }
+
+    [Fact]
     public void Disco_facets_are_sphere_patches_inside_the_ball_in_saturated_palette_hues()
     {
         const string D = BubbleSkinIds.Disco;

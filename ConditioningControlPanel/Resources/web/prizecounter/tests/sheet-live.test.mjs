@@ -7,7 +7,7 @@ import { fakeDocument } from './fake-dom.mjs';
 import { createPreviewServer } from '../mock/preview.js';
 import { asHost } from '../host.js';
 import { mountSheet } from '../sheet/main.js';
-import { SKINS, skinOf, makeBubble, popBubble, stepBubble, stepParts, rollSpec, rng } from '../sheet/skins.js';
+import { SKINS, DISCO, skinOf, makeBubble, popBubble, stepBubble, stepParts, rollSpec, rng } from '../sheet/skins.js';
 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
 
@@ -48,4 +48,30 @@ test('the shelves draw effect items on live canvases, and the fitting room shows
   const shelfCanvas = item('fx.bubble.heart').all().find((n) => n.tagName === 'CANVAS');
   page.pick('fx.bubble.heart');
   assert.equal(item('fx.bubble.heart').all().find((n) => n.tagName === 'CANVAS'), shelfCanvas, 'a repaint keeps the same live canvas');
+});
+
+test('disco wears its palette: coloured tiles, shards in its hues, no beams and no strobe under Gentle', () => {
+  const fills = [];
+  const grad = () => ({ addColorStop() {} });
+  const ctx = new Proxy({}, {
+    get: (o, k) => (k in o ? o[k] : k === 'createLinearGradient' || k === 'createRadialGradient' ? grad : () => {}),
+    set: (o, k, v) => { o[k] = v; if (k === 'fillStyle' && typeof v === 'string') fills.push(v); return true; },
+  });
+  const b = makeBubble('disco', 0, 0, 40, { doc: null });
+  for (const t of [0.5, 1.7, 3.1]) SKINS.disco.draw(ctx, b, t, 0);
+  const tiles = fills.filter((f) => f.startsWith('rgb(')).map((f) => f.slice(4, -1).split(',').map(Number));
+  const hot = tiles.filter(([r, g, bl]) => Math.max(r, g, bl) > 128 && Math.max(r, g, bl) - Math.min(r, g, bl) > 60);
+  assert.ok(tiles.length > 100 && hot.length > tiles.length * 0.1, `lit tiles carry hue (${hot.length} of ${tiles.length})`);
+  const shards = (gentle) => {
+    const w = { c: null, p: [], cap: 400 }, d = makeBubble('disco', 0, 0, 60, { doc: null, gentle });
+    SKINS.disco.burst(w, d);
+    return w.p;
+  };
+  const full = shards(false), soft = shards(true);
+  assert.ok(full.filter((p) => p.kind === 'square').length <= 96 && full.filter((p) => p.kind === 'star').length <= 16);
+  assert.equal(full.filter((p) => p.kind === 'beam').length, 12);
+  assert.equal(soft.filter((p) => p.kind === 'beam').length, 0, 'no beams under Gentle');
+  assert.ok(soft.every((p) => p.kind !== 'square' || p.soft), 'Gentle shards never catch the light');
+  const hues = new Set(full.filter((p) => p.kind === 'square').map((p) => p.color));
+  assert.deepEqual([...hues].sort(), DISCO.map((n) => `rgb(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255})`).sort());
 });
