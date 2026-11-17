@@ -91,6 +91,9 @@ internal sealed class ShopPreviewBackend
         }
     }
 
+    /// <summary>Whether the preview owns a row (the Studio look rows ask, Services/Prizes/LookWardrobe).</summary>
+    public bool Owns(string itemId) { lock (_gate) return Data().Owned.ContainsKey(itemId); }
+
     /// <summary>One page request to one body. Never throws, never leaves this machine.</summary>
     public JObject Handle(string? op, JObject? body, string? idem)
     {
@@ -131,6 +134,9 @@ internal sealed class ShopPreviewBackend
                 }
             }
             RaiseChanges(before);
+            // a bought look: the Studio look rows unlock it at once (LookWardrobe listens to its slot)
+            if (op == PrizeCounterRelay.OpBuy && ShopPreviewRules.Effect(body?["itemId"]?.Type == JTokenType.String ? (string?)body["itemId"] : null) is { } bought)
+                Prizes.WornLooks.Raise(bought.Slot);
             return reply;
         }
         catch (Exception ex)

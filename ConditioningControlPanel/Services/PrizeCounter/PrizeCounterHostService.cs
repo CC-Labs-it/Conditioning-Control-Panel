@@ -337,6 +337,19 @@ internal static partial class PrizeCounterHostService
     /// <paramref name="onClosed"/> is a game paused under it (contract 1): it hears the close once,
     /// with its reason (<see cref="CloseBack"/> and the rest), and re-reads its grants then.
     /// An open counter asked from another door on another tab reloads on that tab.</summary>
+    /// <summary>The item the next init opens on (<see cref="LaunchOn"/>); null = none.</summary>
+    private static string? _pick;
+
+    /// <summary>A Studio look row's door: the counter opens (from the panel's wallet door) on <paramref name="itemId"/>.
+    /// An open counter closes first, so the item always lands in a fresh open.</summary>
+    public static void LaunchOn(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId)) return;
+        if (_host != null) CloseFor(CloseBack);
+        _pick = itemId.Trim();
+        Launch("wallet");
+    }
+
     public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
         tab = CounterTab(tab);
@@ -599,6 +612,8 @@ internal static partial class PrizeCounterHostService
     private static object BuildInit()
     {
         var init = JObject.FromObject(BuildInitBody());
+        // A Studio look row's locked chip (CONTRACT "Studio doors"): the page opens on that item, this open only.
+        if (_pick is { } pick) { init["pick"] = pick; _pick = null; }
         if (_isSheet) init["sheet"] = true;
         // Where the host's wallet star sits, in the page's CSS pixels (CONTRACT.md, sheet additions): the page's stars fly there.
         if (_isSheet && _sheetView?.WalletAt() is { } at) init["walletAt"] = new JObject { ["x"] = at.X, ["y"] = at.Y };

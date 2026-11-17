@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Features
         public PinkFilterFeatureControl()
         {
             InitializeComponent();
+            FogTwoTone.OwnColour = EffectiveColor;   // Two-tone mixes with the colour picked here
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
         }
@@ -232,6 +233,7 @@ namespace ConditioningControlPanel.Features
         {
             var (r, g, b) = EffectiveColor();
             ColorSwatch.Background = new SolidColorBrush(Color.FromRgb(r, g, b));
+            if (FogTwoTone.IsLoaded) FogTwoTone.Rebuild();   // the "too close" line follows the colour
         }
 
         // The color the tint actually renders: the user's pick if set, else the active

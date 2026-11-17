@@ -13,6 +13,7 @@ namespace ConditioningControlPanel.Tests;
 
 /// <summary>The DEBUG shop preview backend: every op over the preview file, the file across restarts,
 /// and the worn looks it feeds (lane I, BRIEF "The preview wire").</summary>
+[Collection("LookWardrobe")]   // both raise WornLooks.Changed: never in parallel
 public class ShopPreviewBackendTests
 {
     // Tuesday 17 November 2026, noon. ISO week 2026-W47; the next Monday is the 23rd.

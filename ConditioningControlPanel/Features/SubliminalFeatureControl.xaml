@@ -177,6 +177,9 @@
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           SelectionChanged="CmbFont_Changed"/>
                             </Grid>
+
+                            <!-- Word style: the looks the shop sells, worn here (Controls/LookRow, Services/Prizes/LookWardrobe). -->
+                            <ctl:LookRow Slot="word"/>
                         </StackPanel>
                     </Grid>
                 </Border>

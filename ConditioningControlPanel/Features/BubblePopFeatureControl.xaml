@@ -160,6 +160,9 @@
                                           Checked="ChkClassicPop_Changed" Unchecked="ChkClassicPop_Changed"/>
                             </Grid>
 
+                            <!-- Bubble skin: the looks the shop sells, worn here (Controls/LookRow, Services/Prizes/LookWardrobe). -->
+                            <ctl:LookRow Slot="bubble"/>
+
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
                             <!-- Solid mode: render all bubbles on one shared host (the DTRH/Chaos path) for

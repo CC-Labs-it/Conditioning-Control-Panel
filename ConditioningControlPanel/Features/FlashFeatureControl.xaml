@@ -509,6 +509,9 @@
                                        VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="13" FontWeight="Bold"/>
                         </Grid>
+                        <!-- The Deck's looks (card frame, the word behind the card), live with the Deck's other options. -->
+                        <ctl:LookRow Slot="card"/>
+                        <ctl:LookRow Slot="behind"/>
                     </StackPanel>
                 </ctl:SuperBox>
             </StackPanel>

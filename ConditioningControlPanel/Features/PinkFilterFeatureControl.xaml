@@ -108,6 +108,10 @@
                                 </StackPanel>
                             </Grid>
 
+                            <!-- Two-tone fog beside the colour it mixes with (pink filter and Steam both wear it):
+                                 the switch and the second colour when owned, a locked chip to the shop when not. -->
+                            <ctl:FogTwoToneBlock x:Name="FogTwoTone"/>
+
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_effect_monitor}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
