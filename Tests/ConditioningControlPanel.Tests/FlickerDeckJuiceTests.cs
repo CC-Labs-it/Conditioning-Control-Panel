@@ -38,9 +38,9 @@ public class FlickerDeckJuiceTests
         Assert.Equal(1, FlickerDeck.FlipWidth(FlickerDeck.FlipSec), 9);
         // Never wider than the card: the settle is in the angle now, not a width pop.
         Assert.All(Enumerable.Range(0, 301), i => Assert.InRange(FlickerDeck.FlipWidth(FlickerDeck.FlipSec * i / 300.0), FlickerDeck.MinScaleX, 1 + 1e-9));
-        // The new face comes round from the other side and passes flat by a few degrees.
+        // The new face comes round from the other side and passes flat by a degree or two (owner 2026-11-17: the wobble was way too much).
         var past = Enumerable.Range(151, 150).Select(i => FlickerDeck.TurnAt(FlickerDeck.FlipSec * i / 300.0)).Max();
-        Assert.InRange(past * 180 / Math.PI, 3, 9);
+        Assert.InRange(past * 180 / Math.PI, 1, 4);
     }
 
     [Fact]

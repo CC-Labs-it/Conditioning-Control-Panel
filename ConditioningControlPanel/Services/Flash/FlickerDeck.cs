@@ -96,8 +96,8 @@ public static class FlickerDeck
     public const int BreakAtMin = 3, BreakAtMax = 5;
 
     /// <summary>The lift: a sine hump over <see cref="LiftSpanSec"/>, flip starting <see cref="LiftLeadSec"/> in.</summary>
-    public const double LiftLeadSec = 0.18;
-    public const double LiftSpanSec = 0.58;
+    public const double LiftLeadSec = 0.14;
+    public const double LiftSpanSec = 0.44;
     /// <summary>The z-order changes this far into the lift, while the card is already in the air.</summary>
     public const double RaiseAtSec = 0.12;
     public const double LiftScale = 0.10;
@@ -106,16 +106,16 @@ public static class FlickerDeck
     /// <summary>The flip: a real turn about the upright axis over this span (CCP.Core DeckTurn), picture
     /// swaps at the midpoint, exactly edge-on. 0.30 s read as a squeeze; a turn with a settle needs a
     /// little longer (owner 2026-11-17, "the flip animation might be smoother"), and it still ends with the lift.</summary>
-    public const double FlipSec = 0.40;
+    public const double FlipSec = 0.30;
     /// <summary>How long a flip waits edge-on for its next picture before opening on the old one.</summary>
     public const double MaxHoldSec = 1.5;
     /// <summary>Edge-on never quite vanishes, so a held flip still reads as a card.</summary>
     public const double MinScaleX = 0.06;
 
-    public const double WobbleMaxRad = 0.15;
+    public const double WobbleMaxRad = 0.035;
     public const double WobblePow = 1.4;
-    public const double WobbleRate = 9.0, WobbleRatePerIndex = 1.3;
-    public const double RingSec = 0.7, RingRadPerSec = 40.0, RingShare = 0.9;
+    public const double WobbleRate = 4.0, WobbleRatePerIndex = 0.6;
+    public const double RingSec = 0.5, RingRadPerSec = 22.0, RingShare = 0.6;
 
     public const double PeekFrac = 0.07, PeekSec = 0.3;
 
