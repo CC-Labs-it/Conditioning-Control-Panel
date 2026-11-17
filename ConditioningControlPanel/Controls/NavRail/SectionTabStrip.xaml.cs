@@ -130,7 +130,8 @@ namespace ConditioningControlPanel.Controls.NavRail
         public static string? PageLabelKey(string? tab)
         {
             if (string.IsNullOrEmpty(tab)) return null;
-            var key = tab.ToLowerInvariant() == "lab" ? "play" : tab.ToLowerInvariant();
+            // "lab" lands on Eyes (declutter wave 2), so it names Eyes, never the Games pill.
+            var key = tab.ToLowerInvariant() == "lab" ? "playeyes" : tab.ToLowerInvariant();
             foreach (var t in NavSections.AllTabs)
                 if (t.Key == key) return t.LabelKey;
             return null;
