@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using ConditioningControlPanel.Controls;
 using ConditioningControlPanel.Models;
+using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Prizes;
 
@@ -102,6 +103,7 @@ internal static class SparkleFlightDirector
         var d = Application.Current?.Dispatcher;
         if (d != null && !d.CheckAccess()) { d.BeginInvoke(new Action(Stop)); return; }
         Owed.Clear();
+        _pendingTimer?.Stop();
         if (_pageGain is { } pg) { _pageGain = null; pg.Host.ReleaseCount(snap: true); }
         CancelReturn(keep: null, snap: true);
         Abort(snap: true);
@@ -135,16 +137,28 @@ internal static class SparkleFlightDirector
         // The focused window first (the launcher is owned by the panel, so both can count as in front).
         var host = Hosts.FirstOrDefault(h => InFront(h) && h.Window.IsActive) ?? Hosts.FirstOrDefault(InFront);
         if (host == null) return false;
+        if (_sheet is { } live && ReferenceEquals(live.Host, host) && live.Out == !change.IsGain
+            && PageFliesOver?.Invoke(host.Window) == true)
+        {
+            // The page's flight started before its ledger change landed: it counts between the ledger's
+            // numbers from here on (the flight keeps going).
+            _sheet = live with { From = change.Before, To = change.Balance };
+            _liveTo = change.Balance;
+            return true;
+        }
         Abort();
         CancelReturn(keep: host);
         if (PageFliesOver?.Invoke(host.Window) == true)
         {
             // The counter sheet is down over this window: its page flies the stars to this wallet
-            // (init.walletAt), and the wallet only counts and kicks as they land (PageLanded).
-            if (!change.IsGain) { host.ReleaseCount(); host.Kick(settle: false); return true; }
-            var start = Owed.Take(owner, change.Before) is { } o ? o.From : change.Before;
-            _pageGain = (host, start, change.Balance);
+            // (init.walletAt), and the wallet only counts and kicks as they land (PageLanded), or as the
+            // host's own copies of the page's stars land or leave (PageStars, the last leg over the bar).
+            var start = change.IsGain && Owed.Take(owner, change.Before) is { } o ? o.From : change.Before;
+            _pageGain = (host, start, change.Balance, !change.IsGain);
             host.HoldCount(start);
+            // The page's stars should follow in a moment; if none do (an old page, a credit from elsewhere) the
+            // number goes to the truth anyway.
+            StartPending();
             return true;
         }
         if (!change.IsGain) { FlySpend(host, change.Amount); return true; }
@@ -157,25 +171,112 @@ internal static class SparkleFlightDirector
     /// <summary>True while the counter sheet is down over that window (set by the counter host): its page flies.</summary>
     internal static Func<Window, bool>? PageFliesOver { get; set; }
 
-    private static (ISparkleFlightHost Host, int From, int To)? _pageGain;
+    /// <summary>A ledger change under the sheet waiting for the page's stars (a gain, or a spend when <c>Out</c>).</summary>
+    private static (ISparkleFlightHost Host, int From, int To, bool Out)? _pageGain;
+
+    /// <summary>The sheet flight the host is drawing (PageStars): the numbers its chip counts between.</summary>
+    private sealed record SheetLive(ISparkleFlightHost Host, int From, int To, bool Out);
+    private static SheetLive? _sheet;
+
+    /// <summary>How long a ledger change under the sheet waits for the page's stars before the number just goes there.</summary>
+    internal const int PendingMs = 1800;
+    private static DispatcherTimer? _pendingTimer;
+
+    private static void StartPending()
+    {
+        if (_pendingTimer == null)
+        {
+            _pendingTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(PendingMs) };
+            _pendingTimer.Tick += (_, _) =>
+            {
+                _pendingTimer!.Stop();
+                if (_pageGain is { } g && _sheet == null) { _pageGain = null; g.Host.ReleaseCount(); }
+            };
+        }
+        _pendingTimer.Stop();
+        _pendingTimer.Start();
+    }
 
     /// <summary>The sheet's page says its stars reached (or, for a spend, left) the wallet of <paramref name="window"/>:
     /// <paramref name="k"/> of them so far (1 = the last). The wallet counts and kicks; with no ledger change waiting
-    /// (the DEBUG preview's pretend wallet) the last one just puts the readout right.</summary>
+    /// (the DEBUG preview's pretend wallet) the last one just puts the readout right. Ignored while the host draws
+    /// the page's stars itself (the page sends none then; a stray one must not settle the chip early).</summary>
     internal static void PageLanded(Window window, double k)
     {
         var host = Hosts.FirstOrDefault(h => ReferenceEquals(h.Window, window));
         if (host == null || !double.IsFinite(k)) return;
+        if (_sheet is { } live && ReferenceEquals(live.Host, host)) return;
         k = Math.Clamp(k, 0, 1);
         bool last = k >= 1;
         if (_pageGain is { } g && ReferenceEquals(g.Host, host))
         {
-            if (last) { _pageGain = null; host.ReleaseCount(); }
+            if (last) { _pageGain = null; _pendingTimer?.Stop(); host.ReleaseCount(); }
             else host.HoldCount((int)Math.Round(g.From + (g.To - g.From) * k));
         }
         else if (last) host.ReleaseCount();
         host.Kick(settle: last);
     }
+
+    /// <summary>
+    /// THE LAST LEG: the sheet's page handed over its stars' whole paths (<c>wallet-stars</c>, CONTRACT "Sheet additions").
+    /// The host draws the same paths in its flight layer above the bar (the part over the page sits under the page's HWND,
+    /// so page and host read as one motion), and the chip counts as its copies land (a gain) or leave (a spend), with a
+    /// pop per star and one settle on the last. <paramref name="originIn"/> maps the page's (0, 0) into a visual.
+    /// Display only: the readout is held and released, the wallet is never written (the DEBUG preview's either).
+    /// Motion Off, no wallet star (Lockdown's veil) or an unreadable frame: the number just goes to the truth.
+    /// </summary>
+    internal static void PageStars(Window window, JObject frame, Func<Visual, Point?> originIn)
+    {
+        var host = Hosts.FirstOrDefault(h => ReferenceEquals(h.Window, window));
+        if (host == null) return;
+        var pending = _pageGain is { } g && ReferenceEquals(g.Host, host) ? g : default((ISparkleFlightHost Host, int From, int To, bool Out)?);
+        _pageGain = null;
+        _pendingTimer?.Stop();
+        if (MotionFx.Level == MotionLevel.Off || host.FlightPanel is not { } panel || host.WalletStar is not { } star)
+        {
+            host.ReleaseCount();
+            host.Kick(settle: true);
+            return;
+        }
+        var layer = LayerFor(host, panel);
+        if (!TryCenter(star, layer, out var wallet) || originIn(layer) is not { } origin
+            || SheetStarPlan.Read(frame, origin.X, origin.Y) is not { } flight)
+        {
+            host.ReleaseCount();
+            host.Kick(settle: true);
+            return;
+        }
+        var truth = TruthNow();
+        var (from, to) = pending is { } p && p.Out == flight.Out ? (p.From, p.To)
+            : SheetStarPlan.Counts(flight.Out, flight.Amount, truth.Value, truth.PreviewMark);
+        Abort();
+        var id = Begin(host, to);
+        _sheet = new SheetLive(host, from, to, flight.Out);
+        host.HoldCount(from);
+        var n = flight.Stars.Count;
+        var done = 0;
+        void Step(int i)
+        {
+            if (id != _flightId || _sheet is not { } live) return;
+            done++;
+            host.HoldCount(SparkleFlightPlan.CountAt(live.From, live.To, done, n));
+            if (done >= n)
+            {
+                if (!flight.Out) layer.Ping(wallet, big: true);
+                host.Kick(settle: true);
+                _sheet = null;
+                Finish();
+                return;
+            }
+            host.Kick(settle: false);
+            if (!flight.Out && done % 2 == 1) layer.Ping(wallet, big: false);
+        }
+        layer.Fly(flight, flight.Out ? Step : null, flight.Out ? null : Step);
+    }
+
+    /// <summary>What the header wallets read on release: the real balance, or the DEBUG preview's own wallet.</summary>
+    private static (bool Show, int Value, bool PreviewMark) TruthNow()
+        => MainWindow.HeaderWalletValue(App.Settings?.Current?.SkillPoints ?? -1);
 
     /// <summary>The launcher or the panel came to the front: hold the number where the owed stars
     /// start, and fly them after a beat.</summary>
@@ -367,6 +468,7 @@ internal static class SparkleFlightDirector
     private static void Abort(bool snap = false)
     {
         _flightId++;
+        _sheet = null;
         _watchdog?.Stop();
         var host = _live;
         _live = null;

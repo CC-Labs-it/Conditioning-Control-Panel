@@ -540,6 +540,11 @@ internal static partial class PrizeCounterHostService
                 if (_isSheet && _sheetView?.DoorWindow is { } door && m["k"] is JValue { Type: JTokenType.Float or JTokenType.Integer } k)
                     OnUi(() => Prizes.SparkleFlightDirector.PageLanded(door, k.Value<double>()));
                 break;
+            case "wallet-stars":
+                // The page's stars, whole paths (CONTRACT "Sheet additions"): the host draws them over its bar and counts.
+                if (_isSheet && generation == _generation && _sheetView is { HostFlies: true } starView)
+                    OnUi(() => Prizes.SparkleFlightDirector.PageStars(starView.DoorWindow, m, starView.PageOrigin));
+                break;
             case "wallet":
                 if (m["sp"] is JValue { Type: JTokenType.Integer } sp && _relay?.HandleWalletFrame(sp.Value<int>()) != true)
                     App.Logger?.Debug("PrizeCounter: wallet frame {Sp} names no receipt, ignored", sp);
@@ -616,7 +621,12 @@ internal static partial class PrizeCounterHostService
         if (_pick is { } pick) { init["pick"] = pick; _pick = null; }
         if (_isSheet) init["sheet"] = true;
         // Where the host's wallet star sits, in the page's CSS pixels (CONTRACT.md, sheet additions): the page's stars fly there.
-        if (_isSheet && _sheetView?.WalletAt() is { } at) init["walletAt"] = new JObject { ["x"] = at.X, ["y"] = at.Y };
+        if (_isSheet && _sheetView?.WalletAt() is { } at)
+        {
+            init["walletAt"] = new JObject { ["x"] = at.X, ["y"] = at.Y };
+            // The host draws the stars' last leg over its bar (wallet-stars) and counts its chip itself.
+            if (_sheetView.HostFlies) init["walletFly"] = true;
+        }
         // The active mod's Disco hues (CONTRACT.md, sheet additions), the desktop ball's own palette.
         try
         {

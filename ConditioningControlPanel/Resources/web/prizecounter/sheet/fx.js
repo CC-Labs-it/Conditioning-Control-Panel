@@ -5,7 +5,19 @@
  * at / ink / confetti serve sheet/juice.js (the OWNED stamp's hit, a stamp press, the coupon); Gentle gets no confetti.
  * Uses Web Animations; a page without them (the tests' fake DOM) gets no flight and the same outcome. */
 
-export function createFx({ root, doc, base = './', motion = 'full', gentle = false, sound, wallet, walletAt = () => null, onWallet = () => {} }) {
+export function createFx({ root, doc, base = './', motion = 'full', gentle = false, sound, wallet, walletAt = () => null, onWallet = () => {}, onStars = null }) {
+  // THE LAST LEG (CONTRACT "Sheet additions", wallet-stars): the page cannot draw over the host's bar (its HWND ends at
+  // the sheet's top edge), so with a host wallet it also hands the host every star's whole path, once, as the flight
+  // starts. The host draws the same path in its own layer (the part over the page is hidden under the page), counts
+  // its chip as the stars land (a gain) or leave (a spend), and the page sends no wallet-land for that flight.
+  // onStars(plan) answers true when the host took it.
+  const handOff = (dir, amount, ease, tracks) => {
+    if (typeof onStars !== 'function' || !walletAt() || !tracks.length) return false;
+    const h = host(), r1 = (v) => Math.round(v * 10) / 10, r3 = (v) => Math.round(v * 1000) / 1000;
+    const stars = tracks.map((t) => ({ d: Math.round(t.d), ms: Math.round(t.ms),
+      k: t.k.map(([o, x, y, s, rot, a]) => [r3(o), r1(x + h.left + 13), r1(y + h.top + 13), r3(s), Math.round(rot), r3(a)]) }));
+    try { return onStars({ dir, n: Math.max(0, Math.round(amount)), e: ease, stars }) === true; } catch (e) { return false; }
+  };
   const can = (n) => motion !== 'off' && n && typeof n.animate === 'function' && typeof n.getBoundingClientRect === 'function';
   // In a sheet the host says where its wallet star is (init.walletAt / wallet-at, page CSS pixels) and hears the
   // stars reach or leave it (onWallet(k), k = share so far, 1 = the last): its chip counts and kicks.
@@ -62,25 +74,31 @@ export function createFx({ root, doc, base = './', motion = 'full', gentle = fal
     /** A spend: stars leave the wallet in a dense stream, arc high and land on the item, each with a small pop where it
      * lands (the owner: "slower, more dense, a small animation when they land"). Answers how long that takes (0 = none). */
     flyOut(toEl, amount) {
-      if (amount > 0) onWallet(1);   // a spend: the number goes down as the stars leave
-      if (!can(toEl) || !can(root)) return 0;
+      if (!can(toEl) || !can(root)) { if (amount > 0) onWallet(1); return 0; }   // no flight: the number just changes
       const s0 = walletPoint(), box = toEl.getBoundingClientRect(), e0 = centre(toEl);
       const n = Math.max(8, Math.round(Math.max(16, Math.min(32, Math.round(amount / 20))) * few));
       let longest = 0;
-      sound.air(0.7, 0.045, false);
+      // Out of the host's chip the arc stays low: the bar is short and the window's top edge cuts a high one.
+      const low = !!hostWallet(host());
+      const tracks = [], go = [];
       for (let i = 0; i < n; i++) {
-        const s = star(), size = i % 4 === 0 ? 0.85 : 0.34 + Math.random() * 0.3, dx = (Math.random() - 0.5) * box.width * 0.7, dy = (Math.random() - 0.5) * box.height * 0.6, spin = (Math.random() - 0.5) * 480;
+        const size = i % 4 === 0 ? 0.85 : 0.34 + Math.random() * 0.3, dx = (Math.random() - 0.5) * box.width * 0.7, dy = (Math.random() - 0.5) * box.height * 0.6, spin = (Math.random() - 0.5) * 480;
         const ex = e0.x + dx, ey = e0.y + dy, side = (Math.random() - 0.5) * 160;
-        const ax = s0.x + (ex - s0.x) * 0.3 + side, ay = Math.min(s0.y, ey) - 40 - Math.random() * 60, bx = s0.x + (ex - s0.x) * 0.7 + side * 0.4, by = ay + (ey - ay) * 0.35;
+        const ax = s0.x + (ex - s0.x) * 0.3 + side, ay = Math.min(s0.y, ey) - (low ? 8 + Math.random() * 14 : 40 + Math.random() * 60), bx = s0.x + (ex - s0.x) * 0.7 + side * 0.4, by = ay + (ey - ay) * 0.35;
         const dur = 1250 + Math.random() * 450, delay = i * Math.min(52, 1100 / n) + Math.random() * 30; longest = Math.max(longest, dur + delay);
-        s.animate([
-          { transform: `translate(${s0.x}px,${s0.y}px) scale(${size * 0.3})`, opacity: 0 },
-          { transform: `translate(${s0.x + (ax - s0.x) * 0.25}px,${s0.y + (ay - s0.y) * 0.25}px) scale(${size * 1.05}) rotate(${spin * 0.1}deg)`, opacity: 1, offset: 0.12 },
-          { transform: `translate(${ax}px,${ay}px) scale(${size * 1.1}) rotate(${spin * 0.4}deg)`, opacity: 1, offset: 0.42 },
-          { transform: `translate(${bx}px,${by}px) scale(${size}) rotate(${spin * 0.7}deg)`, opacity: 1, offset: 0.7 },
-          { transform: `translate(${ex}px,${ey}px) scale(${size * 0.8}) rotate(${spin}deg)`, opacity: 1, offset: 0.9 },
-          { transform: `translate(${ex}px,${ey - 4}px) scale(${size * (gentle ? 0.8 : 1.4)}) rotate(${spin}deg)`, opacity: 0 },   // the landing: a little pop
-        ], { duration: dur, delay, easing: 'cubic-bezier(.45,0,.3,1)', fill: 'both' }).onfinish = () => {
+        const k = [[0, s0.x, s0.y, size * 0.3, 0, 0], [0.12, s0.x + (ax - s0.x) * 0.25, s0.y + (ay - s0.y) * 0.25, size * 1.05, spin * 0.1, 1],
+          [0.42, ax, ay, size * 1.1, spin * 0.4, 1], [0.7, bx, by, size, spin * 0.7, 1], [0.9, ex, ey, size * 0.8, spin, 1],
+          [1, ex, ey - 4, size * (gentle ? 0.8 : 1.4), spin, 0]];   // the last: the landing, a little pop
+        tracks.push({ d: delay, ms: dur, k });
+        go.push({ i, ex, ey, k, dur, delay });
+      }
+      // A spend: the host's chip counts down as its stars leave (it took the flight), else at once as before.
+      if (!handOff('out', amount, [0.45, 0, 0.3, 1], tracks) && amount > 0) onWallet(1);
+      sound.air(0.7, 0.045, false);
+      for (const { i, ex, ey, k, dur, delay } of go) {
+        const s = star();
+        s.animate(k.map(([offset, x, y, sc, rot, opacity]) => ({ transform: `translate(${x}px,${y}px) scale(${sc}) rotate(${rot}deg)`, opacity, offset })),
+          { duration: dur, delay, easing: 'cubic-bezier(.45,0,.3,1)', fill: 'both' }).onfinish = () => {
           s.remove(); if (i % 2 === 0 || i === n - 1) sparkAt(ex + 13, ey + 13, false); sound.tick(1 - i / n);
           if (i % 5 === 4 && toEl.isConnected && !gentle) toEl.animate([{ scale: '1' }, { scale: motion === 'less' ? '1.006' : '1.012', offset: 0.35 }, { scale: '1' }], { duration: 220, easing: 'ease-out' });
         };
@@ -93,22 +111,26 @@ export function createFx({ root, doc, base = './', motion = 'full', gentle = fal
       const s0 = centre(fromEl), e0 = walletPoint();
       const n = Math.max(6, Math.round(Math.max(10, Math.min(30, 8 + Math.round(amount * 0.9))) * few));
       let landed = 0, longest = 0;
-      sound.air(0.55, 0.05, true);
+      const tracks = [];
       for (let i = 0; i < n; i++) {
-        const s = star(), size = i % 4 === 0 ? 0.78 + Math.random() * 0.2 : 0.34 + Math.random() * 0.3;   // a few lead stars, the rest fine dust
+        const size = i % 4 === 0 ? 0.78 + Math.random() * 0.2 : 0.34 + Math.random() * 0.3;   // a few lead stars, the rest fine dust
         const a = -Math.PI / 2 + (Math.random() - 0.5) * 3.6, burst = 34 + Math.random() * 70, bx = s0.x + Math.cos(a) * burst, by = s0.y + Math.sin(a) * burst * 0.8;
         const sway = (Math.random() - 0.5) * 150, mx = bx + (e0.x - bx) * 0.55 + sway * 0.35, my = by + (e0.y - by) * 0.55 - Math.abs(sway) * 0.3, spin = (Math.random() - 0.5) * 540;
         const dur = 1150 + Math.random() * 420, delay = i * 44 + Math.random() * 40; longest = Math.max(longest, dur + delay);
-        s.animate([
-          { transform: `translate(${s0.x}px,${s0.y}px) scale(${size * 0.3}) rotate(0deg)`, opacity: 0 },
-          { transform: `translate(${bx}px,${by}px) scale(${size * 1.15}) rotate(${spin * 0.2}deg)`, opacity: 1, offset: 0.2 },
-          { transform: `translate(${mx}px,${my}px) scale(${size}) rotate(${spin * 0.6}deg)`, opacity: 1, offset: 0.62 },
-          { transform: `translate(${e0.x}px,${e0.y}px) scale(${size * 0.55}) rotate(${spin}deg)`, opacity: 1 },
-        ], { duration: dur, delay, easing: 'cubic-bezier(.42,0,.3,1)', fill: 'both' }).onfinish = () => {
+        tracks.push({ d: delay, ms: dur, k: [[0, s0.x, s0.y, size * 0.3, 0, 0], [0.2, bx, by, size * 1.15, spin * 0.2, 1],
+          [0.62, mx, my, size, spin * 0.6, 1], [1, e0.x, e0.y, size * 0.55, spin, 1]] });
+      }
+      // A gain: the host's chip counts up as its own copy of each star lands (it took the flight), else on wallet-land.
+      const hosted = handOff('in', amount, [0.42, 0, 0.3, 1], tracks);
+      sound.air(0.55, 0.05, true);
+      for (const { d: delay, ms: dur, k } of tracks) {
+        const s = star();
+        s.animate(k.map(([offset, x, y, sc, rot, opacity]) => ({ transform: `translate(${x}px,${y}px) scale(${sc}) rotate(${rot}deg)`, opacity, offset })),
+          { duration: dur, delay, easing: 'cubic-bezier(.42,0,.3,1)', fill: 'both' }).onfinish = () => {
           s.remove(); landed++;
           if (landed === n) { sparkAt(e0.x + 13, e0.y + 13, true); sound.chord(); } else { if (landed % 2) sparkAt(e0.x + 13, e0.y + 13, false); sound.tick(landed / n); }
           onLand(landed / n);
-          if (landed === n || landed % 3 === 0) onWallet(landed / n);
+          if (!hosted && (landed === n || landed % 3 === 0)) onWallet(landed / n);
         };
       }
       return longest;

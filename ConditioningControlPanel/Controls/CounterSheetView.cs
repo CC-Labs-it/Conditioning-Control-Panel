@@ -793,6 +793,24 @@ internal sealed class CounterSheetView : Grid
         catch (Exception ex) { Diag.Swallowed(ex); return null; }
     }
 
+    /// <summary>The door draws Sparkles flights (the launcher, the panel: a wallet chip and a flight layer), so the page
+    /// hands it its stars (init.walletFly). A game sheet has no chip.</summary>
+    public bool HostFlies => _walletChip != null;
+
+    /// <summary>The page's (0, 0) CSS pixel, once the sheet is down, in <paramref name="to"/>'s coordinates (the inverse of
+    /// <see cref="WalletAt"/>). Null = not laid out.</summary>
+    public Point? PageOrigin(Visual to)
+    {
+        try
+        {
+            if (PresentationSource.FromVisual(_slot) == null || PresentationSource.FromVisual(to) == null) return null;
+            double inset = CounterSheetRules.BorderDip + CounterSheetRules.PaddingDip;
+            var p = _slot.TransformToVisual(to).Transform(new Point(inset, CounterSheetRules.GapUnderBarDip + inset));
+            return double.IsFinite(p.X) && double.IsFinite(p.Y) ? p : null;
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); return null; }
+    }
+
     /// <summary>Tell a live page where the wallet star moved to (the window was resized or the sheet landed).</summary>
     private void PostWalletAt()
     {
