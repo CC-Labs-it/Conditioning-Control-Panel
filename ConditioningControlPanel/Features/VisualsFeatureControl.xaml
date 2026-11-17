@@ -43,6 +43,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="visuals.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_scale_of_flash_images_100_original_size_200_d}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -125,9 +126,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="visuals.sound" Title="{loc:Str studio_section_sound}" Theme="Sound">
                             <!-- Link to Audio.
                                  Deliberately NOT SessionLock.Owned, even though SessionSettings.FlashAudioEnabled
                                  is a session-prescribed enable. Killing sound is the one change a user most
@@ -144,6 +145,7 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkAudio_Changed" Unchecked="ChkAudio_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>

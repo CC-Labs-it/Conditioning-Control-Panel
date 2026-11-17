@@ -69,6 +69,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="video.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_videos_per_hour}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -158,9 +159,9 @@
                             </Grid>
                             <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="video.showing" Title="{loc:Str studio_section_showing}" Theme="Look">
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_strict_mode_videos_cannot_be_skipped_must_wat}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -285,6 +286,7 @@
                                     <feat:MercyRow x:Name="MercyRow"/>
                                 </StackPanel>
                             </feat:MoreFold>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -311,8 +313,7 @@
                                           Checked="ChkMiniGame_Changed" Unchecked="ChkMiniGame_Changed"/>
                             </Grid>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="video.minigame" Title="{loc:Str studio_section_options}" Theme="Timing" DefaultOpen="False">
                             <!-- Targets (the dice toggle randomises the count, so it rides the label) -->
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_number_of_targets_to_click_per_video}">
                                 <Grid.ColumnDefinitions>
@@ -386,9 +387,9 @@
                                           feat:SessionLock.Owned="True" VerticalAlignment="Center"
                                           Checked="ChkReplayFailedCheck_Changed" Unchecked="ChkReplayFailedCheck_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="video.gaze" Title="{loc:Str label_gaze_interaction}" Theme="Interaction" DefaultOpen="False">
                             <!-- Gaze click: copy passed the 6.9.4 voice sweep. -->
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_stare_to_click}">
                                 <Grid.ColumnDefinitions>
@@ -401,6 +402,7 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkVideoGazeClick_Changed" Unchecked="ChkVideoGazeClick_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
 
                             <Grid Margin="0,8,0,2">
                                 <Grid.ColumnDefinitions>
