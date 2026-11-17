@@ -26,7 +26,7 @@ namespace ConditioningControlPanel;
 /// inside AllowsTransparency=true, and staying out of the layered-window path keeps this host
 /// clear of the app's historic render-thread deadlock cluster.
 /// </summary>
-internal sealed class ChaosWebViewHost : IDisposable
+internal sealed partial class ChaosWebViewHost : IDisposable
 {
     public sealed class Options
     {
@@ -140,6 +140,18 @@ internal sealed class ChaosWebViewHost : IDisposable
         /// so nothing the app does to main can bury the game surface. Set for the player-facing
         /// game windows (DtRH, Graded Intake, Bureau). See <see cref="AttachMainWindowGlue"/>.</summary>
         public bool OwnedByMainWindow { get; init; }
+
+        /// <summary>Sheet mode (ChaosWebViewHost.Sheet.cs): the window that owns a borderless sheet.
+        /// Needs <see cref="SheetBounds"/>; leave <see cref="OwnedByMainWindow"/> off.</summary>
+        public Window? SheetOwner { get; init; }
+
+        /// <summary>Sheet mode: the frame in screen pixels, measured again whenever the owner moves.
+        /// Null = no room any more (reported through <see cref="OnSheetLost"/>).</summary>
+        public Func<Int32Rect?>? SheetBounds { get; init; }
+
+        /// <summary>Sheet mode: the sheet lost activation (<c>deactivated</c>) or its owner went
+        /// (<c>owner-hidden</c>, <c>owner-minimized</c>, <c>owner-closed</c>, <c>no-room</c>). UI thread.</summary>
+        public Action<string>? OnSheetLost { get; init; }
     }
 
     /// <summary>Virtual host serving DOWNLOADED content packs (audio that no longer ships in the
@@ -297,7 +309,8 @@ internal sealed class ChaosWebViewHost : IDisposable
             Content = grid,
         };
         if (_opts.HostOwnedFullscreen) HookHostFullscreenInput();
-        ApplyWindowMode(_opts.StartFullscreen);   // sets style / bounds / resize mode
+        if (IsSheet) LayoutSheet();               // borderless, owned, at the caller's bounds
+        else ApplyWindowMode(_opts.StartFullscreen);   // sets style / bounds / resize mode
         if (!_opts.InputEnabled)
             _window.SourceInitialized += (_, _) => ApplyPassiveExStyles(_window);
         else if (_opts.OwnedByMainWindow)
@@ -606,7 +619,7 @@ internal sealed class ChaosWebViewHost : IDisposable
     /// Esc - the page is not one of them.</summary>
     public void SetFullscreen(bool on)
     {
-        if (_window == null || _isFullscreen == on) return;
+        if (_window == null || _isFullscreen == on || IsSheet) return;   // a sheet never leaves its owner's frame
         // Going fullscreen: remember the current windowed size so exit restores it.
         if (on && _window.WindowState == WindowState.Normal
             && _window.WindowStyle == WindowStyle.SingleBorderWindow)
@@ -840,6 +853,8 @@ internal sealed class ChaosWebViewHost : IDisposable
             if (hwnd == IntPtr.Zero) { _window.Activate(); return; }
             if (_window.WindowState == WindowState.Minimized) ShowWindow(hwnd, SW_RESTORE);
             if (!_opts.InputEnabled) return;
+            // A sheet rides its owner: no topmost pulse (it would lift the sheet alone over other apps).
+            if (IsSheet) { _window.Activate(); _web?.Focus(); return; }
 
             // A window that is legitimately topmost (host-owned fullscreen) keeps its claim.
             const uint flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
@@ -1773,6 +1788,7 @@ internal sealed class ChaosWebViewHost : IDisposable
         }
         catch (Exception ex) { Diag.Swallowed(ex); }
         try { DetachMainWindowGlue(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        try { DetachSheet(); } catch (Exception ex) { Diag.Swallowed(ex); }
         try { _web?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
         try { _window?.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
         ReleaseActiveCounts();

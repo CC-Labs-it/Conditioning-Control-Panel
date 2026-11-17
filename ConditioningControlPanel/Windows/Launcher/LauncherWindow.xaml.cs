@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Launcher;
 /// <para>The decoration (particles, comets, sheen, the mascot) lives in the Fx partial and is
 /// gated there. Everything in this file must read and work with all of it switched off.</para>
 /// </summary>
-public partial class LauncherWindow : Window
+public partial class LauncherWindow : Window, ConditioningControlPanel.Services.PrizeCounter.ICounterSheetDoor
 {
     private const double TileRadius = 16;
 
@@ -252,8 +252,12 @@ public partial class LauncherWindow : Window
 
     private void AccountChip_Click(object sender, RoutedEventArgs e) => OpenPanelTab("appsettings");
 
-    /// <summary>The wallet chip opens the Prize Counter over the launcher: the same door as the
-    /// panel's SparkleWallet (owner, 2026-10-29). The counter is its own window; the launcher stays.</summary>
+    // The counter sheet hangs under the title bar the wallet chip sits in; a press on the chip is its second click.
+    FrameworkElement? Services.PrizeCounter.ICounterSheetDoor.CounterSheetBar => TitleBar;
+    FrameworkElement? Services.PrizeCounter.ICounterSheetDoor.CounterSheetChip => WalletChip;
+
+    /// <summary>The wallet chip drops the Prize Counter sheet under the title bar (owner, 2026-11-17;
+    /// PrizeCounterHostService.Sheet.cs); a second press closes it. The launcher stays.</summary>
     private void WalletChip_Click(object sender, RoutedEventArgs e)
     {
         LauncherSfx.Click();

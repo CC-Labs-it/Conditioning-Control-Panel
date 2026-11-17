@@ -6,8 +6,15 @@ using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel;
 
-public partial class MainWindow
+public partial class MainWindow : Services.PrizeCounter.ICounterSheetDoor
 {
+    // The counter sheet hangs under the header bar the wallet sits in (the wallet's Grid, inside the
+    // row-1 header Border; render tests pin that Border's text, so it carries no name); a press on the
+    // wallet is its second click.
+    FrameworkElement? Services.PrizeCounter.ICounterSheetDoor.CounterSheetBar
+        => (HeaderSparkleWallet.Parent as FrameworkElement)?.Parent as FrameworkElement;
+    FrameworkElement? Services.PrizeCounter.ICounterSheetDoor.CounterSheetChip => HeaderSparkleWallet;
+
     private AppSettings? _sparkleWalletSettings;
     private bool _sparkleWalletActive;
 
