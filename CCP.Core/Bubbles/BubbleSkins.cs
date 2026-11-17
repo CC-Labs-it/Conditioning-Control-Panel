@@ -15,7 +15,7 @@ public static class BubbleSkinIds
     public static readonly IReadOnlyList<string> All = new[] { Soap, Champagne, Heart, Spiral, Marble, Disco, Frost };
 
     /// <summary>True for a skin that has a draw today (soap draws nothing extra).</summary>
-    public static bool IsDrawn(string? id) => id is Champagne or Heart or Marble or Spiral or Disco;
+    public static bool IsDrawn(string? id) => id is Champagne or Heart or Marble or Spiral or Disco or Frost;
 }
 
 /// <summary>The one place a new bubble learns its skin. Soap, unless a DEBUG build names a drawn
@@ -44,8 +44,9 @@ public static class BubbleSkinChoice
 /// <summary>Heart: <see cref="HeartBody"/> is the heart itself (R = its scale, Alpha = the beat 0..1);
 /// <see cref="HeartRipple"/> is the small heart a beat sends out (R = its scale).
 /// Disco: <see cref="Glint"/> / <see cref="GlintPink"/> are four-point glints on the ball (R = their size);
-/// <see cref="Fleck"/> / <see cref="FleckPink"/> are the specks of light orbiting outside it.</summary>
-public enum SkinPrimKind : byte { Bead, Ring, Foam, HeartBody, HeartRipple, Glint, GlintPink, Fleck, FleckPink }
+/// <see cref="Fleck"/> / <see cref="FleckPink"/> are the specks of light orbiting outside it.
+/// Frost: <see cref="Speck"/> is a square speck of rime (R = half its side).</summary>
+public enum SkinPrimKind : byte { Bead, Ring, Foam, HeartBody, HeartRipple, Glint, GlintPink, Fleck, FleckPink, Speck }
 
 /// <summary>One interior shape in the bubble's unit circle (y down, radius 1 = the glass).</summary>
 public readonly record struct SkinPrim(float X, float Y, float R, float Alpha, SkinPrimKind Kind);
@@ -53,8 +54,10 @@ public readonly record struct SkinPrim(float X, float Y, float R, float Alpha, S
 /// <summary><see cref="Shard"/>: a Marble shard, corners from <see cref="BubbleSkins.MarbleShard"/> by its Index.
 /// <see cref="Star"/>: a four-point glint whose size twinkles at Grow radians per second.
 /// <see cref="Square"/>: a tumbling mirror square (Grow = how fast it catches the light, 0 = steady).
-/// <see cref="Beam"/>: a thin beam from the middle, Size glass radii long, turning by Spin.</summary>
-public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist, Heart, HeartWave, Shard, Star, Orbit, Square, Beam }
+/// <see cref="Beam"/>: a thin beam from the middle, Size glass radii long, turning by Spin.
+/// Frost: <see cref="Flake"/> (three crossed strokes), <see cref="Stick"/> (an arm, Size long), <see cref="Puff"/>
+/// (a soft cloud that widens by Grow).</summary>
+public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist, Heart, HeartWave, Shard, Star, Orbit, Square, Beam, Flake, Stick, Puff }
 
 /// <summary>One pop particle at birth, in glass radii (position) and radii per second (velocity).
 /// <see cref="Rise"/> is a constant pull (negative = up), <see cref="Drag"/> slows it per second,
@@ -93,7 +96,7 @@ public static partial class BubbleSkins
     public static bool OwnsBody(string? skin) => skin is BubbleSkinIds.Heart or BubbleSkinIds.Marble or BubbleSkinIds.Disco;
 
     /// <summary>True for a skin drawn under the soap sprite (inside the film), not over it.</summary>
-    public static bool UnderShell(string? skin) => skin is BubbleSkinIds.Spiral;
+    public static bool UnderShell(string? skin) => skin is BubbleSkinIds.Spiral or BubbleSkinIds.Frost;
 
     /// <summary>Seconds the skin's burst spends on the dying body (squeeze, cracks, wind-in) before its
     /// particles fly. The pop itself pays and sounds at once; this is drawing only. 0 = no pre-burst.</summary>
@@ -103,6 +106,7 @@ public static partial class BubbleSkins
         BubbleSkinIds.Marble => gentle ? .32 : .2,   // Gentle: the flash becomes a glow that rises over 0.3 s
         BubbleSkinIds.Spiral => .46,
         BubbleSkinIds.Disco => .09,   // the ball goes white; under Gentle it only holds
+        BubbleSkinIds.Frost => gentle ? .3 : .1,   // the cracks run out; under Gentle they brighten over 0.3 s
         _ => 0,
     };
 
@@ -117,6 +121,7 @@ public static partial class BubbleSkins
     {
         if (skin == BubbleSkinIds.Heart) return HeartInterior(seed, seconds, motion, radiusPx, dst);
         if (skin == BubbleSkinIds.Disco) return DiscoInterior(seed, seconds, motion, radiusPx, dst);
+        if (skin == BubbleSkinIds.Frost) return FrostInterior(seed, seconds, motion, radiusPx, dst);
         if (skin != BubbleSkinIds.Champagne || dst.Length < MaxInterior || radiusPx <= 0) return 0;
         double t = seconds * Math.Clamp(motion, 0, 1);
         double minR = MinPx / radiusPx;
@@ -177,6 +182,7 @@ public static partial class BubbleSkins
     {
         motion = Math.Clamp(motion, 0, 1);
         if (skin == BubbleSkinIds.Disco) return DiscoBurst(seed, radiusPx, motion, gentle, dst);
+        if (skin == BubbleSkinIds.Frost) return FrostBurst(seed, radiusPx, motion, dst);
         if (skin == BubbleSkinIds.Heart) return HeartBurst(seed, radiusPx, motion, dst);
         if (skin == BubbleSkinIds.Marble) return MarbleBurst(seed, radiusPx, motion, dst);
         if (skin == BubbleSkinIds.Spiral) return SpiralBurst(seed, radiusPx, motion, dst);
@@ -245,7 +251,7 @@ public static partial class BubbleSkins
         double size = p.Kind switch
         {
             SkinParticleKind.Wave => p.Size * (1 + p.Grow * (1 - (1 - u) * (1 - u))),
-            SkinParticleKind.Mist or SkinParticleKind.HeartWave => p.Size * (1 + p.Grow * u),
+            SkinParticleKind.Mist or SkinParticleKind.HeartWave or SkinParticleKind.Puff => p.Size * (1 + p.Grow * u),
             SkinParticleKind.Star => p.Size * (.35 + .65 * Math.Abs(Math.Sin(age * p.Grow))),
             SkinParticleKind.Orbit => p.Size * (1 - u * .6),
             _ => p.Size,

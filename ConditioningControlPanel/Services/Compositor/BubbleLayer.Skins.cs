@@ -165,12 +165,12 @@ public sealed partial class BubbleLayer
         private readonly SKShader _mist = SKShader.CreateRadialGradient(new SKPoint(0, 0), 1,
             new[] { new SKColor(255, 240, 210, 255), new SKColor(255, 240, 210, 0) }, SKShaderTileMode.Clamp);
 
-        /// <summary>The colour filter the base sprite wears for a skin (Champagne: a light gold film), else null.
+        /// <summary>The colour filter the base sprite wears for a skin (Champagne: a light gold film, Frost: ice), else null.
         /// App-lifetime and shared, like the sprites.</summary>
         public static SKColorFilter? ShellTint(string? skin)
             => skin == BubbleSkinIds.Champagne
                 ? s_goldShell ??= SKColorFilter.CreateBlendMode(new SKColor(255, 212, 140, 110), SKBlendMode.SrcATop)
-                : null;
+                : skin == BubbleSkinIds.Frost ? IceShell() : null;
 
         public void DrawInterior(SKCanvas c, string skin, int seed, double seconds, double motion,
                                  float cx, float cy, float r, float alpha, SkinArt? art = null)
@@ -179,6 +179,7 @@ public sealed partial class BubbleLayer
             if (skin == BubbleSkinIds.Spiral) { DrawSpiral(c, seed, seconds, motion, cx, cy, r, alpha, 0, false, art, null); return; }
             if (skin == BubbleSkinIds.Marble) { DrawMarble(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
             if (skin == BubbleSkinIds.Disco) { DrawDisco(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
+            if (skin == BubbleSkinIds.Frost) { DrawFrost(c, seed, seconds, motion, cx, cy, r, alpha, 0, null); return; }
             int n = BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims);
             if (n == 0) return;
             if (skin == BubbleSkinIds.Heart) { DrawHeart(c, _prims[0], _prims[1], cx, cy, r, alpha, 1, 0); return; }
@@ -227,6 +228,7 @@ public sealed partial class BubbleLayer
             if (skin == BubbleSkinIds.Spiral) DrawSpiral(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle, art, sprite);
             if (skin == BubbleSkinIds.Marble) DrawMarble(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
             if (skin == BubbleSkinIds.Disco) DrawDisco(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
+            if (skin == BubbleSkinIds.Frost) DrawFrost(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, sprite);
             if (skin == BubbleSkinIds.Heart)
             {
                 if (BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims) < 2) return;
@@ -287,6 +289,11 @@ public sealed partial class BubbleLayer
                     case SkinParticleKind.Square:
                     case SkinParticleKind.Beam:
                         DrawDiscoParticle(c, p, st, age, x, y, s, a);
+                        break;
+                    case SkinParticleKind.Flake:
+                    case SkinParticleKind.Stick:
+                    case SkinParticleKind.Puff:
+                        DrawFrostParticle(c, p, st, x, y, s, r, a);
                         break;
                     default:
                         _fill.Color = p.Argb != 0 ? Tone(p.Argb, a) : new SKColor(255, 244, 214, A(.9f * a));

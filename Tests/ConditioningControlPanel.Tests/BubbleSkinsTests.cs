@@ -18,7 +18,7 @@ public class BubbleSkinsTests
     [Fact]
     public void Choice_is_soap_unless_a_drawn_skin_is_named()
     {
-        foreach (var s in new[] { null, "", "glitter", BubbleSkinIds.Frost })
+        foreach (var s in new[] { null, "", "glitter", "ice" })
             Assert.Equal(BubbleSkinIds.Soap, BubbleSkinChoice.Resolve(s));
         Assert.Equal(Champ, BubbleSkinChoice.Resolve(" Champagne "));
         Assert.Equal(BubbleSkinIds.Heart, BubbleSkinChoice.Resolve("HEART"));
@@ -386,9 +386,63 @@ public class BubbleSkinsTests
         => Stills(BubbleSkinIds.Disco, new[] { .04, .08, .14, .24, .5, .9 }, popCell: 3, outerReach: .3);
 
     [Fact]
+    public void Frost_freezes_with_age_inside_the_glass_and_its_pop_snows_down()
+    {
+        const string F = BubbleSkinIds.Frost;
+        Assert.Equal(F, BubbleSkinChoice.Resolve(" frost"));
+        Assert.True(BubbleSkins.UnderShell(F));
+        Assert.False(BubbleSkins.OwnsBody(F));
+        Assert.InRange(BubbleSkins.PreBurst(F, false), .05, .15);
+        Assert.True(BubbleSkins.PreBurst(F, true) >= .3, "under Gentle the cracks brighten over 0.3 s");
+        Assert.NotNull(BubbleLayer.SkinPainter.ShellTint(F));
+
+        // It freezes with age: more rime, a longer flake that branches; Reduced half as fast, Off frozen through and still.
+        var a = new SkinPrim[BubbleSkins.MaxInterior];
+        var b = new SkinPrim[BubbleSkins.MaxInterior];
+        var seg = new float[BubbleSkins.MaxFrostSegments * 4];
+        int lastSpecks = 0, lastSegs = 0;
+        double lastArm = 0;
+        foreach (var t in new[] { 0, 1.2, 2.4, 3.6, 4.5 })
+        {
+            int n = BubbleSkins.Interior(F, 31, t, 1, 60, a);
+            Assert.True(n >= lastSpecks && n <= BubbleSkins.FrostSpeckCount(60));
+            for (int i = 0; i < n; i++)
+            {
+                Assert.Equal(SkinPrimKind.Speck, a[i].Kind);
+                Assert.True(Math.Sqrt(a[i].X * a[i].X + a[i].Y * a[i].Y) + a[i].R * 1.42 <= BubbleSkins.Inner);
+            }
+            int s = BubbleSkins.FrostFlake(31, t, 1, seg);
+            double arm = Math.Sqrt(seg[2] * seg[2] + seg[3] * seg[3]);
+            for (int i = 0; i < s * 4; i += 2) Assert.True(Math.Sqrt(seg[i] * seg[i] + seg[i + 1] * seg[i + 1]) <= .7);
+            Assert.True(s >= lastSegs && arm >= lastArm);
+            lastSpecks = n; lastSegs = s; lastArm = arm;
+        }
+        Assert.True(lastSpecks > 15 && lastSegs == BubbleSkins.MaxFrostSegments && lastArm > .6, "frozen through");
+        Assert.Equal(BubbleSkins.FrostGrowth(4, .5), BubbleSkins.FrostGrowth(2, 1), 9);
+        Assert.Equal(1, BubbleSkins.FrostGrowth(.3, 0));
+        int na = BubbleSkins.Interior(F, 31, .2, 0, 60, a);
+        Assert.Equal(na, BubbleSkins.Interior(F, 31, 9, 0, 60, b));
+        for (int i = 0; i < na; i++) Assert.Equal(a[i], b[i]);
+        Assert.Equal(BubbleSkins.FrostSpin(31, .2, 0), BubbleSkins.FrostSpin(31, 9, 0));
+
+        BurstRules(F, 1 + BubbleSkins.FrostSticks + BubbleSkins.MaxFrostDots + BubbleSkins.MaxFrostFlakes);
+        var p = new SkinParticle[BubbleSkins.BurstCapacity];
+        int count = BubbleSkins.Burst(F, 9, 80, 1, p), flakes = 0;
+        double y0 = 0, y1 = 0;
+        for (int i = 0; i < count; i++)
+            if (p[i].Kind == SkinParticleKind.Flake && p[i].Life > 1.6f)
+            { flakes++; y0 += BubbleSkins.At(p[i], .3).Y; y1 += BubbleSkins.At(p[i], 1.5).Y; }
+        Assert.True(flakes > 10 && y1 > y0, "the flakes drift down");
+    }
+
+    [Fact]
+    public void Frost_stills_grow_a_snowflake_under_the_ice_film_and_crack_into_snow()
+        => Stills(BubbleSkinIds.Frost, new[] { .05, .09, .15, .3, .7, 1.4 }, popCell: 4, outerReach: 0, times: new[] { .5, 1.6, 3, 5 });
+
+    [Fact]
     public void Soap_and_reserved_skins_leave_the_item_untouched()
     {
-        foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Frost, "nope" })
+        foreach (var skin in new[] { BubbleSkinIds.Soap, null, "", "nope" })
         {
             var fresh = new BubbleLayer.BubbleItem();
             var item = new BubbleLayer.BubbleItem();
@@ -416,12 +470,12 @@ public class BubbleSkinsTests
     /// &lt;dir&gt;/&lt;skin&gt;/&lt;skin&gt;-interior.png (four times, a small bubble, an Off frame) and -pop.png.
     /// <paramref name="outerReach"/> is how far past the glass the live body may draw (0 = inside it).
     /// </summary>
-    private static void Stills(string skin, double[] popAges, int popCell, double outerReach)
+    private static void Stills(string skin, double[] popAges, int popCell, double outerReach, double[]? times = null)
     {
         using var sprite = LoadSprite();
         using var paint = new BubbleLayer.SkinPainter();
         const int seed = 20261117;
-        double[] times = { 0, 0.6, 1.3, 2.5 };
+        times ??= new[] { 0, 0.6, 1.3, 2.5 };
         using var strip = Canvas(Cell * 6, out var c);
         for (int i = 0; i < times.Length; i++) Bubble(c, sprite, paint, skin, seed, times[i], 1, i, Side, 1f, 1f);
         Bubble(c, sprite, paint, skin, seed + 1, 1.0, 1, 4, 90f, 1f, 1f);
