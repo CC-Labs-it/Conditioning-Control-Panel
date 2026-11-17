@@ -141,23 +141,23 @@ internal sealed class ShopPreviewBackend
     }
 
     /// <summary>A gain the desktop banked, mirrored into the preview wallet and its ledger.</summary>
-    public void Credit(int amount, string text)
+    public void Credit(int amount, string code)
     {
         if (amount <= 0) return;
         lock (_gate)
         {
             var d = Data();
-            ShopPreviewRules.Credit(d, amount, text);
+            ShopPreviewRules.Credit(d, amount, code, _clock());
             Save(d);
         }
     }
 
-    /// <summary>The ledger line for a desktop credit.</summary>
-    internal static string CreditText(SparklePointSource source) => source switch
+    /// <summary>The ledger code for a desktop credit (the page turns it into words).</summary>
+    internal static string CreditCode(SparklePointSource source) => source switch
     {
-        SparklePointSource.LevelUp => "Level up",
-        SparklePointSource.BubbleMilestone => "Bubble pops",
-        _ => "Earned elsewhere",
+        SparklePointSource.LevelUp => ShopPreviewRules.CodeLevel,
+        SparklePointSource.BubbleMilestone => ShopPreviewRules.CodePops,
+        _ => ShopPreviewRules.CodePlay,
     };
 
     /// <summary>Startup (App, DEBUG only): when the preview is on, WornLooks reads its equip and every
@@ -166,7 +166,7 @@ internal sealed class ShopPreviewBackend
     {
         if (!Enabled) return;
         Prizes.WornLooks.Source = slot => Shared.Worn(slot);
-        SparklePointRewards.Awarded += (_, award) => Shared.Credit(award.Amount, CreditText(award.Source));
+        SparklePointRewards.Awarded += (_, award) => Shared.Credit(award.Amount, CreditCode(award.Source));
         App.Logger?.Information("ShopPreview: ON, answering the Prize Counter from {File}", FileName);
     }
 

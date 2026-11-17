@@ -101,11 +101,11 @@ test('a stray key never buys, claims, stamps or opens the gift', async () => {
   assert.equal(r.ops('shop-gift').length + r.ops('shop-stamp').length + r.ops('shop-buy').length, 0);
 });
 
-test('a refusal shows one plain line; the gift answered not_ready leaves the wallet alone', async () => {
+test('a refusal shows its own plain line; the gift answered not_ready leaves the wallet alone', async () => {
   const r = await rig({}, (s) => { const h = s.handle; s.handle = async (op, b, i) => (op === 'shop-gift' ? { ok: false, reason: 'not_ready' } : h(op, b, i)); });
   r.wait(500); r.click('gift'); await settle();
-  assert.equal(r.page.ui.nudge.text, 'That did not go through.');
-  assert.match(r.page.view.nudge.text(), /That did not go through/);
+  assert.equal(r.page.ui.nudge.text, 'Not ready yet.');
+  assert.match(r.page.view.nudge.text(), /Not ready yet/);
   assert.equal(r.page.shop.sp(), 410);
   r.click('nudge-x');
   assert.equal(r.page.view.nudge.hidden, true);

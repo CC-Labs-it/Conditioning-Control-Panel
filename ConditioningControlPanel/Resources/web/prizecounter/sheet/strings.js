@@ -1,8 +1,13 @@
-/* sheet/strings.js - the words the 2D counter sheet adds over state/strings.js (English fallbacks only).
- * They live here, not in LEX, until the ten language files carry them (tests/hud-loc.test.mjs pins LEX to en.json).
- * The host's lexicon still wins: sheetT() = makeT over these, then the host's words. Names follow the owner's mockup. */
+/* sheet/strings.js - the words the 2D counter sheet adds over state/strings.js, as `shop_sheet_*` loc keys (and
+ * `shop_item_fx_*` names for the effect rows) with their English fallbacks. The ten language files carry the same keys
+ * (tests/hud-loc.test.mjs keeps them in step); the host sends every `shop_` key of the current language in
+ * init.lexicon (PrizeCounterHostService), and that wins: sheetT() = makeT over these, then the host's words. English
+ * stays the default for a host that sends nothing. Names follow the owner's mockup. */
 
 import { makeT } from '../state/strings.js';
+
+/** DEBUG preview only (CCP_SHOP_PREVIEW=1): stays English, no loc key. */
+export const PREVIEW_SLIP = 'Preview: nothing here is real';
 
 export const SHEET_LEX = {
   shop_sheet_search: 'Search items',
@@ -15,7 +20,6 @@ export const SHEET_LEX = {
   shop_sheet_yes_buy: 'Yes, buy for {0}',
   shop_sheet_cancel: 'Cancel',
   // the preview wire
-  shop_sheet_preview: 'Preview: nothing here is real',
   shop_sheet_tab_featured: 'Featured',
   shop_sheet_tab_effects: 'Screen effects',
   shop_sheet_tab_games: 'Game skins',
@@ -105,7 +109,11 @@ export const SHEET_LEX = {
   shop_sheet_stamp_go: 'Stamp day {0}',
   shop_sheet_stamped_today: 'Stamped today',
   shop_sheet_coupon: '1 free item',
-  shop_sheet_coupon_terms: 'any 120 tag, at {0} stamps',
+  shop_sheet_coupon_terms: 'any {1} tag, at {0} stamps',
+  shop_sheet_coupon_terms_any: 'one small item, at {0} stamps',
+  shop_sheet_stamp_finished: 'Finished',
+  shop_sheet_stamp_over: 'Card done, with {0} stamps.',
+  shop_sheet_stamp_over_keep: 'Card done. Your free item still works.',
   shop_sheet_coupon_ready: 'Ready. Pick one.',
   shop_sheet_coupon_used: 'Claimed.',
   shop_sheet_coupon_count: '{0} of {1} stamps',
@@ -125,6 +133,21 @@ export const SHEET_LEX = {
   shop_sheet_view: 'View',
   shop_sheet_dismiss: 'Dismiss',
   shop_sheet_refused: 'That did not go through.',
+  shop_sheet_no_stamped: 'Already stamped today.',
+  shop_sheet_no_done: 'The stamp card is finished.',
+  shop_sheet_no_not_ready: 'Not ready yet.',
+  shop_sheet_no_owned: 'You already own this.',
+  shop_sheet_no_not_owned: 'Buy it first, then wear it.',
+  shop_sheet_no_unavailable: 'Not on offer right now.',
+  shop_sheet_no_short: 'Not enough Sparkles.',
+  // the receipt: the server sends codes, these are their words
+  shop_sheet_led_buy: 'Bought an item',
+  shop_sheet_led_coupon: 'Stamp card: {0}',
+  shop_sheet_led_coupon_any: 'Stamp card item',
+  shop_sheet_led_level: 'Level up',
+  shop_sheet_led_pops: 'Bubble pops',
+  shop_sheet_led_play: 'Earned playing',
+  shop_sheet_led_other: 'Sparkles moved',
   // where things show
   shop_sheet_works_here: 'Works here',
   shop_sheet_works_on: 'Works on',
@@ -145,6 +168,53 @@ export const SHEET_LEX = {
   shop_sheet_you_are_here: 'you are here',
   shop_sheet_host_note: 'Same wallet and same shelves as the desktop app. Anything marked',
   shop_sheet_host_note_end: 'is bought here and worn there.',
+  // the effect rows' names and how lines (the wire's English `name` / `how` only covers a row this list does not know)
+  shop_item_fx_bubble_soap_name: 'Soap',
+  shop_item_fx_bubble_soap_how: 'the default',
+  shop_item_fx_bubble_marble_name: 'Marble',
+  shop_item_fx_bubble_heart_name: 'Heart',
+  shop_item_fx_bubble_champagne_name: 'Champagne',
+  shop_item_fx_bubble_spiral_name: 'Spiral',
+  shop_item_fx_bubble_disco_name: 'Disco',
+  shop_item_fx_bubble_frost_name: 'Frost',
+  shop_item_fx_bubble_gum_name: 'Bubblegum',
+  shop_item_fx_bubble_latex_name: 'Latex',
+  shop_item_fx_bubble_oil_name: 'Oil slick',
+  shop_item_fx_card_plain_name: 'Plain',
+  shop_item_fx_card_ink_name: 'Ink',
+  shop_item_fx_card_check_name: 'Check',
+  shop_item_fx_card_lace_name: 'Lace',
+  shop_item_fx_behind_none_name: 'Nothing',
+  shop_item_fx_behind_whisper_name: 'Whisper',
+  shop_item_fx_behind_whisper_how: 'a new word each flip',
+  shop_item_fx_fog_pink_name: 'Pink',
+  shop_item_fx_fog_lilac_name: 'Lilac',
+  shop_item_fx_fog_mint_name: 'Mint',
+  shop_item_fx_fog_amber_name: 'Amber',
+  shop_item_fx_fog_twotone_name: 'Two-tone',
+  shop_item_fx_fog_twotone_how: 'two colours swirl',
+  shop_item_fx_word_classic_name: 'Classic',
+  shop_item_fx_word_classic_how: 'fades',
+  shop_item_fx_word_type_name: 'Typed',
+  shop_item_fx_word_type_how: 'typewriter',
+  shop_item_fx_word_chalk_name: 'Chalk',
+  shop_item_fx_word_chalk_how: 'written on',
+  shop_item_fx_word_drift_name: 'Drift',
+  shop_item_fx_word_drift_how: 'letters rise',
+  shop_item_fx_word_echo_name: 'Echo',
+  shop_item_fx_word_echo_how: 'ghost copies',
+  shop_item_fx_word_marquee_name: 'Marquee',
+  shop_item_fx_word_marquee_how: 'lights up',
 };
 
 export const sheetT = (lexicon, companion) => makeT({ ...SHEET_LEX, ...(lexicon && typeof lexicon === 'object' ? lexicon : {}) }, companion);
+
+/** A refusal's line, one per reason the server and the host answer (CCP-Server shop-routes.js): retry words for the
+ * host's own answers, a plain line for each shop reason, one plain line for anything else. */
+const REFUSAL = {
+  offline: 'shop_note_retry', timeout: 'shop_note_retry', busy: 'shop_note_retry', too_fast: 'shop_note_retry', signed_out: 'shop_note_signed_out',
+  stamped: 'shop_sheet_no_stamped', done: 'shop_sheet_no_done', not_ready: 'shop_sheet_no_not_ready', owned: 'shop_sheet_no_owned',
+  not_owned: 'shop_sheet_no_not_owned', unavailable: 'shop_sheet_no_unavailable', needs_prime: 'shop_prime_reason', insufficient: 'shop_sheet_no_short',
+  bad_input: 'shop_sheet_refused',
+};
+export const refusalKey = (res) => REFUSAL[(res && res.reason) || 'offline'] || 'shop_sheet_refused';

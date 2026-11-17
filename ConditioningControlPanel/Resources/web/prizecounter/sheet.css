@@ -445,3 +445,9 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
   .ping, .mote { display: none; }
   .gbox .gl, .meter i { transition: none; }
 }
+
+/* the finished stamp card (stamps.done): kept with its stamps while its coupon waits, no Stamp button, a red FINISHED mark */
+.scard.done { background-color: var(--paper-2); transform: rotate(-.4deg); }
+.scard.done .scard-h span { color: var(--stamp); border: 2.5px solid currentColor; border-radius: 6px; padding: 3px 8px 2px; transform: rotate(-4deg); letter-spacing: .14em; }
+.scard.done .dots span:not(.on) { border-style: dotted; opacity: .55; }
+.scard-over { margin: 0; font: 700 13px/1.35 var(--f-body); color: var(--ink-soft); }

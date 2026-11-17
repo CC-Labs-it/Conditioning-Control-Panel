@@ -27,7 +27,7 @@ test('the preview opens on Featured: spotlight, gift, stamp card, saving for, re
   const s = r.text();
   for (const w of ['New this week', 'Marble bubbles', 'Try it on', 'Also new', 'Heart bubbles', 'Gifts and stamps', 'Monday gift', 'Open, +25',
     'Stamp card', 'Stamp day 5', '1 free item', '3 of 6 stamps', 'Saving for', 'Spiral bubbles', '320 to go', 'Earned and spent',
-    'Won at chess', 'The Suggestible Duck', 'In the wallet', 'You can buy now', 'with the 410 in your wallet']) assert.ok(s.includes(w), w);
+    'Earned playing', 'Bubble pops', 'The Suggestible Duck', 'In the wallet', 'You can buy now', 'with the 410 in your wallet']) assert.ok(s.includes(w), w);
   assert.match(r.page.view.head.text(), /Preview: nothing here is real/);
   assert.match(r.btn('tab:featured').text(), /2/);
   assert.ok(r.btn('gift') && !r.btn('gift').disabled);

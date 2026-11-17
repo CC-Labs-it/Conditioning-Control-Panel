@@ -112,7 +112,7 @@ test('the mock preview ops: equip refuses what you do not own, one gift a week, 
   assert.equal((await server.handle('shop-equip', { slot: 'bubble', itemId: 'fx.bubble.heart' })).reason, 'not_owned');
   assert.equal(readPreview(await server.handle('shop-equip', { slot: 'fog2', itemId: 'fx.fog.mint' })).equip.fog2, 'fx.fog.mint');
   const g = await server.handle('shop-gift', {});
-  assert.equal(g.sp, 435); assert.equal(g.gift.ready, false); assert.deepEqual(g.ledger[0], { t: 'Monday gift', n: 25 });
+  assert.equal(g.sp, 435); assert.equal(g.gift.ready, false); assert.deepEqual([g.ledger[0].code, g.ledger[0].n, typeof g.ledger[0].at], ['gift', 25, 'string']);
   assert.equal((await server.handle('shop-gift', {})).ok, false);
   assert.deepEqual((await server.handle('shop-stamp', {})).stamps.stamped, [1, 2, 4, 5]);
   assert.equal((await server.handle('shop-stamp', {})).ok, false);
@@ -129,6 +129,6 @@ test('the mock preview ops: equip refuses what you do not own, one gift a week, 
   assert.equal(heart.sp, 75);
   const s = await server.handle('shop-state');
   assert.equal(readPreview(s).equip.bubble, 'fx.bubble.heart');
-  assert.deepEqual(readPreview(s).ledger[0], { t: 'fx.bubble.heart', n: -360 });
+  assert.deepEqual(readPreview(s).ledger[0], { code: 'buy', n: -360, id: 'fx.bubble.heart' });
   assert.equal(previewSample(SAMPLE).tabs[0].id, 'effects');
 });
