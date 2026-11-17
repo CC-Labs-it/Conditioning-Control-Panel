@@ -10661,6 +10661,14 @@ namespace ConditioningControlPanel.Models
             set { _afterglowGhostOpacity = SuperCore.AfterglowLineOptions.ClampGhost(value); OnPropertyChanged(); }
         }
 
+        // Afterglow (take two): while the V2 runs, the normal subliminal cards rest unless this is on (owner 2026-11-17).
+        private bool _afterglowAlsoBase = SuperCore.AfterglowBase.AlsoBaseDefault;
+        public bool AfterglowAlsoBase
+        {
+            get => _afterglowAlsoBase;
+            set { _afterglowAlsoBase = value; OnPropertyChanged(); }
+        }
+
         // Froth: the biggest a merged bubble may grow, in sizes of a fresh one. Never changes pay.
         private double _frothMaxSize = SuperCore.FrothOptions.MaxSizeDefault;
         public double FrothMaxSize

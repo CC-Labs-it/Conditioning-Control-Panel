@@ -4596,6 +4596,8 @@
   "tooltip_super_afterglow_hold": "완성된 줄이 가라앉기 전에 빛나는 시간.",
   "super_afterglow_ghost": "유령 불투명도",
   "tooltip_super_afterglow_ghost": "줄에서 기다리는 유령 단어가 보이는 정도.",
+  "super_afterglow_also_base": "일반 서브리미널도 표시",
+  "tooltip_super_afterglow_also_base": "V2가 켜져 있으면 일반 서브리미널 카드는 쉬어요. 둘 다 쓰려면 켜세요.",
   "super_froth_size": "최대 거품",
   "tooltip_super_froth_size": "합쳐진 거품이 커질 수 있는 크기. 합쳐진 거품은 항상 원래 거품들의 합을 줍니다.",
   "super_froth_reach": "터짐 범위",

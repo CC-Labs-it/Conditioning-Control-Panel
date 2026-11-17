@@ -140,7 +140,8 @@ public sealed class SteamLayer : BaseLayer
         screen.LastT = _t;
         screen.Words.Line = Line;
         screen.Words.Step(field, dt, Safety.GentleVisuals.On, WordsOn);
-        screen.WordsDraw.Draw(canvas, bounds, field, screen.Words, colour, Face);
+        // The worn word style (shop): its face, colour and way in; Still under Gentle visuals.
+        screen.WordsDraw.Draw(canvas, bounds, field, screen.Words, colour, Face, Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);
         field.ClearDirty();
     }
 }

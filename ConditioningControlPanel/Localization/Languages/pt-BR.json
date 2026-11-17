@@ -4596,6 +4596,8 @@
   "tooltip_super_afterglow_hold": "Quanto tempo a linha completa brilha antes de afundar.",
   "super_afterglow_ghost": "Opacidade fantasma",
   "tooltip_super_afterglow_ghost": "Quanto uma palavra fantasma aparece enquanto espera na linha.",
+  "super_afterglow_also_base": "Mostrar também as subliminares normais",
+  "tooltip_super_afterglow_also_base": "Com a V2 ligada, os cartões subliminares normais descansam. Ligue isto para usar os dois.",
   "super_froth_size": "Bolha máxima",
   "tooltip_super_froth_size": "Até onde as bolhas unidas podem crescer. Uma bolha unida sempre paga a soma das partes.",
   "super_froth_reach": "Alcance do estouro",

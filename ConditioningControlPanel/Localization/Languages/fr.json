@@ -4596,6 +4596,8 @@
   "tooltip_super_afterglow_hold": "Combien de temps la ligne complète brille avant de couler.",
   "super_afterglow_ghost": "Opacité des fantômes",
   "tooltip_super_afterglow_ghost": "La visibilité d'un mot fantôme pendant qu'il attend dans la ligne.",
+  "super_afterglow_also_base": "Afficher aussi les subliminaux normaux",
+  "tooltip_super_afterglow_also_base": "Avec la V2 activée, les cartes subliminales normales se reposent. Active ceci pour lancer les deux.",
   "super_froth_size": "Bulle maximale",
   "tooltip_super_froth_size": "Jusqu'où les bulles fusionnées peuvent grossir. Une bulle fusionnée paie toujours la somme de ses parties.",
   "super_froth_reach": "Portée de l'éclat",

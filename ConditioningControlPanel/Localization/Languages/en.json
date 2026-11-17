@@ -1690,6 +1690,8 @@
   "tooltip_super_afterglow_hold": "How long the finished line glows before it sinks.",
   "super_afterglow_ghost": "Ghost opacity",
   "tooltip_super_afterglow_ghost": "How visible a ghost word is while it waits in the line.",
+  "super_afterglow_also_base": "Also show the normal subliminals",
+  "tooltip_super_afterglow_also_base": "With the V2 on, the normal subliminal cards rest. Turn this on to run both.",
   "super_froth_size": "Biggest bubble",
   "tooltip_super_froth_size": "How big merged bubbles may grow. A merged bubble always pays the sum of its parts.",
   "super_froth_reach": "Pop reach",

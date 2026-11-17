@@ -4596,6 +4596,8 @@
   "tooltip_super_afterglow_hold": "完成した行が沈むまでに光り続ける時間。",
   "super_afterglow_ghost": "ゴーストの不透明度",
   "tooltip_super_afterglow_ghost": "行で待っているゴーストの単語の見えやすさ。",
+  "super_afterglow_also_base": "通常のサブリミナルも表示",
+  "tooltip_super_afterglow_also_base": "V2がオンの間、通常のサブリミナルカードは休みます。両方を動かすにはオンにします。",
   "super_froth_size": "最大の泡",
   "tooltip_super_froth_size": "合体した泡が育つ最大の大きさ。合体した泡は常に元の泡の合計を払います。",
   "super_froth_reach": "破裂の範囲",

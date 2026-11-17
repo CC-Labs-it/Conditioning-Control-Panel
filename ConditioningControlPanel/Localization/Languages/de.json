@@ -4596,6 +4596,8 @@
   "tooltip_super_afterglow_hold": "Wie lange die fertige Zeile leuchtet, bevor sie versinkt.",
   "super_afterglow_ghost": "Geister-Deckkraft",
   "tooltip_super_afterglow_ghost": "Wie sichtbar ein Geisterwort ist, während es in der Zeile wartet.",
+  "super_afterglow_also_base": "Auch die normalen Subliminals zeigen",
+  "tooltip_super_afterglow_also_base": "Mit der V2 ruhen die normalen Subliminal-Karten. Schalte das ein, um beide laufen zu lassen.",
   "super_froth_size": "Größte Blase",
   "tooltip_super_froth_size": "Wie groß verschmolzene Blasen werden dürfen. Eine verschmolzene Blase zahlt immer die Summe ihrer Teile.",
   "super_froth_reach": "Platz-Reichweite",
