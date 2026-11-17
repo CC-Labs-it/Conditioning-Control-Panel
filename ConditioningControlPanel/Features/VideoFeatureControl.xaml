@@ -299,7 +299,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_enable_attention_check_targets}">
+                            <Grid x:Name="RowMiniGame" Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_enable_attention_check_targets}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -312,8 +312,13 @@
                                           ToolTip="{loc:Str tooltip_enable_attention_check_targets}"
                                           Checked="ChkMiniGame_Changed" Unchecked="ChkMiniGame_Changed"/>
                             </Grid>
+                            <!-- Floating videos have no mini game: the row greys out and reads as off while
+                                 Floating is the pick (MandatoryVideoPresentation.MiniGameShownOn). -->
+                            <TextBlock x:Name="TxtMiniGameFloatNote" Text="{loc:Str video_minigame_floating_note}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
+                                       Visibility="Collapsed"/>
 
-                            <feat:OptionSection Key="video.minigame" Title="{loc:Str studio_section_options}" Theme="Timing" DefaultOpen="False">
+                            <feat:OptionSection x:Name="SectionMiniGame" Key="video.minigame" Title="{loc:Str studio_section_options}" Theme="Timing" DefaultOpen="False">
                             <!-- Targets (the dice toggle randomises the count, so it rides the label) -->
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_number_of_targets_to_click_per_video}">
                                 <Grid.ColumnDefinitions>

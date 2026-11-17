@@ -5,89 +5,62 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
-using System.Windows.Shapes;
+using System.Windows.Media.Imaging;
+using ConditioningControlPanel.SuperCore;
 
 namespace ConditioningControlPanel.Services.Super
 {
     /// <summary>
-    /// Super Lights Down: one click-through, non-activating window OWNED by a mandatory-video
-    /// window, so it always sits just above that video and closes with it (panic, emergency exit,
-    /// skip and natural end all close the owner). It cannot be a compositor layer: the z-order
-    /// reconciler pins every compositor host BELOW a playing video (#497), and the video surface
-    /// is an airspace HWND (WebView2 or VideoView) nothing in WPF can draw over.
+    /// Super Lights Down's window: one click-through, non-activating, layered window over one screen.
+    /// It draws ONE small picture (<see cref="LightsDownCanvas"/>, about 320 cells across) and lets
+    /// WPF stretch it over the screen with a bilinear filter: no gradient brush, no Effect, no
+    /// per-frame geometry, and the stretch itself is what makes every edge soft. A frame is written
+    /// only when <see cref="LightsDownCanvas.Worth"/> says it changed, so a dim at rest never repaints.
     ///
-    /// Retained WPF visuals built once; a frame only copies <see cref="LightsDownFrame"/> values
-    /// onto transforms, opacities and gradient stops. No geometry is rebuilt per frame except the
-    /// cut-outs around live attention targets, and only when they move.
+    /// Full screen it is OWNED by the video window, so it sits just above that video and closes with
+    /// it (the dim lies over the screen edges of the picture). Floating it has NO owner (an owned
+    /// window always sits above its owner, which would put the dim over the video, and an owner chain
+    /// can lift itself over the user's app); the service keeps it just BELOW the floating windows
+    /// with <see cref="KeepBelow"/>, so the videos are never dimmed even when a hole lags a frame.
     /// </summary>
     internal sealed class LightsDownOverlay : Window
     {
-        private const int MaxMotes = 48;
-
         private readonly IntPtr _ownerHwnd;
         private readonly System.Drawing.Rectangle _bounds;
         private readonly double _dpi;
-        private readonly double _w, _h;
-        private readonly bool _swellVideo;
-        private readonly FrameworkElement? _videoContent;
-        private readonly Transform? _savedTransform;
-        private readonly Point _savedOrigin;
-        private ScaleTransform? _videoScale;
-
-        private Rect _pic;
+        private readonly LightsDownCanvas _canvas;
+        private readonly WriteableBitmap _bitmap;
         private readonly Canvas _root = new();
-        private readonly Canvas _shade = new();
-        private readonly RectangleGeometry _picHole = new();
-        private readonly ScaleTransform _holeSwell = new();
-        private readonly CombinedGeometry _outside;
-        private readonly Path _dim = new() { Fill = new SolidColorBrush(Color.FromRgb(3, 1, 9)) };
-        private readonly Path[] _aperture = new Path[LightsDownMath.ApertureLayers];
-        private readonly ScaleTransform[] _apScale = new ScaleTransform[LightsDownMath.ApertureLayers];
-        private readonly RotateTransform _apRotate = new();
-        private readonly TranslateTransform _apMove = new();
-        private readonly Canvas _rays = new();
-        private readonly RotateTransform _raysRotate = new();
-        private readonly GradientStop[] _rayStops = new GradientStop[LightsDownMath.Rays];
-        private readonly Canvas _frame = new();
-        private readonly ScaleTransform _frameSwell = new();
-        private readonly Rectangle _glow = new() { RadiusX = 10, RadiusY = 10, StrokeThickness = 3 };
-        private readonly SolidColorBrush _glowBrush = new();
-        private readonly DropShadowEffect? _glowFx;
-        private readonly Rectangle _run = new() { RadiusX = 10, RadiusY = 10, StrokeThickness = 3, Stroke = new SolidColorBrush(Color.FromRgb(255, 235, 250)) };
-        private readonly Rectangle _splitA = new() { Fill = new SolidColorBrush(Color.FromRgb(255, 0, 90)), RadiusX = 10, RadiusY = 10 };
-        private readonly Rectangle _splitB = new() { Fill = new SolidColorBrush(Color.FromRgb(0, 210, 255)), RadiusX = 10, RadiusY = 10 };
-        private readonly Rectangle _streak = new() { Height = 4 };
-        private readonly Ellipse[] _motes = new Ellipse[MaxMotes];
-        private readonly TranslateTransform[] _moteAt = new TranslateTransform[MaxMotes];
-        private readonly SolidColorBrush[] _moteBrush = new SolidColorBrush[MaxMotes];
-        private readonly double[] _mx = new double[MaxMotes], _my = new double[MaxMotes], _mvx = new double[MaxMotes], _mvy = new double[MaxMotes], _mAge = new double[MaxMotes], _mLife = new double[MaxMotes];
-        private readonly bool[] _mBurst = new bool[MaxMotes];
-        private readonly double[] _mPhase = new double[MaxMotes];
-        // The iris leans toward the pointer on a spring (local DIPs, offset from the picture centre).
-        private double _leanX, _leanVX, _leanY, _leanVY;
-        private double _ptrX = double.NaN, _ptrY = double.NaN;
-        private double _picCx, _picCy;
-        private readonly Random _rng = new();
-        private readonly List<Rect> _cutRects = new();
-        private bool _cutDirty;
+        private LightsDownLook _drawn = LightsDownLook.None;
+        private bool _blank = true;
 
         public IntPtr OwnerHwnd => _ownerHwnd;
+        public System.Drawing.Rectangle BoundsPx => _bounds;
+        public double Dpi => _dpi;
+        public bool Floating => _ownerHwnd == IntPtr.Zero;
+
+        /// <summary>The short side of the screen in physical pixels (the look scales with it).</summary>
+        public double ShortSidePx => Math.Min(_bounds.Width, _bounds.Height);
+
+        /// <summary>The holes this screen tracks (floating windows or attention targets on it).</summary>
+        public LightsDownHoles Holes { get; } = new();
 
         /// <summary>An unowned overlay for a screen at the origin, for the offscreen render test.</summary>
-        internal static LightsDownOverlay ForTest(int widthPx, int heightPx, double aspect)
-            => new(IntPtr.Zero, new System.Drawing.Rectangle(0, 0, widthPx, heightPx), 1, aspect, null, true, 116);
+        internal static LightsDownOverlay ForTest(int widthPx, int heightPx, double dpi = 1)
+            => new(IntPtr.Zero, new System.Drawing.Rectangle(0, 0, widthPx, heightPx), dpi);
 
         /// <summary>The drawing root, for the offscreen render test.</summary>
         internal FrameworkElement RootForTest => _root;
 
-        public LightsDownOverlay(IntPtr ownerHwnd, System.Drawing.Rectangle screenBoundsPx, double dpi, double aspect, Window? videoWindow, bool allowGlow, double glowCap)
+        /// <summary>The small picture, for tests.</summary>
+        internal LightsDownCanvas CanvasForTest => _canvas;
+
+        public LightsDownOverlay(IntPtr ownerHwnd, System.Drawing.Rectangle screenBoundsPx, double dpi)
         {
             _ownerHwnd = ownerHwnd;
             _bounds = screenBoundsPx;
-            _dpi = dpi <= 0 ? 1 : dpi;
-            _w = screenBoundsPx.Width / _dpi;
-            _h = screenBoundsPx.Height / _dpi;
+            _dpi = dpi is > 0.25 and < 8 ? dpi : 1;
+            double w = screenBoundsPx.Width / _dpi, h = screenBoundsPx.Height / _dpi;
 
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
@@ -102,371 +75,103 @@ namespace ConditioningControlPanel.Services.Super
             // Same placement formula as the video window it rides (VideoService.CreateLibVLCVideoWindow).
             Left = screenBoundsPx.X / _dpi;
             Top = screenBoundsPx.Y / _dpi;
-            Width = _w;
-            Height = _h;
+            Width = w;
+            Height = h;
             Title = "CCP Lights Down";
 
-            // The swell only works where the video is WPF content (the blurred-background vmem path):
-            // a WebView2 or VideoView surface is an HwndHost and ignores render transforms.
-            if (SwellTarget(videoWindow) is { } fe)
+            _canvas = new LightsDownCanvas(screenBoundsPx.Width, screenBoundsPx.Height, _dpi);
+            _bitmap = new WriteableBitmap(_canvas.Width, _canvas.Height, 96, 96, PixelFormats.Pbgra32, null);
+            // Cell centres land on the screen pixels they were sampled at: the picture is a whole
+            // number of cells, a hair larger than the screen, and the window clips the rest.
+            var image = new Image
             {
-                _videoContent = fe;
-                _savedTransform = fe.RenderTransform;
-                _savedOrigin = fe.RenderTransformOrigin;
-                _swellVideo = true;
-            }
-
-            _outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(new Rect(0, 0, _w, _h)), _picHole);
-            _picHole.Transform = _holeSwell;
-
-            _dim.Data = _outside;
-            _shade.Children.Add(_dim);
-
-            // Rays: a fixed fan from the picture centre, clipped to the room so the picture stays clean.
-            double L = Math.Max(_w, _h);
-            for (int i = 0; i < LightsDownMath.Rays; i++)
-            {
-                double an = i * Math.PI * 2 / LightsDownMath.Rays, wd = LightsDownMath.RayHalfWidth;
-                var stop = new GradientStop(Colors.Transparent, 0);
-                _rayStops[i] = stop;
-                var brush = new LinearGradientBrush
-                {
-                    MappingMode = BrushMappingMode.Absolute,
-                    StartPoint = new Point(0, 0),
-                    EndPoint = new Point(Math.Cos(an) * L, Math.Sin(an) * L),
-                    GradientStops = { stop, new GradientStop(Colors.Transparent, 1) },
-                };
-                var fig = new PathFigure(new Point(0, 0), new[]
-                {
-                    new LineSegment(new Point(Math.Cos(an - wd) * L, Math.Sin(an - wd) * L), false),
-                    new LineSegment(new Point(Math.Cos(an + wd) * L, Math.Sin(an + wd) * L), false),
-                }, true);
-                _rays.Children.Add(new Path { Data = new PathGeometry(new[] { fig }), Fill = brush });
-            }
-            var raysHost = new Canvas { Clip = _outside };
-            _rays.RenderTransform = new TransformGroup { Children = { _raysRotate, new TranslateTransform() } };
-            raysHost.Children.Add(_rays);
-            _shade.Children.Add(raysHost);
-
-            // Aperture: four soft hexagonal irises. Unit hexagon inside a huge rectangle, even-odd,
-            // scaled per layer; one rotation and one centre shared by all four.
-            var hex = new StreamGeometry { FillRule = FillRule.EvenOdd };
-            using (var g = hex.Open())
-            {
-                g.BeginFigure(new Point(-40, -40), true, true);
-                g.PolyLineTo(new[] { new Point(40, -40), new Point(40, 40), new Point(-40, 40) }, false, false);
-                var v0 = LightsDownMath.HexVertex(0);
-                g.BeginFigure(new Point(v0.X, v0.Y), true, true);
-                var pts = new Point[5];
-                for (int i = 1; i < 6; i++) { var v = LightsDownMath.HexVertex(i); pts[i - 1] = new Point(v.X, v.Y); }
-                g.PolyLineTo(pts, false, false);
-            }
-            hex.Freeze();
-            var apBrush = new SolidColorBrush(Color.FromRgb(2, 0, 8));
-            apBrush.Freeze();
-            // Clipped to the room like the rays: shut, the innermost hex reaches inside the
-            // picture's corners (its apothem is under the picture's half-diagonal), and the
-            // mockup draws the video OVER the aperture, so the picture stays clean.
-            var apHost = new Canvas { Clip = _outside };
-            _shade.Children.Add(apHost);
-            for (int i = 0; i < _aperture.Length; i++)
-            {
-                _apScale[i] = new ScaleTransform();
-                _aperture[i] = new Path
-                {
-                    Data = hex,
-                    Fill = apBrush,
-                    RenderTransform = new TransformGroup { Children = { _apScale[i], _apRotate, _apMove } },
-                };
-                apHost.Children.Add(_aperture[i]);
-            }
-
-            // Dust motes catching the light.
-            for (int i = 0; i < MaxMotes; i++)
-            {
-                _moteAt[i] = new TranslateTransform();
-                _moteBrush[i] = new SolidColorBrush(Color.FromArgb(0, 255, 215, 240));
-                _motes[i] = new Ellipse { Width = 2.8, Height = 2.8, Fill = _moteBrush[i], RenderTransform = _moteAt[i], Visibility = Visibility.Collapsed };
-                _shade.Children.Add(_motes[i]);
-            }
-            _root.Children.Add(_shade);
-
-            // Glow and the lock-in run hug the frame; they swell with it.
-            // The mockup's glow is the shadow of the whole frame, so with glow allowed the rect is
-            // FILLED and the room clip below cuts the fill away, leaving only the halo outside.
-            // Without glow (Performance tier) a soft stroke stands in.
-            if (allowGlow) _glow.Fill = _glowBrush; else _glow.Stroke = _glowBrush;
-            if (allowGlow)
-            {
-                _glowFx = new DropShadowEffect { ShadowDepth = 0, BlurRadius = 26, Opacity = 1 };
-                _glow.Effect = _glowFx;
-            }
-            _glowCap = glowCap;
-            _run.Effect = allowGlow ? new DropShadowEffect { ShadowDepth = 0, BlurRadius = 14, Color = Colors.White, Opacity = 1 } : null;
-            var frameHost = new Canvas { Clip = _outside };
-            frameHost.Children.Add(_glow);
-            _frame.Children.Add(frameHost);
-            _frame.Children.Add(_run);
-            _frame.RenderTransform = _frameSwell;
-            _root.Children.Add(_frame);
-
-            _root.Children.Add(_splitA);
-            _root.Children.Add(_splitB);
-            var streakBrush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            streakBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 255, 200, 240), 0));
-            streakBrush.GradientStops.Add(new GradientStop(Color.FromArgb(255, 255, 220, 245), 0.5));
-            streakBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 255, 200, 240), 1));
-            streakBrush.Freeze();
-            _streak.Fill = streakBrush;
-            _streak.Width = _w;
-            _root.Children.Add(_streak);
-
-            _root.Width = _w;
-            _root.Height = _h;
+                Source = _bitmap,
+                Stretch = Stretch.Fill,
+                Width = _canvas.Width * _canvas.Cell / _dpi,
+                Height = _canvas.Height * _canvas.Cell / _dpi,
+                IsHitTestVisible = false,
+            };
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.Linear);
+            _root.Children.Add(image);
+            _root.Width = w;
+            _root.Height = h;
+            _root.ClipToBounds = true;
+            _root.IsHitTestVisible = false;
             Content = _root;
-            SetAspect(aspect);
-            Apply(default, 0);
 
             SourceInitialized += (_, _) =>
             {
-                var h = new WindowInteropHelper(this).Handle;
-                int ex = GetWindowLong(h, GWL_EXSTYLE);
-                SetWindowLong(h, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED);
+                var hwnd = new WindowInteropHelper(this).Handle;
+                int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED);
             };
-            new WindowInteropHelper(this).Owner = ownerHwnd;
-            Closed += (_, _) => RestoreVideo();
+            if (ownerHwnd != IntPtr.Zero) new WindowInteropHelper(this).Owner = ownerHwnd;
         }
 
-        private readonly double _glowCap;
+        /// <summary>A physical-pixel rectangle in this overlay's own pixels.</summary>
+        public LightsDownRect ToLocal(System.Drawing.Rectangle px)
+            => new(px.X - _bounds.X, px.Y - _bounds.Y, px.Width, px.Height);
 
-        /// <summary>Re-fit the picture once the video's aspect is known.</summary>
-        public void SetAspect(double aspect)
+        /// <summary>A desktop DIP rectangle (this screen's scale, the attention bounds) in this overlay's pixels.</summary>
+        public LightsDownRect DipToLocal(Rect dip)
+            => new(dip.X * _dpi - _bounds.X, dip.Y * _dpi - _bounds.Y, dip.Width * _dpi, dip.Height * _dpi);
+
+        /// <summary>Is a physical-pixel point on this overlay's screen.</summary>
+        public bool ContainsPx(double x, double y)
+            => x >= _bounds.Left && x < _bounds.Right && y >= _bounds.Top && y < _bounds.Bottom;
+
+        /// <summary>Does a physical-pixel rectangle come close enough to this screen for its hole or halo to show here.</summary>
+        public bool Touches(System.Drawing.Rectangle px, double marginPx)
+            => px.Right + marginPx > _bounds.Left && px.Left - marginPx < _bounds.Right
+            && px.Bottom + marginPx > _bounds.Top && px.Top - marginPx < _bounds.Bottom;
+
+        /// <summary>Draw a frame if it differs visibly from the last one. Returns true when it wrote.</summary>
+        public bool Render(in LightsDownLook look, IReadOnlyList<LightsDownHole> holes, bool holesChanged)
         {
-            var (x, y, w, h) = LightsDownMath.FitPicture(_w, _h, aspect);
-            _pic = new Rect(x, y, w, h);
-            _picHole.Rect = _pic;
-            _picHole.RadiusX = _picHole.RadiusY = 10;
-            double cx = x + w / 2, cy = y + h / 2;
-            _holeSwell.CenterX = cx; _holeSwell.CenterY = cy;
-            _frameSwell.CenterX = cx; _frameSwell.CenterY = cy;
-            ((TranslateTransform)((TransformGroup)_rays.RenderTransform).Children[1]).X = cx;
-            ((TranslateTransform)((TransformGroup)_rays.RenderTransform).Children[1]).Y = cy;
-            _apMove.X = cx + _leanX; _apMove.Y = cy + _leanY;
-            _picCx = cx; _picCy = cy;
-            foreach (var r in new[] { _glow, _run, _splitA, _splitB })
+            if (!look.Visible)
             {
-                r.Width = w; r.Height = h;
-                Canvas.SetLeft(r, x); Canvas.SetTop(r, y);
+                if (_blank) return false;
+                Array.Clear(_canvas.Pixels);
+                Write();
+                _blank = true;
+                _drawn = look;
+                return true;
             }
-            Canvas.SetLeft(_splitA, x - 4);
-            Canvas.SetLeft(_splitB, x + 4);
-            Canvas.SetTop(_streak, cy - 2);
-            double per = 2 * (w + h);
-            // Dash lengths are in stroke widths: a bright run 18% of the perimeter, then a gap.
-            _run.StrokeDashArray = new DoubleCollection { per * 0.18 / _run.StrokeThickness, per / _run.StrokeThickness };
+            if (!_blank && !LightsDownCanvas.Worth(_drawn, look, holesChanged)) return false;
+            _canvas.Draw(look, holes);
+            Write();
+            _blank = false;
+            _drawn = look;
+            return true;
         }
 
-        /// <summary>Is this physical-pixel point on the picture (unswollen)?</summary>
-        public bool PictureContainsPx(double px, double py)
-            => LightsDownMath.Inside((px - _bounds.X) / _dpi, (py - _bounds.Y) / _dpi, _pic.X, _pic.Y, _pic.Width, _pic.Height);
-
-        /// <summary>The point the iris leans toward (cursor, or gaze when it decides), physical pixels.
-        /// <paramref name="known"/> false lets the iris settle back on the picture centre.</summary>
-        public void SetPointerPx(double px, double py, bool known)
-        {
-            if (!known) { _ptrX = _ptrY = double.NaN; return; }
-            _ptrX = (px - _bounds.X) / _dpi;
-            _ptrY = (py - _bounds.Y) / _dpi;
-        }
-
-        /// <summary>Current iris lean from the picture centre, DIPs (tests).</summary>
-        internal (double X, double Y) LeanForTest => (_leanX, _leanY);
-
-        /// <summary>Cut the live attention targets (desktop DIP rects) out of the dark. Rebuilt only on change.</summary>
-        public void SetCutouts(List<Rect> desktopDips)
-        {
-            bool same = desktopDips.Count == _cutRects.Count;
-            for (int i = 0; same && i < desktopDips.Count; i++) same = desktopDips[i] == _cutRects[i];
-            if (same && !_cutDirty) return;
-            _cutRects.Clear();
-            _cutRects.AddRange(desktopDips);
-            _cutDirty = false;
-            if (_cutRects.Count == 0) { _shade.Clip = null; return; }
-            var holes = new GeometryGroup();
-            foreach (var r in _cutRects)
-            {
-                var local = new Rect(r.X - Left, r.Y - Top, r.Width, r.Height);
-                local.Inflate(24, 24);
-                holes.Children.Add(new RectangleGeometry(local, 12, 12));
-            }
-            var clip = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(new Rect(0, 0, _w, _h)), holes);
-            clip.Freeze();
-            _shade.Clip = clip;
-        }
-
-        /// <summary>Copy one frame onto the visuals. <paramref name="time"/> drives the ray shimmer.</summary>
-        public void Apply(in LightsDownFrame f, double time, double dt = 0, bool particles = false, double moteSpeed = 1)
-        {
-            double d = f.Depth;
-            _dim.Opacity = Math.Clamp(f.DimAlpha, 0, 1);
-
-            // A frame built by hand (tests, the first paint) carries 0 for the juice multipliers.
-            double breath = f.ApertureBreath > 0 ? f.ApertureBreath : 1;
-            double pulse = f.GlowPulse > 0 ? f.GlowPulse : 1;
-            for (int i = 0; i < _aperture.Length; i++)
-            {
-                double r = LightsDownMath.ApertureRadius(_w, _h, Math.Max(_pic.Width, _pic.Height), f.ApertureClose, i);
-                _apScale[i].ScaleX = _apScale[i].ScaleY = r * breath;
-                _aperture[i].Opacity = f.ApertureAlpha;
-            }
-            _apRotate.Angle = f.ApertureRotation * 180 / Math.PI;
-
-            // The iris eases toward the pointer: a second of lag and one small overshoot.
-            var (tx, ty) = double.IsNaN(_ptrX) ? (0.0, 0.0) : LightsDownMath.LeanTarget(_ptrX, _ptrY, _picCx, _picCy, f.LeanGain);
-            if (f.LeanGain <= 0) { _leanX = _leanY = _leanVX = _leanVY = 0; }
-            else
-            {
-                LightsDownMath.LeanStep(ref _leanX, ref _leanVX, tx, dt);
-                LightsDownMath.LeanStep(ref _leanY, ref _leanVY, ty, dt);
-            }
-            _apMove.X = _picCx + _leanX;
-            _apMove.Y = _picCy + _leanY;
-
-            var (lr, lg, lb) = LightsDownMath.Hsl(f.Hue, 0.9, 0.7);
-            _raysRotate.Angle = f.RayAngle * 180 / Math.PI;
-            for (int i = 0; i < _rayStops.Length; i++)
-            {
-                double a = LightsDownMath.RayAlpha(f.RayAlpha, time, i);
-                _rayStops[i].Color = Color.FromArgb((byte)Math.Clamp(a * 255, 0, 255), lr, lg, lb);
-            }
-
-            double swell = _swellVideo ? f.Swell : 1;
-            _frameSwell.ScaleX = _frameSwell.ScaleY = swell;
-            _holeSwell.ScaleX = _holeSwell.ScaleY = swell;
-            if (_videoContent != null && _swellVideo)
-            {
-                if (_videoScale == null)
-                {
-                    _videoScale = new ScaleTransform();
-                    _videoContent.RenderTransformOrigin = new Point(0.5, 0.5);
-                    _videoContent.RenderTransform = _videoScale;
-                }
-                if (_videoScale.ScaleX != swell) _videoScale.ScaleX = _videoScale.ScaleY = swell;
-            }
-
-            var (gr, gg, gb) = LightsDownMath.Hsl(f.Hue, 0.95, 0.62);
-            _glowBrush.Color = Color.FromRgb(gr, gg, gb);
-            double flare = Math.Clamp(f.LockFlare, 0, 1);
-            _glow.Opacity = Math.Clamp(f.GlowAlpha * pulse * (1 + LightsDownMath.FlareGlow * flare), 0, 1);
-            if (_glowFx != null)
-            {
-                _glowFx.Color = _glowBrush.Color;
-                _glowFx.BlurRadius = Math.Min(f.GlowBlur * (1 + LightsDownMath.FlareBlur * flare), _glowCap);
-            }
-            else _glow.StrokeThickness = 3 + 8 * d;
-
-            if (f.LockRun >= 0)
-            {
-                double per = 2 * (_pic.Width + _pic.Height) / _run.StrokeThickness;
-                _run.StrokeDashOffset = -f.LockRun * per;
-                _run.Opacity = 1 - f.LockRun * 0.6;
-            }
-            else _run.Opacity = 0;
-
-            _splitA.Opacity = _splitB.Opacity = f.SplitAlpha * 0.8;
-            _streak.Opacity = f.StreakAlpha;
-
-            StepMotes(f, dt, particles, moteSpeed);
-        }
-
-        private void StepMotes(in LightsDownFrame f, double dt, bool particles, double speed)
-        {
-            if (!particles)
-            {
-                for (int i = 0; i < MaxMotes; i++) if (_mLife[i] > 0) { _mLife[i] = 0; _motes[i].Visibility = Visibility.Collapsed; }
-                return;
-            }
-            int spawn = LightsDownMath.MotesToSpawn(dt, f.Depth, _rng.NextDouble());
-            for (int k = 0; k < spawn; k++)
-                Spawn(_pic.X - _pic.Width * 0.3 + _rng.NextDouble() * _pic.Width * 1.6,
-                      _pic.Y - _pic.Height * 0.3 + _rng.NextDouble() * _pic.Height * 1.6,
-                      0, -(4 + _rng.NextDouble() * 6), LightsDownMath.MoteLife, false);
-            if (f.LockInFired)
-            {
-                double cx = _pic.X + _pic.Width / 2;
-                for (int k = 0; k < 14; k++) Burst(cx, _pic.Y);
-                for (int k = 0; k < 14; k++) Burst(cx, _pic.Y + _pic.Height);
-            }
-            for (int i = 0; i < MaxMotes; i++)
-            {
-                if (_mLife[i] <= 0) continue;
-                _mAge[i] += dt;
-                if (_mAge[i] >= _mLife[i]) { _mLife[i] = 0; _motes[i].Visibility = Visibility.Collapsed; continue; }
-                _mx[i] += _mvx[i] * dt * speed;
-                _my[i] += _mvy[i] * dt * speed;
-                if (_mBurst[i]) { _mvx[i] *= 1 - Math.Min(1, dt * 2.5); _mvy[i] *= 1 - Math.Min(1, dt * 2.5); }
-                double a = _mBurst[i] ? 1 - _mAge[i] / _mLife[i] : LightsDownMath.MoteAlpha(_mAge[i], f.Depth);
-                var c = _moteBrush[i].Color;
-                _moteBrush[i].Color = Color.FromArgb((byte)Math.Clamp(a * 255, 0, 255), c.R, c.G, c.B);
-                // Dust drifts side to side as it rises, each mote on its own phase; bursts fly straight.
-                _moteAt[i].X = _mx[i] + (_mBurst[i] ? 0 : LightsDownMath.MoteSway(_mAge[i], _mPhase[i], speed));
-                _moteAt[i].Y = _my[i];
-            }
-        }
-
-        private void Burst(double x, double y)
-        {
-            double an = _rng.NextDouble() * Math.PI * 2, sp = 40 + _rng.NextDouble() * 80;
-            Spawn(x, y, Math.Cos(an) * sp, Math.Sin(an) * sp, 0.8, true);
-        }
-
-        private void Spawn(double x, double y, double vx, double vy, double life, bool burst)
-        {
-            for (int i = 0; i < MaxMotes; i++)
-            {
-                if (_mLife[i] > 0) continue;
-                _mx[i] = x; _my[i] = y; _mvx[i] = vx; _mvy[i] = vy; _mAge[i] = 0; _mLife[i] = life; _mBurst[i] = burst;
-                _mPhase[i] = _rng.NextDouble() * Math.PI * 2;
-                double size = burst ? 2.8 : LightsDownMath.MoteSize(_rng.NextDouble());
-                _motes[i].Width = _motes[i].Height = size;
-                _moteBrush[i].Color = burst ? (y <= _pic.Y + 1 ? Color.FromArgb(255, 255, 208, 240) : Color.FromArgb(255, 208, 240, 255)) : Color.FromArgb(0, 255, 215, 240);
-                _motes[i].Visibility = Visibility.Visible;
-                return;
-            }
-        }
-
-        /// <summary>Hand the video its own transform back. Safe to call more than once.</summary>
-        public void RestoreVideo()
-        {
-            if (_videoContent == null || _videoScale == null) return;
-            _videoScale = null;
-            try
-            {
-                _videoContent.RenderTransform = _savedTransform ?? Transform.Identity;
-                _videoContent.RenderTransformOrigin = _savedOrigin;
-            }
-            catch { }
-        }
+        private void Write()
+            => _bitmap.WritePixels(new Int32Rect(0, 0, _canvas.Width, _canvas.Height), _canvas.Pixels, _canvas.Width * 4, 0);
 
         /// <summary>
-        /// The element the swell may scale: the picture surface ONLY, the first child of the video
-        /// window's grid. Its siblings are the click overlay and, on the vmem path, the in-window
-        /// attention plane; scaling the whole grid would carry the checks up to 7% away from the
-        /// bounds gaze dwell and the cut-outs read. Null when the surface is an HwndHost.
+        /// Floating only: keep this window just under the lowest of <paramref name="windows"/> in the
+        /// z-order (all of them topmost), so every video sits over the dim. Walks the z-order from
+        /// the top and moves only when something sits wrong; called a couple of times a second.
         /// </summary>
-        internal static FrameworkElement? SwellTarget(Window? videoWindow)
+        public void KeepBelow(IReadOnlyList<IntPtr> windows)
         {
-            if (videoWindow?.Content is not Panel p || p.Children.Count == 0) return null;
-            return p.Children[0] is FrameworkElement fe && !HasHwndHost(fe) ? fe : null;
-        }
-
-        private static bool HasHwndHost(DependencyObject root)
-        {
-            if (root is HwndHost) return true;
-            int n = VisualTreeHelper.GetChildrenCount(root);
-            for (int i = 0; i < n; i++)
-                if (HasHwndHost(VisualTreeHelper.GetChild(root, i))) return true;
-            return false;
+            if (!Floating || windows.Count == 0) return;
+            var me = new WindowInteropHelper(this).Handle;
+            if (me == IntPtr.Zero) return;
+            var want = new HashSet<IntPtr>();
+            foreach (var w in windows) if (w != IntPtr.Zero && IsWindow(w)) want.Add(w);
+            if (want.Count == 0) return;
+            int meAt = -1, lowestAt = -1, seen = 0;
+            IntPtr lowest = IntPtr.Zero;
+            int n = 0;
+            for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && n < 4096; h = GetWindow(h, GW_HWNDNEXT), n++)
+            {
+                if (h == me) meAt = n;
+                else if (want.Contains(h)) { lowest = h; lowestAt = n; seen++; }
+                if (meAt >= 0 && seen == want.Count) break;
+            }
+            if (lowest == IntPtr.Zero || (meAt > lowestAt && seen == want.Count)) return;
+            SetWindowPos(me, lowest, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
         }
 
         private const int GWL_EXSTYLE = -20;
@@ -474,7 +179,13 @@ namespace ConditioningControlPanel.Services.Super
         private const int WS_EX_TOOLWINDOW = 0x80;
         private const int WS_EX_LAYERED = 0x80000;
         private const int WS_EX_NOACTIVATE = 0x08000000;
+        private const uint GW_HWNDNEXT = 2;
+        private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010, SWP_NOOWNERZORDER = 0x0200;
         [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll")] private static extern IntPtr GetTopWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+        [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
     }
 }
