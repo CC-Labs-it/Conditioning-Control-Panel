@@ -1,5 +1,7 @@
 ﻿using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.SuperCore;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -86,6 +88,9 @@ public sealed class FlashLayer : BaseLayer
         /// <summary>The white puff at a flip's edge as the new picture lands. Null once it has died.</summary>
         internal FlickerSpark[]? DeckSparks;
         internal float DeckShadowSigma = -1f;
+        /// <summary>Shop look "behind": this card's word and the flip it came with (rules: CCP.Core DeckWhisper).</summary>
+        internal string? WhisperText;
+        internal int WhisperFlip = -1;
 
         // Super, the Whirlpool: its hold on this flash. The pool moves the rect itself (X, Y), so
         // clicks and gaze keep landing where the picture is; PoolScale is draw-only.
@@ -173,6 +178,8 @@ public sealed class FlashLayer : BaseLayer
     // Super Flicker Deck: one reused path for cracks and shard clips, one rng for the breaks.
     private readonly SKPath _deckPath = new();
     private readonly Random _deckRng = new();
+    // Shop looks worn by the Deck (backs, the whisper): rules in CCP.Core DeckLooks.
+    private readonly Super.Draw.DeckLookDraw _deckLook = new();
 
     public FlashLayer(CompositorEngine engine) : base(engine) { }
 
@@ -490,6 +497,9 @@ public sealed class FlashLayer : BaseLayer
             var alpha = (byte)Math.Clamp(item.Opacity * item.EntranceAlpha * exitAlpha * 255, 0, 255);
             if (alpha == 0 && item.Exit != null) { DrawSparks(canvas, item); continue; }
             var image = frames[Math.Clamp(item.FrameIndex, 0, frames.Length - 1)];
+            // Shop look "behind": the word starts behind the card and comes past it once the flip is done.
+            var whisper = item.Deck != null ? WhisperNow(item) : null;
+            if (whisper is { Front: false } behindCard) DrawWhisper(canvas, item, behindCard, alpha);
 
             int saves = canvas.Save();
             // Pendulum: rotate the canvas about the pivot and draw the media hanging straight
@@ -614,8 +624,15 @@ public sealed class FlashLayer : BaseLayer
             }
 
             _imagePaint.Color = new SKColor(255, 255, 255, alpha);
+            // Shop look, slot "card": mid-flip the card wears its back. Plain (the default) never
+            // shows one, so the stock card draws its picture exactly as before.
+            var back = DeckLookChoice.Back;
+            var wearsBack = pose != null && exit == null && item.Deck is { } turning
+                && DeckLooks.BackShows(back, turning.FlipT, FlickerDeck.FlipSec, MotionFx.Level == MotionLevel.Off);
             if (exit is { Glitch: > 0 } && item.Exit is { } glitchState)
                 DrawGlitch(canvas, image, fit, alpha, glitchState, exit.Value.Glitch);
+            else if (wearsBack)
+                _deckLook.DrawBack(canvas, fit, back, alpha);
             else
                 canvas.DrawImage(image, fit, _imagePaint);
             if (exit is { Whiten: > 0 } lit)
@@ -642,6 +659,7 @@ public sealed class FlashLayer : BaseLayer
             if (item.DodgeUntilMs > 0 && item.Exit == null) DrawDodgeRing(canvas, fit, alpha, item.DodgeUntilMs);
             if (item.Credit && item.Exit == null) DrawCredit(canvas, fit, alpha, dpiScale);
             canvas.RestoreToCount(saves);
+            if (whisper is { Front: true } pastCard) DrawWhisper(canvas, item, pastCard, alpha);
             if (item.Exit != null) DrawSparks(canvas, item);
             if (item.DeckSparks != null && item.Deck != null) DrawDeckPuff(canvas, item.DeckSparks, rect.MidX, rect.MidY, item.Opacity);
         }
@@ -954,6 +972,38 @@ public sealed class FlashLayer : BaseLayer
         if ((ev & FlickerEvents.GaveUp) != 0) item.OnDeckGaveUp?.Invoke(item);
         if (ev != FlickerEvents.None || (MotionFx.Level != MotionLevel.Off && FlickerDeck.Animating(deck)))
             _dirty = true;
+        StepWhisper(item, deck);
+    }
+
+    /// <summary>Shop look, slot "behind": a new flip takes a new word from the player's pool (one per card).</summary>
+    private void StepWhisper(FlashItem item, FlickerDeckState deck)
+    {
+        if (deck.Flips != item.WhisperFlip)
+        {
+            item.WhisperFlip = deck.Flips;
+            item.WhisperText = DeckLookChoice.Whisper && MotionFx.Level != MotionLevel.Off
+                && deck.SinceFlip < DeckWhisper.LifeSec
+                ? DeckWhisper.Pick(App.Settings?.Current?.SubliminalPool, item.WhisperText, _deckRng)
+                : null;
+        }
+        if (item.WhisperText != null && deck.SinceFlip < DeckWhisper.LifeFor(Safety.GentleVisuals.On)) _dirty = true;
+    }
+
+    /// <summary>The whisper this card shows now, or null (none worn, none picked, motion Off, or over).</summary>
+    private static WhisperPose? WhisperNow(FlashItem item)
+    {
+        if (item.WhisperText == null || item.Deck is not { } deck || item.Exit != null || !DeckLookChoice.Whisper) return null;
+        var level = MotionFx.Level;
+        var p = DeckWhisper.Sample(deck.SinceFlip, level == MotionLevel.Reduced ? 0.5 : 1.0, level == MotionLevel.Off,
+            Safety.GentleVisuals.On, DeckWhisper.Direction(deck.Flips));
+        return p.Visible ? p : null;
+    }
+
+    private void DrawWhisper(SKCanvas canvas, FlashItem item, WhisperPose p, byte alpha)
+    {
+        float pad = item.PaddingPx;
+        _deckLook.DrawWhisper(canvas, item.X + item.W / 2, item.Y + item.H / 2,
+            Math.Max(1, item.W - pad * 2), Math.Max(1, item.H - pad * 2), item.WhisperText!, p, alpha);
     }
 
     /// <summary>The card's shadow grows and drops as it lifts (mockup: blur 8 + 24 lift, offset 3 + 12 lift).</summary>
