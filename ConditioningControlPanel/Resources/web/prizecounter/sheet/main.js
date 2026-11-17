@@ -71,6 +71,11 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   root.replaceChildren(view.root);
   const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title', busy: false, idem: null,
     pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false, spot: null, freshStamp: 0, fog2Try: null, nudge: null };
+  // What the account wears now in the families the host wears in place (init.worn: the profile frame and picture, EMI's
+  // hat and toy), so the Owned tab and the fitting room say Wearing from the first paint, not only after a Wear here.
+  for (const id of Array.isArray(init.worn) ? init.worn : []) if (typeof id === 'string' && id) ui.wearing.set(slotOf(id), id);
+  /** init.goes: the places a "take me there" can open from this door (absent = the line shows with no button). */
+  const goes = Array.isArray(init.goes) ? init.goes.filter((g) => typeof g === 'string') : null;
 
   const st = () => shop.state();
   const pv = () => { if (raw !== rawRead) { rawRead = raw; ui.pv = readPreview(raw); } return ui.pv; };
@@ -82,8 +87,9 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     const s = st(), card = shop.card(), p = pv(), sp = shop.sp();
     const fxe = ui.fx && locate(s, ui.fx, p);
     if (ui.fx && !fxe) ui.fx = null;
-    const room = fxe ? fxRoom(fxe, { sp, t, pv: p, asking: ui.asking, pending: ui.fxPending, note: ui.fxNote, away: away(fxe.id) })
-      : roomModel(card, { sp, t, wearing: ui.wearing, asking: ui.asking, pv: p, row: card && (locate(s, card.itemId, p) || {}).row, away: !!card && away(card.itemId) });
+    const at = card && locate(s, card.itemId, p);
+    const room = fxe ? fxRoom(fxe, { sp, t, pv: p, asking: ui.asking, pending: ui.fxPending, note: ui.fxNote, away: away(fxe.id), goes })
+      : roomModel(card, { sp, t, wearing: ui.wearing, asking: ui.asking, pv: p, row: at && at.row, away: !!card && away(card.itemId), at, goes });
     view.paint({ status: shop.status(), state: s, sp, tier: s ? s.tier : 0, tabs: sheetTabs(shop.tabs(), p), tab: ui.tab, query: ui.query,
       index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, fog2Try: ui.fog2Try, fogColour, nudge: ui.nudge, platform, hereOnly: ui.hereOnly, room }, on);
     const to = ui.focusTo;
@@ -233,6 +239,12 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     },
     nudgeView(id) { ui.nudge = null; ui.tab = (locate(st(), id, pv()) || {}).group || ui.tab; if ((ui.fx || (shop.card() || {}).itemId) !== id) pick(id); else paint(); },
     nudgeClose() { ui.nudge = null; paint(); },
+    /** "See it on your profile" and the rest (sheet/shown.js): the host closes the sheet and opens the place. */
+    go(place, viaKey) {
+      if (!viaKey && !guard.ready()) return;
+      const id = ui.fx || (shop.card() || {}).itemId;
+      if (place && goes && goes.includes(place)) host.go(place, id || null);
+    },
     /** Works here (website, phone): only what shows on this host. */
     here() { ui.hereOnly = !ui.hereOnly; paint(); },
     close: () => host.close('back'),

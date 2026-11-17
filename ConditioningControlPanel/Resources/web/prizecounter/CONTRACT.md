@@ -114,6 +114,18 @@ Studio doors (look pickers lane, 2026-11-17; additive, absent = today's behaviou
   host sends it when a locked look in a Studio "Look" row is clicked (`PrizeCounterHostService.LaunchOn`), once,
   on that open only.
 
+Where it shows (bought-shows lane, 2026-11-17; additive, absent = today's behaviour):
+- in: `init.worn ['itemId', ...]`: what the account wears now in the families the host wears in place (the WPF host:
+  the own profile frame and picture, EMI's desk hat and toy; in the DEBUG shop preview the preview's own frame and
+  picture). The page marks them Wearing from the first paint (Owned tab, the fitting room drops Wear).
+- in: `init.goes ['profile'|'desk'|'race'|'chess'|'bubbles'|'flash'|'subliminal'|'pinkfilter', ...]`: the places a
+  "take me there" can open from this door (`Services/PrizeCounter/ShownPlaces`; a game's own sheet sends none, EMI's
+  desk only while it is on). Absent = the line shows with no button.
+- Once an item is worn (a kart once owned), the fitting room says where it shows (`sheet/shown.js`, by family) and,
+  for a place in `init.goes`, offers a button. out: `{type:'go', place, id}`: the host closes the counter and opens the
+  place (the profile page with one avatar pulse, the Studio page of the look, the chess board, the race, EMI's desk).
+  A place it did not list does nothing.
+
 ## Rules
 
 - Every effect has an IN and an OUT. Gentle visuals: fades only, no dust, no shake. Motion off: cuts.

@@ -11,6 +11,7 @@ import { faceOf } from '../state/shop.js';
 import { tabKey, itemName, itemKey } from '../state/strings.js';
 import { cardModel } from '../hud/card.js';
 import { readPreview, FX_SLOTS, placesOf, isHere, couponOn, cardGone } from './wire.js';
+import { shownOf } from './shown.js';
 
 export const OWNED = 'owned', FEATURED = 'featured', EFFECTS = 'effects', KARTS = 'kart', CHESS = 'chess', ACCESSORIES = 'accessories';
 export const NO_PREVIEW = readPreview(null);
@@ -163,8 +164,9 @@ const askActions = (t, price, claim, pending) => [
 const askLine = (t, price, claim, away) => (claim ? t('shop_sheet_ask_claim') : t('shop_sheet_ask', price)) + (away ? ' ' + t('shop_sheet_ask_where') : '');
 
 /** The fitting room for shop.card(): null = nothing picked. asking = Buy was pressed and the Yes step is up.
- * row = the card's row (for the coupon), away = it does not show on this host (the confirm says where it does). */
-export function roomModel(card, { sp, t, wearing, asking = false, pv = NO_PREVIEW, row = null, away = false }) {
+ * row = the card's row (for the coupon), away = it does not show on this host (the confirm says where it does).
+ * at = the card's entry and goes = init.goes: once worn, `shown` says where it shows and may carry a "take me there". */
+export function roomModel(card, { sp, t, wearing, asking = false, pv = NO_PREVIEW, row = null, away = false, at = null, goes = null }) {
   if (!card) return null;
   const m = cardModel(card, sp, t);
   const claim = card.face === 'buy' && couponOn(pv, row || { priceSp: card.priceSp, sale: 'on', owned: null });
@@ -178,11 +180,13 @@ export function roomModel(card, { sp, t, wearing, asking = false, pv = NO_PREVIE
     if (mode === 'garage') actions = [{ id: 'garage', label: t('shop_wear_in_garage'), main: true, cls: 'line' }];
     else if (mode === 'wear' && !on) actions = [{ id: 'wear', label: t('shop_wear'), main: true, cls: '' }, BACK(t)];
   } else if (card.face === 'short') { const s = saveAction(card.itemId, pv, t); if (s) actions = [s, BACK(t)]; }
-  return { itemId: card.itemId, face: card.face, name: m.name, desc: m.desc, lines, ask, note: m.note, pending: !!card.pending, actions };
+  const on = !!(wearing && wearing.get(slotOf(card.itemId)) === card.itemId);
+  const shown = card.face === 'owned' && at && !away ? shownOf(at, t, { on, goes }) : null;
+  return { itemId: card.itemId, face: card.face, name: m.name, desc: m.desc, lines, ask, note: m.note, pending: !!card.pending, actions, shown };
 }
 
-/** The fitting room for an effect row. ctx: { sp, t, pv, asking, pending, note, away }. */
-export function fxRoom(e, { sp, t, pv = NO_PREVIEW, asking = false, pending = false, note = null, away = false }) {
+/** The fitting room for an effect row. ctx: { sp, t, pv, asking, pending, note, away, goes }. */
+export function fxRoom(e, { sp, t, pv = NO_PREVIEW, asking = false, pending = false, note = null, away = false, goes = null }) {
   if (!e) return null;
   const row = e.row, x = e.x || {}, eq = pv.equip || {}, claim = couponOn(pv, row), price = claim ? 0 : row.priceSp;
   const lines = [], add = (id, label, cls = '', main = true, disabled = false) => ({ id, label, cls, main, disabled });
@@ -201,8 +205,11 @@ export function fxRoom(e, { sp, t, pv = NO_PREVIEW, asking = false, pending = fa
     else actions = [claim ? add('claim', t('shop_sheet_claim'), 'gold') : add('buy', t('shop_buy'), 'gold')];
   } else { const s = saveAction(row.id, pv, t); if (s) actions = [s]; }
   if (!ask) actions.push(BACK(t));
+  // worn (a bought look, never the free default) or Two-tone switched on: where it shows now
+  const on = row.priceSp > 0 && (x.special ? !!eq.mix : eq[e.fx] === row.id);
+  const shown = !away ? shownOf(e, t, { on, goes }) : null;
   return { itemId: row.id, face: 'fx', name: labelOf(e, t), desc: x.special ? t('shop_sheet_twotone_where') : t('shop_sheet_shows_' + e.fx) + '.', lines, ask,
-    note: pending ? t('shop_pending') : note, pending: !!pending, actions };
+    note: pending ? t('shop_pending') : note, pending: !!pending, actions, shown };
 }
 
 /** Can this be bought now: not owned, out, not Prime-locked, priced, and the wallet covers it (or the coupon does). */

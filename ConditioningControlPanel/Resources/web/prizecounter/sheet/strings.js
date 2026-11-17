@@ -6,6 +6,7 @@
 
 import { makeT } from '../state/strings.js';
 import { EXPLAIN_LEX } from './explain.js';
+import { SHOWN_LEX } from './shown.js';
 
 /** DEBUG preview only (CCP_SHOP_PREVIEW=1): stays English, no loc key. */
 export const PREVIEW_SLIP = 'Preview: nothing here is real';
@@ -216,6 +217,8 @@ export const SHEET_LEX = {
   shop_item_fx_word_marquee_how: 'lights up',
   // what each thing does: hover tips, the fitting room's block, the shelf signs (sheet/explain.js)
   ...EXPLAIN_LEX,
+  // where a worn thing shows, and the button that goes there (sheet/shown.js)
+  ...SHOWN_LEX,
 };
 
 export const sheetT = (lexicon, companion) => makeT({ ...SHEET_LEX, ...(lexicon && typeof lexicon === 'object' ? lexicon : {}) }, companion);

@@ -182,6 +182,15 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     for (const l of m.lines) room.append(el('p', 'd-line d-' + l.cls, l.text));
     const acts = el('div', 'd-act');
     acts.append(...view.awayNote(at, v));
+    // Worn: where it shows now, and a button that goes there (sheet/shown.js; the host closes the sheet and opens it)
+    if (m.shown && !m.ask) {
+      const s = el('p', 'd-shown'), tick = el('span', 'tick');
+      tick.innerHTML = TICK;
+      s.append(tick, el('span', null, m.shown.text));
+      s.setAttribute('role', 'status');
+      acts.append(s);
+      if (m.shown.go) acts.append(button('btn go', m.shown.label, 'act:go', (viaKey) => on.go(m.shown.go, viaKey)));
+    }
     if (m.ask) acts.append(el('p', 'd-ask', m.ask));
     for (const a of m.actions) {
       const b = button('btn' + (a.cls ? ' ' + a.cls : ''), a.label, 'act:' + a.id, (viaKey) => on.act(a.id, viaKey, a.main));
