@@ -842,7 +842,8 @@ namespace ConditioningControlPanel.Services
                     new SkiaSharp.SKColor(textColor.R, textColor.G, textColor.B),
                     new SkiaSharp.SKColor(borderColor.R, borderColor.G, borderColor.B),
                     bgTransparent, targetOpacity, durationMs, fadeInMs, fadeOutMs,
-                    Compositor.SubliminalLayer.ResolveFace(App.Settings.Current.SubliminalFont));
+                    Compositor.SubliminalLayer.ResolveFace(App.Settings.Current.SubliminalFont),
+                    Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);
                 return true;
             }
             catch (Exception ex)
