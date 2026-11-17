@@ -15,7 +15,12 @@ namespace ConditioningControlPanel.Launcher;
 public partial class LauncherWindow
 {
     private bool _spFlightHold;
+    /// <summary>The number held while stars land (the show's count-up stops there).</summary>
+    private int _spHeldAt;
     private ScaleTransform? _chipStarKick;
+
+    private bool OwnsKick(Transform? t)
+        => ReferenceEquals(t, _chipStarKick) || (t is TransformGroup g && g.Children.Contains(_chipStarKick!));
 
     private void InitializeSparkleFly()
     {
@@ -35,27 +40,42 @@ public partial class LauncherWindow
             ? SparkleWallet.FindStar(_w.WalletChip) : null;
         public FrameworkElement? OriginFor(SparkleSource source) => null;
         public void HoldCount(int value) => _w.HoldChipCount(value);
-        public void ReleaseCount() { _w._spFlightHold = false; _w.RefreshSpReadout(countUp: false); }
+        public void ReleaseCount(bool snap = false) => _w.ReleaseChipCount(snap);
         public void Kick(bool settle) => _w.KickChipStar(settle);
     }
 
     private void HoldChipCount(int value)
     {
         _spFlightHold = true;
+        _spHeldAt = value;
+        // Already there, or the show's count-up is heading there: leave that tween running.
+        if (!double.IsNaN(_spShown) && Math.Abs(_spShown - value) < 0.5) return;
         var from = double.IsNaN(_spShown) ? value : _spShown;
         MotionFx.Odometer(SpReadout, from, value, "{0:N0}", 0.12);
         _spShown = value;
     }
 
+    private void ReleaseChipCount(bool snap)
+    {
+        _spFlightHold = false;
+        var sp = App.Settings?.Current?.SkillPoints ?? -1;
+        // Panic: straight onto the balance, no tween.
+        if (snap && sp >= 0 && !double.IsNaN(_spShown)) { MotionFx.Odometer(SpReadout, sp, sp); _spShown = sp; return; }
+        RefreshSpReadout(countUp: false);
+    }
+
     private void KickChipStar(bool settle)
     {
-        if (!MotionFx.AllowTransitions || SparkleWallet.FindStar(WalletChip) is not { } star) return;
-        if (_chipStarKick == null || !ReferenceEquals(star.RenderTransform, _chipStarKick))
+        // The chip squishes on its own press (MotionFx.PressSquish on the button): no kick while it is held.
+        if (!MotionFx.AllowTransitions || WalletChip.IsPressed || SparkleWallet.FindStar(WalletChip) is not { } star) return;
+        if (_chipStarKick == null || !OwnsKick(star.RenderTransform))
         {
-            if (star.RenderTransform is { } t && !t.Value.IsIdentity) return;
             _chipStarKick = new ScaleTransform(1, 1);
             star.RenderTransformOrigin = new Point(0.5, 0.5);
-            star.RenderTransform = _chipStarKick;
+            // Composes with anything already on the star instead of replacing it.
+            star.RenderTransform = star.RenderTransform is { } t && !t.Value.IsIdentity
+                ? new TransformGroup { Children = { t, _chipStarKick } }
+                : _chipStarKick;
         }
         var peak = (settle ? 0.45 : 0.22) * (MotionFx.Level == MotionLevel.Reduced ? 0.5 : 1);
         var ms = settle ? 340 : 160;

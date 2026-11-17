@@ -23,6 +23,19 @@ internal static class SparkleSfx
 
     public static void Air(bool up) => Play(up ? "sparkles/air_up.wav" : "sparkles/air_down.wav", AirScale, "sparkle-air");
 
+    private static readonly System.Collections.Generic.List<AudioPlaybackHandle> Live = new();
+
+    /// <summary>Panic: every flight sound still playing stops now.</summary>
+    public static void StopAll()
+    {
+        AudioPlaybackHandle[] live;
+        lock (Live) { live = Live.ToArray(); Live.Clear(); }
+        foreach (var h in live)
+        {
+            try { h.Stop(); } catch (Exception ex) { App.Logger?.Debug("Sparkle sfx stop: {E}", ex.Message); }
+        }
+    }
+
     private static void Play(string rel, float scale, string tag)
     {
         try
@@ -35,7 +48,8 @@ internal static class SparkleSfx
             if (master <= 0f) return;
             var path = ModResourceResolver.ResolveAudioPath(rel);
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-            audio.PlayOneShot(path, Math.Clamp(master * scale, 0f, 1f), tag);
+            if (audio.PlayOneShot(path, Math.Clamp(master * scale, 0f, 1f), tag) is not { } handle) return;
+            lock (Live) { Live.RemoveAll(h => h.IsFinished); Live.Add(handle); }
         }
         catch (Exception ex) { App.Logger?.Debug("Sparkle sfx {Tag}: {E}", tag, ex.Message); }
     }

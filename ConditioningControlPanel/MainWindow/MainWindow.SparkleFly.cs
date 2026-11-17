@@ -30,7 +30,8 @@ public partial class MainWindow
         // A level-up came from "you": the profile bubble, the same honest origin THE BANK uses.
         public FrameworkElement? OriginFor(SparkleSource source) => source == SparkleSource.LevelUp ? _w.BtnProfileBubble : null;
         public void HoldCount(int value) => _w.HeaderSparkleWallet?.HoldShown(value);
-        public void ReleaseCount() => _w.HeaderSparkleWallet?.ReleaseShown();
+        // The header readout has no tween: a release is always a snap.
+        public void ReleaseCount(bool snap = false) => _w.HeaderSparkleWallet?.ReleaseShown();
         public void Kick(bool settle) => _w.HeaderSparkleWallet?.Kick(settle);
     }
 }
