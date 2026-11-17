@@ -83,6 +83,9 @@ Sheet additions (shop frame lane, 2026-11-17; all optional, absent = today's beh
   stars fly there instead of the page's top-right corner. A resize sends the new point as `{type:'wallet-at', x, y}`.
 - in: `init.disco ['#rrggbb', ...]` (at most six): the active mod's Disco hues, the desktop ball's own palette
   (`DiscoPaletteSource`). The page's Disco preview wears them; absent or unreadable = the fallback four.
+- in: `init.fogColour '#rrggbb'` (WPF host): the colour the pink filter really draws (the user's pick, else the mod's
+  filter colour, else hot pink; `SheetHostRules.FogColourWire`). The Two-tone preview wears it as colour one; absent or
+  unreadable = pink. Other hosts may leave it out.
 - out: `{type:'wallet-land', k}` (sheet only): the page's stars reached the host's wallet (a gain, k = share landed so
   far, 1 = the last) or left it (a spend, one frame with k = 1). The WPF host counts and kicks its chip; with the DEBUG
   shop preview on, the last one puts the chip back on the preview wallet.

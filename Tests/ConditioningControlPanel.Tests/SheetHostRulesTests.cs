@@ -40,6 +40,27 @@ public class SheetHostRulesTests
     }
 
     [Fact]
+    public void TheFogColour_IsTheFiltersOwn_UserPickThenModThenHotPink()
+    {
+        Assert.Equal("#12abef", SheetHostRules.FogColourWire("#12ABEF", ((byte)1, (byte)2, (byte)3)));
+        Assert.Equal("#12abef", SheetHostRules.FogColourWire(" 12abef ", null));
+        Assert.Equal("#010203", SheetHostRules.FogColourWire("", ((byte)1, (byte)2, (byte)3)));
+        Assert.Equal("#010203", SheetHostRules.FogColourWire("#zzzzzz", ((byte)1, (byte)2, (byte)3)));
+        Assert.Equal("#ff69b4", SheetHostRules.FogColourWire(null, null));
+    }
+
+    [Fact]
+    public void BuildInit_SendsTheFogColour()
+    {
+        string? root = null;
+        for (var d = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory); d != null && root == null; d = d.Parent)
+            if (System.IO.File.Exists(System.IO.Path.Combine(d.FullName, "ConditioningControlPanel", "ConditioningControlPanel.csproj"))) root = d.FullName;
+        Assert.NotNull(root);
+        var src = System.IO.File.ReadAllText(System.IO.Path.Combine(root!, "ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.cs"));
+        Assert.Contains("init[\"fogColour\"] = SheetHostRules.FogColourWire(App.Settings?.Current?.PinkFilterColor, App.Mods?.GetFilterColorRgb())", src);
+    }
+
+    [Fact]
     public void TheOpeningSlide_OvershootsSoftly_AndSettlesHome()
     {
         double over = CounterSheetRules.OvershootDip(MotionLevel.Full, gentle: false, 600);

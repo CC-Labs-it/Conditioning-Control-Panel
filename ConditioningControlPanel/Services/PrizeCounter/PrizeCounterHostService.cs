@@ -611,6 +611,9 @@ internal static partial class PrizeCounterHostService
             if (SheetHostRules.DiscoWire(rgb) is { } disco) init["disco"] = new JArray(disco);
         }
         catch (Exception ex) { Diag.Swallowed(ex); }
+        // The colour the pink filter draws (CONTRACT.md, sheet additions): the Two-tone preview's colour one.
+        try { init["fogColour"] = SheetHostRules.FogColourWire(App.Settings?.Current?.PinkFilterColor, App.Mods?.GetFilterColorRgb()); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
         return init;
     }
 

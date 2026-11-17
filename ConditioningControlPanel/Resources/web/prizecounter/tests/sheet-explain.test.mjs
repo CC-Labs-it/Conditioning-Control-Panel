@@ -204,3 +204,27 @@ test('the "?" marks: one line each, a press shows it, and a stray Space never bu
   assert.match(r.page.view.tips.el.text(), /once a week/);
   assert.equal(r.page.shop.card(), null, 'nothing picked, nothing bought');
 });
+
+test('init.fogColour reaches the view as v.fogColour (the Two-tone preview\'s colour one); junk does not', async () => {
+  for (const [given, want] of [['#12abef', '#12abef'], ['pink', null], [undefined, null]]) {
+    const r = await rig({ init: { fogColour: given }, preview: true });
+    const paint = r.page.view.paint;
+    let seen = null;
+    r.page.view.paint = (v, on) => { seen = v; return paint(v, on); };
+    r.page.pick('fx.fog.twotone');
+    assert.equal(seen.fogColour, want, String(given));
+    if (want) assert.equal(r.page.view.live.looks(seen).own, want);
+  }
+});
+
+test('the Whisper thumbnail shows a word coming out past the card\'s right edge', async () => {
+  const { drawWhisperThumb } = await import('../sheet/looks.js');
+  const calls = [];
+  const g = new Proxy({}, { get: (o, k) => (k in o ? o[k] : (...a) => calls.push([k, ...a])), set: (o, k, v) => { o[k] = v; return true; } });
+  g.measureText = () => ({ width: 30 });
+  drawWhisperThumb(g, 'sink', 0.55, 10, 10, 40, 60);
+  const words = calls.filter((c) => c[0] === 'fillText');
+  assert.equal(words.length, 3, 'the word and its two ghosts');
+  assert.ok(words.every((c) => c[2] > 10 + 40 * 0.55), 'starting past the middle of the card, out to its right');
+  assert.ok(calls.findIndex((c) => c[0] === 'fillText') < calls.findIndex((c) => c[0] === 'fillRect'), 'the word is drawn first: the card covers its start');
+});

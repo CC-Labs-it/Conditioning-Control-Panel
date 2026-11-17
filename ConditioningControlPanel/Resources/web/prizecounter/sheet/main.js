@@ -33,6 +33,8 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const t = sheetT(init.lexicon, init.companion);
   const motion = init.motion === 'off' ? 'off' : init.motion === 'less' || init.reducedMotion ? 'less' : 'full';
   const platform = platformOf(init);
+  // the colour the host's pink filter draws (init.fogColour, '#rrggbb'): the Two-tone preview's colour one; absent = pink
+  const fogColour = /^#[0-9a-f]{6}$/i.test(String(init.fogColour || '')) ? init.fogColour : null;
   root.classList.add('shroot');
   root.dataset.motion = motion;
   if (init.gentle) root.dataset.gentle = 'on'; else delete root.dataset.gentle;   // a reused page (sheet/reuse.js) mounts again
@@ -81,7 +83,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     const room = fxe ? fxRoom(fxe, { sp, t, pv: p, asking: ui.asking, pending: ui.fxPending, note: ui.fxNote, away: away(fxe.id) })
       : roomModel(card, { sp, t, wearing: ui.wearing, asking: ui.asking, pv: p, row: card && (locate(s, card.itemId, p) || {}).row, away: !!card && away(card.itemId) });
     view.paint({ status: shop.status(), state: s, sp, tier: s ? s.tier : 0, tabs: sheetTabs(shop.tabs(), p), tab: ui.tab, query: ui.query,
-      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, fog2Try: ui.fog2Try, nudge: ui.nudge, platform, hereOnly: ui.hereOnly, room }, on);
+      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), spot: ui.spot, freshStamp: ui.freshStamp, fog2Try: ui.fog2Try, fogColour, nudge: ui.nudge, platform, hereOnly: ui.hereOnly, room }, on);
     const to = ui.focusTo;
     ui.focusTo = null;
     if (to === 'title') view.title.focus();

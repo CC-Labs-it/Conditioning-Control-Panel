@@ -109,6 +109,18 @@ export function drawFogBlobs(k, cols, t, w, h, alpha = 0.55) {
   }
   k.globalAlpha = 1;
 }
+/** The shelf's small Whisper picture, readable at thumbnail size (owner 2026-11-17: the two thumbnails looked like the
+ * same pink card): the card stands left of centre and a faded word slides out from behind its right edge, splitting
+ * into a pink and a blue ghost as it goes. k = 0..1 through one slide (motion off: a still at 0.55). Draws the card too. */
+export function drawWhisperThumb(g, word, k, x, y, cw, ch) {
+  const px = Math.max(11, ch * 0.3), e = ease(Math.min(1, k / 0.8)), a = k < 0.15 ? k / 0.15 : k > 0.8 ? Math.max(0, (1 - k) / 0.2) : 1;
+  const wx = x + cw * 0.55 + e * cw * 1.05, wy = y + ch * 0.46, split = e * px * 0.12;
+  g.save(); g.font = wordFont('classic', px); g.textAlign = 'left'; g.textBaseline = 'middle';
+  g.globalAlpha = 0.45 * a; g.fillStyle = '#ff9cc8'; g.fillText(word, wx - split, wy);
+  g.fillStyle = '#9ce8ff'; g.fillText(word, wx + split, wy);
+  g.globalAlpha = 0.85 * a; g.fillStyle = '#ffffff'; g.fillText(word, wx, wy); g.restore();
+  drawBack(g, 'plain', x, y, cw, ch);
+}
 /** The whisper: small behind the card as it turns, then past it and thinning out toward you. front = draw the near half. */
 export function drawWhisper(g, word, age, x, y, cw, ch, front, style = 'classic') {
   const dur = 1.9;

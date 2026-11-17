@@ -6,7 +6,7 @@
  * repaint never restarts an animation. A click on a bubble in "Your screen" pops it with its own sound (opts.onPop). */
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
-import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf, secondFog } from './looks.js';
+import { drawBack, drawFront, drawFrame, drawCard, drawWord, drawFogBlobs, drawWhisper, drawWhisperThumb, FOGS, WORDS, hueOf, secondFog } from './looks.js';
 import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
@@ -50,8 +50,8 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     const e = v.pick && locate(v.state, v.pick, v.pv);
     if (e && e.fx) { if (e.x.special) out.mix = true; else out[e.fx] = kindOf(e.id); }
     if (v.fog2Try) out.fog2 = kindOf(v.fog2Try);
-    // Colour one is the user's own filter colour. The host does not send it yet (host lane: init.fogColour, handed to
-    // the view as v.fogColour); until then pink stands in. A second colour too close to it steps on to the next.
+    // Colour one is the user's own filter colour (init.fogColour, handed to the view as v.fogColour by sheet/main.js);
+    // a host that sends none gets pink. A second colour too close to it steps on to the next.
     out.own = /^#[0-9a-f]{6}$/i.test(v.fogColour || '') ? v.fogColour : FOGS.pink;
     const second = secondFog(out.fog2, out.own);
     out.fog2Picked = out.fog2; out.fog2 = second.kind; out.fog2Skipped = second.skipped;
@@ -77,10 +77,10 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
       const g = item.c, w = item.w, h = item.h; g.clearRect(0, 0, w, h);
       if (slot === 'card') { const cw = h * 0.68, ch = h * 0.88; g.save(); g.translate(w / 2, h / 2); g.rotate(motion === 'off' ? -0.05 : Math.sin(tt * 0.9 + hueOf(e.id)) * 0.08); drawCard(g, kind, -cw / 2, -ch / 2, cw, ch, 200); g.restore(); }   // the same picture on every thumb: only the frame differs
       else if (slot === 'behind') {
-        const cw = h * 0.42, ch = h * 0.72, x = (w - cw) / 2, y = (h - ch) / 2, age = (tt % 3.2);
-        if (kind === 'whisper') drawWhisper(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.9 : age, x, y, cw, ch, false);
-        drawBack(g, 'plain', x, y, cw, ch);
-        if (kind === 'whisper') drawWhisper(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.9 : age, x, y, cw, ch, true);
+        const cw = h * 0.42, ch = h * 0.72, y = (h - ch) / 2;
+        // Whisper: the card steps left and a word visibly slides out from behind it; Nothing: the plain card, centred
+        if (kind === 'whisper') drawWhisperThumb(g, WORDS[Math.floor(tt / 3.2) % WORDS.length], motion === 'off' ? 0.55 : (tt % 3.2) / 3.2, w * 0.3 - cw / 2, y, cw, ch);
+        else drawBack(g, 'plain', (w - cw) / 2, y, cw, ch);
       } else if (slot === 'fog') drawFogBlobs(g, fogPair(), tt, w, h, 0.7);
       else if (slot === 'word') drawWord(g, kind, 'sink', w / 2, h * 0.52, h * 0.33, motion === 'off' ? 2 : tt % 4, 1);
     };

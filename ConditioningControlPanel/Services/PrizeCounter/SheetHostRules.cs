@@ -57,6 +57,20 @@ internal static class SheetHostRules
     /// only; the panel wallet's label says "Preview wallet"). Null outside the preview.</summary>
     public static string? PreviewMarkText(bool previewMark) => previewMark ? "Preview" : null;
 
+    /// <summary>
+    /// The page's <c>init.fogColour</c>: the colour the pink filter really draws, as "#rrggbb". The same order as
+    /// <c>OverlayService.GetFilterRgb</c>: the user's own pick ("#RRGGBB" or "RRGGBB"), else the active mod's
+    /// filter colour, else hot pink. The page's Two-tone preview wears it as colour one.
+    /// </summary>
+    public static string FogColourWire(string? custom, (byte R, byte G, byte B)? mod)
+    {
+        var hex = custom?.Trim().TrimStart('#') ?? "";
+        if (hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var v))
+            return "#" + v.ToString("x6");
+        var (r, g, b) = mod ?? ((byte)255, (byte)105, (byte)180);
+        return $"#{r:x2}{g:x2}{b:x2}";
+    }
+
     /// <summary>The Disco hues as the page's <c>init.disco</c>: "#rrggbb" strings, at most six; null for none.</summary>
     public static string[]? DiscoWire(IReadOnlyList<uint>? rgb)
     {
