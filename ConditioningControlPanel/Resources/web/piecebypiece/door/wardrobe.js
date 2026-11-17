@@ -26,7 +26,7 @@ export function wardrobeHtml(wear, kit) {
   const owned = wear ? wear.owned() : new Set();
   const picked = wear ? wear.picked() : {};
   const rows = SLOTS.map((slot) => {
-    const items = slot === 'finish' ? CATALOG.finish.filter((id) => owned.has(id)) : CATALOG[slot];
+    const items = ['finish', 'board', 'companion'].includes(slot) ? CATALOG[slot].filter((id) => owned.has(id)) : CATALOG[slot];
     if (!items.length) return '';
     const cur = owned.has(picked[slot]) ? picked[slot] : null;
     const none = `<button type="button" class="level-pill${cur === null ? ' on' : ''}" data-act="wear" data-id="${slot}:" aria-pressed="${cur === null}">None</button>`;

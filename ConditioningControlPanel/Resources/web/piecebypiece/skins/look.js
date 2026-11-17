@@ -17,9 +17,10 @@
  * ==========================================================================*/
 
 import { FINISH_IDS, FINISH_NAMES } from './finish-ids.js';
+import { BOARD_THEME_IDS, BOARD_THEME_NAMES } from '../board/theme-ids.js';
 
 const ATTACHMENT_SLOTS = Object.freeze(['set', 'banner', 'insignia']);
-export const SLOTS = Object.freeze([...ATTACHMENT_SLOTS, 'finish']);
+export const SLOTS = Object.freeze([...ATTACHMENT_SLOTS, 'finish', 'board', 'companion']);
 
 /** Every id this page can draw, by slot. Order is the picker's order. */
 export const CATALOG = Object.freeze({
@@ -27,6 +28,8 @@ export const CATALOG = Object.freeze({
   banner: Object.freeze(['chess.banner.house-pink', 'chess.banner.crest', 'prime.banner.arena']),
   insignia: Object.freeze(['chess.insignia.heart', 'chess.insignia.star']),
   finish: FINISH_IDS,
+  board: BOARD_THEME_IDS,
+  companion: Object.freeze(['chess.companion.emi']),
 });
 
 /** Shelf names, the Prize Counter's own words (prizecounter/state/strings.js). */
@@ -39,9 +42,14 @@ export const NAMES = Object.freeze({
   'chess.insignia.heart': 'Heart Insignia',
   'chess.insignia.star': 'Star Insignia',
   ...FINISH_NAMES,
+  ...BOARD_THEME_NAMES,
+  'chess.companion.emi': 'Emi cheerleader',
 });
 
-export const SLOT_WORDS = Object.freeze({ set: 'Clothes', banner: 'Banner', insignia: 'Insignia', finish: 'Piece finish' });
+export const SLOT_WORDS = Object.freeze({
+  set: 'Clothes', banner: 'Banner', insignia: 'Insignia',
+  finish: 'Piece finish', board: 'Board', companion: 'Cheerleader',
+});
 
 /** Items the counter sells only to Prime. Owned ones stay usable after Prime ends. */
 export const PRIME_ONLY = Object.freeze(['prime.banner.arena']);

@@ -32,7 +32,7 @@ function hostPipe() {
 test('every attachment item has its six sculpted models', () => {
   const reg = JSON.parse(readFileSync(fileURLToPath(new URL('../assets/skins/registry.json', import.meta.url)), 'utf8'));
   const ids = [...new Set(reg.items.map((i) => i.id))].sort();
-  const attachments = SLOTS.filter((s) => s !== 'finish').flatMap((s) => CATALOG[s]);
+  const attachments = ['set', 'banner', 'insignia'].flatMap((s) => CATALOG[s]);
   assert.deepEqual(ids, attachments.sort());
   for (const id of ids) {
     const pieces = reg.items.filter((i) => i.id === id).map((i) => i.piece).sort();

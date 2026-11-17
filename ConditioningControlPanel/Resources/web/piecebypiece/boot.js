@@ -81,16 +81,35 @@ function main() {
   const attachments = createAttachments();
   const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle, attachments });
   const ornaments = createBoardOrnaments({ scene: view.scene, attachments });
+  let boardTheme = null;
+  let themeEffects = null;
+  let themeLights = null;
+  let cheerleaders = null;
+  let selectedBoard = null;
   // The wardrobe (skins/wear.js): who wears what, and the player's own pick. The pick rides
   // every seat and join (contract 4); the server clamps it and hands both looks back.
-  const wear = createWear({ bus, pieces: { setLooks(looks) {
+  const wear = createWear({ bus, pieces: { setLooks(looks, boardId) {
     pieces.setLooks(looks);
     ornaments.setLooks(looks);
+    selectedBoard = boardId;
+    boardTheme?.setTheme(boardId);
+    themeEffects?.setTheme(boardId);
+    themeLights?.setTheme(boardId);
+    cheerleaders?.setLooks(looks);
   } }, post: postToHost, onHost: onHostMessage, hosted: isHosted,
     storage: (() => { try { return window.localStorage; } catch { return null; } })() });
   let finishMotion = 1;
   const stopFinishPreference = onPresentation(p => { finishMotion = p.reducedMotion ? 0 : boardMotionScale(p); });
-  { const dispose = view.dispose; view.dispose = () => { stopFinishPreference(); ornaments.dispose(); wear.dispose(); dispose(); }; }
+  { const dispose = view.dispose; view.dispose = () => {
+    stopFinishPreference();
+    themeLights?.dispose();
+    boardTheme?.dispose();
+    themeEffects?.dispose();
+    cheerleaders?.dispose();
+    ornaments.dispose();
+    wear.dispose();
+    dispose();
+  }; }
   setLookSource(() => wear.mine());
   // The board API the effects layer drives. Keep this surface stable.
   const board = {
@@ -217,6 +236,11 @@ function main() {
   const drawBoard = () => { if (board.intro) board.intro.render(renderBase); else renderBase(); };
   view.render = () => {
     for (const fn of feelLate) fn(feelDt);
+    const themeDt = pausedGame || document.hidden ? 0 : feelDt * finishMotion;
+    boardTheme?.update(themeDt);
+    themeEffects?.update(themeDt);
+    themeLights?.update(themeDt);
+    cheerleaders?.update(themeDt);
     if (board.juice) { board.juice.update(feelDt); board.juice.render(drawBoard); }
     else drawBoard();
   };
@@ -374,10 +398,29 @@ function main() {
   // --- T: the room (floor, dome, and the light that leans to the mover) ---
   // Loaded late and guarded like the rest: without it the board sits in the
   // flat navy it always did. The turn tell rides the bus on its own.
-  import('./board/room.js').then((m) => {
+  import('./board/room.js').then(async (m) => {
     board.room = m.createRoom({ view, bus, game, env: () => board.env });
     feelLate.push((dt) => board.room.update(dt));
+    const themes = await import('./board/themes.js');
+    boardTheme = themes.createBoardTheme({ view });
+    board.theme = boardTheme;
+    boardTheme.setTheme(selectedBoard);
+    const lighting = await import('./board/theme-lights.js');
+    themeLights = lighting.createThemeLights({ view, bus });
+    board.themeLights = themeLights;
+    themeLights.setTheme(selectedBoard);
   }).catch((e) => console.warn('[pbp] room missing', e));
+  import('./board/theme-effects.js').then(m => {
+    themeEffects = m.createThemeEffects({ view, bus, pieces });
+    board.themeEffects = themeEffects;
+    themeEffects.setTheme(selectedBoard);
+  }).catch(e => console.warn('[pbp] theme effects missing', e));
+  bus.on('theme-react', event => boardTheme?.react(event));
+  import('./board/cheerleader.js').then(m => {
+    cheerleaders = m.createCheerleaders({ view, bus, pieces, game });
+    board.cheerleaders = cheerleaders;
+    cheerleaders.setLooks(wear.sides());
+  }).catch(e => console.warn('[pbp] cheerleader missing', e));
   // The air in it: motes drifting round the board, scenery only.
   import('./board/motes.js').then((m) => {
     board.motes = m.createMotes({ scene: view.scene });
