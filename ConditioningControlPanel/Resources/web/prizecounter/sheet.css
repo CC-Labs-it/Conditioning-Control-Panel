@@ -485,3 +485,50 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .d-what b { min-width: 46px; font: 800 11.5px/1.4 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--tx-3); }
 .d-what .d-where, .d-what .d-how { font-size: 13px; color: var(--tx-2); }
 @media (max-width: 860px) { .s-detail .d-what { grid-column: 2; } }
+/* ---------- the game shelves: Chess and Kart wear a big emblem on the head (sheet/section-art.js) and a ground of their
+   own, so each reads as its own place at a glance. The place's trim lives at the edges (the band under the sign, kerbs,
+   the floor under the last plank); behind the cards it is a dark, quiet tone, so every name and price keeps its contrast. ---------- */
+.sh .emb { position: relative; flex: none; display: block; height: 52px; margin: -8px 2px -12px -4px; }
+.sh .emb svg { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; overflow: visible; transform-origin: 50% 100%; }
+.sh .emb-chess { width: 64px; }
+.sh .emb-kart { width: 100px; margin-right: -4px; }
+.sec.fam-chess, .sec.fam-kart { --ground: #361a4c; position: relative; isolation: isolate; padding-bottom: 34px; }
+.sec.fam-kart { --ground: #262a3c; }
+.sec.fam-chess::before, .sec.fam-kart::before, .sec.fam-chess::after, .sec.fam-kart::after { content: ""; position: absolute; z-index: -1; pointer-events: none; }
+.sec.fam-chess::before, .sec.fam-kart::before { inset: -10px -12px 0; border: var(--o) solid var(--ink); border-radius: 22px; box-shadow: 3px 4px 0 var(--black); }
+/* the sign sits inside the place, on its ground, with the place's trim under it (it carries the trim when it sticks) */
+.sec.fam-chess > .sh, .sec.fam-kart > .sh { margin: -7px -9px 0; padding: 16px 10px 22px; border-radius: 19px 19px 0 0; box-shadow: 0 8px 7px -6px #0000008c; }
+/* Chess: a pink and cream board. A board band under the sign, a faint big board behind, the board floor in perspective */
+.sec.fam-chess::before { background: repeating-conic-gradient(#ffd8ec0d 0 25%, #0000 0 50%) 0 0 / 64px 64px, var(--ground); }
+.sec.fam-chess > .sh { background: repeating-conic-gradient(#ff8cc6 0 25%, #fff3df 0 50%) 0 100% / 14px 14px repeat-x, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 14px) / 100% 3px no-repeat, var(--ground); }
+.sec.fam-chess::after { left: -9px; right: -9px; bottom: 3px; height: 78px; border-radius: 0 0 19px 19px;
+  background: repeating-conic-gradient(#ff8cc6 0 25%, #fff3df 0 50%) 50% 100% / 52px 52px;
+  transform: perspective(240px) rotateX(52deg); transform-origin: 50% 100%; opacity: .7;
+  -webkit-mask-image: linear-gradient(to top, #000 0, #000 30%, #0000 78%); mask-image: linear-gradient(to top, #000 0, #000 30%, #0000 78%); }
+/* Kart: a race track. A chequered flag band under the sign, red and white kerbs down both sides, asphalt, the road */
+.sec.fam-kart::before {
+  background: repeating-linear-gradient(180deg, #ff4f6d 0 14px, #fff6ea 0 28px) 0 0 / 9px 100% no-repeat,
+    repeating-linear-gradient(180deg, #ff4f6d 0 14px, #fff6ea 0 28px) 100% 0 / 9px 100% no-repeat,
+    radial-gradient(circle at 1px 1px, #ffffff14 1px, #0000 1.6px) 0 0 / 7px 7px, var(--ground); }
+.sec.fam-kart > .sh { background: repeating-conic-gradient(var(--ink) 0 25%, #fff6ea 0 50%) 0 100% / 14px 14px repeat-x, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 14px) / 100% 3px no-repeat, var(--ground); }
+.sec.fam-kart::after { left: 6px; right: 6px; bottom: 3px; height: 26px; border-top: 3px solid #ffffff2e;
+  background: linear-gradient(90deg, #ffe066 0 24px, #0000 0 46px) 10px 50% / 46px 4px repeat-x, #1f2232; }
+/* a search or the Owned list: a game card away from its shelf wears the shelf's emblem as a small badge (sheet/section-art.js
+   lends the pictures as --emb-chess / --emb-kart), and its cubby takes the same ground, small */
+.it.fam-chess .niche { background-image: repeating-conic-gradient(#ffd8ec14 0 25%, #0000 0 50%); background-size: 22px 22px; }
+.it.fam-kart .niche { background-image: repeating-conic-gradient(#ffffff2a 0 25%, #0000 0 50%), radial-gradient(circle at 2px 2px, #ffffff14 1.2px, #fff0 1.7px);
+  background-size: 8px 8px, 12px 12px; background-repeat: repeat-x, repeat; background-position: 0 100%, 0 0; }
+.it.fam-chess .niche::after, .it.fam-kart .niche::after { content: ""; position: absolute; z-index: 1; right: 4px; bottom: 3px; width: 30px; height: 30px; pointer-events: none;
+  background: var(--emb-chess) no-repeat 50% 100% / contain; }
+.it.fam-kart .niche::after { width: 38px; height: 27px; background-image: var(--emb-kart); }
+.sec.fam-chess .it .niche::after, .sec.fam-kart .it .niche::after { content: none; }
+@media (max-width: 860px) {
+  .sec.fam-chess::before, .sec.fam-kart::before { left: -10px; right: -10px; }
+  .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin-left: -7px; margin-right: -7px; }
+  .sec.fam-chess::after { left: -7px; right: -7px; }
+}
+@media (max-width: 640px) {
+  .sh .emb { height: 42px; margin: -8px 0 -8px -4px; }
+  .sh .emb-chess { width: 50px; } .sh .emb-kart { width: 74px; }
+  .sec.fam-chess > .sh, .sec.fam-kart > .sh { padding-top: 17px; }
+}

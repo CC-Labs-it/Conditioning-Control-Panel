@@ -7,6 +7,7 @@ import { tabKey } from '../state/strings.js';
 import { placeMark, placesOf, isHere, awayLine, PLACES } from './wire.js';
 import { sections, statusOf, statusText, locate, tabLabelKey, nameOf, howOf, FEATURED } from './model.js';
 import { itemArt } from './pictures.js';
+import { sectionEmblem, lendEmblems } from './section-art.js';
 import { PREVIEW_SLIP } from './strings.js';
 import { createTips } from './tips.js';
 import { tipText, roomExplain, placesTip, TAB_TIPS, SIGN_TIPS, HELP } from './explain.js';
@@ -26,6 +27,7 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
 
   const root = el('section', 'sheet' + (sheet ? ' from-wallet' : ''));
   root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 's-title');
+  lendEmblems(root);   // the game cards' small shelf badge in a search or the Owned list (sheet/section-art.js)
   const head = el('div', 's-head'), title = el('h1', 's-title', t('shop_title'));
   title.id = 's-title'; title.tabIndex = -1;
   const slip = el('span', 's-slip', PREVIEW_SLIP);
@@ -121,8 +123,9 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     return b;
   }
   function sectionHead(title, meta, fam) {
-    const h = el('div', 'sh' + (fam ? ' fam-' + fam : '')), sign = el('h2', null, title);
-    h.append(el('span', 'sq'), sign, el('span', 'rule'));
+    const emb = sectionEmblem(doc, fam);   // the game shelves wear a big emblem where the little star sits (sheet/section-art.js)
+    const h = el('div', 'sh' + (fam ? ' fam-' + fam : '') + (emb ? ' has-emb' : '')), sign = el('h2', null, title);
+    h.append(emb || el('span', 'sq'), sign, el('span', 'rule'));
     if (SIGN_TIPS[fam]) tips.bind(sign, t(SIGN_TIPS[fam]), { focus: false });   // a sign takes no focus: hover, and screen readers
     if (meta) h.append(el('span', 'meta', meta));
     return h;
