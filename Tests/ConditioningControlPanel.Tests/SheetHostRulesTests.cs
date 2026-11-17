@@ -61,4 +61,50 @@ public class SheetHostRulesTests
         Assert.True(StartupQueueCore.IsParked(new QuietInputs { CounterSheetUp = true }));
         Assert.False(StartupQueueCore.IsQuiet(new QuietInputs { NowUtc = System.DateTime.UtcNow }));
     }
+
+    [Fact]
+    public void AWalletPress_UnderAModal_OnlyNudges()
+    {
+        Assert.Equal(SheetHostRules.DoorPress.Open, SheetHostRules.OnDoorPress(doorEnabled: true, threadModal: false));
+        Assert.Equal(SheetHostRules.DoorPress.Nudge, SheetHostRules.OnDoorPress(doorEnabled: false, threadModal: false));   // a message box on the door
+        Assert.Equal(SheetHostRules.DoorPress.Nudge, SheetHostRules.OnDoorPress(doorEnabled: true, threadModal: true));    // a ShowDialog anywhere
+        Assert.Equal(4, SheetHostRules.NudgeDip(MotionLevel.Full, gentle: false));
+        Assert.Equal(2, SheetHostRules.NudgeDip(MotionLevel.Reduced, gentle: false));
+        Assert.Equal(0, SheetHostRules.NudgeDip(MotionLevel.Off, gentle: false));
+        Assert.Equal(0, SheetHostRules.NudgeDip(MotionLevel.Full, gentle: true));
+    }
+
+    [Fact]
+    public void OnlyVisibleFloatingCards_HideWhileTheSheetIsDown()
+    {
+        Assert.True(SheetHostRules.HidesWhileDown(visible: true, floatingCard: true));
+        Assert.False(SheetHostRules.HidesWhileDown(visible: false, floatingCard: true));
+        Assert.False(SheetHostRules.HidesWhileDown(visible: true, floatingCard: false));   // the avatar tube, overlays: left alone
+    }
+
+    [Fact]
+    public void ThePreviewMark_FollowsTheHeaderWalletRule()
+    {
+        Assert.Equal("Preview", SheetHostRules.PreviewMarkText(SheetHostRules.HeaderWallet(true, false, 9000, 410).PreviewMark));
+        Assert.Null(SheetHostRules.PreviewMarkText(SheetHostRules.HeaderWallet(false, true, 9000, 410).PreviewMark));
+    }
+
+    [Fact]
+    public void TheSheet_StaysWarmWhileUp_AndHoldsItsRevealForTheFirstAnswer()
+    {
+        var view = System.IO.File.ReadAllText(Root("ConditioningControlPanel", "Controls", "CounterSheetView.cs"));
+        Assert.Contains("_slot.Visibility = Visibility.Visible;", view);
+        Assert.Contains("if (_web == null) _slot.Visibility = Visibility.Collapsed;", view);
+        Assert.Contains("HoldReveal(RevealCap)", view);
+        Assert.Contains("TimeSpan.FromMilliseconds(150)", view);
+        Assert.DoesNotContain("_tongue", view);
+    }
+
+    private static string Root(params string[] parts)
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources"))) dir = dir.Parent;
+        Assert.True(dir != null, "repo root not found");
+        return System.IO.Path.Combine(dir!.FullName, System.IO.Path.Combine(parts));
+    }
 }

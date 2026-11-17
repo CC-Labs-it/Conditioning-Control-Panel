@@ -674,7 +674,12 @@ public partial class LauncherWindow : Window, ConditioningControlPanel.Services.
             double xp = Math.Max(0, s.PlayerXP);
             double need = 0;
             try { need = App.Progression?.GetXPForLevel(level) ?? 0; } catch { }
-            int sparkles = Math.Max(0, s.SkillPoints);
+            // The same rule as the chip and the panel wallet: the DEBUG shop preview shows its own wallet, marked.
+            var wallet = MainWindow.HeaderWalletValue(s.SkillPoints);
+            int sparkles = wallet.PreviewMark ? wallet.Value : Math.Max(0, s.SkillPoints);
+#if DEBUG
+            MarkPreview(StatSparkles.Parent as Panel, wallet.PreviewMark);
+#endif
             double minutes = Math.Max(0, s.TotalConditioningMinutes);
 
             MotionFx.Odometer(StatLevel, _shownLevel, level, "{0:0}", _shownLevel == 0 ? 0.9 : 0.5);

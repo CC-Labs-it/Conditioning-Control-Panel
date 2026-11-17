@@ -51,14 +51,25 @@ internal sealed class CounterSheetView : Grid
 
     private static readonly TimeSpan WarmDelay = TimeSpan.FromSeconds(4);
 
-    /// <summary>sheet.css <c>--night</c>: the page's ground, so a slow first paint is never white.</summary>
-    private static readonly Color Night = Color.FromRgb(0x13, 0x0D, 0x1E);
+    /// <summary>sheet.css <c>--night</c> (the cartoon page's ground): the browser's default background and the
+    /// frame's, so a frame before the page's first paint is its own ground, never black or white.</summary>
+    private static readonly Color Night = Color.FromRgb(0x2A, 0x17, 0x40);
 
     /// <summary>sheet.css <c>--gold</c>, the wallet's gold: the sheet's edge.</summary>
     private static readonly Color Gold = Color.FromRgb(0xFF, 0xD2, 0x4A);
 
-    /// <summary>The cartoon page's ink (near-black plum): the outline, the tongue's sides and the hard shadow.</summary>
+    /// <summary>The cartoon page's ink (near-black plum): the outline.</summary>
     private static readonly Color Ink = Color.FromRgb(0x1C, 0x0A, 0x22);
+
+    /// <summary>sheet.css <c>--night-3</c>: the raised slab's side, down-right of the frame. An ink shadow vanishes
+    /// on the dark window; a lighter plum edge with its own ink line reads as the panel standing off it.</summary>
+    private static readonly Color Slab = Color.FromRgb(0x45, 0x28, 0x6A);
+
+    /// <summary>The longest a warm page's reveal waits for its first shop answer to paint (then it slides anyway).</summary>
+    private static readonly TimeSpan RevealCap = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>After the page's first answer is posted: two frames for it to paint before the slide starts.</summary>
+    private static readonly TimeSpan RevealAfterReply = TimeSpan.FromMilliseconds(40);
 
     private static Task<CoreWebView2Environment>? _env;
 
@@ -66,9 +77,17 @@ internal sealed class CounterSheetView : Grid
     private readonly string _from;
     private readonly Border _scrim;
     private readonly Grid _slot;
-    private readonly Border _frame, _shadow, _tongue;
+    private readonly Border _frame, _shadow;
     private readonly FrameClock _clock = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private readonly Stopwatch _watch = new();
+    private readonly DispatcherTimer _reveal = new(DispatcherPriority.Normal);
+    /// <summary>While the sheet is down a card can still arrive (a server announcement does not wait for the
+    /// ladder; seen on screen over the sheet): a cheap look at the door's owned windows twice a second.</summary>
+    private readonly DispatcherTimer _cardWatch = new(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(500) };
+    private bool _revealHeld, _down;
+    private Action<bool>? _pressChip;
+    /// <summary>The door's own floating cards hidden while the sheet is down (restored when it is up again).</summary>
+    private readonly List<Window> _hiddenCards = new();
     private WebView2? _web;
     private CoreWebView2? _core;
     private bool _disposed, _noRuntime;
@@ -121,8 +140,9 @@ internal sealed class CounterSheetView : Grid
         // once the page has landed and goes out as the close starts: WPF composes behind a moving HWND
         // (measured about 40 DIP behind mid-slide in the launcher), so an edge that moved with the page
         // would trail it. The page itself, rounded and on the same night ground, does the slide.
-        // Cartoon frame (shop frame lane): ink outline, gold band, night ground; a hard ink shadow down-right
-        // and a gold tongue from the wallet chip into the sheet, all IN with the edge and OUT at once with it.
+        // Cartoon frame (shop frame lane): ink outline, gold band, night ground; a raised plum slab down-right
+        // (polish lane: the ink shadow was invisible on the dark window, the gold tongue read as a stray block
+        // and is gone; the pressed-in wallet chip is the door now), IN with the edge and OUT at once with it.
         var ink = new SolidColorBrush(Ink);
         _frame = new Border
         {
@@ -140,22 +160,20 @@ internal sealed class CounterSheetView : Grid
                 CornerRadius = new CornerRadius(CounterSheetRules.CornerRadiusDip - CounterSheetRules.InkDip),
             },
         };
-        _shadow = new Border { Background = ink, CornerRadius = new CornerRadius(CounterSheetRules.CornerRadiusDip), Opacity = 0, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
-        _tongue = new Border
+        _shadow = new Border
         {
-            Background = new SolidColorBrush(Gold), BorderBrush = ink,
-            BorderThickness = new Thickness(CounterSheetRules.InkDip, 0, CounterSheetRules.InkDip, 0),
-            Width = 22, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
-            Opacity = 0, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
+            Background = new SolidColorBrush(Slab), BorderBrush = ink, BorderThickness = new Thickness(CounterSheetRules.InkDip),
+            CornerRadius = new CornerRadius(CounterSheetRules.CornerRadiusDip), Opacity = 0, IsHitTestVisible = false, Visibility = Visibility.Collapsed,
         };
         _slot = new Grid { ClipToBounds = true, Visibility = Visibility.Collapsed };
         _slot.Children.Add(_frame);
         Children.Add(_scrim);
         Children.Add(_shadow);
-        Children.Add(_tongue);
         Children.Add(_slot);
         SizeChanged += (_, _) => OnResized();
         _clock.Tick += (_, _) => Step();
+        _reveal.Tick += (_, _) => Reveal();
+        _cardWatch.Tick += (_, _) => { if (_down) HideCards(); else _cardWatch.Stop(); };
         door.IsVisibleChanged += OnDoorVisibleChanged;
         door.Closed += OnDoorClosed;
     }
@@ -167,6 +185,7 @@ internal sealed class CounterSheetView : Grid
         Func<FrameworkElement?>? walletChip = null)
     {
         var view = new CounterSheetView(door, bar, from) { _walletChip = walletChip };
+        if (walletChip != null) view._pressChip = on => PressChip(walletChip(), on);
         if (zIndex != 0) Panel.SetZIndex(view, zIndex);
         if (insertAt >= 0 && insertAt <= host.Children.Count) host.Children.Insert(insertAt, view);
         else host.Children.Add(view);
@@ -200,10 +219,15 @@ internal sealed class CounterSheetView : Grid
             string? version = null;
             try { version = CoreWebView2Environment.GetAvailableBrowserVersionString(); } catch (Exception ex) { Diag.Swallowed(ex); }
             if (string.IsNullOrEmpty(version)) { _noRuntime = true; App.Logger?.Information("PrizeSheet: no WebView2 runtime, the counter window opens instead"); return; }
-            var web = new WebView2 { DefaultBackgroundColor = System.Drawing.Color.FromArgb(Night.R, Night.G, Night.B) };
+            // Parked above the window until the first layout cuts it to an empty region (ApplyProgress at 0).
+            var web = new WebView2 { DefaultBackgroundColor = System.Drawing.Color.FromArgb(Night.R, Night.G, Night.B), Margin = new Thickness(0, -20000, 0, 20000) };
             web.SizeChanged += (_, _) => ApplyProgress();
             _web = web;
             _slot.Children.Add(web);
+            // The slot stays VISIBLE while the sheet is up, the page's HWND cut to an empty region: a collapsed
+            // WebView2 is hidden to the browser, which drops its frames, and the next open showed flat black
+            // (#121212) for a few hundred ms before the first paint (polish lane, seen on screen).
+            _slot.Visibility = Visibility.Visible;
             _ = InitCoreAsync(web);
         }
         catch (Exception ex) { App.Logger?.Warning("PrizeSheet: WebView2 create failed: {E}", ex.Message); DisposeWeb(); }
@@ -292,9 +316,26 @@ internal sealed class CounterSheetView : Grid
             try { _core.PostWebMessageAsJson(json); } catch (Exception ex) { Diag.Swallowed(ex); }
         _pending.Clear();
         try { _onReady?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
-        // A warm page slides its content in the moment its init lands: the reveal starts with it.
-        // Two frames of lead: the page paints, then starts its transition on the next animation frame.
-        if (_openOnHandOver) { _openOnHandOver = false; AnimateTo(1, leadMs: 32); }
+        // A warm page paints its shelves once its first shop answer lands: the reveal waits for that answer
+        // plus two frames, never longer than RevealCap (then it slides anyway), so the sheet never slides
+        // down as bare ground.
+        if (_openOnHandOver) { _openOnHandOver = false; HoldReveal(RevealCap); }
+    }
+
+    private void HoldReveal(TimeSpan wait)
+    {
+        _revealHeld = true;
+        _reveal.Stop();
+        _reveal.Interval = wait;
+        _reveal.Start();
+    }
+
+    private void Reveal()
+    {
+        _reveal.Stop();
+        if (!_revealHeld) return;
+        _revealHeld = false;
+        if (_session != 0 && !_disposed) AnimateTo(1);
     }
 
     public void Post(int session, object msg)
@@ -305,6 +346,7 @@ internal sealed class CounterSheetView : Grid
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(msg);
             if (_live && _core != null) _core.PostWebMessageAsJson(json);
             else _pending.Add(json);
+            if (_revealHeld && json.StartsWith("{\"type\":\"reply\"", StringComparison.Ordinal) && _reveal.Interval > RevealAfterReply) HoldReveal(RevealAfterReply);
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeSheet.Post: {E}", ex.Message); }
     }
@@ -389,12 +431,16 @@ internal sealed class CounterSheetView : Grid
         if (_web == null) return 0;
         _session = ++_sessions;
         _wantsClose = wantsClose;
+        _down = true;
         _slot.Visibility = Visibility.Visible;
         _scrim.Visibility = Visibility.Visible;
         _scrim.IsHitTestVisible = true;
         ShowEdge(false);
         ApplyProgress();
         RaiseHwnd();
+        HideCards();
+        _cardWatch.Start();
+        try { _pressChip?.Invoke(true); } catch (Exception ex) { Diag.Swallowed(ex); }
         // A warm page waits for its init (Load hands it over a moment later): starting the reveal now
         // would run ahead of the page's own slide and show its bare ground first.
         _openOnHandOver = _fresh && _pageReady && _core != null && _p <= 0;
@@ -413,8 +459,11 @@ internal sealed class CounterSheetView : Grid
         _wantsClose = null;
         _pending.Clear();
         _openOnHandOver = false;
+        _revealHeld = false;
+        _reveal.Stop();
         _scrim.IsHitTestVisible = false;
         ShowEdge(false);
+        try { _pressChip?.Invoke(false); } catch (Exception ex) { Diag.Swallowed(ex); }
         if (animate) AnimateTo(0);
         else Finish(0);
     }
@@ -456,10 +505,14 @@ internal sealed class CounterSheetView : Grid
         _p = _scrimP = to;
         _settleOff = double.NaN;
         if (to > 0) { ApplyProgress(); ShowEdge(true); PostWalletAt(); return; }
-        ApplyProgress();   // an empty band: nothing of the HWND shows
-        _slot.Visibility = Visibility.Collapsed;
+        ApplyProgress();   // an empty band: nothing of the HWND shows (the slot stays visible: the browser keeps painting)
+        _down = false;
+        _cardWatch.Stop();
+        if (_web == null) _slot.Visibility = Visibility.Collapsed;
         _scrim.Visibility = Visibility.Collapsed;
-        _shadow.Visibility = _tongue.Visibility = Visibility.Collapsed;
+        _shadow.Visibility = Visibility.Collapsed;
+        try { _pressChip?.Invoke(false); } catch (Exception ex) { Diag.Swallowed(ex); }
+        RestoreCards();
         try { if (FocusDoorOnClose && DoorWindow.IsActive) DoorWindow.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
         // The next open finds a page loaded and waiting for its init.
         if (_core != null && _session == 0) Navigate(CounterSheetRules.SheetUrl);
@@ -485,7 +538,7 @@ internal sealed class CounterSheetView : Grid
     private void ShowEdge(bool on)
     {
         int ms = on ? CounterSheetRules.EdgeFadeMs(Services.MotionFx.Level, Services.Safety.GentleVisuals.On) : 0;
-        foreach (var part in new UIElement[] { _frame, _shadow, _tongue })
+        foreach (var part in new UIElement[] { _frame, _shadow })
         {
             part.BeginAnimation(OpacityProperty, null);
             if (ms <= 0) { part.Opacity = on ? 1 : 0; continue; }
@@ -554,16 +607,6 @@ internal sealed class CounterSheetView : Grid
             double sd = CounterSheetRules.ShadowDip, gap = CounterSheetRules.GapUnderBarDip;
             _shadow.Margin = new Thickness(f.Left + sd, f.Top + gap + sd, Math.Max(0, ActualWidth - f.Right - sd), Math.Max(0, ActualHeight - f.Bottom - sd));
             _shadow.Visibility = Visibility.Visible;
-            // The tongue: from under the chip down into the sheet's gold band, when the chip sits over the sheet.
-            double cx = chip.IsEmpty ? double.NaN : chip.X + chip.Width / 2;
-            bool tongue = !chip.IsEmpty && cx - 11 > f.Left + CounterSheetRules.CornerRadiusDip && cx + 11 < f.Right - CounterSheetRules.CornerRadiusDip
-                && f.Top + gap - chip.Bottom > 1;
-            _tongue.Visibility = tongue ? Visibility.Visible : Visibility.Collapsed;
-            if (tongue)
-            {
-                _tongue.Margin = new Thickness(cx - 11, chip.Bottom - 1, 0, 0);
-                _tongue.Height = f.Top + gap + CounterSheetRules.BorderDip - chip.Bottom + 1;
-            }
             return true;
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeSheet: place failed: {E}", ex.Message); return false; }
@@ -571,7 +614,7 @@ internal sealed class CounterSheetView : Grid
 
     private void OnResized()
     {
-        if (_slot.Visibility != Visibility.Visible) return;
+        if (!_down) return;
         if (!PlaceSlot()) { _wantsClose?.Invoke("no-room"); return; }
         _region = (-1, -1, -1, -1);
         ApplyProgress();
@@ -602,7 +645,8 @@ internal sealed class CounterSheetView : Grid
 
     private void OnDoorVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
     {
-        if (e.NewValue is not false || _slot.Visibility != Visibility.Visible) return;
+        if (e.NewValue is true && !_down) { RestoreCards(); return; }   // cards held while the door was hidden
+        if (e.NewValue is not false || !_down) return;
         var ask = _wantsClose;
         Finish(0);   // a hidden window cannot slide: cut
         ask?.Invoke("door-hidden");
@@ -613,6 +657,9 @@ internal sealed class CounterSheetView : Grid
         var ask = _wantsClose;
         _disposed = true;
         _clock.Stop();
+        _reveal.Stop();
+        _cardWatch.Stop();
+        _hiddenCards.Clear();
         DisposeWeb();
         ask?.Invoke("door-closed");
     }
@@ -638,6 +685,102 @@ internal sealed class CounterSheetView : Grid
         _region = (-1, -1, -1, -1);
         if (web == null) return;
         try { _slot.Children.Remove(web); web.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        if (!_down) _slot.Visibility = Visibility.Collapsed;
+    }
+
+    // ============================== the door's own windows and chip ==============================
+
+    /// <summary>A wallet press while a modal holds the thread (a startup dialog, a message box): the sheet is
+    /// in-tree and any window draws above it, so the press does not open it; the chip gives a small shake
+    /// instead (<see cref="SheetHostRules.OnDoorPress"/>). True = the press is spent here.</summary>
+    public bool NudgeIfBusy()
+    {
+        bool enabled = true;
+        try { var h = new WindowInteropHelper(DoorWindow).Handle; enabled = h == IntPtr.Zero || IsWindowEnabled(h); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        if (SheetHostRules.OnDoorPress(enabled, ComponentDispatcher.IsThreadModal) == SheetHostRules.DoorPress.Open) return false;
+        App.Logger?.Information("PrizeSheet: a modal is up over {From}, the wallet only nudges", _from);
+        double amp = SheetHostRules.NudgeDip(Services.MotionFx.Level, Services.Safety.GentleVisuals.On);
+        if (amp > 0 && _walletChip?.Invoke() is { } chip && Face(chip) is { } t)
+        {
+            var shake = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(280), FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop };
+            int i = 0;
+            foreach (var x in new[] { 0, -amp, amp, -amp / 2, amp / 3, 0 })
+                shake.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(x, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(56 * i++))));
+            t.BeginAnimation(TranslateTransform.XProperty, shake);
+        }
+        return true;
+    }
+
+    /// <summary>The door's floating cards (a passive startup card, "What moved") are separate windows and
+    /// would float over the sheet: hidden while it is down, shown again once it is up.</summary>
+    private void HideCards()
+    {
+        try
+        {
+            // The door's own cards, and the passive cards nobody owns (a server announcement opens unowned).
+            foreach (Window w in Application.Current.Windows)
+                if ((ReferenceEquals(w.Owner, DoorWindow) || (w.Owner == null && w is Services.Startup.IPassiveStartupSurface))
+                    && SheetHostRules.HidesWhileDown(w.IsVisible, w is Services.Startup.IPassiveStartupSurface || w is WhatMovedCard) && !_hiddenCards.Contains(w))
+                {
+                    w.Hide();
+                    _hiddenCards.Add(w);
+                }
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+    }
+
+    private void RestoreCards()
+    {
+        if (_hiddenCards.Count == 0 || !DoorWindow.IsVisible || _down) return;
+        var cards = _hiddenCards.ToArray();
+        _hiddenCards.Clear();
+        foreach (var w in cards)
+            try { w.Show(); } catch (InvalidOperationException) { /* closed while hidden */ } catch (Exception ex) { Diag.Swallowed(ex); }
+    }
+
+    /// <summary>ON IS PRESSED IN (Depth law): while its sheet is down the wallet chip sits in a well (house
+    /// depth brushes, no Effect) and its face drops a pixel; it pops back as the sheet goes up.</summary>
+    internal static void PressChip(FrameworkElement? chip, bool on)
+    {
+        if (chip == null) return;
+        if (chip is SparkleWallet wallet) wallet.SetPressedIn(on);
+        else if (chip is Control c)
+        {
+            if (on)
+            {
+                if (PressedFill(c, c.Background) is { } fill) c.Background = fill;
+                c.SetResourceReference(Control.BorderBrushProperty, "DepthPressedBevel");
+                c.BorderThickness = new Thickness(2);
+            }
+            else { c.ClearValue(Control.BackgroundProperty); c.ClearValue(Control.BorderBrushProperty); c.ClearValue(Control.BorderThicknessProperty); }
+        }
+        if (Face(chip) is { } t) t.Y = on ? 1 : 0;
+    }
+
+    /// <summary>The chip's own fill with the house <c>DepthPressedShade</c> laid over it (the shade falls from the
+    /// top edge into the well), as one frozen brush; null when either is missing.</summary>
+    internal static Brush? PressedFill(FrameworkElement at, Brush? basis)
+    {
+        if (basis == null || at.TryFindResource("DepthPressedShade") is not Brush shade) return null;
+        var unit = new RectangleGeometry(new Rect(0, 0, 1, 1));
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing(basis, null, unit));
+        group.Children.Add(new GeometryDrawing(shade, null, unit));
+        var fill = new DrawingBrush(group) { Stretch = Stretch.Fill };
+        if (fill.CanFreeze) fill.Freeze();
+        return fill;
+    }
+
+    /// <summary>The chip's face (its content), with a translate of its own; null when something else owns its transform.</summary>
+    private static TranslateTransform? Face(FrameworkElement chip)
+    {
+        var face = chip is ContentControl { Content: FrameworkElement f } ? f : chip;
+        if (face.RenderTransform is TranslateTransform t) return t;
+        if (face.RenderTransform is { } rt && !rt.Value.IsIdentity) return null;
+        var made = new TranslateTransform();
+        face.RenderTransform = made;
+        return made;
     }
 
     // ============================== DEBUG desk hooks ==============================
@@ -681,4 +824,5 @@ internal sealed class CounterSheetView : Grid
     [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr hWnd);
 }

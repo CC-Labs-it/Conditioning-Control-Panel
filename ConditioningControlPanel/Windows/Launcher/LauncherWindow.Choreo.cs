@@ -622,6 +622,7 @@ public partial class LauncherWindow
         bool show = wallet.Show;
 #if DEBUG
         if (wallet.PreviewMark) WalletChip.ToolTip = "Preview wallet";   // DEBUG shop preview chrome, plain literal
+        MarkPreview(WalletChip.Content as Panel, wallet.PreviewMark);
 #endif
         WalletChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _spShown = double.NaN; return; }
@@ -635,6 +636,22 @@ public partial class LauncherWindow
         MotionFx.Odometer(SpReadout, from, sp, "{0:N0}", countUp ? 0.9 : 0.6);
         _spShown = sp;
     }
+
+#if DEBUG
+    /// <summary>DEBUG shop preview: a small visible mark after a wallet number (the chip, the stat card), by the
+    /// same rule as the panel wallet's label (<see cref="Services.PrizeCounter.SheetHostRules.PreviewMarkText"/>).</summary>
+    private static void MarkPreview(Panel? host, bool on)
+    {
+        if (host == null) return;
+        var mark = host.Children.OfType<TextBlock>().FirstOrDefault(t => Equals(t.Tag, "preview-mark"));
+        var text = Services.PrizeCounter.SheetHostRules.PreviewMarkText(on);
+        if (text == null) { if (mark != null) host.Children.Remove(mark); return; }
+        if (mark != null) return;
+        mark = new TextBlock { Text = text, Tag = "preview-mark", FontSize = 10, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.75 };
+        mark.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        host.Children.Add(mark);
+    }
+#endif
 
     // ------------------------------------------------------------------ helpers
 

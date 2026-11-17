@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.PrizeCounter;
 
@@ -33,6 +34,28 @@ internal static class SheetHostRules
     public static (bool Show, int Value, bool PreviewMark) HeaderWallet(bool preview, bool signedIn, int real, int previewSp)
         => preview ? (true, Math.Max(0, previewSp), true)
            : (signedIn && real >= 0, Math.Max(0, real), false);
+
+    public enum DoorPress { Open, Nudge }
+
+    /// <summary>
+    /// A wallet press on a door window (polish lane). The sheet is in the window's own tree, so any other window
+    /// draws above it: while a modal holds that window (its HWND disabled by a dialog or a message box) or the
+    /// thread (a WPF <c>ShowDialog</c>), the press never opens the sheet under it; the chip only nudges.
+    /// </summary>
+    public static DoorPress OnDoorPress(bool doorEnabled, bool threadModal)
+        => doorEnabled && !threadModal ? DoorPress.Open : DoorPress.Nudge;
+
+    /// <summary>The door's own non-modal floating cards (a passive startup card, "What moved") hide while the
+    /// sheet is down and come back when it is up; anything else the window owns is left alone.</summary>
+    public static bool HidesWhileDown(bool visible, bool floatingCard) => visible && floatingCard;
+
+    /// <summary>The chip's nudge, in DIPs either side: none at motion Off or with Gentle visuals, half at Reduced.</summary>
+    public static double NudgeDip(MotionLevel level, bool gentle)
+        => gentle || level == MotionLevel.Off ? 0 : level == MotionLevel.Reduced ? 2 : 4;
+
+    /// <summary>The DEBUG shop preview's visible mark beside a header wallet's number (plain literal, preview chrome
+    /// only; the panel wallet's label says "Preview wallet"). Null outside the preview.</summary>
+    public static string? PreviewMarkText(bool previewMark) => previewMark ? "Preview" : null;
 
     /// <summary>The Disco hues as the page's <c>init.disco</c>: "#rrggbb" strings, at most six; null for none.</summary>
     public static string[]? DiscoWire(IReadOnlyList<uint>? rgb)

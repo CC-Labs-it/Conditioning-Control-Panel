@@ -123,6 +123,20 @@ public partial class SparkleWallet : UserControl
 
     internal void ReleaseShown() { _held = null; SetBalance(_balance); }
 
+    /// <summary>ON IS PRESSED IN: while the counter sheet it opened is down the wallet sits in a well (house depth
+    /// brushes, no Effect); it pops back as the sheet goes up (<see cref="CounterSheetView.PressChip"/>).</summary>
+    internal void SetPressedIn(bool on)
+    {
+        if (WalletButton.Template?.FindName("Outline", WalletButton) is not Border outline) return;
+        if (on)
+        {
+            if (CounterSheetView.PressedFill(outline, outline.Background) is { } fill) outline.Background = fill;
+            outline.SetResourceReference(Border.BorderBrushProperty, "DepthPressedBevel");
+            outline.BorderThickness = new Thickness(2);
+        }
+        else { outline.ClearValue(Border.BackgroundProperty); outline.ClearValue(Border.BorderBrushProperty); outline.ClearValue(Border.BorderThicknessProperty); }
+    }
+
     /// <summary>The star the flight lands on.</summary>
     internal FrameworkElement? Star => FindStar(this);
 

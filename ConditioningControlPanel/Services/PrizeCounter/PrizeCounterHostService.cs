@@ -344,6 +344,8 @@ internal static partial class PrizeCounterHostService
         // (PrizeCounterHostService.Sheet.cs). A wallet's second press closes it; one counter at a time.
         var want = CounterSheetRules.PickSurface(from, onClosed != null, Force3D);
         if (want == CounterSheetRules.Surface.DoorSheet && SheetPressHandled()) return;
+        // A modal over the door: the sheet would open under it, so the press only nudges the chip (polish lane).
+        if (want == CounterSheetRules.Surface.DoorSheet && _host == null && SheetDoorView(from)?.NudgeIfBusy() == true) return;
         var game = want == CounterSheetRules.Surface.GameSheet ? GameSheetFor(from) : null;
         if (want == CounterSheetRules.Surface.GameSheet && game == null) want = CounterSheetRules.Surface.Window;
         if (CounterSheetRules.ClosesOpenFirst(OpenSurface, want, game != null && ReferenceEquals(game.View, _sheetView))) CloseFor(CloseBack);

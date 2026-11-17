@@ -280,7 +280,16 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   });
 
   paint();
-  if (init.sheet === true) frame(() => view.root.classList.add('open'));
+  // The host slides the whole page down under its wallet (polish lane): the root's own slide on top of it showed bare
+  // ground first, so the root starts in place; Gentle keeps the root's fade (the host never slides then).
+  if (init.sheet === true && init.gentle) frame(() => view.root.classList.add('open'));
+  else if (init.sheet === true) {
+    const s = view.root.style;
+    if (s) s.transition = 'none';
+    view.root.classList.add('open');
+    void view.root.offsetWidth;   // the style lands now, with no transition to run
+    if (s) frame(() => { s.transition = ''; });
+  }
   const [res, index] = await Promise.all([shop.load(), Promise.resolve().then(loadIndex).catch(() => null)]);
   ui.index = index;
   const tabs = sheetTabs(shop.tabs(), pv());
