@@ -52,6 +52,14 @@ public sealed class SparkleFlightTests
         Assert.Equal(0, SparkleFlightPlan.Ease(0, .42, 0, .3, 1)); Assert.Equal(1, SparkleFlightPlan.Ease(1, .42, 0, .3, 1));
     }
 
+    [Theory]
+    [InlineData(5, 100, 105, SparkleSource.BackRoom, true)]
+    [InlineData(-40, 100, 60, SparkleSource.CounterBuy, true)]
+    [InlineData(900, 0, 900, SparkleSource.Synced, false)]      // first fill after a sign-in
+    [InlineData(-60, 60, 0, SparkleSource.Reset, false)]
+    public void WhatFlies(int amount, int before, int after, SparkleSource source, bool flies)
+        => Assert.Equal(flies, SparkleFlightDirector.ShouldFly(new SparkleChange(amount, before, after, source)));
+
     /// <summary>The rendered clips ship, are short, never clip, and the tick bells sit under the chord.</summary>
     [Fact]
     public void TheBellsAreRenderedQuietClips()

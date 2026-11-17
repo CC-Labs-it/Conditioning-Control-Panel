@@ -16,6 +16,7 @@ public partial class MainWindow
         _sparkleWalletActive = true;
         App.Settings.CurrentReplaced += ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded += OnSparklePointAwarded;
+        InitializeSparkleFly();
         HeaderSparkleWallet.VisitRequested += VisitFromSparkleWallet;
         HeaderSparkleWallet.CounterRequested += OpenCounterFromSparkleWallet;
         Closed += (_, _) => ShutdownSparkleWallet();
@@ -104,6 +105,7 @@ public partial class MainWindow
         _sparkleWalletActive = false;
         App.Settings.CurrentReplaced -= ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded -= OnSparklePointAwarded;
+        ShutdownSparkleFly();
         if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded -= OnSparkleWalletProfileLoaded;
         if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
         _sparkleWalletSettings = null;
