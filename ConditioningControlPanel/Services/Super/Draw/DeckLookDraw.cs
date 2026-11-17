@@ -5,72 +5,16 @@ using SkiaSharp;
 namespace ConditioningControlPanel.Services.Super.Draw;
 
 /// <summary>
-/// Draws the Deck's worn looks (rules in CCP.Core <see cref="DeckLooks"/> and <see cref="DeckWhisper"/>):
-/// the card frames round the picture (the product, there the whole time), the same patterns on the
-/// back mid-flip, painted procedurally, no art files, and the word behind the card. The caller has already squashed,
-/// lifted and clipped the canvas exactly as it does for the picture, so a back turns with the card.
-/// Skia only, no WPF and no App. One instance per layer; it owns its paints.
+/// Draws the Deck's worn looks and its turn (rules in CCP.Core <see cref="DeckLooks"/>, <see cref="DeckTurn"/>
+/// and <see cref="DeckSpiralBack"/>): the card frames round the picture, the shade on a turning face, and the
+/// spiral back with its phrase coming at the viewer. The caller has already lifted, tilted and turned the
+/// canvas exactly as it does for the picture, so everything here turns with the card. Skia only, no WPF
+/// and no App. One instance per layer; it owns its paints and shaders and allocates nothing per frame.
 /// </summary>
 public sealed class DeckLookDraw : IDisposable
 {
     private readonly SKPaint _fill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
     private readonly SKPaint _line = new() { IsAntialias = true, Style = SKPaintStyle.Stroke };
-
-    /// <summary>Paint <paramref name="back"/> into <paramref name="r"/> at <paramref name="alpha"/>. Plain draws nothing.</summary>
-    public void DrawBack(SKCanvas canvas, SKRect r, DeckBack back, byte alpha)
-    {
-        if (back == DeckBack.Plain || alpha == 0 || r.Width < 2 || r.Height < 2) return;
-        float w = r.Width, h = r.Height;
-        int save = canvas.Save();
-        canvas.ClipRect(r, antialias: true);
-        _fill.Color = Colour(DeckLooks.Ground(back), alpha);
-        canvas.DrawRect(r, _fill);
-        var mark = Colour(DeckLooks.Mark(back), alpha);
-        switch (back)
-        {
-            case DeckBack.Ink:
-            {
-                // Diagonal hatch, lower left to upper right, like a pen-ruled playing card.
-                float step = (float)DeckLooks.Px(DeckLooks.InkStep, w);
-                _line.Color = mark;
-                _line.StrokeWidth = (float)DeckLooks.Px(DeckLooks.InkLine, w);
-                for (float i = -h; i < w; i += step)
-                    canvas.DrawLine(r.Left + i, r.Bottom, r.Left + i + h, r.Top, _line);
-                break;
-            }
-            case DeckBack.Check:
-            {
-                float s = Math.Max(6f, w / DeckLooks.CheckCells);
-                _fill.Color = mark;
-                for (int cy = 0; cy * s < h; cy++)
-                    for (int cx = 0; cx * s < w; cx++)
-                        if ((cx + cy) % 2 == 0) canvas.DrawRect(r.Left + cx * s, r.Top + cy * s, s, s, _fill);
-                break;
-            }
-            case DeckBack.Lace:
-            {
-                float step = (float)DeckLooks.Px(DeckLooks.LaceStep, w);
-                float dot = (float)DeckLooks.Px(DeckLooks.LaceDot, w);
-                float edge = step * 5f / 9f;   // the mockup's first dot sits 5 of its 9 in
-                _fill.Color = mark;
-                int row = 0;
-                for (float ly = edge; ly < h; ly += step, row++)
-                    for (float lx = edge + (row % 2) * step / 2f; lx < w; lx += step)
-                        canvas.DrawCircle(r.Left + lx, r.Top + ly, dot, _fill);
-                float inset = (float)DeckLooks.Px(DeckLooks.LaceInset, w);
-                _line.Color = mark;
-                _line.StrokeWidth = (float)DeckLooks.Px(DeckLooks.LaceFrame, w);
-                canvas.DrawRect(r.Left + inset, r.Top + inset, w - inset * 2, h - inset * 2, _line);
-                break;
-            }
-        }
-        canvas.RestoreToCount(save);
-        // The rim sits on top, half white, so a dark back still reads as a card on a dark desktop.
-        float rim = (float)DeckLooks.Px(DeckLooks.RimWidth, w);
-        _line.Color = Colour(DeckLooks.Rim, alpha);
-        _line.StrokeWidth = rim;
-        canvas.DrawRect(r.Left + rim / 2, r.Top + rim / 2, w - rim, h - rim, _line);
-    }
 
     // ---- card frames: the pattern band round every Deck card (rules: DeckLooks.Frame*) ----
     private readonly SKPaint _band = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
@@ -160,44 +104,135 @@ public sealed class DeckLookDraw : IDisposable
         _tiles.Clear();
     }
 
-    /// <summary>The whisper's ghosts (mockup drawWhisper): pink to one side, blue to the other.</summary>
-    public static readonly SKColor GhostPink = new(0xFF, 0x9C, 0xC8), GhostBlue = new(0x9C, 0xE8, 0xFF);
+    // ---- the turn: the face darkens toward its far edge as it turns away (DeckTurn.Shade) ----
 
-    private readonly SKPaint _word = new()
+    /// <summary>Unit-space ramp, black from a third at the near edge to full at the far edge; mapped onto the face per frame.</summary>
+    private readonly SKPaint _shade = new()
     {
         IsAntialias = true,
-        TextAlign = SKTextAlign.Center,
-        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default,
+        Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(1, 0),
+            new[] { new SKColor(0, 0, 0, 85), new SKColor(0, 0, 0, 255) }, new[] { 0f, 1f }, SKShaderTileMode.Clamp),
     };
 
     /// <summary>
-    /// The whisper at <paramref name="p"/> for a card centred on (<paramref name="cx"/>, <paramref name="cy"/>)
-    /// and <paramref name="cardW"/> by <paramref name="cardH"/>. The caller draws it before the card
-    /// while <see cref="WhisperPose.Front"/> is false and after it once true. Never squashed or tilted
-    /// with the card: the word is in the air, not on it.
+    /// Darken the face <paramref name="r"/> by <paramref name="shade"/> (0..1). <paramref name="farRight"/> says
+    /// which edge is turning away. Drawn in the card's own space, so it narrows with the face.
     /// </summary>
-    public void DrawWhisper(SKCanvas canvas, float cx, float cy, float cardW, float cardH, string text, WhisperPose p, byte alpha)
+    public void DrawShade(SKCanvas canvas, SKRect r, double shade, bool farRight, byte alpha)
     {
-        if (!p.Visible || string.IsNullOrEmpty(text)) return;
+        var a = (byte)Math.Clamp(shade * alpha, 0, 255);
+        if (a == 0 || r.Width < 1) return;
+        int save = canvas.Save();
+        canvas.ClipRect(r, antialias: true);
+        if (farRight) { canvas.Translate(r.Left, r.Top); canvas.Scale(r.Width, r.Height); }
+        else { canvas.Translate(r.Right, r.Top); canvas.Scale(-r.Width, r.Height); }
+        _shade.Color = new SKColor(255, 255, 255, a);
+        canvas.DrawRect(0, 0, 1, 1, _shade);
+        canvas.RestoreToCount(save);
+    }
+
+    // ---- the spiral back (DeckSpiralBack): a Loom spiral filling the card, the phrase coming at you ----
+
+    private readonly SKPaint _spiral = new() { IsAntialias = false, FilterQuality = SKFilterQuality.Low };
+    /// <summary>Unit-space dim at the centre, so the phrase reads on any spiral colour.</summary>
+    private readonly SKPaint _dim = new()
+    {
+        IsAntialias = true,
+        Shader = SKShader.CreateRadialGradient(new SKPoint(0, 0), 1,
+            new[] { new SKColor(0, 0, 0, 150), new SKColor(0, 0, 0, 90), new SKColor(0, 0, 0, 0) },
+            new[] { 0f, 0.45f, 1f }, SKShaderTileMode.Clamp),
+    };
+
+    /// <summary>
+    /// The back: <paramref name="ground"/> (ARGB), then the spiral picture <paramref name="spiral"/> turned by
+    /// <paramref name="turnRad"/> and sized to cover the whole card <paramref name="r"/> (its round edge sits past
+    /// the corners), then a soft dim at the centre for the phrase. The caller clips to the card.
+    /// </summary>
+    public void DrawSpiralBack(SKCanvas canvas, SKRect r, SKBitmap spiral, uint ground, double turnRad, byte alpha)
+    {
+        if (alpha == 0 || r.Width < 2 || r.Height < 2) return;
+        _fill.Color = Colour(ground, alpha);
+        canvas.DrawRect(r, _fill);
+        float half = (float)Math.Sqrt(r.Width * r.Width + r.Height * r.Height) / 2f;
+        int save = canvas.Save();
+        canvas.Translate(r.MidX, r.MidY);
+        if (turnRad != 0) canvas.RotateRadians((float)turnRad);
+        _spiral.Color = new SKColor(255, 255, 255, alpha);
+        canvas.DrawBitmap(spiral, new SKRect(-half, -half, half, half), _spiral);
+        canvas.RestoreToCount(save);
+        float dimR = Math.Min(r.Width, r.Height) * 0.62f;
+        save = canvas.Save();
+        canvas.Translate(r.MidX, r.MidY);
+        canvas.Scale(dimR * Math.Max(1f, r.Width / r.Height), dimR * Math.Max(1f, r.Height / r.Width));
+        _dim.Color = new SKColor(255, 255, 255, alpha);
+        canvas.DrawCircle(0, 0, 1, _dim);
+        canvas.RestoreToCount(save);
+    }
+
+    private readonly SKPaint _wordFill = new() { IsAntialias = true, TextAlign = SKTextAlign.Center, Style = SKPaintStyle.Fill, Typeface = WordFace };
+    private readonly SKPaint _wordEdge = new()
+    {
+        IsAntialias = true, TextAlign = SKTextAlign.Center, Style = SKPaintStyle.Stroke,
+        StrokeJoin = SKStrokeJoin.Round, Typeface = WordFace,
+    };
+    private static readonly SKTypeface WordFace =
+        SKTypeface.FromFamilyName("Segoe UI", SKFontStyleWeight.Black, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+        ?? SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
+
+    /// <summary>The slot's ghosts (callout.js): pink to one side, blue to the other, as the word passes.</summary>
+    public static readonly SKColor GhostPink = new(0xFF, 0x3D, 0x8F), GhostBlue = new(0x5F, 0xB0, 0xFF);
+    /// <summary>The outline and the drop under the face of the word: a deep plum, like the slot's #49164f.</summary>
+    public static readonly SKColor WordInk = new(0x2A, 0x0B, 0x30);
+    public const float LineHeight = 1.08f;
+
+    /// <summary>
+    /// The phrase at <paramref name="p"/>, centred on the card <paramref name="r"/>, bold, a pale house tint
+    /// (<paramref name="hue"/>) over a thick plum outline and a short drop, so it reads on any spiral.
+    /// The block is fitted to the card at every shape (DeckSpiralBack.FontPx).
+    /// </summary>
+    public void DrawBackWord(SKCanvas canvas, SKRect r, string[]? lines, BackWordPose p, float hue, byte alpha)
+    {
+        if (!p.Visible || lines is not { Length: > 0 }) return;
         var a = p.Alpha * alpha;
         if (a < 1) return;
-        float font = (float)DeckWhisper.FontPx(cardH);
-        _word.TextSize = font;
-        var m = _word.FontMetrics;
-        float baseline = -(m.Ascent + m.Descent) / 2;
+        _wordFill.TextSize = 100;
+        float widest = 0;
+        foreach (var l in lines) widest = Math.Max(widest, _wordFill.MeasureText(l));
+        float font = (float)DeckSpiralBack.FontPx(widest / 100f, lines.Length, r.Width, r.Height, LineHeight);
+        if (font <= 0) return;
+        _wordFill.TextSize = font;
+        _wordEdge.TextSize = font;
+        var m = _wordFill.FontMetrics;
+        float lineH = font * LineHeight;
+        float top = -lineH * lines.Length / 2f;
+        float baseline0 = top + (lineH - (m.Descent - m.Ascent)) / 2f - m.Ascent;
+
         int save = canvas.Save();
-        canvas.Translate(cx + (float)(p.Dx * cardW), cy + (float)(p.Dy * cardH));
-        canvas.Scale((float)p.Scale);
-        if (p.Split > 0.01)
+        canvas.Translate(r.MidX, r.MidY);
+        if (p.RotRad != 0) canvas.RotateRadians((float)p.RotRad);
+        canvas.Scale((float)p.Scale, (float)(p.Scale * p.ScaleY));
+
+        if (p.GhostAlpha > 0.01 && p.Split > 0.001)
         {
             float off = (float)(p.Split * font);
-            _word.Color = GhostPink.WithAlpha((byte)Math.Clamp(a * 0.5, 0, 255));
-            canvas.DrawText(text, -off, baseline, _word);
-            _word.Color = GhostBlue.WithAlpha((byte)Math.Clamp(a * 0.5, 0, 255));
-            canvas.DrawText(text, off, baseline, _word);
+            byte ga = (byte)Math.Clamp(p.GhostAlpha * alpha * Math.Max(0.35, p.Alpha), 0, 255);
+            _wordFill.BlendMode = SKBlendMode.Screen;
+            _wordFill.Color = GhostPink.WithAlpha(ga);
+            for (int i = 0; i < lines.Length; i++) canvas.DrawText(lines[i], -off, baseline0 + i * lineH, _wordFill);
+            _wordFill.Color = GhostBlue.WithAlpha(ga);
+            for (int i = 0; i < lines.Length; i++) canvas.DrawText(lines[i], off, baseline0 + i * lineH, _wordFill);
+            _wordFill.BlendMode = SKBlendMode.SrcOver;
         }
-        _word.Color = SKColors.White.WithAlpha((byte)Math.Clamp(a, 0, 255));
-        canvas.DrawText(text, 0, baseline, _word);
+
+        byte ia = (byte)Math.Clamp(a, 0, 255);
+        float drop = Math.Max(1.5f, font * 0.06f);
+        _wordEdge.Color = WordInk.WithAlpha((byte)(ia * 0.85f));
+        _wordEdge.StrokeWidth = Math.Max(2f, font * 0.17f);
+        for (int i = 0; i < lines.Length; i++) canvas.DrawText(lines[i], 0, baseline0 + i * lineH + drop, _wordEdge);
+        _wordEdge.Color = WordInk.WithAlpha(ia);
+        for (int i = 0; i < lines.Length; i++) canvas.DrawText(lines[i], 0, baseline0 + i * lineH, _wordEdge);
+        _wordFill.Color = SKColor.FromHsl(hue, 100, 90).WithAlpha(ia);
+        for (int i = 0; i < lines.Length; i++) canvas.DrawText(lines[i], 0, baseline0 + i * lineH, _wordFill);
         canvas.RestoreToCount(save);
     }
 
@@ -212,8 +247,12 @@ public sealed class DeckLookDraw : IDisposable
     {
         _fill.Dispose();
         _line.Dispose();
-        _word.Dispose();
         _band.Dispose();
+        _shade.Shader?.Dispose(); _shade.Dispose();
+        _dim.Shader?.Dispose(); _dim.Dispose();
+        _spiral.Dispose();
+        _wordFill.Dispose();
+        _wordEdge.Dispose();
         ClearTiles();
     }
 }

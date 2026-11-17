@@ -13,7 +13,7 @@ const FX = {
     ['marble', 360, { isNew: true }], ['heart', 360, { isNew: true }], ['champagne', 360, {}], ['spiral', 730, { isNew: true }], ['disco', 730, {}],
     ['frost', 360, {}], ['gum', 360, { todo: true, name: 'Bubblegum' }], ['latex', 730, { todo: true }], ['oil', 730, { todo: true, name: 'Oil slick' }]],
   card: [['plain', 0, {}], ['ink', 120, {}], ['check', 120, {}], ['lace', 360, {}]],
-  behind: [['none', 0, { name: 'Nothing' }], ['whisper', 360, { how: 'a new word each flip', isNew: true }]],
+  behind: [['none', 0, { name: 'Nothing' }], ['whisper', 360, { how: 'a new spiral and phrase each flip', isNew: true }]],
   // one fog product (owner 2026-11-17): the fog wears the user's own filter colour, Two-tone adds a free second one
   fog: [['twotone', 730, { special: true, how: 'your colour and a second swirl', name: 'Two-tone' }]],
   word: [['classic', 0, { how: 'fades' }], ['type', 120, { how: 'typewriter', name: 'Typed' }], ['chalk', 360, { how: 'written on' }],

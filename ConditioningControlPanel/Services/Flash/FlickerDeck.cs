@@ -39,7 +39,10 @@ public readonly record struct FlickerPose(
     double SquashY = 1, // juice: the press squashes the card flat before it lifts
     double Sheen = 0,   // juice: 0..1 strength of the lit band sweeping the face mid-flip
     double SheenPos = 0,// juice: 0..1 across the face, left to right
-    double CrackReach = 1); // juice: 0..1 how far the hairlines have run from the impact point
+    double CrackReach = 1, // juice: 0..1 how far the hairlines have run from the impact point
+    double TurnRad = 0,     // the face's turn about its upright axis (CCP.Core DeckTurn.Angle): drives the perspective
+    double Shade = 0,       // 0..1 how dark the face is as it turns away
+    double Persp = 0);      // perspective strength (1 Full, 0.5 Reduced): the draw scales DeckTurn.PerspectiveTerm by it
 
 /// <summary>Per-flash Flicker Deck state. Lives on the compositor item; stepped by the layer tick.</summary>
 public sealed class FlickerDeckState
@@ -100,8 +103,10 @@ public static class FlickerDeck
     public const double LiftScale = 0.10;
     public const double LiftRiseFrac = 0.10;
 
-    /// <summary>The flip: scaleX = cos over this span, picture swaps at the midpoint.</summary>
-    public const double FlipSec = 0.30;
+    /// <summary>The flip: a real turn about the upright axis over this span (CCP.Core DeckTurn), picture
+    /// swaps at the midpoint, exactly edge-on. 0.30 s read as a squeeze; a turn with a settle needs a
+    /// little longer (owner 2026-11-17, "the flip animation might be smoother"), and it still ends with the lift.</summary>
+    public const double FlipSec = 0.40;
     /// <summary>How long a flip waits edge-on for its next picture before opening on the old one.</summary>
     public const double MaxHoldSec = 1.5;
     /// <summary>Edge-on never quite vanishes, so a held flip still reads as a card.</summary>
@@ -117,8 +122,6 @@ public static class FlickerDeck
     // Juice round (owner, 2026-10-01). Feel only: the timings above stay the card's own.
     /// <summary>Anticipation: the press squashes the card 5% flat (and 2.5% wide) over its first 80 ms.</summary>
     public const double AnticipationSec = 0.08, AnticipationSquash = 0.05;
-    /// <summary>The opening half of the flip pops 5% past full width (back ease, s = 1.2) before it settles.</summary>
-    public const double FlipBack = 1.2, FlipOvershoot = 0.053;
     /// <summary>The landing: one soft damped bounce on the new face once the lift is down.</summary>
     public const double LandSec = 0.5, LandAmp = 0.045, LandHz = 3.2, LandDecay = 7.0;
     /// <summary>The lit band that sweeps the face through the flip: tinted, low, one pulse per flip.</summary>
@@ -264,7 +267,8 @@ public static class FlickerDeck
 
         var lift = s.LiftT >= 0 && s.LiftT <= LiftSpanSec ? Math.Sin(Math.PI * s.LiftT / LiftSpanSec) : 0.0;
         var flipping = s.FlipT >= 0 && s.FlipT <= FlipSec;
-        var scaleX = flipping ? FlipWidth(s.FlipT) : 1.0;
+        var turn = flipping ? TurnAt(s.FlipT, amp) : 0.0;
+        var scaleX = flipping ? SuperCore.DeckTurn.Width(turn, MinScaleX) : 1.0;
         var ant = Anticipation(s.LiftT) * amp;
         scaleX *= 1 + AnticipationSquash * 0.5 * ant;
         var scale = (1 + LiftScale * lift * amp) * (1 + Land(s.SinceLand) * amp);
@@ -272,21 +276,23 @@ public static class FlickerDeck
         var (shown, reach) = CrackShown(s, level);
         var peek = Ease(s.Peek) * PeekFrac * amp;
         return new FlickerPose(scaleX, scale, lift * amp, -LiftRiseFrac * lift * amp,
-            Wobble(s, amp), peek, shown, 1 - AnticipationSquash * ant, sheen * amp, sheenPos, reach);
+            Wobble(s, amp), peek, shown, 1 - AnticipationSquash * ant, sheen * amp, sheenPos, reach,
+            turn, flipping ? SuperCore.DeckTurn.Shade(turn, amp) : 0.0, amp);
     }
 
     /// <summary>
-    /// The card's width through the flip: the closing half is the plain cosine, the opening half a
-    /// back ease that pops about 5% wide before it settles on 1. Never mirrored, never thinner than
-    /// <see cref="MinScaleX"/>.
+    /// The face's turn <paramref name="flipT"/> seconds into the flip (CCP.Core DeckTurn.Angle): eased in
+    /// from rest, quickest edge-on, the new face swinging a few degrees past flat before it settles.
+    /// A flip held edge-on for its picture sits at the midpoint, exactly a quarter turn.
     /// </summary>
-    public static double FlipWidth(double flipT)
-    {
-        var half = FlipSec / 2;
-        if (flipT <= half) return Math.Max(MinScaleX, Math.Cos(Math.PI * Math.Max(0, flipT) / FlipSec));
-        var u = Math.Clamp((flipT - half) / half, 0, 1) - 1;
-        return Math.Max(MinScaleX, 1 + (FlipBack + 1) * u * u * u + FlipBack * u * u);
-    }
+    public static double TurnAt(double flipT, double amp = 1)
+        => SuperCore.DeckTurn.Angle(Math.Max(0, flipT) / FlipSec, amp);
+
+    /// <summary>
+    /// The card's width through the flip: the cosine of its turn, never mirrored, never thinner than
+    /// <see cref="MinScaleX"/>, never wider than the card.
+    /// </summary>
+    public static double FlipWidth(double flipT) => SuperCore.DeckTurn.Width(TurnAt(flipT), MinScaleX);
 
     /// <summary>The press: one 0..1..0 sine dip over <see cref="AnticipationSec"/> from the click.</summary>
     public static double Anticipation(double liftT)
@@ -349,7 +355,8 @@ public static class FlickerDeck
         var k = (1 - u) * (1 - u) * (1 - u);   // 1 minus a cubic ease-out
         static double To(double v, double rest, double k) => rest + (v - rest) * k;
         return new FlickerPose(To(p.ScaleX, 1, k), To(p.Scale, 1, k), p.Lift * k, p.RiseFrac * k,
-            p.WobbleRad * k, p.PeekFrac * k, p.Crack, To(p.SquashY, 1, k), p.Sheen * k, p.SheenPos, p.CrackReach);
+            p.WobbleRad * k, p.PeekFrac * k, p.Crack, To(p.SquashY, 1, k), p.Sheen * k, p.SheenPos, p.CrackReach,
+            p.TurnRad * k, p.Shade * k, p.Persp);
     }
 
     /// <summary>Idle sway that grows with the flips, plus a decaying ring after each flip.</summary>

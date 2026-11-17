@@ -31,15 +31,16 @@ public class FlickerDeckJuiceTests
     }
 
     [Fact]
-    public void The_flip_closes_on_the_cosine_and_opens_with_a_small_overshoot_then_settles_on_one()
+    public void The_flip_is_a_turn_that_goes_edge_on_half_way_and_swings_a_little_past_flat_before_it_settles()
     {
         Assert.Equal(1, FlickerDeck.FlipWidth(0), 9);
         Assert.Equal(FlickerDeck.MinScaleX, FlickerDeck.FlipWidth(FlickerDeck.FlipSec / 2), 9);
         Assert.Equal(1, FlickerDeck.FlipWidth(FlickerDeck.FlipSec), 9);
-        var peak = Enumerable.Range(0, 301).Select(i => FlickerDeck.FlipWidth(FlickerDeck.FlipSec * i / 300.0)).Max();
-        // House overshoot is 3-8 percent.
-        Assert.InRange(peak, 1.03, 1.08);
-        Assert.InRange(peak, 1, 1 + FlickerDeck.FlipOvershoot + 0.002);
+        // Never wider than the card: the settle is in the angle now, not a width pop.
+        Assert.All(Enumerable.Range(0, 301), i => Assert.InRange(FlickerDeck.FlipWidth(FlickerDeck.FlipSec * i / 300.0), FlickerDeck.MinScaleX, 1 + 1e-9));
+        // The new face comes round from the other side and passes flat by a few degrees.
+        var past = Enumerable.Range(151, 150).Select(i => FlickerDeck.TurnAt(FlickerDeck.FlipSec * i / 300.0)).Max();
+        Assert.InRange(past * 180 / Math.PI, 3, 9);
     }
 
     [Fact]

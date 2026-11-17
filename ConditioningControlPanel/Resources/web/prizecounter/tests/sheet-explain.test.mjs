@@ -231,14 +231,17 @@ test('init.fogColour reaches the view as v.fogColour (the Two-tone preview\'s co
   }
 });
 
-test('the Whisper thumbnail shows a word coming out past the card\'s right edge', async () => {
-  const { drawWhisperThumb } = await import('../sheet/looks.js');
+test('the Whisper look is a spiral back with the word coming at you from its centre', async () => {
+  const { drawSpiralBack, backWord, BACK_ZOOM, BACK_LIFE } = await import('../sheet/looks.js');
   const calls = [];
-  const g = new Proxy({}, { get: (o, k) => (k in o ? o[k] : (...a) => calls.push([k, ...a])), set: (o, k, v) => { o[k] = v; return true; } });
-  g.measureText = () => ({ width: 30 });
-  drawWhisperThumb(g, 'sink', 0.55, 10, 10, 40, 60);
-  const words = calls.filter((c) => c[0] === 'fillText');
-  assert.equal(words.length, 3, 'the word and its two ghosts');
-  assert.ok(words.every((c) => c[2] > 10 + 40 * 0.55), 'starting past the middle of the card, out to its right');
-  assert.ok(calls.findIndex((c) => c[0] === 'fillText') < calls.findIndex((c) => c[0] === 'fillRect'), 'the word is drawn first: the card covers its start');
+  const g = new Proxy({}, { get: (o, k) => (k in o ? o[k] : (...a) => (calls.push([k, ...a]), { addColorStop() {} })), set: (o, k, v) => { o[k] = v; return true; } });
+  drawSpiralBack(g, 'sink', 0.5, 10, 10, 40, 60, 0);
+  const words = calls.filter((c) => c[0] === 'fillText' || c[0] === 'strokeText');
+  assert.ok(words.length >= 2, 'the word, bold over an outline');
+  assert.ok(words.every((c) => c[2] === 0 || Math.abs(c[2]) < 1), 'centred on the spiral');
+  assert.ok(calls.findIndex((c) => c[0] === 'stroke') < calls.findIndex((c) => c[0] === 'fillText'), 'over the spiral');
+  assert.ok(backWord(0.02).s < 0.3, 'small and far at first');
+  assert.ok(backWord(BACK_ZOOM + 0.01).s > 0.95, 'full size after the zoom');
+  assert.ok(backWord(BACK_LIFE - 0.05).s > 1.05 && backWord(BACK_LIFE - 0.05).a < 0.2, 'passes you as it fades');
+  assert.equal(backWord(0.5, true).s, 1, 'motion off: it fades in place');
 });
