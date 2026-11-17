@@ -267,6 +267,7 @@ public class BubbleSkinsTests
                 double px = (x + .5) / size * 2 - 1, py = (y + .5) / size * 2 - 1, r = Math.Sqrt(px * px + py * py);
                 byte al = rgba[(y * size + x) * 4 + 3];
                 if (r >= 1) Assert.Equal(0, al);
+                else if (r > .995) Assert.True(al <= 12, $"the rim fades to nothing: {al}");
                 else if (r > .97) Assert.True(al <= 60, $"rim alpha {al}");
                 if (r < .7 && al > 128) lit++;
             }
@@ -294,6 +295,18 @@ public class BubbleSkinsTests
             Assert.True(Array.IndexOf(spec.Layer.Colors, rgb) >= 0 || (spec.Layer2On && Array.IndexOf(spec.Layer2.Colors, rgb) >= 0));
         }
         Assert.True(orbits >= 32);
+
+        // Dense and fine on a large bubble (the lab's 126 along the arms), fewer on a small one, all in the shared buffer.
+        foreach (var (r, lo, hi) in new[] { (80.0, 100, 126), (27.0, 40, 60) })
+            for (int seed = 1; seed < 60; seed += 3)
+            {
+                int count = BubbleSkins.Burst(S, seed, r, 1, p), along = 0;
+                double sum = 0;
+                for (int i = 0; i < count; i++)
+                    if (p[i].Kind == SkinParticleKind.Orbit) { along++; sum += p[i].Size; }
+                Assert.InRange(along, lo, hi);
+                Assert.True(r < 40 || sum / along < .02, $"fine particles: mean {sum / along:0.000}");
+            }
     }
 
     [Fact]

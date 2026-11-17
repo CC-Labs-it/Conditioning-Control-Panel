@@ -38,7 +38,7 @@ public sealed partial class BubbleLayer
         private static SKPaint? s_artPaint;
         private static SKPaint ArtPaint() => s_artPaint ??= new SKPaint { IsAntialias = true, FilterQuality = SKFilterQuality.Medium };
 
-        /// <summary>Bake this bubble's spiral for a glass of <paramref name="r"/> pixels: about one texel per pixel, at most 128.</summary>
+        /// <summary>Bake this bubble's spiral for a glass of <paramref name="r"/> pixels: about one texel per pixel, at most <see cref="BubbleSkins.MaxSpiralArt"/>.</summary>
         public static SkinArt SpiralArt(int seed, float r)
         {
             var spec = BubbleSkins.SpiralSpec(seed);

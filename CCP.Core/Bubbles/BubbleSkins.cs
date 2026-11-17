@@ -90,7 +90,7 @@ public static partial class BubbleSkins
     public const int MaxFizz = 48, MaxSparks = 12, Mists = 3;
     public const int MaxBurst = 1 + MaxFizz + MaxSparks + Mists;
     /// <summary>Room for the largest burst of any skin: the layer sizes every burst buffer by it.</summary>
-    public const int BurstCapacity = 128;
+    public const int BurstCapacity = 160;
 
     /// <summary>True for a skin that draws its own body in place of the soap sprite (the hit area stays the circle).</summary>
     public static bool OwnsBody(string? skin) => skin is BubbleSkinIds.Heart or BubbleSkinIds.Marble or BubbleSkinIds.Disco;

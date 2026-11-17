@@ -11,13 +11,16 @@ namespace ConditioningControlPanel.BubbleCore;
 /// </summary>
 public static partial class BubbleSkins
 {
-    public const int MinSpiralArt = 40, MaxSpiralArt = 128;
-    public const int MaxSpiralOrbits = 72, MaxSpiralDust = 22;
+    /// <summary>The baked picture's side. 192 covers a glass of about 107 px at one texel per pixel (a 192 bake of
+    /// both weaves takes about 2.4 ms, 128 about 1.3 ms, 256 about 4.3 ms: once per bubble, at spawn).</summary>
+    public const int MinSpiralArt = 40, MaxSpiralArt = 192;
+    /// <summary>The lab flings 126 along the arms; a field pops many at once, so smaller bubbles fling fewer.</summary>
+    public const int MaxSpiralOrbits = 126, MaxSpiralDust = 26;
     /// <summary>The spiral picture's radius as a share of the glass.</summary>
     public const double SpiralReach = .9;
 
-    public static int SpiralOrbitCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 1.2), 36, MaxSpiralOrbits);
-    public static int SpiralDustCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * .5), 10, MaxSpiralDust);
+    public static int SpiralOrbitCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 1.6), 48, MaxSpiralOrbits);
+    public static int SpiralDustCount(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * .33), 10, MaxSpiralDust);
 
     /// <summary>The side of the baked picture for a glass radius in pixels: about one texel per pixel, capped.</summary>
     public static int SpiralArtSize(double radiusPx) => Math.Clamp((int)Math.Round(radiusPx * 2 * SpiralReach), MinSpiralArt, MaxSpiralArt);
@@ -46,16 +49,43 @@ public static partial class BubbleSkins
         var loom = new LoomSpiral(size);
         loom.Add(one, 0, 0, 1);
         loom.CopyTo(rgba);
+        Soften(rgba, size);
         double c = size / 2.0;
         for (int y = 0, i = 0; y < size; y++)
             for (int x = 0; x < size; x++, i += 4)
             {
                 double px = (x + .5 - c) / c, py = (y + .5 - c) / c, r = Math.Sqrt(px * px + py * py);
                 double k = r - .74; k = Math.Clamp(k / .26, 0, 1);
-                float edge = (float)(1 - k * k * (3 - 2 * k) * .85);
+                // The lab's fade toward the rim, then the last pixel and a half to nothing: no stepped circle when stretched.
+                float edge = (float)((1 - k * k * (3 - 2 * k) * .85) * Math.Clamp((1 - r) * c / 1.5, 0, 1));
                 for (int ch = 0; ch < 4; ch++) rgba[i + ch] = (byte)(rgba[i + ch] * edge + .5f);
             }
         return true;
+    }
+
+    /// <summary>A 1-2-1 tent across and down the picture. The Loom's own edge smoothing follows the angle only, so a
+    /// tightly wound weave steps along its arms at one texel per pixel; this smooths those steps for a fraction of the
+    /// cost of baking it twice as large.</summary>
+    private static void Soften(byte[] rgba, int size)
+    {
+        int row = size * 4, len = size * row;
+        var tmp = System.Buffers.ArrayPool<byte>.Shared.Rent(len);
+        try
+        {
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    int i = y * row + x * 4, l = x > 0 ? i - 4 : i, r = x < size - 1 ? i + 4 : i;
+                    for (int ch = 0; ch < 4; ch++) tmp[i + ch] = (byte)((rgba[l + ch] + 2 * rgba[i + ch] + rgba[r + ch] + 2) >> 2);
+                }
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    int i = y * row + x * 4, u = y > 0 ? i - row : i, d = y < size - 1 ? i + row : i;
+                    for (int ch = 0; ch < 4; ch++) rgba[i + ch] = (byte)((tmp[u + ch] + 2 * tmp[i + ch] + tmp[d + ch] + 2) >> 2);
+                }
+        }
+        finally { System.Buffers.ArrayPool<byte>.Shared.Return(tmp); }
     }
 
     /// <summary>How fast this bubble's spiral turns, radians per second.</summary>
@@ -86,16 +116,18 @@ public static partial class BubbleSkins
         dst[n++] = new SkinParticle(0, 0, 0, 0, .42f, 1f, SkinParticleKind.Wave, Grow: 1.1f, Argb: 0xE6FFFFFF);
 
         // Particles fling out along each arm, still turning, slowing as they go (Orbit: X is the start radius,
-        // Vx the outward speed, Vy the turn speed, Rot the start angle).
+        // Vx the outward speed, Vy the turn speed, Rot the start angle). Fine and dense: smaller than the lab's,
+        // with a little scatter across the arm so it reads as a stream, not a string of beads.
         int per = Math.Max(4, SpiralOrbitCount(radiusPx) / arms);
         for (int arm = 0; arm < arms; arm++)
             for (int j = 0; j < per; j++)
             {
                 double f = (double)j / per;
-                double ang = (double)arm / arms * Tau + f * 2.6 * dir + (rnd.Next() - .5) * .08;
-                double vr = 1.5 + f * 3.4 + rnd.Next() * .4, life = .6 + f * .5 + rnd.Next() * .2;
+                double ang = (double)arm / arms * Tau + f * 2.6 * dir + (rnd.Next() - .5) * .14;
+                double vr = 1.5 + f * 3.4 + rnd.Next() * .5, life = .6 + f * .5 + rnd.Next() * .2;
+                float size = (float)((.022 - f * .012) * (.75 + rnd.Next() * .5));
                 dst[n++] = new SkinParticle(.04f, 0, (float)vr * m, (float)(dir * (8.5 - f * 5.5)) * m, (float)life,
-                    Math.Max(minS, (float)(.034 - f * .02)), SkinParticleKind.Orbit, Drag: 2.4f, Rot: (float)ang, Argb: Col(arm % ncol));
+                    Math.Max(minS, size), SkinParticleKind.Orbit, Drag: 2.4f, Rot: (float)ang, Argb: Col(arm % ncol));
             }
 
         int dust = SpiralDustCount(radiusPx);
