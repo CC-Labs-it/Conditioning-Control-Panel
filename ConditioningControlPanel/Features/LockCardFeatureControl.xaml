@@ -77,6 +77,7 @@
                                     Background="{StaticResource SectionHueStudioBrush}"/>
                             <StackPanel Margin="16,8,16,8">
 
+                                <feat:OptionSection Key="lockcard.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                                 <!-- Per hour -->
                                 <Grid Height="36" ToolTip="{loc:Str tooltip_lock_card_frequency_1_10_per_hour}">
                                     <Grid.ColumnDefinitions>
@@ -192,9 +193,9 @@
                                                VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
                                                Foreground="{DynamicResource PinkBrush}"/>
                                 </Grid>
+                                </feat:OptionSection>
 
-                                <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
+                                <feat:OptionSection Key="lockcard.rules" Title="{loc:Str studio_section_rules}" Theme="Interaction">
                                 <!-- Strict lock -->
                                 <Grid Height="34" ToolTip="{loc:Str tooltip_cannot_escape_must_complete_typing}">
                                     <Grid.ColumnDefinitions>
@@ -242,6 +243,7 @@
                                                   Checked="ChkResetOnTypo_Changed" Unchecked="ChkResetOnTypo_Changed"/>
                                     </Grid>
                                 </feat:MoreFold>
+                                </feat:OptionSection>
 
                             </StackPanel>
                         </Grid>

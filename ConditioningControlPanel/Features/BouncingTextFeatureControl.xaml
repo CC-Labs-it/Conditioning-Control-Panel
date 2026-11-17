@@ -80,6 +80,7 @@
                                     Background="{StaticResource SectionHueStudioBrush}"/>
                             <StackPanel Margin="16,8,16,8">
 
+                                <feat:OptionSection Key="bouncingtext.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                                 <!-- Speed -->
                                 <Grid Height="36" ToolTip="{loc:Str tooltip_bounce_speed_1_slow_10_fast}">
                                     <Grid.ColumnDefinitions>
@@ -130,9 +131,9 @@
                                                VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
                                                Foreground="{DynamicResource PinkBrush}"/>
                                 </Grid>
+                                </feat:OptionSection>
 
-                                <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
+                                <feat:OptionSection Key="bouncingtext.look" Title="{loc:Str studio_section_look}" Theme="Look">
                                 <!-- Colour mode -->
                                 <Grid Height="36" ToolTip="{loc:Str tooltip_random_rerolls_every_bounce_fixed_keeps_one_c}">
                                     <Grid.ColumnDefinitions>
@@ -184,9 +185,9 @@
                                               Style="{DynamicResource DarkComboBoxStyle}"
                                               SelectionChanged="CmbFont_Changed"/>
                                 </Grid>
+                                </feat:OptionSection>
 
-                                <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
+                                <feat:OptionSection Key="bouncingtext.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                                 <!-- Second text -->
                                 <Grid Height="34" ToolTip="{loc:Str tooltip_second_independent_bouncing_text}">
                                     <Grid.ColumnDefinitions>
@@ -212,6 +213,7 @@
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkAlwaysOnTop_Changed" Unchecked="ChkAlwaysOnTop_Changed"/>
                                 </Grid>
+                                </feat:OptionSection>
 
                             </StackPanel>
                         </Grid>
@@ -226,8 +228,7 @@
                             <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                                     Background="{StaticResource SectionHueStudioBrush}"/>
                             <StackPanel Margin="16,8,16,8">
-                                <helpers:EmojiTextBlock Text="{loc:Str label_effects}" FontSize="13" FontWeight="SemiBold"
-                                                        Foreground="{StaticResource TextLightBrush}" Margin="0,0,0,2"/>
+                                <feat:OptionSection Key="bouncingtext.effects" Title="{loc:Str studio_section_effects}" Theme="Look">
                                 <UniformGrid Columns="2">
                                     <Grid Height="30" Margin="0,0,10,0">
                                         <Grid.ColumnDefinitions>
@@ -307,6 +308,7 @@
                                                   VerticalAlignment="Center" Checked="ChkOutline_Changed" Unchecked="ChkOutline_Changed"/>
                                     </Grid>
                                 </UniformGrid>
+                                </feat:OptionSection>
                             </StackPanel>
                         </Grid>
                     </Border>
