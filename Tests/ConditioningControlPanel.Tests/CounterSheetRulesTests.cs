@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Windows;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.PrizeCounter;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
 
-/// <summary>The 2D counter sheet (owner 2026-11-17): which door drops it, where it sits, and the wallet's second press.</summary>
+/// <summary>The 2D counter sheet (owner 2026-11-17): which door slides it down, where it sits inside the
+/// door window, the wallet's second press, and the slide itself.</summary>
 public class CounterSheetRulesTests
 {
     [Theory]
@@ -38,63 +40,116 @@ public class CounterSheetRulesTests
     [InlineData("wallet", true, false, "Launcher")]   // EMI's options with the panel in the tray
     [InlineData("wallet", false, false, "None")]      // nothing on screen: the window opens
     [InlineData("backroom", true, true, "None")]
-    public void TheSheetHangsFromTheDoorsOwnWindow(string from, bool launcherUp, bool panelUp, string door)
+    public void TheSheetLivesInTheDoorsOwnWindow(string from, bool launcherUp, bool panelUp, string door)
         => Assert.Equal(door, CounterSheetRules.PickDoor(from, launcherUp, panelUp).ToString());
 
     [Fact]
-    public void Bounds_RunFromUnderTheBar_ToNearTheBottom_EdgeToEdge()
+    public void Frame_RunsFromUnderTheBar_InsideTheWindowEdge()
     {
-        var client = new Rect(100, 50, 1200, 800);
-        var r = CounterSheetRules.Bounds(client, barBottom: 98, Rect.Empty, bottomInset: 8, minWidth: 360, minHeight: 240);
-        Assert.NotNull(r);
-        Assert.Equal(new Int32Rect(100, 98, 1200, 800 + 50 - 98 - 8), r!.Value);
+        // The launcher: a 48 DIP title bar across the whole 1280 x 800 window.
+        var f = CounterSheetRules.Frame(new Size(1280, 800), new Rect(0, 0, 1280, 48), 8, 12, 360, 240);
+        Assert.Equal(new Rect(8, 48, 1264, 800 - 48 - 12), f!.Value);
     }
 
     [Fact]
-    public void Bounds_AreClampedToTheMonitor_ForAMaximizedOverhang()
+    public void Frame_StartsAtTheBarsLeftEdge_WhenTheBarDoesNot()
     {
-        // A maximized borderless window overhangs its monitor by its resize border.
-        var client = new Rect(-8, -8, 1936, 1096);
-        var monitor = new Rect(0, 0, 1920, 1080);
-        var r = CounterSheetRules.Bounds(client, barBottom: 52, monitor, bottomInset: 10, minWidth: 360, minHeight: 240);
-        Assert.Equal(new Int32Rect(0, 52, 1920, 1080 - 52 - 10), r!.Value);
+        // The panel: the header sits right of the nav rail.
+        var f = CounterSheetRules.Frame(new Size(1500, 900), new Rect(100, 40, 1400, 50), 8, 12, 360, 240);
+        Assert.Equal(100, f!.Value.Left);
+        Assert.Equal(90, f.Value.Top);
+        Assert.Equal(1500 - 8, f.Value.Right);
+        Assert.Equal(900 - 12, f.Value.Bottom);
     }
 
     [Fact]
-    public void Bounds_NeverStartAboveTheClient()
+    public void Frame_NeverTouchesTheWindowsRoundedCorners()
     {
-        var r = CounterSheetRules.Bounds(new Rect(0, 200, 800, 600), barBottom: 10, Rect.Empty, 0, 360, 240);
-        Assert.Equal(200, r!.Value.Y);
+        var client = new Size(1000, 700);
+        var f = CounterSheetRules.Frame(client, new Rect(0, 0, 1000, 48), CounterSheetRules.SideInsetDip,
+            CounterSheetRules.BottomInsetDip, 360, 240)!.Value;
+        // Windows 11 rounds the frame at 8 DIPs: the sheet's bottom corners sit inside that curve's box.
+        Assert.True(f.Left >= 8 && client.Width - f.Right >= 8);
+        Assert.True(client.Height - f.Bottom >= 8);
     }
 
     [Theory]
-    [InlineData(800, 300, 240, true)]     // room
-    [InlineData(800, 290, 240, false)]    // 300 - 48 bar - 8 inset < 240: the window opens instead
-    [InlineData(300, 600, 240, false)]    // too narrow
-    public void Bounds_RefuseAWindowWithNoRoom(double w, double h, double minH, bool fits)
+    [InlineData(800, 300, true)]     // 300 - 48 - 12 = 240: room
+    [InlineData(800, 299, false)]    // no room: the counter window opens instead
+    [InlineData(370, 600, false)]    // too narrow once inset
+    public void Frame_RefusesAWindowWithNoRoom(double w, double h, bool fits)
+        => Assert.Equal(fits, CounterSheetRules.Frame(new Size(w, h), new Rect(0, 0, w, 48), 8, 12, 360, 240) != null);
+
+    [Fact]
+    public void Frame_RefusesNonsense()
     {
-        var r = CounterSheetRules.Bounds(new Rect(0, 0, w, h), barBottom: 48, Rect.Empty, 8, 360, minH);
-        Assert.Equal(fits, r != null);
+        Assert.Null(CounterSheetRules.Frame(new Size(0, 0), new Rect(0, 0, 10, 10), 8, 12, 360, 240));
+        Assert.Null(CounterSheetRules.Frame(new Size(800, 600), Rect.Empty, 8, 12, 360, 240));
+        Assert.Null(CounterSheetRules.Frame(new Size(800, 600), new Rect(0, 900, 800, 10), 8, 12, 360, 240));
+        Assert.Null(CounterSheetRules.Frame(new Size(double.NaN, 600), new Rect(0, 0, 800, 48), 8, 12, 360, 240));
     }
 
     [Fact]
-    public void Bounds_RefuseNonsense()
+    public void TheSecondPress_ClosesTheSheet()
     {
-        Assert.Null(CounterSheetRules.Bounds(Rect.Empty, 10, Rect.Empty, 8, 360, 240));
-        Assert.Null(CounterSheetRules.Bounds(new Rect(0, 0, 800, 600), double.NaN, Rect.Empty, 8, 360, 240));
-        Assert.Null(CounterSheetRules.Bounds(new Rect(0, 0, 800, 600), 900, Rect.Empty, 8, 360, 240));
+        Assert.Equal(CounterSheetRules.Press.Close, CounterSheetRules.OnPress(sheetOpen: true));
+        Assert.Equal(CounterSheetRules.Press.Open, CounterSheetRules.OnPress(sheetOpen: false));
+    }
+
+    [Theory]
+    [InlineData(MotionLevel.Full, false, 280, 280)]
+    [InlineData(MotionLevel.Reduced, false, 140, 140)]   // less halves
+    [InlineData(MotionLevel.Off, false, 0, 0)]           // off cuts
+    [InlineData(MotionLevel.Off, true, 0, 0)]
+    [InlineData(MotionLevel.Reduced, true, 0, 300)]      // Gentle never slides, the scrim fades at its floor
+    public void TheSlide_FollowsTheMotionLevel(MotionLevel level, bool gentle, int slideMs, int scrimMs)
+    {
+        Assert.Equal(slideMs, CounterSheetRules.SlideDurationMs(level, gentle));
+        Assert.Equal(scrimMs, CounterSheetRules.ScrimMs(level, gentle));
     }
 
     [Fact]
-    public void TheSecondPress_ClosesTheSheet_AndThePressThatClosedItOpensNothing()
+    public void EaseOut_StartsFast_EndsSoft_AndClamps()
     {
-        var t = new DateTime(2026, 11, 17, 12, 0, 0, DateTimeKind.Utc);
-        Assert.Equal(CounterSheetRules.Press.Close, CounterSheetRules.OnPress(sheetOpen: true, null, t));
-        Assert.Equal(CounterSheetRules.Press.Open, CounterSheetRules.OnPress(false, null, t));
-        // The press-down on the chip took focus off the sheet (closed on deactivation); its click follows.
-        Assert.Equal(CounterSheetRules.Press.Swallow, CounterSheetRules.OnPress(false, t, t.AddMilliseconds(180)));
-        Assert.Equal(CounterSheetRules.Press.Open, CounterSheetRules.OnPress(false, t, t + CounterSheetRules.PressWindow + TimeSpan.FromMilliseconds(1)));
-        Assert.Equal(CounterSheetRules.Press.Open, CounterSheetRules.OnPress(false, t, t.AddSeconds(-1)));
+        Assert.Equal(0, CounterSheetRules.EaseOut(0));
+        Assert.Equal(1, CounterSheetRules.EaseOut(1));
+        Assert.Equal(1, CounterSheetRules.EaseOut(3));
+        Assert.Equal(0, CounterSheetRules.EaseOut(-1));
+        Assert.True(CounterSheetRules.EaseOut(0.5) > 0.8);
+        Assert.Equal(1, CounterSheetRules.EaseOut(double.NaN));
+    }
+
+    [Fact]
+    public void TheSheet_SlidesAsOnePiece_FromWhollyAboveTheBar()
+    {
+        Assert.Equal(600, CounterSheetRules.SlideOffset(0, 600));   // closed: all of it above the bar line
+        Assert.Equal(150, CounterSheetRules.SlideOffset(0.75, 600));
+        Assert.Equal(0, CounterSheetRules.SlideOffset(1, 600));
+        Assert.Equal(0, CounterSheetRules.SlideOffset(2, 600));
+        Assert.Equal(0, CounterSheetRules.SlideOffset(double.NaN, double.NaN));
+    }
+
+    [Fact]
+    public void TheSheet_IsATabInsideTheWindow_WithARoundedFramedEdge()
+    {
+        // Owner 2026-11-17: smaller, smooth edges, a clear border.
+        Assert.True(CounterSheetRules.SideInsetDip >= 24 && CounterSheetRules.BottomInsetDip >= 24);
+        Assert.True(CounterSheetRules.GapUnderBarDip > 0);
+        Assert.True(CounterSheetRules.BorderDip >= 2);
+        // The page's HWND region is rounded concentric with the frame's inside: no square corner past the curve.
+        Assert.Equal(CounterSheetRules.CornerRadiusDip - CounterSheetRules.BorderDip - CounterSheetRules.PaddingDip,
+            CounterSheetRules.InnerRadiusDip);
+        Assert.True(CounterSheetRules.InnerRadiusDip > 0);
+    }
+
+    [Theory]
+    [InlineData(MotionLevel.Full, false, 120)]
+    [InlineData(MotionLevel.Reduced, false, 60)]
+    [InlineData(MotionLevel.Off, false, 0)]
+    [InlineData(MotionLevel.Reduced, true, 300)]
+    public void TheEdge_LightsUpOnLanding_AtTheMotionLevel(MotionLevel level, bool gentle, int ms)
+    {
+        Assert.Equal(ms, CounterSheetRules.EdgeFadeMs(level, gentle));
     }
 
     [Fact]
@@ -103,36 +158,14 @@ public class CounterSheetRulesTests
         Assert.Equal("https://ccp.game/prizecounter/sheet.html", CounterSheetRules.SheetUrl);
         var src = Read("ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.cs");
         Assert.Contains("if (_isSheet) init[\"sheet\"] = true;", src);
-        Assert.Contains("StartUrl = _startUrl,", src);
-        Assert.Contains("OnSheetLost = why => OnSheetLost(me, why),", src);
+        Assert.Contains("if (wantSheet && TryLaunchSheet(generation)) return;", src);
+        Assert.Contains("_host = new WindowCounterSurface(window);", src);
         // Reload and sign-in stay on the page that is up.
         Assert.DoesNotContain("NavigatePage(StartUrl,", src);
         var sheet = Read("ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.Sheet.cs");
-        Assert.Contains("if (why == \"deactivated\" && _signingIn) return;", sheet);
         Assert.Contains("CloseFor(CloseBack)", sheet);
-    }
-
-    [Fact]
-    public void BothWalletWindows_AreSheetDoors()
-    {
-        Assert.Contains("ICounterSheetDoor.CounterSheetBar => TitleBar;",
-            Read("ConditioningControlPanel", "Windows", "Launcher", "LauncherWindow.xaml.cs"));
-        Assert.Contains("=> (HeaderSparkleWallet.Parent as FrameworkElement)?.Parent as FrameworkElement;",
-            Read("ConditioningControlPanel", "MainWindow", "MainWindow.SparkleWallet.cs"));
-        // The wallet sits in a Grid directly inside the header Border (row 1), so its grandparent is that bar.
-        var xaml = Read("ConditioningControlPanel", "MainWindow", "MainWindow.xaml");
-        int bar = xaml.IndexOf("<Border Grid.Row=\"1\" Grid.Column=\"1\" Background=\"Transparent\" Padding=\"15,8\">", StringComparison.Ordinal);
-        int grid = xaml.IndexOf("<Grid>", bar, StringComparison.Ordinal);
-        int wallet = xaml.IndexOf("x:Name=\"HeaderSparkleWallet\"", StringComparison.Ordinal);
-        Assert.True(bar > 0 && grid > bar && wallet > grid, "the wallet sits in the header bar's Grid");
-        Assert.DoesNotContain("<Border", xaml.Substring(bar + 10, grid - bar - 10));
-        var between = xaml.Substring(grid + 6, xaml.LastIndexOf('<', wallet) - grid - 6);
-        Assert.DoesNotContain("<Grid>", between);
-        Assert.DoesNotContain("<Grid ", between);
-        Assert.DoesNotContain("</Grid>", between);
-        // The sheet never takes the game windows' topmost pulse.
-        Assert.Contains("if (IsSheet) { _window.Activate(); _web?.Focus(); return; }",
-            Read("ConditioningControlPanel", "Chaos", "ChaosWebViewHost.cs"));
+        // The window-sheet is gone: the counter window is the game doors' window again.
+        Assert.DoesNotContain("SheetOwner", Read("ConditioningControlPanel", "Chaos", "ChaosWebViewHost.cs"));
     }
 
     private static string Read(params string[] parts)

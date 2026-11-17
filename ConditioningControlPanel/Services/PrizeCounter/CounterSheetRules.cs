@@ -1,13 +1,14 @@
 using System;
 using System.Windows;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Services.PrizeCounter;
 
 /// <summary>
-/// The 2D counter SHEET (owner 2026-11-17): a wallet door drops the counter down under its own wallet
-/// bar instead of opening the 3D counter window. Pure rules, testable without a window: which door gets
-/// the sheet, which window it hangs from, where it sits, and what a wallet press does while it is up.
-/// The host wiring is <c>PrizeCounterHostService.Sheet.cs</c> and <c>ChaosWebViewHost.Sheet.cs</c>.
+/// The 2D counter SHEET (owner 2026-11-17): a wallet door slides the counter down INSIDE its own window,
+/// from under the wallet bar, instead of opening the 3D counter window. Pure rules, testable without a
+/// window: which door gets the sheet, which window it lives in, its frame inside that window, the
+/// wallet's second press, and the slide. The view is <c>Controls/CounterSheetView.cs</c>.
 /// </summary>
 internal static class CounterSheetRules
 {
@@ -17,14 +18,25 @@ internal static class CounterSheetRules
     /// <summary>The launcher's wallet chip; the panel's wallet and EMI's options both say <c>wallet</c>.</summary>
     public const string FromLauncher = "launcher", FromWallet = "wallet";
 
-    /// <summary>Space left under the sheet, so the door window's bottom edge still shows (DIPs).</summary>
-    public const double BottomInsetDip = 8;
+    /// <summary>Gap between the sheet and the window's sides and bottom (DIPs): the sheet reads as a tab
+    /// inside the launcher or the panel, which stays visible round it under the scrim (owner 2026-11-17).</summary>
+    public const double SideInsetDip = 28, BottomInsetDip = 28;
+
+    /// <summary>Gap between the wallet bar and the sheet's top edge once it is down (DIPs).</summary>
+    public const double GapUnderBarDip = 10;
+
+    /// <summary>The sheet's frame: corner radius, gold edge, and the gap between the edge and the page
+    /// (DIPs). The page's HWND gets a window region rounded at <see cref="InnerRadiusDip"/>, concentric
+    /// with the frame, so no square corner shows past the curve; the page's own gold bottom line then
+    /// sits on the frame's.</summary>
+    public const double CornerRadiusDip = 14, BorderDip = 2, PaddingDip = 0;
+    public const double InnerRadiusDip = CornerRadiusDip - BorderDip - PaddingDip;
 
     /// <summary>Smaller than this and the door window has no room for a sheet: the counter window opens instead (DIPs).</summary>
     public const double MinWidthDip = 360, MinHeightDip = 240;
 
-    /// <summary>A wallet press this soon after the press-down that closed the sheet is that same click.</summary>
-    public static readonly TimeSpan PressWindow = TimeSpan.FromMilliseconds(700);
+    /// <summary>The slide at full motion, and at reduced motion (half).</summary>
+    public const int SlideMs = 280, ReducedSlideMs = 140;
 
     /// <summary>The wallet doors get the sheet. A game door (Back Room, Racing Thoughts, chess, Rain's
     /// wardrobe), or any door with a game paused under it (<paramref name="hasOpener"/>), keeps the window.</summary>
@@ -33,7 +45,7 @@ internal static class CounterSheetRules
 
     public enum Door { None, Launcher, Panel }
 
-    /// <summary>The window the sheet hangs from. The launcher chip prefers the launcher; the panel's wallet
+    /// <summary>The window the sheet lives in. The launcher chip prefers the launcher; the panel's wallet
     /// (and EMI's options, which say <c>wallet</c> too) prefers the panel. Neither on screen: no sheet.</summary>
     public static Door PickDoor(string? from, bool launcherUp, bool panelUp)
     {
@@ -43,43 +55,57 @@ internal static class CounterSheetRules
     }
 
     /// <summary>
-    /// The sheet's frame in screen PIXELS: the door window's client left and right edges, from the bottom
-    /// of its wallet bar down to <paramref name="bottomInset"/> above its bottom edge, clamped to the
-    /// monitor (a maximized borderless window overhangs it). Null when that leaves less than the minimum,
-    /// or the measures make no sense: the caller opens the counter window instead.
+    /// The sheet's slot in the door window's own client space (DIPs; the sheet itself starts
+    /// <see cref="GapUnderBarDip"/> lower): from the bottom of the wallet <paramref name="bar"/> down to <paramref name="bottomInset"/> above the window's bottom edge, from the
+    /// bar's left edge (never closer than <paramref name="sideInset"/> to the window's) to
+    /// <paramref name="sideInset"/> short of its right edge. Null when that leaves less than the minimum or
+    /// the measures make no sense: the caller opens the counter window instead.
     /// </summary>
-    public static Int32Rect? Bounds(Rect client, double barBottom, Rect monitor,
-        double bottomInset, double minWidth, double minHeight)
+    public static Rect? Frame(Size client, Rect bar, double sideInset, double bottomInset, double minWidth, double minHeight)
     {
-        if (client.IsEmpty || !Finite(client) || client.Width <= 0 || client.Height <= 0 || !double.IsFinite(barBottom)) return null;
-        double left = client.Left, right = client.Right, top = Math.Max(client.Top, barBottom), bottom = client.Bottom;
-        if (!monitor.IsEmpty && Finite(monitor) && monitor.Width > 0 && monitor.Height > 0)
-        {
-            left = Math.Max(left, monitor.Left);
-            right = Math.Min(right, monitor.Right);
-            top = Math.Max(top, monitor.Top);
-            bottom = Math.Min(bottom, monitor.Bottom);
-        }
-        bottom -= Math.Max(0, bottomInset);
+        if (!double.IsFinite(client.Width) || !double.IsFinite(client.Height) || client.Width <= 0 || client.Height <= 0) return null;
+        if (bar.IsEmpty || !double.IsFinite(bar.Left) || !double.IsFinite(bar.Bottom)) return null;
+        double left = Math.Max(Math.Max(0, sideInset), bar.Left);
+        double right = client.Width - Math.Max(0, sideInset);
+        double top = Math.Max(0, bar.Bottom);
+        double bottom = client.Height - Math.Max(0, bottomInset);
         if (right - left < minWidth || bottom - top < minHeight) return null;
-        int x = (int)Math.Round(left), y = (int)Math.Round(top);
-        return new Int32Rect(x, y, (int)Math.Round(right) - x, (int)Math.Round(bottom) - y);
+        return new Rect(left, top, right - left, bottom - top);
     }
 
-    private static bool Finite(Rect r) => double.IsFinite(r.X) && double.IsFinite(r.Y) && double.IsFinite(r.Width) && double.IsFinite(r.Height);
+    public enum Press { Open, Close }
 
-    public enum Press { Open, Close, Swallow }
+    /// <summary>A wallet press: with the sheet up it closes it (the second click), otherwise it opens.</summary>
+    public static Press OnPress(bool sheetOpen) => sheetOpen ? Press.Close : Press.Open;
 
-    /// <summary>
-    /// A wallet press. With the sheet up it closes it (the second click). With the sheet down it opens,
-    /// unless the press-down on this same chip is what just closed it: that press-down took focus off
-    /// the sheet (closing it on deactivation) before its click arrived, and the click must not open it
-    /// again. <paramref name="armedAt"/> is when a deactivation found the cursor on the door's chip.
-    /// </summary>
-    public static Press OnPress(bool sheetOpen, DateTime? armedAt, DateTime now)
+    /// <summary>How long the sheet slides. Motion Off cuts, Reduced halves; Gentle visuals never slides
+    /// (the page fades itself in, and the scrim fades: <see cref="ScrimMs"/>).</summary>
+    public static int SlideDurationMs(MotionLevel level, bool gentle)
+        => level == MotionLevel.Off || gentle ? 0 : level == MotionLevel.Reduced ? ReducedSlideMs : SlideMs;
+
+    /// <summary>How long the scrim fades. Off cuts; Gentle keeps its 300 ms rise floor.</summary>
+    public static int ScrimMs(MotionLevel level, bool gentle)
+        => level == MotionLevel.Off ? 0 : gentle ? Safety.GentleVisuals.RiseMs(SlideMs, on: true) : SlideDurationMs(level, false);
+
+    /// <summary>How long the gold edge takes to light up once the page has landed. Off cuts; Gentle
+    /// keeps its 300 ms rise floor.</summary>
+    public static int EdgeFadeMs(MotionLevel level, bool gentle)
+        => level == MotionLevel.Off ? 0 : Safety.GentleVisuals.RiseMs(level == MotionLevel.Reduced ? 60 : 120, gentle);
+
+    /// <summary>Ease out (cubic), clamped: fast off the bar, soft at the bottom.</summary>
+    public static double EaseOut(double t)
     {
-        if (sheetOpen) return Press.Close;
-        if (armedAt is { } at && now >= at && now - at <= PressWindow) return Press.Swallow;
-        return Press.Open;
+        t = Math.Clamp(double.IsFinite(t) ? t : 1, 0, 1);
+        double u = 1 - t;
+        return 1 - u * u * u;
+    }
+
+    /// <summary>How far above its open place the sheet sits at progress <paramref name="p"/> (0 closed,
+    /// 1 open) in a slot <paramref name="height"/> tall: closed, it is wholly above the bar line.</summary>
+    public static double SlideOffset(double p, double height)
+    {
+        p = Math.Clamp(double.IsFinite(p) ? p : 0, 0, 1);
+        height = double.IsFinite(height) ? Math.Max(0, height) : 0;
+        return (1 - p) * height;
     }
 }

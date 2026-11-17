@@ -37,7 +37,8 @@ internal static partial class PrizeCounterHostService
     /// <summary>The page plays this as its own Escape unless the real key reached it too (host-escape.js).</summary>
     internal const string KeptEscapeType = "kept-escape";
 
-    private static ChaosWebViewHost? _host;
+    /// <summary>The page's surface: the counter window or the in-window sheet (CounterSurface.cs).</summary>
+    private static ICounterSurface? _host;
     private static PrizeCounterRelay? _relay;
     private static string _from = "wallet";
     private static string? _tab;
@@ -339,8 +340,8 @@ internal static partial class PrizeCounterHostService
     public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
         tab = CounterTab(tab);
-        // A wallet door drops the 2D sheet (PrizeCounterHostService.Sheet.cs): its second press closes
-        // it; a game door replaces an open sheet with the window, as one counter at a time.
+        // A wallet door slides the 2D sheet down inside its window (PrizeCounterHostService.Sheet.cs):
+        // its second press closes it; a game door replaces an open sheet with the window, one counter at a time.
         bool wantSheet = CounterSheetRules.GetsSheet(from, onClosed != null);
         if (wantSheet && SheetPressHandled()) return;
         if (!wantSheet && IsSheetOpen) CloseFor(CloseBack);
@@ -367,16 +368,11 @@ internal static partial class PrizeCounterHostService
             // the page's own "Sign in to shop" moves the pin (SignInFromPage), and it reloads the page.
             _opener = BackRoomApi.AppIdentity()?.UnifiedId;
             _relay = NewRelay();
-            // The sheet needs a door window with room under its wallet bar; without one the window opens.
-            var sheetOwner = wantSheet ? SheetDoorWindow(_from) : null;
-            if (sheetOwner != null && MeasureSheet(sheetOwner) == null) sheetOwner = null;
-            _isSheet = sheetOwner != null;
-            _sheetOwner = sheetOwner;
-            _startUrl = _isSheet ? CounterSheetRules.SheetUrl : StartUrl;
-            // A door behind the user's other apps (EMI's options) comes forward first, so the sheet
-            // never floats over another app on its own.
-            if (sheetOwner is { IsActive: false }) { try { sheetOwner.Activate(); } catch (Exception ex) { Diag.Swallowed(ex); } }
-            ChaosWebViewHost? me = null;
+            // The sheet slides down inside the door window (PrizeCounterHostService.Sheet.cs); with no
+            // door on screen, or no room under its wallet bar, the window opens instead.
+            if (wantSheet && TryLaunchSheet(generation)) return;
+            _isSheet = false;
+            _startUrl = StartUrl;
 
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             var mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
@@ -385,7 +381,7 @@ internal static partial class PrizeCounterHostService
                 ("ccp.game", webRoot, CoreWebView2HostResourceAccessKind.Deny),
                 ChaosWebViewHost.ContentMapping(),
             };
-            me = _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
+            var window = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
                 StartUrl = _startUrl,
                 PrimaryHost = "ccp.game",
@@ -394,11 +390,8 @@ internal static partial class PrizeCounterHostService
                 InputEnabled = true,
                 IsGame = true,   // the startup ladder goes quiet while it is up
                 StartFullscreen = false,
-                OwnedByMainWindow = sheetOwner == null,
-                CenterOnMainWindow = sheetOwner == null,
-                SheetOwner = sheetOwner,
-                SheetBounds = sheetOwner == null ? null : () => MeasureSheet(sheetOwner),
-                OnSheetLost = why => OnSheetLost(me, why),
+                OwnedByMainWindow = true,
+                CenterOnMainWindow = true,
                 WindowTitle = ProductName,
                 LogTag = "PrizeCounter",
                 ExtraBrowserArguments = BrowserArguments,
@@ -406,8 +399,9 @@ internal static partial class PrizeCounterHostService
                 OnMessage = m => OnPageMessage(m, generation),
                 OnProcessFailed = kind => { App.Logger?.Warning("PrizeCounter: process failed ({Kind}), closing", kind); OnUi(() => CloseFor(CloseFailed)); },
             });
-            _host.Show();
-            if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
+            _host = new WindowCounterSurface(window);
+            window.Show();
+            if (window.Window != null) window.Window.Closed += (_, _) => Close();
             _host.FocusWeb();
             App.Logger?.Information("PrizeCounterHostService: launched from {From} on {Tab}", _from, _tab ?? "(first)");
         }
@@ -464,12 +458,12 @@ internal static partial class PrizeCounterHostService
         {
             ++_generation;
             bool had = _host != null;
-            try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // The sheet slides back up on a calm close; panic, app exit and a dead page cut.
+            try { _host?.Close(animate: reason == CloseBack || reason == CloseWear); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             _relay = null;
             _opener = null;
             _isSheet = false;
-            _sheetOwner = null;
             _startUrl = StartUrl;
             if (had) App.Logger?.Information("PrizeCounterHostService: closed ({Reason})", reason);
         }
