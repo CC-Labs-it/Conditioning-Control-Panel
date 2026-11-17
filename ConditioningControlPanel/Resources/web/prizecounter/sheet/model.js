@@ -190,11 +190,12 @@ export function badgeCount(st, pv, sp) {
   return (pv.gift && pv.gift.ready ? 1 : 0) + (s && !s.stamped.includes(s.day) ? 1 : 0) + (s && s.couponReady ? 1 : 0) + (goalReady(st, pv, sp) ? 1 : 0);
 }
 
-/** The Featured page. ctx: { sp, tier, pv, platform, hereOnly }. Every part is null (goal: undefined) when the wire did not send it. */
+/** The Featured page. ctx: { sp, tier, pv, platform, hereOnly, spot (an "Also new" chip the player put under the light) }. Every part is null (goal: undefined) when the wire did not send it. */
 export function frontModel(st, ctx) {
   const { pv = NO_PREVIEW, platform = 'desktop', hereOnly = false, sp = 0 } = ctx;
   const keep = (e) => !hereOnly || isHere(placesOf(pv, e.id), platform);
-  const fresh = hereFirst(uniq(pv.fresh.map((id) => locate(st, id, pv)).filter((e) => e && !e.row.owned && keep(e))), pv, platform);
+  let fresh = hereFirst(uniq(pv.fresh.map((id) => locate(st, id, pv)).filter((e) => e && !e.row.owned && keep(e))), pv, platform);
+  if (ctx.spot && fresh.some((e) => e.id === ctx.spot)) fresh = [fresh.find((e) => e.id === ctx.spot), ...fresh.filter((e) => e.id !== ctx.spot)];
   const g = goalEntry(st, pv);
   const can = hereFirst(uniq(rowsOf(st, pv)).filter((e) => buyable(e, ctx) && keep(e)), pv, platform).slice(0, 6);
   return {

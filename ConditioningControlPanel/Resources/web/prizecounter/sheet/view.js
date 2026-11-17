@@ -4,8 +4,15 @@
 
 import { TAB_ICONS, LOCK } from '../hud/icons.js';
 import { tabKey } from '../state/strings.js';
+import { placeMark } from './wire.js';
 import { sections, statusOf, statusText, artOf, locate, tabLabelKey, nameOf, FEATURED } from './model.js';
 
+/* The mockup's place icons: a monitor, a globe, a phone (decorative, currentColor). */
+export const PLACE_ICONS = {
+  desktop: '<svg viewBox="0 0 14 12" width="13" height="11" aria-hidden="true"><rect x="1" y="1" width="12" height="7.6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4.6 11h4.8M7 8.6V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  web: '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><circle cx="6" cy="6" r="4.8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M1.2 6h9.6M6 1.2c-2.5 2.6-2.5 7 0 9.6M6 1.2c2.5 2.6 2.5 7 0 9.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+  phone: '<svg viewBox="0 0 8 12" width="7" height="11" aria-hidden="true"><rect x="1" y="1" width="6" height="10" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+};
 const TICK = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M2 6.5l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 export function createView(doc, { t, sheet, base = './' }) {
@@ -70,7 +77,7 @@ export function createView(doc, { t, sheet, base = './' }) {
   }
 
   /** One item standing on its plank. bare = picture only (the saving-for shelf). */
-  function itemNode(e, v, on, bare = false) {
+  function itemNode(e, v, on, bare = false, mixed = false) {
     const row = e.row, picked = v.pick === row.id;
     const b = button('it fam-' + (e.fx || e.tab), null, 'it:' + row.id, () => on.pick(row.id));
     b.setAttribute('aria-pressed', String(!!picked));
@@ -150,6 +157,16 @@ export function createView(doc, { t, sheet, base = './' }) {
     monitor(at, v) { const p = el('div', 'prev'); p.append(artNode(artOf(at ? at.id : '', v.index, at ? at.fx || at.tab : 'backroom', base), true)); return p; },
     idleRoom: () => [el('p', 'd-where', t('shop_sheet_pick'))],
     placeRow: () => [], awayNote: () => [], roomExtra: () => [],
+    stage(e, v) { const s = el('div', 'stage'); s.append(view.thumb(e, v)); return s; },
+    mini(e, v) { const s = el('span', 'mini-art'); s.append(view.thumb(e, v)); return s; },
+    /** The place mark: the place icons and plain words; away = the paper tab an item wears where it does not show. */
+    placeMark(places, away) {
+      const m = placeMark(places, t), s = el('span', 'pl' + (m.all ? ' all' : '') + (away ? ' away' : ''));
+      for (const p of places) { const i = el('span', 'ico'); i.innerHTML = PLACE_ICONS[p]; s.append(i); }
+      s.append(el('span', null, m.text));
+      return s;
+    },
+    hostNote() { const p = el('p', 'hostnote'); p.append(el('span', null, t('shop_sheet_host_note')), view.placeMark(['desktop'], false), el('span', null, t('shop_sheet_host_note_end'))); return [p]; },
     paint(v, on) {
       close.onpress = on.close;
       walletN.textContent = String(v.sp);
