@@ -684,8 +684,15 @@ internal static class BackRoomHostService
             // The plan list (contract C1 via PlanCatalog) for the end cards (C10): Breakout demo
             // end, bank cash-out. A page shows a price only when this is present.
             plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
+            // The worn bubble skin for Breakout's bubbles (CONTRACT 10.23, optional; soap = today's bubble).
+            bubbleSkin = BubbleSkinWire(),
         };
     }
+
+    /// <summary>The worn bubble skin id the page draws (CONTRACT 10.23): the same answer new desktop bubbles get,
+    /// so a skin not drawn yet, or nothing worn, reads <c>soap</c>.</summary>
+    internal static string BubbleSkinWire(Func<string?>? worn = null)
+        => worn == null ? BubbleCore.BubbleSkinChoice.Current() : BubbleCore.BubbleSkinChoice.Resolve(worn());
 
     private static object SettingsMessage()
     {
@@ -699,6 +706,7 @@ internal static class BackRoomHostService
             reduced = motion != Models.MotionLevel.Full, gates = GatesWire(s), intensityChoice = IntensityChoiceWire(s),
             invertLook = s?.BackRoomInvertLook ?? false,
             media = MediaWire(s), audio = AudioWire(s, _breakoutPage),
+            bubbleSkin = BubbleSkinWire(),
         };
     }
 
