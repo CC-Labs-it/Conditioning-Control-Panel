@@ -92,7 +92,7 @@ public sealed partial class BubbleLayer
         float r = item.SizeDip * 0.5f * item.DpiScale * item.FrothScale * GlassOfHalf * Math.Max(1f, item.Scale);
         var parts = new SkinParticle[BubbleSkins.BurstCapacity];
         double motion = SkinMotion();
-        int n = BubbleSkins.Burst(item.Skin, item.SkinSeed, r, motion, parts);
+        int n = BubbleSkins.Burst(item.Skin, item.SkinSeed, r, motion, parts, _skinGentle);
         if (n == 0) return;
         if (_skinFx.Count >= MaxLiveSkinBursts) { _skinFx[0].Art?.Dispose(); _skinFx.RemoveAt(0); }
         long now = System.Environment.TickCount64;
@@ -178,6 +178,7 @@ public sealed partial class BubbleLayer
             if (r < 2f || alpha <= .003f) return;
             if (skin == BubbleSkinIds.Spiral) { DrawSpiral(c, seed, seconds, motion, cx, cy, r, alpha, 0, false, art, null); return; }
             if (skin == BubbleSkinIds.Marble) { DrawMarble(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
+            if (skin == BubbleSkinIds.Disco) { DrawDisco(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
             int n = BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims);
             if (n == 0) return;
             if (skin == BubbleSkinIds.Heart) { DrawHeart(c, _prims[0], _prims[1], cx, cy, r, alpha, 1, 0); return; }
@@ -225,6 +226,7 @@ public sealed partial class BubbleLayer
             if (r < 2f) return;
             if (skin == BubbleSkinIds.Spiral) DrawSpiral(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle, art, sprite);
             if (skin == BubbleSkinIds.Marble) DrawMarble(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
+            if (skin == BubbleSkinIds.Disco) DrawDisco(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
             if (skin == BubbleSkinIds.Heart)
             {
                 if (BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims) < 2) return;
@@ -281,6 +283,10 @@ public sealed partial class BubbleLayer
                     case SkinParticleKind.Heart:
                     case SkinParticleKind.HeartWave:
                         DrawHeartParticle(c, p, st, age, x, y, s, a);
+                        break;
+                    case SkinParticleKind.Square:
+                    case SkinParticleKind.Beam:
+                        DrawDiscoParticle(c, p, st, age, x, y, s, a);
                         break;
                     default:
                         _fill.Color = p.Argb != 0 ? Tone(p.Argb, a) : new SKColor(255, 244, 214, A(.9f * a));

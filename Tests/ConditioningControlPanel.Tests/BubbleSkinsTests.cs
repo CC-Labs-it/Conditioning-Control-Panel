@@ -18,7 +18,7 @@ public class BubbleSkinsTests
     [Fact]
     public void Choice_is_soap_unless_a_drawn_skin_is_named()
     {
-        foreach (var s in new[] { null, "", "glitter", BubbleSkinIds.Disco })
+        foreach (var s in new[] { null, "", "glitter", BubbleSkinIds.Frost })
             Assert.Equal(BubbleSkinIds.Soap, BubbleSkinChoice.Resolve(s));
         Assert.Equal(Champ, BubbleSkinChoice.Resolve(" Champagne "));
         Assert.Equal(BubbleSkinIds.Heart, BubbleSkinChoice.Resolve("HEART"));
@@ -301,9 +301,94 @@ public class BubbleSkinsTests
         => Stills(BubbleSkinIds.Spiral, new[] { .1, .25, .38, .44, .62, .9 }, popCell: 4, outerReach: 0);
 
     [Fact]
+    public void Disco_facets_are_sphere_patches_inside_the_ball_and_its_glints_fade_never_pile()
+    {
+        const string D = BubbleSkinIds.Disco;
+        Assert.Equal(D, BubbleSkinChoice.Resolve("Disco"));
+        Assert.True(BubbleSkins.OwnsBody(D));
+        Assert.InRange(BubbleSkins.PreBurst(D, false), .05, .15);
+
+        var a = new SkinQuad[BubbleSkins.MaxDiscoFacets];
+        var b = new SkinQuad[BubbleSkins.MaxDiscoFacets];
+        double ball = BubbleSkins.DiscoBall + 1e-5;
+        foreach (var r in Radii)
+            for (double t = 0; t < 14; t += 1.7)
+            {
+                int n = BubbleSkins.DiscoFacets(9, t, 1, r, a);
+                Assert.InRange(n, BubbleSkins.DiscoRows(r) * BubbleSkins.DiscoCols(r) / 3, BubbleSkins.DiscoRows(r) * BubbleSkins.DiscoCols(r));
+                Assert.Equal(n, BubbleSkins.DiscoFacets(9, t, 1, r, b));
+                double inner = 0, outer = 0; int ni = 0, no = 0;
+                for (int i = 0; i < n; i++)
+                {
+                    var q = a[i];
+                    Assert.Equal(q, b[i]);
+                    foreach (var (x, y) in new[] { (q.X0, q.Y0), (q.X1, q.Y1), (q.X2, q.Y2), (q.X3, q.Y3) })
+                        Assert.True(Math.Sqrt(x * x + y * y) <= ball, $"r={r} t={t} i={i}: a facet pokes past the ball");
+                    double mx = (q.X0 + q.X1 + q.X2 + q.X3) / 4, my = (q.Y0 + q.Y1 + q.Y2 + q.Y3) / 4, d = Math.Sqrt(mx * mx + my * my);
+                    double area = Math.Abs((q.X0 * q.Y1 - q.X1 * q.Y0) + (q.X1 * q.Y2 - q.X2 * q.Y1) + (q.X2 * q.Y3 - q.X3 * q.Y2) + (q.X3 * q.Y0 - q.X0 * q.Y3)) / 2;
+                    if (d < .4) { inner += area; ni++; } else if (d > .85) { outer += area; no++; }
+                }
+                Assert.True(ni > 0 && no > 0 && outer / no < inner / ni * .7, $"facets narrow toward the edge (r={r} t={t})");
+            }
+        BubbleSkins.DiscoFacets(9, .4, 0, 60, a);
+        BubbleSkins.DiscoFacets(9, 11, 0, 60, b);
+        Assert.Equal(a[5], b[5]);
+
+        // Glints: two at most, apart when both show, and no glint brightens faster than over 0.3 s.
+        var p0 = new SkinPrim[BubbleSkins.MaxInterior];
+        var p1 = new SkinPrim[BubbleSkins.MaxInterior];
+        double steepest = 0;
+        for (int seed = 1; seed < 200; seed += 13)
+        {
+            int n0 = BubbleSkins.Interior(D, seed, 0, 1, 60, p0);
+            for (double t = 1 / 30.0; t < 40; t += 1 / 30.0)
+            {
+                int n1 = BubbleSkins.Interior(D, seed, t, 1, 60, p1);
+                Assert.Equal(n0, n1);
+                int glints = 0;
+                for (int i = 0; i < n1; i++)
+                {
+                    if (p1[i].Kind is SkinPrimKind.Glint or SkinPrimKind.GlintPink)
+                    {
+                        glints++;
+                        Assert.True(Math.Sqrt(p1[i].X * p1[i].X + p1[i].Y * p1[i].Y) + p1[i].R <= BubbleSkins.DiscoBall);
+                        steepest = Math.Max(steepest, p1[i].Alpha - p0[i].Alpha);
+                    }
+                    else Assert.True(Math.Sqrt(p1[i].X * p1[i].X + p1[i].Y * p1[i].Y) + p1[i].R <= BubbleSkins.DiscoFleckReach);
+                }
+                Assert.Equal(BubbleSkins.DiscoGlints, glints);
+                if (p1[0].Alpha > .3f && p1[1].Alpha > .3f)
+                    Assert.True(Math.Sqrt(Math.Pow(p1[0].X - p1[1].X, 2) + Math.Pow(p1[0].Y - p1[1].Y, 2)) > .3, $"glints piled (seed {seed}, t {t:0.00})");
+                (p0, p1) = (p1, p0);
+            }
+        }
+        Assert.True(steepest <= .95 / 30 / .3, $"a glint rose {steepest:0.000} in one frame");
+
+        BurstRules(D, 1 + BubbleSkins.DiscoBeams + BubbleSkins.MaxDiscoSquares + BubbleSkins.MaxDiscoStars);
+        var parts = new SkinParticle[BubbleSkins.BurstCapacity];
+        int full = BubbleSkins.Burst(D, 4, 80, 1, parts), beams = 0, squares = 0;
+        for (int i = 0; i < full; i++) { if (parts[i].Kind == SkinParticleKind.Beam) beams++; if (parts[i].Kind == SkinParticleKind.Square) squares++; }
+        Assert.Equal(BubbleSkins.DiscoBeams, beams);
+        Assert.Equal(BubbleSkins.MaxDiscoSquares, squares);
+        // Gentle visuals: no beams, squares never catch the light white, stars twinkle slowly.
+        int gentle = BubbleSkins.Burst(D, 4, 80, 1, parts, gentle: true);
+        Assert.Equal(full - BubbleSkins.DiscoBeams, gentle);
+        for (int i = 0; i < gentle; i++)
+        {
+            Assert.NotEqual(SkinParticleKind.Beam, parts[i].Kind);
+            if (parts[i].Kind == SkinParticleKind.Square) Assert.Equal(0f, parts[i].Grow);
+            if (parts[i].Kind == SkinParticleKind.Star) Assert.True(parts[i].Grow <= 3f);
+        }
+    }
+
+    [Fact]
+    public void Disco_stills_draw_a_mirror_ball_in_place_of_the_sprite_and_scatter_mirrors()
+        => Stills(BubbleSkinIds.Disco, new[] { .04, .08, .14, .24, .5, .9 }, popCell: 3, outerReach: .3);
+
+    [Fact]
     public void Soap_and_reserved_skins_leave_the_item_untouched()
     {
-        foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Disco, "nope" })
+        foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Frost, "nope" })
         {
             var fresh = new BubbleLayer.BubbleItem();
             var item = new BubbleLayer.BubbleItem();
