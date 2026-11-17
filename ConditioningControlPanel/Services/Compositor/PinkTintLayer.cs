@@ -19,6 +19,11 @@ public class PinkTintLayer : BaseLayer
     private readonly CompositorEngine _engine;
     private int _sortedZ;
 
+    /// <summary>The pink filter's own tint wears the shop's fog colour (<see cref="Prizes.WornFog"/>).
+    /// Off for other users of the layer (the welcome show paints its own pink).</summary>
+    internal bool WearsLooks { get; init; }
+    private long _wornStamp;
+
     public PinkTintLayer(CompositorEngine engine) : base(engine)
     {
         _engine = engine;
@@ -93,6 +98,12 @@ public class PinkTintLayer : BaseLayer
 
     public override void Update(TimeSpan delta)
     {
+        if (WearsLooks)
+        {
+            // A worn fog colour changed, or is still cross-fading in: repaint.
+            long stamp = Prizes.WornFog.Stamp;
+            if (stamp != _wornStamp || Prizes.WornFog.Easing) { _wornStamp = stamp; _dirty = true; }
+        }
         double target = _stepAside ? 0 : 1;
         if (_veil == target) return;
         _veil = Super.SuperStepAside.Step(_veil, _stepAside, delta.TotalSeconds,
@@ -104,7 +115,8 @@ public class PinkTintLayer : BaseLayer
     {
         double o = _opacity * Super.SuperStepAside.Ease(_veil);
         if (o <= 0) return;
-        _paint.Color = new SKColor(_r, _g, _b, (byte)Math.Clamp(o * 255, 0, 255));
+        var (r, g, b) = WearsLooks ? Prizes.WornFog.Over((_r, _g, _b)) : (_r, _g, _b);
+        _paint.Color = new SKColor(r, g, b, (byte)Math.Clamp(o * 255, 0, 255));
         canvas.DrawRect(boundsPx, _paint);
     }
 }

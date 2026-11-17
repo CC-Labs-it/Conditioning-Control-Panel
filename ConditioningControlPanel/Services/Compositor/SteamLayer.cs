@@ -115,7 +115,9 @@ public sealed class SteamLayer : BaseLayer
         // The base filter's own colour and strength: thicker than the flat tint, never opaque.
         var look = PinkTintLayer.LastLook;
         double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82);
-        var colour = new SKColor(look.R, look.G, look.B);
+        // Worn from the shop (fog colours): the filter's own colour unless another is worn, cross-faded on a change.
+        var (wr, wg, wb) = Prizes.WornFog.Over((look.R, look.G, look.B));
+        var colour = new SKColor(wr, wg, wb);
         var bounds = new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom);
         // The fog only: SteamDraw's own words are retired, the words come from SteamWordsDraw below.
         screen.Fog.Draw(canvas, bounds, field, colour, strength, Array.Empty<string>(), null, Face, _t);
