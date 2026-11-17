@@ -87,6 +87,15 @@ internal sealed class CounterSheetView : Grid
 
     public Window DoorWindow { get; }
 
+    /// <summary>The dim layer under the sheet (a game window's top strip copies its brush and opacity).</summary>
+    internal Border ScrimLayer => _scrim;
+
+    /// <summary>False in a game window: the game's own close hook hands the keyboard back, the sheet must not take it.</summary>
+    internal bool FocusDoorOnClose { get; set; } = true;
+
+    /// <summary>The sheet is fully up again (slid away or cut): a game window shows its page again.</summary>
+    internal event Action? Retracted;
+
     private CounterSheetView(Window door, FrameworkElement bar, string from)
     {
         DoorWindow = door;
@@ -417,9 +426,10 @@ internal sealed class CounterSheetView : Grid
         ApplyProgress();   // an empty band: nothing of the HWND shows
         _slot.Visibility = Visibility.Collapsed;
         _scrim.Visibility = Visibility.Collapsed;
-        try { if (DoorWindow.IsActive) DoorWindow.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        try { if (FocusDoorOnClose && DoorWindow.IsActive) DoorWindow.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
         // The next open finds a page loaded and waiting for its init.
         if (_core != null && _session == 0) Navigate(CounterSheetRules.SheetUrl);
+        try { Retracted?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
     }
 
     /// <summary>Paint one moment of the slide: the page comes down from under the bar (layout margin, a

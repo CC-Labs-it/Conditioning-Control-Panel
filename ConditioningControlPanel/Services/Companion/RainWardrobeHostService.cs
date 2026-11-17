@@ -36,6 +36,9 @@ internal static class RainWardrobeHostService
     internal const string UserDataFolder = "browser_data_rainwardrobe";
 
     private static ChaosWebViewHost? _host;
+
+    /// <summary>This game's window, for the Prize Counter sheet its door opens over it (PrizeCounterHostService.Sheet.cs).</summary>
+    internal static ChaosWebViewHost? CounterHost => _host;
     private static bool _disposing;
     private static RainApplyController? _apply;
     private static readonly RainSerialQueue BakeQueue = new();

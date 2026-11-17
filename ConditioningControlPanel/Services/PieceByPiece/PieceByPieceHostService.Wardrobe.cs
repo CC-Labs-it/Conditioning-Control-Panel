@@ -103,7 +103,7 @@ internal static partial class PieceByPieceHostService
         _ => look.Insignia == id,
     };
 
-    /// <summary>Contract 1: the counter window over the board, on the chess tab.</summary>
+    /// <summary>Contract 1: the counter sheet inside the board window, on the chess tab.</summary>
     private static void OnOpenCounter(JObject o)
     {
         var tab = PbpLookRules.CounterTabOf(o);

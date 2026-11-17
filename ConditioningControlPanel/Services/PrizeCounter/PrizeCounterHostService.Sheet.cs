@@ -20,11 +20,53 @@ internal interface ICounterSheetDoor
 /// </summary>
 internal static partial class PrizeCounterHostService
 {
+    /// <summary>The open sheet is a wallet door's: <c>init.sheet = true</c>. A sheet over a game leaves it out,
+    /// so the page draws its own wallet line (no wallet bar there), as CONTRACT.md's standalone page.</summary>
     private static bool _isSheet;
     private static string _startUrl = StartUrl;
+    /// <summary>The open sheet's view (a wallet door's or a game window's), and whether it is over a game.</summary>
+    private static CounterSheetView? _sheetView;
+    private static bool _inGame;
 
-    /// <summary>True while the open counter is the sheet (not the 3D window).</summary>
-    public static bool IsSheetOpen => _host != null && _isSheet;
+    /// <summary>True while the open counter is a sheet (not the 3D window).</summary>
+    public static bool IsSheetOpen => _host != null && _sheetView != null;
+
+    /// <summary>What shows the open counter now.</summary>
+    internal static CounterSheetRules.Surface OpenSurface
+        => _host == null ? CounterSheetRules.Surface.None
+           : _sheetView == null ? CounterSheetRules.Surface.Window
+           : _inGame ? CounterSheetRules.Surface.GameSheet : CounterSheetRules.Surface.DoorSheet;
+
+    /// <summary>The old 3D counter window for the game doors: DEBUG <c>CCP_COUNTER_3D=1</c> only. Release
+    /// builds always open the sheet (the window stays as the fallback when a game window cannot carry one).</summary>
+    internal static bool Force3D
+    {
+        get
+        {
+#if DEBUG
+            return Environment.GetEnvironmentVariable("CCP_COUNTER_3D") == "1";
+#else
+            return false;
+#endif
+        }
+    }
+
+    /// <summary>A game door's own window, by door (settable for tests). Null = that game is not up.</summary>
+    internal static Func<string?, ChaosWebViewHost?> GameHostOf { get; set; } = from => from switch
+    {
+        "backroom" => BackRoom.BackRoomHostService.CounterHost,
+        "glassroad" => Glassroad.GlassroadHostService.CounterHost,
+        "piecebypiece" => PieceByPiece.PieceByPieceHostService.CounterHost,
+        "rain-wardrobe" => Companion.RainWardrobeHostService.CounterHost,
+        _ => null,
+    };
+
+    /// <summary>The sheet inside this game door's window, or null (the counter window opens instead).</summary>
+    private static GameCounterSheet? GameSheetFor(string? from)
+    {
+        try { return GameHostOf(from) is { } game ? GameCounterSheet.For(game, from!) : null; }
+        catch (Exception ex) { App.Logger?.Warning("PrizeCounter: game sheet lookup failed: {E}", ex.Message); return null; }
+    }
 
     /// <summary>The door's sheet for a wallet door now, or null (no sheet: the counter window opens).</summary>
     private static CounterSheetView? SheetDoorView(string from)
@@ -42,21 +84,26 @@ internal static partial class PrizeCounterHostService
         return (door as ICounterSheetDoor)?.CounterSheet;
     }
 
-    /// <summary>Open the sheet for this launch, or false (the caller opens the window).</summary>
-    private static bool TryLaunchSheet(int generation)
+    /// <summary>Open the sheet for this launch, or false (the caller opens the window). <paramref name="game"/>
+    /// is the game window's sheet (its game goes still under the scrim), null for a wallet door's.</summary>
+    private static bool TryLaunchSheet(CounterSheetView? view, int generation, GameCounterSheet? game)
     {
-        var view = SheetDoorView(_from);
         if (view == null) return false;
         SheetCounterSurface? surface = null;
         surface = SheetCounterSurface.TryOpen(view, why => OnSheetWantsClose(surface, why));
         if (surface == null) return false;
-        _isSheet = true;
+        _isSheet = game == null;
+        _sheetView = view;
+        _inGame = game != null;
         _startUrl = CounterSheetRules.SheetUrl;
         _host = surface;
+        game?.Freeze();
         // A door behind the user's other apps (EMI's options) comes forward first, so the sheet is never
         // left behind someone else's app.
         if (!view.DoorWindow.IsActive) { try { view.DoorWindow.Activate(); } catch (Exception ex) { Diag.Swallowed(ex); } }
-        _host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+        // A game window's sheet may be cold (its browser made on this press): the keys come to the page
+        // once it answers, never left with the game under it.
+        _host.NavigatePage(_startUrl, () => { Post(BuildInit()); if (game != null) OnUi(() => _host?.FocusWeb()); }, m => OnPageMessage(m, generation));
         _host.FocusWeb();
         App.Logger?.Information("PrizeCounterHostService: sheet down from {From} on {Tab}", _from, _tab ?? "(first)");
         return true;
@@ -70,7 +117,7 @@ internal static partial class PrizeCounterHostService
         App.Logger?.Information("PrizeCounter: sheet closing ({Why})", why);
         Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
         {
-            if (ReferenceEquals(surface, _host)) CloseFor(why == CounterSheetView.WhyFailed ? CloseFailed : CloseBack);
+            if (ReferenceEquals(surface, _host)) CloseFor(CounterSheetRules.SheetCloseReason(why));
         }));
     }
 
@@ -80,7 +127,7 @@ internal static partial class PrizeCounterHostService
     /// </summary>
     private static bool SheetPressHandled()
     {
-        if (CounterSheetRules.OnPress(IsSheetOpen) != CounterSheetRules.Press.Close) return false;
+        if (CounterSheetRules.OnPress(OpenSurface == CounterSheetRules.Surface.DoorSheet) != CounterSheetRules.Press.Close) return false;
         App.Logger?.Information("PrizeCounter: wallet pressed again, sheet closing");
         CloseFor(CloseBack);
         return true;

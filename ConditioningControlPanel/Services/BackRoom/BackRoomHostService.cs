@@ -204,6 +204,9 @@ internal static class BackRoomHostService
     private static readonly TimeSpan PanicDoublePressWindow = TimeSpan.FromSeconds(2);
 
     private static ChaosWebViewHost? _host;
+
+    /// <summary>This game's window, for the Prize Counter sheet its door opens over it (PrizeCounterHostService.Sheet.cs).</summary>
+    internal static ChaosWebViewHost? CounterHost => _host;
     private static BackRoomBridge? _bridge;
     private static Models.AppSettings? _hookedSettings;
     private static bool _replaceHooked;
@@ -464,7 +467,7 @@ internal static class BackRoomHostService
     }
 
     /// <summary>The page's <c>open-prize-counter</c> (walking to the counter + E): suspend the room and
-    /// open the counter WINDOW over it on the Back Room tab (owner call: no per-game relay).</summary>
+    /// open the counter sheet inside this window on the Back Room tab (owner call: no per-game relay).</summary>
     private static void OpenCounter(string? tab)
     {
         if (_host == null || _bridge == null || _racePage || _breakoutPage) return;
