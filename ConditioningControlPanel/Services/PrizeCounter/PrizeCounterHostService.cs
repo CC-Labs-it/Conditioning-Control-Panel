@@ -514,6 +514,10 @@ internal static class PrizeCounterHostService
                 if (generation == _generation)
                 {
                     var wearId = m["id"]?.Type == JTokenType.String ? (string?)m["id"] : null;
+#if DEBUG
+                    // Preview: the real families (desk, chess, profile PUTs, Rain) never hear a preview Wear.
+                    if (ShopPreviewBackend.Enabled) { Post(new { type = "worn", id = wearId, ok = true }); break; }
+#endif
                     var from = _from;
                     Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
                     {
@@ -570,12 +574,16 @@ internal static class PrizeCounterHostService
         bool osAnim = true;
         try { osAnim = SystemParameters.ClientAreaAnimation; } catch { }
         bool gentle = Safety.GentleVisuals.On;
+        int sp = s?.SkillPoints ?? 0;
+#if DEBUG
+        if (ShopPreviewBackend.Enabled) sp = ShopPreviewBackend.Shared.Sp;   // the preview's own wallet, never the real one
+#endif
         return new
         {
             type = "init",
             protocol = 1,
             identity = id == null ? null : new { unifiedId = id.Value.UnifiedId },
-            sp = s?.SkillPoints ?? 0,
+            sp,
             locale = LocalizationManager.Instance.CurrentLanguage,
             lexicon = LocalizationManager.Instance.KeysWithPrefix(LexPrefix)
                 .Distinct(StringComparer.Ordinal).ToDictionary(k => k, k => Loc.Get(k), StringComparer.Ordinal),

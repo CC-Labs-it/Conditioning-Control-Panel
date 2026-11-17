@@ -102,6 +102,10 @@ public sealed class PrizeCounterRelay
     /// <summary>One page request to one body. Never throws.</summary>
     public async Task<JObject> RelayAsync(string? op, JObject? body, string? idem, CancellationToken ct = default)
     {
+#if DEBUG
+        // The DEBUG shop preview (CCP_SHOP_PREVIEW=1) answers locally: no server, no token, no real wallet.
+        if (ShopPreviewBackend.Enabled) return ShopPreviewBackend.Shared.Handle(op, body, idem);
+#endif
         if (!TryRoute(op, out _, out _)) return Refusal("bad_input");
         if (op == OpBuy && (string.IsNullOrWhiteSpace(idem) || body?["itemId"] is not JValue { Type: JTokenType.String }))
             return Refusal("bad_input");
@@ -140,6 +144,9 @@ public sealed class PrizeCounterRelay
     /// the wallet to a number the server did not settle.</summary>
     public bool HandleWalletFrame(int sp)
     {
+#if DEBUG
+        if (ShopPreviewBackend.Enabled) return false;   // a preview receipt never moves the real wallet
+#endif
         if (_lastReceipt is not { } last || last.Sp != sp) return false;
         Adopt(last.Account, true, sp);
         return true;

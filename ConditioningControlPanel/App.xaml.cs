@@ -2252,6 +2252,12 @@ namespace ConditioningControlPanel
             Services.Prizes.PrizeGrants.Attach(Ownership);
             // Rain's wardrobe reaches the Prize Counter (its Open counter door and price badges).
             Services.PrizeCounter.PrizeCounterHostService.WireRainWardrobe();
+            // Worn looks: new bubbles (and later fog, words, the Deck card) ask it what is on.
+            Services.Prizes.WornLooks.Wire();
+#if DEBUG
+            // CCP_SHOP_PREVIEW=1: the counter answers from a local preview file and feeds the worn looks.
+            Services.PrizeCounter.ShopPreviewBackend.Wire();
+#endif
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
             // screen. The relay is the room's own, so a reply applies its prizes block.
