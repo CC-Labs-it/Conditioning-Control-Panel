@@ -1305,7 +1305,8 @@ public partial class BubbleService : IDisposable
         // started here any more. The bloom code is parked in BubbleService.InnerBloom.cs.
         if (spec == null)
             return new Bubble(screen, _bubbleImage, _random, OnPop, OnMiss, OnDestroy, isClickable,
-                              ambientMotion: AmbientBubbleMotion.RollForSpawn(_random));
+                              ambientMotion: AmbientBubbleMotion.RollForSpawn(_random),
+                              skin: BubbleCore.BubbleSkinChoice.Current());
         // Trigger bubbles ride the shared ambient host like plain bubbles (hook-based pops via the
         // UsesHost/HostHitClickable snapshots). forceWindowMode was a relic of the host being
         // chaos-run-only: the per-pop layered-window Show/Close it forced was the residual "small
@@ -1323,7 +1324,8 @@ public partial class BubbleService : IDisposable
                               FireAmbientPayload(b);
                               OnFrothPopped(b);   // Super Froth: the parts it took in, then its ring
                           },
-                          forceWindowMode: !hostUp, ambientTrigger: true);
+                          forceWindowMode: !hostUp, ambientTrigger: true,
+                          skin: BubbleCore.BubbleSkinChoice.Current());
     }
 
     /// <summary>
@@ -2319,6 +2321,7 @@ public partial class BubbleService : IDisposable
         // bubble doesn't get stranded by the claim-pop guard during teardown.
         CancelAvatarEgg();
         ClearBloomState();   // panic, Stop and pause all land here: Inner Bloom stops with the field
+        try { Bubble.Layer?.ClearSkinFx(); } catch (Exception ex) { Diag.Swallowed(ex); }   // and every skin pop burst
         try
         {
             // Safety check for shutdown scenarios
@@ -2516,6 +2519,8 @@ internal partial class Bubble
     private readonly bool _useHost;     // AppSettings.ChaosBubbleSharedHost && chaos bubble — see the spawn block
     private readonly bool _useLayer;    // UnifiedOverlayHost: render on the compositor BubbleLayer (also window-less)
     private Compositor.BubbleLayer.BubbleItem? _layerItem;   // this bubble's draw-state on the layer (null off-layer)
+    private readonly string _skin = BubbleCore.BubbleSkinIds.Soap;   // bubble skin (soap = today's look); only the layer draws one
+    private static int s_skinSeq;
     private string? _flashFacePath;
     private FlashClipPlayer? _faceClip;
     private List<BitmapSource>? _faceFrames;
@@ -3254,6 +3259,9 @@ internal partial class Bubble
             HintText = (_hintEl?.Child as TextBlock)?.Text,
             HintYOffDip = (float)(_size / 2.0 + Math.Clamp(_winPad - 24.0, 2.0, 14.0)),
         };
+        // Bubble skin: only on the plain glass sprite (no variant art, no picture face). Soap never gets here.
+        if (_skin != BubbleCore.BubbleSkinIds.Soap && !_hasVariantSprite && !item.HasFace)
+            Compositor.BubbleLayer.ApplySkin(item, _skin, unchecked(Environment.TickCount * 31 + ++s_skinSeq * 7919));
         return item;
     }
 
@@ -3274,6 +3282,8 @@ internal partial class Bubble
         it.Bloom = _bloom;
         it.HideBody = _bloomHidden;
         if (_frothTouched) SyncFrothItem(it);   // Super Froth: size, wobble, rim, picture clock
+        // Bubble skin: a real pop hands its burst to the layer once (a defuse deflate or a treat dissolve does not).
+        if (it.Skin != null && _isPopping && !_isDeflating && !_isDissolving) s_layer?.AddSkinBurst(it);
 
         if (_fuseRing != null)
         {
@@ -3357,9 +3367,10 @@ internal partial class Bubble
                   Action<Bubble>? onBrittleShattered = null, bool forceWindowMode = false,
                   bool ambientTrigger = false,
                   BubbleMotionStyle ambientMotion = BubbleMotionStyle.FloatUp,
-                  double sizeMult = 1.0, int sizeDip = 0)
+                  double sizeMult = 1.0, int sizeDip = 0, string? skin = null)
     {
         _random = random;
+        _skin = BubbleCore.BubbleSkinChoice.Resolve(skin);   // null or unknown = soap
         _onPop = onPop;
         _onMiss = onMiss;
         _onDestroy = onDestroy;
