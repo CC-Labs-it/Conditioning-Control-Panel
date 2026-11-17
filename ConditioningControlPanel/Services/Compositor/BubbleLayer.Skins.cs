@@ -126,7 +126,7 @@ public sealed partial class BubbleLayer
             if (age < fx.Pre)
                 _skinPaint.DrawDying(c, fx.Skin, fx.Seed, fx.BodySeconds + age, fx.Motion, age / fx.Pre, fx.Gentle, fx.X, fx.Y, fx.R);
             else
-                _skinPaint.DrawBurst(c, new ReadOnlySpan<SkinParticle>(fx.Parts, 0, fx.Count), age - fx.Pre, fx.X, fx.Y, fx.R, 1f);
+                _skinPaint.DrawBurst(c, new ReadOnlySpan<SkinParticle>(fx.Parts, 0, fx.Count), age - fx.Pre, fx.X, fx.Y, fx.R, 1f, fx.Seed);
         }
         if (_skinFx.Count == 0) _dirty = true;   // one last clean frame without the burst
         if (_skinFx.Count == 0 && _items.Count == 0 && _bloomFx.Count == 0) SetActive(false);
@@ -169,6 +169,7 @@ public sealed partial class BubbleLayer
                                  float cx, float cy, float r, float alpha)
         {
             if (r < 2f || alpha <= .003f) return;
+            if (skin == BubbleSkinIds.Marble) { DrawMarble(c, seed, seconds, motion, cx, cy, r, alpha, 0, false); return; }
             int n = BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims);
             if (n == 0) return;
             if (skin == BubbleSkinIds.Heart) { DrawHeart(c, _prims[0], _prims[1], cx, cy, r, alpha, 1, 0); return; }
@@ -214,6 +215,7 @@ public sealed partial class BubbleLayer
                               float cx, float cy, float r)
         {
             if (r < 2f) return;
+            if (skin == BubbleSkinIds.Marble) DrawMarble(c, seed, seconds, motion, cx, cy, r, 1f, (float)k, gentle);
             if (skin == BubbleSkinIds.Heart)
             {
                 if (BubbleSkins.Interior(skin, seed, seconds, motion, r, _prims) < 2) return;
@@ -222,7 +224,7 @@ public sealed partial class BubbleLayer
             }
         }
 
-        public void DrawBurst(SKCanvas c, ReadOnlySpan<SkinParticle> parts, double age, float cx, float cy, float r, float alpha)
+        public void DrawBurst(SKCanvas c, ReadOnlySpan<SkinParticle> parts, double age, float cx, float cy, float r, float alpha, int seed = 0)
         {
             foreach (ref readonly var p in parts)
             {
@@ -245,7 +247,7 @@ public sealed partial class BubbleLayer
                     case SkinParticleKind.Wave:
                         float u = (float)(age / p.Life);
                         // Thinner and softer than the lab's ring: a field pops many at once.
-                        _stroke.Color = new SKColor(255, 214, 140, A(.7f * a));
+                        _stroke.Color = p.Argb != 0 ? Tone(p.Argb, .7f * a) : new SKColor(255, 214, 140, A(.7f * a));
                         _stroke.StrokeWidth = Math.Max(.5f, p.Size * r * .05f * (1 - u));
                         c.DrawCircle(x, y, s, _stroke);
                         break;
@@ -262,6 +264,10 @@ public sealed partial class BubbleLayer
                     case SkinParticleKind.Spark:
                         _fill.Color = new SKColor(255, 236, 190, A(.9f * a));
                         c.DrawCircle(x, y, s, _fill);
+                        break;
+                    case SkinParticleKind.Shard:
+                    case SkinParticleKind.Star:
+                        DrawMarbleParticle(c, p, st, seed, x, y, s, r, a);
                         break;
                     case SkinParticleKind.Heart:
                     case SkinParticleKind.HeartWave:
@@ -280,12 +286,16 @@ public sealed partial class BubbleLayer
         /// <summary>A skin colour (0xAARRGGBB) with its own alpha times <paramref name="a"/>.</summary>
         private static SKColor Tone(uint argb, float a) => new SKColor(argb).WithAlpha(A((argb >> 24) / 255f * a));
 
+        /// <summary>Each skin's own native parts (paths, paints) go with the painter.</summary>
+        partial void DisposeParts();
+
         public void Dispose()
         {
             _fill.Dispose();
             _stroke.Dispose();
             _tint.Dispose();
             _mist.Dispose();
+            DisposeParts();
         }
     }
 }

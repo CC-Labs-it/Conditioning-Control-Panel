@@ -162,6 +162,78 @@ public class BubbleSkinsTests
         => Stills(BubbleSkinIds.Heart, new[] { .05, .12, .2, .34, .6, 1.0 }, popCell: 3, outerReach: .2);
 
     [Fact]
+    public void Marble_vanes_wind_inside_the_glass_change_colour_and_its_pop_cracks_then_falls()
+    {
+        const string M = BubbleSkinIds.Marble;
+        Assert.True(BubbleSkins.OwnsBody(M));
+        Assert.InRange(BubbleSkins.PreBurst(M, false), .15, .25);
+        Assert.True(BubbleSkins.PreBurst(M, true) >= .3, "under Gentle the flash is a glow rising over 0.3 s");
+
+        var a = new SkinQuad[BubbleSkins.MaxMarbleQuads];
+        var b = new SkinQuad[BubbleSkins.MaxMarbleQuads];
+        foreach (var r in Radii)
+            for (double t = 0; t < 20; t += 1.3)
+            {
+                int n = BubbleSkins.MarbleVanes(5, t, 1, r, a);
+                Assert.Equal(BubbleSkins.MarbleVaneCount * BubbleSkins.VaneSteps(r), n);
+                Assert.Equal(n, BubbleSkins.MarbleVanes(5, t, 1, r, b));
+                for (int i = 0; i < n; i++)
+                {
+                    Assert.Equal(a[i], b[i]);
+                    var q = a[i];
+                    foreach (var (x, y) in new[] { (q.X0, q.Y0), (q.X1, q.Y1), (q.X2, q.Y2), (q.X3, q.Y3) })
+                        Assert.True(Math.Sqrt(x * x + y * y) <= .9, $"r={r} t={t} i={i}");
+                }
+            }
+        // The colours inside travel: the mean colour moves a long way over half a minute.
+        static (double, double, double) Mean(SkinQuad[] q, int n)
+        {
+            double r = 0, g = 0, bl = 0;
+            for (int i = 0; i < n; i++) { r += (q[i].Argb >> 16) & 255; g += (q[i].Argb >> 8) & 255; bl += q[i].Argb & 255; }
+            return (r / n, g / n, bl / n);
+        }
+        int m0 = BubbleSkins.MarbleVanes(5, 0, 1, 60, a);
+        var c0 = Mean(a, m0);
+        double far = 0;
+        for (double t = 2; t < 30; t += 2)
+        {
+            var c1 = Mean(a, BubbleSkins.MarbleVanes(5, t, 1, 60, a));
+            far = Math.Max(far, Math.Abs(c1.Item1 - c0.Item1) + Math.Abs(c1.Item2 - c0.Item2) + Math.Abs(c1.Item3 - c0.Item3));
+        }
+        Assert.True(far > 60, $"the colours change ({far:0})");
+        BubbleSkins.MarbleVanes(5, .4, 0, 60, a);
+        BubbleSkins.MarbleVanes(5, 12, 0, 60, b);
+        Assert.Equal(a[7], b[7]);
+        Assert.Equal(BubbleSkins.MarbleTumble(5, .4, 0), BubbleSkins.MarbleTumble(5, 12, 0));
+
+        var cracks = new float[BubbleSkins.MarbleCrackCount * BubbleSkins.MarbleCrackStops * 2];
+        BubbleSkins.MarbleCracks(9, cracks);
+        for (int i = 0; i < BubbleSkins.MarbleCrackCount; i++)
+        {
+            int o = i * BubbleSkins.MarbleCrackStops * 2, e = o + (BubbleSkins.MarbleCrackStops - 1) * 2;
+            Assert.Equal(0f, cracks[o]);
+            Assert.InRange(Math.Sqrt(cracks[e] * cracks[e] + cracks[e + 1] * cracks[e + 1]), .96, .98);
+        }
+        var pts = new float[8];
+        Assert.Equal(3, BubbleSkins.MarbleShard(cracks, 0, pts));
+        Assert.Equal(4, BubbleSkins.MarbleShard(cracks, 5, pts));
+
+        BurstRules(M, 1 + BubbleSkins.MarbleShards + BubbleSkins.MaxMarbleDust + BubbleSkins.MaxMarbleGlints);
+        var p = new SkinParticle[BubbleSkins.BurstCapacity];
+        int count = BubbleSkins.Burst(M, 9, 60, 1, p), shards = 0;
+        double y0 = 0, y1 = 0;
+        for (int i = 0; i < count; i++)
+            if (p[i].Kind == SkinParticleKind.Shard)
+            { shards++; y0 += BubbleSkins.At(p[i], .1).Y; y1 += BubbleSkins.At(p[i], .8).Y; }
+        Assert.Equal(BubbleSkins.MarbleShards, shards);
+        Assert.True(y1 > y0, "the shards fall");
+    }
+
+    [Fact]
+    public void Marble_stills_draw_solid_glass_in_place_of_the_sprite_and_shatter_outside_it()
+        => Stills(BubbleSkinIds.Marble, new[] { .05, .12, .19, .26, .45, .8 }, popCell: 4, outerReach: .05);
+
+    [Fact]
     public void Soap_and_reserved_skins_leave_the_item_untouched()
     {
         foreach (var skin in new[] { BubbleSkinIds.Soap, null, BubbleSkinIds.Disco, "nope" })

@@ -15,7 +15,7 @@ public static class BubbleSkinIds
     public static readonly IReadOnlyList<string> All = new[] { Soap, Champagne, Heart, Spiral, Marble, Disco, Frost };
 
     /// <summary>True for a skin that has a draw today (soap draws nothing extra).</summary>
-    public static bool IsDrawn(string? id) => id is Champagne or Heart;
+    public static bool IsDrawn(string? id) => id is Champagne or Heart or Marble;
 }
 
 /// <summary>The one place a new bubble learns its skin. Soap, unless a DEBUG build names a drawn
@@ -48,7 +48,9 @@ public enum SkinPrimKind : byte { Bead, Ring, Foam, HeartBody, HeartRipple }
 /// <summary>One interior shape in the bubble's unit circle (y down, radius 1 = the glass).</summary>
 public readonly record struct SkinPrim(float X, float Y, float R, float Alpha, SkinPrimKind Kind);
 
-public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist, Heart, HeartWave }
+/// <summary><see cref="Shard"/>: a Marble shard, corners from <see cref="BubbleSkins.MarbleShard"/> by its Index.
+/// <see cref="Star"/>: a four-point glint whose size twinkles at Grow radians per second.</summary>
+public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist, Heart, HeartWave, Shard, Star }
 
 /// <summary>One pop particle at birth, in glass radii (position) and radii per second (velocity).
 /// <see cref="Rise"/> is a constant pull (negative = up), <see cref="Drag"/> slows it per second,
@@ -57,7 +59,7 @@ public enum SkinParticleKind : byte { Dot, Ring, Spark, Wave, Mist, Heart, Heart
 /// painter's default for the kind).</summary>
 public readonly record struct SkinParticle(float X, float Y, float Vx, float Vy, float Life, float Size,
     SkinParticleKind Kind, float Rise = 0, float Drag = 0, float SwayAmp = 0, float SwayFreq = 0, float SwayPhase = 0, float Grow = 0,
-    float Rot = 0, float Spin = 0, uint Argb = 0);
+    float Rot = 0, float Spin = 0, uint Argb = 0, ushort Index = 0);
 
 /// <summary>Where a particle is <c>age</c> seconds after the pop. Alive = false once its life is spent.</summary>
 public readonly record struct SkinParticleState(float X, float Y, float Size, float Alpha, bool Alive, float Rot = 0);
@@ -84,13 +86,14 @@ public static partial class BubbleSkins
     public const int BurstCapacity = 96;
 
     /// <summary>True for a skin that draws its own body in place of the soap sprite (the hit area stays the circle).</summary>
-    public static bool OwnsBody(string? skin) => skin is BubbleSkinIds.Heart;
+    public static bool OwnsBody(string? skin) => skin is BubbleSkinIds.Heart or BubbleSkinIds.Marble;
 
     /// <summary>Seconds the skin's burst spends on the dying body (squeeze, cracks, wind-in) before its
     /// particles fly. The pop itself pays and sounds at once; this is drawing only. 0 = no pre-burst.</summary>
     public static double PreBurst(string? skin, bool gentle) => skin switch
     {
         BubbleSkinIds.Heart => .16,
+        BubbleSkinIds.Marble => gentle ? .32 : .2,   // Gentle: the flash becomes a glow that rises over 0.3 s
         _ => 0,
     };
 
@@ -163,6 +166,7 @@ public static partial class BubbleSkins
     {
         motion = Math.Clamp(motion, 0, 1);
         if (skin == BubbleSkinIds.Heart) return HeartBurst(seed, radiusPx, motion, dst);
+        if (skin == BubbleSkinIds.Marble) return MarbleBurst(seed, radiusPx, motion, dst);
         if (skin != BubbleSkinIds.Champagne || dst.Length < MaxBurst || radiusPx <= 0 || motion <= 0) return 0;
         var rnd = new Mulberry((uint)seed);
         float m = (float)motion, minS = (float)(MinPx / radiusPx);
@@ -228,6 +232,7 @@ public static partial class BubbleSkins
         {
             SkinParticleKind.Wave => p.Size * (1 + p.Grow * (1 - (1 - u) * (1 - u))),
             SkinParticleKind.Mist or SkinParticleKind.HeartWave => p.Size * (1 + p.Grow * u),
+            SkinParticleKind.Star => p.Size * (.35 + .65 * Math.Abs(Math.Sin(age * p.Grow))),
             _ => p.Size,
         };
         return new SkinParticleState((float)x, (float)y, (float)size, (float)alpha, true, (float)(p.Rot + p.Spin * age));
