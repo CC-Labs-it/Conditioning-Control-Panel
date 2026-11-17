@@ -2,6 +2,7 @@
  * wallet and land on the item (a spend), or puff out of the gift box and stream into the wallet (a gain), each landing
  * a gold ring and a few motes, with sheet/sound.js bells. In sheet mode the wallet is the host's, just above the page,
  * so the stars aim at the top right edge. Motion off: no flight (the caller rings one bell). Less or Gentle: half the stars.
+ * at / ink / confetti serve sheet/juice.js (the OWNED stamp's hit, a stamp press, the coupon); Gentle gets no confetti.
  * Uses Web Animations; a page without them (the tests' fake DOM) gets no flight and the same outcome. */
 
 export function createFx({ root, doc, base = './', motion = 'full', gentle = false, sound, wallet }) {
@@ -26,24 +27,57 @@ export function createFx({ root, doc, base = './', motion = 'full', gentle = fal
         { duration: 360 + Math.random() * 300, easing: 'cubic-bezier(.1,.7,.3,1)', fill: 'both' }).onfinish = () => m.remove();
     }
   }
+  /** The centre of a node, in the sheet's own coordinates (for the juice's ink rings and confetti). */
+  function at(node) { const h = host(), a = node.getBoundingClientRect(); return { x: a.left + a.width / 2 - h.left, y: a.top + a.height / 2 - h.top }; }
+  /** An ink ring where a stamp hits: one ring, scaling out and fading (Gentle: a fade in place). small = a stamp-card dot. */
+  function ink(x, y, small) {
+    if (!can(root)) return;
+    const r = el('i', 'j-ink' + (small ? ' small' : ''));
+    r.style.left = x + 'px'; r.style.top = y + 'px'; root.append(r);
+    const s = gentle ? [1, 1] : motion === 'less' ? [0.6, 1.4] : [0.4, small ? 1.6 : 2.2];
+    r.animate([{ transform: `scale(${s[0]})`, opacity: 0.85 }, { transform: `scale(${s[1]})`, opacity: 0 }], { duration: gentle ? 420 : small ? 460 : 620, easing: 'cubic-bezier(.15,.7,.3,1)', fill: 'both' }).onfinish = () => r.remove();
+  }
+  /** A few confetti bits in a colour (the shelf's), thrown up and falling with a turn. Gentle and off: none. */
+  function confetti(x, y, colour, count) {
+    if (!can(root) || gentle || !(count > 0)) return;
+    for (let i = 0; i < count; i++) {
+      const c = el('i', 'j-conf' + (i % 3 === 0 ? ' alt' : '')), a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, d = (40 + Math.random() * 70) * (motion === 'less' ? 0.5 : 1);
+      if (colour) c.style.setProperty('--c', colour);
+      c.style.left = x + 'px'; c.style.top = y + 'px'; root.append(c);
+      const ux = Math.cos(a) * d, uy = Math.sin(a) * d, spin = (Math.random() - 0.5) * 720;
+      c.animate([
+        { transform: 'translate(0,0) rotate(0deg) scale(.6)', opacity: 1 },
+        { transform: `translate(${ux}px,${uy}px) rotate(${spin * 0.5}deg) scale(1)`, opacity: 1, offset: 0.38 },
+        { transform: `translate(${ux * 1.25}px,${uy + 46 + Math.random() * 30}px) rotate(${spin}deg) scale(.9)`, opacity: 0 },
+      ], { duration: 900 + Math.random() * 400, delay: Math.random() * 60, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'both' }).onfinish = () => c.remove();
+    }
+  }
   return {
-    sparkAt,
-    /** A spend: stars leave the wallet and land on the item. Answers how long that takes (0 = no flight). */
+    sparkAt, at, ink, confetti,
+    /** A spend: stars leave the wallet in a dense stream, arc high and land on the item, each with a small pop where it
+     * lands (the owner: "slower, more dense, a small animation when they land"). Answers how long that takes (0 = none). */
     flyOut(toEl, amount) {
       if (!can(toEl) || !can(root)) return 0;
       const s0 = centre(walletStar()), box = toEl.getBoundingClientRect(), e0 = centre(toEl);
-      const n = Math.max(5, Math.round(Math.max(10, Math.min(22, Math.round(amount / 35))) * few));
+      const n = Math.max(8, Math.round(Math.max(16, Math.min(32, Math.round(amount / 20))) * few));
       let longest = 0;
-      sound.air(0.5, 0.045, false);
+      sound.air(0.7, 0.045, false);
       for (let i = 0; i < n; i++) {
-        const s = star(), size = i % 3 === 0 ? 0.8 : 0.4 + Math.random() * 0.3, dx = (Math.random() - 0.5) * box.width * 0.7, dy = (Math.random() - 0.5) * box.height * 0.6, spin = (Math.random() - 0.5) * 420;
-        const mx = s0.x + (e0.x + dx - s0.x) * 0.45 + (Math.random() - 0.5) * 120, my = s0.y + (e0.y + dy - s0.y) * 0.45 - 30 - Math.random() * 40;
-        const dur = 900 + Math.random() * 320, delay = i * 42; longest = Math.max(longest, dur + delay);
+        const s = star(), size = i % 4 === 0 ? 0.85 : 0.34 + Math.random() * 0.3, dx = (Math.random() - 0.5) * box.width * 0.7, dy = (Math.random() - 0.5) * box.height * 0.6, spin = (Math.random() - 0.5) * 480;
+        const ex = e0.x + dx, ey = e0.y + dy, side = (Math.random() - 0.5) * 160;
+        const ax = s0.x + (ex - s0.x) * 0.3 + side, ay = Math.min(s0.y, ey) - 40 - Math.random() * 60, bx = s0.x + (ex - s0.x) * 0.7 + side * 0.4, by = ay + (ey - ay) * 0.35;
+        const dur = 1250 + Math.random() * 450, delay = i * Math.min(52, 1100 / n) + Math.random() * 30; longest = Math.max(longest, dur + delay);
         s.animate([
-          { transform: `translate(${s0.x}px,${s0.y}px) scale(${size * 0.5})`, opacity: 0 },
-          { transform: `translate(${mx}px,${my}px) scale(${size * 1.1}) rotate(${spin * 0.5}deg)`, opacity: 1, offset: 0.45 },
-          { transform: `translate(${e0.x + dx}px,${e0.y + dy}px) scale(${size * 0.7}) rotate(${spin}deg)`, opacity: 1 },
-        ], { duration: dur, delay, easing: 'cubic-bezier(.4,0,.25,1)', fill: 'both' }).onfinish = () => { s.remove(); sparkAt(e0.x + dx + 13, e0.y + dy + 13, false); sound.tick(1 - i / n); };
+          { transform: `translate(${s0.x}px,${s0.y}px) scale(${size * 0.3})`, opacity: 0 },
+          { transform: `translate(${s0.x + (ax - s0.x) * 0.25}px,${s0.y + (ay - s0.y) * 0.25}px) scale(${size * 1.05}) rotate(${spin * 0.1}deg)`, opacity: 1, offset: 0.12 },
+          { transform: `translate(${ax}px,${ay}px) scale(${size * 1.1}) rotate(${spin * 0.4}deg)`, opacity: 1, offset: 0.42 },
+          { transform: `translate(${bx}px,${by}px) scale(${size}) rotate(${spin * 0.7}deg)`, opacity: 1, offset: 0.7 },
+          { transform: `translate(${ex}px,${ey}px) scale(${size * 0.8}) rotate(${spin}deg)`, opacity: 1, offset: 0.9 },
+          { transform: `translate(${ex}px,${ey - 4}px) scale(${size * (gentle ? 0.8 : 1.4)}) rotate(${spin}deg)`, opacity: 0 },   // the landing: a little pop
+        ], { duration: dur, delay, easing: 'cubic-bezier(.45,0,.3,1)', fill: 'both' }).onfinish = () => {
+          s.remove(); if (i % 2 === 0 || i === n - 1) sparkAt(ex + 13, ey + 13, false); sound.tick(1 - i / n);
+          if (i % 5 === 4 && toEl.isConnected && !gentle) toEl.animate([{ scale: '1' }, { scale: motion === 'less' ? '1.006' : '1.012', offset: 0.35 }, { scale: '1' }], { duration: 220, easing: 'ease-out' });
+        };
       }
       return longest;
     },

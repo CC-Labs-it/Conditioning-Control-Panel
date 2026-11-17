@@ -1,0 +1,81 @@
+/* sheet-juice.css - the sheet's movement (Lane MOTION), loaded after sheet.css. It only moves things: transitions and
+ * keyframes on transform-family properties (translate, rotate, scale, transform-origin) and opacity, plus the juice's own
+ * small pieces (idle bubbles, ink rings, confetti, the wipe, the wallet's rolling digits). Colours, borders, fonts and
+ * sizes of the page's parts are sheet.css's; the juice's own pieces borrow its tokens. sheet/juice.js plays the one-shot
+ * beats through Web Animations. --j-amp scales every distance: full 1, less (and OS reduced motion) .5, Gentle 0; motion
+ * off is cut by sheet.css's own rule (no transition, no animation) and the script plays nothing. */
+
+.shroot { --j-amp: 1; --j-spring: cubic-bezier(.3, 1.6, .45, 1); }
+.shroot[data-motion="less"] { --j-amp: .5; }
+.shroot[data-gentle="on"] { --j-amp: 0; }
+@media (prefers-reduced-motion: reduce) { .shroot { --j-amp: .5; } }
+
+/* ---------- cards: lift and lean on hover with a springy settle, squash on press ---------- */
+.it .stand { transform-origin: 50% 100%; transition: translate .34s var(--j-spring), rotate .34s var(--j-spring), scale .12s ease-out; }
+.it:hover .stand { translate: 0 calc(-3px * var(--j-amp)); rotate: calc(-1.1deg * var(--j-amp)); }
+.it[data-v="1"]:hover .stand, .it[data-v="3"]:hover .stand { rotate: calc(1.1deg * var(--j-amp)); }
+.it:active .stand { scale: calc(1 + .04 * var(--j-amp)) calc(1 - .06 * var(--j-amp)); transition-duration: .34s, .34s, .06s; }
+.tg { transform-origin: 9px 50%; }
+.tg.big { transform-origin: 13px 50%; }
+.mini { transition: translate .3s var(--j-spring), scale .1s ease-out; }
+.mini:hover { translate: 0 calc(-2px * var(--j-amp)); }
+.mini:active { scale: calc(1 - .04 * var(--j-amp)); }
+
+/* ---------- buttons and tabs: a squash on press, a small spring on the tab you point at ---------- */
+.btn:active:not([disabled]) { scale: calc(1 + .03 * var(--j-amp)) calc(1 - .05 * var(--j-amp)); }
+.s-tab { transform-origin: 50% 100%; transition: translate .3s var(--j-spring); }
+.s-tab[aria-selected="false"]:hover { translate: 0 calc(-2px * var(--j-amp)); }
+
+/* ---------- spotlight: the headline picture bobs (canvas items bob on their own); bulbs chase slowly if drawn ---------- */
+.spot .stage .lit { animation: j-bob 3.6s ease-in-out infinite; }
+@keyframes j-bob { 50% { translate: 0 calc(-5px * var(--j-amp)); } }
+.bulb { animation: j-bulb 2.4s ease-in-out infinite; }
+.bulb:nth-child(3n + 2) { animation-delay: -.8s; }
+.bulb:nth-child(3n) { animation-delay: -1.6s; }
+@keyframes j-bulb { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+/* ---------- gift: the box hops now and then while it waits (the lid's own wobble is sheet.css's) ---------- */
+.gbox { transform-origin: 50% 100%; }
+.gift:not(.opened) .gbox { animation: j-hop 3.4s ease-in-out infinite; }
+.shroot[data-gentle="on"] .gift .gbox, .shroot[data-gentle="on"] .spot .stage .lit { animation: none; }
+@keyframes j-hop {
+  0%, 70%, 100% { translate: 0 0; scale: 1; }
+  74% { translate: 0 0; scale: calc(1 + .06 * var(--j-amp)) calc(1 - .08 * var(--j-amp)); }
+  80% { translate: 0 calc(-9px * var(--j-amp)); scale: calc(1 - .04 * var(--j-amp)) calc(1 + .06 * var(--j-amp)); }
+  86% { translate: 0 0; scale: calc(1 + .05 * var(--j-amp)) calc(1 - .06 * var(--j-amp)); }
+  91% { translate: 0 calc(-2px * var(--j-amp)); scale: 1; }
+}
+
+/* ---------- the OWNED stamp: sheet/juice.js plays its hit (squash, ink, confetti); Gentle keeps sheet.css's fade ---------- */
+.shroot:not([data-gentle="on"]):not([data-motion="off"]) .sold { animation: none; }
+@media (prefers-reduced-motion: reduce) { .shroot:not([data-gentle="on"]) .sold { animation: none; } }
+
+/* ---------- the saving-for bar: a shine runs along it when it grows ---------- */
+.meter i.j-shine { position: relative; overflow: hidden; }
+.meter i.j-shine::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, #fff0, #fff9 50%, #fff0); animation: j-shine .9s .5s ease-in-out both; }
+@keyframes j-shine { from { transform: translateX(-110%); opacity: 1; } 90% { opacity: 1; } to { transform: translateX(260%); opacity: 0; } }
+
+/* ---------- the juice's own pieces ---------- */
+.j-dg { display: inline-block; }
+.j-ink { position: absolute; z-index: 9; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 4px solid var(--stamp, #a3262f); pointer-events: none; opacity: 0; }
+.j-ink.small { width: 34px; height: 34px; margin: -17px 0 0 -17px; border-width: 3px; }
+.j-conf { position: absolute; z-index: 9; width: 6px; height: 3px; margin: -1.5px 0 0 -3px; border-radius: 1px; background: var(--c, var(--gold, #ffd24a)); pointer-events: none; opacity: 0; }
+.j-conf.alt { background: var(--gold, #ffd24a); width: 4px; height: 4px; border-radius: 50%; }
+.j-wipe { position: absolute; inset: 0; z-index: 3; background: var(--paper, #ece6d8); pointer-events: none; transform: scaleX(0); }
+
+/* the idle bubbles: a few, slow, behind the content; paused while the page is hidden; none under Gentle or motion off */
+.sheet { isolation: isolate; }
+.j-idle { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.j-bub { position: absolute; left: var(--x); bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+  border: 1.5px solid #ffffff33; background: radial-gradient(circle at 32% 30%, #ffffff40 0 14%, #fff0 15%), radial-gradient(circle, #fff0 58%, #ffffff12 100%);
+  animation: j-rise var(--d) linear var(--w) infinite; will-change: transform, opacity; }
+@keyframes j-rise {
+  0% { transform: translate(0, 40px); opacity: 0; }
+  10% { opacity: .9; }
+  50% { transform: translate(calc(14px * var(--j-amp)), -48vh); }
+  85% { opacity: .7; }
+  100% { transform: translate(calc(-8px * var(--j-amp)), -104vh); opacity: 0; }
+}
+.j-idle[data-paused="1"] .j-bub { animation-play-state: paused; }
+.shroot[data-gentle="on"] .j-idle, .shroot[data-motion="off"] .j-idle { display: none; }
+@media (prefers-reduced-motion: reduce) { .j-bub { animation-duration: calc(var(--d) * 2); } }

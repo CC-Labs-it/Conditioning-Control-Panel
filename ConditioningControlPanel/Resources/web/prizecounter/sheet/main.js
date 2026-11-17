@@ -18,6 +18,7 @@ import { createSound } from './sound.js';
 import { createFx } from './fx.js';
 import { installFront } from './front.js';
 import { installLive } from './live.js';
+import { installJuice } from './juice.js';   // juice (Lane MOTION)
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const pressKey = (e) => e.key === 'Enter' || e.key === ' ' || e.code === 'Space' || e.code === 'NumpadEnter';
@@ -58,6 +59,9 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const sound = createSound({ muted: motion === 'off' || init.muted === true, win });
   installLive(view, { t, base, motion, gentle: !!init.gentle, doc, win, onPop: (b) => { sound.unlock(); sound.pop(b); } });
   const fx = createFx({ root: view.root, doc, base, motion, gentle: !!init.gentle, sound, wallet: () => view.wallet });
+  // ---- juice (Lane MOTION): movement, feedback and sound over each paint; decides nothing (sheet/juice.js) ----
+  installJuice(view, { motion, gentle: !!init.gentle, doc, win, sound, fx, sheet: init.sheet === true, later });
+  // ---- end juice ----
   root.replaceChildren(view.root);
   const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title', busy: false, idem: null,
     pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false, spot: null, freshStamp: 0, fog2Try: null, nudge: null };
