@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prize Counter sheet (dev)</title>
+  <link rel="stylesheet" href="../sheet.css">
+</head>
+<body>
+  <!-- The sheet on the mock host and mock/state.sample.json. Knobs as dev.html: ?tier=2 ?sp=50 ?tab=kart ?fail=<reason>
+       ?signedout ?sheet (the drop-down mode: no wallet line) ?rain (init.rainV2) ?motion=off|less ?gentle. -->
+  <main id="pc"></main>
+  <script type="module">
+    import { createMockServer } from './server.js';
+    import { createMockHost } from './host.js';
+    import { mountSheet } from '../sheet/main.js';
+    const q = new URLSearchParams(location.search);
+    const server = createMockServer(await (await fetch('./state.sample.json')).json());
+    if (q.has('tier')) server.setTier(Number(q.get('tier')));
+    if (q.has('sp')) server.setSp(Number(q.get('sp')));
+    if (q.has('fail')) server.fail(q.get('fail'));
+    if (q.has('signedout')) server.setSignedOut(true);
+    const onSignIn = () => { q.delete('signedout'); location.search = q.toString(); };
+    window.mock = server;
+    const host = createMockHost(server, { tab: q.get('tab'), onSignIn, sheet: q.has('sheet'), rainV2: q.has('rain'),
+      motion: q.get('motion') || 'full', gentle: q.has('gentle'), wears: ['desk', 'chess', 'profile', 'rain'] });
+    window.page = await mountSheet(host, { root: document.getElementById('pc'), base: '../' });
+    if (q.get('pick')) window.page.pick(q.get('pick'));
+    if (q.has('ask')) window.page.act('buy', true, true);
+  </script>
+</body>
+</html>
