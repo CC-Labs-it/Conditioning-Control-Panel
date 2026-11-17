@@ -178,15 +178,26 @@ public class FogTwoToneBlock : StackPanel
         var swatches = new StackPanel { Orientation = Orientation.Horizontal };
         AutomationProperties.SetName(swatches, Loc.Get("shop_sheet_second_colour"));
         var picked = LookWardrobe.SecondFogColour;
+        var ownHex = OwnSecond;
+        var own = SuperCore.FogLooks.TryHex(ownHex);
         foreach (var (id, rgb) in SuperCore.FogLooks.Palette)
-            swatches.Children.Add(LookChips.Swatch(Loc.Get(NameKey(id)), Color.FromRgb(rgb.R, rgb.G, rgb.B), id == picked, () => LookWardrobe.SecondFogColour = id));
+            swatches.Children.Add(LookChips.Swatch(Loc.Get(NameKey(id)), Color.FromRgb(rgb.R, rgb.G, rgb.B), own == null && id == picked,
+                () => { bool had = OwnSecond.Length > 0; OwnSecond = ""; LookWardrobe.SecondFogColour = id; if (had) Rebuild(); }));
+        // your own colour (owner, 2026-11-17: "with the color picker"): this PC only, the account keeps the palette pick
+        if (own is { } o)
+            swatches.Children.Add(LookChips.Swatch(Loc.Get("fog_second_own"), Color.FromRgb(o.R, o.G, o.B), true, ChooseOwn));
+        var choose = new Button { Content = Loc.Get("btn_choose_color"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = Loc.Get("fog_second_own") };
+        choose.SetResourceReference(StyleProperty, "SmallPinkButton");
+        AutomationProperties.SetName(choose, Loc.Get("fog_second_own"));
+        choose.Click += (_, _) => ChooseOwn();
+        swatches.Children.Add(choose);
         Grid.SetColumn(swatches, 1);
         row.Children.Add(second);
         row.Children.Add(swatches);
         Children.Add(row);
 
         var shown = SuperCore.FogLooks.SecondRow(picked, OwnColour());
-        if (shown != picked)
+        if (own == null && shown != picked)
         {
             var note = new TextBlock { Text = Loc.GetF("shop_sheet_fog2_close", Loc.Get(NameKey(picked)), Loc.Get(NameKey(shown))), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
             note.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
@@ -195,6 +206,32 @@ public class FogTwoToneBlock : StackPanel
     }
 
     private static string NameKey(string fogRow) => "shop_item_" + fogRow.Replace('.', '_') + "_name";
+
+    /// <summary>The user's own second colour (#RRGGBB, empty = the palette pick). Saved, and the fog follows at once.</summary>
+    private static string OwnSecond
+    {
+        get { try { return App.Settings?.Current?.FogSecondOwnColor ?? ""; } catch { return ""; } }
+        set
+        {
+            try
+            {
+                if (App.Settings?.Current is not { } s || s.FogSecondOwnColor == value) return;
+                s.FogSecondOwnColor = value;
+                App.Settings?.Save();
+                WornFog.Retarget();
+            }
+            catch (Exception ex) { App.Logger?.Debug("FogTwoTone own colour: {E}", ex.Message); }
+        }
+    }
+
+    private void ChooseOwn()
+    {
+        var start = SuperCore.FogLooks.TryHex(OwnSecond) ?? SuperCore.FogLooks.SecondColour(LookWardrobe.SecondFogColour, OwnColour());
+        using var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true, Color = System.Drawing.Color.FromArgb(start.R, start.G, start.B) };
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        OwnSecond = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+        Rebuild();
+    }
 }
 
 /// <summary>

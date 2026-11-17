@@ -149,7 +149,7 @@ public static class SuperStageHost
         if (Stage.SteamOn)
         {
             _steamAge += dt;
-            Stage.StepSteam(dt, SteamOptions.Level(_steamAge, SteamOptions.CreepSeconds((int)(set?.SuperCreepSpeed ?? CreepSpeed.Normal))), 1.0);
+            Stage.StepSteam(dt, SteamOptions.Level(_steamAge, SteamOptions.CreepSeconds((int)(set?.SuperCreepSpeed ?? CreepSpeed.Normal)), set?.SteamReach ?? SteamOptions.ReachDefault), 1.0);
             // The cursor wipes the fog while it moves. At rest under a live pool the pool owns the
             // spot (it keeps its own eye clear), so the two never fight. A pool that leaves the fog
             // alone does not clear its eye either, so then the cursor keeps wiping.

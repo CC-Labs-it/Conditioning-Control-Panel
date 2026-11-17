@@ -23,6 +23,15 @@ public static class SteamOptions
     public static double Level(double ageSeconds, double creepSeconds)
         => 0.45 + 1.05 * Math.Clamp(ageSeconds / Math.Max(1, creepSeconds), 0, 1);
 
+    /// <summary>"Reach" (owner, 2026-11-17), percent of the way in the fog may come: at the bottom it stays a
+    /// rim at the screen edges, 100 = the whole screen, as shipped.</summary>
+    public const int ReachMin = 10, ReachMax = 100, ReachDefault = 100;
+    public static int ClampReach(int pct) => Math.Clamp(pct, ReachMin, ReachMax);
+    /// <summary><see cref="Level(double,double)"/> held back by the reach: the creep covers the same share of
+    /// the shorter way in the same time, so a low reach is a slow rim, never a fog that stops dead.</summary>
+    public static double Level(double ageSeconds, double creepSeconds, int reachPct)
+        => 0.45 + 1.05 * Math.Clamp(ageSeconds / Math.Max(1, creepSeconds), 0, 1) * ClampReach(reachPct) / 100.0;
+
     /// <summary>"Fog returns", percent of the stock heal speed. 100 = as shipped.</summary>
     public const int ReturnMin = 25, ReturnMax = 300, ReturnDefault = 100;
     public static int ClampReturn(int pct) => Math.Clamp(pct, ReturnMin, ReturnMax);
