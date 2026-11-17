@@ -28,6 +28,50 @@ namespace ConditioningControlPanel.Views.Controls
             ApplyDecoration();
         }
 
+        /// <summary>
+        /// One highlight ring (OwnAvatarPulse): a gold ring the size of the frame rises in, holds, then grows out and
+        /// fades, and is removed. Opacity and scale on one small ellipse only (no Effect, the HoverPop transform is not
+        /// touched). A second pulse replaces a running one.
+        /// </summary>
+        internal void Pulse(AvatarPulsePlan plan)
+        {
+            try
+            {
+                if (_pulse != null) Root.Children.Remove(_pulse);
+                var d = AvatarSize / ShopCosmetics.FrameWindowRatio;
+                var scale = new ScaleTransform(1, 1);
+                var ring = new System.Windows.Shapes.Ellipse
+                {
+                    Width = d, Height = d, Margin = new Thickness(-(d - AvatarSize) / 2d),
+                    Stroke = new SolidColorBrush(Color.FromRgb(0xFF, 0xCF, 0x6B)), StrokeThickness = Math.Max(2, AvatarSize * 0.035),
+                    IsHitTestVisible = false, Opacity = 0, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = scale,
+                    Tag = "avatar-pulse",
+                };
+                _pulse = ring;
+                Root.Children.Add(ring);
+                var rise = TimeSpan.FromMilliseconds(plan.RiseMs);
+                var fallAt = TimeSpan.FromMilliseconds(plan.RiseMs + plan.HoldMs);
+                var fall = TimeSpan.FromMilliseconds(plan.FallMs);
+                var fade = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+                fade.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(plan.Peak, rise,
+                    new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }));
+                fade.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(plan.Peak, fallAt));
+                fade.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(0, fallAt + fall,
+                    new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }));
+                var grow = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+                grow.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(1, fallAt));
+                grow.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(plan.GrowTo, fallAt + fall,
+                    new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }));
+                fade.Completed += (_, _) => { if (ReferenceEquals(_pulse, ring)) { Root.Children.Remove(ring); _pulse = null; } };
+                ring.BeginAnimation(OpacityProperty, fade);
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+            }
+            catch (Exception ex) { App.Logger?.Debug("AdornedAvatar: pulse failed: {E}", ex.Message); }
+        }
+
+        private System.Windows.Shapes.Ellipse? _pulse;
+
         // ---- the avatar picture ---------------------------------------------------------
 
         /// <summary>

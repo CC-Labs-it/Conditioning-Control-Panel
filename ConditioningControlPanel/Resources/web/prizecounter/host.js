@@ -3,6 +3,7 @@
  *   createHost(win)  standalone: frames over window.chrome.webview (WPF) or postMessage to the parent (web, phone).
  *                    out { type:'ready' } { type:'request', reqId, op, body, idem } { type:'wallet', sp } { type:'close', reason } { type:'signin' }
  *                        { type:'wear', id } (an owned card's Wear; the WPF host opens Rain's dressing room for a Rain row)
+ *                        { type:'go', place, id } (the fitting room's "take me there": a place from init.goes)
  *                    in  { type:'init', ... } { type:'reply', reqId, body } { type:'worn', id, ok } (WPF, after an in-place Wear)
  *                        { type:'reset' } (WPF sheet, after a close: drop this open, mount again, say ready; sheet/reuse.js)
  *   asHost(obj)      mounted inside a game: a plain object with the same methods (missing ones are no-ops).
@@ -61,6 +62,8 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     close(reason = 'back') { post({ type: 'close', reason }); },
     signIn() { post({ type: 'signin' }); },
     wear(id) { if (typeof id === 'string' && id) post({ type: 'wear', id }); },
+    /** The fitting room's "take me there" (sheet/shown.js): the host closes the sheet and opens the place. */
+    go(place, id) { if (typeof place === 'string' && place) post({ type: 'go', place, id: typeof id === 'string' ? id : null }); },
     onWorn(f) { if (typeof f === 'function') wornHears.push(f); },
     onWalletAt(f) { if (typeof f === 'function') atHears.push(f); },
     /** The host's { type:'reset' } (sheet/reuse.js listens; a reset never clears this list). */
@@ -82,6 +85,7 @@ export function asHost(o = {}) {
     close: (reason = 'back') => call(o.close, reason),
     signIn: () => call(o.signIn),
     wear: (id) => call(o.wear, id),
+    go: (place, id) => call(o.go, place, id),
     onWorn: (f) => call(o.onWorn, f),
     onWalletAt: (f) => call(o.onWalletAt, f),
     walletLand: (k) => call(o.walletLand, k),

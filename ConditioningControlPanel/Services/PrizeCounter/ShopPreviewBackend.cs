@@ -94,6 +94,46 @@ internal sealed class ShopPreviewBackend
     /// <summary>Whether the preview owns a row (the Studio look rows ask, Services/Prizes/LookWardrobe).</summary>
     public bool Owns(string itemId) { lock (_gate) return Data().Owned.ContainsKey(itemId); }
 
+    /// <summary>The preview's worn profile frame and picture (null = none). Display only: the own avatar surfaces read
+    /// it through Services/Profile/OwnProfileLook while the preview is on.</summary>
+    public (string? Frame, string? Avatar) ProfileWorn()
+    {
+        lock (_gate)
+        {
+            var p = Data().Profile;
+            return (p.TryGetValue(ShopPreviewRules.ProfileFrame, out var f) ? f : null, p.TryGetValue(ShopPreviewRules.ProfileAvatar, out var a) ? a : null);
+        }
+    }
+
+    /// <summary>The counter's Wear on an owned profile row, in the preview file only. False = refused.</summary>
+    public bool WearProfile(string? itemId)
+    {
+        bool ok;
+        lock (_gate)
+        {
+            var d = Data();
+            ok = ShopPreviewRules.WearProfile(d, itemId).Ok;
+            if (ok) Save(d);
+        }
+        if (ok) ProfileChanged?.Invoke();
+        return ok;
+    }
+
+    /// <summary>The Customize dialog's save in preview: frame and picture as a whole, in the preview file only.</summary>
+    public void SetProfile(string? frameId, string? avatarId)
+    {
+        lock (_gate)
+        {
+            var d = Data();
+            ShopPreviewRules.SetProfile(d, frameId, avatarId);
+            Save(d);
+        }
+        ProfileChanged?.Invoke();
+    }
+
+    /// <summary>The preview's frame or picture changed (any thread).</summary>
+    public event Action? ProfileChanged;
+
     /// <summary>One page request to one body. Never throws, never leaves this machine.</summary>
     public JObject Handle(string? op, JObject? body, string? idem)
     {
@@ -172,6 +212,10 @@ internal sealed class ShopPreviewBackend
     {
         if (!Enabled) return;
         Prizes.WornLooks.Source = slot => Shared.Worn(slot);
+        // The own avatar surfaces (profile hero, account chip, friends chip and drawer) show the preview's frame.
+#if DEBUG
+        OwnProfileLook.Preview = new PreviewProfileLook(Shared);
+#endif
         SparklePointRewards.Awarded += (_, award) => Shared.Credit(award.Amount, CreditCode(award.Source));
         App.Logger?.Information("ShopPreview: ON, answering the Prize Counter from {File}", FileName);
     }

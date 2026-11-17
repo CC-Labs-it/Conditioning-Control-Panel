@@ -48,6 +48,9 @@ internal sealed class ShopPreviewData
     [JsonProperty("owned")] public Dictionary<string, PreviewOwned> Owned { get; set; } = new(StringComparer.Ordinal);
     [JsonProperty("equip")] public Dictionary<string, string> Equip { get; set; } = new(StringComparer.Ordinal);
     [JsonProperty("mix")] public bool Mix { get; set; }
+    /// <summary>The worn profile frame and picture (<c>frame</c>, <c>avatar</c>): the preview's own, never the account's
+    /// (Services/Profile/OwnProfileLook reads it back for the own avatar surfaces, display only).</summary>
+    [JsonProperty("profile")] public Dictionary<string, string> Profile { get; set; } = new(StringComparer.Ordinal);
     /// <summary>The ISO week the gift was last opened in; null = never.</summary>
     [JsonProperty("giftWeek")] public string? GiftWeek { get; set; }
     /// <summary>Day 1 of the stamp card (the day of the first stamp), yyyy-MM-dd; empty = no stamp yet.</summary>
@@ -162,6 +165,9 @@ internal static class ShopPreviewRules
     {
         d.Owned ??= new(StringComparer.Ordinal);
         d.Equip ??= new(StringComparer.Ordinal);
+        d.Profile ??= new(StringComparer.Ordinal);
+        foreach (var kind in d.Profile.Keys.ToList())
+            if (ProfileKindOf(d.Profile[kind]) != kind || !d.Owned.ContainsKey(d.Profile[kind])) d.Profile.Remove(kind);
         d.Receipts ??= new();
         d.Ledger = (d.Ledger ?? new()).Where(l => l != null && (!string.IsNullOrEmpty(l.Code) || !string.IsNullOrEmpty(l.T))).Take(LedgerMax).ToList();
         d.Stamped = (d.Stamped ?? new()).Where(n => n >= 1 && n <= CardDays).Distinct().OrderBy(n => n).ToList();
@@ -295,6 +301,39 @@ internal static class ShopPreviewRules
         if (e.Special) d.Mix = true;
         else d.Equip[slot] = e.Id;
         return PreviewOutcome.Done;
+    }
+
+    public const string ProfileFrame = "frame", ProfileAvatar = "avatar";
+
+    /// <summary>The profile slot a row wears in: <c>frame</c> (profile.frame.*, prime.frame.*), <c>avatar</c>
+    /// (profile.avatar.*), else null (PrizeCounterHostService.WearFamily's profile family).</summary>
+    public static string? ProfileKindOf(string? id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        if (id.StartsWith("profile.frame.", StringComparison.Ordinal) || id.StartsWith("prime.frame.", StringComparison.Ordinal)) return ProfileFrame;
+        if (id.StartsWith("profile.avatar.", StringComparison.Ordinal)) return ProfileAvatar;
+        return null;
+    }
+
+    /// <summary>Wear an owned profile frame or picture in the preview (its own slot, nothing else moves).</summary>
+    public static PreviewOutcome WearProfile(ShopPreviewData d, string? itemId)
+    {
+        var kind = ProfileKindOf(itemId);
+        if (kind == null) return PreviewOutcome.No("bad_input");
+        if (!d.Owned.ContainsKey(itemId!)) return PreviewOutcome.No("not_owned");
+        d.Profile[kind] = itemId!;
+        return PreviewOutcome.Done;
+    }
+
+    /// <summary>Put the preview's frame and picture as a whole (the Customize dialog's save in preview): null takes
+    /// a slot off; an id of the wrong slot or one not owned leaves that slot as it was.</summary>
+    public static void SetProfile(ShopPreviewData d, string? frameId, string? avatarId)
+    {
+        foreach (var (kind, id) in new[] { (ProfileFrame, frameId), (ProfileAvatar, avatarId) })
+        {
+            if (id == null) d.Profile.Remove(kind);
+            else if (ProfileKindOf(id) == kind && d.Owned.ContainsKey(id)) d.Profile[kind] = id;
+        }
     }
 
     /// <summary>The Monday gift: once per ISO week.</summary>

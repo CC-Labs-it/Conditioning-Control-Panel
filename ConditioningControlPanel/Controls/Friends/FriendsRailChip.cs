@@ -201,9 +201,18 @@ public sealed class FriendsRailChip : UserControl
             Rebind();
             _host = Window.GetWindow(this);
             if (_host != null) _host.Activated += OnHostActivated;
+            OwnProfileLook.Changed -= OnOwnLook;
+            OwnProfileLook.Changed += OnOwnLook;
             RefreshFace();
         }
         catch (Exception ex) { App.Logger?.Debug("[Friends] chip load failed: {E}", ex.Message); }
+    }
+
+    /// <summary>A frame or picture put on (the counter, Customize): the chip and an open drawer wear it at once.</summary>
+    private void OnOwnLook()
+    {
+        RefreshFace();
+        if (_popup.IsOpen) _drawer.Render();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -212,6 +221,7 @@ public sealed class FriendsRailChip : UserControl
         {
             _popup.IsOpen = false;
             if (_host != null) _host.Activated -= OnHostActivated;
+            OwnProfileLook.Changed -= OnOwnLook;
             Unwire();
             UnwireFeed();
             _drawer.Unsubscribe();
@@ -283,7 +293,8 @@ public sealed class FriendsRailChip : UserControl
             var name = _drawer.MeName();
             _name.Text = name;
             _avatarHost.Children.Clear();
-            _avatarHost.Children.Add(FriendsLook.Avatar(name, null, 40));
+            // Your own frame and picture (OwnProfileLook), so a counter buy shows the moment the sheet closes.
+            _avatarHost.Children.Add(FriendsLook.Avatar(name, null, 40, null, _drawer.MeLook()));
 
             while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
             if (FriendsLook.TierPlate(_drawer.MeTier(), 13) is { } plate)

@@ -260,6 +260,17 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .d-act { display: flex; flex-wrap: wrap; gap: 9px; position: sticky; bottom: 0; z-index: 3; margin: 0 -16px; padding: 10px 16px 16px; background: var(--room); border-top: 2px dashed #ffffff1f; }
 .d-act .btn { flex: 1 1 auto; }
 .d-ask { flex: 1 1 100%; margin: 0; font-size: 14px; font-weight: 800; color: var(--gold); }
+/* where a worn thing shows now (sheet/shown.js): a mint paper line over its "take me there" button */
+.d-shown { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; margin: 0; font: 800 13.5px/1.3 var(--f-body); color: var(--mint); }
+.d-shown.fresh { animation: shown-in .32s cubic-bezier(.2,.9,.3,1.2) both; }
+.d-shown .tick { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--mint); color: var(--ink); }
+.d-act .btn.go { flex: 1 1 100%; background: var(--bean), var(--mint); color: var(--ink); }
+.d-act .btn.go.fresh { animation: shown-in .32s .06s cubic-bezier(.2,.9,.3,1.2) both; }
+.d-act .btn.go:hover:not([disabled]) { background: var(--bean), #7cf0c4; }
+@keyframes shown-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+[data-motion="off"] .d-shown.fresh, [data-motion="off"] .d-act .btn.go.fresh { animation: none; }
+[data-gentle="on"] .d-shown.fresh, [data-gentle="on"] .d-act .btn.go.fresh { animation: shown-fade .45s ease-out both; }
+@keyframes shown-fade { from { opacity: 0; } to { opacity: 1; } }
 .d-note { margin: 0 0 14px; font-size: 13.5px; color: var(--tx); border-left: 4px solid var(--gold); border-radius: 2px; padding-left: 9px; }
 .btn.ink { background: radial-gradient(ellipse 8px 3.5px at 14px 7px, #ffffff40 96%, #fff0 100%), var(--ink); color: var(--paper); box-shadow: 3px 4px 0 var(--pink-deep); }
 .btn.ink:hover:not([disabled]) { background-color: #3a1a48; }
