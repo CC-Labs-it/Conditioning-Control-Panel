@@ -7167,6 +7167,8 @@
   "tooltip_bouncing_font_any_installed": "Windows 里装过的任何字体都行。即时生效，不用重启。",
   "setting_bubble_solid_mode": "实体模式（大量气泡）",
   "tooltip_bubble_solid_mode": "借用兔子洞的渲染器，气泡再密也能跑得顺，同时解除屏幕上的数量上限。关掉就回到一个气泡一个窗口。气泡重新开始时生效。",
+  "setting_bubble_classic_pop": "经典爆破音",
+  "tooltip_bubble_classic_pop": "无论使用哪种外观，气泡都用原来的爆破音。",
   "setting_trigger_bubbles": "触发气泡",
   "tooltip_trigger_bubbles": "有些气泡戳破时会触发点什么：一张闪图、一段视频、一层覆盖。",
   "label_trigger_bubbles_egg_hint": "小心，{0} 最喜欢这个了…",

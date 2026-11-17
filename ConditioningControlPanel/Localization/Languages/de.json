@@ -6655,6 +6655,8 @@
   "tooltip_bouncing_font_any_installed": "Jede unter Windows installierte Schriftart. Wirkt sofort, kein Neustart nötig.",
   "setting_bubble_solid_mode": "Solid-Modus (viele Blasen)",
   "tooltip_bubble_solid_mode": "Borgt sich den Renderer des Rabbit Hole, damit ein volles Feld flüssig bleibt, und hebt das Limit auf dem Bildschirm auf. Aus heißt zurück zu einem Fenster pro Blase. Gilt, sobald die Blasen neu starten.",
+  "setting_bubble_classic_pop": "Klassischer Plopp",
+  "tooltip_bubble_classic_pop": "Jede Blase nutzt den ursprünglichen Plopp, egal welchen Skin sie trägt.",
   "setting_trigger_bubbles": "Trigger-Blasen",
   "tooltip_trigger_bubbles": "Manche Blasen lösen beim Poppen etwas aus: einen Flash, ein Video, ein Overlay.",
   "label_trigger_bubbles_egg_hint": "Vorsicht, {0} liebt die…",

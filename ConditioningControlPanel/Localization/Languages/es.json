@@ -6655,6 +6655,8 @@
   "tooltip_bouncing_font_any_installed": "Cualquier fuente instalada en Windows. Se aplica al momento, sin reiniciar.",
   "setting_bubble_solid_mode": "Modo sólido (muchas burbujas)",
   "tooltip_bubble_solid_mode": "Toma prestado el renderizador del Rabbit Hole para que un campo lleno siga fluido, y quita el tope en pantalla. Apagado vuelve a una ventana por burbuja. Se aplica cuando las burbujas se reinician.",
+  "setting_bubble_classic_pop": "Sonido clásico",
+  "tooltip_bubble_classic_pop": "Todas las burbujas usan el sonido original, lleven el aspecto que lleven.",
   "setting_trigger_bubbles": "Burbujas con efecto",
   "tooltip_trigger_bubbles": "Algunas burbujas disparan algo al reventarlas: un destello, un vídeo, una superposición.",
   "label_trigger_bubbles_egg_hint": "cuidado, a {0} le encantan…",

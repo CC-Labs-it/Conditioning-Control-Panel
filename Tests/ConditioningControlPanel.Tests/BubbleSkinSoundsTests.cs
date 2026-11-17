@@ -110,6 +110,18 @@ public class BubbleSkinSoundsTests
         Assert.True(p.ExitCode == 0, $"rerun differs from the committed clips:\n{stdout.Result}\n{stderr.Result}");
     }
 
+    [Fact]
+    public void Classic_pop_option_puts_the_original_pop_on_every_skin()
+    {
+        var src = File.ReadAllText(Repo("ConditioningControlPanel", "Services", "BubbleService.cs"));
+        int optOut = src.IndexOf("BubbleClassicPop == true) skin = null;", StringComparison.Ordinal);
+        int pick = src.IndexOf("BubbleSkinSounds.PopClips(skin)", StringComparison.Ordinal);
+        Assert.True(optOut > 0 && optOut < pick, "the opt-out must clear the skin before the clip is picked");
+        Assert.False(new ConditioningControlPanel.Models.AppSettings().BubbleClassicPop);   // off by default
+        var xaml = File.ReadAllText(Repo("ConditioningControlPanel", "Features", "BubblePopFeatureControl.xaml"));
+        Assert.Contains("setting_bubble_classic_pop", xaml);
+    }
+
     private static string Repo(params string[] parts)
     {
         var dir = AppContext.BaseDirectory;

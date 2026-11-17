@@ -6655,6 +6655,8 @@
   "tooltip_bouncing_font_any_installed": "Qualquer fonte instalada no Windows. Vale na hora, sem reiniciar.",
   "setting_bubble_solid_mode": "Modo sólido (muitas bolhas)",
   "tooltip_bubble_solid_mode": "Pega emprestado o renderizador do Rabbit Hole para o campo continuar fluido com muitas bolhas, e tira o limite na tela. Desligado, volta a uma janela por bolha. Vale quando as bolhas reiniciam.",
+  "setting_bubble_classic_pop": "Som clássico",
+  "tooltip_bubble_classic_pop": "Toda bolha usa o estouro original, seja qual for a skin.",
   "setting_trigger_bubbles": "Bolhas com efeito",
   "tooltip_trigger_bubbles": "Algumas bolhas disparam alguma coisa quando você estoura: um flash, um vídeo, uma sobreposição.",
   "label_trigger_bubbles_egg_hint": "cuidado, {0} adora essas…",

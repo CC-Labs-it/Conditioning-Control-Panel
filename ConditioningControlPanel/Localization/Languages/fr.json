@@ -6655,6 +6655,8 @@
   "tooltip_bouncing_font_any_installed": "N'importe quelle police installée sous Windows. Effet immédiat, sans redémarrage.",
   "setting_bubble_solid_mode": "Mode solide (beaucoup de bulles)",
   "tooltip_bubble_solid_mode": "Emprunte le moteur de rendu du Rabbit Hole pour qu'un champ chargé reste fluide, et lève la limite à l'écran. Désactivé, on revient à une fenêtre par bulle. Actif au redémarrage des bulles.",
+  "setting_bubble_classic_pop": "Son classique",
+  "tooltip_bubble_classic_pop": "Chaque bulle garde le son d'origine, quel que soit son habillage.",
   "setting_trigger_bubbles": "Bulles à effet",
   "tooltip_trigger_bubbles": "Certaines bulles déclenchent quelque chose quand tu les éclates : un flash, une vidéo, un calque.",
   "label_trigger_bubbles_egg_hint": "attention, {0} adore ça…",

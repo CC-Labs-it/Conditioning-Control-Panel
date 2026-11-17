@@ -6978,6 +6978,8 @@
   "tooltip_bouncing_font_any_installed": "Qualsiasi font installato su Windows. Vale subito, senza riavvio.",
   "setting_bubble_solid_mode": "Modalità solida (molte bolle)",
   "tooltip_bubble_solid_mode": "Usa il renderer del Rabbit Hole, così anche con tante bolle resta tutto fluido, e toglie il limite a schermo. Disattivata, torna a una finestra per bolla. Vale al prossimo riavvio delle bolle.",
+  "setting_bubble_classic_pop": "Suono classico",
+  "tooltip_bubble_classic_pop": "Ogni bolla usa lo scoppio originale, qualunque skin indossi.",
   "setting_trigger_bubbles": "Bolle Trigger",
   "tooltip_trigger_bubbles": "Alcune bolle fanno scattare qualcosa quando le scoppi: un flash, un video, un overlay.",
   "label_trigger_bubbles_egg_hint": "occhio, {0} le adora…",

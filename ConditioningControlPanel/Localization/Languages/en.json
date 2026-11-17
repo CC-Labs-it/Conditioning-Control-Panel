@@ -7275,6 +7275,8 @@
   "tooltip_bouncing_font_any_installed": "Any font installed on Windows. Applies live, no restart.",
   "setting_bubble_solid_mode": "Solid mode (many bubbles)",
   "tooltip_bubble_solid_mode": "Borrows the Rabbit Hole's renderer so a crowded field stays smooth, and lifts the on-screen cap. Off goes back to one window per bubble. Takes effect when bubbles restart.",
+  "setting_bubble_classic_pop": "Classic pop sound",
+  "tooltip_bubble_classic_pop": "Every bubble uses the original pop, whatever skin it wears.",
   "setting_trigger_bubbles": "Trigger Bubbles",
   "tooltip_trigger_bubbles": "Some bubbles set something off when you pop them: a flash, a video, an overlay.",
   "label_trigger_bubbles_egg_hint": "careful, {0} loves these…",

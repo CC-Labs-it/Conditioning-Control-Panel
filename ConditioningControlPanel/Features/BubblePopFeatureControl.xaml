@@ -147,6 +147,19 @@
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
 
+                            <!-- Classic pop sound: every bubble plays the original pop, whatever skin it wears. -->
+                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_classic_pop}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_classic_pop}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkClassicPop"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          Checked="ChkClassicPop_Changed" Unchecked="ChkClassicPop_Changed"/>
+                            </Grid>
+
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
                             <!-- Solid mode: render all bubbles on one shared host (the DTRH/Chaos path) for

@@ -4038,6 +4038,14 @@ namespace ConditioningControlPanel.Models
             get => _bubbleSharedHost;
             set { _bubbleSharedHost = value; OnPropertyChanged(); }
         }
+        private bool _bubbleClassicPop;
+        /// <summary>Every bubble plays the original pop, whatever skin it wears (owner 2026-11-17: an opt-out
+        /// for people who do not like the skins' own pops). The lucky chime is untouched.</summary>
+        public bool BubbleClassicPop
+        {
+            get => _bubbleClassicPop;
+            set { _bubbleClassicPop = value; OnPropertyChanged(); }
+        }
         private int _bubblesVolume = 50;
         public int BubblesVolume
         {

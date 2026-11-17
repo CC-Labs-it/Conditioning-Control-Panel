@@ -2282,6 +2282,7 @@ public partial class BubbleService : IDisposable
 
             // Normal pop sound. A skinned bubble plays one of its own three clips (BubbleSkinSounds);
             // soap and unknown skins get today's pops, and a skin clip missing on disk falls back to them.
+            if (App.Settings?.Current?.BubbleClassicPop == true) skin = null;   // the opt-out: the original pop for every skin
             var popFiles = BubbleCore.BubbleSkinSounds.PopClips(skin);
             var popPath = ModResourceResolver.ResolveAudioPath(popFiles[_random.Next(popFiles.Count)]);
             if (!File.Exists(popPath) && BubbleCore.BubbleSkinSounds.HasOwnPop(skin))
