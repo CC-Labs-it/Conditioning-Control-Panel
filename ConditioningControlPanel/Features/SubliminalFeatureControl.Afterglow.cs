@@ -7,8 +7,9 @@ using ConditioningControlPanel.SuperCore;
 namespace ConditioningControlPanel.Features
 {
     /// <summary>
-    /// Afterglow's own rows in the gold box (take two, owner 2026-11-15): words per line, how long
-    /// the finished line stays lit, how visible a waiting ghost is. Shown only while Afterglow is
+    /// Afterglow's own rows in the gold box (take two, owner 2026-11-15): also show the normal
+    /// cards (owner 2026-11-17, off by default), words per line, how long the finished line stays
+    /// lit, how visible a waiting ghost is. Shown only while Afterglow is
     /// lit. The line layer reads the settings every frame. The October near-cursor options
     /// (frequency, count, size, colours, duration, opacity, tilt, "only") are not read by this
     /// effect and get no rows; their settings stay. Clamps: CCP.Core/Super/AfterglowLineOptions.cs.
@@ -40,6 +41,7 @@ namespace ConditioningControlPanel.Features
             try
             {
                 ConditioningControlPanel.Controls.SuperRows.Apply(AfterglowRows, SuperEffect.Afterglow);
+                ChkAfterglowAlsoBase.IsChecked = s.AfterglowAlsoBase;
                 SliderAfterglowWords.Value = s.AfterglowLineWords;
                 TxtAfterglowWords.Text = s.AfterglowLineWords.ToString();
                 SliderAfterglowHold.Value = s.AfterglowLineHold;
@@ -49,6 +51,16 @@ namespace ConditioningControlPanel.Features
             }
             catch (Exception ex) { App.Logger?.Debug("Afterglow rows: {E}", ex.Message); }
             finally { _afterglowLoading = false; }
+        }
+
+        // Off (the default): with the V2 on, the ambient cards rest. SubliminalService asks per tick.
+        private void ChkAfterglowAlsoBase_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_afterglowLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.AfterglowAlsoBase = ChkAfterglowAlsoBase.IsChecked == true;
+            App.Settings?.Save();
         }
 
         private static string HoldText(double seconds) => Loc.GetF("super_opt_seconds", seconds.ToString("0.0"));

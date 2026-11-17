@@ -37,6 +37,14 @@ public static class FogLooks
 
     public static bool IsPalette(string? row) => ColourOf(row) != null;
 
+    /// <summary>The user's own second colour, written <c>#RRGGBB</c>; null for anything else.</summary>
+    public static (byte R, byte G, byte B)? TryHex(string? s)
+    {
+        if (s == null || s.Length != 7 || s[0] != '#') return null;
+        return int.TryParse(s.AsSpan(1), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out int v)
+            ? ((byte)(v >> 16), (byte)(v >> 8), (byte)v) : null;
+    }
+
     /// <summary>A palette colour, or null for anything else (old rows, unknown ids).</summary>
     public static (byte R, byte G, byte B)? ColourOf(string? row)
     {

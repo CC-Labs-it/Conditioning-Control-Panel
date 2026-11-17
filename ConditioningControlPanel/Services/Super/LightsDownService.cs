@@ -6,29 +6,46 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.SuperCore;
 using Screen = System.Windows.Forms.Screen;
 
 namespace ConditioningControlPanel.Services.Super
 {
     /// <summary>
-    /// Super Lights Down, the add-on to the mandatory video: the longer the picture is watched
-    /// (cursor on it, or gaze when the tracker is already running and calibrated) the more the
-    /// room falls away. Rides <see cref="VideoService"/>'s own lifecycle: it starts on
-    /// VideoStarted and ends on VideoEnded, on the tick the video stops playing or begins its
-    /// teardown, and with the video windows themselves (each overlay is OWNED by one). Panic and
-    /// the emergency exit tear the video down, so they end this on the same frame. Click-through
-    /// and non-activating: the video keeps every click, key, pause and seek it had.
+    /// Super Lights Down, the add-on to the mandatory video (reworked by the owner, 2026-11-17):
+    /// <list type="bullet">
+    /// <item>FULL SCREEN: a small dim at the screen edges. It eases in while the mouse rests and pulls
+    /// back toward the edges the moment the mouse moves, or the eyes leave the video when the
+    /// camera is already running (<see cref="LightsDownRules.LookedAway"/>; never switched on here).</item>
+    /// <item>FLOATING: every screen the videos can open on dims slowly from the edges in, except a
+    /// soft hole around each floating window with a halo in the mod's accent colour. The holes follow
+    /// the windows as they drift, open, join and close.</item>
+    /// </list>
+    /// Rides <see cref="VideoService"/>'s lifecycle: it starts on VideoStarted; a full-screen dim ends
+    /// with its video windows (each overlay is owned by one), a floating dim fades out in 0.6 s when
+    /// the run ends. Panic (<see cref="Panic"/>), the switch going off and every non-floating teardown
+    /// end it on the same frame. Click-through and non-activating: the video keeps every click and key.
+    /// The rules and maths live in CCP.Core/Super/LightsDown.cs; this file only reads the world and draws.
     /// </summary>
     internal static class LightsDownService
     {
         private static VideoService? _video;
         private static readonly List<LightsDownOverlay> _overlays = new();
         private static readonly List<Rect> _cut = new();
+        private static readonly List<(IntPtr Hwnd, System.Drawing.Rectangle Rect)> _floatRects = new();
+        private static readonly List<(long Key, LightsDownRect Rect, bool Halo)> _live = new();
+        private static readonly List<IntPtr> _floatHwnds = new();
         private static readonly Stopwatch _clock = new();
-        private static LightsDownState? _state;
-        private static bool _hooked, _gazeHooked, _idle;
-        private static double _last, _nextCut, _nextProbe, _aspect;
+        private static LightsDownFullScreen? _full;
+        private static LightsDownFloating? _float;
+        private static bool _hooked, _gazeHooked, _floating;
+        private static double _last, _nextCut, _nextZ, _nextAccent;
+        private static double _mouseX = double.NaN, _mouseY = double.NaN;
         private static double _gazeX, _gazeY, _gazeAt = double.NegativeInfinity;
+        private static uint _haloRgb = FallbackHalo;
+
+        /// <summary>The floating frame's own pink, when no mod colour can be read.</summary>
+        private const uint FallbackHalo = 0xFF69B4;
 
         /// <summary>Wire once, after the VideoService exists. Costs nothing until a video starts with the switch on.</summary>
         public static void Attach(VideoService video)
@@ -36,7 +53,7 @@ namespace ConditioningControlPanel.Services.Super
             if (_video != null) return;
             _video = video;
             video.VideoStarted += (_, _) => OnUi(TryStart);
-            video.VideoEnded += (_, _) => OnUi(Stop);
+            video.VideoEnded += (_, _) => OnUi(EndOfVideo);
             SuperAccess.Changed += e =>
             {
                 if (e != SuperEffect.LightsDown) return;
@@ -45,36 +62,43 @@ namespace ConditioningControlPanel.Services.Super
         }
 
         private static bool Wanted(VideoService v)
-            => LightsDownMath.ShouldRun(SuperAccess.IsOn(SuperEffect.LightsDown), v.IsPlaying, v.IsCleaningUp, v.HasOpenWindows);
+            => LightsDownRules.ShouldRun(SuperAccess.IsOn(SuperEffect.LightsDown), v.IsPlaying, v.IsCleaningUp,
+                v.HasOpenWindows || v.HasFloatingInstances);
 
         private static void TryStart()
         {
             var v = _video;
-            if (v == null || _overlays.Count > 0 || !Wanted(v)) return;
+            if (v == null || !Wanted(v)) return;
+            if (_overlays.Count > 0)
+            {
+                if (_float?.Ending != true && _floating == v.FloatingVideoUp) return;
+                Stop();   // a fading floating dim, or the other mode: start clean
+            }
             try
             {
-                var tier = PerformanceProfile.CurrentTier;
-                bool glow = PerformanceProfile.AllowGlow(tier);
-                double glowCap = tier == PerformanceTier.Quality ? 116 : 60;
-                _aspect = ProbeAspect(v);
-                foreach (var h in v.GetVideoWindowHandles())
+                _floating = v.FloatingVideoUp;
+                if (_floating)
                 {
-                    if (h == IntPtr.Zero || !IsWindow(h)) continue;
-                    var screen = Screen.FromHandle(h);
-                    double dpi = BubbleCountWindow.GetDpiForScreen(screen);
-                    var owner = HwndSource.FromHwnd(h)?.RootVisual as Window;
-                    var o = new LightsDownOverlay(h, screen.Bounds, dpi, _aspect, owner, glow, glowCap);
-                    o.Closed += (_, _) => _overlays.Remove(o);
-                    _overlays.Add(o);
-                    o.Show();
+                    foreach (var screen in VideoService.FloatingVideoScreens())
+                        Open(IntPtr.Zero, screen);
+                }
+                else
+                {
+                    foreach (var h in v.GetVideoWindowHandles())
+                    {
+                        if (h == IntPtr.Zero || !IsWindow(h)) continue;
+                        Open(h, Screen.FromHandle(h));
+                    }
                 }
                 if (_overlays.Count == 0) return;
-                _state = new LightsDownState();
+                _full = new LightsDownFullScreen();
+                _float = new LightsDownFloating();
                 _clock.Restart();
-                _last = 0; _nextCut = 0; _nextProbe = 0.5; _idle = false;
+                _last = 0; _nextCut = 0; _nextZ = 0; _nextAccent = 0;
+                _mouseX = _mouseY = double.NaN;
                 if (App.Webcam != null && !_gazeHooked) { App.Webcam.OnGazeMove += OnGaze; _gazeHooked = true; }
                 if (!_hooked) { CompositionTarget.Rendering += OnRendering; _hooked = true; }
-                App.Logger?.Information("Super Lights Down: riding {N} video window(s), aspect {A:0.000}", _overlays.Count, _aspect);
+                App.Logger?.Information("Super Lights Down: {Mode}, {N} overlay(s)", _floating ? "floating" : "full screen", _overlays.Count);
             }
             catch (Exception ex)
             {
@@ -83,8 +107,16 @@ namespace ConditioningControlPanel.Services.Super
             }
         }
 
-        /// <summary>Tear everything down at once. Idempotent; never touches the video itself
-        /// beyond handing back the transform the swell borrowed.</summary>
+        private static void Open(IntPtr owner, Screen screen)
+        {
+            double dpi = BubbleCountWindow.GetDpiForScreen(screen);
+            var o = new LightsDownOverlay(owner, screen.Bounds, dpi);
+            o.Closed += (_, _) => _overlays.Remove(o);
+            _overlays.Add(o);
+            o.Show();
+        }
+
+        /// <summary>Tear everything down at once. Idempotent.</summary>
         public static void Stop()
         {
             if (_hooked) { CompositionTarget.Rendering -= OnRendering; _hooked = false; }
@@ -93,23 +125,37 @@ namespace ConditioningControlPanel.Services.Super
             _gazeAt = double.NegativeInfinity;
             foreach (var o in _overlays.ToArray())
             {
-                try { o.RestoreVideo(); o.Close(); } catch { }
+                try { o.Close(); } catch { }
             }
             _overlays.Clear();
-            _state = null;
+            _full = null;
+            _float = null;
             _clock.Reset();
+        }
+
+        /// <summary>The panic key: gone on this frame, whatever the mode, no fade.</summary>
+        public static void Panic()
+        {
+            if (IsActive) OnUi(Stop);
         }
 
         /// <summary>
         /// Called by VideoService.CloseAll, the one funnel every teardown reaches (panic, emergency
-        /// exit, skip, natural end, attention retry). The Rendering tick would also notice, but
-        /// CloseAll can hold the dispatcher in a non-pumping wait for up to 500 ms first, so the
-        /// dark goes the moment teardown begins instead. Does nothing when Lights Down is not up.
+        /// exit, skip, natural end, attention retry). CloseAll can hold the dispatcher in a
+        /// non-pumping wait for up to 500 ms, so a full-screen dim goes the moment teardown begins.
+        /// A floating dim fades out (the panic key has already ended it through <see cref="Panic"/>).
         /// </summary>
         internal static void OnVideoTeardown()
         {
             if (!IsActive) return;
-            OnUi(Stop);
+            OnUi(EndOfVideo);
+        }
+
+        private static void EndOfVideo()
+        {
+            if (!IsActive) return;
+            if (_floating && _float != null && _overlays.Count > 0) _float.BeginEnd();
+            else Stop();
         }
 
         /// <summary>True while an overlay is up or the frame hook is armed.</summary>
@@ -118,16 +164,9 @@ namespace ConditioningControlPanel.Services.Super
         private static void OnRendering(object? sender, EventArgs e)
         {
             var v = _video;
-            var s = _state;
-            if (v == null || s == null || _overlays.Count == 0 || !Wanted(v)) { Stop(); return; }
+            if (v == null || _overlays.Count == 0 || _full == null || _float == null) { Stop(); return; }
 
             double now = _clock.Elapsed.TotalSeconds;
-            var motion = MotionFx.Level switch
-            {
-                MotionLevel.Off => LightsDownMotion.Off,
-                MotionLevel.Reduced => LightsDownMotion.Reduced,
-                _ => LightsDownMotion.Full,
-            };
             // 30 fps is plenty for slow light and halves what a fullscreen layered window costs;
             // the Performance tier drops to 20.
             double step = PerformanceProfile.CurrentTier == PerformanceTier.Performance ? 1.0 / 20 : 1.0 / 30;
@@ -135,52 +174,116 @@ namespace ConditioningControlPanel.Services.Super
             double dt = now - _last;
             _last = now;
 
-            if (now >= _nextProbe && _aspect <= 0)
+            var opt = App.Settings?.Current;
+            // The player's options, read live so a slider moves the dim at once.
+            var tune = opt == null ? LightsDownTuning.Stock
+                : LightsDownOptions.Tuning(opt.LightsDownDarkness, opt.LightsDownDimSpeed, opt.LightsDownReturnSpeed);
+            double gentle = Safety.GentleVisuals.FadeSeconds;   // 0 when off; Gentle only lengthens
+            var motion = MotionFx.Level switch
             {
-                _nextProbe = now + 0.5;
-                _aspect = ProbeAspect(v);
-                if (_aspect > 0) foreach (var o in _overlays) o.SetAspect(_aspect);
+                MotionLevel.Off => LightsDownMotion.Off,
+                MotionLevel.Reduced => LightsDownMotion.Reduced,
+                _ => LightsDownMotion.Full,
+            };
+
+            if (_float.Ending)
+            {
+                _float.Step(dt, tune, gentle);
+                _live.Clear();
+                foreach (var o in _overlays)
+                {
+                    o.Holes.Update(dt, _live, gentle);
+                    o.Render(LightsDownFloating.Look(_float.Grow, _float.Fade, tune, motion, o.ShortSidePx, _haloRgb),
+                        o.Holes.Current, o.Holes.Changed);
+                }
+                if (_float.Done) Stop();
+                return;
             }
 
-            bool attended = IsAttended(v, now);
-            var opt = App.Settings?.Current;
-            bool photosafe = opt?.LockdownPhotosafe == true || Safety.GentleVisuals.On;   // Gentle: the lights come back as a plain fade, no stutter
-            // The player's options, read live so a slider moves the room at once.
-            s.Tuning = opt == null ? SuperCore.LightsDownTuning.Stock
-                : SuperCore.LightsDownOptions.Tuning(opt.LightsDownDarkness, opt.LightsDownDimSpeed, opt.LightsDownReturnSpeed);
-            var f = s.Step(dt, attended, motion, photosafe);
+            if (!Wanted(v)) { EndOfVideo(); return; }
+            if (_floating != v.FloatingVideoUp) { Stop(); TryStart(); return; }
 
-            if (now >= _nextCut)
+            if (_floating) FloatingFrame(v, dt, now, tune, gentle, motion);
+            else FullScreenFrame(v, dt, now, tune, gentle, motion);
+        }
+
+        private static void FloatingFrame(VideoService v, double dt, double now, LightsDownTuning tune, double gentle, LightsDownMotion motion)
+        {
+            var f = _float!;
+            f.Step(dt, tune, gentle);
+            if (now >= _nextAccent) { _nextAccent = now + 1; _haloRgb = ModAccent(); }
+
+            v.CopyFloatingVideoRects(_floatRects);
+            _floatHwnds.Clear();
+            foreach (var (h, _) in _floatRects) _floatHwnds.Add(h);
+            bool restack = now >= _nextZ;
+            if (restack) _nextZ = now + 0.5;
+
+            foreach (var o in _overlays)
+            {
+                double margin = 3 * LightsDownCanvas.HaloOutDip * o.Dpi + LightsDownCanvas.HoleFeatherDip * o.Dpi;
+                _live.Clear();
+                foreach (var (h, r) in _floatRects)
+                    if (o.Touches(r, margin)) _live.Add(((long)h, o.ToLocal(r), true));
+                o.Holes.Update(dt, _live, gentle);
+                if (restack) o.KeepBelow(_floatHwnds);
+                o.Render(LightsDownFloating.Look(f.Grow, f.Fade, tune, motion, o.ShortSidePx, _haloRgb),
+                    o.Holes.Current, o.Holes.Changed);
+            }
+        }
+
+        private static void FullScreenFrame(VideoService v, double dt, double now, LightsDownTuning tune, double gentle, LightsDownMotion motion)
+        {
+            var s = _full!;
+            bool moved = false;
+            if (GetCursorPos(out var cp))
+            {
+                moved = LightsDownRules.Moved(_mouseX, _mouseY, cp.X, cp.Y);
+                _mouseX = cp.X; _mouseY = cp.Y;
+            }
+            s.Step(dt, moved, LookedAway(now), tune, gentle);
+
+            // The live attention targets are cut out of the dim, so it never covers a check.
+            bool cutNow = now >= _nextCut;
+            if (cutNow)
             {
                 _nextCut = now + 0.1;
                 v.CopyAttentionBounds(_cut);
-                foreach (var o in _overlays) o.SetCutouts(_cut);
             }
-
-            // At rest nothing changes, so nothing is written and the layered window never repaints.
-            bool rest = f.Depth <= 0 && f.LockRun < 0 && f.SplitAlpha <= 0 && f.StreakAlpha <= 0;
-            if (rest && _idle) return;
-            _idle = rest;
-            bool particles = MotionFx.AllowParticles;
-            double moteSpeed = motion == LightsDownMotion.Reduced ? 0.5 : 1;
-            foreach (var o in _overlays) o.Apply(f, s.Time, dt, particles, moteSpeed);
-        }
-
-        private static bool IsAttended(VideoService v, double now)
-        {
-            bool cursorOn = false, gazeOn = false;
-            bool cursorKnown = GetCursorPos(out var cp);
-            var webcam = App.Webcam;
-            bool gazeLive = webcam != null && webcam.IsRunning && webcam.Calibration != null && now - _gazeAt < 0.5;
             foreach (var o in _overlays)
             {
-                if (cursorKnown && o.PictureContainsPx(cp.X, cp.Y)) cursorOn = true;
-                if (gazeLive && o.PictureContainsPx(_gazeX, _gazeY)) gazeOn = true;
-                // The iris leans toward whatever decides attention: gaze when live, else the cursor.
-                if (gazeLive) o.SetPointerPx(_gazeX, _gazeY, true);
-                else o.SetPointerPx(cp.X, cp.Y, cursorKnown);
+                _live.Clear();
+                for (int i = 0; i < _cut.Count; i++) _live.Add((i, o.DipToLocal(_cut[i]), false));
+                o.Holes.Update(dt, _live, gentle);
+                o.Render(LightsDownFullScreen.Look(s.Level, tune, motion, o.ShortSidePx), o.Holes.Current, o.Holes.Changed);
             }
-            return LightsDownMath.Attended(v.IsGracePaused, gazeLive, gazeOn, cursorOn);
+        }
+
+        /// <summary>Only with the camera already running: the face is gone, or the calibrated gaze is
+        /// fresh and on none of the video screens.</summary>
+        private static bool LookedAway(double now)
+        {
+            var cam = App.Webcam;
+            if (cam == null || !cam.IsRunning) return false;
+            bool faceLost = cam.State == WebcamTrackingState.FaceLost;
+            bool gazeLive = cam.Calibration != null && now - _gazeAt < 0.5;
+            bool onVideo = false;
+            if (gazeLive)
+                foreach (var o in _overlays)
+                    if (o.ContainsPx(_gazeX, _gazeY)) { onVideo = true; break; }
+            return LightsDownRules.LookedAway(true, faceLost, gazeLive, onVideo);
+        }
+
+        /// <summary>The active mod's accent (a live event may override it), as 0xRRGGBB.</summary>
+        private static uint ModAccent()
+        {
+            try
+            {
+                var hex = App.Mods?.GetAccentColorHex();
+                if (BubbleCore.DiscoPalette.TryParseHex(hex, out var rgb)) return rgb & 0xFFFFFF;
+            }
+            catch (Exception ex) { App.Logger?.Debug("Lights Down: mod accent unavailable: {E}", ex.Message); }
+            return FallbackHalo;
         }
 
         /// <summary>Gaze arrives in DIPs local to the calibrated monitor; keep it in physical pixels.</summary>
@@ -202,34 +305,6 @@ namespace ConditioningControlPanel.Services.Super
                 _gazeAt = _clock.Elapsed.TotalSeconds;
             }
             catch { }
-        }
-
-        /// <summary>The picture's display aspect: the browser page's meta, else the LibVLC track
-        /// (SAR corrected). 0 until known; the overlay then treats the picture as full screen.</summary>
-        private static double ProbeAspect(VideoService v)
-        {
-            try
-            {
-                if (v.BrowserVideoAspect > 0) return v.BrowserVideoAspect;
-                var mp = v.PrimaryMediaPlayer;
-                if (mp == null) return 0;
-                // MediaPlayer.Media hands back a NEW ref-counted wrapper on every read (#1196).
-                using var media = mp.Media;
-                if (media?.Tracks == null) return 0;
-                double best = 0; long area = 0;
-                foreach (var t in media.Tracks)
-                {
-                    if (t.TrackType != LibVLCSharp.Shared.TrackType.Video) continue;
-                    var vt = t.Data.Video;
-                    if (vt.Width == 0 || vt.Height == 0) continue;
-                    long a = (long)vt.Width * vt.Height;
-                    if (a <= area) continue;
-                    area = a;
-                    best = vt.Width * (double)(vt.SarNum > 0 ? vt.SarNum : 1u) / (vt.Height * (double)(vt.SarDen > 0 ? vt.SarDen : 1u));
-                }
-                return best;
-            }
-            catch { return 0; }
         }
 
         private static void OnUi(Action a)

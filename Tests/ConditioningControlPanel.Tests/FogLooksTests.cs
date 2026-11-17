@@ -57,6 +57,52 @@ public class FogLooksTests
     }
 
     [Fact]
+    public void An_own_second_colour_beats_the_palette_pick_and_only_while_two_tone_is_on()
+    {
+        Assert.Equal(((byte)0x12, (byte)0xAB, (byte)0xFF), FogLooks.TryHex("#12ABFF"));
+        foreach (var bad in new string?[] { null, "", "12ABFF", "#12ABF", "#12ABFG", "fx.fog.mint" }) Assert.Null(FogLooks.TryHex(bad));
+        Assert.Equal("", new Models.AppSettings { FogSecondOwnColor = "nope" }.FogSecondOwnColor);
+        Assert.Equal("#12ABFF", new Models.AppSettings { FogSecondOwnColor = "#12abff" }.FogSecondOwnColor);
+
+        var (read, clock, ownSecond) = (WornFog.Read, WornFog.Clock, WornFog.OwnSecond);
+        try
+        {
+            double now = 500;
+            bool mix = true;
+            string? own = "#102030";
+            WornFog.Clock = () => now;
+            WornFog.OwnSecond = () => own;
+            WornFog.Read = slot => slot == WornLooks.Mix ? (mix ? FogLooks.Twotone : null) : slot == WornLooks.Fog2 ? FogLooks.Mint : WornLooks.DefaultOf(slot);
+            WornFog.Retarget();
+            now += 60;
+            Assert.Equal(new WornFog.FogShown(Own, (0x10, 0x20, 0x30), true), WornFog.Shown(Own));
+            own = "";   // back to the palette pick
+            WornFog.Retarget();
+            now += 60;
+            Assert.Equal(FogLooks.SecondColour(FogLooks.Mint, Own), WornFog.Shown(Own).Second);
+            own = "#102030"; mix = false;   // two-tone off: an own colour draws nothing
+            WornFog.Retarget();
+            now += 60;
+            Assert.False(WornFog.Shown(Own).TwoTone);
+        }
+        finally
+        {
+            (WornFog.Read, WornFog.Clock, WornFog.OwnSecond) = (read, clock, ownSecond);
+            WornFog.Retarget();
+        }
+    }
+
+    [Fact]
+    public void The_flat_tint_stays_flat_under_steam()
+    {
+        // Owner, 2026-11-17: with two colours the fog seemed to fill the whole screen. That was the flat tint
+        // drawing the moving mix edge to edge under the fog.
+        var tint = File.ReadAllText(Path.Combine(Root(), "ConditioningControlPanel", "Services", "Compositor", "PinkTintLayer.cs"));
+        Assert.Contains("if (worn.TwoTone && !SteamCarriesMix())", tint);
+        Assert.Contains("Stage.SteamOn", tint);
+    }
+
+    [Fact]
     public void A_worn_fog_colour_never_recolours_the_fog()
     {
         // An old preview (or account) still naming a fog colour in slot fog: the fog stays the user's own.
@@ -94,7 +140,7 @@ public class FogLooksTests
         Assert.Contains("Prizes.WornFog.Shown((look.R, look.G, look.B))", steam);
         Assert.Contains("Face, _t, mix, ramp);", steam);
         var tint = File.ReadAllText(Path.Combine(app, "Services", "Compositor", "PinkTintLayer.cs"));
-        Assert.Contains("if (worn.TwoTone)", tint);
+        Assert.Contains("if (worn.TwoTone && !SteamCarriesMix())", tint);   // flat under Steam: the fog carries the mix
         Assert.Contains("WornFog.MixSpeed(MotionFx.Level)", tint);
         // The welcome show paints its own pink: it never wears a shop look.
         var show = File.ReadAllText(Path.Combine(app, "Services", "FirstShow", "FirstShowEffects.cs"));

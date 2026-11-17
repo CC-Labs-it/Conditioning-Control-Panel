@@ -2563,8 +2563,10 @@ namespace ConditioningControlPanel.Services
 
             // Trigger Bambi Freeze subliminal+audio BEFORE video, but only if:
             // - No minigame is active
-            // - Attention checks are NOT enabled (user needs to be alert to click targets)
-            var skipFreeze = App.Settings.Current.AttentionChecksEnabled ||
+            // - Attention checks are NOT enabled (user needs to be alert to click targets). A video
+            //   that will float has no checks (MandatoryVideoPresentation.AttentionChecksApply).
+            var skipFreeze = Video.MandatoryVideoPresentation.AttentionChecksApply(
+                                App.Settings.Current.AttentionChecksEnabled, FloatingWanted(strict)) ||
                             (App.BubbleCount != null && App.BubbleCount.IsBusy);
 
             if (!skipFreeze)
@@ -2671,8 +2673,9 @@ namespace ConditioningControlPanel.Services
                 ForceCleanup();
             }
 
-            // Skip freeze if attention checks are enabled (user needs to click targets)
-            if (!App.Settings.Current.AttentionChecksEnabled)
+            // Skip freeze if attention checks are enabled (user needs to click targets); a video
+            // that will float has none.
+            if (!Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, FloatingWanted(strictMode)))
             {
                 // Trigger Bambi Freeze subliminal+audio BEFORE video
                 App.Subliminal?.TriggerBambiFreeze(deferReset: true);

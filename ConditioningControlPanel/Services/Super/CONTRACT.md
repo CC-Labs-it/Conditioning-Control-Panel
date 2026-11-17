@@ -31,8 +31,8 @@ https://claude.ai/artifact/2bZLs83jd5AuuSqaoqK69m . Port the feel, not the canva
 2. Panic always wins. Every Super effect stops at once on the panic key and on the emergency exit, like the base
    effect it rides. No Super effect may be more permissive than panic, Lockdown or a leash.
 3. `MotionFx` decides motion: Off = still or a 120 ms fade, Reduced = half amplitude and speed. Photosafe means no
-   flicker: Lights Down's stutter and Vortex's gif flicker obey it (Lights Down skips the stutter; Vortex's gif
-   flash becomes one soft fade).
+   flicker: Vortex's gif flicker obeys it (one soft fade). Lights Down has no flicker since its 2026-11-17 rework
+   (edge dim / floating vignette, rules in CCP.Core/Super/LightsDown.cs); Gentle only lengthens its fades.
 4. Render through the compositor layers (`Services/Compositor`, Skia) when the base effect does. No new
    fullscreen windows if a layer can carry it. Brain drain keeps `ExcludeFromCapture` semantics.
 5. Every user-facing string is a loc key in ALL 9 language files, edited as lines, never re-serialised, no BOM.

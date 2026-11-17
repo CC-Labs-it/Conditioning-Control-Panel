@@ -124,6 +124,22 @@ public static class WordStyles
         return Math.Min(cap, total * 0.3);
     }
 
+    /// <summary>The leaving stretch of a life: its last fifth, at most 0.7 s (the mockup's out).</summary>
+    public static double OutSeconds(double total) => Math.Min(0.7, Math.Max(0.001, total) * 0.2);
+
+    /// <summary>
+    /// The life whose leaving stretch starts at <paramref name="settledAt"/> seconds. A surface
+    /// that keeps a word up for as long as it likes (the Afterglow ghosts) plays the style's way
+    /// in over this life and then holds its clock at <paramref name="settledAt"/>: every style is
+    /// settled there (letters in, caret gone, bulbs lit, nothing lifted), so holding never jumps.
+    /// </summary>
+    public static double LifeSettledAt(double settledAt)
+    {
+        settledAt = Math.Max(0.001, settledAt);
+        // total - min(0.7, total * 0.2) = settledAt
+        return settledAt <= 2.8 ? settledAt / 0.8 : settledAt + 0.7;
+    }
+
     /// <summary>
     /// Fill <paramref name="into"/> for a word of <paramref name="letters"/> letters,
     /// <paramref name="t"/> seconds into a life of <paramref name="total"/> seconds.
@@ -151,8 +167,7 @@ public static class WordStyles
 
         bool full = motion == WordMotion.Full;
         double reveal = RevealSeconds(style, total);
-        // The leaving stretch: the last fifth of the life, at most 0.7 s (the mockup's out).
-        double outLen = Math.Min(0.7, total * 0.2);
+        double outLen = OutSeconds(total);
         double stay = Math.Clamp((total - t) / outLen, 0, 1);
 
         switch (style)

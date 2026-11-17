@@ -1287,6 +1287,8 @@ namespace ConditioningControlPanel
             // The one-shot clip (the companion's Audio effect, a Deeper play-audio action). Only a
             // session pause stopped it before, so a panic with the engine off let it play out.
             try { Audio?.StopSound(); } catch { }
+            // Super Lights Down: no fade after a panic exit, in any mode.
+            try { Services.Super.LightsDownService.Panic(); } catch { }
 
             try
             {
