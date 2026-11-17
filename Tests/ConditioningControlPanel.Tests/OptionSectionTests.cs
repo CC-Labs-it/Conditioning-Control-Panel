@@ -241,6 +241,8 @@ public class OptionSectionTests
         ["bouncingtext"] = () => new BouncingTextFeatureControl(),
         ["visuals"] = () => new VisualsFeatureControl(),
         ["braindrain"] = () => new ConditioningControlPanel.Views.Controls.Studio.BrainDrainFeatureControl(),
+        // The Scheduler page is left whole on purpose: three rows (switch, time range, days), nothing to fold.
+        ["ramp"] = () => new IntensityRampFeatureControl(),
     };
 
     [Theory]
