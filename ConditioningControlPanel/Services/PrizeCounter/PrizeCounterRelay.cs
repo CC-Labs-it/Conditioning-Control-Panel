@@ -61,6 +61,15 @@ public sealed class PrizeCounterRelay
 
     public static JObject Refusal(string reason) => new() { ["ok"] = false, ["reason"] = reason };
 
+    /// <summary>The sheet's own three (CCP-Server shop-routes.js "7.3 SHEET ADDITIONS"): the weekly gift, a stamp,
+    /// the row being saved for. Until 2026-11-17 only the DEBUG preview answered them, so the real server
+    /// never heard a press.</summary>
+    public const string OpGift = "shop-gift", OpStamp = "shop-stamp", OpGoal = "shop-goal";
+
+    /// <summary>What this app can draw that older ones cannot (server shop.js envForCaps): the 7.3.1 chess rows
+    /// (finishes, boards, seated Emi) are listed and sold only to a request that says so.</summary>
+    public const string Caps = "chess2";
+
     /// <summary>The whitelist. Exact, case-sensitive.</summary>
     public static bool TryRoute(string? op, out HttpMethod method, out string path)
     {
@@ -69,6 +78,9 @@ public sealed class PrizeCounterRelay
             case OpState: method = HttpMethod.Get; path = "/v2/shop/state"; return true;
             case OpBuy: method = HttpMethod.Post; path = "/v2/shop/buy"; return true;
             case OpEquip: method = HttpMethod.Post; path = "/v2/shop/equip"; return true;
+            case OpGift: method = HttpMethod.Post; path = "/v2/shop/gift"; return true;
+            case OpStamp: method = HttpMethod.Post; path = "/v2/shop/stamp"; return true;
+            case OpGoal: method = HttpMethod.Post; path = "/v2/shop/goal"; return true;
             default: method = HttpMethod.Get; path = string.Empty; return false;
         }
     }
@@ -81,11 +93,22 @@ public sealed class PrizeCounterRelay
         HttpRequestMessage req;
         if (method == HttpMethod.Get)
         {
-            req = new HttpRequestMessage(HttpMethod.Get, $"{BackRoomApi.BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
+            req = new HttpRequestMessage(HttpMethod.Get, $"{BackRoomApi.BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}&caps={Caps}");
         }
         else if (op == OpEquip)
         {
-            var o = new JObject { ["slot"] = body?["slot"]?.DeepClone(), ["itemId"] = body?["itemId"]?.DeepClone() ?? JValue.CreateNull(), ["unified_id"] = id.UnifiedId };
+            var o = new JObject { ["slot"] = body?["slot"]?.DeepClone(), ["itemId"] = body?["itemId"]?.DeepClone() ?? JValue.CreateNull(), ["caps"] = Caps, ["unified_id"] = id.UnifiedId };
+            req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
+            {
+                Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
+            };
+        }
+        else if (op is OpGift or OpStamp or OpGoal)
+        {
+            // Nothing of the page's but the goal's row: the reply is a whole state, so it carries the caps too.
+            var o = new JObject { ["caps"] = Caps };
+            if (op == OpGoal) o["itemId"] = body?["itemId"]?.DeepClone() ?? JValue.CreateNull();
+            o["unified_id"] = id.UnifiedId;
             req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
@@ -99,8 +122,11 @@ public sealed class PrizeCounterRelay
                 ["itemId"] = body?["itemId"]?.DeepClone(),
                 ["catalogVersion"] = body?["catalogVersion"]?.DeepClone(),
                 ["week"] = body?["week"]?.DeepClone(),
+                ["caps"] = Caps,
                 ["unified_id"] = id.UnifiedId,
             };
+            // The stamp card's coupon: only ever the literal true (the server refuses anything else).
+            if (body?["coupon"] is JValue { Type: JTokenType.Boolean } c && c.Value<bool>()) o["coupon"] = true;
             req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
@@ -122,6 +148,8 @@ public sealed class PrizeCounterRelay
             return Refusal("bad_input");
         if (op == OpEquip && (body?["slot"] is not JValue { Type: JTokenType.String }
             || body["itemId"] is { Type: not (JTokenType.String or JTokenType.Null) }))
+            return Refusal("bad_input");
+        if (op == OpGoal && body?["itemId"] is { Type: not (JTokenType.String or JTokenType.Null) })
             return Refusal("bad_input");
         bool offline;
         try { offline = _offline(); } catch { offline = false; }
