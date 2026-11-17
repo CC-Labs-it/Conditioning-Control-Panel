@@ -42,7 +42,7 @@ async function rig(init = {}, sample = SAMPLE) {
   const all = () => page.view.root.all();
   const btn = (key) => all().find((x) => x.dataset && x.dataset.key === key) || null;
   const click = (key) => page.view.root.dispatch('click', { target: btn(key), detail: 1 });
-  const shown = () => all().find((x) => x.className === 'd-shown') || null;
+  const shown = () => all().find((x) => String(x.className || '').split(' ').includes('d-shown')) || null;
   return { page, calls, btn, click, shown, wait: (ms) => { T += ms; }, worn: (id, ok = true) => wornHear && wornHear({ id, ok }) };
 }
 
@@ -121,6 +121,11 @@ test('init.worn: an owned frame worn elsewhere reads Wearing on the Owned tab an
   r.click('it:profile.frame.gilt');
   assert.equal(r.btn('act:wear'), null, 'already worn: no Wear');
   assert.ok(r.btn('act:go'));
+  // the slip slides in once; a repaint (another tab) draws it in place, no second entrance
+  assert.match(r.shown().className, /\bfresh\b/);
+  r.click('tab:accessories');
+  assert.ok(r.shown());
+  assert.doesNotMatch(r.shown().className, /\bfresh\b/);
 });
 
 test('no init.goes (a game door, the web): the line shows, no button', async () => {

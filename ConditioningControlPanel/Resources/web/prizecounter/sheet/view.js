@@ -153,10 +153,11 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     }));
   }
 
+  let lastShown = null;   // the "where it shows" slip last drawn (item + line): it slides in only when new
   function paintRoom(v, on) {
     const m = v.room;
     root.classList[m ? 'remove' : 'add']('nopick');
-    if (!m) { room.replaceChildren(...view.idleRoom(v)); return; }
+    if (!m) { lastShown = null; room.replaceChildren(...view.idleRoom(v)); return; }
     const at = locate(v.state, m.itemId, v.pv), fam = at ? at.fx || at.tab : 'backroom';
     const mon = el('div', 'mon fam-' + fam), foot = el('div', 'mon-foot');
     const prev = view.monitor(at, v);
@@ -183,13 +184,16 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     const acts = el('div', 'd-act');
     acts.append(...view.awayNote(at, v));
     // Worn: where it shows now, and a button that goes there (sheet/shown.js; the host closes the sheet and opens it)
-    if (m.shown && !m.ask) {
-      const s = el('p', 'd-shown'), tick = el('span', 'tick');
+    // (it slides in once, when it first shows for this item; a repaint draws it in place)
+    const shownKey = m.shown && !m.ask ? m.itemId + '|' + m.shown.text : null, fresh = shownKey !== null && shownKey !== lastShown ? ' fresh' : '';
+    lastShown = shownKey;
+    if (shownKey) {
+      const s = el('p', 'd-shown' + fresh), tick = el('span', 'tick');
       tick.innerHTML = TICK;
       s.append(tick, el('span', null, m.shown.text));
       s.setAttribute('role', 'status');
       acts.append(s);
-      if (m.shown.go) acts.append(button('btn go', m.shown.label, 'act:go', (viaKey) => on.go(m.shown.go, viaKey)));
+      if (m.shown.go) acts.append(button('btn go' + fresh, m.shown.label, 'act:go', (viaKey) => on.go(m.shown.go, viaKey)));
     }
     if (m.ask) acts.append(el('p', 'd-ask', m.ask));
     for (const a of m.actions) {
