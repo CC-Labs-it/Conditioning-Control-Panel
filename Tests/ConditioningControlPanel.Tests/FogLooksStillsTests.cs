@@ -72,4 +72,70 @@ public class FogLooksStillsTests
             Save(bmp, dir, "tint-" + name);
         }
     }
+
+    /// <summary>Two-tone: five frames three seconds apart for two colour pairs, on Steam and on the flat
+    /// tint, plus the cost of a frame with and without the mix.</summary>
+    [Fact]
+    public void Dump_two_tone_when_asked()
+    {
+        var dir = Environment.GetEnvironmentVariable("CCP_FOG_DUMP");
+        if (string.IsNullOrEmpty(dir)) return;
+        Directory.CreateDirectory(dir);
+        using var bmp = new SKBitmap(new SKImageInfo(W, H, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bmp);
+        using var steam = new SteamDraw();
+        using var tint = new FogMixDraw();
+        var mix = new FogMixField();
+        var bounds = new SKRect(0, 0, W, H);
+        var pairs = new[] { ("pink-mint", FogLooks.Pink, FogLooks.Mint), ("amber-lilac", FogLooks.Amber, FogLooks.Lilac) };
+        foreach (var (name, a, b) in pairs)
+        {
+            var main = FogLooks.Wear(a, HotPink);
+            var second = FogLooks.Wear(FogLooks.SecondRow(a, b), HotPink);
+            var ramp = FogMix.Ramp(main, second);
+            var field = Fog();
+            double t = 9;
+            for (int k = 0; k < 5; k++)
+            {
+                Desktop(canvas);
+                mix.Fill(48, 27, W / (double)H, t);
+                steam.Draw(canvas, bounds, field, new SKColor(main.R, main.G, main.B), 0.62, Array.Empty<string>(), null, SKTypeface.Default, t, mix, ramp);
+                canvas.Flush();
+                Save(bmp, dir, $"two-steam-{name}-{k + 1}");
+
+                Desktop(canvas);
+                tint.Draw(canvas, bounds, main, second, 0.3, t);
+                canvas.Flush();
+                Save(bmp, dir, $"two-tint-{name}-{k + 1}");
+                for (int i = 0; i < 90; i++) field.Step(Dt, 1.5, 1);
+                t += 3;
+            }
+        }
+
+        // Cost at 1920x1080 on a CPU canvas: Steam one colour, Steam two-tone (fill + draw), tint flat, tint two-tone.
+        using var big = new SKBitmap(new SKImageInfo(1920, 1080, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var bc = new SKCanvas(big);
+        var bb = new SKRect(0, 0, 1920, 1080);
+        var bf = new SteamField(1920, 1080);
+        bf.Settle(1.5, 1);
+        using var flat = new SKPaint { Color = new SKColor(255, 105, 180, 60) };
+        double Time(Action<int> frame)
+        {
+            for (int i = 0; i < 5; i++) frame(i);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 60; i++) frame(i);
+            bc.Flush();
+            return sw.Elapsed.TotalMilliseconds / 60;
+        }
+        double steamOne = Time(i => steam.Draw(bc, bb, bf, new SKColor(255, 105, 180), 0.62, Array.Empty<string>(), null, SKTypeface.Default, i / 30.0));
+        double steamTwo = Time(i =>
+        {
+            mix.Fill(48, 27, 16 / 9.0, i / 30.0);
+            steam.Draw(bc, bb, bf, new SKColor(255, 105, 180), 0.62, Array.Empty<string>(), null, SKTypeface.Default, i / 30.0, mix, FogMix.Ramp(HotPink, (95, 224, 184)));
+        });
+        double tintOne = Time(i => bc.DrawRect(bb, flat));
+        double tintTwo = Time(i => tint.Draw(bc, bb, HotPink, (95, 224, 184), 0.24, i / 30.0));
+        File.WriteAllText(Path.Combine(dir, "draw-cost.txt"), FormattableString.Invariant(
+            $"CPU canvas 1920x1080, ms a frame over 60 frames: steam one colour {steamOne:F2}, steam two-tone {steamTwo:F2}, tint flat {tintOne:F2}, tint two-tone {tintTwo:F2}{Environment.NewLine}"));
+    }
 }

@@ -23,6 +23,10 @@ public class PinkTintLayer : BaseLayer
     /// Off for other users of the layer (the welcome show paints its own pink).</summary>
     internal bool WearsLooks { get; init; }
     private long _wornStamp;
+    /// <summary>Two-tone (shop look): the second fog colour moving through the tint. Made on first use and
+    /// kept (a 64-cell bitmap), so a hide on the UI thread never frees it under a render.</summary>
+    private Super.Draw.FogMixDraw? _mix;
+    private double _mixSince;
 
     public PinkTintLayer(CompositorEngine engine) : base(engine)
     {
@@ -103,6 +107,13 @@ public class PinkTintLayer : BaseLayer
             // A worn fog colour changed, or is still cross-fading in: repaint.
             long stamp = Prizes.WornFog.Stamp;
             if (stamp != _wornStamp || Prizes.WornFog.Easing) { _wornStamp = stamp; _dirty = true; }
+            // Two-tone moves: 30 pictures a second, none with motion Off (a still frame).
+            _mixSince += delta.TotalSeconds;
+            if (IsActive && _mixSince >= 1 / 30.0 && Prizes.WornFog.TwoTone && MotionFx.Level != Models.MotionLevel.Off)
+            {
+                _mixSince = 0;
+                _dirty = true;
+            }
         }
         double target = _stepAside ? 0 : 1;
         if (_veil == target) return;
@@ -115,7 +126,15 @@ public class PinkTintLayer : BaseLayer
     {
         double o = _opacity * Super.SuperStepAside.Ease(_veil);
         if (o <= 0) return;
-        var (r, g, b) = WearsLooks ? Prizes.WornFog.Over((_r, _g, _b)) : (_r, _g, _b);
+        var worn = WearsLooks ? Prizes.WornFog.Shown((_r, _g, _b)) : new Prizes.WornFog.FogShown((_r, _g, _b), (_r, _g, _b), false);
+        if (worn.TwoTone)
+        {
+            _mix ??= new Super.Draw.FogMixDraw();
+            _mix.Draw(canvas, new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom), worn.Main, worn.Second, o,
+                Prizes.WornFog.MixTime(Prizes.WornFog.MixSpeed(MotionFx.Level)));
+            return;
+        }
+        var (r, g, b) = worn.Main;
         _paint.Color = new SKColor(r, g, b, (byte)Math.Clamp(o * 255, 0, 255));
         canvas.DrawRect(boundsPx, _paint);
     }

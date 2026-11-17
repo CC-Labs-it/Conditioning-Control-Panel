@@ -106,10 +106,142 @@ public class FogLooksTests
         Assert.Contains("Prizes.WornLooks.Changed += OnWornLookChanged;", overlay);
         Assert.Contains("Prizes.WornLooks.Changed -= OnWornLookChanged;", overlay);
         var steam = File.ReadAllText(Path.Combine(app, "Services", "Compositor", "SteamLayer.cs"));
-        Assert.Contains("Prizes.WornFog.Over((look.R, look.G, look.B))", steam);
+        Assert.Contains("Prizes.WornFog.Shown((look.R, look.G, look.B))", steam);
+        Assert.Contains("Face, _t, mix, ramp);", steam);
+        var tint = File.ReadAllText(Path.Combine(app, "Services", "Compositor", "PinkTintLayer.cs"));
+        Assert.Contains("if (worn.TwoTone)", tint);
+        Assert.Contains("WornFog.MixSpeed(MotionFx.Level)", tint);
         // The welcome show paints its own pink: it never wears a shop look.
         var show = File.ReadAllText(Path.Combine(app, "Services", "FirstShow", "FirstShowEffects.cs"));
         Assert.DoesNotContain("WearsLooks", show);
+    }
+
+    // ---- Two-tone ----------------------------------------------------------------------------
+
+    [Fact]
+    public void The_ramp_keeps_its_ends_and_never_goes_grey_or_dark_between_them()
+    {
+        var pink = ((byte)255, (byte)105, (byte)180);
+        foreach (var other in new[] { FogLooks.Mint, FogLooks.Lilac, FogLooks.Amber })
+        {
+            var b = FogLooks.ColourOf(other)!.Value;
+            var ramp = FogMix.Ramp(pink, b);
+            Assert.Equal(FogMix.RampSize, ramp.Length);
+            Assert.Equal(pink, ramp[0]);
+            Assert.Equal(b, ramp[^1]);
+            double floor = Math.Min(FogMix.Luma(pink), FogMix.Luma(b)) - 0.02;
+            foreach (var c in ramp)
+            {
+                Assert.True(FogMix.Luma(c) >= floor, $"{other}: {c} darker than both ends");
+                Assert.True(FogMix.ToHsv(c).S >= 0.3, $"{other}: {c} goes grey");
+            }
+        }
+    }
+
+    [Fact]
+    public void Both_colours_always_show_and_the_mix_moves_but_holds_still_at_motion_off()
+    {
+        var field = new FogMixField();
+        double total = 0; int frames = 0;
+        for (double t = 0; t < 600; t += 7)
+        {
+            field.Fill(48, 27, 16 / 9.0, t);
+            int second = 0;
+            foreach (var s in field.S) if (FogMix.Shape(s) > 0.5) second++;
+            double share = second / (double)field.S.Length;
+            Assert.InRange(share, 0.05, 0.95);
+            total += share; frames++;
+        }
+        Assert.InRange(total / frames, 0.25, 0.75);
+
+        // A few seconds apart the picture plainly differs; the same moment is the same picture.
+        Assert.Equal(FogMix.Field(0.4, 0.6, 1.7, 12), FogMix.Field(0.4, 0.6, 1.7, 12));
+        double moved = 0;
+        for (int i = 0; i < 20; i++) moved += Math.Abs(FogMix.Shape(FogMix.Field(i * 0.09, 0.5, 1.78, 12)) - FogMix.Shape(FogMix.Field(i * 0.09, 0.5, 1.78, 15)));
+        Assert.True(moved > 1, $"moved {moved}");
+
+        var clock = WornFog.Clock;
+        try
+        {
+            double now = 50;
+            WornFog.Clock = () => now;
+            double t0 = WornFog.MixTime(0);
+            now += 3;
+            Assert.Equal(t0, WornFog.MixTime(0));
+            now += 0.05;
+            Assert.Equal(t0 + 0.025, WornFog.MixTime(WornFog.MixSpeed(ConditioningControlPanel.Models.MotionLevel.Reduced)), 6);
+            Assert.Equal(0, WornFog.MixSpeed(ConditioningControlPanel.Models.MotionLevel.Off));
+            Assert.Equal(1, WornFog.MixSpeed(ConditioningControlPanel.Models.MotionLevel.Full));
+        }
+        finally { WornFog.Clock = clock; }
+    }
+
+    [Fact]
+    public void Two_tone_wears_the_second_colour_and_fades_in_and_out()
+    {
+        var read = WornFog.Read;
+        var clock = WornFog.Clock;
+        try
+        {
+            double now = 1000;
+            bool mixOn = false;
+            WornFog.Clock = () => now;
+            WornFog.Read = slot => slot switch
+            {
+                WornLooks.Fog => FogLooks.Mint,
+                WornLooks.Fog2 => FogLooks.Pink,
+                WornLooks.Mix => mixOn ? "fx.fog.twotone" : null,
+                _ => WornLooks.DefaultOf(slot),
+            };
+            WornFog.Retarget();
+            now += 10;
+            var flat = WornFog.Shown(Own);
+            Assert.False(flat.TwoTone);
+            Assert.Equal(FogLooks.ColourOf(FogLooks.Mint), flat.Main);
+
+            mixOn = true;
+            WornFog.Retarget();
+            var start = WornFog.Shown(Own);
+            Assert.True(start.TwoTone);
+            Assert.Equal(start.Main, start.Second);                 // grows in from one colour
+            now += 10;
+            var on = WornFog.Shown(Own);
+            Assert.True(on.TwoTone);
+            Assert.Equal(Own, on.Second);                           // pink = the filter's own colour
+
+            mixOn = false;
+            WornFog.Retarget();
+            now += 0.5;
+            Assert.True(WornFog.Shown(Own).TwoTone);                // still fading out
+            now += 10;
+            Assert.False(WornFog.Shown(Own).TwoTone);
+        }
+        finally
+        {
+            WornFog.Read = read;
+            WornFog.Clock = clock;
+            WornFog.Retarget();
+        }
+    }
+
+    [Fact]
+    public void Nothing_worn_is_today_s_flat_colour()
+    {
+        var read = WornFog.Read;
+        try
+        {
+            WornFog.Read = WornLooks.DefaultOf;
+            WornFog.Retarget();
+            WornFog.Clock = () => 1e6;
+            var shown = WornFog.Shown(Own);
+            Assert.Equal(new WornFog.FogShown(Own, Own, false), shown);
+        }
+        finally
+        {
+            WornFog.Read = read;
+            WornFog.Clock = () => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+            WornFog.Retarget();
+        }
     }
 
     private static string Root()
