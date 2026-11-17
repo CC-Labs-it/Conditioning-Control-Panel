@@ -31,6 +31,25 @@ public class ShopPreviewBackendTests
     private static string TempFile() => Path.Combine(Path.GetTempPath(), "ccp-shop-preview-" + Guid.NewGuid().ToString("N"), ShopPreviewBackend.FileName);
 
     [Fact]
+    public void The_chess_finishes_sell_in_the_preview_at_the_L_price_and_grant_cos_ids()
+    {
+        var sample = Sample();
+        var d = ShopPreviewRules.Seed(Now, sample);
+        Assert.True(d.Owned.ContainsKey("chess.finish.marble"));   // the seeded owned finish
+        foreach (var id in new[] { "chess.finish.polka", "chess.finish.marble", "chess.finish.contour", "chess.finish.opal", "chess.finish.kintsugi" })
+            Assert.Equal((730, "on", (string?)null, (string?)"L"), ShopPreviewRules.Row(sample, id));
+        d.Sp = 1000;
+        var buy = ShopPreviewRules.Buy(d, sample, "chess.finish.polka", "f1", coupon: false, Now);
+        Assert.True(buy.Ok);
+        Assert.Equal(270, d.Sp);
+        Assert.Equal("owned", ShopPreviewRules.Buy(d, sample, "chess.finish.marble", "f2", coupon: false, Now).Reason);
+        var grants = ShopPreviewRules.BuildState(d, sample, Now)["prizes"]!["grants"]!.Values<string>().ToArray();
+        Assert.Contains("cos.chess.finish.polka", grants);
+        Assert.Contains("cos.chess.finish.marble", grants);
+        Assert.DoesNotContain("cos.chess.finish.opal", grants);
+    }
+
+    [Fact]
     public void The_backend_answers_every_op_and_keeps_the_file()
     {
         var path = TempFile();

@@ -6,6 +6,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { PICTURED, pictureOf, itemArt } from '../sheet/pictures.js';
 import { artOf } from '../sheet/model.js';
 import { previewSample } from '../mock/preview.js';
+import { FINISH_IDS } from '../../piecebypiece/skins/finish-ids.js';
 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
 const INDEX = JSON.parse(readFileSync(new URL('../assets/preview/index.json', import.meta.url), 'utf8'));
@@ -40,10 +41,24 @@ test('every picture in the map is a real WebP on disk, small, and named after a 
     assert.equal(buf.subarray(0, 4).toString('latin1'), 'RIFF', id);
     assert.equal(buf.subarray(8, 12).toString('latin1'), 'WEBP', id);
     assert.ok(size < 40 * 1024, `${id} is ${size} bytes`);
-    assert.ok(models.has(id), id + ' has a model in assets/manifest.json to render from');
+    // a chess finish has no shelf model: it paints the game's own sculpt (piecebypiece/board/finishes.js)
+    if (id.startsWith('chess.finish.')) assert.ok(FINISH_IDS.includes(id), id + ' is a finish the game knows');
+    else assert.ok(models.has(id), id + ' has a model in assets/manifest.json to render from');
     total += size;
   }
   assert.ok(total < 1.5 * 1024 * 1024, `pictures total ${total} bytes`);
+});
+
+test('every chess finish the game knows is in the shop with a picture, an L price, its grant and words', () => {
+  const chess = SAMPLE.tabs.find((tb) => tb.id === 'chess').shelves.flatMap((s) => s.rows);
+  for (const id of FINISH_IDS) {
+    assert.ok(PICTURED.includes(id), id + ' pictured');
+    const row = chess.find((r) => r && r.id === id);
+    assert.ok(row, id + ' on the Chess shelf');
+    assert.equal(row.tier, 'L', id);
+    assert.deepEqual(row.grants, ['cos.' + id], id);
+  }
+  assert.equal(FINISH_IDS.length, 5);
 });
 
 test('an unknown id falls back to artOf, and base prefixes the picture path', () => {
