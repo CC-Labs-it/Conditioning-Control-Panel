@@ -11,6 +11,7 @@ import { labelOf, locate, nameOf } from './model.js';
 import { itemArt } from './pictures.js';
 import { makeFogMix } from './fogmix.js';
 import { FX_SLOTS } from './wire.js';
+import { isFrame, drawFramed, frameMotion } from './frames.js';
 
 const kindOf = (id) => String(id || '').split('.').pop();
 const DEFAULTS = { bubble: 'soap', card: 'plain', behind: 'none', fog: 'pink', word: 'classic' };
@@ -95,6 +96,27 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     if (item.world) item.world.c = item.c;
     item.cv.className = cls || '';
     return item.cv;
+  }
+
+  /* ---------- profile frames: the desktop's own drawing (sheet/frames.js) round the example portrait, moving ---------- */
+  const fm = frameMotion(motion, gentle);
+  fm.speed = speed ? fm.speed / speed : 0;   // the clock already runs at the page's speed
+  let portrait = null;
+  try {
+    if (doc && doc.createElement) { portrait = doc.createElement('img'); portrait.onload = () => kick(); portrait.src = `${base}assets/preview/profile/profile.avatar.rain-portrait.png`; }
+  } catch { portrait = null; }
+  const framePainter = (e, fill) => (item, tt) => {
+    const g = item.c, w = item.w, h = item.h, s = Math.min(w, h) * fill;
+    g.clearRect(0, 0, w, h);
+    drawFramed(g, e.id, portrait, (w - s) / 2, (h - s) / 2, s, tt, fm);
+  };
+  /** The art box the view would make (same classes, so the shelf and the TV keep their look), with a live canvas. */
+  function frameArt(prefix, e, big) {
+    const box = el('span', 'art art-card art-frame' + (big ? ' big' : ''));
+    const item = keep(`${prefix}:${e.id}`, (cv) => ({ cv, c: cv.getContext ? cv.getContext('2d') : null, draw: framePainter(e, big ? 0.98 : 0.92) }));
+    item.cv.setAttribute('style', 'position:absolute;inset:0;width:100%;height:100%;display:block');
+    box.append(item.cv);
+    return box;
   }
 
   /* ---------- the spotlight stage: the headline item in a beam of light ---------- */
@@ -217,18 +239,22 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
 
   /* ---------- the hooks the view calls ---------- */
   const art = view.thumb;
-  view.thumb = (e, v) => (e.fx ? thumbCanvas('t', e) : art(e, v));
-  view.mini = (e, v) => { if (!e.fx) { const s = el('span', 'mini-art'); s.append(art(e, v)); return s; } return thumbCanvas('m', e, 'mini-cv'); };
+  view.thumb = (e, v) => (e.fx ? thumbCanvas('t', e) : isFrame(e.id) ? frameArt('t', e) : art(e, v));
+  view.mini = (e, v) => { if (!e.fx) { const s = el('span', 'mini-art'); s.append(isFrame(e.id) ? frameArt('m', e) : art(e, v)); return s; } return thumbCanvas('m', e, 'mini-cv'); };
   view.stage = (e, v) => {
     const s = el('div', 'stage'), item = keep(`s:${e.id}`, (cv) => ({ cv, c: cv.getContext ? cv.getContext('2d') : null, draw: heroPainter(e), world: { c: null, p: [], cap: 500 } }));
     item.world.c = item.c;
     item.cv.setAttribute('role', 'img'); item.cv.setAttribute('aria-label', t('shop_sheet_spotlit', labelOf(e, t)));
     s.append(item.cv);
-    if (!e.fx) { const a = view.artNode(itemArt(e.id, v.index, e.tab, base), true); a.classList.add('lit'); s.append(a); }
+    if (!e.fx) { const a = isFrame(e.id) ? frameArt('sf', e, true) : view.artNode(itemArt(e.id, v.index, e.tab, base), true); a.classList.add('lit'); s.append(a); }
     return s;
   };
   const monitor = view.monitor;
-  view.monitor = (e, v) => (e && e.fx ? screenBox() : monitor(e, v));
+  view.monitor = (e, v) => {
+    if (e && e.fx) return screenBox();
+    if (e && isFrame(e.id)) { const p = el('div', 'prev'); p.append(frameArt('tv', e, true)); return p; }   // the frame on the TV, moving
+    return monitor(e, v);
+  };
   const idle = view.idleRoom;
   view.idleRoom = (v) => {
     if (!v.pv || !v.pv.equip || v.status !== 'ready') return idle(v);

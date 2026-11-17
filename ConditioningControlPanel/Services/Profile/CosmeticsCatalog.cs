@@ -171,11 +171,14 @@ namespace ConditioningControlPanel.Services
             return map.Count == 0 ? null : map;
         }
 
-        /// <summary>The art for a Prize Counter frame id, or null (unknown, missing, or none worn).</summary>
-        public static ImageSource? GetFrameImage(string? id)
+        /// <summary>The art for a Prize Counter frame id, or null (unknown, missing, or none worn). A drawn frame
+        /// (CCP.Core ProfileFrames) comes back as its still picture for a canvas about <paramref name="canvasPx"/>
+        /// pixels wide (small rows get the simpler drawing); anything else falls back to its shop PNG.</summary>
+        public static ImageSource? GetFrameImage(string? id, double canvasPx = 133)
         {
             var item = ShopCosmetics.Find(id);
-            return item != null && item.IsFrame ? ShopCosmetics.GetImage(item.Id) : null;
+            if (item == null || !item.IsFrame) return null;
+            return ProfileFrameArt.Still(item.Id, canvasPx) ?? ShopCosmetics.GetImage(item.Id);
         }
 
         /// <summary>
