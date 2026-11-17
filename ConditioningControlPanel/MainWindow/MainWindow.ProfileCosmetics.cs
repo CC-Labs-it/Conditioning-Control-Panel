@@ -460,7 +460,12 @@ namespace ConditioningControlPanel
         }
 
         private void OnProfileEquipProfileLoaded(object? sender, EventArgs e)
-            => Dispatcher.BeginInvoke(new Action(() => _ = ProfileEquipSync.PullOnceAsync()));
+            => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _ = ProfileEquipSync.PullOnceAsync();
+                // The screen effect looks follow the account the same way (once per account per launch).
+                if (Services.Prizes.AccountLookStore.ForRelay() is { } looks) _ = looks.PullOnceAsync();
+            }));
 
         private void OnProfileEquipAdopted()
         {
