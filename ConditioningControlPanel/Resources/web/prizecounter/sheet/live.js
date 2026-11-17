@@ -248,14 +248,19 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     return [mon, name, el('p', 'd-where', t(v.platform === 'desktop' ? 'shop_sheet_wearing_pick' : 'shop_sheet_wearing_pick_away')), dl];
   };
 
-  /** Two-tone fog: the second colour, as round swatches under the actions. */
+  /** Two-tone fog: the second colour, as round swatches right under "What it does" (above the pinned actions, so the
+   * room shows them at every size). Owned: "Second colour" and the pick named; before buying: "Try a second colour". */
   view.roomExtra = (e, v, on) => {
     const eq = (v.pv && v.pv.equip) || {}, tw = v.state && locate(v.state, 'fx.fog.twotone', v.pv);
     if (!e || e.fx !== 'fog' || !(e.x.special || (tw && tw.row.owned && eq.mix))) return [];
     // Colour one is the user's own filter colour; the second is free, from the palette. Every swatch is offered; one
     // too close to the user's own colour hands over to the next, and one short line says so.
     const L = looks(v), box = el('div', 'mix'), name = (k) => t('shop_item_fx_fog_' + k + '_name');
-    box.append(el('span', null, t('shop_sheet_second_colour')));
+    const owned = !!(tw && tw.row.owned), head = el('p', 'mix-head');
+    box.dataset.fog2 = owned ? 'owned' : 'try';
+    if (owned) head.append(el('span', null, t('shop_sheet_second_colour')), el('b', null, name(L.fog2Picked)));
+    else head.append(el('span', null, t('shop_sheet_fog2_try')));
+    box.append(head);
     for (const k of Object.keys(FOGS)) {
       const b = view.button('', null, 'fog2:' + k, () => on.fog2('fx.fog.' + k));
       b.setAttribute('style', 'background:' + FOGS[k]); b.setAttribute('aria-label', name(k)); b.setAttribute('aria-pressed', String(L.fog2Picked === k));

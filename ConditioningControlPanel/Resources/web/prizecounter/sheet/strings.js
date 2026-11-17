@@ -81,6 +81,7 @@ export const SHEET_LEX = {
   shop_sheet_wear_desktop: 'Wear on desktop',
   shop_sheet_is_default: 'Wearing, this is the default',
   shop_sheet_second_colour: 'Second colour',
+  shop_sheet_fog2_try: 'Try a second colour',
   shop_sheet_fog2_close: '{0} is too close to your colour, so {1} swirls instead.',
   shop_sheet_wearing_now: 'Wearing now',
   shop_sheet_wearing_pick: 'Pick an item and this screen tries it on.',

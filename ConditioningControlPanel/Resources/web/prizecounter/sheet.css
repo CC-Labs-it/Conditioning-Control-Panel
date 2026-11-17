@@ -248,6 +248,9 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .stage > .art.lit { inset: 12% 24% 22%; z-index: 2; filter: drop-shadow(4px 5px 0 #000a); }
 .mix { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 700; color: var(--tx-2); }
 .s-detail > .mix:last-child { margin-bottom: 16px; }
+.mix-head { flex-basis: 100%; margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.s-detail > .mix { scroll-margin: 12px 0 96px; }
+.mix-head b { color: var(--gold); font-weight: 900; }
 .mix button { width: 36px; height: 36px; border-radius: 50%; border: var(--o) solid var(--ink); padding: 0; box-shadow: 2px 3px 0 var(--ink); }
 .mix button[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--room), 0 0 0 6px var(--gold); }
 .wearing { margin: 4px 0 16px; display: grid; gap: 5px; font: 600 13px/1.4 var(--f-body); background: #ffffff0a; border: 2px solid #ffffff1a; border-radius: 14px; padding: 9px 12px; }

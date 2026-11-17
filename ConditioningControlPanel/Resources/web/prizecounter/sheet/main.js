@@ -309,6 +309,9 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   ui.tab = init.tab && tabs.includes(groupOf(init.tab)) ? groupOf(init.tab) : tabs.includes(FEATURED) ? FEATURED : groupOf(shop.tabId() || OWNED);
   ui.focusTo = doc.activeElement === view.title || doc.activeElement === doc.body || !doc.activeElement || !view.root.contains(doc.activeElement) ? 'title' : null;
   apply(res);
+  // init.pick (CONTRACT "Studio doors"): a door names one item; the page opens on its tab with it in the fitting room
+  const first = typeof init.pick === 'string' ? locate(st(), init.pick, pv()) : null;
+  if (first) { ui.tab = first.group || ui.tab; pick(first.id); }
   return {
     shop, view, ui, pick, act, pv, dispose,
   };

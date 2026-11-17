@@ -100,6 +100,12 @@ Reuse (open speed lane, 2026-11-17; additive, a host that never sends it loads t
   drops page frames while no open owns the page; a sign-in from the page still loads it again. No `ready` within
   400 ms of a reset: the host loads the page again.
 
+Studio doors (look pickers lane, 2026-11-17; additive, absent = today's behaviour):
+- in: `init.pick 'itemId'`: open on that item. The page answers its state as usual, then opens the item's own tab
+  with the item in the fitting room (the same as a click on it). An id the state does not carry is ignored. The WPF
+  host sends it when a locked look in a Studio "Look" row is clicked (`PrizeCounterHostService.LaunchOn`), once,
+  on that open only.
+
 ## Rules
 
 - Every effect has an IN and an OUT. Gentle visuals: fades only, no dust, no shake. Motion off: cuts.

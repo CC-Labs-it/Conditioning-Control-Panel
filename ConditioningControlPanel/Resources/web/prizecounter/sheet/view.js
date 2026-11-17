@@ -165,7 +165,8 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
     if (tip) room.append(el('p', 'd-tip', tip));
     const what = at ? view.explainBlock(at) : null;
     if (what) room.append(what); else if (m.desc) room.append(el('p', 'd-where', m.desc));
-    room.append(...view.placeRow(at, v));
+    // the look's own pickers (Two-tone's second colour) sit right under "What it does", never under the pinned actions
+    room.append(...view.roomExtra(at, v, on), ...view.placeRow(at, v));
     if (at && !at.row.owned) { const pr = el('div', 'd-price'); pr.append(statusNode(statusOf(at, ctx(v)), v, true)); room.append(pr); }
     for (const l of m.lines) room.append(el('p', 'd-line d-' + l.cls, l.text));
     const acts = el('div', 'd-act');
@@ -176,7 +177,10 @@ export function createView(doc, { t, sheet, base = './', win = globalThis.window
       b.disabled = !!a.disabled; b.dataset.main = a.main ? '1' : '';
       acts.append(b);
     }
-    room.append(acts, ...view.roomExtra(at, v, on));
+    room.append(acts);
+    // a look's own picker (Two-tone's second colour) lands in view, clear of the pinned actions, at every sheet size
+    const mix = [...room.children].find((n) => n.classList.contains('mix'));
+    if (mix && later && typeof mix.scrollIntoView === 'function') later(() => { if (mix.isConnected) mix.scrollIntoView({ block: 'nearest' }); }, 0);
     if (m.note) { const n = el('p', 'd-note', m.note); n.setAttribute('role', 'status'); room.append(n); }
   }
 

@@ -47,3 +47,46 @@ test('the fog shelf sells Two-tone only; its fitting room offers every palette s
   assert.match(page.view.room.text(), /Pink is too close to your colour, so Lilac swirls instead\./);
   assert.match(page.view.room.text(), /Your pink filter colour and a second one move through each other/);
 });
+
+// Owner note 2026-11-17: "we got no way to pick the second color once unlocked". The swatches sit right under "What it
+// does", above the pinned Buy / Switch row, so the room shows them at every size; owned they name the pick.
+async function mountFog(owned, init = {}) {
+  const server = createPreviewServer(SAMPLE);
+  const own = (r) => { if (owned && r && Array.isArray(r.tabs)) for (const t of r.tabs) for (const s of t.shelves) for (const row of s.rows) if (row && row.id === 'fx.fog.twotone') row.owned = { at: '2026-11-17T10:00:00Z', paidSp: 730 }; return r; };
+  const host = asHost({ init: { motion: 'full', tab: 'effects', ...init }, request: async (op, b, i) => own(await server.handle(op, b, i)) });
+  const doc = fakeDocument(), root = doc.createElement('main');
+  const page = await mountSheet(host, { root, doc, win: { addEventListener() {}, removeEventListener() {} }, now: () => 1e6, frame: (f) => f(), later() {}, loadIndex: () => null });
+  return { page, server };
+}
+const order = (room) => room.children.map((n) => n.classList.contains('mix') ? 'mix' : n.classList.contains('d-what') ? 'what' : n.classList.contains('d-act') ? 'act' : '-');
+
+test('the second colour sits under "What it does" and above the actions, as a try-on before buying', async () => {
+  const { page } = await mountFog(false);
+  page.pick('fx.fog.twotone');
+  const o = order(page.view.room);
+  assert.ok(o.indexOf('what') >= 0 && o.indexOf('what') < o.indexOf('mix') && o.indexOf('mix') < o.indexOf('act'), o.join(' '));
+  const mix = page.view.room.children.find((n) => n.classList.contains('mix'));
+  assert.equal(mix.dataset.fog2, 'try');
+  assert.match(mix.text(), /^Try a second colour/);
+});
+
+test('owned, the swatches read "Second colour" with the pick named, and a pick is worn through shop-equip fog2', async () => {
+  const { page, server } = await mountFog(true);
+  page.pick('fx.fog.twotone');
+  let mix = page.view.room.children.find((n) => n.classList.contains('mix'));
+  assert.equal(mix.dataset.fog2, 'owned');
+  assert.match(mix.text(), /^Second colour Lilac/);
+  page.view.root.dispatch('click', { target: page.view.room.all().find((n) => n.dataset && n.dataset.key === 'fog2:sky'), detail: 1 });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(server.preview.equip.fog2, 'fx.fog.sky');
+  mix = page.view.room.children.find((n) => n.classList.contains('mix'));
+  assert.match(mix.text(), /^Second colour Sky/);
+});
+
+test('init.pick opens the page on that item, on its own tab; an unknown id is ignored', async () => {
+  const { page } = await mountFog(false, { tab: null, pick: 'fx.bubble.heart' });
+  assert.equal(page.ui.fx, 'fx.bubble.heart');
+  assert.equal(page.ui.tab, 'effects');
+  const { page: other } = await mountFog(false, { tab: null, pick: 'fx.nothing.here' });
+  assert.equal(other.ui.fx, null);
+});
