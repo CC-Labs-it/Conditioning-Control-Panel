@@ -129,13 +129,36 @@ public class PanelDoorLinkTests
     }
 
     [Fact]
-    public void PlayIsEyesSessionsAndDeeperAndLandsOnEyes()
+    public void PlayIsEyesSessionsDeeperAndAGamesDoorAndLandsOnEyes()
     {
         var play = NavSections.Find(NavSections.Play)!;
         Assert.Equal("playeyes", play.DefaultTab);
-        Assert.Equal(new[] { "playeyes", "playsessions", "deeper" },
+        Assert.Equal(new[] { "playeyes", "playsessions", "deeper", "play" },
             play.Tabs.Where(t => !t.Hidden).Select(t => t.Key).ToArray());
-        Assert.DoesNotContain(NavSections.AllTabs, t => t.Key == "play");
+    }
+
+    // ccp-bugs #1633: 7.3.0 testers could not find the games from the panel. The Games pill is
+    // back on Play as a WINDOW pill: visible, asks first, opens the launcher's Games door, and
+    // never becomes a page (no lit pill, no slide slot, never remembered by the rail).
+    [Fact]
+    public void TheGamesPillIsAVisibleWindowPillThatOpensTheGamesDoor()
+    {
+        var games = NavStripRules.Pills(NavSections.Play).Single(t => t.Key == "play");
+        Assert.Equal(NavTabKind.Window, games.Kind);
+        Assert.Equal("nav_tab_games", games.LabelKey);
+        Assert.Equal(0, games.Tier);
+        Assert.False(games.Hidden);
+        Assert.True(NavStripRules.AsksBeforeOpening(games));
+        Assert.Equal(PanelDoorLink.Games, NavSections.LauncherDoorFor(games.Key));
+        Assert.NotNull(NavStripRules.Glyph(games.Key));
+
+        Assert.DoesNotContain("play", ConditioningControlPanel.Services.ChromeFxNav.NavOrder);
+        Assert.Equal("playeyes", NavRailRules.TargetTab(NavSections.Play, "{\"play\":\"play\"}"));
+        Assert.Equal("nav_tab_eyes", NavStripRules.PageLabelKey("lab"));
+
+        // Its click goes through ShowTab, whose launcher-door intercept runs before any page code.
+        var chrome = AppFile("MainWindow", "MainWindow.SectionChrome.cs");
+        Assert.Contains("try { ShowTab(tab.Key); }", chrome, StringComparison.Ordinal);
     }
 
     [Fact]
