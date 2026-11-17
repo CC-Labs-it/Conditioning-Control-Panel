@@ -97,6 +97,10 @@ namespace ConditioningControlPanel.Services.Super
             _root.Height = h;
             _root.ClipToBounds = true;
             _root.IsHitTestVisible = false;
+            // A fixed size in this screen's DIPs, pinned top-left: Fit() rescales it when the window's
+            // own scale is not this screen's (a mixed-DPI desk), so a cell always lands on its pixels.
+            _root.HorizontalAlignment = HorizontalAlignment.Left;
+            _root.VerticalAlignment = VerticalAlignment.Top;
             Content = _root;
 
             SourceInitialized += (_, _) =>
@@ -104,8 +108,44 @@ namespace ConditioningControlPanel.Services.Super
                 var hwnd = new WindowInteropHelper(this).Handle;
                 int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
                 SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED);
+                Fit();
             };
+            Loaded += (_, _) => Fit();
             if (ownerHwnd != IntPtr.Zero) new WindowInteropHelper(this).Owner = ownerHwnd;
+        }
+
+        /// <summary>
+        /// Put the window on its screen in PHYSICAL pixels and match the picture to the window's real
+        /// scale. Left/Top/Width/Height are DIPs at the scale WPF picked for the window, which on a
+        /// desk with two different scales is not this screen's: the dim then sat offset and too small,
+        /// with every hole beside its video (owner, 2026-11-18, 125% + 100%).
+        /// </summary>
+        private void Fit()
+        {
+            if (_fitting) return;
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            _fitting = true;
+            try
+            {
+                // Twice: a move onto another screen changes the window's scale, and WPF answers
+                // that change with a resize of its own.
+                for (int i = 0; i < 2; i++)
+                    SetWindowPos(hwnd, IntPtr.Zero, _bounds.X, _bounds.Y, _bounds.Width, _bounds.Height,
+                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                double actual = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                double k = actual > 0.25 ? _dpi / actual : 1;
+                _root.LayoutTransform = Math.Abs(k - 1) < 0.001 ? Transform.Identity : new ScaleTransform(k, k);
+            }
+            finally { _fitting = false; }
+        }
+
+        private bool _fitting;
+
+        protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+        {
+            base.OnDpiChanged(oldDpi, newDpi);
+            Dispatcher.BeginInvoke(new Action(Fit), System.Windows.Threading.DispatcherPriority.Normal);
         }
 
         /// <summary>A physical-pixel rectangle in this overlay's own pixels.</summary>
@@ -180,7 +220,7 @@ namespace ConditioningControlPanel.Services.Super
         private const int WS_EX_LAYERED = 0x80000;
         private const int WS_EX_NOACTIVATE = 0x08000000;
         private const uint GW_HWNDNEXT = 2;
-        private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010, SWP_NOOWNERZORDER = 0x0200;
+        private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010, SWP_NOOWNERZORDER = 0x0200;
         [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll")] private static extern IntPtr GetTopWindow(IntPtr hWnd);
