@@ -331,7 +331,7 @@
                                                         <Border CornerRadius="6" Margin="5" BorderBrush="#6600E676" BorderThickness="1"/>
                                                         <StackPanel Orientation="Horizontal" Margin="18,6,20,8">
                                                             <TextBlock Text="&#x2713;" Foreground="#00E676" FontSize="34"
-                                                                       FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"
+                                                                       FontFamily="Segoe UI Symbol, Segoe UI"
                                                                        FontWeight="Bold" VerticalAlignment="Center">
                                                                 <TextBlock.Effect>
                                                                     <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="2"/>

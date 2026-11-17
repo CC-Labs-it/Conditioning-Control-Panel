@@ -132,15 +132,16 @@ public static class FlickerDeck
 
     /// <summary>
     /// Does a flash become a card? Super on, drawn by the compositor and clickable by the mouse.
-    /// Anything owned that would also act on the press or the dismiss wins and Super stands down
-    /// for that flash: a v2 preview, owned Shatter. Owned dragging keeps the card (owner,
-    /// 2026-11-15): a drag moves it, a tap flips it. A remix (one hero picture
-    /// across the screens) and Natasha's red flash (a click is how you dodge it) stay plain too.
+    /// A v2 preview keeps its own press. Owned dragging keeps the card (owner, 2026-11-15): a
+    /// drag moves it, a tap flips it. Owned Shatter keeps the card too (7.3.0 testers, 2026-11-16:
+    /// with Shatter on, the lit Deck never showed and every card broke on the first click). The
+    /// card flips, and its last click breaks it the Deck way; a gaze pop or a right-click still
+    /// leaves by the owned Shatter. A remix (one hero picture across the screens) and Natasha's
+    /// red flash (a click is how you dodge it) stay plain.
     /// </summary>
     public static bool Applies(bool superOn, bool usesLayer, bool clickable, bool previewV2, bool isRemix,
         bool isNatasha, bool dragOwnedOn, bool shatterOwnedOn)
-        => superOn && usesLayer && clickable && !previewV2 && !isRemix && !isNatasha
-           && !shatterOwnedOn;
+        => superOn && usesLayer && clickable && !previewV2 && !isRemix && !isNatasha;
 
     /// <summary>A fresh card with its BreakAt rolled and its cracks laid out.</summary>
     public static FlickerDeckState Create(int index, Random rng) => Create(index, rng, BreakAtMin, BreakAtMax);

@@ -200,7 +200,10 @@ public class FlickerDeckTests
         Assert.False(FlickerDeck.Applies(true, true, true, false, true, false, false, false));  // remix
         Assert.False(FlickerDeck.Applies(true, true, true, false, false, true, false, false));  // natasha
         Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, true, false));   // owned drag keeps the card: a tap flips
-        Assert.False(FlickerDeck.Applies(true, true, true, false, false, false, false, true));  // owned shatter
+        // Owned Shatter no longer stands the Deck down: a lit star with Shatter on showed no
+        // Deck at all (7.3.0 testers). The card flips; its last click breaks the Deck way.
+        Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, false, true));
+        Assert.True(FlickerDeck.Applies(true, true, true, false, false, false, true, true));
     }
 
     [Fact]
