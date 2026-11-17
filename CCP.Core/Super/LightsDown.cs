@@ -258,7 +258,7 @@ public sealed class LightsDownCanvas
     /// the window covers it, and a glow never sits on the picture if the order ever slips).</summary>
     public const double HaloOutDip = 22, HaloInDip = 10;
     /// <summary>The halo reads as this share of the dim around it, never above <see cref="HaloMax"/>.</summary>
-    public const double HaloGain = 0.7, HaloMax = 0.48;
+    public const double HaloGain = 0.55, HaloMax = 0.38;   // owner: a SMALL hue; it tints the dim, it never clears it
     /// <summary>The corner radius of a floating window (FloatingFrameLook.CornerDip).</summary>
     public const double CornerDip = 10;
     /// <summary>Attention targets: inflated and feathered less, no halo.</summary>
@@ -387,7 +387,9 @@ public sealed class LightsDownCanvas
             ref readonly var h = ref prep[pick[n]];
             if (!h.Near(x, y)) continue;
             double d = RoundedRectDistance(x, y, h.Rc, h.Corner);
-            if (d < h.Feather) keep *= 1 - h.Presence * HoleClear(d, h.Feather);
+            // The clear zone ends AT the window (its soft edge runs inward, under the window, which sits above this
+            // overlay): a feather outside it let a bright app shine round every video like a lit sign (stills, 2026-11-18).
+            if (d < 0) keep *= 1 - h.Presence * HoleClear(d + h.Feather, h.Feather);
             if (h.Halo)
             {
                 double s = d >= 0 ? h.HaloOut : h.HaloIn;

@@ -323,7 +323,10 @@ public class LightsDownReworkTests
 
         // The halo is quiet: never louder than the cap, whatever the darkness.
         var loud = Px(Win.Right + 4, Win.Y + Win.H / 2, LightsDownOptions.MaxAlpha, hole);
-        Assert.True(loud.A <= LightsDownOptions.MaxAlpha + 1e-9);
+        // The halo tints the dim and never clears it (a clear ring let a bright app shine round the video), so it
+        // may sit a little over the dim's own cap, never opaque.
+        Assert.True(loud.A <= LightsDownOptions.MaxAlpha + LightsDownCanvas.HaloMax * (1 - LightsDownOptions.MaxAlpha) + 1e-9 && loud.A < 1);
+        Assert.True(Px(Win.Right + 2, Win.Y + Win.H / 2, v, hole).A >= v - 1e-9, "no clear ring outside the window");
         Assert.True(loud.R <= LightsDownCanvas.HaloMax + 0.05);
 
         // No dim, no halo: the halo only lives where the dim reaches.
