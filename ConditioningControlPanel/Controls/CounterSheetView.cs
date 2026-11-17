@@ -935,6 +935,7 @@ internal sealed class CounterSheetView : Grid
             else { c.ClearValue(Control.BackgroundProperty); c.ClearValue(Control.BorderBrushProperty); c.ClearValue(Control.BorderThicknessProperty); }
         }
         if (Face(chip) is { } t) t.Y = on ? 1 : 0;
+        foreach (var tag in ShopTag.In(chip)) tag.PressedIn = on;   // its gold SHOP tag sits in with it
     }
 
     /// <summary>The chip's own fill with the house <c>DepthPressedShade</c> laid over it (the shade falls from the

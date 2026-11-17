@@ -47,8 +47,14 @@
                     </Grid>
                 </Viewbox>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="2,0,0,0">
-                    <TextBlock x:Name="WalletLabel" TextTrimming="CharacterEllipsis" Foreground="#D9BCD9" FontSize="8"
-                               LineHeight="9" LineStackingStrategy="BlockLineHeight"/>
+                    <!-- the label line carries the gold SHOP tag (owner 2026-11-17: SHOP on every door into the shop);
+                         the tag is a column of its own, so a long label trims and the tag always reads -->
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <local:ShopTag x:Name="DoorTag" Compact="True" Margin="0,1,4,0"/>
+                        <TextBlock x:Name="WalletLabel" Grid.Column="1" TextTrimming="CharacterEllipsis" Foreground="#D9BCD9" FontSize="8"
+                                   LineHeight="9" LineStackingStrategy="BlockLineHeight" VerticalAlignment="Center"/>
+                    </Grid>
                     <StackPanel Orientation="Horizontal" RenderTransformOrigin="0.5,0.5">
                         <StackPanel.RenderTransform><ScaleTransform x:Name="BalancePulse"/></StackPanel.RenderTransform>
                         <local:SparkleStar Height="11" VerticalAlignment="Center" Margin="0,0,4,0"/>

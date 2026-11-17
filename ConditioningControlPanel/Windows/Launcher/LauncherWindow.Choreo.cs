@@ -621,8 +621,9 @@ public partial class LauncherWindow
         int sp = wallet.Value;
         bool show = wallet.Show;
 #if DEBUG
-        if (wallet.PreviewMark) WalletChip.ToolTip = "Preview wallet";   // DEBUG shop preview chrome, plain literal
-        MarkPreview(WalletChip.Content as Panel, wallet.PreviewMark);
+        // DEBUG shop preview chrome, plain literal: the chip's face shows the SHOP door (owner: SHOP instead of preview),
+        // the preview mark rides on its hover line
+        if (wallet.PreviewMark) WalletChip.ToolTip = "Preview wallet";
 #endif
         WalletChip.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) { _spShown = double.NaN; return; }

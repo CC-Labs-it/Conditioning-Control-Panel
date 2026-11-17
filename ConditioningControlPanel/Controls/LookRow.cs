@@ -62,7 +62,7 @@ public class LookRow : StackPanel
         foreach (var c in shown) _chips.Children.Add(Chip(c));
         // the last child: "More in the shop", shown by the panel only when the chips would need a third line
         var firstLocked = all.FirstOrDefault(c => !c.Owned) ?? all[^1];
-        _chips.Children.Add(LookChips.Make(null, Loc.Get("studio_look_more"), LookChips.State.Locked, null, Loc.Get("studio_look_more"), () => OpenShopOn(firstLocked.Id)));
+        _chips.Children.Add(LookChips.Make(new ShopTag(), Loc.Get("studio_look_more"), LookChips.State.Locked, null, Loc.Get("studio_look_more"), () => OpenShopOn(firstLocked.Id)));
     }
 
     private UIElement Chip(LookChoice c)
@@ -311,7 +311,7 @@ internal static class LookChips
         }
         if (state == State.Locked)
         {
-            if (picture != null) picture.Opacity = 0.45;
+            if (picture != null && picture is not ShopTag) picture.Opacity = 0.45;   // the gold SHOP door never dims
             if (price is int p)
             {
                 inner.Children.Add(new SparkleStar { Width = 12, Height = 12, Margin = new Thickness(5, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center });
