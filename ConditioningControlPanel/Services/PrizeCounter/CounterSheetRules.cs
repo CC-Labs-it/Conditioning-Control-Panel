@@ -166,6 +166,29 @@ internal static class CounterSheetRules
         return -overshootDip * (1 - u) * (1 - u);
     }
 
+    // ============================ open speed (one page, many opens) ============================
+
+    /// <summary>A door's page is made and loaded this long after its window shows, so the first press finds it
+    /// waiting. Game sheets never warm (60 to 120 MB per game window): they open cold.</summary>
+    public const int WarmDelayMs = 1200;
+
+    /// <summary>A reused page answers its reset with a new <c>ready</c> in a few ms; past this it is loaded again.</summary>
+    public const int ResetTimeoutMs = 400;
+
+    /// <summary>After a close, what the kept page needs: one that served the open (its mount holds that open's
+    /// state) is reset; one that never met its init (still loading, or ready and never handed over) is kept as is.</summary>
+    public static bool NeedsReset(bool pageReady, bool handedOver) => pageReady && handedOver;
+
+    /// <summary>The slide waits for the page (up to the reveal cap) only when this open will be handed a waiting page at
+    /// once: a kept page that is ready or just resetting, on a sheet that is fully up. Anything else slides at once and
+    /// shows the waiting card until the page has painted.</summary>
+    public static bool HoldsSlide(bool fresh, bool pageReady, bool resetting, bool hasCore, double progress)
+        => fresh && hasCore && progress <= 0 && (pageReady || resetting);
+
+    /// <summary>The waiting card's star pulse: scale amplitude and period. Off and Gentle hold it still, Reduced halves it.</summary>
+    public static (double Amp, int Ms) StarPulse(MotionLevel level, bool gentle)
+        => level == MotionLevel.Off || gentle ? (0, 0) : level == MotionLevel.Reduced ? (0.06, 900) : (0.12, 700);
+
     /// <summary>How far above its open place the sheet sits at progress <paramref name="p"/> (0 closed,
     /// 1 open) in a slot <paramref name="height"/> tall: closed, it is wholly above the bar line.</summary>
     public static double SlideOffset(double p, double height)

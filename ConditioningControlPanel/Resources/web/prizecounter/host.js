@@ -4,6 +4,7 @@
  *                    out { type:'ready' } { type:'request', reqId, op, body, idem } { type:'wallet', sp } { type:'close', reason } { type:'signin' }
  *                        { type:'wear', id } (an owned card's Wear; the WPF host opens Rain's dressing room for a Rain row)
  *                    in  { type:'init', ... } { type:'reply', reqId, body } { type:'worn', id, ok } (WPF, after an in-place Wear)
+ *                        { type:'reset' } (WPF sheet, after a close: drop this open, mount again, say ready; sheet/reuse.js)
  *   asHost(obj)      mounted inside a game: a plain object with the same methods (missing ones are no-ops).
  * request() never rejects: a missing reply answers { ok:false, reason:'offline' }. */
 
@@ -16,9 +17,19 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
   const post = (m) => { try { if (webview) webview.postMessage(m); else if (parent) parent.postMessage(m, '*'); } catch (e) { /* host gone */ } };
   const waiting = new Map();
   let init = null, initWaiters = [];
-  const wornHears = [], atHears = [];
+  const wornHears = [], atHears = [], resetHears = [];
   const onFrame = (m) => {
     if (!m || typeof m.type !== 'string') return;
+    if (m.type === 'reset') {
+      // The host keeps this page for its next open (CONTRACT "Reuse"): every answer, init and listener of the open
+      // that ended is dropped unanswered (its mount is gone), then the reuse controller mounts again and says ready.
+      for (const done of waiting.values()) clearTimeout(done.timer);
+      waiting.clear();
+      init = null; initWaiters = [];
+      wornHears.length = 0; atHears.length = 0;
+      resetHears.slice().forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } });
+      return;
+    }
     if (m.type === 'wallet-at') { atHears.forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } }); return; }
     if (m.type === 'init') { init = m; initWaiters.forEach((f) => f(m)); initWaiters = []; }
     else if (m.type === 'worn') wornHears.forEach((f) => { try { f(m); } catch (e) { /* page error stays local */ } });
@@ -40,7 +51,9 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
       const reqId = mintId();
       return new Promise((res) => {
         const timer = setTimeout(() => { waiting.delete(reqId); res(OFFLINE); }, timeoutMs);
-        waiting.set(reqId, (b) => { clearTimeout(timer); res(b); });
+        const done = (b) => { clearTimeout(timer); res(b); };
+        done.timer = timer;
+        waiting.set(reqId, done);
         post({ type: 'request', reqId, op, body, idem });
       });
     },
@@ -50,6 +63,8 @@ export function createHost(win = window, { timeoutMs = 15000 } = {}) {
     wear(id) { if (typeof id === 'string' && id) post({ type: 'wear', id }); },
     onWorn(f) { if (typeof f === 'function') wornHears.push(f); },
     onWalletAt(f) { if (typeof f === 'function') atHears.push(f); },
+    /** The host's { type:'reset' } (sheet/reuse.js listens; a reset never clears this list). */
+    onReset(f) { if (typeof f === 'function') resetHears.push(f); },
     walletLand(k) { if (Number.isFinite(k)) post({ type: 'wallet-land', k: Math.max(0, Math.min(1, k)) }); },
     log(msg) { post({ type: 'log', level: 'debug', msg: String(msg).slice(0, 400) }); },
   };

@@ -27,7 +27,7 @@ const SOLD_MS = 1700, NUDGE_MS = 7000;
 
 export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win = globalThis.window, now = () => performance.now(),
   frame = (f) => requestAnimationFrame(f), base = './', later = (f, ms) => setTimeout(f, ms), newIdem = mintIdem,
-  loadIndex = () => fetch(`${base}assets/preview/index.json`).then((r) => (r.ok ? r.json() : null)) } = {}) {
+  loadIndex = () => fetch(`${base}assets/preview/index.json`).then((r) => (r.ok ? r.json() : null)), bind = null } = {}) {
   const host = typeof hostIn.ready === 'function' && hostIn.hosted !== undefined ? hostIn : asHost(hostIn);
   const init = (await host.ready()) || {};
   const t = sheetT(init.lexicon, init.companion);
@@ -35,7 +35,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const platform = platformOf(init);
   root.classList.add('shroot');
   root.dataset.motion = motion;
-  if (init.gentle) root.dataset.gentle = 'on';
+  if (init.gentle) root.dataset.gentle = 'on'; else delete root.dataset.gentle;   // a reused page (sheet/reuse.js) mounts again
   // The raw shop-state body: state/shop.js reads today's rows from it, sheet/wire.js the rest. A body the page already
   // holds (an op's answer) is handed to shop.load() through `queued`, so both read the same body with no second trip.
   // A preview op (and the preview's buy) answers the whole fresh state: that becomes the raw body too.
@@ -62,7 +62,7 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const onWallet = (k) => { if (init.sheet === true && typeof host.walletLand === 'function') host.walletLand(k); };
   const fx = createFx({ root: view.root, doc, base, motion, gentle: !!init.gentle, sound, wallet: () => view.wallet, walletAt: () => walletAt, onWallet });
   // ---- juice (Lane MOTION): movement, feedback and sound over each paint; decides nothing (sheet/juice.js) ----
-  installJuice(view, { motion, gentle: !!init.gentle, doc, win, sound, fx, sheet: init.sheet === true, later });
+  const juice = installJuice(view, { motion, gentle: !!init.gentle, doc, win, sound, fx, sheet: init.sheet === true, later });
   // ---- end juice ----
   root.replaceChildren(view.root);
   const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title', busy: false, idem: null,
@@ -71,7 +71,9 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const st = () => shop.state();
   const pv = () => { if (raw !== rawRead) { rawRead = raw; ui.pv = readPreview(raw); } return ui.pv; };
   const away = (id) => !isHere(placesOf(ui.pv, id), platform);
+  let gone = false;   // disposed: late timers and answers paint nothing
   function paint() {
+    if (gone) return;
     const had = doc.activeElement && doc.activeElement.dataset ? doc.activeElement.dataset.key : null;
     const s = st(), card = shop.card(), p = pv(), sp = shop.sp();
     const fxe = ui.fx && locate(s, ui.fx, p);
@@ -275,6 +277,17 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     apply(shop.worn(id, ok));
   });
 
+  const dispose = () => {
+    if (gone) return;
+    gone = true;
+    win.removeEventListener('keydown', onKeyDown); win.removeEventListener('keyup', onKeyUp);
+    win.removeEventListener('focus', onFocus); win.removeEventListener('blur', onBlur);
+    try { if (juice && typeof juice.dispose === 'function') juice.dispose(); } catch (e) { /* the juice is a bonus */ }
+    try { sound.close(); } catch (e) { /* sound is a bonus */ }
+    if (view.root.parentNode === root) root.replaceChildren();
+  };
+  if (typeof bind === 'function') bind(dispose);   // the reuse controller can drop this mount before its first answer
+
   paint();
   // The host slides the whole page down under its wallet (polish lane): the root's own slide on top of it showed bare
   // ground first, so the root starts in place; Gentle keeps the root's fade (the host never slides then).
@@ -288,17 +301,13 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   }
   const [res, index] = await Promise.all([shop.load(), Promise.resolve().then(loadIndex).catch(() => null)]);
   ui.index = index;
+  if (gone) return { shop, view, ui, pick, act, pv, dispose };
   const tabs = sheetTabs(shop.tabs(), pv());
   ui.tab = init.tab && tabs.includes(groupOf(init.tab)) ? groupOf(init.tab) : tabs.includes(FEATURED) ? FEATURED : groupOf(shop.tabId() || OWNED);
-  ui.focusTo = doc.activeElement === view.title || doc.activeElement === doc.body || !doc.activeElement ? 'title' : null;
+  ui.focusTo = doc.activeElement === view.title || doc.activeElement === doc.body || !doc.activeElement || !view.root.contains(doc.activeElement) ? 'title' : null;
   apply(res);
   return {
-    shop, view, ui, pick, act, pv,
-    dispose() {
-      win.removeEventListener('keydown', onKeyDown); win.removeEventListener('keyup', onKeyUp);
-      win.removeEventListener('focus', onFocus); win.removeEventListener('blur', onBlur);
-      root.replaceChildren();
-    },
+    shop, view, ui, pick, act, pv, dispose,
   };
 }
 

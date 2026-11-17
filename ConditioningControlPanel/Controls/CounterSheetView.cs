@@ -30,9 +30,10 @@ namespace ConditioningControlPanel.Controls;
 /// cuts whatever of it is still above the bar line. Motion Off cuts, Reduced halves, Gentle never slides
 /// and only fades the scrim.</para>
 ///
-/// <para>The WebView2 is created once, a few seconds after the window is up, and kept hidden with the
-/// page loaded and waiting for its <c>init</c>, so a first open is instant; after every close the page
-/// is loaded fresh again. Both doors share one browser profile (<see cref="UserDataFolderName"/>) and
+/// <para>The WebView2 is created once, shortly after the window shows (<see cref="CounterSheetRules.WarmDelayMs"/>), and
+/// kept hidden with the page loaded and waiting for its <c>init</c>, so a first open is instant. After a close the SAME
+/// page is reset (CONTRACT.md "Reuse") and waits, quiet, for the next init: no load between opens. A press that beats
+/// the page slides on a waiting card in the page's ground until it has painted. Both doors share one browser profile (<see cref="UserDataFolderName"/>) and
 /// one environment, with one constant argument string. The page bridge mirrors ChaosWebViewHost's:
 /// navigation locked to ccp.game, <c>ready</c> then queued frames, <c>log</c> to the app log, every
 /// other frame to the open counter only (<see cref="PrizeCounterHostService"/>, via
@@ -49,7 +50,7 @@ internal sealed class CounterSheetView : Grid
     /// <summary>The reason a sheet gives when its page died (the counter closes as failed).</summary>
     public const string WhyFailed = "failed";
 
-    private static readonly TimeSpan WarmDelay = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan WarmDelay = TimeSpan.FromMilliseconds(CounterSheetRules.WarmDelayMs);
 
     /// <summary>sheet.css <c>--night</c> (the cartoon page's ground): the browser's default background and the
     /// frame's, so a frame before the page's first paint is its own ground, never black or white.</summary>
@@ -98,6 +99,19 @@ internal sealed class CounterSheetView : Grid
     // The page: which document, whether it said ready, whether a counter owns it.
     private string? _pageUrl;
     private bool _pageReady, _fresh, _live;
+    /// <summary>The kept page served an open since its last load or reset; a reset was sent and its ready is awaited.</summary>
+    private bool _used, _resetting;
+    /// <summary>Page loads so far, opens served by the current load, and the open that last called Load.</summary>
+    private int _loads, _served, _loadedFor;
+    private readonly DispatcherTimer _resetWatch = new(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(CounterSheetRules.ResetTimeoutMs) };
+    private bool _warms, _warmPending;
+    // This open: the page has not painted yet (the HWND stays cut, the waiting card shows), and its timings.
+    private bool _waiting;
+    private readonly Stopwatch _openWatch = new();
+    private long _slideAtMs = -1;
+    private string _how = "cold";
+    private readonly Border _placeholder;
+    private readonly ScaleTransform _starPulse = new(1, 1);
     private int _session, _sessions;
     private Action? _onReady;
     private Action<JObject>? _onMessage;
@@ -167,6 +181,9 @@ internal sealed class CounterSheetView : Grid
         };
         _slot = new Grid { ClipToBounds = true, Visibility = Visibility.Collapsed };
         _slot.Children.Add(_frame);
+        _placeholder = MakePlaceholder();
+        _slot.Children.Add(_placeholder);
+        _resetWatch.Tick += (_, _) => OnResetTimeout();
         Children.Add(_scrim);
         Children.Add(_shadow);
         Children.Add(_slot);
@@ -182,9 +199,9 @@ internal sealed class CounterSheetView : Grid
     /// and warm its page a few seconds after the window is up. <paramref name="insertAt"/> keeps the
     /// window's own top layers (veil, edge) above the scrim; -1 adds it on top with <paramref name="zIndex"/>.</summary>
     public static CounterSheetView Mount(Window door, Panel host, FrameworkElement bar, string from, int insertAt = -1, int zIndex = 0,
-        Func<FrameworkElement?>? walletChip = null)
+        Func<FrameworkElement?>? walletChip = null, bool warm = true)
     {
-        var view = new CounterSheetView(door, bar, from) { _walletChip = walletChip };
+        var view = new CounterSheetView(door, bar, from) { _walletChip = walletChip, _warms = warm };
         if (walletChip != null) view._pressChip = on => PressChip(walletChip(), on);
         if (zIndex != 0) Panel.SetZIndex(view, zIndex);
         if (insertAt >= 0 && insertAt <= host.Children.Count) host.Children.Insert(insertAt, view);
@@ -195,15 +212,21 @@ internal sealed class CounterSheetView : Grid
 
     // ============================== warm ==============================
 
+    /// <summary>Make and load the page <see cref="WarmDelay"/> after the door window shows (again when a hidden door
+    /// shows later), so the first press finds it ready. A game sheet never warms (it opens cold).</summary>
     private void ScheduleWarm()
     {
+        if (!_warms || _warmPending || _web != null || _disposed) return;
+        _warmPending = true;
         var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = WarmDelay };
         timer.Tick += (_, _) =>
         {
-            if (_disposed) { timer.Stop(); return; }
-            if (!DoorWindow.IsVisible) return;   // try again next tick, once the window shows
             timer.Stop();
+            _warmPending = false;
+            if (_disposed || _web != null || !DoorWindow.IsVisible) return;   // a hidden door warms when it shows
+            var sw = Stopwatch.StartNew();
             EnsureWeb();
+            App.Logger?.Information("PrizeSheet: warming the {From} page ({Ms} ms on the UI thread)", _from, sw.ElapsedMilliseconds);
 #if DEBUG
             DemoLater();
 #endif
@@ -259,6 +282,9 @@ internal sealed class CounterSheetView : Grid
             s.IsZoomControlEnabled = false;
             s.IsBuiltInErrorPageEnabled = false;
             s.IsWebMessageEnabled = true;
+            // The page is our own files on ccp.game (navigation locked there): a SmartScreen reputation check of that
+            // made-up host held every load of it for about 2 s before the document committed (open speed lane).
+            try { s.IsReputationCheckingRequired = false; } catch (Exception ex) { Diag.Swallowed(ex); }
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             foreach (var (host, folder, access) in new[] { ("ccp.game", webRoot, CoreWebView2HostResourceAccessKind.Deny), ChaosWebViewHost.ContentMapping() })
                 if (Directory.Exists(folder)) core.SetVirtualHostNameToFolderMapping(host, folder, access);
@@ -283,6 +309,11 @@ internal sealed class CounterSheetView : Grid
         _pageUrl = url;
         _pageReady = false;
         _live = false;
+        _used = false;
+        _resetting = false;
+        _resetWatch.Stop();
+        _loads++;
+        _served = 0;
         _fresh = _session == 0;   // nobody owns it yet: the next open takes it as it stands
         try { _core?.Navigate(url); }
         catch (Exception ex) { App.Logger?.Debug("PrizeSheet: navigate failed: {E}", ex.Message); }
@@ -297,12 +328,20 @@ internal sealed class CounterSheetView : Grid
         _onMessage = message;
         _pending.Clear();
         _live = false;
+        bool first = _loadedFor != session;   // a second Load in one open (a new tab, a sign-in) always loads again
+        _loadedFor = session;
         if (_core == null) { _pageUrl = url; return; }   // InitCoreAsync navigates it
-        if (_fresh && _pageUrl != null && ChaosWebViewHost.SameDocument(_pageUrl, url))
+        if (first && _pageUrl != null && ChaosWebViewHost.SameDocument(_pageUrl, url))
         {
-            _fresh = false;
-            if (_pageReady) Dispatcher.BeginInvoke(new Action(() => HandOver(session)));
-            return;
+            if (_fresh)
+            {
+                _fresh = false;
+                if (_pageReady) Dispatcher.BeginInvoke(new Action(() => HandOver(session)));
+                return;
+            }
+            // Opened again while the last open was still sliding up: that page starts over now, no load.
+            if (CounterSheetRules.NeedsReset(_pageReady, _used)) { SendReset(); return; }
+            if (_resetting) return;   // its ready hands it over
         }
         Navigate(url);
     }
@@ -311,6 +350,7 @@ internal sealed class CounterSheetView : Grid
     {
         if (session == 0 || session != _session || !_pageReady || _live || _core == null) return;
         _live = true;
+        if (!_used) { _used = true; _served++; }
         _walletSent = WalletAt();   // init carried it
         foreach (var json in _pending)
             try { _core.PostWebMessageAsJson(json); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -318,8 +358,8 @@ internal sealed class CounterSheetView : Grid
         try { _onReady?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
         // A warm page paints its shelves once its first shop answer lands: the reveal waits for that answer
         // plus two frames, never longer than RevealCap (then it slides anyway), so the sheet never slides
-        // down as bare ground.
-        if (_openOnHandOver) { _openOnHandOver = false; HoldReveal(RevealCap); }
+        // down as bare ground. A sheet that already slid on the waiting card hands over to the page the same way.
+        if (_openOnHandOver || _waiting) HoldReveal(RevealCap);
     }
 
     private void HoldReveal(TimeSpan wait)
@@ -335,7 +375,112 @@ internal sealed class CounterSheetView : Grid
         _reveal.Stop();
         if (!_revealHeld) return;
         _revealHeld = false;
-        if (_session != 0 && !_disposed) AnimateTo(1);
+        if (_session == 0 || _disposed) return;
+        bool held = _openOnHandOver;
+        _openOnHandOver = false;
+        ShowPage();
+        if (held) AnimateTo(1);
+        // One line per open (tester logs): press to slide start, press to the page's first content paint.
+        if (_openWatch.IsRunning)
+        {
+            App.Logger?.Information("PrizeSheet: open from {From} ({How}, load {Load} open {Open}): slide +{Slide} ms, content +{Paint} ms",
+                _from, _how, _loads, _served, _slideAtMs, _openWatch.ElapsedMilliseconds);
+            _openWatch.Reset();
+        }
+    }
+
+    /// <summary>The page has painted this open's content: its HWND shows again over the waiting card, which goes a
+    /// frame later (the page's ground is the card's ground, so the hand-over never flashes).</summary>
+    private void ShowPage()
+    {
+        if (!_waiting) return;
+        _waiting = false;
+        _region = (-1, -1, -1, -1);
+        ApplyProgress();
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { if (!_waiting) HidePlaceholder(); }));
+    }
+
+    private void HidePlaceholder()
+    {
+        _starPulse.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        _starPulse.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        _placeholder.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>The waiting card: the page's night ground, its title band and a gold star with a slow pulse (Off and
+    /// Gentle hold it still). No words: it is there for a moment.</summary>
+    private Border MakePlaceholder()
+    {
+        var ink = new SolidColorBrush(Ink);
+        var star = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 12,0 L 15.4,7.6 23.6,8.4 17.4,13.9 19.2,22 12,17.8 4.8,22 6.6,13.9 0.4,8.4 8.6,7.6 Z"),
+            Fill = new SolidColorBrush(Gold), Stroke = ink, StrokeThickness = 1.4, StrokeLineJoin = PenLineJoin.Round,
+            Width = 46, Height = 46, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center, RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = _starPulse,
+        };
+        double r = CounterSheetRules.InnerRadiusDip;
+        var band = new Border
+        {
+            Height = 64, VerticalAlignment = VerticalAlignment.Top, Background = new SolidColorBrush(Slab),
+            BorderBrush = ink, BorderThickness = new Thickness(0, 0, 0, CounterSheetRules.InkDip), CornerRadius = new CornerRadius(r, r, 0, 0),
+        };
+        var g = new Grid();
+        g.Children.Add(band);
+        g.Children.Add(star);
+        return new Border
+        {
+            Background = new SolidColorBrush(Night), CornerRadius = new CornerRadius(r), Child = g,
+            Visibility = Visibility.Collapsed, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Stretch,
+        };
+    }
+
+    private void ShowPlaceholder()
+    {
+        _placeholder.Visibility = Visibility.Visible;
+        var (amp, ms) = CounterSheetRules.StarPulse(Services.MotionFx.Level, Services.Safety.GentleVisuals.On);
+        if (amp <= 0) return;
+        var pulse = new System.Windows.Media.Animation.DoubleAnimation(1 - amp, 1 + amp, TimeSpan.FromMilliseconds(ms))
+        {
+            AutoReverse = true, RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            EasingFunction = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },
+        };
+        _starPulse.BeginAnimation(ScaleTransform.ScaleXProperty, pulse);
+        _starPulse.BeginAnimation(ScaleTransform.ScaleYProperty, pulse);
+    }
+
+    // ============================== reuse (one page, many opens) ==============================
+
+    /// <summary>After a close: a page that served the open is told to start over (CONTRACT "Reuse": it drops that
+    /// open, goes quiet and says ready again); a page still loading, or ready and never handed over, is kept as is.
+    /// Either way the next open takes it as it stands.</summary>
+    private void KeepPage()
+    {
+        if (_core == null || _session != 0) return;
+        _fresh = true;
+        if (CounterSheetRules.NeedsReset(_pageReady, _used)) SendReset();
+    }
+
+    private void SendReset()
+    {
+        if (_core == null) return;
+        _pageReady = false;
+        _used = false;
+        _resetting = true;
+        try { _core.PostWebMessageAsJson("{\"type\":\"reset\"}"); }
+        catch (Exception ex) { Diag.Swallowed(ex); OnResetTimeout(); return; }
+        _resetWatch.Stop();
+        _resetWatch.Start();
+    }
+
+    /// <summary>The page never answered its reset: load it again (an open waiting on it gets it when that load is ready).</summary>
+    private void OnResetTimeout()
+    {
+        _resetWatch.Stop();
+        if (!_resetting || _core == null) return;
+        App.Logger?.Information("PrizeSheet: the {From} page did not answer its reset, loading it again", _from);
+        if (_openOnHandOver) { _openOnHandOver = false; _waiting = true; ShowPlaceholder(); AnimateTo(1); }   // never held for a whole load
+        Navigate(_pageUrl ?? CounterSheetRules.SheetUrl);
     }
 
     public void Post(int session, object msg)
@@ -395,6 +540,7 @@ internal sealed class CounterSheetView : Grid
             {
                 case "ready":
                     _pageReady = true;
+                    if (_resetting) { _resetting = false; _resetWatch.Stop(); }
                     if (!_fresh) HandOver(_session);
                     break;
                 case "log":
@@ -429,9 +575,19 @@ internal sealed class CounterSheetView : Grid
         if (_disposed || _noRuntime || !DoorWindow.IsVisible || !PlaceSlot()) return 0;
         EnsureWeb();
         if (_web == null) return 0;
+        _openWatch.Restart();
+        _slideAtMs = -1;
         _session = ++_sessions;
         _wantsClose = wantsClose;
         _down = true;
+        _how = _core == null ? "cold" : _fresh ? (_pageReady ? "kept" : _resetting ? "resetting" : "loading") : _pageReady && _used ? "closing" : "loading";
+        // A warm page waits for its init (Load hands it over a moment later): starting the reveal now
+        // would run ahead of the page's own slide and show its bare ground first. Anything else slides at
+        // once on the waiting card, the page's HWND cut out until it has painted.
+        _openOnHandOver = CounterSheetRules.HoldsSlide(_fresh, _pageReady, _resetting, _core != null, _p);
+        _waiting = !_openOnHandOver;
+        if (_waiting) ShowPlaceholder();
+        _region = (-1, -1, -1, -1);
         _slot.Visibility = Visibility.Visible;
         _scrim.Visibility = Visibility.Visible;
         _scrim.IsHitTestVisible = true;
@@ -441,14 +597,11 @@ internal sealed class CounterSheetView : Grid
         HideCards();
         _cardWatch.Start();
         try { _pressChip?.Invoke(true); } catch (Exception ex) { Diag.Swallowed(ex); }
-        // A warm page waits for its init (Load hands it over a moment later): starting the reveal now
-        // would run ahead of the page's own slide and show its bare ground first.
-        _openOnHandOver = _fresh && _pageReady && _core != null && _p <= 0;
         if (!_openOnHandOver) AnimateTo(1);
         return _session;
     }
 
-    /// <summary>Close this open: slide up (or cut), then load the page fresh for the next open.</summary>
+    /// <summary>Close this open: slide up (or cut), then keep the page for the next open (<see cref="KeepPage"/>).</summary>
     public void Close(int session, bool animate)
     {
         if (session == 0 || session != _session) return;
@@ -470,6 +623,7 @@ internal sealed class CounterSheetView : Grid
 
     private void AnimateTo(double to, int leadMs = 0)
     {
+        if (to > 0 && _slideAtMs < 0 && _openWatch.IsRunning) _slideAtMs = _openWatch.ElapsedMilliseconds;
         _leadMs = leadMs;
         _from0 = _p;
         _scrim0 = _scrimP;
@@ -514,8 +668,10 @@ internal sealed class CounterSheetView : Grid
         try { _pressChip?.Invoke(false); } catch (Exception ex) { Diag.Swallowed(ex); }
         RestoreCards();
         try { if (FocusDoorOnClose && DoorWindow.IsActive) DoorWindow.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
-        // The next open finds a page loaded and waiting for its init.
-        if (_core != null && _session == 0) Navigate(CounterSheetRules.SheetUrl);
+        // The next open finds the same page waiting for its init: no load between opens.
+        _waiting = false;
+        HidePlaceholder();
+        KeepPage();
         try { Retracted?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex); }
     }
 
@@ -531,7 +687,9 @@ internal sealed class CounterSheetView : Grid
         if (_web == null) return;
         var margin = new Thickness(inset, top, inset, inset + off);
         if (_web.Margin != margin) _web.Margin = margin;
-        ApplyRegion(Math.Max(0, -top));   // whatever of it is still above the bar line is cut
+        if (_placeholder.Visibility == Visibility.Visible && _placeholder.Margin != margin) _placeholder.Margin = margin;
+        // Whatever of it is still above the bar line is cut; all of it while this open has not painted (the waiting card shows).
+        ApplyRegion(_waiting ? 1e6 : Math.Max(0, -top));
     }
 
     /// <summary>The gold edge: IN once the page has landed (a short fade, Gentle's floor), OUT at once.</summary>
@@ -645,7 +803,7 @@ internal sealed class CounterSheetView : Grid
 
     private void OnDoorVisibleChanged(object? sender, DependencyPropertyChangedEventArgs e)
     {
-        if (e.NewValue is true && !_down) { RestoreCards(); return; }   // cards held while the door was hidden
+        if (e.NewValue is true && !_down) { RestoreCards(); ScheduleWarm(); return; }   // cards held while the door was hidden
         if (e.NewValue is not false || !_down) return;
         var ask = _wantsClose;
         Finish(0);   // a hidden window cannot slide: cut
@@ -659,6 +817,8 @@ internal sealed class CounterSheetView : Grid
         _clock.Stop();
         _reveal.Stop();
         _cardWatch.Stop();
+        _resetWatch.Stop();
+        HidePlaceholder();
         _hiddenCards.Clear();
         DisposeWeb();
         ask?.Invoke("door-closed");
@@ -681,7 +841,8 @@ internal sealed class CounterSheetView : Grid
         catch (Exception ex) { Diag.Swallowed(ex); }
         _core = null;
         _pageUrl = null;
-        _pageReady = _fresh = _live = false;
+        _pageReady = _fresh = _live = _used = _resetting = false;
+        _resetWatch.Stop();
         _region = (-1, -1, -1, -1);
         if (web == null) return;
         try { _slot.Children.Remove(web); web.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }

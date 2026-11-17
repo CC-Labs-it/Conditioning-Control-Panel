@@ -56,7 +56,7 @@ internal sealed class GameCounterSheet
         Grid.SetRowSpan(strip, 99);
         Grid.SetColumnSpan(strip, 99);
         grid.Children.Add(strip);
-        View = CounterSheetView.Mount(window, grid, strip, from);
+        View = CounterSheetView.Mount(window, grid, strip, from, warm: false);   // made on a press: cold by design
         View.FocusDoorOnClose = false;
         // The strip above the scrim dims with it, so the whole game reads as under the sheet.
         strip.Background = View.ScrimLayer.Background;

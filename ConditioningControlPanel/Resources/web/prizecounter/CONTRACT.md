@@ -88,6 +88,15 @@ Sheet additions (shop frame lane, 2026-11-17; all optional, absent = today's beh
   shop preview on, the last one puts the chip back on the preview wallet.
 `stock_changed` / `catalog_changed` carry the fresh state as `state` (the page also reads it inline).
 
+Reuse (open speed lane, 2026-11-17; additive, a host that never sends it loads the page per open as before):
+- in: `{type:'reset'}` (WPF sheet, once the sheet is fully up after a close). The page drops that open: every pending
+  answer, the init, the `worn` / `wallet-at` listeners; the mount is disposed (window listeners, juice observer,
+  sound) and the page stays empty and quiet (no frames, timers or sounds). `sheet/reuse.js` then mounts again and
+  posts `{type:'ready'}`; the next open's `init` starts it over at the first tab, nothing picked, no query, only the
+  heading focused, the arrival played again. The host gives every open its own relay and identity pin as before and
+  drops page frames while no open owns the page; a sign-in from the page still loads it again. No `ready` within
+  400 ms of a reset: the host loads the page again.
+
 ## Rules
 
 - Every effect has an IN and an OUT. Gentle visuals: fades only, no dust, no shake. Motion off: cuts.

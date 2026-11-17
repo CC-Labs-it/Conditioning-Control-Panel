@@ -114,5 +114,7 @@ export function createSound({ muted = false, win = globalThis.window } = {}) {
     /** A bubble's own pop (sheet/skins.js sfx). */
     pop(b) { if (!ac()) return; try { b.skin.sfx(b, s.ctx.currentTime + 0.01, au); } catch (e) { /* sound is a bonus */ } },
     get ready() { return !!s.ctx; },
+    /** The page let this mount go (sheet/reuse.js): the context closes and nothing plays again. */
+    close() { muted = true; s.unlocked = false; const c = s.ctx; s.ctx = null; try { if (c && typeof c.close === 'function') c.close(); } catch (e) { /* gone already */ } },
   };
 }

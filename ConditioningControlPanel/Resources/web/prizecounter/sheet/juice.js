@@ -124,6 +124,7 @@ export function installJuice(view, { motion = 'full', gentle = false, doc, win =
   const live = L.on && typeof root.animate === 'function' && typeof root.querySelector === 'function';
   const st = { arrived: false, arriveAt: 0, t0: now(), tab: null, pick: null, sold: null, soldAt: 0, soldNode: null, ask: false, sp: null,
     eq: null, gift: null, fresh: 0, coupon: null, meter: null, roll: 0, swung: new Set(), io: null };
+  let offVis = null;   // dispose() (a reused page mounts again: sheet/reuse.js)
   const sfx = (name, ...a) => { try { if (sound && typeof sound[name] === 'function') sound[name](...a); } catch (e) { /* sound is a bonus */ } };
   const q = (n, sel) => (n && typeof n.querySelector === 'function' ? n.querySelector(sel) : null);
   const qa = (n, sel) => (n && typeof n.querySelector === 'function' ? Array.from(n.querySelectorAll(sel)) : []);
@@ -309,7 +310,7 @@ export function installJuice(view, { motion = 'full', gentle = false, doc, win =
     }
     root.prepend(layer);
     const vis = () => { layer.dataset.paused = doc.hidden ? '1' : ''; };
-    if (typeof doc.addEventListener === 'function') doc.addEventListener('visibilitychange', vis);
+    if (typeof doc.addEventListener === 'function') { doc.addEventListener('visibilitychange', vis); offVis = () => doc.removeEventListener('visibilitychange', vis); }
   }
 
   /* ---------- the paint hook: compare, then animate what changed ---------- */
@@ -357,5 +358,9 @@ export function installJuice(view, { motion = 'full', gentle = false, doc, win =
     inner(v, on);
     if (live) { try { after(v); } catch (e) { /* the juice is a bonus: the page works without it */ } }
   };
-  return { level: L, state: st };
+  return {
+    level: L, state: st,
+    /** Let go of what outlives the nodes: the shelf observer and the visibility listener. */
+    dispose() { try { if (st.io) st.io.disconnect(); if (offVis) offVis(); } catch (e) { /* the juice is a bonus */ } st.io = null; offVis = null; },
+  };
 }
