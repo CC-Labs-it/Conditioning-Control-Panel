@@ -20,15 +20,60 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.0";
+        public const string AppVersion = "7.3.1";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.0 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.1 - Back to the basics
 
-NEW IN 7.3.0
+NEW IN 7.3.1
+
+7.3.0 gave the basics a V2. this one gives them a wardrobe, and fixes what you told us about the V2s.
+
+THE SHOP
+the Prize Counter is rebuilt. it is a sheet that drops down from your wallet now, not a room you walk through. look for the gold SHOP tag on the launcher, the panel wallet, Studio and EMI's desk.
+
+- tabs with their own emblem: Featured, Karts, Chess, Bubbles and effects, Accessories, Prime only, Back Room, Owned.
+- every item has a picture, a short ""what it does"", and a try-on before you buy.
+- after you buy or wear something, the shop tells you where it shows and takes you there.
+- Sparkles are one gold star everywhere, and every credit flies to your wallet.
+- a weekly gift, a stamp card for your first two weeks, and a ""saving for"" bar you can pin to one item.
+
+LOOKS FOR YOUR EFFECTS
+- Bubbles: ten skins. Soap, Marble, Heart, Champagne, Spiral, Disco, Frost, Bubblegum, Latex, Oil slick. each has its own movement inside, its own pop and its own sound. the old pop is still there as a switch.
+- Deck cards: backs in Ink, Check and Lace, and Whisper, which puts a spiral with words coming at you on the back of every flip.
+- Subliminals: word styles. Typed, Chalk, Drift, Echo, Marquee.
+- Pink Filter: Two-tone, a second colour blended into the first.
+- what you own is picked in the effect's own options, next to everything else.
+
+CHESS AND KARTS
+- Piece by Piece: five piece finishes (Candy lacquer, Mineral strata, Liquid ribbons, Oil slick, Gold faultlines), four boards (Midnight Observatory, Glasshouse, Velvet Theatre, After Hours Arcade), and Emi as a cheerleader at your table.
+- chess and kart items sit on their own shelves now, easy to tell apart.
+
+PROFILE
+- profile frames are redrawn and they move: Lace, Ink Stamp, Gilt, Polaroid.
+- your own picture wears the frame everywhere you see it.
+
+V2, AFTER YOUR FEEDBACK
+- every settings page has a plain V2 on/off switch, and presets remember which V2s are on.
+- the old Back Room ""Flashes v2"" and ""Bubbles v2"" are called Extra Flashes and Extra Bubbles now. the Super effects are the V2.
+- Deck: the card takes the shape of the picture, so tall pictures no longer sit in an empty frame. the flip is quicker and steadier.
+- Deck keeps its cards when you own Shatter.
+- Steam: a pause between fog phrases.
+- fog and the Whirlpool are much lighter on the processor.
+- the V2 star and three other icons no longer show as empty boxes.
+
+STUDIO
+- option pages are split into named sections (Basics and so on) that fold, and each one says how many things you changed.
+
+FIXES
+- fixed a ""Collection was modified"" crash while popping bubbles with Froth on.
+- a Games pill on Play opens the launcher's Games page.
+- takeover web videos go fullscreen again.
+
+FROM 7.3.0
 
 most of you spend most of your time on the basics: flashes, bubbles, the spiral, subliminals. it has been almost a year since those arrived, so a V2 was owed. this one is their revamp.
 
@@ -72,7 +117,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.2.4.";
+this is a pre-release. it carries everything in 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
