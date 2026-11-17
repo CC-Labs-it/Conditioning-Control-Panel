@@ -211,7 +211,8 @@ export function createView(doc, { t, sheet, base = './' }) {
       close.onpress = on.close;
       walletN.textContent = String(v.sp);
       wallet.setAttribute('aria-label', t('shop_wallet', v.sp));
-      wallet.hidden = !!sheet || v.status === 'signed_out';
+      // In a sheet the host's own wallet shows the balance; the preview wallet is not the host's, so it shows here.
+      wallet.hidden = (!!sheet && !(v.pv && v.pv.preview)) || v.status === 'signed_out';
       search.hidden = v.status !== 'ready';
       here.hidden = v.status !== 'ready' || v.platform === 'desktop' || !(v.pv && v.pv.places.size);
       here.setAttribute('aria-pressed', String(!!v.hereOnly));
