@@ -70,11 +70,11 @@ public class LookWardrobeTests
             LookWardrobe.TwoToneOn = true;
             Assert.False(LookWardrobe.TwoToneOn);
         });
-        // no network anywhere in the seam: the real equip is a marked later plug-in
+        // no network in the seam itself: the real account equip is its own store, the default outside the preview
         var src = File.ReadAllText(Path.Combine(Root(), "ConditioningControlPanel", "Services", "Prizes", "LookWardrobe.cs"));
         Assert.DoesNotContain("HttpClient", src);
         Assert.DoesNotContain("BackRoomApi", src);
-        Assert.Contains("THE REAL ACCOUNT EQUIP PLUGS IN HERE", src);
+        Assert.Contains("return AccountLookStore.Shared;", src);
     }
 
     [Fact]

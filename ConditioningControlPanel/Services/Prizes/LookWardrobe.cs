@@ -25,12 +25,9 @@ internal interface ILookStore
 }
 
 /// <summary>
-/// No account equip yet: only the free row of each slot is owned and worn, everything else is locked, and nothing
-/// is ever sent anywhere.
-/// <para>THE REAL ACCOUNT EQUIP PLUGS IN HERE (later lane, CCP-Server shop-routes.js header): owned = the grants of
-/// <c>/v2/shop/state</c>, worn = <c>GET /v2/equip</c> family <c>looks</c>, wear = <c>POST /v2/shop/equip { slot, itemId }</c>,
-/// then <see cref="WornLooks.Raise"/>. Replace this class (or give <see cref="LookWardrobe.Store"/> a new one); the
-/// Studio rows and the effects do not change.</para>
+/// Free only: only the free row of each slot is owned and worn, everything else is locked, and nothing is ever sent
+/// anywhere. The real account equip is <see cref="AccountLookStore"/>, which answers this way by itself while nobody
+/// is signed in or the server has no looks yet; this class stays for tests.
 /// </summary>
 internal sealed class FreeOnlyLookStore : ILookStore
 {
@@ -77,7 +74,8 @@ public static class LookWardrobe
 #if DEBUG
         if (ShopPreviewBackend.Enabled) return new PreviewLookStore(ShopPreviewBackend.Shared);
 #endif
-        return new FreeOnlyLookStore();
+        // The real account equip: owned = the grants, worn = /v2/equip family looks, cached on this PC.
+        return AccountLookStore.Shared;
     }
 
     /// <summary>The looks of a slot for a Studio row: the free row first, owned and worn marked. Fog has none (Two-tone is its own block).</summary>

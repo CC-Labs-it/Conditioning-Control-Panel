@@ -2254,6 +2254,8 @@ namespace ConditioningControlPanel
             Services.PrizeCounter.PrizeCounterHostService.WireRainWardrobe();
             // Worn looks: new bubbles (and later fog, words, the Deck card) ask it what is on.
             Services.Prizes.WornLooks.Wire();
+            // Outside the preview the looks come from the account (owned = grants, worn = /v2/equip family looks).
+            Services.Prizes.AccountLookStore.Wire();
 #if DEBUG
             // CCP_SHOP_PREVIEW=1: the counter answers from a local preview file and feeds the worn looks.
             Services.PrizeCounter.ShopPreviewBackend.Wire();
