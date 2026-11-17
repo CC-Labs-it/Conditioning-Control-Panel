@@ -34,6 +34,10 @@ public partial class BubbleService
     private bool _frothWasOn;
     private long _frothLastMs, _frothAskedMs = -100000;
     private readonly List<Bubble> _frothBuf = new();
+    /// <summary>True while a step walks <see cref="_frothBuf"/>. A pop inside the walk can pump the
+    /// dispatcher (a render tick lands mid-pop) and start a second step, which cleared the buffer under
+    /// the first one: "Collection was modified" (owner crash, 2026-11-17). The inner step stands down.</summary>
+    private bool _frothStepping;
 
     /// <summary>The star is on AND this is the ambient field on the compositor path. Never during
     /// a chaos run, never on the legacy per-window path.</summary>
@@ -124,6 +128,10 @@ public partial class BubbleService
         // only moves while Steam or the Whirlpool steps the stage. Read only, nothing is hooked.
         bool haveCursor = TryCursorPx(out var cursorPx);
 
+        if (_frothStepping) return;
+        _frothStepping = true;
+        try
+        {
         _frothBuf.Clear();
         foreach (var b in _bubbles) if (b.IsFrothLive) _frothBuf.Add(b);
 
@@ -180,6 +188,8 @@ public partial class BubbleService
             }
         }
         _frothBuf.Clear();
+        }
+        finally { _frothStepping = false; }
     }
 
     /// <summary>Every ambient pop comes through here after the ordinary award: pay the parts a
