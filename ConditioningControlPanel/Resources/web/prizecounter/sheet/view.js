@@ -5,7 +5,8 @@
 import { TAB_ICONS, LOCK } from '../hud/icons.js';
 import { tabKey } from '../state/strings.js';
 import { placeMark, placesOf, isHere, awayLine, PLACES } from './wire.js';
-import { sections, statusOf, statusText, artOf, locate, tabLabelKey, nameOf, FEATURED } from './model.js';
+import { sections, statusOf, statusText, locate, tabLabelKey, nameOf, FEATURED } from './model.js';
+import { itemArt } from './pictures.js';
 
 /* The mockup's place icons: a monitor, a globe, a phone (decorative, currentColor). */
 export const PLACE_ICONS = {
@@ -176,8 +177,8 @@ export function createView(doc, { t, sheet, base = './' }) {
     walletShown(n) { walletN.textContent = String(n); }, el, button, star, statusNode, itemNode, sectionHead: null, artNode,
     // Hooks the later parts fill (sheet/front.js, sheet/live.js, sheet/places.js); these defaults draw slice 1.
     front: null,
-    thumb: (e, v) => artNode(artOf(e.id, v.index, e.fx || e.tab, base)),
-    monitor(at, v) { const p = el('div', 'prev'); p.append(artNode(artOf(at ? at.id : '', v.index, at ? at.fx || at.tab : 'backroom', base), true)); return p; },
+    thumb: (e, v) => artNode(itemArt(e.id, v.index, e.fx || e.tab, base)),
+    monitor(at, v) { const p = el('div', 'prev'); p.append(artNode(itemArt(at ? at.id : '', v.index, at ? at.fx || at.tab : 'backroom', base), true)); return p; },
     idleRoom: () => [el('p', 'd-where', t('shop_sheet_pick'))],
     /** Works on: Desktop app, Website, Phone, each on or struck through, the one you are on underlined. */
     placeRow(e, v) {

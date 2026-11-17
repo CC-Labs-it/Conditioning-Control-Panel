@@ -7,7 +7,8 @@
 
 import { makeBubble, stepBubble, drawBubble, popBubble, stepParts, drawParts, loadShells } from './skins.js';
 import { drawBack, drawFront, drawWord, drawFogBlobs, drawWhisper, FOGS, WORDS, hueOf } from './looks.js';
-import { artOf, labelOf, locate } from './model.js';
+import { labelOf, locate } from './model.js';
+import { itemArt } from './pictures.js';
 import { FX_SLOTS } from './wire.js';
 
 const kindOf = (id) => String(id || '').split('.').pop();
@@ -220,7 +221,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
     item.world.c = item.c;
     item.cv.setAttribute('role', 'img'); item.cv.setAttribute('aria-label', t('shop_sheet_spotlit', labelOf(e, t)));
     s.append(item.cv);
-    if (!e.fx) { const a = view.artNode(artOf(e.id, v.index, e.tab, base), true); a.classList.add('lit'); s.append(a); }
+    if (!e.fx) { const a = view.artNode(itemArt(e.id, v.index, e.tab, base), true); a.classList.add('lit'); s.append(a); }
     return s;
   };
   const monitor = view.monitor;

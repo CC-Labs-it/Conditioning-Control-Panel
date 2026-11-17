@@ -151,6 +151,11 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .it[data-v="2"] .art-glyph svg { transform: rotate(-2deg) scaleX(-1); }
 .it[data-v="3"] .art-glyph { background-image: radial-gradient(circle at 30% 25%, #ffffff16 0 18%, #0000 19%); }
 .it[data-v="3"] .art-glyph svg { transform: rotate(-9deg) scale(1.08); }
+/* a rendered item picture (sheet/pictures.js): an ink-outlined sticker of the real model, set on the cubby floor */
+.art-pic img { padding: 4% 5% 1%; }
+.it[data-v="1"] .art-pic img { transform: rotate(2deg); }
+.it[data-v="3"] .art-pic img { transform: rotate(-2deg); }
+.prev .art-pic img, .stage .art-pic img { padding: 2%; }
 
 /* price stickers: fat round stickers with the star; cream for 120, pink for 360, ink and gold from 730 */
 .tg { position: relative; display: inline-flex; align-items: center; isolation: isolate; }
