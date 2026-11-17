@@ -514,6 +514,14 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .sec.fam-chess::before, .sec.fam-kart::before { inset: -10px -12px 0; border: var(--o) solid var(--ink); border-radius: 22px; box-shadow: 3px 4px 0 var(--black); }
 /* the sign sits inside the place, on its ground, with the place's trim under it (it carries the trim when it sticks) */
 .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin: -7px -9px 0; padding: 16px 10px 22px; border-radius: 19px 19px 0 0; box-shadow: 0 8px 7px -6px #0000008c; }
+/* stuck under the tabs, the sign carries the place's top edge with it: the ink rim and its round corners, the night
+   outside the curve. Without it the kerbs and the board peeked past the corners and the head read as cut off. At rest
+   this sits exactly on the place's own rim, so nothing changes there. The head sticks 3px lower so the rim shows. */
+.sec.fam-chess > .sh, .sec.fam-kart > .sh { top: -17px; }
+.sec.fam-chess > .sh::before, .sec.fam-kart > .sh::before { content: ""; position: absolute; z-index: -1; left: calc(-1 * var(--o)); right: calc(-1 * var(--o)); top: calc(-1 * var(--o)); height: 22px; pointer-events: none;
+  background: radial-gradient(circle at 22px 22px, #0000 18.6px, var(--ink) 19px 21.6px, var(--night) 22px) 0 0 / 22px 22px no-repeat,
+    radial-gradient(circle at 0 22px, #0000 18.6px, var(--ink) 19px 21.6px, var(--night) 22px) 100% 0 / 22px 22px no-repeat,
+    linear-gradient(var(--ink), var(--ink)) 50% 0 / calc(100% - 44px) var(--o) no-repeat; }
 /* Chess: a pink and cream board. A board band under the sign, a faint big board behind, the board floor in perspective */
 .sec.fam-chess::before { background: repeating-conic-gradient(#ffd8ec0d 0 25%, #0000 0 50%) 0 0 / 64px 64px, var(--ground); }
 .sec.fam-chess > .sh { background: repeating-conic-gradient(#ff8cc6 0 25%, #fff3df 0 50%) 0 100% / 14px 14px repeat-x, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 14px) / 100% 3px no-repeat, var(--ground); }
@@ -540,7 +548,7 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .sec.fam-chess .it .niche::after, .sec.fam-kart .it .niche::after { content: none; }
 @media (max-width: 860px) {
   .sec.fam-chess::before, .sec.fam-kart::before { left: -10px; right: -10px; }
-  .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin-left: -7px; margin-right: -7px; }
+  .sec.fam-chess > .sh, .sec.fam-kart > .sh { margin-left: -7px; margin-right: -7px; top: var(--o); }
   .sec.fam-chess::after { left: -7px; right: -7px; }
 }
 @media (max-width: 640px) {
