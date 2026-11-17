@@ -43,7 +43,7 @@ test('opens on the heading with nothing picked; the tabs are the state shelves g
   assert.equal(r.doc.activeElement, r.page.view.title);
   assert.equal(r.page.shop.card(), null);
   assert.deepEqual(r.page.view.root.all().filter((x) => x.dataset.key && x.dataset.key.startsWith('tab:')).map((x) => x.dataset.key),
-    ['tab:games', 'tab:you', 'tab:prime', 'tab:backroom', 'tab:owned']);
+    ['tab:kart', 'tab:chess', 'tab:accessories', 'tab:prime', 'tab:backroom', 'tab:owned']);
   r.click('tab:owned');
   assert.ok(r.btn('it:jackpot_remix'));
   assert.equal(r.btn('it:desk.hat.party'), null);

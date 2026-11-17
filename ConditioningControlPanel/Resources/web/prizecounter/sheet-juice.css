@@ -124,3 +124,16 @@
   .emb-chess .emb-body, .emb-kart .emb-body, .emb-wheel, .emb-puff { animation-duration: 5.6s; }
   .emb-chess .emb-body { animation-duration: 8.8s; }
 }
+/* ---------- the tab emblems (sheet/tab-art.js): pointing at a tab makes its emblem react, easing in and back out (a
+   transition, so leaving is the OUT); the open tab's emblem stands a little bigger and pops with the tab (sheet/juice.js).
+   No idle loop: eight tabs stay calm. Gentle stills them (amp 0), motion off cuts them (sheet.css). ---------- */
+.tab-emb svg { transition: translate .4s var(--j-spring), rotate .4s var(--j-spring), scale .4s var(--j-spring); }
+.tab-emb .te-body, .tab-emb .te-wheel, .tab-emb .te-spin { transform-box: view-box; transition: rotate .7s cubic-bezier(.2, .7, .3, 1), translate .4s var(--j-spring); }
+.s-tab[aria-selected="true"] .tab-emb svg { scale: calc(1 + .1 * var(--j-amp)); }
+.s-tab:hover .te-kart svg { translate: calc(2px * var(--j-amp)) 0; rotate: calc(-6deg * var(--j-amp)); }
+.s-tab:hover .te-kart .te-wheel { rotate: calc(360deg * var(--j-amp)); }
+.s-tab:hover .te-chess svg { translate: 0 calc(-2px * var(--j-amp)); rotate: calc(-10deg * var(--j-amp)); }
+.s-tab:hover .te-effects svg { translate: 0 calc(-2.5px * var(--j-amp)); }
+.s-tab:hover .te-effects .te-spin { rotate: calc(-300deg * var(--j-amp)); }
+.s-tab:hover .te-accessories svg { rotate: calc(-12deg * var(--j-amp)); translate: 0 calc(-1.5px * var(--j-amp)); }
+.s-tab:hover .te-accessories .te-body { translate: 0 calc(-1px * var(--j-amp)); }

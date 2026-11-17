@@ -72,16 +72,28 @@ kbd { font: 700 11.5px var(--f-body); border: 2px solid currentColor; border-rad
 .s-tab[aria-selected="true"] { background: var(--bean), var(--tc); color: var(--ink); min-height: 46px; font-weight: 900; box-shadow: none; }
 .s-tab[data-key="tab:effects"] { --tc: var(--sky); } .s-tab[data-key="tab:games"] { --tc: var(--tang); } .s-tab[data-key="tab:you"] { --tc: var(--gold); }
 .s-tab[data-key="tab:prime"] { --tc: var(--lilac); } .s-tab[data-key="tab:backroom"] { --tc: var(--teal); } .s-tab[data-key="tab:owned"] { --tc: var(--paper-2); }
-.s-tab[data-key="tab:kart"] { --tc: var(--tang); } .s-tab[data-key="tab:chess"] { --tc: var(--paper-2); } .s-tab[data-key="tab:profile"] { --tc: var(--gold); } .s-tab[data-key="tab:desk"] { --tc: var(--mint); }
+.s-tab[data-key="tab:kart"] { --tc: var(--tang); } .s-tab[data-key="tab:chess"] { --tc: var(--mint); } .s-tab[data-key="tab:profile"] { --tc: var(--gold); } .s-tab[data-key="tab:desk"] { --tc: var(--mint); }
+.s-tab[data-key="tab:accessories"] { --tc: var(--gold); }
+.s-tabs:has([data-key="tab:accessories"][aria-selected="true"]) { --tabc: var(--gold); }
 .s-tabs:has([data-key="tab:effects"][aria-selected="true"]) { --tabc: var(--sky); } .s-tabs:has([data-key="tab:games"][aria-selected="true"]) { --tabc: var(--tang); }
 .s-tabs:has([data-key="tab:you"][aria-selected="true"]) { --tabc: var(--gold); } .s-tabs:has([data-key="tab:prime"][aria-selected="true"]) { --tabc: var(--lilac); }
 .s-tabs:has([data-key="tab:backroom"][aria-selected="true"]) { --tabc: var(--teal); } .s-tabs:has([data-key="tab:owned"][aria-selected="true"]) { --tabc: var(--paper-2); }
-.s-tabs:has([data-key="tab:kart"][aria-selected="true"]) { --tabc: var(--tang); } .s-tabs:has([data-key="tab:chess"][aria-selected="true"]) { --tabc: var(--paper-2); }
+.s-tabs:has([data-key="tab:kart"][aria-selected="true"]) { --tabc: var(--tang); } .s-tabs:has([data-key="tab:chess"][aria-selected="true"]) { --tabc: var(--mint); }
 .s-tabs:has([data-key="tab:profile"][aria-selected="true"]) { --tabc: var(--gold); } .s-tabs:has([data-key="tab:desk"][aria-selected="true"]) { --tabc: var(--mint); }
 .s-tab .cnt { font: 900 11.5px/18px var(--f-body); min-width: 22px; height: 22px; display: inline-grid; place-items: center; background: var(--cherry); color: var(--tx); border: 2px solid var(--ink); border-radius: 11px; padding: 0 4px; }
 .s-tab[aria-selected="true"] .cnt { background: var(--ink); color: var(--tx); }
 .shroot .s-tab:focus-visible { outline-offset: -7px; }
 .shroot .s-tab[aria-selected="true"]:focus-visible { outline-color: var(--ink); }
+/* the four emblem tabs (sheet/tab-art.js): a small sticker before the word, standing a touch proud of the tab's top edge */
+.s-tab .tab-emb { flex: none; display: inline-grid; place-items: center; height: 26px; margin: -5px -1px -3px -6px; }
+.s-tab .tab-emb svg { display: block; overflow: visible; transform-origin: 50% 90%; }
+.s-tab .lbl-short { display: none; }
+/* eight tabs on the 1000-wide sheet: tighter tabs; below that the long label gives way to its short word; never two rows */
+@media (max-width: 1180px) {
+  .s-tabs { gap: 4px; padding-left: 14px; padding-right: 14px; }
+  .s-tab { padding: 0 11px; font-size: 13.5px; gap: 6px; }
+}
+@media (max-width: 990px) { .s-tab .lbl-long { display: none; } .s-tab .lbl-short { display: inline; } }
 
 .s-main { grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 350px); min-height: 0; }   /* row 3 even while the tabs hide (search) */
 /* scrollbars in the counter's own colours, not the browser's grey */

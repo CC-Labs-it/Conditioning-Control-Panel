@@ -1,6 +1,6 @@
 /* sheet/model.js - the 2D counter sheet, pure (no DOM). state/shop.js owns today's rows; sheet/wire.js reads the preview
  * wire (effects, places, gift, stamps, goal, ledger). This only says what to draw.
- *   sheetTabs   Featured (when the wire has a front page), Screen effects, the state's tabs grouped as the mockup, Owned
+ *   sheetTabs   Featured (when the wire has a front page), Karts, Chess, Bubbles and effects, Accessories, the rest, Owned
  *   rowsOf      every row as an entry { id, row, tab, group, ti, bay, slot, fx, x } (fx = the effect slot, x = wire extras)
  *   sections    a tab (or a search) -> headed sections of planks of entries, with a place mark where a shelf has one
  *   statusOf    the one status a card wears: Switched on, Wearing, Owned, Not out yet, Prime only, soon, free, a price tag
@@ -12,12 +12,21 @@ import { tabKey, itemName, itemKey } from '../state/strings.js';
 import { cardModel } from '../hud/card.js';
 import { readPreview, FX_SLOTS, placesOf, isHere, couponOn, cardGone } from './wire.js';
 
-export const OWNED = 'owned', FEATURED = 'featured', EFFECTS = 'effects';
+export const OWNED = 'owned', FEATURED = 'featured', EFFECTS = 'effects', KARTS = 'kart', CHESS = 'chess', ACCESSORIES = 'accessories';
 export const NO_PREVIEW = readPreview(null);
-const GROUP = { kart: 'games', chess: 'games', profile: 'you', desk: 'you' };
-export const groupOf = (tabId) => GROUP[tabId] || tabId;
-const TAB_WORDS = { featured: 'shop_sheet_tab_featured', effects: 'shop_sheet_tab_effects', games: 'shop_sheet_tab_games', you: 'shop_sheet_tab_you', prime: 'shop_sheet_prime_only', owned: 'shop_owned' };
+/** The sheet's tabs (owner, 2026-11-17): Featured, Karts, Chess, Bubbles and effects, Accessories, then the state's other
+ * tabs in its own order (Prime only, Back Room), then Owned. A state tab hangs in its group; the old tab names a link,
+ * a test or a shot may still carry ("games", "you") are aliases. */
+const GROUP = { profile: ACCESSORIES, desk: ACCESSORIES };
+export const TAB_ALIAS = Object.freeze({ games: KARTS, you: ACCESSORIES });
+export const groupOf = (tabId) => GROUP[tabId] || TAB_ALIAS[tabId] || tabId;
+const LEAD = [KARTS, CHESS, EFFECTS, ACCESSORIES];
+const TAB_WORDS = { featured: 'shop_sheet_tab_featured', kart: 'shop_sheet_tab_karts', chess: 'shop_sheet_tab_chess', effects: 'shop_sheet_tab_effects',
+  accessories: 'shop_sheet_tab_accessories', games: 'shop_sheet_tab_games', you: 'shop_sheet_tab_you', prime: 'shop_sheet_prime_only', owned: 'shop_owned' };
 export const tabLabelKey = (id) => TAB_WORDS[id] || tabKey(id);
+/** A shorter word for a tab whose label is long, shown when the tab bar runs out of room (null = the label fits). */
+const TAB_SHORT = { effects: 'shop_sheet_tab_effects_short' };
+export const tabShortKey = (id) => TAB_SHORT[id] || null;
 /** The section a row hangs in: its effect slot, or its state tab. */
 const SECTION_WORDS = new Set(['kart', 'chess', 'profile', 'desk', 'prime', ...FX_SLOTS]);
 export const sectionTitleKey = (k) => (SECTION_WORDS.has(k) ? `shop_sheet_sec_${k}` : tabKey(k));
@@ -26,9 +35,10 @@ const SHOWS_MORE = { backroom: 'shop_sheet_shows_backroom', 'rain-clothes': 'sho
 export const sectionShowsKey = (k) => (SECTION_WORDS.has(k) ? `shop_sheet_shows_${k}` : SHOWS_MORE[k] || null);
 
 export function sheetTabs(tabIds, pv = NO_PREVIEW) {
-  const out = [];
-  if (pv.front) out.push(FEATURED);
-  if (pv.fx.length) out.push(EFFECTS);
+  const has = new Set((tabIds || []).map(groupOf));
+  if (pv.fx.length) has.add(EFFECTS);
+  const out = pv.front ? [FEATURED] : [];
+  for (const id of LEAD) if (has.has(id)) out.push(id);
   for (const id of tabIds || []) if (!out.includes(groupOf(id))) out.push(groupOf(id));
   return [...out, OWNED];
 }
@@ -79,8 +89,9 @@ function sharedPlaces(list, pv) {
 
 /** Sections: { key, title, meta?, places?, mixed?, planks: [[entry]], empty? }. ctx: { tab, query, t, pv, platform, hereOnly }.
  * mixed = a list across shelves (search, Owned): each away item wears its own place tab. */
-export function sections(st, { tab, query = '', t, pv = NO_PREVIEW, platform = 'desktop', hereOnly = false }) {
+export function sections(st, { tab: asked, query = '', t, pv = NO_PREVIEW, platform = 'desktop', hereOnly = false }) {
   if (!st) return [];
+  const tab = groupOf(asked);   // an old tab name ("games", "you") reads as its new tab
   const keep = (e) => !hereOnly || isHere(placesOf(pv, e.id), platform);
   const all = rowsOf(st, pv);
   const q = String(query).trim().toLowerCase();

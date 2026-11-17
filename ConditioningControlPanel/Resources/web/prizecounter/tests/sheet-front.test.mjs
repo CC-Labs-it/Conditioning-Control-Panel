@@ -43,7 +43,7 @@ test('today\'s server body draws no Featured tab, no slip and no front page part
   const r = await mountOn(createMockServer(SAMPLE), { tab: 'kart' });
   assert.equal(r.btn('tab:featured'), null);
   assert.equal(r.page.view.head.all().find((n) => n.className === 's-slip').hidden, true);
-  assert.equal(r.page.ui.tab, 'games');
+  assert.equal(r.page.ui.tab, 'kart');
   assert.doesNotMatch(r.text(), /Monday gift|Stamp card|Saving for/);
 });
 

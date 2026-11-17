@@ -3,6 +3,9 @@
 
 export const LEX = {
   shop_title: 'Prize Counter',
+  // the host's door into the shop (Controls/ShopTag.cs, the gold tag on every wallet chip and shop link); the page only carries them
+  shop_door_label: 'SHOP',
+  shop_door_tip: 'Open the shop',
   shop_loading: 'Opening the counter.',
   shop_offline: 'The counter did not answer. Try again in a moment.',
   shop_signed_out: 'Sign in to shop at the counter.',

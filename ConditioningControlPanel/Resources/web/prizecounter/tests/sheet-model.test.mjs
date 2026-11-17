@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import { readState, readRow } from '../state/shop.js';
 import { LEX } from '../state/strings.js';
 import { SHEET_LEX, sheetT } from '../sheet/strings.js';
-import { sheetTabs, sections, statusOf, statusText, artOf, roomModel, locate, slotOf, tagTier, OWNED } from '../sheet/model.js';
+import { sheetTabs, sections, statusOf, statusText, artOf, roomModel, locate, slotOf, tagTier, OWNED, FEATURED, EFFECTS, TAB_ALIAS, groupOf, tabLabelKey, tabShortKey } from '../sheet/model.js';
+import { readPreview } from '../sheet/wire.js';
 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
 const INDEX = JSON.parse(readFileSync(new URL('../assets/preview/index.json', import.meta.url), 'utf8'));
@@ -13,10 +14,29 @@ const t = sheetT({});
 const row = (extra) => readRow({ id: 'desk.hat.party', priceSp: 360, sale: 'on', owned: null, ...extra });
 const S = (r, sp, tier, wearing) => statusOf({ row: r, x: {}, fx: null }, { sp, tier, wearing });
 
-test('tabs come from the state grouped as the mockup, Owned last; Rain only with init.rainV2', () => {
-  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: false }).tabs.map((x) => x.id)), ['games', 'you', 'prime', 'backroom', OWNED]);
-  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: true }).tabs.map((x) => x.id)).slice(0, 2), ['rain-clothes', 'rain-hair']);
+test('tabs come from the state grouped as the owner asked, Owned last; Rain only with init.rainV2', () => {
+  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: false }).tabs.map((x) => x.id)), ['kart', 'chess', 'accessories', 'prime', 'backroom', OWNED]);
+  // Rain's tabs come after the four lead tabs, in the state's own order
+  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: true }).tabs.map((x) => x.id)).slice(0, 5), ['kart', 'chess', 'accessories', 'rain-clothes', 'rain-hair']);
   assert.deepEqual(sheetTabs([]), [OWNED]);
+});
+
+test('Karts, Chess, Bubbles and effects, Accessories lead in that order whatever order the state sends', () => {
+  const pv = { ...readPreview(null), front: true, fx: [{ slot: 'bubble', row: { id: 'fx.bubble.heart' } }] };
+  assert.deepEqual(sheetTabs(['backroom', 'desk', 'prime', 'chess', 'profile', 'kart'], pv), [FEATURED, 'kart', 'chess', EFFECTS, 'accessories', 'backroom', 'prime', OWNED]);
+});
+
+test('the old tab names are aliases: games opens Karts, you opens Accessories, effects stays Bubbles and effects', () => {
+  assert.equal(TAB_ALIAS.games, 'kart'); assert.equal(TAB_ALIAS.you, 'accessories');
+  assert.equal(groupOf('games'), 'kart'); assert.equal(groupOf('you'), 'accessories'); assert.equal(groupOf('effects'), EFFECTS);
+  assert.equal(groupOf('profile'), 'accessories'); assert.equal(groupOf('desk'), 'accessories');
+  assert.equal(groupOf('kart'), 'kart'); assert.equal(groupOf('chess'), 'chess'); assert.equal(groupOf('backroom'), 'backroom');
+  const st = readState(SAMPLE, { rain: false });
+  assert.deepEqual(sections(st, { tab: 'games', t }).map((s) => s.key), sections(st, { tab: 'kart', t }).map((s) => s.key));
+  assert.deepEqual(sections(st, { tab: 'you', t }).map((s) => s.key), ['profile', 'desk']);
+  assert.equal(tabLabelKey('kart'), 'shop_sheet_tab_karts'); assert.equal(tabLabelKey('accessories'), 'shop_sheet_tab_accessories');
+  assert.equal(t(tabLabelKey(EFFECTS)), 'Bubbles and effects'); assert.equal(t(tabShortKey(EFFECTS)), 'Effects');
+  assert.equal(tabShortKey('kart'), null);
 });
 
 test('every card face wears one status', () => {
@@ -36,11 +56,14 @@ test('every card face wears one status', () => {
 
 test('a group tab is one section per state tab with a plank per server shelf; Owned groups by shelf; search finds by name', () => {
   const st = readState(SAMPLE, { rain: false });
-  const games = sections(st, { tab: 'games', t });
-  assert.deepEqual(games.map((s) => s.title), ['Kart skins', 'Chess looks']);
-  assert.equal(games[0].meta, 'Racing Thoughts');
-  assert.equal(games[0].planks.length, st.tabs.find((x) => x.id === 'kart').shelves.filter((s) => s.rows.some(Boolean)).length);
-  assert.deepEqual(sections(st, { tab: 'you', t }).map((s) => s.title), ['Profile frames', 'Desk toys']);
+  const karts = sections(st, { tab: 'kart', t });
+  assert.deepEqual(karts.map((s) => s.title), ['Kart skins']);
+  assert.equal(karts[0].meta, 'Racing Thoughts');
+  assert.equal(karts[0].planks.length, st.tabs.find((x) => x.id === 'kart').shelves.filter((s) => s.rows.some(Boolean)).length);
+  const chess = sections(st, { tab: 'chess', t });
+  assert.deepEqual(chess.map((s) => s.key), ['chess']);
+  assert.equal(chess[0].planks.length, st.tabs.find((x) => x.id === 'chess').shelves.filter((s) => s.rows.some(Boolean)).length);
+  assert.deepEqual(sections(st, { tab: 'accessories', t }).map((s) => s.title), ['Profile frames', 'Desk toys']);
   const owned = sections(st, { tab: OWNED, t });
   assert.ok(owned.length >= 2);
   assert.ok(owned.every((s) => s.planks[0].every((e) => e.row.owned)));

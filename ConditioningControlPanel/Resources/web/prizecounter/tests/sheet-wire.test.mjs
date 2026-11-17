@@ -23,7 +23,7 @@ test('the real server body reads as no preview: every part stays hidden and the 
   assert.equal(pv.preview, false); assert.equal(pv.front, false);
   assert.deepEqual([pv.fx, pv.fresh, pv.equip, pv.gift, pv.stamps, pv.goal, pv.ledger], [[], [], null, null, null, undefined, null]);
   assert.deepEqual(placesOf(pv, 'desk.hat.party'), ['desktop', 'web', 'phone']);
-  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: false }).tabs.map((x) => x.id), pv), ['games', 'you', 'prime', 'backroom', OWNED]);
+  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: false }).tabs.map((x) => x.id), pv), ['kart', 'chess', 'accessories', 'prime', 'backroom', OWNED]);
   assert.equal(readPreview(null).front, false);
   assert.equal(readPreview({ ok: false, preview: true }).preview, false);
 });
@@ -31,7 +31,7 @@ test('the real server body reads as no preview: every part stays hidden and the 
 test('the preview body: Featured and Screen effects first, effect rows by slot, places, equip, stamps', async () => {
   const { st, pv } = await preview();
   assert.equal(pv.preview, true);
-  assert.deepEqual(sheetTabs(st.tabs.map((x) => x.id), pv), [FEATURED, EFFECTS, 'games', 'you', 'prime', 'backroom', OWNED]);
+  assert.deepEqual(sheetTabs(st.tabs.map((x) => x.id), pv), [FEATURED, 'kart', 'chess', EFFECTS, 'accessories', 'prime', 'backroom', OWNED]);
   const fx = sections(st, { tab: EFFECTS, t, pv });
   assert.deepEqual(fx.map((s) => s.title), ['Bubble skins', 'Card frames', 'Words behind the card', 'Two-tone fog', 'Word styles']);
   assert.deepEqual(fx[0].places, ['desktop']);

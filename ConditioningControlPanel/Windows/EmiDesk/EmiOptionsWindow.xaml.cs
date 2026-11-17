@@ -170,7 +170,10 @@ public partial class EmiOptionsWindow : Window
             TxtHeadThings.Text = Loc.Get("emi_desk_opt_head_things");
             LblDeskHat.Text = Loc.Get("emi_desk_opt_hat");
             LblDeskToy.Text = Loc.Get("emi_desk_opt_toy");
-            BtnDeskCounter.Content = Loc.Get("emi_desk_opt_counter");
+            // a door into the shop: the words, then the gold SHOP tag every door wears (Controls/ShopTag.cs)
+            var counterWords = Loc.Get("emi_desk_opt_counter");
+            BtnDeskCounter.Content = Controls.ShopTag.Beside(counterWords);
+            System.Windows.Automation.AutomationProperties.SetName(BtnDeskCounter, counterWords);
             SpiceInnocent.Content = Loc.Get("emi_desk_spice_innocent");
             SpiceSuggestive.Content = Loc.Get("emi_desk_spice_suggestive");
             SpiceAnything.Content = Loc.Get("emi_desk_spice_anything");
