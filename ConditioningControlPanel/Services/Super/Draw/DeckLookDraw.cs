@@ -5,8 +5,9 @@ using SkiaSharp;
 namespace ConditioningControlPanel.Services.Super.Draw;
 
 /// <summary>
-/// Draws the Deck's worn looks (rules in CCP.Core <see cref="DeckLooks"/>): the four card backs,
-/// painted procedurally into the card's picture box, no art files. The caller has already squashed,
+/// Draws the Deck's worn looks (rules in CCP.Core <see cref="DeckLooks"/> and <see cref="DeckWhisper"/>):
+/// the four card backs, painted procedurally into the card's picture box, no art files, and the
+/// word behind the card. The caller has already squashed,
 /// lifted and clipped the canvas exactly as it does for the picture, so a back turns with the card.
 /// Skia only, no WPF and no App. One instance per layer; it owns its paints.
 /// </summary>
@@ -71,6 +72,47 @@ public sealed class DeckLookDraw : IDisposable
         canvas.DrawRect(r.Left + rim / 2, r.Top + rim / 2, w - rim, h - rim, _line);
     }
 
+    /// <summary>The whisper's ghosts (mockup drawWhisper): pink to one side, blue to the other.</summary>
+    public static readonly SKColor GhostPink = new(0xFF, 0x9C, 0xC8), GhostBlue = new(0x9C, 0xE8, 0xFF);
+
+    private readonly SKPaint _word = new()
+    {
+        IsAntialias = true,
+        TextAlign = SKTextAlign.Center,
+        Typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default,
+    };
+
+    /// <summary>
+    /// The whisper at <paramref name="p"/> for a card centred on (<paramref name="cx"/>, <paramref name="cy"/>)
+    /// and <paramref name="cardW"/> by <paramref name="cardH"/>. The caller draws it before the card
+    /// while <see cref="WhisperPose.Front"/> is false and after it once true. Never squashed or tilted
+    /// with the card: the word is in the air, not on it.
+    /// </summary>
+    public void DrawWhisper(SKCanvas canvas, float cx, float cy, float cardW, float cardH, string text, WhisperPose p, byte alpha)
+    {
+        if (!p.Visible || string.IsNullOrEmpty(text)) return;
+        var a = p.Alpha * alpha;
+        if (a < 1) return;
+        float font = (float)DeckWhisper.FontPx(cardH);
+        _word.TextSize = font;
+        var m = _word.FontMetrics;
+        float baseline = -(m.Ascent + m.Descent) / 2;
+        int save = canvas.Save();
+        canvas.Translate(cx + (float)(p.Dx * cardW), cy + (float)(p.Dy * cardH));
+        canvas.Scale((float)p.Scale);
+        if (p.Split > 0.01)
+        {
+            float off = (float)(p.Split * font);
+            _word.Color = GhostPink.WithAlpha((byte)Math.Clamp(a * 0.5, 0, 255));
+            canvas.DrawText(text, -off, baseline, _word);
+            _word.Color = GhostBlue.WithAlpha((byte)Math.Clamp(a * 0.5, 0, 255));
+            canvas.DrawText(text, off, baseline, _word);
+        }
+        _word.Color = SKColors.White.WithAlpha((byte)Math.Clamp(a, 0, 255));
+        canvas.DrawText(text, 0, baseline, _word);
+        canvas.RestoreToCount(save);
+    }
+
     /// <summary>An ARGB colour with its own alpha scaled by the card's.</summary>
     internal static SKColor Colour(uint argb, byte alpha)
     {
@@ -82,5 +124,6 @@ public sealed class DeckLookDraw : IDisposable
     {
         _fill.Dispose();
         _line.Dispose();
+        _word.Dispose();
     }
 }
