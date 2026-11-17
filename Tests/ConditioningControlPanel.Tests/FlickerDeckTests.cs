@@ -129,11 +129,11 @@ public class FlickerDeckTests
         s.Flips = 4;
         s.SinceFlip = 99;
         s.Clock = 0.37;
-        var a = Math.Pow(4.0 / 5, 1.4) * 0.15;
-        Assert.Equal(Math.Sin(0.37 * (9 + 1.3)) * a, FlickerDeck.Wobble(s), 9);
-        // After a flip the 40 rad/s ring rides on top and is gone after 0.7 s.
+        var a = Math.Pow(4.0 / 5, 1.4) * FlickerDeck.WobbleMaxRad;
+        Assert.Equal(Math.Sin(0.37 * (FlickerDeck.WobbleRate + FlickerDeck.WobbleRatePerIndex)) * a, FlickerDeck.Wobble(s), 9);
+        // After a flip a short ring rides on top and is gone after RingSec.
         s.SinceFlip = 0.1;
-        Assert.Equal(Math.Sin(0.37 * 10.3) * a + Math.Sin(0.1 * 40) * a * 0.9 * (1 - 0.1 / 0.7), FlickerDeck.Wobble(s), 9);
+        Assert.Equal(Math.Sin(0.37 * (FlickerDeck.WobbleRate + FlickerDeck.WobbleRatePerIndex)) * a + Math.Sin(0.1 * FlickerDeck.RingRadPerSec) * a * FlickerDeck.RingShare * (1 - 0.1 / FlickerDeck.RingSec), FlickerDeck.Wobble(s), 9);
     }
 
     [Fact]

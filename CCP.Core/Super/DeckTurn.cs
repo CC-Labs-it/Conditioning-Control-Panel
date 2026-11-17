@@ -16,7 +16,7 @@ public static class DeckTurn
     /// <summary>How far the new face swings past flat before it settles (a share of a quarter turn at full
     /// motion: about 5 degrees), over the last part of the flip from <see cref="SettleFrom"/>; the face is
     /// flat by <see cref="OpenBy"/> of its opening half.</summary>
-    public const double Settle = 0.06, SettleFrom = 0.6, OpenBy = 0.75;
+    public const double Settle = 0.025, SettleFrom = 0.6, OpenBy = 0.85;
     /// <summary>The perspective at full strength: the near edge grows and the far edge shrinks by about this share at a quarter turn.</summary>
     public const double Perspective = 0.2;
     /// <summary>The darkest the face gets as it turns away (edge-on), 0..1 of black.</summary>
