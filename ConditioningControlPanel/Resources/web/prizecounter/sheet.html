@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prize Counter</title>
+  <link rel="stylesheet" href="./sheet.css">
+</head>
+<body>
+  <!-- The 2D counter sheet (CONTRACT.md host seam; init.sheet = shown under the host's own wallet). The mock: mock/sheet.html. -->
+  <main id="pc"></main>
+  <script type="module">
+    import { createHost } from './host.js';
+    import { mountSheet } from './sheet/main.js';
+    import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
+    const esc = createHostEscape();
+    window.chrome?.webview?.addEventListener('message', (e) => { if (e.data && e.data.type === HOST_ESCAPE) esc.kept(); });
+    mountSheet(createHost(), { root: document.getElementById('pc') });
+  </script>
+</body>
+</html>
