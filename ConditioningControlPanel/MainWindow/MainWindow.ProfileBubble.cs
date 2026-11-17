@@ -173,7 +173,8 @@ namespace ConditioningControlPanel
                 ProfileBubbleInitials.Visibility = Visibility.Visible;
 
                 // Equipped preset bust (Own It cosmetic) beats initials.
-                var presetArt = CosmeticsCatalog.GetAvatarImage(App.Settings?.Current?.ProfileCosmetics?.AvatarId);
+                var own = loggedIn ? OwnProfileLook.Current : default;
+                var presetArt = CosmeticsCatalog.GetAvatarImage(own.AvatarId);
                 if (presetArt != null)
                 {
                     ProfileBubbleFill.Fill = new ImageBrush(presetArt) { Stretch = Stretch.UniformToFill };
@@ -204,6 +205,7 @@ namespace ConditioningControlPanel
                     _profileBubblePhotoBrush = null;
                 }
 
+                ApplyProfileBubbleFrame(own.FrameId);
                 RefreshProfileBubbleTierBadge();
 
                 if (ProfileBubblePopup?.IsOpen == true) RefreshProfileMenu();
@@ -212,6 +214,47 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Debug("RefreshProfileBubble: {E}", ex.Message);
             }
+        }
+
+        /// <summary>The bubble's worn profile frame (made in code, between the ring and the tier badge), or null.</summary>
+        private System.Windows.Controls.Image? _profileBubbleFrame;
+
+        /// <summary>
+        /// The worn profile frame round the header bubble: the small still (ProfileFrameArt draws a simpler one at
+        /// this size) at the one frame geometry every surface uses, over the pink ring, under the glow ring and the
+        /// tier badge. No frame: the pink ring as before.
+        /// </summary>
+        private void ApplyProfileBubbleFrame(string? frameId)
+        {
+            if (ProfileBubbleVisual == null || ProfileBubbleRing == null) return;
+            var face = ProfileBubbleVisual.Width - ProfileBubbleFill.Margin.Left * 2;   // the picture's circle (28 of 34)
+            var size = face / ShopCosmetics.FrameWindowRatio;
+            var art = CosmeticsCatalog.GetFrameImage(frameId, size);
+            if (art == null)
+            {
+                if (_profileBubbleFrame != null) _profileBubbleFrame.Visibility = Visibility.Collapsed;
+                ProfileBubbleRing.Visibility = Visibility.Visible;
+                return;
+            }
+            if (_profileBubbleFrame == null)
+            {
+                _profileBubbleFrame = new System.Windows.Controls.Image
+                {
+                    Stretch = Stretch.Fill,
+                    IsHitTestVisible = false,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Tag = "profile-bubble-frame",
+                };
+                ProfileBubbleVisual.Children.Insert(ProfileBubbleVisual.Children.IndexOf(ProfileBubbleRing) + 1, _profileBubbleFrame);
+            }
+            _profileBubbleFrame.Width = size;
+            _profileBubbleFrame.Height = size;
+            // Larger than the 34 box without a layout clip, as AdornedAvatar and the friends rows do it.
+            _profileBubbleFrame.Margin = new Thickness(-(size - ProfileBubbleVisual.Width) / 2d);
+            _profileBubbleFrame.Source = art;
+            _profileBubbleFrame.Visibility = Visibility.Visible;
+            ProfileBubbleRing.Visibility = Visibility.Collapsed;
         }
 
         /// <summary>Basic / Prime badge on the bubble's rim, from the canonical gates.</summary>

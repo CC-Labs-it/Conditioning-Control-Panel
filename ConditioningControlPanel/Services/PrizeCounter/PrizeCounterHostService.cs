@@ -221,7 +221,7 @@ internal static partial class PrizeCounterHostService
     /// <summary>Each family's own picker write (local first, PUT behind). Settable for tests.</summary>
     internal static Func<string, bool> WearDesk { get; set; } = id => EmiDesk.DeskEquipSync.WearFromCounter(id);
     internal static Func<string, bool> WearChess { get; set; } = id => PieceByPiece.PieceByPieceHostService.WearFromCounter(id);
-    internal static Func<string, bool> WearProfile { get; set; } = id => App.MainWindowRef?.WearProfileItemFromCounter(id) == true;
+    internal static Func<string, bool> WearProfile { get; set; } = id => OwnProfileLook.WearFromCounter(id);
 
     /// <summary>
     /// The page's <c>wear {id}</c>, routed by family. Rain closes the counter for the dressing room; a
@@ -561,8 +561,14 @@ internal static partial class PrizeCounterHostService
                 {
                     var wearId = m["id"]?.Type == JTokenType.String ? (string?)m["id"] : null;
 #if DEBUG
-                    // Preview: the real families (desk, chess, profile PUTs, Rain) never hear a preview Wear.
-                    if (ShopPreviewBackend.Enabled) { Post(new { type = "worn", id = wearId, ok = true }); break; }
+                    // Preview: the real families (desk, chess, profile PUTs, Rain) never hear a preview Wear. A profile
+                    // frame or picture is worn in the preview file, and the own avatar surfaces show it (OwnProfileLook).
+                    if (ShopPreviewBackend.Enabled)
+                    {
+                        var worn = WearFamily(wearId) != FamilyProfile || ShopPreviewBackend.Shared.WearProfile(wearId);
+                        Post(new { type = "worn", id = wearId, ok = worn });
+                        break;
+                    }
 #endif
                     var from = _from;
                     Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
@@ -570,6 +576,18 @@ internal static partial class PrizeCounterHostService
                         if (generation != _generation) return;
                         try { RouteWear(wearId, from); }
                         catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wear failed"); }
+                    }));
+                }
+                break;
+            case "go":
+                // The fitting room's "take me there" (ShownPlaces). Queued: it closes the counter.
+                if (generation == _generation)
+                {
+                    var place = m["place"]?.Type == JTokenType.String ? (string?)m["place"] : null;
+                    Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (generation != _generation) return;
+                        GoTo(place);
                     }));
                 }
                 break;
@@ -668,11 +686,72 @@ internal static partial class PrizeCounterHostService
             tab = !Companion.RainV2Gate.On && IsRainId(_tab) ? null : _tab,
             from = _from,
             wears = WearsFor(_from),
+            // What the account wears now in the in-place families (the sheet's Wearing marks), and where the fitting
+            // room's "take me there" can go from this door (CONTRACT "Sheet additions": worn, goes, go).
+            worn = WornNow(),
+            goes = ShownPlaces.Goes(_from, s?.EmiDeskEnabled == true),
             platform = "desktop",
             // The V2 avatar's name for the active mod; the lexicon is already filled, this covers page-side copy.
             companion = Companion.CompanionName.ForActiveMod(),
             rainV2 = Companion.RainV2Gate.On,
         };
+    }
+
+    /// <summary><c>init.worn</c>: the ids worn now in the families the counter wears in place: the own profile frame
+    /// and picture (OwnProfileLook, so the DEBUG preview's own in preview), and EMI's desk hat and toy (the real
+    /// account only: a preview Wear never reaches the desk). Never throws.</summary>
+    internal static string[] WornNow()
+    {
+        var ids = new List<string>();
+        try { var own = OwnProfileLook.Current; if (own.FrameId != null) ids.Add(own.FrameId); if (own.AvatarId != null) ids.Add(own.AvatarId); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+#if DEBUG
+        if (ShopPreviewBackend.Enabled) return ids.ToArray();
+#endif
+        try
+        {
+            var desk = EmiDesk.EmiDeskItems.Clamp(EmiDesk.EmiDeskItems.Current(), EmiDesk.EmiDeskItems.KnownGrants());
+            if (desk.Hat != null) ids.Add(desk.Hat);
+            if (desk.Toy != null) ids.Add(desk.Toy);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        return ids.ToArray();
+    }
+
+    /// <summary>
+    /// The fitting room's "take me there" (<c>go {place, id}</c>): the sheet closes and the place opens. The profile
+    /// and the Studio pages open the panel on them (from the launcher the panel comes up first), and the profile
+    /// avatar gives one short pulse; chess and the race open their game; EMI's desk brings her out. A place this open
+    /// did not list in <c>init.goes</c> does nothing. UI thread.
+    /// </summary>
+    internal static void GoTo(string? place)
+    {
+        if (!ShownPlaces.IsKnown(place) || !ShownPlaces.Goes(_from, App.Settings?.Current?.EmiDeskEnabled == true).Contains(place))
+        {
+            App.Logger?.Information("PrizeCounter: go {Place} refused", place ?? "(none)");
+            return;
+        }
+        App.Logger?.Information("PrizeCounter: go {Place}", place);
+        CloseFor(CloseBack);
+        try
+        {
+            switch (place)
+            {
+                case ShownPlaces.Chess: PieceByPiece.PieceByPieceHostService.Launch(); return;
+                case ShownPlaces.Race: Glassroad.GlassroadHostService.Launch(); return;
+                case ShownPlaces.Desk: App.EmiDesk?.Summon("shop"); return;
+            }
+            var rack = ShownPlaces.RackKey(place);
+            void Open(MainWindow mw)
+            {
+                if (rack != null) mw.OpenStudioModule(rack);
+                else { mw.ShowTab(ShownPlaces.ProfileTab); mw.PulseOwnAvatarSoon(); }
+            }
+            // The panel on screen: straight there. Under the launcher or tucked away: the panel comes up first.
+            if (!Launcher.LauncherHost.IsShown && App.MainWindowRef is { IsVisible: true } mw) Open(mw);
+            else Launcher.LauncherHost.OpenPanelThen(() => { if (App.MainWindowRef is { } w) Open(w); });
+        }
+        catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: go {Place} failed", place); }
     }
 
     /// <summary>The page's three levels. Gentle visuals caps motion at less, as it does for UI motion.</summary>
