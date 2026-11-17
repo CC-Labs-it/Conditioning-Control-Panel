@@ -175,6 +175,15 @@ namespace ConditioningControlPanel.Views.Controls
             try
             {
                 if (FrameLayer == null) return;
+                // A drawn frame lives (ProfileFrameArt: one shared clock, only while showing); anything else is its PNG.
+                var known = ShopCosmetics.Find(FrameId) is { IsFrame: true };
+                var px = AvatarSize / ShopCosmetics.FrameWindowRatio;
+                if (known && ProfileFrameArt.Attach(FrameLayer, FrameId, double.IsFinite(px) && px > 0 ? px : 133))
+                {
+                    FrameLayer.Visibility = Visibility.Visible;
+                    return;
+                }
+                ProfileFrameArt.Detach(FrameLayer);
                 var art = CosmeticsCatalog.GetFrameImage(FrameId);
                 FrameLayer.Source = art;
                 FrameLayer.Visibility = art == null ? Visibility.Collapsed : Visibility.Visible;
@@ -271,6 +280,8 @@ namespace ConditioningControlPanel.Views.Controls
                     FrameLayer.Width = frame;
                     FrameLayer.Height = frame;
                     FrameLayer.Margin = new Thickness(-(frame - size) / 2d);
+                    // The frame's detail follows its drawn size (a 28 px row gets the simpler drawing).
+                    if (FrameLayer.Visibility == Visibility.Visible) ApplyFrame();
                 }
 
                 if (DecoLayer != null)
