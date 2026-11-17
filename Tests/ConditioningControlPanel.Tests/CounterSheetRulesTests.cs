@@ -163,9 +163,46 @@ public class CounterSheetRulesTests
         // Reload and sign-in stay on the page that is up.
         Assert.DoesNotContain("NavigatePage(StartUrl,", src);
         var sheet = Read("ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.Sheet.cs");
+        Assert.Contains("_host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));", sheet);
         Assert.Contains("CloseFor(CloseBack)", sheet);
         // The window-sheet is gone: the counter window is the game doors' window again.
         Assert.DoesNotContain("SheetOwner", Read("ConditioningControlPanel", "Chaos", "ChaosWebViewHost.cs"));
+    }
+
+    [Fact]
+    public void BothWalletWindows_HoldTheirOwnSheet_InTheirOwnTree()
+    {
+        var launcher = Read("ConditioningControlPanel", "Windows", "Launcher", "LauncherWindow.xaml.cs");
+        Assert.Contains("CounterSheetView.Mount(this, RootGrid, TitleBar,", launcher);
+        Assert.Contains("insertAt: RootGrid.Children.IndexOf(LockdownVeil)", launcher);
+        var panel = Read("ConditioningControlPanel", "MainWindow", "MainWindow.SparkleWallet.cs");
+        Assert.Contains("(HeaderSparkleWallet.Parent as FrameworkElement)?.Parent is not FrameworkElement bar", panel);
+        Assert.Contains("CounterSheetView.Mount(this, RootGrid, bar,", panel);
+        // The wallet sits in a Grid directly inside the header Border (row 1), so its grandparent is that bar.
+        var xaml = Read("ConditioningControlPanel", "MainWindow", "MainWindow.xaml");
+        int bar = xaml.IndexOf("<Border Grid.Row=\"1\" Grid.Column=\"1\" Background=\"Transparent\" Padding=\"15,8\">", StringComparison.Ordinal);
+        int grid = xaml.IndexOf("<Grid>", bar, StringComparison.Ordinal);
+        int wallet = xaml.IndexOf("x:Name=\"HeaderSparkleWallet\"", StringComparison.Ordinal);
+        Assert.True(bar > 0 && grid > bar && wallet > grid, "the wallet sits in the header bar's Grid");
+        Assert.DoesNotContain("<Border", xaml.Substring(bar + 10, grid - bar - 10));
+        var between = xaml.Substring(grid + 6, xaml.LastIndexOf('<', wallet) - grid - 6);
+        Assert.DoesNotContain("<Grid>", between);
+        Assert.DoesNotContain("<Grid ", between);
+        Assert.DoesNotContain("</Grid>", between);
+    }
+
+    [Fact]
+    public void TheSheetsPage_IsShapedByARegion_AndKeepsOneArgumentString()
+    {
+        var view = Read("ConditioningControlPanel", "Controls", "CounterSheetView.cs");
+        Assert.Contains("SetWindowRgn(hwnd, band, true)", view);
+        Assert.Contains("BorderBrush = new SolidColorBrush(Gold)", view);
+        Assert.Contains("CreateRoundRectRgn(0, 0, w + 1, h + 1, r, r)", view);
+        Assert.Contains("ScrolllerWebGate.Attach(core)", view);
+        Assert.Contains("public const string BrowserArguments =", view);
+        Assert.Contains("AdditionalBrowserArguments = BrowserArguments", view);
+        // Its own profile: never the counter window's, whose arguments follow the motion setting.
+        Assert.NotEqual("browser_data_prizecounter", ConditioningControlPanel.Controls.CounterSheetView.UserDataFolderName);
     }
 
     private static string Read(params string[] parts)

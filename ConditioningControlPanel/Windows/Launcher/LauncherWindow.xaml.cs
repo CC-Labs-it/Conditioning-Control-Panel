@@ -63,6 +63,11 @@ public partial class LauncherWindow : Window, ConditioningControlPanel.Services.
 
         SetUpSoundButton();
 
+        // The Prize Counter sheet slides down under the title bar, inside this window; the veil and
+        // the window edge stay above its scrim.
+        _counterSheet = ConditioningControlPanel.Controls.CounterSheetView.Mount(this, RootGrid, TitleBar,
+            Services.PrizeCounter.CounterSheetRules.FromLauncher, insertAt: RootGrid.Children.IndexOf(LockdownVeil));
+
         var mods = App.Mods;
         if (mods != null) mods.ModChanged += OnModChanged;
 
@@ -252,12 +257,11 @@ public partial class LauncherWindow : Window, ConditioningControlPanel.Services.
 
     private void AccountChip_Click(object sender, RoutedEventArgs e) => OpenPanelTab("appsettings");
 
-    // The counter sheet hangs under the title bar the wallet chip sits in; a press on the chip is its second click.
-    FrameworkElement? Services.PrizeCounter.ICounterSheetDoor.CounterSheetBar => TitleBar;
-    FrameworkElement? Services.PrizeCounter.ICounterSheetDoor.CounterSheetChip => WalletChip;
+    private readonly ConditioningControlPanel.Controls.CounterSheetView _counterSheet;
+    ConditioningControlPanel.Controls.CounterSheetView? Services.PrizeCounter.ICounterSheetDoor.CounterSheet => _counterSheet;
 
-    /// <summary>The wallet chip drops the Prize Counter sheet under the title bar (owner, 2026-11-17;
-    /// PrizeCounterHostService.Sheet.cs); a second press closes it. The launcher stays.</summary>
+    /// <summary>The wallet chip slides the Prize Counter sheet down under the title bar, inside this
+    /// window (owner, 2026-11-17; PrizeCounterHostService.Sheet.cs); a second press closes it.</summary>
     private void WalletChip_Click(object sender, RoutedEventArgs e)
     {
         LauncherSfx.Click();
