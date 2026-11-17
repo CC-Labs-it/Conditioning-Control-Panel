@@ -7,23 +7,29 @@
   <link rel="stylesheet" href="../sheet.css">
 </head>
 <body>
-  <!-- The sheet on the mock host and mock/state.sample.json. Knobs as dev.html: ?tier=2 ?sp=50 ?tab=kart ?fail=<reason>
-       ?signedout ?sheet (the drop-down mode: no wallet line) ?rain (init.rainV2) ?motion=off|less ?gentle. -->
+  <!-- The sheet on the mock host. By default the full preview wire (mock/preview.js: effects, gift, stamps, goal, ledger,
+       places); ?real = today's mock/state.sample.json only, as the real server answers now. Knobs as dev.html: ?tier=2
+       ?sp=50 ?tab=kart ?fail=<reason> ?signedout ?sheet (the drop-down mode: no wallet line) ?rain (init.rainV2)
+       ?motion=off|less ?gentle ?platform=web|phone ?pick=<item id> ?ask (the Yes step) ?muted -->
   <main id="pc"></main>
   <script type="module">
     import { createMockServer } from './server.js';
+    import { createPreviewServer } from './preview.js';
     import { createMockHost } from './host.js';
     import { mountSheet } from '../sheet/main.js';
     const q = new URLSearchParams(location.search);
-    const server = createMockServer(await (await fetch('./state.sample.json')).json());
+    const sample = await (await fetch('./state.sample.json')).json();
+    const server = q.has('real') ? createMockServer(sample) : createPreviewServer(sample);
     if (q.has('tier')) server.setTier(Number(q.get('tier')));
     if (q.has('sp')) server.setSp(Number(q.get('sp')));
     if (q.has('fail')) server.fail(q.get('fail'));
     if (q.has('signedout')) server.setSignedOut(true);
     const onSignIn = () => { q.delete('signedout'); location.search = q.toString(); };
     window.mock = server;
+    const platform = q.get('platform') || 'desktop';
+    const wears = platform === 'desktop' ? ['desk', 'chess', 'profile', 'rain'] : ['chess', 'profile'];
     const host = createMockHost(server, { tab: q.get('tab'), onSignIn, sheet: q.has('sheet'), rainV2: q.has('rain'),
-      motion: q.get('motion') || 'full', gentle: q.has('gentle'), wears: ['desk', 'chess', 'profile', 'rain'] });
+      motion: q.get('motion') || 'full', gentle: q.has('gentle'), muted: q.has('muted'), wears, platform });
     window.page = await mountSheet(host, { root: document.getElementById('pc'), base: '../' });
     if (q.get('pick')) window.page.pick(q.get('pick'));
     if (q.has('ask')) window.page.act('buy', true, true);

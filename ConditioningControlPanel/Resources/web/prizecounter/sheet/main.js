@@ -1,6 +1,8 @@
 /* sheet/main.js - the 2D counter sheet's entry: mountSheet(host, { root }). Same host seam and state model as the 3D
  * page (host.js, state/shop.js); sheet.html mounts it on the real host, mock/sheet.html on the mock.
  *   init.sheet true: the host shows it as a drop-down under its own wallet, so no wallet line and the sheet slides in.
+ *   The preview wire (sheet/wire.js) rides on the same shop-state body: the page taps the raw body and reads what
+ *   state/shop.js drops (the effects tab, places, gift, stamps, goal, ledger). Absent fields hide their parts.
  * Stray keys never spend (state/press-guard.js): only the heading has focus on open, a new step (a fresh pick, the
  * Yes step) focuses the fitting room's heading, and Space or Enter act on RELEASE of a deliberate press. Esc ladder:
  * the Yes step, then the fitting room, then close { reason: 'back' }. Tab stays inside the sheet. */
@@ -9,7 +11,8 @@ import { createShop } from '../state/shop.js';
 import { asHost } from '../host.js';
 import { createPressGuard, keyName } from '../state/press-guard.js';
 import { sheetT } from './strings.js';
-import { roomModel, locate, slotOf, OWNED } from './model.js';
+import { readPreview, platformOf, placesOf, isHere } from './wire.js';
+import { roomModel, fxRoom, locate, slotOf, OWNED, FEATURED, groupOf, sheetTabs, badgeCount } from './model.js';
 import { createView } from './view.js';
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -23,22 +26,36 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   const init = (await host.ready()) || {};
   const t = sheetT(init.lexicon, init.companion);
   const motion = init.motion === 'off' ? 'off' : init.motion === 'less' || init.reducedMotion ? 'less' : 'full';
+  const platform = platformOf(init);
   root.classList.add('shroot');
   root.dataset.motion = motion;
   if (init.gentle) root.dataset.gentle = 'on';
-  const shop = createShop({ request: host.request, newIdem, tab: init.tab || null, wears: init.wears, rain: init.rainV2 === true });
+  // The raw shop-state body: state/shop.js reads today's rows from it, sheet/wire.js the rest. A body the page already
+  // holds (an op's answer) is handed to shop.load() through `queued`, so both read the same body with no second trip.
+  let raw = null, queued = null, rawRead = undefined;
+  const request = (op, body, idem) => {
+    if (op === 'shop-state' && queued) { const b = queued; queued = null; raw = b; return Promise.resolve(b); }
+    return Promise.resolve(host.request(op, body, idem)).then((res) => { if (op === 'shop-state') raw = res; return res; });
+  };
+  const shop = createShop({ request, newIdem, tab: init.tab || null, wears: init.wears, rain: init.rainV2 === true });
   const guard = createPressGuard({ now, focused: typeof doc.hasFocus === 'function' ? doc.hasFocus() : true });
-  const view = createView(doc, { t, sheet: init.sheet === true, base });
+  const view = createView(doc, { t, sheet: init.sheet === true, base, platform });
   root.replaceChildren(view.root);
-  const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title' };
+  const ui = { tab: null, query: '', asking: false, wearing: new Map(), sold: null, index: null, focusTo: 'title',
+    pv: readPreview(null), fx: null, fxNote: null, fxPending: false, hereOnly: false };
 
   const st = () => shop.state();
+  const pv = () => { if (raw !== rawRead) { rawRead = raw; ui.pv = readPreview(raw); } return ui.pv; };
+  const away = (id) => !isHere(placesOf(ui.pv, id), platform);
   function paint() {
     const had = doc.activeElement && doc.activeElement.dataset ? doc.activeElement.dataset.key : null;
-    const s = st(), card = shop.card();
-    view.paint({ status: shop.status(), state: s, sp: shop.sp(), tier: s ? s.tier : 0, tabs: shop.tabs(), tab: ui.tab, query: ui.query,
-      index: ui.index, wearing: ui.wearing, sold: ui.sold, card,
-      room: roomModel(card, { sp: shop.sp(), t, wearing: ui.wearing, asking: ui.asking }) }, on);
+    const s = st(), card = shop.card(), p = pv(), sp = shop.sp();
+    const fxe = ui.fx && locate(s, ui.fx, p);
+    if (ui.fx && !fxe) ui.fx = null;
+    const room = fxe ? fxRoom(fxe, { sp, t, pv: p, asking: ui.asking, pending: ui.fxPending, note: ui.fxNote, away: away(fxe.id) })
+      : roomModel(card, { sp, t, wearing: ui.wearing, asking: ui.asking, pv: p, row: card && (locate(s, card.itemId, p) || {}).row, away: !!card && away(card.itemId) });
+    view.paint({ status: shop.status(), state: s, sp, tier: s ? s.tier : 0, tabs: sheetTabs(shop.tabs(), p), tab: ui.tab, query: ui.query,
+      index: ui.index, wearing: ui.wearing, sold: ui.sold, pick: fxe ? fxe.id : card ? card.itemId : null, pv: p, badge: badgeCount(s, p, sp), platform, hereOnly: ui.hereOnly, room }, on);
     const to = ui.focusTo;
     ui.focusTo = null;
     if (to === 'title') view.title.focus();
@@ -63,13 +80,15 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     paint();
   }
 
-  /** Open an item in the fitting room (the state model's card); the picked item again puts it back. */
+  /** Open an item in the fitting room; the picked item again puts it back. An effect row is the sheet's own (ui.fx);
+   * a state row goes through state/shop.js's card. */
   function pick(id) {
-    const open = shop.card();
+    const open = shop.card(), was = ui.fx || (open && open.itemId);
     if (open) shop.intent({ type: 'back' });
-    ui.asking = false; ui.sold = null;
-    const at = open && open.itemId === id ? null : locate(st(), id);
-    if (at) {
+    ui.fx = null; ui.asking = false; ui.sold = null; ui.fxNote = null;
+    const at = was === id ? null : locate(st(), id, pv());
+    if (at && at.fx) { ui.fx = at.id; step(); }
+    else if (at) {
       for (let n = 10; shop.tabId() !== at.tab && n--;) shop.intent({ type: 'tabNext' });
       for (let n = 2; !shop.card() && n--;) shop.intent({ type: 'pick', bay: at.bay, slot: at.slot });
       step();
@@ -78,8 +97,9 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   }
   function act(id, viaKey, main) {
     if (main && !viaKey && !guard.ready()) return;   // a fresh step: a click lands only after it has been up a moment
-    if (id === 'buy') { ui.asking = true; step(); paint(); return; }
+    if (id === 'buy' || id === 'claim') { ui.asking = true; step(); paint(); return; }
     if (id === 'cancel') { ui.asking = false; step(); paint(); return; }
+    if (ui.fx) { if (id === 'back') { ui.fx = null; ui.asking = false; step(); paint(); } return; }
     if (id === 'yes' || id === 'wear') return apply(shop.intent({ type: 'select' }));
     ui.asking = false;
     apply(shop.intent({ type: 'back' }));
@@ -91,8 +111,8 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
     signIn: () => host.signIn(),
   };
   function ladder() {
-    if (ui.asking && !(shop.card() || {}).pending) { ui.asking = false; step(); paint(); return; }
-    if (shop.card()) { act('back'); return; }
+    if (ui.asking && !(shop.card() || {}).pending && !ui.fxPending) { ui.asking = false; step(); paint(); return; }
+    if (ui.fx || shop.card()) { act('back'); return; }
     host.close('back');
   }
 
@@ -140,11 +160,12 @@ export async function mountSheet(hostIn, { root, doc = root.ownerDocument, win =
   if (init.sheet === true) frame(() => view.root.classList.add('open'));
   const [res, index] = await Promise.all([shop.load(), Promise.resolve().then(loadIndex).catch(() => null)]);
   ui.index = index;
-  ui.tab = shop.tabId() || OWNED;
+  const tabs = sheetTabs(shop.tabs(), pv());
+  ui.tab = init.tab && tabs.includes(groupOf(init.tab)) ? groupOf(init.tab) : tabs.includes(FEATURED) ? FEATURED : groupOf(shop.tabId() || OWNED);
   ui.focusTo = doc.activeElement === view.title || doc.activeElement === doc.body || !doc.activeElement ? 'title' : null;
   apply(res);
   return {
-    shop, view, ui, pick, act,
+    shop, view, ui, pick, act, pv,
     dispose() {
       win.removeEventListener('keydown', onKeyDown); win.removeEventListener('keyup', onKeyUp);
       win.removeEventListener('focus', onFocus); win.removeEventListener('blur', onBlur);

@@ -11,40 +11,43 @@ const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', impo
 const INDEX = JSON.parse(readFileSync(new URL('../assets/preview/index.json', import.meta.url), 'utf8'));
 const t = sheetT({});
 const row = (extra) => readRow({ id: 'desk.hat.party', priceSp: 360, sale: 'on', owned: null, ...extra });
+const S = (r, sp, tier, wearing) => statusOf({ row: r, x: {}, fx: null }, { sp, tier, wearing });
 
-test('tabs come from the state in house order, Owned last; Rain only with init.rainV2', () => {
-  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: false }).tabs.map((x) => x.id)), ['kart', 'chess', 'profile', 'desk', 'prime', 'backroom', OWNED]);
+test('tabs come from the state grouped as the mockup, Owned last; Rain only with init.rainV2', () => {
+  assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: false }).tabs.map((x) => x.id)), ['games', 'you', 'prime', 'backroom', OWNED]);
   assert.deepEqual(sheetTabs(readState(SAMPLE, { rain: true }).tabs.map((x) => x.id)).slice(0, 2), ['rain-clothes', 'rain-hair']);
   assert.deepEqual(sheetTabs([]), [OWNED]);
 });
 
 test('every card face wears one status', () => {
   const wearing = new Map([['desk.hat', 'desk.hat.party']]);
-  assert.equal(statusOf(row({ owned: { at: 'T', paidSp: 360 } }), 1000, 1).kind, 'owned');
-  assert.equal(statusOf(row({ owned: { at: 'T', paidSp: 360 } }), 1000, 1, wearing).kind, 'wearing');
-  assert.equal(statusOf(row({ sale: 'soon' }), 1000, 1).kind, 'soon');
-  assert.equal(statusOf(row({ needs: 'prime' }), 1000, 1).kind, 'prime');
-  assert.deepEqual(statusOf(row({ needs: 'prime' }), 1000, 2), { kind: 'price', price: 360, tier: 't2', short: false });
-  assert.equal(statusOf(row({ needs: 'discord' }), 1000, 2).kind, 'discord');
-  assert.deepEqual(statusOf(row({}), 100, 1), { kind: 'price', price: 360, tier: 't2', short: true });
+  assert.equal(S(row({ owned: { at: 'T', paidSp: 360 } }), 1000, 1).kind, 'owned');
+  assert.equal(S(row({ owned: { at: 'T', paidSp: 360 } }), 1000, 1, wearing).kind, 'wearing');
+  assert.equal(S(row({ sale: 'soon' }), 1000, 1).kind, 'soon');
+  assert.equal(S(row({ needs: 'prime' }), 1000, 1).kind, 'prime');
+  assert.deepEqual(S(row({ needs: 'prime' }), 1000, 2), { kind: 'price', price: 360, tier: 't2', short: false });
+  assert.equal(S(row({ needs: 'discord' }), 1000, 2).kind, 'discord');
+  assert.deepEqual(S(row({}), 100, 1), { kind: 'price', price: 360, tier: 't2', short: true });
   assert.deepEqual([tagTier(120), tagTier(360), tagTier(730), tagTier(2540)], ['t1', 't2', 't3', 't3']);
-  const words = ['wearing', 'owned', 'prime', 'soon', 'discord'].map((kind) => statusText({ kind }, t));
-  assert.deepEqual(words, ['Wearing', 'Owned', 'Prime only', 'On the shelf soon.', 'Link Discord first']);
+  const words = ['wearing', 'owned', 'prime', 'soon', 'discord', 'on', 'todo'].map((kind) => statusText({ kind }, t));
+  assert.deepEqual(words, ['Wearing', 'Owned', 'Prime only', 'On the shelf soon.', 'Link Discord first', 'Switched on', 'Not out yet']);
   assert.equal(statusText({ kind: 'price', price: 730 }, t), '730 Sparkles');
 });
 
-test('a tab is one section with a plank per server shelf; Owned groups by shelf; search finds by name', () => {
+test('a group tab is one section per state tab with a plank per server shelf; Owned groups by shelf; search finds by name', () => {
   const st = readState(SAMPLE, { rain: false });
-  const kart = sections(st, { tab: 'kart', t });
-  assert.equal(kart.length, 1);
-  assert.equal(kart[0].title, 'Kart');
-  assert.equal(kart[0].planks.length, st.tabs.find((x) => x.id === 'kart').shelves.filter((s) => s.rows.some(Boolean)).length);
+  const games = sections(st, { tab: 'games', t });
+  assert.deepEqual(games.map((s) => s.title), ['Kart skins', 'Chess outfits']);
+  assert.equal(games[0].meta, 'Racing Thoughts');
+  assert.equal(games[0].planks.length, st.tabs.find((x) => x.id === 'kart').shelves.filter((s) => s.rows.some(Boolean)).length);
+  assert.deepEqual(sections(st, { tab: 'you', t }).map((s) => s.title), ['Profile frames', 'Desk toys']);
   const owned = sections(st, { tab: OWNED, t });
   assert.ok(owned.length >= 2);
   assert.ok(owned.every((s) => s.planks[0].every((e) => e.row.owned)));
-  const q = sections(st, { tab: 'kart', query: 'duck', t });
+  const q = sections(st, { tab: 'games', query: 'duck', t });
   assert.deepEqual(q[0].planks[0].map((e) => e.row.id), ['desk.toy.rubber-duck']);
-  assert.equal(sections(st, { tab: 'kart', query: 'zzz', t })[0].empty, 'Nothing on the shelves matches that.');
+  assert.equal(q[0].title, '1 found');
+  assert.equal(sections(st, { tab: 'games', query: 'zzz', t })[0].empty, 'Nothing on the shelves matches that.');
   const none = readState({ ...SAMPLE, tabs: [{ id: 'kart', shelves: [{ rows: [{ id: 'kart.body.petal', priceSp: 9, sale: 'on' }] }] }] });
   assert.equal(sections(none, { tab: OWNED, t })[0].empty, 'Nothing owned yet.');
 });
@@ -64,11 +67,13 @@ test('the fitting room: Buy asks twice, pending locks the Yes, owned rows wear b
   assert.equal(roomModel(null, { sp: 0, t }), null);
   const first = roomModel(card, { sp: 1000, t });
   assert.deepEqual(ids(first), ['buy', 'back']);
+  assert.equal(first.actions[1].label, 'Put it back');
   assert.equal(first.ask, null);
   assert.ok(first.lines.some((l) => l.text === 'Balance after: 640'));
   const ask = roomModel(card, { sp: 1000, t, asking: true });
   assert.deepEqual(ask.actions.map((a) => a.label), ['Yes, buy for 360', 'Cancel']);
   assert.equal(ask.ask, 'Spend 360 Sparkles on this?');
+  assert.equal(roomModel(card, { sp: 1000, t, asking: true, away: true }).ask, 'Spend 360 Sparkles on this? It shows in the desktop app.');
   const pending = roomModel({ ...card, pending: true }, { sp: 1000, t, asking: true });
   assert.ok(pending.actions.every((a) => a.disabled));
   assert.equal(pending.note, 'Ringing it up.');
