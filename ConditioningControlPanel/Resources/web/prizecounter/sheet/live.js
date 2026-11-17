@@ -86,13 +86,31 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
   }
 
   /* ---------- the spotlight stage: the headline item in a beam of light ---------- */
+  const still = motion === 'off' || gentle;   // the stage's own movement (bob, sweep); Gentle keeps the slow twinkle fades
+  /** A few small four-point sparkles fading in and out slowly at fixed spots (a 7 s cycle each, never a flicker). */
+  function twinkles(k, w, h, tt) {
+    const spots = [[0.12, 0.18, 4.5, 0], [0.84, 0.14, 3.5, 2.3], [0.9, 0.62, 4, 4.1], [0.2, 0.7, 3, 5.6], [0.66, 0.08, 3, 1.2]];
+    k.save(); k.fillStyle = '#fff6dc';
+    for (const [x, y, r, ph] of spots) {
+      const a = motion === 'off' ? (ph < 3 ? 0.6 : 0) : Math.pow(Math.max(0, Math.sin(tt * 0.9 + ph)), 3) * 0.85;
+      if (a < 0.02) continue;
+      const px = x * w, py = y * h, s = r * (0.7 + a * 0.4);
+      k.globalAlpha = a; k.beginPath();
+      k.moveTo(px, py - s * 2); k.quadraticCurveTo(px, py, px + s * 2, py); k.quadraticCurveTo(px, py, px, py + s * 2); k.quadraticCurveTo(px, py, px - s * 2, py); k.quadraticCurveTo(px, py, px, py - s * 2);
+      k.fill();
+    }
+    k.restore();
+  }
   function heroPainter(e) {
     const slot = e.fx, kind = kindOf(e.id);
     return (item, tt, dt) => {
-      const k = item.c, w = item.w, h = item.h, cx = w / 2, floor = h * 0.87, bob = motion === 'off' ? 0 : Math.sin(tt * 1.6) * h * 0.028;
+      const k = item.c, w = item.w, h = item.h, cx = w / 2, floor = h * 0.87, bob = still ? 0 : Math.sin(tt * 1.6) * h * 0.028;
       k.clearRect(0, 0, w, h);
-      k.fillStyle = 'rgba(255,240,214,.13)'; k.beginPath(); k.moveTo(cx - w * 0.05, 0); k.lineTo(cx + w * 0.05, 0); k.lineTo(cx + w * 0.34, floor); k.lineTo(cx - w * 0.34, floor); k.closePath(); k.fill();
-      k.fillStyle = 'rgba(255,240,214,.22)'; k.beginPath(); k.ellipse(cx, floor, w * 0.34, h * 0.065, 0, 0, Math.PI * 2); k.fill();
+      // the lamp sweeps slowly across the stage and its pool follows (Gentle and off: it stands still)
+      const sweep = still ? 0 : Math.sin(tt * 0.32) * w * 0.07, pool = cx + sweep * 0.8;
+      k.fillStyle = 'rgba(255,240,214,.13)'; k.beginPath(); k.moveTo(cx - w * 0.05, 0); k.lineTo(cx + w * 0.05, 0); k.lineTo(pool + w * 0.34, floor); k.lineTo(pool - w * 0.34, floor); k.closePath(); k.fill();
+      k.fillStyle = 'rgba(255,240,214,.22)'; k.beginPath(); k.ellipse(pool, floor, w * 0.34, h * 0.065, 0, 0, Math.PI * 2); k.fill();
+      twinkles(k, w, h, tt);
       k.fillStyle = 'rgba(0,0,0,.5)'; k.beginPath(); k.ellipse(cx, floor, h * 0.2 * (1 - bob / h * 3), h * 0.028, 0, 0, Math.PI * 2); k.fill();
       if (slot === 'bubble') {
         const W = item.world, R = Math.min(w * 0.5, h) * 0.31, spots = [[cx - w * 0.27, h * 0.3, 0.36, 1.5], [cx + w * 0.28, h * 0.56, 0.5, -0.9], [cx, h * 0.44, 1, -1]];
