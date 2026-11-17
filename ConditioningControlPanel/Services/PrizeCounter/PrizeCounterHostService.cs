@@ -340,11 +340,13 @@ internal static partial class PrizeCounterHostService
     public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
         tab = CounterTab(tab);
-        // A wallet door slides the 2D sheet down inside its window (PrizeCounterHostService.Sheet.cs):
-        // its second press closes it; a game door replaces an open sheet with the window, one counter at a time.
-        bool wantSheet = CounterSheetRules.GetsSheet(from, onClosed != null);
-        if (wantSheet && SheetPressHandled()) return;
-        if (!wantSheet && IsSheetOpen) CloseFor(CloseBack);
+        // A wallet door slides the 2D sheet down inside its window, a game door inside the game window
+        // (PrizeCounterHostService.Sheet.cs). A wallet's second press closes it; one counter at a time.
+        var want = CounterSheetRules.PickSurface(from, onClosed != null, Force3D);
+        if (want == CounterSheetRules.Surface.DoorSheet && SheetPressHandled()) return;
+        var game = want == CounterSheetRules.Surface.GameSheet ? GameSheetFor(from) : null;
+        if (want == CounterSheetRules.Surface.GameSheet && game == null) want = CounterSheetRules.Surface.Window;
+        if (CounterSheetRules.ClosesOpenFirst(OpenSurface, want, game != null && ReferenceEquals(game.View, _sheetView))) CloseFor(CloseBack);
         if (_host == null) WornItem = null;
         if (onClosed != null) _onClosed.Add(onClosed);
         if (_host != null)
@@ -370,7 +372,9 @@ internal static partial class PrizeCounterHostService
             _relay = NewRelay();
             // The sheet slides down inside the door window (PrizeCounterHostService.Sheet.cs); with no
             // door on screen, or no room under its wallet bar, the window opens instead.
-            if (wantSheet && TryLaunchSheet(generation)) return;
+            if (want == CounterSheetRules.Surface.DoorSheet && TryLaunchSheet(SheetDoorView(_from), generation, null)) return;
+            if (game != null && TryLaunchSheet(game.View, generation, game)) return;
+            if (game != null) App.Logger?.Warning("PrizeCounterHostService: no sheet over {From}, the counter window opens", _from);
             _isSheet = false;
             _startUrl = StartUrl;
 
@@ -464,6 +468,8 @@ internal static partial class PrizeCounterHostService
             _relay = null;
             _opener = null;
             _isSheet = false;
+            _sheetView = null;
+            _inGame = false;
             _startUrl = StartUrl;
             if (had) App.Logger?.Information("PrizeCounterHostService: closed ({Reason})", reason);
         }

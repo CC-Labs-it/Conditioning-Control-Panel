@@ -24,10 +24,11 @@ public class CounterSheetRulesTests
         => Assert.Equal(sheet, CounterSheetRules.GetsSheet(from, hasOpener));
 
     [Fact]
-    public void EveryGameDoor_KeepsTheWindow()
+    public void EveryGameDoor_GetsNoWalletSheet_ButItsOwnOverTheGame()
     {
         foreach (var door in PrizeCounterHostService.GameDoors)
         {
+            Assert.Equal(CounterSheetRules.Surface.GameSheet, CounterSheetRules.PickSurface(door, hasOpener: true, force3D: false));
             Assert.False(CounterSheetRules.GetsSheet(door, hasOpener: false));
             Assert.Equal(CounterSheetRules.Door.None, CounterSheetRules.PickDoor(door, true, true));
         }
@@ -158,14 +159,14 @@ public class CounterSheetRulesTests
         Assert.Equal("https://ccp.game/prizecounter/sheet.html", CounterSheetRules.SheetUrl);
         var src = Read("ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.cs");
         Assert.Contains("if (_isSheet) init[\"sheet\"] = true;", src);
-        Assert.Contains("if (wantSheet && TryLaunchSheet(generation)) return;", src);
+        Assert.Contains("if (want == CounterSheetRules.Surface.DoorSheet && TryLaunchSheet(SheetDoorView(_from), generation, null)) return;", src);
         Assert.Contains("_host = new WindowCounterSurface(window);", src);
         // Reload and sign-in stay on the page that is up.
         Assert.DoesNotContain("NavigatePage(StartUrl,", src);
         var sheet = Read("ConditioningControlPanel", "Services", "PrizeCounter", "PrizeCounterHostService.Sheet.cs");
-        Assert.Contains("_host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));", sheet);
+        Assert.Contains("_host.NavigatePage(_startUrl, () => { Post(BuildInit()); if (game != null) OnUi(() => _host?.FocusWeb()); }, m => OnPageMessage(m, generation));", sheet);
         Assert.Contains("CloseFor(CloseBack)", sheet);
-        // The window-sheet is gone: the counter window is the game doors' window again.
+        // The window-sheet is gone: the counter window is only the game doors' fallback now.
         Assert.DoesNotContain("SheetOwner", Read("ConditioningControlPanel", "Chaos", "ChaosWebViewHost.cs"));
     }
 

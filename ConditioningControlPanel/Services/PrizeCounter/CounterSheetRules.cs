@@ -38,10 +38,48 @@ internal static class CounterSheetRules
     /// <summary>The slide at full motion, and at reduced motion (half).</summary>
     public const int SlideMs = 280, ReducedSlideMs = 140;
 
-    /// <summary>The wallet doors get the sheet. A game door (Back Room, Racing Thoughts, chess, Rain's
-    /// wardrobe), or any door with a game paused under it (<paramref name="hasOpener"/>), keeps the window.</summary>
+    /// <summary>The wallet doors get the sheet under their wallet bar. A game door (Back Room, Racing
+    /// Thoughts, chess, Rain's wardrobe) gets its own sheet inside the game window instead
+    /// (<see cref="PickSurface"/>); any other door with a game paused under it keeps the window.</summary>
     public static bool GetsSheet(string? from, bool hasOpener)
         => !hasOpener && (from == FromLauncher || from == FromWallet);
+
+    // ============================ the game doors (owner 2026-11-17: retire the 3D counter) ============================
+
+    /// <summary>What shows the counter: the 3D window (only behind <see cref="PrizeCounterHostService.Force3D"/>
+    /// or when a sheet cannot open), the sheet under a wallet bar, or the sheet inside the game window.</summary>
+    public enum Surface { None, Window, DoorSheet, GameSheet }
+
+    /// <summary>A door named in <see cref="PrizeCounterHostService.GameDoors"/>.</summary>
+    public static bool IsGameDoor(string? from) => from != null && Array.IndexOf(PrizeCounterHostService.GameDoors, from) >= 0;
+
+    /// <summary>The surface a door asks for. Every game door gets the sheet over its own game, paused
+    /// under it or not; <paramref name="force3D"/> (DEBUG <c>CCP_COUNTER_3D=1</c>) gives it the old window back.</summary>
+    public static Surface PickSurface(string? from, bool hasOpener, bool force3D)
+    {
+        if (IsGameDoor(from)) return force3D ? Surface.Window : Surface.GameSheet;
+        return GetsSheet(from, hasOpener) ? Surface.DoorSheet : Surface.Window;
+    }
+
+    /// <summary>One counter at a time across windows: the open one goes first when a door wants it on
+    /// another surface. The same game's sheet stays (a new tab reloads it); a wallet press over the 3D
+    /// window brings that window forward, as before. A wallet press over its own sheet is the second
+    /// press (<see cref="OnPress"/>), handled before this.</summary>
+    public static bool ClosesOpenFirst(Surface open, Surface want, bool sameView) => open switch
+    {
+        Surface.Window => want == Surface.GameSheet,
+        Surface.DoorSheet => want != Surface.DoorSheet || !sameView,
+        Surface.GameSheet => want != Surface.GameSheet || !sameView,
+        _ => false,
+    };
+
+    /// <summary>Why a sheet that asks to go closes the counter, as the game under it hears it: a dead
+    /// page is <c>failed</c>; the scrim, the door hiding or closing and no room are a plain back.</summary>
+    public static string SheetCloseReason(string? why)
+        => why == Controls.CounterSheetView.WhyFailed ? PrizeCounterHostService.CloseFailed : PrizeCounterHostService.CloseBack;
+
+    /// <summary>The strip over a game window's top edge the sheet hangs from (DIPs), dimmed with the scrim.</summary>
+    public const double GameTopDip = 28;
 
     public enum Door { None, Launcher, Panel }
 
