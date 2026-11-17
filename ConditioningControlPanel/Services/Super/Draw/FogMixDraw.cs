@@ -17,7 +17,7 @@ public sealed class FogMixDraw : IDisposable
     public const int Columns = 64;
 
     private readonly FogMixField _field = new();
-    private readonly SKPaint _soft = new() { FilterQuality = SKFilterQuality.Medium };
+    private readonly SKPaint _soft = new() { FilterQuality = SKFilterQuality.Low };
     private SKBitmap? _bmp;
     private byte[] _px = Array.Empty<byte>();
     private (byte R, byte G, byte B)[] _ramp = Array.Empty<(byte R, byte G, byte B)>();
@@ -39,7 +39,7 @@ public sealed class FogMixDraw : IDisposable
         if (_bmp == null || _bmp.Width != w || _bmp.Height != h)
         {
             _bmp?.Dispose();
-            _bmp = new SKBitmap(new SKImageInfo(w, h, SKColorType.Rgba8888, SKAlphaType.Premul));
+            _bmp = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
             _px = new byte[w * h * 4];
         }
         double a = Math.Clamp(alpha, 0, 1);
@@ -49,7 +49,7 @@ public sealed class FogMixDraw : IDisposable
         for (int i = 0, j = 0; i < s.Length; i++, j += 4)
         {
             var c = _ramp[(int)(FogMix.Shape(s[i]) * top + 0.5)];
-            _px[j] = (byte)(c.R * a); _px[j + 1] = (byte)(c.G * a); _px[j + 2] = (byte)(c.B * a); _px[j + 3] = a8;
+            _px[j] = (byte)(c.B * a); _px[j + 1] = (byte)(c.G * a); _px[j + 2] = (byte)(c.R * a); _px[j + 3] = a8;
         }
         Marshal.Copy(_px, 0, _bmp.GetPixels(), _px.Length);
         _bmp.NotifyPixelsChanged();

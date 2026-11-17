@@ -52,15 +52,24 @@ public sealed class WhirlpoolDraw : IDisposable
         if (from != null)
         {
             _loom ??= new LoomSpiral(LoomSize);
-            _loomBmp ??= new SKBitmap(new SKImageInfo(LoomSize, LoomSize, SKColorType.Rgba8888, SKAlphaType.Premul));
+            _loomBmp ??= new SKBitmap(new SKImageInfo(LoomSize, LoomSize, SKColorType.Bgra8888, SKAlphaType.Premul));
             _loomPx ??= new byte[LoomSize * LoomSize * 4];
             double k = to == null ? 0 : Math.Clamp(mix, 0, 1);
-            _loom.Clear();
-            _loom.Add(from, p.Angle, phase, 1 - k);
-            if (to != null) _loom.Add(to, p.Angle, phase, k);
-            _loom.CopyTo(_loomPx);
-            System.Runtime.InteropServices.Marshal.Copy(_loomPx, 0, _loomBmp.GetPixels(), _loomPx.Length);
-            _loomBmp.NotifyPixelsChanged();
+            // The same picture is asked for once per monitor and again on every present another layer
+            // causes: work it out only when what goes into it has moved.
+            var made = (from, to, k, p.Angle, phase);
+            if (!_loomMade.HasValue || !_loomMade.Value.Equals(made))
+            {
+                _loomMade = made;
+                _loom.Clear();
+                _loom.Add(from, p.Angle, phase, 1 - k);
+                if (to != null) _loom.Add(to, p.Angle, phase, k);
+                _loom.CopyTo(_loomPx);
+                // The compositor's fast stretch wants Bgra8888: swap red and blue.
+                for (int q = 0; q < _loomPx.Length; q += 4) (_loomPx[q], _loomPx[q + 2]) = (_loomPx[q + 2], _loomPx[q]);
+                System.Runtime.InteropServices.Marshal.Copy(_loomPx, 0, _loomBmp.GetPixels(), _loomPx.Length);
+                _loomBmp.NotifyPixelsChanged();
+            }
             DrawPicture(canvas, _loomBmp, r, master, (float)e);
             canvas.Restore();
             return;
@@ -111,7 +120,8 @@ public sealed class WhirlpoolDraw : IDisposable
     private LoomSpiral? _loom;
     private SKBitmap? _loomBmp;
     private byte[]? _loomPx;
-    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+    private (LoomSpec From, LoomSpec? To, double Mix, double Angle, double Phase)? _loomMade;
+    private readonly SKPaint _pic = new() { IsAntialias = true, FilterQuality = SKFilterQuality.Low };
     private readonly SKPaint _rim = new() { BlendMode = SKBlendMode.DstIn };
     private SKShader? _rimShader; private float _rimR;
 

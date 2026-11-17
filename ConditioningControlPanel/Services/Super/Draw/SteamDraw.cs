@@ -15,7 +15,7 @@ public sealed class SteamDraw : IDisposable
 {
     private SKBitmap? _fog;
     private byte[] _fogPx = Array.Empty<byte>();
-    private readonly SKPaint _soft = new() { FilterQuality = SKFilterQuality.Medium };
+    private readonly SKPaint _soft = new() { FilterQuality = SKFilterQuality.Low };
 
     // The fog's texture: one small tile of smooth noise that wraps, read at three sizes that
     // slide past each other. Built once from a fixed seed so every monitor and every run match.
@@ -64,7 +64,7 @@ public sealed class SteamDraw : IDisposable
         if (_fog == null || _fog.Width != f.W || _fog.Height != f.H)
         {
             _fog?.Dispose();
-            var info = new SKImageInfo(f.W, f.H, SKColorType.Rgba8888, SKAlphaType.Premul);
+            var info = new SKImageInfo(f.W, f.H, SKColorType.Bgra8888, SKAlphaType.Premul);
             _fog = new SKBitmap(info);
             _fogPx = new byte[n * 4];
         }
@@ -96,8 +96,8 @@ public sealed class SteamDraw : IDisposable
                     var c = ramp![(int)(FogMix.Shape(s) * top + 0.5)];
                     cr = c.R; cg = c.G; cb = c.B;
                 }
-                _fogPx[j] = (byte)(cr * a); _fogPx[j + 1] = (byte)(cg * a);
-                _fogPx[j + 2] = (byte)(cb * a); _fogPx[j + 3] = (byte)(a * 255);
+                _fogPx[j] = (byte)(cb * a); _fogPx[j + 1] = (byte)(cg * a);
+                _fogPx[j + 2] = (byte)(cr * a); _fogPx[j + 3] = (byte)(a * 255);
             }
         }
         Marshal.Copy(_fogPx, 0, _fog.GetPixels(), _fogPx.Length);
