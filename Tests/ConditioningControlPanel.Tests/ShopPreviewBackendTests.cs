@@ -111,6 +111,35 @@ public class ShopPreviewBackendTests
     }
 
     [Fact]
+    public void A_file_that_still_wears_a_gone_tint_falls_back_to_soap()
+    {
+        // The Rose, Mint and Lilac bubble tints were taken out of the shop (owner, 2026-11-17).
+        var path = TempFile();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "{ \"v\": 1, \"sp\": 90, \"cardStart\": \"2026-11-13\", \"stamped\": [1],"
+                + " \"owned\": { \"fx.bubble.soap\": { \"at\": \"x\", \"paidSp\": 0 }, \"fx.bubble.rose\": { \"at\": \"x\", \"paidSp\": 120 } },"
+                + " \"equip\": { \"bubble\": \"fx.bubble.rose\", \"fog\": \"fx.fog.mint\", \"fog2\": \"fx.bubble.lilac\" },"
+                + " \"goal\": \"fx.bubble.mint\" }");
+            var b = new ShopPreviewBackend(path, Sample(), () => Now);
+            Assert.Equal(90, b.Sp);
+            Assert.Equal("fx.bubble.soap", b.Worn("bubble"));
+            Assert.Equal("fx.fog.mint", b.Worn("fog"));            // the fog colour of the same name stays
+            Assert.Equal("fx.fog.lilac", b.Worn("fog2"));
+            Assert.Equal("fx.card.plain", b.Worn("card"));
+            var s = b.Handle("shop-state", null, null);
+            Assert.Equal("fx.bubble.soap", (string?)s["equip"]!["bubble"]);
+            Assert.Null(s["goal"]!.Value<string>());
+            Assert.DoesNotContain("cos.fx.bubble.rose", s["prizes"]!["grants"]!.Values<string>());
+            Assert.DoesNotContain(s.SelectTokens("tabs[*].shelves[*].rows[*].id").Values<string>(), id => id!.StartsWith("fx.bubble.rose"));
+            Assert.Equal("not_in_stock", (string?)b.Handle("shop-buy", new JObject { ["itemId"] = "fx.bubble.lilac" }, "t1")["reason"]);
+            Assert.Equal("bad_input", (string?)b.Handle("shop-equip", new JObject { ["slot"] = "bubble", ["itemId"] = "fx.bubble.mint" }, null)["reason"]);
+        }
+        finally { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } }
+    }
+
+    [Fact]
     public void Desktop_credits_get_a_plain_ledger_line()
     {
         Assert.Equal("Level up", ShopPreviewBackend.CreditText(SparklePointSource.LevelUp));

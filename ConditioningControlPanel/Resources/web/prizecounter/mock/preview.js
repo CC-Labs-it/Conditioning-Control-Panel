@@ -9,7 +9,7 @@ import { createMockServer } from './server.js';
 
 const ALL = ['desktop', 'web', 'phone'];
 const FX = {
-  bubble: [['soap', 0, { how: 'the default' }], ['rose', 120, { how: 'tint' }], ['mint', 120, { how: 'tint' }], ['lilac', 120, { how: 'tint' }],
+  bubble: [['soap', 0, { how: 'the default' }],
     ['marble', 360, { isNew: true }], ['heart', 360, { isNew: true }], ['champagne', 360, {}], ['spiral', 730, { isNew: true }], ['disco', 730, {}],
     ['frost', 360, {}], ['gum', 360, { todo: true, name: 'Bubblegum' }], ['latex', 730, { todo: true }], ['oil', 730, { todo: true, name: 'Oil slick' }]],
   card: [['plain', 0, {}], ['ink', 120, {}], ['check', 120, {}], ['lace', 360, {}]],

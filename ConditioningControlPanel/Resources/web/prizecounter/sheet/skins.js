@@ -1,10 +1,10 @@
 /* sheet/skins.js - the animated bubble skins, ported from the owner's bubble lab (C:/wt-shop/ref/bubble-lab.html): each
  * skin has something alive inside, its own pop with particles, and its own sound (sfx, played only from a click, through
  * sheet/sound.js). Plain canvas 2D, no DOM besides the shell picture. The shop shows these moving, never stills.
- *   makeBubble(kind, x, y, r)   one bubble; kind = the effect id's last part (soap, rose, champagne, heart, spiral ...)
+ *   makeBubble(kind, x, y, r)   one bubble; kind = the effect id's last part (soap, champagne, heart, spiral ...)
  *   stepBubble / drawBubble / popBubble   per frame; popBubble starts the skin's own pop (pre-burst, then particles)
  *   stepParts / drawParts       a world's particles ({ c, p: [] }); counts scale with the bubble and are capped
- *   loadShells(src)             the shipped soap bubble picture (sheet/art/soap.png), tinted per skin */
+ *   loadShells(src)             the shipped soap bubble picture (sheet/art/soap.png), tinted for the skins that want it */
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -21,7 +21,7 @@ const many = (b, n) => Math.max(3, Math.round(n * clamp(b.r / 46, 0.3, 1)));
 
 /* ---------- shells: the shipped soap bubble, tinted where a skin wants it ---------- */
 const shells = {};
-export const TINTS = { rose: 'rgba(255,111,168,.62)', mint: 'rgba(79,224,180,.62)', lilac: 'rgba(169,139,255,.62)', gold: 'rgba(255,212,140,.5)', ice: 'rgba(160,214,255,.7)' };
+export const TINTS = { gold: 'rgba(255,212,140,.5)', ice: 'rgba(160,214,255,.7)' };
 export function loadShells(src, doc = globalThis.document, onload = () => {}) {
   if (shells.soap || !doc || typeof Image === 'undefined') return;
   const im = new Image();
@@ -139,12 +139,10 @@ export function drawParts(w) {
 }
 const soapBurst = (w, b) => { wave(w, b, 'rgba(255,255,255,.8)'); for (let i = 0, n = many(b, 22); i < n; i++) { const a = b.rnd() * TAU, v = b.r * (1.5 + b.rnd() * 4); P(w, { kind: 'dot', x: b.x + Math.cos(a) * b.r * 0.8, y: b.y + Math.sin(a) * b.r * 0.8, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: b.r * 8, drag: 3, life: 0.25 + b.rnd() * 0.3, size: b.r * (0.012 + b.rnd() * 0.016) + 0.4, color: 'rgba(255,255,255,.9)' }); } };
 const soapSfx = (b, t, au) => { au.osc('sine', 380, b.note * 2, t, 0.07, 0.35); au.nz(t, 0.02, 0.1, 'highpass', 3000); };
-const tinted = (key) => ({ pre: 0, rise: 1, draw(c, b) { shell(c, b.r, key); }, burst: soapBurst, sfx: soapSfx });
 
 /* ---------- the skins ---------- */
 export const SKINS = {
   soap: { pre: 0, rise: 1, draw(c, b) { shell(c, b.r, 'soap'); }, burst: soapBurst, sfx: soapSfx },
-  rose: tinted('rose'), mint: tinted('mint'), lilac: tinted('lilac'),
 
   champagne: { pre: 0, rise: 1.15,
     draw(c, b, t) {

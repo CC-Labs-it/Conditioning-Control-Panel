@@ -12,7 +12,7 @@ import { SKINS, skinOf, makeBubble, popBubble, stepBubble, stepParts, rollSpec, 
 const SAMPLE = JSON.parse(readFileSync(new URL('../mock/state.sample.json', import.meta.url), 'utf8'));
 
 test('every bubble skin on sale has its own pop; particles stay bounded and die out', () => {
-  for (const kind of ['soap', 'rose', 'mint', 'lilac', 'champagne', 'heart', 'spiral', 'marble', 'disco', 'frost']) {
+  for (const kind of ['soap', 'champagne', 'heart', 'spiral', 'marble', 'disco', 'frost']) {
     assert.ok(SKINS[kind], kind);
     for (const r of [12, 60]) {
       const w = { c: null, p: [], cap: 260 }, b = makeBubble(kind, 50, 50, r, { doc: null });

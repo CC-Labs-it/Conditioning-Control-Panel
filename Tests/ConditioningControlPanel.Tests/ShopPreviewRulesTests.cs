@@ -75,7 +75,7 @@ public class ShopPreviewRulesTests
 
     [Theory]
     [InlineData("fx.bubble.soap", 0)]
-    [InlineData("fx.bubble.rose", 120)]
+    [InlineData("fx.card.ink", 120)]
     [InlineData("fx.bubble.champagne", 360)]
     [InlineData("fx.bubble.frost", 360)]
     [InlineData("fx.bubble.spiral", 730)]
