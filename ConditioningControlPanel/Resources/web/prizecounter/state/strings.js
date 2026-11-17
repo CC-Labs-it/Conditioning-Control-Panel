@@ -80,6 +80,9 @@ const ITEM_NAMES = {
   'kart.body.reverie': 'The Drowsy Reverie', 'kart.body.house-edge': 'The Lucky House Edge',
   'kart.paint.pattern-bundle': 'The Pattern Parade', 'rain.suit.action-yellow': 'The Vengeful Bride',
   'rain.acc.hazmat-mask': 'The Lab Partner', 'rain.acc.back-katana': 'The Last Word',
+  // Chess finishes (chess lane 2026-11-17, piecebypiece/skins/finish-ids.js FINISH_NAMES).
+  'chess.finish.polka': 'Candy lacquer', 'chess.finish.marble': 'Mineral strata', 'chess.finish.contour': 'Liquid ribbons',
+  'chess.finish.opal': 'Oil slick', 'chess.finish.kintsugi': 'Gold faultlines',
 };
 for (const [id, name] of Object.entries(ITEM_NAMES)) LEX[itemKey(id)] = name;
 
@@ -118,6 +121,7 @@ const ITEM_DESCS = {
   "shop_item_chess_banner_crest_desc": "Cobalt and gold banner with a star crest for your chess pieces.",
   "shop_item_chess_insignia_heart_desc": "Heart badge for your chess pieces.",
   "shop_item_chess_insignia_star_desc": "Star badge for your chess pieces.",
+  "shop_item_chess_finish_desc": "One buy paints all six pieces, on the white side and the black side. Wear one finish at a time, with clothes, a badge and a banner.",
   "shop_item_profile_frame_lace_desc": "Lace frame for your profile picture. The portrait is an example.",
   "shop_item_profile_frame_ink_stamp_desc": "Postage stamp frame for your profile picture. The portrait is an example.",
   "shop_item_profile_frame_gilt_desc": "Gold frame for your profile picture. The portrait is an example.",

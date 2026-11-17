@@ -1,7 +1,7 @@
 /* ============================================================================
  * door/wardrobe.js - the menu's Wardrobe screen: what your men wear.
  *
- * One row per slot (clothes, banner, insignia). Owned items are pills you can
+ * One row per slot. Piece finishes appear when the player owns one. Other owned items are pills you can
  * pick; the rest stay visible, locked, with where to get them ("In the Prize
  * Counter"). A hosted page has the counter button, which asks the host to open
  * the Prize Counter on the chess tab; the host re-sends the grants when it
@@ -26,9 +26,11 @@ export function wardrobeHtml(wear, kit) {
   const owned = wear ? wear.owned() : new Set();
   const picked = wear ? wear.picked() : {};
   const rows = SLOTS.map((slot) => {
+    const items = slot === 'finish' ? CATALOG.finish.filter((id) => owned.has(id)) : CATALOG[slot];
+    if (!items.length) return '';
     const cur = owned.has(picked[slot]) ? picked[slot] : null;
     const none = `<button type="button" class="level-pill${cur === null ? ' on' : ''}" data-act="wear" data-id="${slot}:" aria-pressed="${cur === null}">None</button>`;
-    const pills = CATALOG[slot].map((id) => {
+    const pills = items.map((id) => {
       const name = esc(NAMES[id] || id);
       if (owned.has(id)) {
         return `<button type="button" class="level-pill${cur === id ? ' on' : ''}" data-act="wear" data-id="${slot}:${esc(id)}" aria-pressed="${cur === id}">${name}</button>`;

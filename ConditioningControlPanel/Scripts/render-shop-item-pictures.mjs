@@ -39,6 +39,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /* Per family: how far round and how high the camera sits. Flat things (banners, frames) turn less so they stay
  * readable; karts and toys get the full three-quarter. */
 const VIEW = { flat: [0.32, 0.18], low: [0.62, 0.62], round: [0.62, 0.4] };
+/* Chess finishes (chess.finish.*) are not shelf models: they paint the game's own sculpts, so their picture is one
+ * game piece in both team palettes side by side (piecebypiece/assets/pieces/<FINISH_PIECE>.glb + board/finishes.js). */
+const FINISH_PIECE = opt('--finish-piece', 'knight');
 const viewOf = (id) => (/banner|frame|insignia|podium/.test(id) ? VIEW.flat : /^kart\.body|umbrella|^desk\.hat/.test(id) ? VIEW.low : VIEW.round);
 
 const PAGE = `<!doctype html><meta charset="utf-8"><body style="margin:0;background:transparent">
@@ -94,7 +97,37 @@ function sticker(src, size, line) {
 
 window.render = async (id, size, maxKb, yaw, pitch) => {
   const gltf = await loader.loadAsync('/prizecounter/assets/items/' + id + '.glb');
-  const g = gltf.scene; scene.add(g); g.updateMatrixWorld(true);
+  return shoot(gltf.scene, size, maxKb, yaw, pitch);
+};
+
+/* A chess finish: the same game sculpt twice, the white side's palette on the left and the black side's on the
+ * right, painted by the game's own finishes.js exactly as the board paints it (pattern clock at 0). */
+const TYPE = { pawn: 'p', knight: 'n', bishop: 'b', rook: 'r', queen: 'q', king: 'k' };
+window.renderFinish = async (finish, name, size, maxKb, yaw, pitch) => {
+  const { applyFinish } = await import('/piecebypiece/board/finishes.js');
+  const gltf = await loader.loadAsync('/piecebypiece/assets/pieces/' + name + '.glb');
+  const pair = new T.Group();
+  const w = new T.Box3().setFromObject(gltf.scene).getSize(new T.Vector3()).x;
+  for (const side of ['w', 'b']) {
+    const piece = gltf.scene.clone(true);
+    piece.userData.type = TYPE[name]; piece.userData.side = side;
+    piece.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.geometry.attributes.color) {
+        o.material = new T.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.35, clearcoat: 0.3, emissiveIntensity: 0 });
+        o.material.userData.pbpPatch = 'skin';
+      } else o.material = o.material.clone();
+    });
+    if (!applyFinish(piece, finish, side)) return { err: 'finish did not take: ' + finish };
+    piece.position.x = (side === 'w' ? -0.56 : 0.56) * w;
+    piece.rotation.y = side === 'w' ? 0.3 : -0.3;
+    pair.add(piece);
+  }
+  return shoot(pair, size, maxKb, yaw, pitch);
+};
+
+function shoot(g, size, maxKb, yaw, pitch) {
+  scene.add(g); g.updateMatrixWorld(true);
   const box = new T.Box3().setFromObject(g), c = box.getCenter(new T.Vector3()), s = box.getSize(new T.Vector3());
   const rad = s.length() * 0.5, dist = rad / Math.sin(T.MathUtils.degToRad(camera.fov / 2)) * 1.02;
   const dir = new T.Vector3(Math.sin(yaw), pitch, Math.cos(yaw)).normalize();
@@ -108,7 +141,7 @@ window.render = async (id, size, maxKb, yaw, pitch) => {
   let q = 0.9, url = out.toDataURL('image/webp', q);
   while (url.length * 0.75 > maxKb * 1024 && q > 0.3) { q -= 0.08; url = out.toDataURL('image/webp', q); }
   return { data: url.slice(url.indexOf(',') + 1), q: Math.round(q * 100), w: out.width, h: out.height };
-};
+}
 window.ready = true;
 </script>`;
 
@@ -148,7 +181,10 @@ try {
   let total = 0;
   for (const id of IDS) {
     const [yaw, pitch] = viewOf(id);
-    const r = await ev(`window.render(${JSON.stringify(id)}, ${SIZE}, ${MAX_KB}, ${yaw}, ${pitch})`);
+    const finish = id.startsWith('chess.finish.') ? id.slice('chess.finish.'.length) : null;
+    const r = finish
+      ? await ev(`window.renderFinish(${JSON.stringify(finish)}, ${JSON.stringify(FINISH_PIECE)}, ${SIZE}, ${MAX_KB}, 0, 0.22)`)
+      : await ev(`window.render(${JSON.stringify(id)}, ${SIZE}, ${MAX_KB}, ${yaw}, ${pitch})`);
     if (!r || r.err) throw new Error(`${id}: ${r ? r.err : 'no answer'}`);
     const buf = Buffer.from(r.data, 'base64');
     if (buf.length > MAX_KB * 1024) throw new Error(`${id}.webp is ${buf.length} bytes, over ${MAX_KB} KB`);

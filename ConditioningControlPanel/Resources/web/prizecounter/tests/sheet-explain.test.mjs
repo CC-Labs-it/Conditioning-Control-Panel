@@ -51,6 +51,20 @@ test('every mock row resolves a hover tip and a "What it does", from its own ent
   assert.ok(tipText({ id: 'brand_new_prize', tab: 'backroom', x: {} }, t));
 });
 
+test('a chess finish says one buy covers every piece on both sides, worn one at a time with the rest', () => {
+  for (const id of ['chess.finish.polka', 'chess.finish.marble', 'chess.finish.contour', 'chess.finish.opal', 'chess.finish.kintsugi']) {
+    const e = mockRows().find((x) => x.id === id);
+    assert.ok(e, id + ' is a mock row');
+    assert.equal(familyOf(e), 'chess_finish', id);
+    assert.equal(explainKeys(e).tip, 'shop_sheet_tip_chess_finish_' + id.split('.').pop(), id);
+    const x = roomExplain(e, t);
+    assert.match(x.does, /all six pieces/, id);
+    assert.match(x.does, /one finish at a time/, id);
+    assert.match(x.use, /Wardrobe in Piece by Piece/, id);
+    assert.notEqual(t(explainKeys(e).tip), explainKeys(e).tip, id + ' tip has English');
+  }
+});
+
 test('a card tip says why it cannot be bought; the tabs, signs and mechanics all have words', () => {
   const e = mockRows().find((x) => x.id === 'prime.trail.podium');
   assert.match(tipText(e, t, { kind: 'prime' }), /Prime members can buy it/);

@@ -56,6 +56,43 @@ public class PbpLookRulesTests
     }
 
     [Fact]
+    public void Each_granted_finish_round_trips_alongside_clothes_banner_and_insignia()
+    {
+        var dressed = new ChessLook("chess.set.velvet-court", "chess.banner.crest", "chess.insignia.star");
+        foreach (var id in PbpLookRules.Catalog["finish"])
+        {
+            Assert.Equal("finish", PbpLookRules.SlotOf(id));
+            var pick = PbpLookRules.With(dressed, id);
+            var grants = All.Append(PbpLookRules.GrantOf(id));
+            Assert.Equal(dressed with { Finish = id }, pick);
+            Assert.Contains(PbpLookRules.GrantOf(id), PbpLookRules.ChessGrants(grants).Values<string>());
+            Assert.Equal(dressed, PbpLookRules.Clamp(pick, All));
+            Assert.Equal(pick, PbpLookRules.Clamp(pick, grants));
+            Assert.Equal(pick, PbpLookRules.Read(PbpLookRules.Write(pick, 50)).Look);
+            var value = PbpLookRules.EquipBody("u1", pick)["value"];
+            Assert.Equal(id, (string?)value!["finish"]);
+            var reply = new JObject { ["equip"] = new JObject { ["chess"] = value, ["updatedAt"] = 55 } };
+            Assert.Equal(pick, PbpLookRules.FromEquip(reply).Look);
+        }
+    }
+
+    [Fact]
+    public void Legacy_page_pick_preserves_an_owned_finish_and_explicit_none_clears_it()
+    {
+        var saved = new ChessLook(null, null, null, "chess.finish.marble");
+        var grants = new[] { "cos.chess.finish.marble", "cos.chess.insignia.star" };
+        var page = new JObject { ["insignia"] = "chess.insignia.star" };
+        Assert.Equal(saved with { Insignia = "chess.insignia.star" }, PbpLookRules.PagePick(page, saved, grants));
+        Assert.Null(PbpLookRules.PagePick(page, saved, All).Finish);
+        page["finish"] = JValue.CreateNull();
+        var cleared = PbpLookRules.PagePick(page, saved, grants);
+        Assert.Equal(new ChessLook(null, null, "chess.insignia.star"), cleared);
+        Assert.Equal(JTokenType.Null, PbpLookRules.EquipBody("u1", cleared)["value"]!["finish"]!.Type);
+        page["finish"] = "chess.finish.unknown";
+        Assert.Null(PbpLookRules.PagePick(page, saved, grants).Finish);
+    }
+
+    [Fact]
     public void Reconcile_newer_server_wins_else_local_is_pushed_when_different()
     {
         var local = new ChessLook("chess.set.royal-capes", null, null);
@@ -110,6 +147,14 @@ public class PbpLookRulesTests
         var src = File.ReadAllText(Path.Combine(PageDir(), "skins", "look.js"));
         foreach (var (slot, ids) in PbpLookRules.Catalog)
         {
+            if (slot == "finish")
+            {
+                var finishes = File.ReadAllText(Path.Combine(PageDir(), "skins", "finish-ids.js"));
+                var pageIds = Regex.Matches(finishes, @"'(chess\.finish\.[a-z]+)'\s*:")
+                    .Select(x => x.Groups[1].Value);
+                Assert.Equal(ids, pageIds);
+                continue;
+            }
             var m = Regex.Match(src, slot + @": Object\.freeze\(\[([^\]]*)\]\)");
             Assert.True(m.Success, "look.js has no " + slot + " row");
             var page = Regex.Matches(m.Groups[1].Value, "'([^']+)'").Select(x => x.Groups[1].Value).ToArray();
@@ -118,10 +163,10 @@ public class PbpLookRulesTests
     }
 
     [Fact]
-    public void Every_catalog_item_ships_art_for_all_six_pieces()
+    public void Every_attachment_item_ships_art_for_all_six_pieces()
     {
         var reg = JObject.Parse(File.ReadAllText(Path.Combine(PageDir(), "assets", "skins", "registry.json")));
-        foreach (var id in PbpLookRules.Catalog.Values.SelectMany(v => v))
+        foreach (var id in PbpLookRules.Catalog.Where(row => row.Key != "finish").SelectMany(row => row.Value))
             foreach (var piece in new[] { "pawn", "knight", "bishop", "rook", "queen", "king" })
             {
                 var row = reg["items"]!.FirstOrDefault(i => (string?)i["id"] == id && (string?)i["piece"] == piece);

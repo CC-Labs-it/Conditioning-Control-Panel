@@ -4,7 +4,7 @@
  "catalogVersion": "cv-sample-1",
  "week": "2026-W44",
  "tier": 1,
- "prizes": {"revision":3,"grants":["cos.rain.dress.rose-flare","cos.kart.paint.hearts","cos.jackpot_remix"]},
+ "prizes": {"revision":3,"grants":["cos.rain.dress.rose-flare","cos.kart.paint.hearts","cos.jackpot_remix","cos.chess.finish.marble"]},
  "tabs": [
   {
    "id": "rain-clothes",
@@ -87,6 +87,15 @@
       {"id":"chess.banner.crest","tier":"M","priceSp":360,"grants":["cos.chess.banner.crest"],"owned":null,"sale":"on"},
       {"id":"chess.insignia.heart","tier":"S","priceSp":120,"grants":["cos.chess.insignia.heart"],"owned":null,"sale":"on"},
       {"id":"chess.insignia.star","tier":"S","priceSp":120,"grants":["cos.chess.insignia.star"],"owned":null,"sale":"on"}
+     ]
+    },
+    {
+     "rows": [
+      {"id":"chess.finish.polka","tier":"L","priceSp":730,"grants":["cos.chess.finish.polka"],"owned":null,"sale":"on"},
+      {"id":"chess.finish.marble","tier":"L","priceSp":730,"grants":["cos.chess.finish.marble"],"owned":{"at":"2026-11-17T18:00:00Z","paidSp":730},"sale":"on"},
+      {"id":"chess.finish.contour","tier":"L","priceSp":730,"grants":["cos.chess.finish.contour"],"owned":null,"sale":"on"},
+      {"id":"chess.finish.opal","tier":"L","priceSp":730,"grants":["cos.chess.finish.opal"],"owned":null,"sale":"on"},
+      {"id":"chess.finish.kintsugi","tier":"L","priceSp":730,"grants":["cos.chess.finish.kintsugi"],"owned":null,"sale":"on"}
      ]
     }
    ]

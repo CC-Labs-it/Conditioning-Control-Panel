@@ -7,10 +7,9 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.PieceByPiece;
 
 /// <summary>
-/// The chess wardrobe's rules (7.2 shop, lane B3-C1), pure so they are tested. A look is three
-/// slots, each one Prize Counter item id or null: <c>{ set, banner, insignia }</c>. The page draws
-/// the art (piecebypiece/skins/look.js holds the same catalog); this side clamps every look to the
-/// account's grants before it reaches the page or the server, and words the frames.
+/// A chess look has four independent slots for clothes, a corner banner, an insignia and a piece
+/// finish. Each stores a Prize Counter item id or null. The page draws the art and the host checks
+/// the account's grants before sending the player's choice to the page or server.
 ///
 /// <para>Frames (piecebypiece/skins/wear.js):
 /// <list type="bullet">
@@ -35,9 +34,10 @@ internal static class PbpLookRules
         ["set"] = new[] { "chess.set.royal-capes", "chess.set.velvet-court" },
         ["banner"] = new[] { "chess.banner.house-pink", "chess.banner.crest", "prime.banner.arena" },
         ["insignia"] = new[] { "chess.insignia.heart", "chess.insignia.star" },
+        ["finish"] = new[] { "chess.finish.polka", "chess.finish.marble", "chess.finish.contour", "chess.finish.opal", "chess.finish.kintsugi" },
     };
 
-    public static readonly string[] Slots = { "set", "banner", "insignia" };
+    public static readonly string[] Slots = { "set", "banner", "insignia", "finish" };
 
     public static string GrantOf(string itemId) => "cos." + itemId;
 
@@ -62,7 +62,15 @@ internal static class PbpLookRules
             var v = raw is JObject o && o[slot]?.Type == JTokenType.String ? (string?)o[slot] : null;
             return v != null && Catalog[slot].Contains(v, StringComparer.Ordinal) ? v : null;
         }
-        return new ChessLook(Read("set"), Read("banner"), Read("insignia"));
+        return new ChessLook(Read("set"), Read("banner"), Read("insignia"), Read("finish"));
+    }
+
+    /// <summary>An older page can change clothes without clearing a finish it cannot see.</summary>
+    public static ChessLook PagePick(JObject raw, ChessLook saved, IEnumerable<string>? grants)
+    {
+        var pick = Normal(raw);
+        if (!raw.ContainsKey("finish")) pick = pick with { Finish = saved.Finish };
+        return Clamp(pick, grants);
     }
 
     /// <summary>The look with every slot the grants do not own taken off. Prime items stay usable
@@ -71,7 +79,7 @@ internal static class PbpLookRules
     {
         var held = new HashSet<string>(grants ?? Array.Empty<string>(), StringComparer.Ordinal);
         string? Keep(string? id) => id != null && held.Contains(GrantOf(id)) ? id : null;
-        return new ChessLook(Keep(look.Set), Keep(look.Banner), Keep(look.Insignia));
+        return new ChessLook(Keep(look.Set), Keep(look.Banner), Keep(look.Insignia), Keep(look.Finish));
     }
 
     public static JObject LookFrame(ChessLook look) => new() { ["type"] = LookType, ["look"] = look.ToJObject() };
@@ -136,6 +144,7 @@ internal static class PbpLookRules
         "set" => look with { Set = itemId },
         "banner" => look with { Banner = itemId },
         "insignia" => look with { Insignia = itemId },
+        "finish" => look with { Finish = itemId },
         _ => look,
     };
 
@@ -181,7 +190,7 @@ internal static class PbpLookRules
 }
 
 /// <summary>One look: each slot an item id or null.</summary>
-internal readonly record struct ChessLook(string? Set, string? Banner, string? Insignia)
+internal readonly record struct ChessLook(string? Set, string? Banner, string? Insignia, string? Finish = null)
 {
     public static ChessLook Empty => new(null, null, null);
 
@@ -190,5 +199,6 @@ internal readonly record struct ChessLook(string? Set, string? Banner, string? I
         ["set"] = Set is null ? JValue.CreateNull() : Set,
         ["banner"] = Banner is null ? JValue.CreateNull() : Banner,
         ["insignia"] = Insignia is null ? JValue.CreateNull() : Insignia,
+        ["finish"] = Finish is null ? JValue.CreateNull() : Finish,
     };
 }

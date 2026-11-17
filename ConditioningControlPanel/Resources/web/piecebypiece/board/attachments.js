@@ -1,5 +1,5 @@
 /* ============================================================================
- * board/attachments.js - the clothes, banners and insignias a man wears.
+ * board/attachments.js - piece clothes and insignias, plus board ornaments.
  *
  * Art is Astra's (assets/skins/, registry.json beside it): one glb per item
  * per piece type, rooted at `attachment_<item>_<piece>` with a
@@ -14,7 +14,8 @@
  * flex shader reads position.y as height up the piece, which baked geometry
  * satisfies: the cape bends with the body.
  *
- *   createAttachments({ base }) -> { prepare(look) -> Promise, partsFor(type, look) -> [{geometry, material}] }
+ * Banners use one pawn-authored model on the board corners, never on a man.
+ *   createAttachments({ base }) -> { prepare, partsFor, boardPartsFor }
  *
  * prepare() loads what a look needs (cached, once per item and piece);
  * partsFor() is synchronous and answers only what is already loaded, so a
@@ -114,7 +115,7 @@ export function createAttachments({ base = './assets/skins/' } = {}) {
   async function prepare(look) {
     const jobs = [];
     for (const id of lookIds(look)) {
-      for (const t of TYPES) {
+      for (const t of (slotOf(id) === 'banner' ? ['p'] : TYPES)) {
         const key = id + '|' + PIECE_WORD[t];
         if (!loaded.has(key)) jobs.push(loadOne(id, PIECE_WORD[t]));
       }
@@ -130,13 +131,19 @@ export function createAttachments({ base = './assets/skins/' } = {}) {
     if (!piece || !look) return [];
     const out = [];
     for (const id of lookIds(look)) {
+      if (slotOf(id) === 'banner') continue;
       const parts = loaded.get(id + '|' + piece);
       if (parts) out.push(...parts);
     }
     return out;
   }
 
-  return { prepare, partsFor, debug: () => ({ loaded: [...loaded.keys()], pending: [...pending.keys()] }) };
+  function boardPartsFor(look) {
+    const id = look && look.banner;
+    return slotOf(id) === 'banner' ? (loaded.get(id + '|pawn') || []) : [];
+  }
+
+  return { prepare, partsFor, boardPartsFor, debug: () => ({ loaded: [...loaded.keys()], pending: [...pending.keys()] }) };
 }
 
 /** One worn mesh, ready for a piece root: its own material copy, so the fades and the flex are his. */
