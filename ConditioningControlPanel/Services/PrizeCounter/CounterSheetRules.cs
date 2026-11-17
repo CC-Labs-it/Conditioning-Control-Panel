@@ -20,7 +20,7 @@ internal static class CounterSheetRules
 
     /// <summary>Gap between the sheet and the window's sides and bottom (DIPs): the sheet reads as a tab
     /// inside the launcher or the panel, which stays visible round it under the scrim (owner 2026-11-17).</summary>
-    public const double SideInsetDip = 28, BottomInsetDip = 28;
+    public const double SideInsetDip = 44, BottomInsetDip = 40;
 
     /// <summary>Gap between the wallet bar and the sheet's top edge once it is down (DIPs).</summary>
     public const double GapUnderBarDip = 10;
