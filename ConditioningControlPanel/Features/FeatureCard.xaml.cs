@@ -184,7 +184,7 @@ namespace ConditioningControlPanel.Features
                 IsHitTestVisible = false,
                 Child = new TextBlock
                 {
-                    Text = Localization.Loc.Get("badge_v2"),
+                    Text = Localization.Loc.Get("badge_extra"),
                     Foreground = V2BadgeBrush,
                     FontSize = compact ? 7 : 9,
                     FontWeight = FontWeights.Bold,

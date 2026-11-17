@@ -206,7 +206,7 @@ public class FeatureCardBadgeSlotTests
             var page = new StudioTabView();
             Realize(page, 1209, 700);
 
-            var v2Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2");
+            var v2Text = ConditioningControlPanel.Localization.Loc.Get("badge_extra");
             var rows = Descendants(page).OfType<Grid>()
                 .Select(g => (Grid: g,
                               Pill: g.Children.OfType<Border>().FirstOrDefault(
