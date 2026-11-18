@@ -160,6 +160,7 @@ public sealed class ChaosFlashOverlayTests
             {
                 X11Overlay.RaiseRequestedForTests = w =>
                 {
+                    if (!ChaosFlashOverlay.Shown.Any(flash => ReferenceEquals(flash, w))) return;
                     Assert.True(Assert.IsAssignableFrom<global::Avalonia.Controls.Window>(w).IsVisible);
                     raised.Add(w);
                 };
@@ -180,6 +181,11 @@ public sealed class ChaosFlashOverlayTests
                 hide();
                 Assert.False(window.IsVisible);
                 steps.Clear();
+                // Other overlays can request a raise while the async decode yields to the dispatcher.
+                var unrelated = new Window();
+                try { unrelated.Show(); X11Overlay.Raise(unrelated); }
+                finally { unrelated.Close(); }
+                Assert.Single(raised);
                 await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
                 Assert.Same(window, Assert.Single(ChaosFlashOverlay.Shown));
                 Assert.Equal(2, raised.Count); // retained window raised again after Show
