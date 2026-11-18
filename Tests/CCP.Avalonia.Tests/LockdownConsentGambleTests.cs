@@ -7,6 +7,8 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+// Switches the process-wide language: never beside another class (restack r2-b016 review).
+[Collection(RunsAloneCollection.Name)]
 public sealed class LockdownConsentGambleTests
 {
     [Theory]
