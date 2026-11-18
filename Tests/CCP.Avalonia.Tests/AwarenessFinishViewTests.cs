@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -27,6 +28,53 @@ public sealed class AwarenessFinishViewTests
             ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
+
+    [Fact]
+    public void KeywordCommentShowsButHoldsVoiceWhenIdle() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var saved = (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider,
+            CoreSession.IsSessionRunningProvider, KeywordAvatarComment.TubeSource, CoreEntitlement.HasPremiumProvider,
+            ConditioningControlPanel.Avalonia.App.Ai);
+        AvatarTubeWindow? tube = null;
+        var restorePanic = ProcessStateSnapshot.CapturePanic();
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            var s = CoreSettings.Current;
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            s.CustomCompanionPhrases = new() { new() { Id = "idle:test", Category = "idle-test", Text = "comment", Enabled = true } };
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            ConditioningControlPanel.Avalonia.App.Ai = null;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            tube = new AvatarTubeWindow(null); tube.Show(); Dispatcher.UIThread.RunJobs();
+            KeywordAvatarComment.TubeSource = () => tube;
+            var sounds = 0;
+            tube.SpeechAudioPlayer = (_, _, _, done) => { sounds++; done?.Invoke(); };
+            KeywordAvatarComment.DispatchAsync(new AvatarCommentAction { FallbackPhraseCategory = "idle-test" }, new()).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("comment", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+            Assert.Equal(0, sounds);
+            tube.EndSpeechBubble();
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            KeywordAvatarComment.DispatchAsync(new AvatarCommentAction { FallbackPhraseCategory = "idle-test" }, new()).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, sounds);
+        }
+        finally
+        {
+            try
+            {
+                tube?.Close(); KeywordAvatarComment.CancelPending();
+                (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider,
+                    KeywordAvatarComment.TubeSource, CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.Avalonia.App.Ai) = saved;
+            }
+            finally { restorePanic(); }
+        }
+    });
 
     [Fact]
     public void CommentsWaitForBubbleAndVoiceBoundRetriesAndNeverSpeakAfterPanic() => AvaloniaTestDispatcher.Run(() =>
