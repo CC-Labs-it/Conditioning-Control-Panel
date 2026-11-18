@@ -212,6 +212,7 @@ public sealed class PanicSurfacesTests
         "settings-palette",
         "perfect-week-bonus",
         "keyword-triggers",
+        "keyword-highlights",
         "audio-sync",
         "haptics",
         "help-video",

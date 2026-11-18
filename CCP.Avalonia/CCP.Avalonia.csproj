@@ -545,4 +545,10 @@
     </ItemGroup>
     <Copy SourceFiles="@(LibVLCFiles)" DestinationFolder="$(PublishDir)libvlc\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
+  <!-- WinRT OCR is Windows-only; ship the self-contained helper beside the single-file head. -->
+  <Target Name="PublishWindowsOcrHelper" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <MSBuild Projects="..\CCP.Ocr.Windows\CCP.Ocr.Windows.csproj" Targets="Restore;Publish"
+             RemoveProperties="PublishProfile;TargetFramework"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;PublishSingleFile=true;PublishReadyToRun=false;PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)', '$(MSBuildProjectDirectory)'))\" />
+  </Target>
 </Project>
