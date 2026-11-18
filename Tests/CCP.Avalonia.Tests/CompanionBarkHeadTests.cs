@@ -22,6 +22,77 @@ namespace CCP.Avalonia.Tests;
 public sealed class CompanionBarkHeadTests
 {
     [Fact]
+    public void LevelUpReachesEmiAndStopUnseedsBridge() => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var oldVideo = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe;
+        try
+        {
+            BarkHead.Start();
+            Assert.NotNull(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+            var fire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire!()!;
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance, fire.Target);
+            Assert.Equal("Fire", fire.Method.Name);
+            string? moment = null;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = () => (name, ctx) => { moment = name; fire(name, ctx); };
+            var field = typeof(ProgressionBank).GetField("LevelUp", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            ((System.Action<int>)field.GetValue(null)!)(7);
+            Assert.Equal("levelUp", moment);
+            BarkHead.Stop();
+            Assert.Null(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire);
+            Assert.Null(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = oldFire;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = oldVideo;
+        }
+    });
+
+    [Fact]
+    public void AwarenessBarkArmsEmiVoiceHold() => WithSeamsRestored(_ =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var lines = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var oldVideo = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe;
+        try
+        {
+            lines.ResetForTests();
+            var e = new BarkEngine(() => BarkRuleSet.Empty);
+            BarkHead.Seed(e);
+            e.Start();
+            e.RaiseAwarenessBark(new ConditioningControlPanel.Services.Awareness.ContextFrame());
+            Assert.Equal("awarenessReaction", lines.HeldBy);
+        }
+        finally
+        {
+            desk.CheckAvatarVoiceHold();
+            lines.ResetForTests();
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = oldFire;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = oldVideo;
+        }
+    });
+
+    [Fact] // A seeded test must not leave the real desk wired or its lockdown hold armed on the shared engine.
+    public void SeededTestsLeaveNoEmiStateBehind()
+    {
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var lines = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var heldBefore = lines.HeldBy;
+        WithSeamsRestored(_ =>
+        {
+            var e = Seeded(Rule("LockdownCountdownTick", "tick"), out var spoken);
+            e.Raise("LockdownCountdownTick");
+            Assert.Equal("lockdownCountdown", lines.HeldBy);
+        });
+        Assert.Same(oldFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire);
+        Assert.Equal(heldBefore, lines.HeldBy);
+    }
+
+    [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
     {
         var src = Regex.Replace(File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs")),
@@ -462,6 +533,9 @@ public sealed class CompanionBarkHeadTests
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
         var chaos = (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider);
         var firstTimeBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark;
+        var emi = (ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+        // Seed points the bridge at the real desk, whose holds land on the shared line engine.
+        using var emiScope = new EmiTestScope();
         var state = (s.AvatarEnabled, s.BarkChatSuppressionMs, new Dictionary<string, List<string>>(s.BarkVariantRotation));
         try
         {
@@ -474,6 +548,7 @@ public sealed class CompanionBarkHeadTests
                 CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked) = hooks;
             (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = chaos;
             ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark = firstTimeBark;
+            (ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe) = emi;
             (s.AvatarEnabled, s.BarkChatSuppressionMs) = (state.AvatarEnabled, state.BarkChatSuppressionMs);
             s.BarkVariantRotation.Clear();
             foreach (var kv in state.Item3) s.BarkVariantRotation[kv.Key] = kv.Value;

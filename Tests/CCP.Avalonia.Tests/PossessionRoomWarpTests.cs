@@ -93,6 +93,61 @@ public class PossessionRoomWarpTests
         Assert.Equal(0.0025, midway.wash, 6);
     });
 
+    [Theory]
+    [InlineData("en", "the room")]
+    [InlineData("de", "der Raum")]
+    [InlineData("es", "la habitación")]
+    [InlineData("fr", "la pièce")]
+    [InlineData("it", "la stanza")]
+    [InlineData("ja", "その部屋")]
+    [InlineData("ko", "그 방")]
+    [InlineData("pt-BR", "o quarto")]
+    [InlineData("ru", "комната")]
+    [InlineData("zh-CN", "这个房间")]
+    public void OnlyOneRoomCanBeWarpedAndItIsNamed(string language, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        var canvas = new Grid { Width = 800, Height = 600 };
+        var layer = new Canvas { Width = 800, Height = 600 };
+        var window = new Window { Width = 800, Height = 600, Content = new Viewbox { Child = canvas } };
+        var otherCanvas = new Grid { Width = 800, Height = 600 };
+        var otherWindow = new Window { Width = 800, Height = 600, Content = new Viewbox { Child = otherCanvas } };
+        var host = new Host { PossessionWindow = window, GhostLayer = layer };
+        var otherHost = new Host { PossessionWindow = otherWindow, GhostLayer = new Canvas() };
+        string? name = null;
+        PossessionContext Context(Host h) => new() { Host = h, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(7), ElapsedFraction = 0, Remaining = TimeSpan.Zero,
+            Name = (_, n) => name = n };
+        var firstContext = Context(host);
+        var secondContext = Context(otherHost);
+        var first = new RoomWarpEffect();
+        var second = new RoomWarpEffect();
+        window.Show(); otherWindow.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout(); otherWindow.UpdateLayout();
+        try
+        {
+            loc.SetLanguage(language);
+            Assert.True(first.CanApply(firstContext, null));
+            Assert.True(second.CanApply(secondContext, null));
+            first.ApplyAsync(firstContext, null, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.Equal(expected, name);
+            Assert.False(second.CanApply(secondContext, null));
+            second.ApplyAsync(secondContext, null, CancellationToken.None).GetAwaiter().GetResult();
+            Assert.False(second.IsLive);
+            first.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            Assert.True(second.CanApply(secondContext, null));
+        }
+        finally
+        {
+            first.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            second.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            window.Close(); otherWindow.Close();
+            loc.SetLanguage(previous);
+        }
+    });
+
     [Fact]
     public void CatalogOffersRoomWarp() => Assert.Contains(PossessionAvaloniaHead.CreateEffects(), e => e.Id == "roomwarp");
 }

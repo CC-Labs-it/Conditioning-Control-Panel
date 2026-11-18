@@ -731,4 +731,41 @@ public class TestIsolationTests
         }
         Assert.Equal(before, File.Exists(settingsFile) ? File.ReadAllText(settingsFile) : null);
     }
+
+    /// <summary>BarkHead.Seed points static seams at the real EMI desk and tube. The hook must undo all of
+    /// them after any seeding test, not only those some test file happens to assign by hand.</summary>
+    [Fact]
+    public void BarkHeadSeedIsUndoneByTheSnapshot() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        System.Func<object?>[] seams =
+        {
+            () => ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire,
+            () => ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe,
+            () => ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced,
+            () => ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark,
+        };
+        var before = seams.Select(s => s()).ToArray();
+        var snapshot = ProcessStateSnapshot.Take(repairLateWrites: false);
+        BarkHead.Seed(new ConditioningControlPanel.Services.Bark.BarkEngine());
+        Assert.All(seams, s => Assert.NotNull(s()));
+        snapshot.Restore();
+        for (int i = 0; i < seams.Length; i++) Assert.Same(before[i], seams[i]());
+    });
+
+    [Fact]
+    public void ToastLastLineIsRestoredByProcessSnapshot() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var field = typeof(ConditioningControlPanel.Avalonia.Possession.ToastEffect).GetField("_lastLine",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var original = field.GetValue(null);
+        try
+        {
+            field.SetValue(null, "before");
+            var snapshot = ProcessStateSnapshot.Take();
+            field.SetValue(null, "after");
+            snapshot.Restore();
+            Assert.Equal("before", field.GetValue(null));
+        }
+        finally { field.SetValue(null, original); }
+    });
 }

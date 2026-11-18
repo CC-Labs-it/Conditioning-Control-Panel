@@ -645,6 +645,96 @@ public sealed class ChaosRunHostTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData("ChaosRunStarted")]
+    [InlineData("ChaosWaveEscalated")]
+    [InlineData("ChaosGoldFirst")]
+    [InlineData("ChaosRunCompleted")]
+    public Task Run_lifecycle_barks_carry_WPF_context(string trigger) => WithFreshRun(() =>
+    {
+        var previous = BarkHead.Engine;
+        var settings = CoreSettings.Current;
+        var avatar = settings.AvatarEnabled; var volume = settings.MasterVolume;
+        int spoken = 0;
+        try
+        {
+            settings.AvatarEnabled = true; settings.MasterVolume = 50;
+            var cfg = Cfg();
+            void Listen(Dictionary<string, object>? conditions = null)
+            {
+                var rule = new BarkRule { Id = "run-test", Trigger = trigger, Conditions = conditions,
+                    VariantPool = new() { new BarkVariant("heard") } };
+                var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+                engine.Start(); BarkHead.Engine = engine;
+            }
+            if (trigger == "ChaosRunStarted") Listen(new() { ["difficulty_eq"] = cfg.Difficulty.ToString() });
+            ChaosRunHost.StartRun(cfg); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!;
+            if (trigger == "ChaosWaveEscalated") Listen(new() { ["wave_eq"] = 2.0 });
+            if (trigger == "ChaosGoldFirst") Listen();
+            if (trigger is "ChaosWaveEscalated" or "ChaosGoldFirst") Ticks(80);
+            if (trigger == "ChaosGoldFirst")
+            {
+                Assert.Equal(1, spoken);
+                Listen(); Ticks(80); // a fresh gate proves the lifetime flag suppresses a second bark
+            }
+            if (trigger == "ChaosRunCompleted")
+            {
+                var (_, _, xp) = ChaosPayout.Xp(state.RunDurationSec, state.Config.DifficultyMult, state.Score, state.SkillMult);
+                Listen(new() { ["xp_eq"] = (double)(int)xp, ["difficulty_eq"] = cfg.Difficulty.ToString() });
+                ChaosRunHost.RequestStop();
+            }
+            Assert.Equal(1, spoken);
+        }
+        finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
+    });
+
+    [Fact]
+    public Task Relapse_raises_wave_escalation_like_WPF() => WithFreshRun(() =>
+    {
+        var previous = BarkHead.Engine; var settings = CoreSettings.Current;
+        var avatar = settings.AvatarEnabled; var volume = settings.MasterVolume; int spoken = 0;
+        try
+        {
+            settings.AvatarEnabled = true; settings.MasterVolume = 50;
+            ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            ChaosRunHost.State!.RelapseLoopArmed = true;
+            Ticks(239);   // one tick short of the 60 s end
+            var rule = new BarkRule { Id = "relapse-test", Trigger = "ChaosWaveEscalated",
+                Conditions = new() { ["wave_eq"] = 4.0 }, VariantPool = new() { new BarkVariant("heard") } };
+            // Each read is two minutes on, so the 60 s global gap cannot hide the second raise.
+            var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++, Clock = new LeapClock() };
+            engine.Start(); BarkHead.Engine = engine;
+            Ticks(1);
+            // WPF ChaosModeService.cs:1087 (Relapse) and :1453 (the boundary into loop 4) both raise wave 4.
+            Assert.Equal(2, spoken);
+        }
+        finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
+    });
+
+    private sealed class LeapClock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => _now = _now.AddMinutes(2);
+    }
+
+    [Fact]
+    public Task Panic_does_not_raise_run_completed() => WithFreshRun(() =>
+    {
+        var previous = BarkHead.Engine; var settings = CoreSettings.Current;
+        var avatar = settings.AvatarEnabled; var volume = settings.MasterVolume; int spoken = 0;
+        try
+        {
+            settings.AvatarEnabled = true; settings.MasterVolume = 50;
+            var rule = new BarkRule { Id = "panic-test", Trigger = "ChaosRunCompleted", VariantPool = new() { new BarkVariant("heard") } };
+            var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => spoken++ };
+            engine.Start(); BarkHead.Engine = engine;
+            ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown();
+            ChaosRunHost.ForceShutdown(); Assert.Equal(0, spoken);
+        }
+        finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
+    });
+
     [Fact]
     public Task Wave_draft_holds_clears_rerolls_picks_and_resumes() => WithFreshRun(() =>
     {
@@ -1181,6 +1271,31 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task PanicSurfaceClosesHudInputRegion()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var hud = ChaosRunHost.Hud!;
+                int calls = 0;
+                hud.InputRegionOverride = _ => calls++;
+                hud.SetPreRunExpanded(true);
+                Assert.True(calls > 0);
+                ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.False(hud.IsVisible);
+                int stopped = calls;
+                hud.SetPreRunExpanded(true);
+                Assert.Equal(stopped, calls);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Panic_during_the_countdown_and_mid_run_ends_the_run()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -1545,6 +1660,33 @@ public sealed class ChaosRunHostTests
                     { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(c, c.CenterX, c.CenterY);
                 Assert.Equal((1, "nofocus"), (state.Detonated, c.BrokenReason));
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Held_snap_banks_lifetime_channel_seconds()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.State!.Focus = 100;
+                var now = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => now;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                now = now.AddMilliseconds(1100);
+                BubbleOverlay.Field.Step();
+                Assert.True(b.DefusedViaChannel);
+                Assert.Equal(1.1, ChaosMeta.State.TotalChannelSeconds, 6);
             }
             finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
             return Task.CompletedTask;

@@ -322,7 +322,18 @@ namespace ConditioningControlPanel.Services
             if (Popping || Spec is not { IsLive: true }) return;
             FuseRemainingMs = Math.Max(600, FuseRemainingMs / 2);
             _speed *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;
+            _vx *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;   // WPF BubbleService.cs:2751-2752: roaming halves move by velocity
+            _vy *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;
+            Enraged = true;
         }
+
+        /// <summary>WPF Bubble.Enrage red flare (BubbleService.cs:2756): the renderer draws it.</summary>
+        public bool Enraged { get; private set; }
+
+        /// <summary>WPF MirrorVelocityFrom (BubbleService.cs:2738): the second Bound half pulls against the first.</summary>
+        public void MirrorVelocityFrom(AmbientBubble other) { _vx = -other._vx; _vy = -other._vy; }
+
+        internal (double X, double Y) Velocity => (_vx, _vy);
 
         /// <summary>WPF DANGER_TELEGRAPH_MS: the last stretch of a live fuse breathes faster and deeper.</summary>
         public const double DangerTelegraphMs = 1200;

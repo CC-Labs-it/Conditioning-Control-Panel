@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
+using System.Reflection;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +16,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Possession;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -29,7 +32,7 @@ public sealed class PossessionDissolveToggleTests
         public Point PointerPosition => default;
         public PossessionPointer PossessionPointer { get; } = new();
         public Rect? BoundsOnGhostLayer(Control element) => null;
-        public IReadOnlyList<PossessionTarget> Targets => Array.Empty<PossessionTarget>();
+        public IReadOnlyList<PossessionTarget> Targets { get; set; } = Array.Empty<PossessionTarget>();
         public bool IsUsable => true;
     }
     private sealed class Attribution : IPossessionAttribution
@@ -41,6 +44,40 @@ public sealed class PossessionDissolveToggleTests
         public void ReleaseAll() { }
         private sealed class Release : IDisposable { public void Dispose() { } }
     }
+
+    [Theory]
+    [InlineData(PossessionRung.Drift, false)]
+    [InlineData(PossessionRung.Melt, true)]
+    public Task DirectorNamesRewriteAtMelt(PossessionRung rung, bool named) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var label = new TextBlock { Text = "Pause", Width = 120, Height = 30 };
+        var layer = new Canvas();
+        var window = new Window { Width = 200, Height = 100, Content = new Grid { Children = { label, layer } } };
+        var host = new Host(window, layer, new FakeFrames());
+        host.Targets = new[] { new PossessionTarget { Visual = label, Role = PossessionRole.Label, Key = "label", DisplayName = "label" } };
+        var effect = new DirectedHeadEffect(new RewriteHeadEffect());
+        var names = new List<string>();
+        using var lockdown = new LockdownService();
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead
+        {
+            Attribution = _ => new Attribution(), BarkEffect = (id, _) => names.Add(id)
+        });
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            director.AttachHost(host);
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var hosts = (IList)typeof(PossessionDirector).GetField("_hosts", flags)!.GetValue(director)!;
+            var start = (Task)typeof(PossessionDirector).GetMethod("StartOneAsync", flags)!
+                .Invoke(director, new object[] { hosts[0]!, rung, TimeSpan.FromMinutes(1), 0.5 })!;
+            await start;
+            Assert.Equal("Stay", label.Text);
+            Assert.Equal(named, effect.IsBig);
+            Assert.Equal(named ? 1 : 0, names.Count);
+            if (named) Assert.Equal("rewrite", names[0]);
+        }
+        finally { director.UndoAll(); window.Close(); }
+    });
 
     [Theory]
     [InlineData(false)]
@@ -128,6 +165,9 @@ public sealed class PossessionDissolveToggleTests
                 Assert.Equal(0, toggle.Opacity);
                 Assert.True(toggle.IsHitTestVisible);
                 Assert.Equal(2, layer.Children.Count);
+                var ember = Assert.IsType<Border>(layer.Children[1]);
+                Assert.Equal(12, ember.BoxShadow[0].Blur);
+                Assert.Equal(230, ember.BoxShadow[0].Color.A);
             }
             else
             {
