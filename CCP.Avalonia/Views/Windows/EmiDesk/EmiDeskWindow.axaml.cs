@@ -1047,29 +1047,72 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             return glass;
         }
 
-        /// <summary>Start (or restart) the idle blink cycle and the idle sway.</summary>
-        // ponytail: needs EmiAlive.BlinkDelayMs and EmiChains.SwayCycle / SwayStepMs /
-        // SwayCentreMinMs / SwayCentreMaxMs (Services/EmiDesk/), neither in Core. The two timers
-        // themselves port straight across once those numbers do - the blink clock re-rolls its
-        // jitter every tick so the cadence is 5200 +/- 600 ms and never a metronome.
-        //
-        // AUDITED 2026-09-04 rather than repeated, because "neither in Core" said nothing about how
-        // far away either one is, and they are close. EmiAlive.cs is 428 lines whose ONLY using is
-        // System, and its whole head coupling is two signatures - GazeTarget and WithinApproach
-        // take System.Windows.Point / Rect - so it is one Core geometry type away, the same single
-        // blocker EmiRingLayout has. EmiChains.cs is 654 lines whose only head type is the
-        // DispatcherTimer inside Player (its file probing is AppContext.BaseDirectory, which Core
-        // already uses in EmiProps), so it is ONE seam swap: a System.Threading.Timer ticking
-        // through CoreDispatch.Post. Neither is a re-derivation candidate - inlining these numbers
-        // here would be a second copy of a table EmiAlive's own header forbids retuning outside the
-        // plan, and it would still leave SetPose with no art to swap.
+        // WPF EmiDeskWindow.xaml.cs:1185 and EmiDeskWindow.Alive.cs:696.
+        private static readonly Random IdleRng = new();
+        private DispatcherTimer? _idleTimer, _swayTimer;
+        private int _swayAt;
+
         public void RestartIdleBeats()
         {
+            StopIdleBeats();
+            if (PresentationActive || _closingForGood || !IsVisible) return;
+            _idleTimer = new DispatcherTimer(DispatcherPriority.Background)
+                { Interval = TimeSpan.FromMilliseconds(EmiAlive.BlinkDelayMs(IdleRng)) };
+            _idleTimer.Tick += OnIdleTick;
+            _idleTimer.Start();
+            _swayAt = 0;
+            _swayTimer = new DispatcherTimer(DispatcherPriority.Background)
+                { Interval = TimeSpan.FromMilliseconds(SwayHold("idle")) };
+            _swayTimer.Tick += OnSwayTick;
+            _swayTimer.Start();
         }
 
-        /// <summary>Stop the idle blink cycle and the sway.</summary>
         public void StopIdleBeats()
         {
+            if (_idleTimer != null) { _idleTimer.Stop(); _idleTimer.Tick -= OnIdleTick; _idleTimer = null; }
+            if (_swayTimer != null) { _swayTimer.Stop(); _swayTimer.Tick -= OnSwayTick; _swayTimer = null; }
+        }
+
+        private bool BlinkStillOurs() => !_closingForGood && IsVisible && !Busy() && !_dragging && !_resizing;
+
+        private void OnIdleTick(object? sender, EventArgs e)
+        {
+            if (_idleTimer == null) return;
+            _idleTimer.Interval = TimeSpan.FromMilliseconds(EmiAlive.BlinkDelayMs(IdleRng));
+            if (!BlinkStillOurs()) return;
+            bool twice = IdleRng.Next(EmiAlive.DoubleBlinkOneIn) == 0;
+            DrawFace(EmiAlive.BlinkFace);
+            After(EmiAlive.BlinkHoldMs, () =>
+            {
+                if (!BlinkStillOurs()) return;
+                DrawFace(EmiChains.RestFace);
+                if (!twice) return;
+                After(EmiAlive.DoubleBlinkGapMs, () =>
+                {
+                    if (!BlinkStillOurs()) return;
+                    DrawFace(EmiAlive.BlinkFace);
+                    After(EmiAlive.BlinkHoldMs, () =>
+                    {
+                        if (BlinkStillOurs()) DrawFace(EmiChains.RestFace);
+                    });
+                });
+            });
+        }
+
+        private static int SwayHold(string key) => key != "idle" ? EmiChains.SwayStepMs
+            : IdleRng.Next(EmiChains.SwayCentreMinMs, Math.Max(EmiChains.SwayCentreMinMs, EmiChains.SwayCentreMaxMs) + 1);
+
+        private void OnSwayTick(object? sender, EventArgs e)
+        {
+            if (_swayTimer == null) return;
+            if (Busy() || _dragging || _resizing)
+            {
+                _swayTimer.Interval = TimeSpan.FromMilliseconds(SwayHold("idle"));
+                return;
+            }
+            var key = EmiChains.SwayCycle[_swayAt++ % EmiChains.SwayCycle.Count];
+            SetPose(key);
+            _swayTimer.Interval = TimeSpan.FromMilliseconds(SwayHold(key));
         }
 
         // ---------------------------------------------------------------- pointer
