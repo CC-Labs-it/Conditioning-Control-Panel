@@ -47,8 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// the perf backoff on the cadence; Gif Rain and bouncing text payloads fire; the
     /// first-time bonus pop text.
-    /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
-    /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
+    /// Defuse and detonation barks remain missing. NO FOCUS TO DEFUSE, last breath and UNLEASHED
     /// announcer callers remain missing even though the announcer overlay is now present.
     /// The FX window receives pop, defuse, combo and detonation pulses plus heat tint (also
     /// mirrored to <see cref="PulseFx"/>); screen shake keeps WPF's values through the unseeded
@@ -286,7 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _invulnUntilUtc = DateTime.MinValue;
             _regenPopCount = 0;
             ChaosRunLessons.OnRunStarted();   // WPF :399
-            // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
+            BarkHead.Engine?.Raise("ChaosRunStarted", c => c.Set("difficulty", _state.Config.Difficulty.ToString()));
             _spawning = true;
             _chromeTicks = 0;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
@@ -1066,6 +1065,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce("☠ RELAPSE — one more loop", ChaosAnnounceKind.Temptation,
                     artKey: "relapse", subText: "one more loop");   // WPF :1083
                 _state.PushEvent("☠ relapse. one more loop — everything drips double");
+                BarkHead.Engine?.Raise("ChaosWaveEscalated", c => c.Set("wave", (double)(_state.WaveIndex + 1)));   // WPF :1087
             }
             var (newWave, waveLen) = ChaosRunEngine.WaveAt(_state, elapsed);
             // WPF :1094 Pocket Watch: the wave countdown (+ a live score line).
@@ -1079,6 +1079,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosRunLessons.OnLoopCompleted();
                 AwardLoopTip();
                 _state.AllLiveNextWave = false;
+                BarkHead.Engine?.Raise("ChaosWaveEscalated", c => c.Set("wave", (double)newWave));
                 if (_state.Config.BoonDraftEnabled)
                 {
                     _pendingWave = newWave;
@@ -1414,8 +1415,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             bool first = !ChaosMeta.State.SeenGoldFirst;
             if (first) ChaosMeta.State.SeenGoldFirst = true;
             ChaosMeta.AddGold(gold);   // persists
-            if (first) _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");
-            // ponytail: NotifyChaosGoldFirst bark (WPF :1721) -> chaos-payout-barks.
+            if (first)
+            {
+                _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");
+                BarkHead.Engine?.Raise("ChaosGoldFirst");
+            }
         }
 
         /// <summary>WPF EndRun (:3199): the loop tip on a full course, then XP, Sparks, reveals,
@@ -1451,7 +1455,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRank? rankUp = null;
             try { rankUp = ChaosPayout.RankUp(ChaosMeta.State.RunsCompleted, ChaosMeta.State.LastRankSeen); }
             catch (Exception ex) { Log.Debug("Chaos rank-up: {E}", ex.Message); }
-            // ponytail: NotifyChaosRunCompleted((int)finalXp, difficulty) bark (WPF :3269) -> chaos-payout-barks.
+            BarkHead.Engine?.Raise("ChaosRunCompleted", c => c.Set("xp", (double)(int)finalXp)
+                .Set("difficulty", _state.Config.Difficulty.ToString())
+                .Set("runs_completed", (double)ChaosMeta.State.RunsCompleted)
+                .Set("rank", ChaosRanks.NameLower(ChaosMeta.RankIndex)));
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
