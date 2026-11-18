@@ -352,6 +352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF VideoService.cs:3410: discover the companion script only after playback starts.
             try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
             catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
+            LightsDownOverlay.StartVideo(this); // WPF LightsDownService.cs:38 starts from VideoStarted via a UI post
             _sinceReady.Restart();
             _guard = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _guard.Tick += (_, _) => GuardTick();
@@ -1305,6 +1306,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
+            LightsDownOverlay.CloseAll(); // WPF LightsDownService.cs:106, before decoder teardown
             EndEnhancement();
             System.Threading.Interlocked.Increment(ref _escapeGeneration);
             _floatingOnScreen = false;
