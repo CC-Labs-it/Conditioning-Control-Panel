@@ -84,6 +84,7 @@ public class RecoveredProfileReconcileTests
         }
         finally
         {
+            settings.SealForReset();
             sync.Reset(); CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin;
             if (oldFile == null) File.Delete(path); else File.WriteAllBytes(path, oldFile);
             if (oldMarker == null) File.Delete(marker); else File.WriteAllBytes(marker, oldMarker);
