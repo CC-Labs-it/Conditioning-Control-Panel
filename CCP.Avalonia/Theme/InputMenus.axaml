@@ -1,6 +1,11 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls">
+  <Style Selector="MenuItem[IsVisible=True] /template/ Popup#PART_Popup">
+    <Setter Property="fx:InputPopupFx.Animation" Value="Fade"/>
+    <Setter Property="fx:InputPopupFx.OpenRequested" Value="{Binding IsSubMenuOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+    <Setter Property="IsOpen" Value="{Binding (fx:InputPopupFx.IsPresented), RelativeSource={RelativeSource Self}}"/>
+  </Style>
   <!-- Inputs.xaml:476: context-menu rows. Keep Fluent's popup and part names so local
        view styles and submenu behavior continue to work. -->
   <Style Selector="ContextMenu MenuItem">

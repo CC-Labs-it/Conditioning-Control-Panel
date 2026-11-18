@@ -184,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("mod-creator-preview", _ => ModCreatorWindow.StopPreviewsForPanic()), // Creator-owned audio, like close/reset; stricter than WPF.
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
+            new("input-popups", _ => global::ConditioningControlPanel.Avalonia.Controls.InputPopupFx.CloseAllForPanic()),
             new("help-tooltips", _ => global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.CloseAll()), // WPF help lifetime :750; stricter panic cleanup
             new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
             new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),
