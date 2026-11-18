@@ -280,7 +280,7 @@ public sealed partial class GameWindowTests
             var ack = sent.Last();
             Assert.Equal("fx-ack", (string?)ack["type"]);
             Assert.Equal("t7", (string?)ack["token"]);
-            Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+            Assert.Equal(new[] { "gif-rain", "glitch-bubbles" }, ack["fired"]!.Select(x => (string?)x));
             Assert.All(ack["skipped"]!, skip => Assert.Equal("unknown", (string?)skip["why"]));
             w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"t8\",\"fxId\":\"fx.unknown\",\"station\":\"breakout\"}");
             var unknown = sent.Last();
@@ -2185,6 +2185,29 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); }
     });
+    [Fact]
+    public void Dtrh_BrowserFailure_RecoversOnceAndPanicCancelsQueuedRecovery() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnBrowserProcessFailed(); // before ready
+        w.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        var replacement = GameWindow.OpenForTests("dtrh");
+        Assert.NotNull(replacement);
+        Assert.NotSame(w, replacement);
+        replacement.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+
+        GameWindow.DtrhRelaunchedOnce = false;
+        w = GameWindow.Launch("dtrh")!;
+        w.Web.OnBrowserProcessFailed();
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(GameWindow.DtrhRelaunchedOnce);
+    });
+
     [Fact]
     public void Dtrh_Heartbeat_RelaunchesOnceAndStopsWatching() => RunDtrh(lab: true, (_, xp, _, _) =>
     {

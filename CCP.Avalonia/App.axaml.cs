@@ -936,6 +936,13 @@ namespace ConditioningControlPanel.Avalonia
             settings.PendingPresetReinstalls.Clear();
         }
 
+        internal static void InitializeChaos()
+        {
+            // WPF App.xaml.cs:2427,2827. Settings must be loaded before selecting the save slot.
+            Services.Chaos.ChaosCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+            Services.Chaos.ChaosMeta.Init();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -973,6 +980,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
@@ -1951,6 +1959,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
             try { Views.Games.GameWindow.CloseCounterForExit(); } catch { /* WPF App.OnExit:6433 CloseFor(CloseAppExit) */ }
+            try { Views.Games.GameWindow.DrainGoonInboxForExit(TimeSpan.FromSeconds(3)); } catch { /* partner media never outlives the app */ }
             try { Possession?.Dispose(); } catch { /* WPF App.OnExit:6527: every haunted control back, ember stripped */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).
