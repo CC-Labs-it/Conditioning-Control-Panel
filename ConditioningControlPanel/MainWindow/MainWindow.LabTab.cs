@@ -227,6 +227,7 @@ namespace ConditioningControlPanel
                 // calibration window requires the capture loop to be live.
                 // A running leash task stops the way a panic press stops it (parked, still pending).
                 try { LeashOnPanicPress(); } catch (Exception ex) { App.Logger?.Debug("Leash stop on blink failed: {E}", ex.Message); }
+                try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { App.Logger?.Debug("Sparkle stop on blink failed: {E}", ex.Message); }
                 StopAllForRecalibration();
 
                 // Guard against a race where the capture loop stopped between the

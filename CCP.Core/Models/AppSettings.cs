@@ -4050,6 +4050,14 @@ namespace ConditioningControlPanel.Models
             get => _bubbleSharedHost;
             set { _bubbleSharedHost = value; OnPropertyChanged(); }
         }
+        private bool _bubbleClassicPop;
+        /// <summary>Every bubble plays the original pop, whatever skin it wears (owner 2026-11-17: an opt-out
+        /// for people who do not like the skins' own pops). The lucky chime is untouched.</summary>
+        public bool BubbleClassicPop
+        {
+            get => _bubbleClassicPop;
+            set { _bubbleClassicPop = value; OnPropertyChanged(); }
+        }
         private int _bubblesVolume = 50;
         public int BubblesVolume
         {
@@ -5590,6 +5598,23 @@ namespace ConditioningControlPanel.Models
         {
             get => _steamFogReturn;
             set { _steamFogReturn = SuperCore.SteamOptions.ClampReturn(value); OnPropertyChanged(); }
+        }
+
+        // "Reach": how far in the fog may come, percent (100 = the whole screen, as shipped).
+        private int _steamReach = SuperCore.SteamOptions.ReachDefault;
+        public int SteamReach
+        {
+            get => _steamReach;
+            set { _steamReach = SuperCore.SteamOptions.ClampReach(value); OnPropertyChanged(); }
+        }
+
+        // Two-tone's second colour when the user picked their own (#RRGGBB); empty = the palette pick.
+        // This PC only: the account keeps a palette colour.
+        private string _fogSecondOwnColor = "";
+        public string FogSecondOwnColor
+        {
+            get => _fogSecondOwnColor;
+            set { _fogSecondOwnColor = SuperCore.FogLooks.TryHex(value) != null ? value.ToUpperInvariant() : ""; OnPropertyChanged(); }
         }
 
         // "Drift": how much the fog billows on its own, percent of the stock billow (0 = still).
@@ -10696,6 +10721,14 @@ namespace ConditioningControlPanel.Models
             set { _afterglowGhostOpacity = SuperCore.AfterglowLineOptions.ClampGhost(value); OnPropertyChanged(); }
         }
 
+        // Afterglow (take two): while the V2 runs, the normal subliminal cards rest unless this is on (owner 2026-11-17).
+        private bool _afterglowAlsoBase = SuperCore.AfterglowBase.AlsoBaseDefault;
+        public bool AfterglowAlsoBase
+        {
+            get => _afterglowAlsoBase;
+            set { _afterglowAlsoBase = value; OnPropertyChanged(); }
+        }
+
         // Froth: the biggest a merged bubble may grow, in sizes of a fresh one. Never changes pay.
         private double _frothMaxSize = SuperCore.FrothOptions.MaxSizeDefault;
         public double FrothMaxSize
@@ -10730,6 +10763,19 @@ namespace ConditioningControlPanel.Models
         {
             get => _superPreviewUsedWeek;
             set { _superPreviewUsedWeek = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, bool> _studioSectionsOpen = new();
+        /// <summary>
+        /// Which Studio option sections (Features/OptionSection) this PC left open or closed, by
+        /// section id. A view preference of this PC only: never in a preset, the session journal,
+        /// sync or a cloud backup (ProfileSyncService.ExcludedBackupProperties).
+        /// </summary>
+        [JsonProperty]
+        public Dictionary<string, bool> StudioSectionsOpen
+        {
+            get => _studioSectionsOpen;
+            set => _studioSectionsOpen = value ?? new Dictionary<string, bool>();
         }
 
         private bool _companionAsksEnabled = true;

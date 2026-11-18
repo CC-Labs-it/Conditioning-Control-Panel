@@ -19,6 +19,15 @@ public class PinkTintLayer : BaseLayer
     private readonly Action? _resort;
     private int _sortedZ;
 
+    /// <summary>The pink filter's own tint wears the shop's Two-tone fog (<see cref="Prizes.WornFog"/>); colour one stays the filter's own.
+    /// Off for other users of the layer (the welcome show paints its own pink).</summary>
+    internal bool WearsLooks { get; init; }
+    private long _wornStamp;
+    /// <summary>Two-tone (shop look): the second fog colour moving through the tint. Made on first use and
+    /// kept (a 64-cell bitmap), so a hide on the UI thread never frees it under a render.</summary>
+    private Super.Draw.FogMixDraw? _mix;
+    private double _mixSince;
+
     /// <param name="resort">Re-sorts the host engine's layers after <see cref="ZIndex"/> moved
     /// (WPF: <c>CompositorEngine.ResortLayers</c>). Null: the host has no re-sort to call.</param>
     public PinkTintLayer(Action wake, Action? resort = null) : base(wake)
@@ -93,6 +102,19 @@ public class PinkTintLayer : BaseLayer
 
     public override void Update(TimeSpan delta)
     {
+        if (WearsLooks)
+        {
+            // Two-tone switched or its second colour changed, or still cross-fading: repaint.
+            long stamp = Prizes.WornFog.Stamp;
+            if (stamp != _wornStamp || Prizes.WornFog.Easing) { _wornStamp = stamp; _dirty = true; }
+            // Two-tone moves: 30 pictures a second, none with motion Off (a still frame).
+            _mixSince += delta.TotalSeconds;
+            if (IsActive && _mixSince >= 1 / 30.0 && Prizes.WornFog.TwoTone && Super.SuperStepAside.LevelProvider() != Models.MotionLevel.Off)
+            {
+                _mixSince = 0;
+                _dirty = true;
+            }
+        }
         double target = _stepAside ? 0 : 1;
         if (_veil == target) return;
         _veil = Super.SuperStepAside.Step(_veil, _stepAside, delta.TotalSeconds,
@@ -100,11 +122,27 @@ public class PinkTintLayer : BaseLayer
         _dirty = true;
     }
 
+    /// <summary>Steam on: the fog wears Two-tone and this tint stays one flat colour under it. Two moving
+    /// colours over the whole screen read as fog everywhere (owner, 2026-11-17).</summary>
+    private static bool SteamCarriesMix()
+    {
+        try { return Super.SuperStageHost.Stage.SteamOn; } catch { return false; }
+    }
+
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
     {
         double o = _opacity * Super.SuperStepAside.Ease(_veil);
         if (o <= 0) return;
-        _paint.Color = new SKColor(_r, _g, _b, (byte)Math.Clamp(o * 255, 0, 255));
+        var worn = WearsLooks ? Prizes.WornFog.Shown((_r, _g, _b)) : new Prizes.WornFog.FogShown((_r, _g, _b), (_r, _g, _b), false);
+        if (worn.TwoTone && !SteamCarriesMix())
+        {
+            _mix ??= new Super.Draw.FogMixDraw();
+            _mix.Draw(canvas, new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom), worn.Main, worn.Second, o,
+                Prizes.WornFog.MixTime(Prizes.WornFog.MixSpeed(Super.SuperStepAside.LevelProvider())));
+            return;
+        }
+        var (r, g, b) = worn.Main;
+        _paint.Color = new SKColor(r, g, b, (byte)Math.Clamp(o * 255, 0, 255));
         canvas.DrawRect(boundsPx, _paint);
     }
 }

@@ -83,7 +83,8 @@ public class ScrolllerCreditSurfaceTests
         Assert.Contains("new Controls.ScrolllerCreditBadge", flash);
         Assert.DoesNotContain("ScrolllerCreditChip.Hold(", flash);
         var layer = Read("ConditioningControlPanel", "Services", "Compositor", "FlashLayer.cs");
-        Assert.Contains("if (item.Credit && item.Exit == null) DrawCredit(", layer);
+        // A Deck card showing its spiral back has no picture on it to credit.
+        Assert.Contains("if (item.Credit && item.Exit == null && !onBack) DrawCredit(", layer);
         Assert.Contains("canvas.DrawText(Video.ScrolllerCredit.Mark", layer);
     }
 

@@ -1641,8 +1641,12 @@ namespace ConditioningControlPanel
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
             CancelPendingAi();
+            // The Sparkles flight and its bells stop, the wallet snaps to its balance, nothing stays owed.
+            try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // The weekly free Super try ends with a cut, before any hand-off below can return early.
             try { Services.Super.SuperPreview.End(panic: true); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Super Lights Down: the dim goes on this frame in every mode (a floating dim never fades out after a panic).
+            try { Services.Super.LightsDownService.Panic(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // EMI Desk (MOMENTS 4.B): FIRST LINE, before any of the ladder below. panicPressed is a
             // HOLD with a five-minute silence tail, and it has to be armed even if something further

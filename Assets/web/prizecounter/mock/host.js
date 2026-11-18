@@ -12,6 +12,7 @@ export function createMockHost(server, init = {}) {
     wallet: (sp) => calls.push({ type: 'wallet', sp }),
     close: (reason) => calls.push({ type: 'close', reason }),
     signIn: () => { calls.push({ type: 'signin' }); if (typeof init.onSignIn === 'function') init.onSignIn(); },
+    go: (place, id) => calls.push({ type: 'go', place, id }),
     log: () => {},
   });
   return Object.assign(host, { calls, server });

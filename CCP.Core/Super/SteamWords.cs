@@ -32,6 +32,9 @@ public sealed class SteamWordSlot
     public double Write { get; internal set; }
     /// <summary>The dissolve, 0..1: 0 until Out, then how far the word has melted back into the fog.</summary>
     public double Melt { get; internal set; }
+    /// <summary>Seconds since this word started writing in: the clock a worn word style runs on
+    /// (its whole life is <see cref="SteamWords.LifeFor"/>).</summary>
+    public double Life { get; internal set; }
     internal double Rest, From = 1;
 }
 
@@ -98,6 +101,8 @@ public sealed class SteamWords
 
     public static double InFor(bool gentle) => gentle ? InSeconds * GentleStretch : InSeconds;
     public static double OutFor(bool gentle) => gentle ? OutSeconds * GentleStretch : OutSeconds;
+    /// <summary>A word's whole life, in, hold and out: what a worn word style fits its motion into.</summary>
+    public static double LifeFor(bool gentle) => InFor(gentle) + HoldSeconds + OutFor(gentle);
 
     /// <summary>
     /// Once a frame. <paramref name="open"/> false (the switch is off) wakes no place and sends
@@ -116,6 +121,7 @@ public sealed class SteamWords
         bool any = false;
         foreach (var s in _slots)
         {
+            bool started = false;
             switch (s.Phase)
             {
                 case SteamWordPhase.Hidden:
@@ -126,7 +132,8 @@ public sealed class SteamWords
                         if (!string.IsNullOrWhiteSpace(text))
                         {
                             s.Text = text!; s.Serial++;
-                            s.Phase = SteamWordPhase.In; s.Age = 0;
+                            s.Phase = SteamWordPhase.In; s.Age = 0; s.Life = 0;
+                            started = true;
                         }
                     }
                     break;
@@ -144,6 +151,7 @@ public sealed class SteamWords
                     if (s.Age >= tout) { Forget(field, s); Hide(s, RestSeconds); }
                     break;
             }
+            if (s.Phase != SteamWordPhase.Hidden && !started) s.Life += dt;
             switch (s.Phase)
             {
                 case SteamWordPhase.In:
@@ -194,7 +202,7 @@ public sealed class SteamWords
 
     private static void Hide(SteamWordSlot s, double rest)
     {
-        s.Phase = SteamWordPhase.Hidden; s.Age = 0; s.Rest = rest; s.From = 1;
+        s.Phase = SteamWordPhase.Hidden; s.Age = 0; s.Life = 0; s.Rest = rest; s.From = 1;
         s.Alpha = 0; s.Write = 0; s.Melt = 0;
     }
 

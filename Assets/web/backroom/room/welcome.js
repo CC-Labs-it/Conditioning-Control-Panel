@@ -89,7 +89,7 @@ export const FALLBACK = Object.freeze({
   br_welcome_prizes_title: 'The Prize Parlour',
   br_welcome_prizes_sub: 'What your sparkles buy.',
   br_welcome_prize1_lead: 'Walk up to the counter',
-  br_welcome_prize1: 'EMI trades Sparkle Points for prizes: Jackpot Remix, Flashes v2, Bubbles v2, the High Roller role and the Racing Thoughts bundles.',
+  br_welcome_prize1: 'EMI trades Sparkle Points for prizes: Jackpot Remix, Extra Flashes, Extra Bubbles, the High Roller role and the Racing Thoughts bundles.',
   br_welcome_prize2_lead: 'Try before you buy',
   br_welcome_prize2: 'Most prizes have a Try it button. Once bought, a prize is yours for good.',
   br_welcome_prize3_lead: 'Take it home',

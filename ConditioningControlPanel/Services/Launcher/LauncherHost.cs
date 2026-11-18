@@ -253,6 +253,15 @@ public static partial class LauncherHost
         catch (Exception ex) { Log.Debug(ex, "[Launcher] ShowTab {Tab} failed", tab); }
     }
 
+    /// <summary>The panel comes up (the launcher's exit beat first), then <paramref name="then"/> runs on it: the Prize
+    /// Counter's "See it on your profile" and the Studio look pages (PrizeCounterHostService.GoTo).</summary>
+    public static void OpenPanelThen(Action then)
+        => OpenPanel(null, () =>
+        {
+            try { then(); }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] panel follow-up failed"); }
+        });
+
     /// <summary>The launcher fades and hides, then the panel comes up and fades in.</summary>
     private static void OpenPanelNow(Action? then = null)
         => FadeThenHide(then == null ? ShowPanel : () => { ShowPanel(); then(); });

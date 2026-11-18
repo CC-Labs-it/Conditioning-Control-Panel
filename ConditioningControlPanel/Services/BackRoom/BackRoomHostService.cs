@@ -204,6 +204,9 @@ internal static class BackRoomHostService
     private static readonly TimeSpan PanicDoublePressWindow = TimeSpan.FromSeconds(2);
 
     private static ChaosWebViewHost? _host;
+
+    /// <summary>This game's window, for the Prize Counter sheet its door opens over it (PrizeCounterHostService.Sheet.cs).</summary>
+    internal static ChaosWebViewHost? CounterHost => _host;
     private static BackRoomBridge? _bridge;
     private static Models.AppSettings? _hookedSettings;
     private static bool _replaceHooked;
@@ -440,7 +443,7 @@ internal static class BackRoomHostService
                     ApplyRoomOption(s, option, _breakoutPage);
                     App.Settings.Save();
                 }),
-                SetSp = sp => { if (generation == _roomGeneration && !_racePage && App.Settings?.Current is { } s) s.SkillPoints = sp; },
+                SetSp = sp => { if (generation == _roomGeneration && !_racePage && App.Settings?.Current is { } s) Prizes.SparklesLedger.Write(s, sp, Prizes.SparkleSource.BackRoom); },
                 OnUi = OnUi,
                 OffUi = work => System.Threading.Tasks.Task.Run(work),
                 Log = msg => App.Logger?.Debug("BackRoom: {Msg}", msg),
@@ -464,7 +467,7 @@ internal static class BackRoomHostService
     }
 
     /// <summary>The page's <c>open-prize-counter</c> (walking to the counter + E): suspend the room and
-    /// open the counter WINDOW over it on the Back Room tab (owner call: no per-game relay).</summary>
+    /// open the counter sheet inside this window on the Back Room tab (owner call: no per-game relay).</summary>
     private static void OpenCounter(string? tab)
     {
         if (_host == null || _bridge == null || _racePage || _breakoutPage) return;
@@ -684,8 +687,15 @@ internal static class BackRoomHostService
             // The plan list (contract C1 via PlanCatalog) for the end cards (C10): Breakout demo
             // end, bank cash-out. A page shows a price only when this is present.
             plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
+            // The worn bubble skin for Breakout's bubbles (CONTRACT 10.23, optional; soap = today's bubble).
+            bubbleSkin = BubbleSkinWire(),
         };
     }
+
+    /// <summary>The worn bubble skin id the page draws (CONTRACT 10.23): the same answer new desktop bubbles get,
+    /// so a skin not drawn yet, or nothing worn, reads <c>soap</c>.</summary>
+    internal static string BubbleSkinWire(Func<string?>? worn = null)
+        => worn == null ? BubbleCore.BubbleSkinChoice.Current() : BubbleCore.BubbleSkinChoice.Resolve(worn());
 
     private static object SettingsMessage()
     {
@@ -699,6 +709,7 @@ internal static class BackRoomHostService
             reduced = motion != Models.MotionLevel.Full, gates = GatesWire(s), intensityChoice = IntensityChoiceWire(s),
             invertLook = s?.BackRoomInvertLook ?? false,
             media = MediaWire(s), audio = AudioWire(s, _breakoutPage),
+            bubbleSkin = BubbleSkinWire(),
         };
     }
 

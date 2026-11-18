@@ -124,6 +124,8 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PassEndsUtc),
             // The weekly free Super try is spent per PC, not per account backup.
             nameof(AppSettings.SuperPreviewUsedWeek),
+            // Which Studio option sections are open: how this PC's screen looks, nobody's setting.
+            nameof(AppSettings.StudioSectionsOpen),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
             // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
@@ -206,6 +208,7 @@ namespace ConditioningControlPanel.Services
             restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.PassEndsUtc = current.PassEndsUtc;
             restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
+            restored.StudioSectionsOpen = new Dictionary<string, bool>(current.StudioSectionsOpen);
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;

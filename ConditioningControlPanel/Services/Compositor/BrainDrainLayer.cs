@@ -485,6 +485,7 @@ public sealed class BrainDrainLayer : BaseLayer
         _undertow.Reset();
         _undertowOn = false;
         _undertowStale = true;
+        _lensSmall?.Dispose(); _lensSmall = null; _lensSmallW = _lensSmallH = 0;
     }
 
     /// <summary>Draws the blur with the feathered lens left out, then the click ripples. The
@@ -517,20 +518,68 @@ public sealed class BrainDrainLayer : BaseLayer
             DrawBase(canvas, image, dest, wave);
             canvas.Restore();
 
-            canvas.SaveLayer(lens, null);
-            canvas.ClipRect(lens);
-            DrawBase(canvas, image, dest, wave);
-            canvas.Translate(x, y);
-            canvas.RotateRadians(angle);
-            canvas.Scale(r * (1f + stretch), r);
-            canvas.DrawCircle(0, 0, 1, MaskPaint());
-            canvas.Restore();
+            if (wave != null || !DrawLensSmall(canvas, image, dest, lens, x, y, r, stretch, angle))
+            {
+                canvas.SaveLayer(lens, null);
+                canvas.ClipRect(lens);
+                DrawBase(canvas, image, dest, wave);
+                canvas.Translate(x, y);
+                canvas.RotateRadians(angle);
+                canvas.Scale(r * (1f + stretch), r);
+                canvas.DrawCircle(0, 0, 1, MaskPaint());
+                canvas.Restore();
+            }
 
             DrawRim(canvas, x, y, r, stretch, angle, motion);
         }
         EndWaves();
         DrawDrops(canvas, dpiScale);
     }
+
+    // The lens box without a screen-sized offscreen layer (measured 2026-11-17: the layer cost up to
+    // 16 ms a frame at 1440p with a wide lens, this costs under 2). The blurred capture is small, so the
+    // hole is cut out of the box's share of it at ITS size, on a small kept surface, and the result is
+    // stretched over the box exactly as the whole image would be: same texels, same filter.
+    private SKSurface? _lensSmall;
+
+    private bool DrawLensSmall(SKCanvas canvas, SKImage image, SKRect dest, SKRect lens, float x, float y, float r, float stretch, float angle)
+    {
+        if (image.Width <= 0 || image.Height <= 0 || dest.Width <= 0 || dest.Height <= 0) return false;
+        float sx = dest.Width / image.Width, sy = dest.Height / image.Height;
+        // The box in the capture's own pixels, one pixel wider all round so the stretch filters the
+        // same neighbours the whole image would; the extra is clipped away below.
+        int tx0 = Math.Max(0, (int)Math.Floor((lens.Left - dest.Left) / sx) - 1), ty0 = Math.Max(0, (int)Math.Floor((lens.Top - dest.Top) / sy) - 1);
+        int tx1 = Math.Min(image.Width, (int)Math.Ceiling((lens.Right - dest.Left) / sx) + 1), ty1 = Math.Min(image.Height, (int)Math.Ceiling((lens.Bottom - dest.Top) / sy) + 1);
+        int tw = tx1 - tx0, th = ty1 - ty0;
+        if (tw <= 0 || th <= 0) return true;   // the box misses this capture: nothing to draw
+        if (_lensSmall == null || _lensSmallW < tw || _lensSmallH < th)
+        {
+            _lensSmall?.Dispose();
+            _lensSmallW = Math.Max(_lensSmallW, tw); _lensSmallH = Math.Max(_lensSmallH, th);
+            _lensSmall = SKSurface.Create(new SKImageInfo(_lensSmallW, _lensSmallH, SKColorType.Bgra8888, SKAlphaType.Premul));
+            if (_lensSmall == null) { _lensSmallW = _lensSmallH = 0; return false; }
+        }
+        var sc = _lensSmall.Canvas;
+        sc.Save();
+        sc.ClipRect(new SKRect(0, 0, tw, th));
+        sc.Clear(SKColors.Transparent);
+        sc.DrawImage(image, -tx0, -ty0);
+        sc.Scale(1 / sx, 1 / sy);
+        sc.Translate(-(dest.Left + tx0 * sx), -(dest.Top + ty0 * sy));
+        sc.Translate(x, y);
+        sc.RotateRadians(angle);
+        sc.Scale(r * (1f + stretch), r);
+        sc.DrawCircle(0, 0, 1, MaskPaint());
+        sc.Restore();
+        using var holed = _lensSmall.Snapshot(new SKRectI(0, 0, tw, th));
+        if (holed == null) return false;
+        canvas.Save();
+        canvas.ClipRect(lens);
+        canvas.DrawImage(holed, new SKRect(dest.Left + tx0 * sx, dest.Top + ty0 * sy, dest.Left + tx1 * sx, dest.Top + ty1 * sy), _drawPaint);
+        canvas.Restore();
+        return true;
+    }
+    private int _lensSmallW, _lensSmallH;
 
     // ---- Undertow juice: rim glow and droplet sparks. Reused paints, no per-frame allocations. ----
     private static readonly SKColor UndertowTint = new(0xFF, 0xA8, 0xDC);   // soft pink, screened at low alpha

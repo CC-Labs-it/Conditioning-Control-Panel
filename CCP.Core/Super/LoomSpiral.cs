@@ -270,6 +270,22 @@ public sealed class LoomSpiral
         for (int i = 0; i < n; i++) rgba[i] = (byte)(Math.Clamp(_acc[i], 0f, 1f) * 255f + 0.5f);
     }
 
+    /// <summary>Write the picture as premultiplied BGRA bytes (the compositor's cheap stretch format), laid over
+    /// an opaque <paramref name="groundRgb"/> so the result has no see-through pixels.</summary>
+    public void CopyToBgraOver(byte[] bgra, uint groundRgb)
+    {
+        float gr = ((groundRgb >> 16) & 255) / 255f, gg = ((groundRgb >> 8) & 255) / 255f, gb = (groundRgb & 255) / 255f;
+        int n = Math.Min(bgra.Length, _acc.Length);
+        for (int i = 0; i + 3 < n; i += 4)
+        {
+            float a = Math.Clamp(_acc[i + 3], 0f, 1f), k = 1 - a;
+            bgra[i] = (byte)(Math.Clamp(_acc[i + 2] + gb * k, 0f, 1f) * 255f + 0.5f);
+            bgra[i + 1] = (byte)(Math.Clamp(_acc[i + 1] + gg * k, 0f, 1f) * 255f + 0.5f);
+            bgra[i + 2] = (byte)(Math.Clamp(_acc[i] + gr * k, 0f, 1f) * 255f + 0.5f);
+            bgra[i + 3] = 255;
+        }
+    }
+
     /// <summary>Coverage 0..1 at a pixel of the picture (tests).</summary>
     public double AlphaAt(int x, int y) => _acc[(y * Size + x) * 4 + 3];
 }

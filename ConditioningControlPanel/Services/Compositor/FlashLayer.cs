@@ -1,5 +1,7 @@
 ﻿using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.SuperCore;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -86,6 +88,32 @@ public sealed class FlashLayer : BaseLayer
         /// <summary>The white puff at a flip's edge as the new picture lands. Null once it has died.</summary>
         internal FlickerSpark[]? DeckSparks;
         internal float DeckShadowSigma = -1f;
+        /// <summary>The monitor this card lives on, world px (empty = unknown): a reshaped card stays on it.</summary>
+        internal SKRect DeckBounds;
+        /// <summary>The card's box before the last new face (CCP.Core DeckCardFit): the draw eases from it to X..H.</summary>
+        internal CardBox? DeckShapeFrom;
+        internal double DeckShapeSpan;
+        /// <summary>Motion Off: the old picture, fading out over the new face (DeckTurn.FadeOut). Owned by the layer.</summary>
+        internal SKImage[]? DeckFadeFrames;
+        /// <summary>Motion Off: the old face fading out was the spiral back.</summary>
+        internal bool DeckFadeFromBack;
+        /// <summary>Motion Off: the picture (still in Frames) is fading out over the spiral back.</summary>
+        internal bool DeckFadeFromFront;
+        /// <summary>Shop look "behind" (CCP.Core DeckSpiralBack): this flip turns to the spiral back, not a new picture.</summary>
+        internal bool DeckBackNext;
+        /// <summary>The card shows its spiral back (the picture stays in Frames for the GaveUp case).</summary>
+        internal bool DeckOnBack;
+        /// <summary>The back's spiral picture (Bgra8888, rolled once per flip to the back), its ground and its turn.</summary>
+        internal SKBitmap? DeckSpiral;
+        /// <summary>The back drawn at half size and stretched once (SpiralBackCache: about 3x cheaper than at full size).</summary>
+        internal Super.Draw.SpiralBackCache? DeckBackCache;
+        internal uint DeckSpiralGround;
+        internal double DeckSpiralTurn;
+        internal LoomSpec? DeckSpiralSpec;
+        /// <summary>The back's phrase, broken into lines, and its tint.</summary>
+        internal string? WhisperText;
+        internal string[]? WhisperLines;
+        internal float WhisperHue = 320;
 
         // Super, the Whirlpool: its hold on this flash. The pool moves the rect itself (X, Y), so
         // clicks and gaze keep landing where the picture is; PoolScale is draw-only.
@@ -143,8 +171,26 @@ public sealed class FlashLayer : BaseLayer
             BlurCache?.Dispose();
             BlurCache = null;
             DropDeckPending();
+            DropDeckFade();
+            DeckBackCache?.Dispose();
+            DeckBackCache = null;
+            DeckSpiral?.Dispose();
+            DeckSpiral = null;
             DeckShadowCache?.Dispose();
             DeckShadowCache = null;
+        }
+
+        internal void DropDeckFade()
+        {
+            var fading = DeckFadeFrames;
+            DeckFadeFrames = null;
+            DeckFadeFromBack = false;
+            DeckFadeFromFront = false;
+            if (fading == null) return;
+            foreach (var f in fading)
+            {
+                try { f.Dispose(); } catch { }
+            }
         }
 
         internal void DropDeckPending()
@@ -173,6 +219,8 @@ public sealed class FlashLayer : BaseLayer
     // Super Flicker Deck: one reused path for cracks and shard clips, one rng for the breaks.
     private readonly SKPath _deckPath = new();
     private readonly Random _deckRng = new();
+    // Shop looks worn by the Deck (frames, the spiral back, the turn shade): rules in CCP.Core DeckLooks / DeckSpiralBack.
+    private readonly Super.Draw.DeckLookDraw _deckLook = new();
 
     public FlashLayer(CompositorEngine engine) : base(engine.Wake) { }
 
@@ -323,6 +371,9 @@ public sealed class FlashLayer : BaseLayer
             if (item.Deck == null) continue;
             item.Deck = null;
             item.DropDeckPending();
+            item.DropDeckFade();
+            item.DeckOnBack = item.DeckBackNext = false;
+            item.DeckShapeFrom = null;
             _dirty = true;
         }
     }
@@ -504,6 +555,21 @@ public sealed class FlashLayer : BaseLayer
                 var hh = (float)(pend.MediaH / 2.0);
                 rect = new SKRect(cx - hw, cy - hh, cx + hw, cy + hh);
             }
+            // A Deck card that just took a new face eases into the new shape (CCP.Core DeckCardFit):
+            // the size and the centre both move, so the card turns into its shape instead of popping.
+            if (item.Deck is { } shaping && item.DeckShapeFrom is { } from)
+            {
+                var k = DeckCardFit.Progress(shaping.SinceSwap, item.DeckShapeSpan);
+                if (k < 1)
+                {
+                    var now = new CardBox(rect.Left, rect.Top, rect.Width, rect.Height);
+                    // A moving card keeps its own centre (the path owns it); a still one eases there too.
+                    if (item.Motion is { Style: not FlashMotionStyle.Still })
+                        from = new CardBox(now.Cx - from.W / 2, now.Cy - from.H / 2, from.W, from.H);
+                    var b = DeckCardFit.Between(from, now, k);
+                    rect = new SKRect((float)b.X, (float)b.Y, (float)(b.X + b.W), (float)(b.Y + b.H));
+                }
+            }
             // Gaze-dwell inflate about the rect center (RenderTransform ScaleTransform parity),
             // times how small the Whirlpool has drawn it in.
             if (item.DwellScale > 1.001 || item.PoolScale < 0.999)
@@ -525,7 +591,13 @@ public sealed class FlashLayer : BaseLayer
                 var dy = (float)(item.DeckPeekDy * p.PeekFrac * rect.Width + p.RiseFrac * rect.Height);
                 canvas.Translate(rect.MidX + dx, rect.MidY + dy);
                 if (p.WobbleRad != 0) canvas.RotateRadians((float)p.WobbleRad);
-                canvas.Scale((float)(p.ScaleX * p.Scale), (float)(p.Scale * p.SquashY));
+                canvas.Scale((float)p.Scale, (float)(p.Scale * p.SquashY));
+                // The turn (CCP.Core DeckTurn): width = cos of the angle, and a light perspective so the
+                // far edge is shorter than the near one. One matrix, no allocation.
+                var turnM = SKMatrix.CreateIdentity();
+                turnM.ScaleX = (float)p.ScaleX;
+                turnM.Persp0 = (float)DeckTurn.PerspectiveTerm(p.TurnRad, rect.Width / 2.0, p.Persp);
+                canvas.Concat(ref turnM);
                 canvas.Translate(-rect.MidX, -rect.MidY);
             }
 
@@ -546,7 +618,9 @@ public sealed class FlashLayer : BaseLayer
             var padding = item.PaddingPx * (float)item.EntranceProgress;
             var inner = new SKRect(rect.Left + padding, rect.Top + padding,
                 rect.Right - padding, rect.Bottom - padding);
-            var fit = UniformFit(image.Width, image.Height, inner);
+            // A Deck card IS its picture's shape (DeckCardFit), so its face fills the card edge to edge;
+            // while the card eases from one shape to the next the picture crops a little, never bars.
+            var fit = item.Deck != null ? inner : UniformFit(image.Width, image.Height, inner);
             if (item.EntranceProgress < 1)
             {
                 // Start with the same circle and center crop used by the bubble face.
@@ -559,6 +633,9 @@ public sealed class FlashLayer : BaseLayer
                     inner.MidX + fw / 2, inner.MidY + fh / 2);
                 _imagePaint.Color = new SKColor(255, 255, 255, alpha);
                 canvas.DrawImage(image, fit, _imagePaint);
+                // Shop look "card": a worn frame grows in with the card (it follows the morphing corner).
+                if (item.Deck != null && DeckLookChoice.Back is var entering && DeckLooks.FrameShows(entering))
+                    _deckLook.DrawFrame(canvas, inner, radius, entering, (byte)(alpha * item.EntranceProgress));
                 canvas.RestoreToCount(saves);
                 continue;
             }
@@ -610,14 +687,50 @@ public sealed class FlashLayer : BaseLayer
                 else
                 {
                     canvas.DrawRect(inner, _fillPaint);
+                    if (item.Deck != null) canvas.ClipRect(inner, antialias: true);   // the face may crop while it reshapes
                 }
             }
 
             _imagePaint.Color = new SKColor(255, 255, 255, alpha);
+            var back = DeckLookChoice.Back;
+            // Shop look "behind" (DeckSpiralBack): the card's back is a spiral with a phrase coming at you.
+            var onBack = item.Deck != null && item.DeckOnBack && item.DeckSpiral != null && DeckLookChoice.Whisper;
             if (exit is { Glitch: > 0 } && item.Exit is { } glitchState)
                 DrawGlitch(canvas, image, fit, alpha, glitchState, exit.Value.Glitch);
+            else if (onBack)
+                DrawBackFace(canvas, item, fit, alpha);
+            else if (item.Deck != null)
+                DrawCover(canvas, image, fit, _imagePaint);
             else
                 canvas.DrawImage(image, fit, _imagePaint);
+            // Motion Off: no turn, the old face fades out over the new one (DeckTurn.FadeOut).
+            if (item.Deck is { } fading && exit == null && (item.DeckFadeFrames != null || item.DeckFadeFromBack || item.DeckFadeFromFront))
+            {
+                var oa = (byte)Math.Clamp(DeckTurn.FadeOut(fading.SinceSwap, Safety.GentleVisuals.On) * alpha, 0, 255);
+                if (oa > 0)
+                {
+                    var oldFace = item.DeckFadeFromFront && onBack ? image
+                        : item.DeckFadeFrames is { Length: > 0 } old ? old[0] : null;
+                    if (item.DeckFadeFromBack && item.DeckSpiral != null && !onBack) DrawBackFace(canvas, item, fit, oa, word: false);
+                    else if (oldFace != null)
+                    {
+                        _imagePaint.Color = new SKColor(255, 255, 255, oa);
+                        DrawCover(canvas, oldFace, fit, _imagePaint);
+                        _imagePaint.Color = new SKColor(255, 255, 255, alpha);
+                    }
+                }
+            }
+            // The turn: the face darkens toward the edge that is going away.
+            if (pose is { Shade: > 0.004 } shaded && exit == null)
+                _deckLook.DrawShade(canvas, fit, shaded.Shade, shaded.TurnRad > 0, alpha);
+            // Shop look "card" (sold as Card frames): the worn frame round every Deck card, the whole time
+            // the picture is up. Plain draws nothing; badges below then keep inside the band.
+            var badgeBox = fit;
+            if (item.Deck != null && DeckLooks.FrameShows(back))
+            {
+                var band = _deckLook.DrawFrame(canvas, fit, item.CornerRadiusPx, back, alpha);
+                if (band > 0) badgeBox = SKRect.Inflate(fit, -band, -band);
+            }
             if (exit is { Whiten: > 0 } lit)
             {
                 // TV off: the picture burns bright as it collapses to its line.
@@ -639,8 +752,8 @@ public sealed class FlashLayer : BaseLayer
             if (pose is { Sheen: > 0.004 } lit2) DrawDeckSheen(canvas, fit, lit2.Sheen, lit2.SheenPos, alpha);
             if (pose is { Crack: > 0 } cracked && item.Deck is { } crackDeck)
                 DrawCracks(canvas, crackDeck, fit, cracked.Crack, cracked.CrackReach, alpha);
-            if (item.DodgeUntilMs > 0 && item.Exit == null) DrawDodgeRing(canvas, fit, alpha, item.DodgeUntilMs);
-            if (item.Credit && item.Exit == null) DrawCredit(canvas, fit, alpha, dpiScale);
+            if (item.DodgeUntilMs > 0 && item.Exit == null) DrawDodgeRing(canvas, badgeBox, alpha, item.DodgeUntilMs);
+            if (item.Credit && item.Exit == null && !onBack) DrawCredit(canvas, badgeBox, alpha, dpiScale);
             canvas.RestoreToCount(saves);
             if (item.Exit != null) DrawSparks(canvas, item);
             if (item.DeckSparks != null && item.Deck != null) DrawDeckPuff(canvas, item.DeckSparks, rect.MidX, rect.MidY, item.Opacity);
@@ -928,32 +1041,185 @@ public sealed class FlashLayer : BaseLayer
 
     private void StepDeck(FlashItem item, FlickerDeckState deck, double dt)
     {
-        var ev = FlickerDeck.Step(deck, dt, item.DeckPendingFrames != null, MotionFx.Level);
+        // A flip to the spiral back has its face ready at once (rolled at the press).
+        var ev = FlickerDeck.Step(deck, dt, item.DeckPendingFrames != null || item.DeckBackNext, MotionFx.Level);
         if ((ev & FlickerEvents.Raise) != 0)
         {
             BringToFront(item);
             item.OnDeckRaise?.Invoke(item);
         }
-        if ((ev & FlickerEvents.Swap) != 0 && item.DeckPendingFrames is { Length: > 0 } next)
+        var off = MotionFx.Level == MotionLevel.Off;
+        if ((ev & FlickerEvents.Swap) != 0 && item.DeckBackNext)
+        {
+            // Edge-on: the back turns into view. The picture stays in Frames for the next flip's fall-back.
+            item.DropDeckFade();
+            if (off) item.DeckFadeFromFront = true;   // Off: the picture (still in Frames) fades out over the back
+            item.DeckBackNext = false;
+            item.DeckOnBack = true;
+            item.DeckShapeFrom = null;
+            item.DeckSparks = SwapPuff(item, deck);
+        }
+        else if ((ev & FlickerEvents.Swap) != 0 && item.DeckPendingFrames is { Length: > 0 } next)
         {
             var old = item.Frames;
+            var fromBack = item.DeckOnBack;
+            item.DropDeckFade();
             item.Frames = next;
             item.DeckPendingFrames = null;
             item.FrameIndex = 0;
             item.LastFrameIndex = -1;
-            if (old != null)
+            item.DeckOnBack = false;
+            if (off && fromBack) item.DeckFadeFromBack = true;
+            if (off && !fromBack && old != null) item.DeckFadeFrames = old;   // fades out over the new face, then goes
+            else if (old != null)
                 foreach (var f in old) { try { f.Dispose(); } catch { } }
+            Reshape(item, next[0], off);
             item.DeckSparks = SwapPuff(item, deck);
             item.OnDeckSwap?.Invoke(item);
+        }
+        // Off: the Back-to-picture and picture-to-picture fades let go of the old face once it is gone.
+        if (item.DeckFadeFrames != null || item.DeckFadeFromBack || item.DeckFadeFromFront)
+        {
+            if (deck.SinceSwap >= DeckTurn.FadeLength(Safety.GentleVisuals.On)) item.DropDeckFade();
+            _dirty = true;
+        }
+        if (item.DeckShapeFrom != null)
+        {
+            if (deck.SinceSwap >= item.DeckShapeSpan) item.DeckShapeFrom = null;
+            _dirty = true;
         }
         if (item.DeckSparks is { } puff)
         {
             if (FlickerShatter.StepSparks(puff, dt)) _dirty = true;
             else { item.DeckSparks = null; _dirty = true; }
         }
-        if ((ev & FlickerEvents.GaveUp) != 0) item.OnDeckGaveUp?.Invoke(item);
+        if ((ev & FlickerEvents.GaveUp) != 0)
+        {
+            // No new picture came: the card opens on the one it still holds, never on a stale back.
+            item.DeckOnBack = false;
+            item.DeckBackNext = false;
+            item.OnDeckGaveUp?.Invoke(item);
+        }
         if (ev != FlickerEvents.None || (MotionFx.Level != MotionLevel.Off && FlickerDeck.Animating(deck)))
             _dirty = true;
+        StepBack(item, deck, dt);
+    }
+
+    /// <summary>
+    /// A new face reshapes the card to its picture (CCP.Core DeckCardFit): same area, the picture's own
+    /// aspect, about the same centre, kept on its monitor. The click box moves at once; the draw eases
+    /// from the old shape over the opening half of the flip (Off: over the cross-fade).
+    /// </summary>
+    private static void Reshape(FlashItem item, SKImage picture, bool off)
+    {
+        if (picture.Width <= 0 || picture.Height <= 0) return;
+        var from = new CardBox(item.X, item.Y, item.W, item.H);
+        var bounds = new CardBox(item.DeckBounds.Left, item.DeckBounds.Top, item.DeckBounds.Width, item.DeckBounds.Height);
+        var to = DeckCardFit.Refit(from, item.PaddingPx, picture.Width / (double)picture.Height, bounds);
+        if (Math.Abs(to.W - from.W) < 1 && Math.Abs(to.H - from.H) < 1 && Math.Abs(to.X - from.X) < 1 && Math.Abs(to.Y - from.Y) < 1)
+            return;
+        item.DeckShapeFrom = from;
+        item.DeckShapeSpan = off ? DeckTurn.FadeLength(Safety.GentleVisuals.On) : FlickerDeck.FlipSec / 2;
+        if (item.Motion is { } m && m.Style != FlashMotionStyle.Still)
+        {
+            // A moving card keeps its path: its media size changes about its own centre.
+            double cx = m.X + m.W / 2, cy = m.Y + m.H / 2;
+            m.MediaW = to.W; m.MediaH = to.H;
+            if (m.Style != FlashMotionStyle.Pendulum)
+            {
+                m.W = to.W; m.H = to.H; m.X = cx - to.W / 2; m.Y = cy - to.H / 2;
+            }
+            SyncRect(item, m);
+            return;
+        }
+        item.X = (float)to.X; item.Y = (float)to.Y; item.W = (float)to.W; item.H = (float)to.H;
+    }
+
+    // The spiral back is worked out small and stretched (SKIA STRETCH TRAP: Bgra8888, Low): it is soft
+    // curves, and it is rolled once per flip to the back, never per frame. One generator for the layer.
+    // 320 like the Whirlpool's: at 192 a dense spiral stair-stepped once stretched over a big card.
+    internal const int BackSpiralPx = 320;
+    private SuperCore.LoomSpiral? _backLoom;
+    private byte[]? _backPx;
+
+    /// <summary>
+    /// Shop look "behind": called on a press. With the look worn and the card showing a picture, this flip
+    /// turns to the spiral back: a new Loom spiral and a new phrase are rolled now, so the face is ready at
+    /// the edge. Returns false when the flip should fetch a picture as usual.
+    /// </summary>
+    public bool PrepareDeckBack(FlashItem item)
+    {
+        item.DeckBackNext = false;
+        if (item.Deck == null || item.DeckOnBack || !DeckLookChoice.Whisper) return false;
+        try { RollBack(item, App.Settings?.Current?.SubliminalPool, AccentRgb()); }
+        catch (Exception ex) { App.Logger?.Debug("Deck spiral back: {E}", ex.Message); return false; }
+        item.DeckBackNext = true;
+        return true;
+    }
+
+    /// <summary>Roll the back's spiral into the card's own small bitmap, and its phrase. Tests call it directly.</summary>
+    internal void RollBack(FlashItem item, IEnumerable<KeyValuePair<string, bool>>? pool, uint accentRgb)
+    {
+        var spec = DeckSpiralBack.Roll(_deckRng, accentRgb, item.DeckSpiralSpec);
+        _backLoom ??= new SuperCore.LoomSpiral(BackSpiralPx);
+        _backPx ??= new byte[BackSpiralPx * BackSpiralPx * 4];
+        _backLoom.Clear();
+        _backLoom.Add(spec, 0, 0, 1);
+        uint ground = DeckSpiralBack.Ground(accentRgb);
+        _backLoom.CopyToBgraOver(_backPx, ground & 0xFFFFFF);
+        item.DeckSpiral ??= new SKBitmap(new SKImageInfo(BackSpiralPx, BackSpiralPx, SKColorType.Bgra8888, SKAlphaType.Premul));
+        System.Runtime.InteropServices.Marshal.Copy(_backPx, 0, item.DeckSpiral.GetPixels(), _backPx.Length);
+        item.DeckSpiral.NotifyPixelsChanged();
+        item.DeckBackCache?.Invalidate();   // same bitmap, new pixels: the half-size back draws again
+        item.DeckSpiralSpec = spec;
+        item.DeckSpiralGround = ground;
+        item.DeckSpiralTurn = _deckRng.NextDouble() * Math.PI * 2;
+        var phrase = DeckWhisper.Pick(pool, item.WhisperText, _deckRng, DeckSpiralBack.MaxChars, lower: false);
+        item.WhisperText = phrase;
+        item.WhisperLines = phrase != null ? DeckSpiralBack.Lines(phrase) : null;
+        item.WhisperHue = (float)(270 + _deckRng.NextDouble() * 65);   // the slot's house flavour, pink to purple
+    }
+
+    private static uint AccentRgb()
+    {
+        try
+        {
+            if (App.Mods is { } mods) { var (r, g, b) = mods.GetAccentColorRgb(); return ((uint)r << 16) | ((uint)g << 8) | b; }
+        }
+        catch { }
+        return 0xFF69B4;
+    }
+
+    /// <summary>The back turns slowly while it shows, and keeps the frame moving while its phrase is up.</summary>
+    private void StepBack(FlashItem item, FlickerDeckState deck, double dt)
+    {
+        if (!item.DeckOnBack && !item.DeckFadeFromBack) return;
+        if (!DeckLookChoice.Whisper) { if (item.DeckOnBack) { item.DeckOnBack = false; _dirty = true; } return; }
+        var level = MotionFx.Level;
+        var rate = DeckSpiralBack.TurnRate(level == MotionLevel.Off, Safety.GentleVisuals.On, level == MotionLevel.Reduced ? 0.5 : 1.0);
+        if (rate > 0) { item.DeckSpiralTurn += rate * dt; _dirty = true; }
+        if (item.WhisperLines != null && deck.SinceSwap < DeckSpiralBack.Life(level == MotionLevel.Off, Safety.GentleVisuals.On)) _dirty = true;
+    }
+
+    /// <summary>The spiral back filling <paramref name="r"/>, and its phrase coming at the viewer.</summary>
+    private void DrawBackFace(SKCanvas canvas, FlashItem item, SKRect r, byte alpha, bool word = true)
+    {
+        if (item.DeckSpiral == null) return;
+        _deckLook.DrawSpiralBack(canvas, r, item.DeckSpiral, item.DeckSpiralGround, item.DeckSpiralTurn, alpha, item.DeckBackCache ??= new());
+        if (!word || item.Deck is not { } deck || item.WhisperLines == null || item.Exit != null) return;
+        var level = MotionFx.Level;
+        var p = DeckSpiralBack.Word(deck.SinceSwap, level == MotionLevel.Reduced ? 0.5 : 1.0, level == MotionLevel.Off, Safety.GentleVisuals.On);
+        _deckLook.DrawBackWord(canvas, r, item.WhisperLines, p, item.WhisperHue, alpha);
+    }
+
+    /// <summary>A picture filling <paramref name="dst"/> edge to edge, cropped about its centre (the canvas is clipped to the card).</summary>
+    private static void DrawCover(SKCanvas canvas, SKImage image, SKRect dst, SKPaint paint)
+    {
+        if (image.Width <= 0 || image.Height <= 0 || dst.Width <= 0 || dst.Height <= 0) return;
+        float scale = Math.Max(dst.Width / image.Width, dst.Height / image.Height);
+        float sw = dst.Width / scale, sh = dst.Height / scale;
+        var src = new SKRect((image.Width - sw) / 2f, (image.Height - sh) / 2f, (image.Width + sw) / 2f, (image.Height + sh) / 2f);
+        canvas.DrawImage(image, src, dst, paint);
     }
 
     /// <summary>The card's shadow grows and drops as it lifts (mockup: blur 8 + 24 lift, offset 3 + 12 lift).</summary>

@@ -73,6 +73,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="spiral.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_spiral_opacity_5_100}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -81,7 +82,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_opacity}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderOpacity"
+                                <Slider Grid.Column="1" x:Name="SliderOpacity" feat:OptionSection.Setting="SpiralOpacity"
                                         Minimum="5" Maximum="100" Value="15"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderOpacity_Changed"/>
@@ -89,9 +90,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="spiral.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_spiral_randomize}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -132,12 +133,13 @@
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_effect_monitor}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <ComboBox Grid.Column="1"
-                                          x:Name="CmbMonitor"
+                                          x:Name="CmbMonitor" feat:OptionSection.Setting="SpiralTargetMonitor"
                                           Width="180" VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           DropDownOpened="CmbMonitor_DropDownOpened"
                                           SelectionChanged="CmbMonitor_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -246,7 +248,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_pool_spiral}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" Width="180" VerticalAlignment="Center"
+                        <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" feat:OptionSection.Setting="WhirlpoolSpiral" Width="180" VerticalAlignment="Center"
                                   Style="{DynamicResource DarkComboBoxStyle}"
                                   SelectionChanged="CmbPoolSpiral_Changed"/>
                     </Grid>
@@ -260,7 +262,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_pool_every}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderPoolEvery" Minimum="8" Maximum="60" Value="18"
+                        <Slider Grid.Column="1" x:Name="SliderPoolEvery" feat:OptionSection.Setting="WhirlpoolNewEvery" Minimum="8" Maximum="60" Value="18"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolEvery_Changed"/>
                         <TextBlock Grid.Column="2" x:Name="TxtPoolEvery" Text="18 s" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
@@ -276,7 +278,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{loc:Str super_pool_size}" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderPoolSize" Minimum="50" Maximum="150" Value="100"
+                        <Slider Grid.Column="1" x:Name="SliderPoolSize" feat:OptionSection.Setting="WhirlpoolSize" Minimum="50" Maximum="150" Value="100"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolSize_Changed"/>
                         <TextBlock Grid.Column="2" x:Name="TxtPoolSize" Text="100%" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"

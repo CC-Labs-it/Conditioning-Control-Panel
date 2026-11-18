@@ -207,7 +207,7 @@ internal static class FriendsLook
                 disc.Fill = new ImageBrush(preset) { Stretch = Stretch.UniformToFill };
                 initials.Visibility = Visibility.Collapsed;
             }
-            if (CosmeticsCatalog.GetFrameImage(look.FrameId) is { } frameArt)
+            if (CosmeticsCatalog.GetFrameImage(look.FrameId, size / ShopCosmetics.FrameWindowRatio) is { } frameArt)
             {
                 var frame = size / ShopCosmetics.FrameWindowRatio;
                 host.Children.Add(new Image

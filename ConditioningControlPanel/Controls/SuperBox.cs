@@ -87,13 +87,24 @@ namespace ConditioningControlPanel.Controls
         private readonly Button _star;
         private readonly TextBlock _starGlyph = new()
         {
-            Text = "\u2605", FontSize = 24, LineHeight = 24,
-            FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
+            Text = StarOffGlyph, FontSize = 24, LineHeight = 24,
+            // Segoe UI Symbol first: Segoe MDL2 Assets has no U+2605/U+2606, and on some machines
+            // the fallback never happened and the star drew as an empty box (ccp-bugs #1635).
+            FontFamily = new FontFamily("Segoe UI Symbol, Segoe UI"),
             VerticalAlignment = VerticalAlignment.Center,
         };
+        /// <summary>On is a filled star, off an outline one: the states differ in shape, not only colour.</summary>
+        internal const string StarOnGlyph = "\u2605", StarOffGlyph = "\u2606";
         private static readonly Brush StarOn = Frozen(Color.FromRgb(0xFF, 0xCF, 0x6B));
         private static readonly Brush StarOff = Frozen(Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF));
         private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+        // The plain, labelled on/off for the V2 (ccp-bugs #1635: testers read the star as
+        // "expand"). Same state as the star and the dashboard corner: SuperAccess.
+        private readonly CheckBox _v2Toggle = new() { VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand };
+        private readonly TextBlock _v2ToggleLabel = new() { FontSize = 13, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        private readonly TextBlock _v2ToggleLine = new() { FontSize = 11.5, Opacity = 0.7, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 1, 0, 0) };
+        private readonly Grid _v2Row = new() { MinHeight = 36, Margin = new Thickness(0, 2, 0, 2) };
+        private bool _syncingToggle;
         private readonly StackPanel _corner = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         // No margin of its own: a body starts with the thin gold rule, which carries the gap, so a
         // box whose rows are all folded costs no height.
@@ -214,6 +225,19 @@ namespace ConditioningControlPanel.Controls
             row.Children.Add(text);
             row.Children.Add(_corner);
 
+            // The labelled switch row, laid out like the page's own option rows: words left, toggle right.
+            _v2Toggle.SetResourceReference(StyleProperty, "ToggleStyle");
+            _v2Toggle.Click += (_, _) => OnToggleClicked();
+            var toggleText = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            toggleText.Children.Add(_v2ToggleLabel);
+            toggleText.Children.Add(_v2ToggleLine);
+            _v2Row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            _v2Row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(toggleText, 0);
+            Grid.SetColumn(_v2Toggle, 1);
+            _v2Row.Children.Add(toggleText);
+            _v2Row.Children.Add(_v2Toggle);
+
             _modeLineHost.Child = _modeLine;
             _modeLineHost.RenderTransform = _modeLineRise;
 
@@ -221,6 +245,7 @@ namespace ConditioningControlPanel.Controls
             // the row but stays readable because the box only fades its text and the pick, see Paint.
             _superPart.Children.Add(_head);
             _superPart.Children.Add(row);
+            _superPart.Children.Add(_v2Row);
             // The three-way pick is retired: it stays in the tree, folded, so nothing that reads
             // it breaks, and the star above is the only control.
             _picker.Visibility = Visibility.Collapsed;
@@ -276,6 +301,29 @@ namespace ConditioningControlPanel.Controls
             }
             SuperAccess.Set(effect, !SuperAccess.IsSwitchedOn(effect));
             Refresh();
+        }
+
+        /// <summary>The labelled toggle was clicked: same rule as the star. A free account gets the
+        /// refusal and the toggle springs back on the next <see cref="Refresh"/>.</summary>
+        internal void OnToggleClicked()
+        {
+            if (_syncingToggle) return;
+            OnStarPressed();
+            // OnStarPressed refreshes only when it flips; a refusal must put the toggle back too.
+            SyncToggle();
+        }
+
+        /// <summary>The star's glyph as drawn now: filled when on, outline when off (tests).</summary>
+        internal string StarGlyph => _starGlyph.Text;
+
+        /// <summary>The labelled "use new version (V2)" toggle (tests and hosts).</summary>
+        public CheckBox V2Toggle => _v2Toggle;
+
+        private void SyncToggle()
+        {
+            _syncingToggle = true;
+            try { _v2Toggle.IsChecked = StarLit; }
+            finally { _syncingToggle = false; }
         }
 
         /// <summary>The Classic / Both / Super only row inside the box (tests and hosts).</summary>
@@ -408,7 +456,14 @@ namespace ConditioningControlPanel.Controls
             Paint(lit: unlocked);
             StarLit = unlocked && SuperAccess.IsSwitchedOn(effect);
             _starGlyph.Foreground = StarLit ? StarOn : StarOff;
+            _starGlyph.Text = StarLit ? StarOnGlyph : StarOffGlyph;
             System.Windows.Automation.AutomationProperties.SetName(_star, name);
+            _star.ToolTip = Loc.Get(StarLit ? "super_v2_toggle_on" : "super_v2_toggle_off");
+            _v2ToggleLabel.Text = Loc.Get("super_v2_toggle");
+            _v2ToggleLine.Text = Loc.Get(StarLit ? "super_v2_toggle_on" : "super_v2_toggle_off");
+            _v2ToggleLabel.Opacity = unlocked ? 1.0 : DimOpacity;
+            System.Windows.Automation.AutomationProperties.SetName(_v2Toggle, _v2ToggleLabel.Text);
+            SyncToggle();
             // A supporter needs no sign telling them who this is for: one row, nothing above it.
             _head.Visibility = paid ? Visibility.Collapsed : Visibility.Visible;
             _baseOff.Text = Loc.Get("super_base_off");

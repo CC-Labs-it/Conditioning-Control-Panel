@@ -103,7 +103,7 @@ namespace ConditioningControlPanel
                 // WPF ProgressionService.cs:288 -> SkillTreeService.OnLevelUp:627-648: the level's Sparkle and the
                 // season peak (PlayerLevel itself can be wiped at a rollover).
                 var before = s.SkillPoints;
-                s.SkillPoints += PointsPerLevel;
+                global::ConditioningControlPanel.Services.Prizes.SparklesLedger.Write(s, s.SkillPoints + PointsPerLevel, global::ConditioningControlPanel.Services.Prizes.SparkleSource.LevelUp);
                 s.SeasonPeakLevel = Math.Max(s.SeasonPeakLevel, s.PlayerLevel);
                 levels.Add((s.PlayerLevel, before, s.SkillPoints));
                 Log.Information("Level up! Now level {Level}; awarded {Points} skill point(s), total {Total}", s.PlayerLevel, PointsPerLevel, s.SkillPoints);

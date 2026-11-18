@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services
             // Progression
             s.PlayerXP = 0;
             s.PlayerLevel = 1;
-            s.SkillPoints = 0;
+            Prizes.SparklesLedger.Write(s, 0, Prizes.SparkleSource.Reset);
             s.UnlockedSkills = new List<string>();
             s.SeasonalStreakRecoveryUsed = false;
             s.StreakFixCharges = 0; // per-account, server-authoritative balance

@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Controls.NavRail
             {
                 Text = "★", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 7, 0, 0),
-                FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
+                FontFamily = new FontFamily(Services.GlyphFonts.Symbol),
             };
             var word = new TextBlock
             {

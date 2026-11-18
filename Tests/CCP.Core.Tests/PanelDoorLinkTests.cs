@@ -88,10 +88,11 @@ public class PanelDoorLinkTests
     {
         var play = NavSections.Find(NavSections.Play)!;
         Assert.Equal("playeyes", play.DefaultTab);
-        Assert.Equal(new[] { "playeyes", "playsessions", "deeper" },
+        // 7.3.1 (ccp-bugs #1633): a Games pill is back, last, as a WINDOW pill that opens the launcher's Games door.
+        Assert.Equal(new[] { "playeyes", "playsessions", "deeper", "play" },
             play.Tabs.Where(t => !t.Hidden).Select(t => t.Key).ToArray());
-        Assert.DoesNotContain(NavSections.AllTabs, t => t.Key == "play");
-        Assert.Equal(new[] { "playeyes", "playsessions", "deeper" }, NavStripTable.Pills(NavSections.Play).Select(t => t.Key).ToArray());
+        Assert.Equal(NavTabKind.Window, play.Tabs.Single(t => t.Key == "play").Kind);
+        Assert.Equal(new[] { "playeyes", "playsessions", "deeper", "play" }, NavStripTable.Pills(NavSections.Play).Select(t => t.Key).ToArray());
     }
 
     [Fact]
@@ -122,7 +123,8 @@ public class PanelDoorLinkTests
         Assert.Equal((NavSections.Play, "playeyes"), NavSections.Redirects["play"]);
         Assert.Equal(NavSections.Play, NavSections.SectionForTab("play"));
         Assert.Equal("playeyes", NavStripTable.ActivePill("lab"));
-        Assert.Null(NavStripTable.ActivePill("play"));
+        // 7.3.1: "play" is the Games window pill now (it opens the launcher, never a page of its own).
+        Assert.Equal(NavTabKind.Window, NavStripTable.Pills(NavSections.Play).Single(t => t.Key == "play").Kind);
         // A remembered old Games pill falls back to Play's landing, never a dead page.
         Assert.Equal("playeyes", NavStripTable.LastTabFor("{\"play\":\"play\"}", NavSections.Play));
         Assert.Equal("playsessions", NavStripTable.LastTabFor("{\"play\":\"playsessions\"}", NavSections.Play));

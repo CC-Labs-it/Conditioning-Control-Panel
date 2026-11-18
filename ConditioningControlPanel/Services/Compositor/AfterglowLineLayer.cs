@@ -22,6 +22,7 @@ public sealed class AfterglowLineLayer : BaseLayer
     private static readonly SKTypeface Face = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
     private bool _dirty = true;
     private double _sinceFrame;
+    private int _drawnStyle = -1;
     private System.Drawing.Rectangle _lastBounds;
 
     private AfterglowLineLayer(CompositorEngine engine) : base(engine.Wake) { }
@@ -108,6 +109,8 @@ public sealed class AfterglowLineLayer : BaseLayer
         if (_line.Count == 0) { _lastBounds = default; _dirty = true; SetActive(false); return; }
         _sinceFrame += dt;
         if (_line.Animating && _sinceFrame >= 1 / 30.0) { _sinceFrame = 0; _dirty = true; }
+        // A new worn word style (shop Wear) repaints the waiting line at once.
+        if ((int)Looks.WornWordStyle.Current != _drawnStyle) _dirty = true;
     }
 
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
@@ -120,7 +123,12 @@ public sealed class AfterglowLineLayer : BaseLayer
             fromX = (float)stage.Pool.X; fromY = (float)stage.Pool.Y;
         }
         var look = PinkTintLayer.LastLook;
+        // The worn word style: its face and colour, and its way in as each ghost rises (Still
+        // under Gentle visuals or motion Off). The style's motion is settled by the time a ghost
+        // lands, inside the frames the line already repaints.
+        var style = Looks.WornWordStyle.Current;
+        _drawnStyle = (int)style;
         _draw.Draw(canvas, new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom), _line, Face,
-            new SKColor(look.R, look.G, look.B), fromX, fromY);
+            new SKColor(look.R, look.G, look.B), fromX, fromY, style, Looks.WornWordStyle.Motion);
     }
 }

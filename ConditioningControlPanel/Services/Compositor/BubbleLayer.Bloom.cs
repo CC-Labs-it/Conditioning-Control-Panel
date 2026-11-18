@@ -79,7 +79,7 @@ public sealed partial class BubbleLayer
         foreach (var img in _bloomPics.Values) { try { img.Dispose(); } catch { } }
         _bloomPics.Clear();
         _dirty = true;
-        if (_items.Count == 0) SetActive(false);
+        if (_items.Count == 0 && _skinFx.Count == 0) SetActive(false);
     }
 
     private void DrawBloomItem(SKCanvas canvas, BubbleItem item, float cx, float cy)
@@ -255,7 +255,7 @@ public sealed partial class BubbleLayer
             };
             if (!alive) _bloomFx.RemoveAt(i);
         }
-        if (_bloomFx.Count == 0 && _items.Count == 0) SetActive(false);
+        if (_bloomFx.Count == 0 && _items.Count == 0 && _skinFx.Count == 0) SetActive(false);
     }
 
     /// <summary>Squeeze 0.25 s with the kids still inside, then the tear runs round the rim, 22 droplets fly, a ring spreads.</summary>

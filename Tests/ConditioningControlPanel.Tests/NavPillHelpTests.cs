@@ -70,9 +70,10 @@ public class NavPillHelpTests
     public void OnlyWindowPillsAskBeforeOpening()
     {
         var asking = VisiblePills().Where(p => NavStripRules.AsksBeforeOpening(p.Tab)).Select(p => p.Tab.Key).ToArray();
-        // Declutter wave 2: Just Drop, the only window pill, left the strip for the launcher's
-        // Tools door, so no visible pill asks first. The rule itself still answers for it.
-        Assert.Empty(asking);
+        // Declutter wave 2: Just Drop left the strip for the launcher's Tools door. ccp-bugs #1633:
+        // the Games pill came back as the one visible window pill (it opens the launcher's Games
+        // door). The rule itself still answers for Just Drop.
+        Assert.Equal(new[] { "play" }, asking);
         Assert.True(NavStripRules.AsksBeforeOpening(NavSections.AllTabs.Single(t => t.Key == "justdrop")));
     }
 

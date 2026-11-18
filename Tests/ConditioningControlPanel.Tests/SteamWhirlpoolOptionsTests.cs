@@ -13,6 +13,22 @@ namespace ConditioningControlPanel.Tests;
 /// </summary>
 public class SteamWhirlpoolOptionsTests
 {
+    [Fact]
+    public void The_reach_holds_the_fog_back_and_the_top_is_the_fog_as_shipped()
+    {
+        foreach (var age in new[] { 0.0, 30, 120, 240, 1e6 })
+            Assert.Equal(SteamOptions.Level(age, 240), SteamOptions.Level(age, 240, SteamOptions.ReachDefault), 9);
+        Assert.Equal(0.45, SteamOptions.Level(0, 240, 10), 9);                        // every reach starts at the rim
+        Assert.Equal(0.45 + 1.05 * 0.10, SteamOptions.Level(1e6, 240, 10), 9);        // the bottom stays at the edges
+        Assert.Equal(0.45 + 1.05 * 0.50, SteamOptions.Level(1e6, 240, 50), 9);
+        Assert.True(SteamOptions.Level(60, 240, 40) < SteamOptions.Level(60, 240, 80));
+        Assert.Equal(SteamOptions.Level(1e6, 240, SteamOptions.ReachMin), SteamOptions.Level(1e6, 240, -50), 9);   // clamped
+        var set = new Models.AppSettings();
+        Assert.Equal(100, set.SteamReach);
+        set.SteamReach = 3; Assert.Equal(SteamOptions.ReachMin, set.SteamReach);
+        set.SteamReach = 999; Assert.Equal(SteamOptions.ReachMax, set.SteamReach);
+    }
+
     private static SuperStage LivePool()
     {
         var s = new SuperStage { PoolOn = true };
@@ -183,7 +199,7 @@ public class SteamWhirlpoolOptionsTests
             Assert.Contains("#33FFE08A", xaml.Substring(box, end - box));
             foreach (var n in names) Assert.InRange(xaml.IndexOf($"x:Name=\"{n}\"", StringComparison.Ordinal), box, end);
         }
-        InBox("PinkFilterFeatureControl.xaml", "SteamRows", "ChkSteamWords", "CmbCreepSpeed", "SliderSteamSize", "SliderSteamReturn", "SliderSteamDrift");
+        InBox("PinkFilterFeatureControl.xaml", "SteamRows", "ChkSteamWords", "CmbCreepSpeed", "SliderSteamReach", "SliderSteamSize", "SliderSteamReturn", "SliderSteamDrift", "FogTwoTone");
         InBox("SpiralFeatureControl.xaml", "PoolRows", "CmbPoolSpiral", "SliderPoolEvery", "SliderPoolSize",
             "ChkPoolDragsFog", "ChkPoolDragsPictures", "ChkPoolDragsBubbles");
 

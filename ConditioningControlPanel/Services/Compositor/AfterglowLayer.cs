@@ -71,8 +71,13 @@ public sealed class AfterglowLayer : BaseLayer
 
     public override bool WorldSpacePx => true;
 
-    /// <summary>Anything alive animates every frame; an empty layer is inactive.</summary>
-    public override bool Dirty => IsActive;
+    /// <summary>Anything alive animates, at 60 pictures a second at most: a repaint here re-rasters every
+    /// layer of the surface, so a 144 Hz monitor must not drag the fog and the pool to 144 with it.</summary>
+    public override bool Dirty => _dirty;
+    public override void ClearDirty() => _dirty = false;
+    private bool _dirty = true;
+    private double _sinceFrame;
+    private const double FrameSeconds = 1 / 60.0 - 0.002;   // a hair under, so a 60 Hz tick always passes
 
     /// <summary>One cursor sample (about 30 Hz). Safe from any thread.</summary>
     public void SampleCursor(double dt, double x, double y)
@@ -245,6 +250,8 @@ public sealed class AfterglowLayer : BaseLayer
 
     public override void Update(TimeSpan delta)
     {
+        _sinceFrame += Math.Min(delta.TotalSeconds, 0.1);
+        if (_sinceFrame >= FrameSeconds) { _sinceFrame = 0; _dirty = true; }
         _level = MotionFx.Level;
         _photosafe = App.Settings?.Current?.LockdownPhotosafe == true;
         RefreshColours();

@@ -239,7 +239,7 @@ internal sealed class AchievementEngine
         {
             var settings = CoreSettings.Current;
             var previous = settings.SkillPoints;
-            settings.SkillPoints++;
+            global::ConditioningControlPanel.Services.Prizes.SparklesLedger.Write(settings, settings.SkillPoints + 1, global::ConditioningControlPanel.Services.Prizes.SparkleSource.BubbleMilestone);
             CoreSettings.Save();
             SparklePointRewards.PublishCredit(previous, settings.SkillPoints, SparklePointSource.BubbleMilestone);
             // WPF ShowBubbleMilestoneNotification (AchievementService.cs:593): a failing popup never undoes the credit.

@@ -76,7 +76,55 @@ The page talks to whoever hosts it through `host.js`, never `fetch` to the serve
 Mounted inside a game (`mountPrizeCounter(host, opts)`), the same seam is an object; standalone it is `postMessage`.
 Standalone frames (`host.js`): out `{type:'ready', protocol:1}`, `{type:'request', reqId, op, body, idem}`, `{type:'wallet', sp}`,
 `{type:'close', reason}`, `{type:'signin'}`, `{type:'log', level, msg}`; in `{type:'init', ...}`, `{type:'reply', reqId, body}` (body = the server body).
+
+Sheet additions (shop frame lane, 2026-11-17; all optional, absent = today's behaviour):
+- in: `init.walletAt { x, y }` (sheet only): the centre of the host's wallet star in the page's CSS pixels, measured
+  from the page's top-left once the sheet is down (usually a negative `y`: the chip sits in the bar above). The page's
+  stars fly there instead of the page's top-right corner. A resize sends the new point as `{type:'wallet-at', x, y}`.
+- in: `init.disco ['#rrggbb', ...]` (at most six): the active mod's Disco hues, the desktop ball's own palette
+  (`DiscoPaletteSource`). The page's Disco preview wears them; absent or unreadable = the fallback four.
+- in: `init.fogColour '#rrggbb'` (WPF host): the colour the pink filter really draws (the user's pick, else the mod's
+  filter colour, else hot pink; `SheetHostRules.FogColourWire`). The Two-tone preview wears it as colour one; absent or
+  unreadable = pink. Other hosts may leave it out.
+- out: `{type:'wallet-land', k}` (sheet only): the page's stars reached the host's wallet (a gain, k = share landed so
+  far, 1 = the last) or left it (a spend, one frame with k = 1). The WPF host counts and kicks its chip; with the DEBUG
+  shop preview on, the last one puts the chip back on the preview wallet.
+- in: `init.walletFly true` (WPF sheet with a wallet chip, star flight lane 2026-11-17): the host draws the stars over its
+  bar. The page then sends, once as each flight starts, out `{type:'wallet-stars', dir:'in'|'out', n, e:[x1,y1,x2,y2],
+  stars:[{d, ms, k:[[offset, x, y, scale, deg, opacity], ...]}]}`: every star's whole path (its centre in the page's
+  CSS pixels, the same frames and `cubic-bezier(e)` the page animates, delay `d` and length `ms`). The host draws the
+  same paths in its own layer (the part over the page is hidden under the page's HWND, so the two read as one motion),
+  counts its chip as its copies land (`in`, a gain) or leave (`out`, a spend), pops it per star and settles it on the
+  last. The page sends no `wallet-land` for a flight it handed off; with no flight (motion off) it sends `wallet-land`
+  as before. Absent = today's behaviour.
 `stock_changed` / `catalog_changed` carry the fresh state as `state` (the page also reads it inline).
+
+Reuse (open speed lane, 2026-11-17; additive, a host that never sends it loads the page per open as before):
+- in: `{type:'reset'}` (WPF sheet, once the sheet is fully up after a close). The page drops that open: every pending
+  answer, the init, the `worn` / `wallet-at` listeners; the mount is disposed (window listeners, juice observer,
+  sound) and the page stays empty and quiet (no frames, timers or sounds). `sheet/reuse.js` then mounts again and
+  posts `{type:'ready'}`; the next open's `init` starts it over at the first tab, nothing picked, no query, only the
+  heading focused, the arrival played again. The host gives every open its own relay and identity pin as before and
+  drops page frames while no open owns the page; a sign-in from the page still loads it again. No `ready` within
+  400 ms of a reset: the host loads the page again.
+
+Studio doors (look pickers lane, 2026-11-17; additive, absent = today's behaviour):
+- in: `init.pick 'itemId'`: open on that item. The page answers its state as usual, then opens the item's own tab
+  with the item in the fitting room (the same as a click on it). An id the state does not carry is ignored. The WPF
+  host sends it when a locked look in a Studio "Look" row is clicked (`PrizeCounterHostService.LaunchOn`), once,
+  on that open only.
+
+Where it shows (bought-shows lane, 2026-11-17; additive, absent = today's behaviour):
+- in: `init.worn ['itemId', ...]`: what the account wears now in the families the host wears in place (the WPF host:
+  the own profile frame and picture, EMI's desk hat and toy; in the DEBUG shop preview the preview's own frame and
+  picture). The page marks them Wearing from the first paint (Owned tab, the fitting room drops Wear).
+- in: `init.goes ['profile'|'desk'|'race'|'chess'|'bubbles'|'flash'|'subliminal'|'pinkfilter', ...]`: the places a
+  "take me there" can open from this door (`Services/PrizeCounter/ShownPlaces`; a game's own sheet sends none, EMI's
+  desk only while it is on). Absent = the line shows with no button.
+- Once an item is worn (a kart once owned), the fitting room says where it shows (`sheet/shown.js`, by family) and,
+  for a place in `init.goes`, offers a button. out: `{type:'go', place, id}`: the host closes the counter and opens the
+  place (the profile page with one avatar pulse, the Studio page of the look, the chess board, the race, EMI's desk).
+  A place it did not list does nothing.
 
 ## Rules
 

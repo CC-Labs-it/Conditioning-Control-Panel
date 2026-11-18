@@ -24,6 +24,8 @@ public sealed class SteamLayer : BaseLayer
         public readonly SteamDraw Fog = new();
         public readonly SteamWords Words = new();
         public readonly SteamWordsDraw WordsDraw = new();
+        /// <summary>Two-tone: the mix field on a small grid for this monitor, reused every frame.</summary>
+        public readonly FogMixField Mix = new();
         public double LastT = -1;
         public void Dispose() { Fog.Dispose(); WordsDraw.Dispose(); }
     }
@@ -115,16 +117,31 @@ public sealed class SteamLayer : BaseLayer
         // The base filter's own colour and strength: thicker than the flat tint, never opaque.
         var look = PinkTintLayer.LastLook;
         double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82);
-        var colour = new SKColor(look.R, look.G, look.B);
+        // The filter's own colour always (the shop sells no fog colours); Two-tone adds its second colour below.
+        var worn = Prizes.WornFog.Shown((look.R, look.G, look.B));
+        var (wr, wg, wb) = worn.Main;
+        var colour = new SKColor(wr, wg, wb);
         var bounds = new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom);
+        // Two-tone: the second colour moves through the fog on the mix's shared clock.
+        FogMixField? mix = null;
+        (byte R, byte G, byte B)[]? ramp = null;
+        if (worn.TwoTone)
+        {
+            double aspect = rect.Width / (double)Math.Max(1, rect.Height);
+            screen.Mix.Fill(48, Math.Clamp((int)Math.Round(48 / aspect), 12, 64), aspect,
+                Prizes.WornFog.MixTime(Prizes.WornFog.MixSpeed(MotionFx.Level)));
+            mix = screen.Mix;
+            ramp = FogMix.Ramp(worn.Main, worn.Second);
+        }
         // The fog only: SteamDraw's own words are retired, the words come from SteamWordsDraw below.
-        screen.Fog.Draw(canvas, bounds, field, colour, strength, Array.Empty<string>(), null, Face, _t);
+        screen.Fog.Draw(canvas, bounds, field, colour, strength, Array.Empty<string>(), null, Face, _t, mix, ramp);
 
         double dt = screen.LastT < 0 ? 0 : Math.Clamp(_t - screen.LastT, 0, 0.1);
         screen.LastT = _t;
         screen.Words.Line = Line;
         screen.Words.Step(field, dt, Safety.GentleVisuals.On, WordsOn);
-        screen.WordsDraw.Draw(canvas, bounds, field, screen.Words, colour, Face);
+        // The worn word style (shop): its face, colour and way in; Still under Gentle visuals.
+        screen.WordsDraw.Draw(canvas, bounds, field, screen.Words, colour, Face, Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);
         field.ClearDirty();
     }
 }

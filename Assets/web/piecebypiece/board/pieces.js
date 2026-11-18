@@ -22,6 +22,8 @@
 import * as THREE from 'three';
 import { squareToWorld } from './scene.js';
 import { wornMesh } from './attachments.js';
+import { applyFinish } from './finishes.js';
+import { finishKey } from '../skins/finish-ids.js';
 import { sameLook } from '../skins/look.js';
 import { backMountShift, unionBox } from '../skins/mount.js';
 
@@ -279,7 +281,7 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
       root.add(jewel);
       mats.push(jewel.material);
     }
-    // Worn things (clothes, banner, insignia) are the same kind of child as a
+    // Worn things (clothes and insignia) are the same kind of child as a
     // jewel: authored in the piece's own space, own material, bent by the flex.
     // Only on the sculpted art: a lathe placeholder is scaled to its type height,
     // so a worn mesh authored for the sculpted man would sit at the wrong size.
@@ -311,6 +313,8 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
       phase: Math.random() * Math.PI * 2,
     };
     if (jiggle) jiggle.attach(root);
+    const equippedFinish = finishKey(looks[side]?.finish);
+    if (art && equippedFinish) applyFinish(root, equippedFinish, side);
     // The contact patch goes on AFTER the flex, on purpose: it must not be
     // handed the vertex shader or a depth material, because it is a picture of
     // shade lying on the board and not a part of the man. It is kept out of
@@ -498,7 +502,15 @@ export function createPieces({ group, assetsBase = './assets/pieces/', hooks = {
       if ((was === null) === (now === null) && (was === null || sameLook(was, now))) continue;
       looks[side] = now;
       changed = true;
-      for (const type of TYPES) redress(type, side);
+      if ((was?.set ?? null) !== (now?.set ?? null) || (was?.insignia ?? null) !== (now?.insignia ?? null)) {
+        for (const type of TYPES) redress(type, side);
+      } else if (finishKey(was?.finish) !== finishKey(now?.finish)) {
+        // Repaint in place so changing a finish preserves a jump, drag or capture.
+        const id = finishKey(now?.finish);
+        for (const piece of bySquare.values()) {
+          if (piece.userData.side === side && piece.userData.artSource !== 'placeholder') applyFinish(piece, id, side);
+        }
+      }
     }
     return changed;
   }

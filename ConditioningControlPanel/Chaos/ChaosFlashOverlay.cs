@@ -214,6 +214,7 @@ public sealed class ChaosFlashOverlay : Window
         _hideGrace.Stop();
         _life.Stop();
         ClearImage();
+        LayoutTiles();
         int gen = ++_displayGen;
 
         // A remote still (Phase 3 / Contract 2) is an https URL, not a file. It can never
@@ -298,6 +299,62 @@ public sealed class ChaosFlashOverlay : Window
         BeginAnimation(OpacityProperty, new DoubleAnimation(0, peak, TimeSpan.FromMilliseconds(500)));
         _life.Interval = TimeSpan.FromMilliseconds(Math.Max(600, durationMs));
         _life.Start();
+    }
+
+    private Canvas? _tileHost;                       // only while the stage holds more than one screen
+    private IReadOnlyList<Rect>? _tileRects;
+
+    /// <summary>
+    /// One picture per screen instead of one picture across the whole desktop (<see cref="WashTiles"/>).
+    /// The window keeps its size (a realized layered window is never resized mid-run); only what is
+    /// inside it changes. <see cref="_img"/> stays the first tile and carries the source and any frame
+    /// loop; the other tiles read its Source. One screen keeps the old tree: the bare image as Content.
+    /// The Back Room hero is left as it was. Runs between washes, with the image cleared.
+    /// </summary>
+    private void LayoutTiles()
+    {
+        if (_spanAll) return;
+        try
+        {
+            IReadOnlyList<Rect> tiles = Array.Empty<Rect>();
+            if (App.Settings?.Current?.DualMonitorEnabled ?? true)
+            {
+                var v = System.Windows.Forms.SystemInformation.VirtualScreen;
+                tiles = WashTiles.For(new Rect(v.X, v.Y, v.Width, v.Height),
+                    System.Windows.Forms.Screen.AllScreens.Select(s => new Rect(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height)),
+                    VisualTreeHelper.GetDpi(this).DpiScaleX);
+            }
+            if (tiles.Count <= 1)
+            {
+                if (_tileHost == null) return;   // one screen, never tiled: untouched
+                _tileHost.Children.Clear();
+                _tileHost = null; _tileRects = null;
+                _img.ClearValue(WidthProperty); _img.ClearValue(HeightProperty); _img.ClearValue(ClipToBoundsProperty);
+                Content = _img;
+                return;
+            }
+            if (_tileHost != null && _tileRects != null && tiles.SequenceEqual(_tileRects)) return;
+
+            _tileHost?.Children.Clear();
+            Content = null;
+            var host = new Canvas { IsHitTestVisible = false };
+            for (int i = 0; i < tiles.Count; i++)
+            {
+                var img = _img;
+                if (i > 0)
+                {
+                    img = new Image { Stretch = Stretch.UniformToFill, IsHitTestVisible = false };
+                    img.SetBinding(Image.SourceProperty, new System.Windows.Data.Binding(nameof(Image.Source))
+                        { Source = _img, Mode = System.Windows.Data.BindingMode.OneWay });
+                }
+                img.Width = tiles[i].Width; img.Height = tiles[i].Height; img.ClipToBounds = true;
+                Canvas.SetLeft(img, tiles[i].X); Canvas.SetTop(img, tiles[i].Y);
+                host.Children.Add(img);
+            }
+            _tileHost = host; _tileRects = tiles;
+            Content = host;
+        }
+        catch (Exception ex) { App.Logger?.Debug("ChaosFlashOverlay.LayoutTiles: {E}", ex.Message); }
     }
 
     private void ClearImage()

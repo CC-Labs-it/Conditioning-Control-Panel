@@ -101,7 +101,10 @@ namespace ConditioningControlPanel.Controls.NavRail
         public static string? ActivePill(string? tab) => NavStripTable.ActivePill(tab);
 
         /// <summary>The label key a breadcrumb shows for a tab (its own row in the table).</summary>
-        public static string? PageLabelKey(string? tab) => NavStripTable.PageLabelKey(tab);
+        // "lab" lands on Eyes on WPF (declutter wave 2), so it names Eyes, never the Games pill. The shared
+        // table keeps "lab" = Play for the Avalonia head, where "lab" still opens the Play card wall.
+        public static string? PageLabelKey(string? tab) =>
+            NavStripTable.PageLabelKey(string.Equals(tab, "lab", System.StringComparison.OrdinalIgnoreCase) ? "playeyes" : tab);
 
         /// <summary>Keyboard move inside the strip: Left/Right wrap, Home/End jump. -1 = not a strip key.</summary>
         public static int MoveIndex(int current, int count, Key key) => NavStripTable.MoveIndex(current, count, key.ToString());

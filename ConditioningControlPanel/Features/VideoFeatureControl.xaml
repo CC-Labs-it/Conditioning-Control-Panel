@@ -69,6 +69,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="video.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_videos_per_hour}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120"/>
@@ -77,7 +78,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_per_hour}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderPerHour" Minimum="1" Maximum="20" Value="2"
+                                <Slider Grid.Column="1" x:Name="SliderPerHour" feat:OptionSection.Setting="VideosPerHour" Minimum="1" Maximum="20" Value="2"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderPerHour_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtPerHour" Text="2" HorizontalAlignment="Right"
@@ -101,7 +102,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_duration_filter}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderVideoMinDur" Minimum="0" Maximum="600" Value="0"
+                                <Slider Grid.Column="1" x:Name="SliderVideoMinDur" feat:OptionSection.Setting="VideoMinDurationSeconds" Minimum="0" Maximum="600" Value="0"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0,8,0"
                                         ValueChanged="SliderVideoMinDur_Changed"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtVideoMinDur" Text="off" HorizontalAlignment="Right"
@@ -109,7 +110,7 @@
                                            FontSize="13" FontWeight="Bold"/>
                                 <TextBlock Grid.Column="3" Text="&#x2192;" HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Foreground="{StaticResource TextDimBrush}" FontSize="11"/>
-                                <Slider Grid.Column="4" x:Name="SliderVideoMaxDur" Minimum="0" Maximum="1800" Value="0"
+                                <Slider Grid.Column="4" x:Name="SliderVideoMaxDur" feat:OptionSection.Setting="VideoMaxDurationSeconds" Minimum="0" Maximum="1800" Value="0"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="8,0,8,0"
                                         ValueChanged="SliderVideoMaxDur_Changed"/>
                                 <TextBlock Grid.Column="5" x:Name="TxtVideoMaxDur" Text="off" HorizontalAlignment="Right"
@@ -158,9 +159,9 @@
                             </Grid>
                             <TextBlock Text="{loc:Str tooltip_video_cut_random_start}" FontSize="11"
                                        Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="video.showing" Title="{loc:Str studio_section_showing}" Theme="Look">
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_strict_mode_videos_cannot_be_skipped_must_wat}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -182,7 +183,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <ComboBox Grid.Column="1" x:Name="CmbAppearance"
+                                <ComboBox Grid.Column="1" x:Name="CmbAppearance" feat:OptionSection.Setting="MandatoryVideoFloating"
                                           Width="180" VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
                                           SelectionChanged="CmbAppearance_Changed"/>
@@ -197,7 +198,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_size}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
-                                    <Slider Grid.Column="1" x:Name="SliderFloatingSize" Minimum="15" Maximum="60" Value="33"
+                                    <Slider Grid.Column="1" feat:OptionSection.Setting="MandatoryVideoFloatingSizePercent" x:Name="SliderFloatingSize" Minimum="15" Maximum="60" Value="33"
                                             VerticalAlignment="Center" Margin="14,0"
                                             ToolTip="{loc:Str tooltip_video_appearance_size}"
                                             ValueChanged="SliderFloatingSize_Changed"/>
@@ -213,7 +214,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_speed}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
-                                    <Slider Grid.Column="1" x:Name="SliderFloatingSpeed" Minimum="10" Maximum="100" Value="35"
+                                    <Slider Grid.Column="1" feat:OptionSection.Setting="MandatoryVideoFloatingSpeedPercent" x:Name="SliderFloatingSpeed" Minimum="10" Maximum="100" Value="35"
                                             VerticalAlignment="Center" Margin="14,0"
                                             ToolTip="{loc:Str tooltip_video_appearance_speed}"
                                             ValueChanged="SliderFloatingSpeed_Changed"/>
@@ -228,7 +229,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_video_appearance_count}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
-                                    <ComboBox Grid.Column="1" x:Name="CmbFloatingCount"
+                                    <ComboBox Grid.Column="1" x:Name="CmbFloatingCount" feat:OptionSection.Setting="MandatoryVideoFloatingCount"
                                               Width="180" VerticalAlignment="Center"
                                               Style="{DynamicResource DarkComboBoxStyle}"
                                               SelectionChanged="CmbFloatingCount_Changed"/>
@@ -276,7 +277,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="{loc:Str setting_effect_monitor}" FontSize="13" FontWeight="SemiBold"
                                                    Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Column="1" x:Name="CmbMonitor"
+                                        <ComboBox Grid.Column="1" x:Name="CmbMonitor" feat:OptionSection.Setting="VideoTargetMonitor"
                                                   Width="180" VerticalAlignment="Center"
                                                   Style="{DynamicResource DarkComboBoxStyle}"
                                                   DropDownOpened="CmbMonitor_DropDownOpened"
@@ -285,6 +286,7 @@
                                     <feat:MercyRow x:Name="MercyRow"/>
                                 </StackPanel>
                             </feat:MoreFold>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -297,7 +299,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_enable_attention_check_targets}">
+                            <Grid x:Name="RowMiniGame" Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_enable_attention_check_targets}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -310,9 +312,13 @@
                                           ToolTip="{loc:Str tooltip_enable_attention_check_targets}"
                                           Checked="ChkMiniGame_Changed" Unchecked="ChkMiniGame_Changed"/>
                             </Grid>
+                            <!-- Floating videos have no mini game: the row greys out and reads as off while
+                                 Floating is the pick (MandatoryVideoPresentation.MiniGameShownOn). -->
+                            <TextBlock x:Name="TxtMiniGameFloatNote" Text="{loc:Str video_minigame_floating_note}" FontSize="11"
+                                       Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Margin="0,0,0,4"
+                                       Visibility="Collapsed"/>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection x:Name="SectionMiniGame" Key="video.minigame" Title="{loc:Str studio_section_options}" Theme="Timing" DefaultOpen="False">
                             <!-- Targets (the dice toggle randomises the count, so it rides the label) -->
                             <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_number_of_targets_to_click_per_video}">
                                 <Grid.ColumnDefinitions>
@@ -330,7 +336,7 @@
                                                Source="{Binding Source='🎲', Converter={StaticResource EmojiToImageSource}}"/>
                                     </CheckBox>
                                 </StackPanel>
-                                <Slider Grid.Column="1" x:Name="SliderTargets" Minimum="1" Maximum="10" Value="3"
+                                <Slider Grid.Column="1" x:Name="SliderTargets" feat:OptionSection.Setting="AttentionDensity" Minimum="1" Maximum="10" Value="3"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ToolTip="{loc:Str tooltip_number_of_targets_to_click_per_video}"
                                         ValueChanged="SliderTargets_Changed"/>
@@ -347,7 +353,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_duration}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderDuration" Minimum="1" Maximum="30" Value="12"
+                                <Slider Grid.Column="1" x:Name="SliderDuration" feat:OptionSection.Setting="AttentionLifespan" Minimum="1" Maximum="30" Value="12"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ToolTip="{loc:Str tooltip_seconds_each_target_stays_visible}"
                                         ValueChanged="SliderDuration_Changed"/>
@@ -364,7 +370,7 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_size}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderTargetSize" Minimum="30" Maximum="150" Value="70"
+                                <Slider Grid.Column="1" x:Name="SliderTargetSize" feat:OptionSection.Setting="AttentionSize" Minimum="30" Maximum="150" Value="70"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ToolTip="{loc:Str tooltip_target_button_size_in_pixels}"
                                         ValueChanged="SliderTargetSize_Changed"/>
@@ -386,9 +392,9 @@
                                           feat:SessionLock.Owned="True" VerticalAlignment="Center"
                                           Checked="ChkReplayFailedCheck_Changed" Unchecked="ChkReplayFailedCheck_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
+                            <feat:OptionSection Key="video.gaze" Title="{loc:Str label_gaze_interaction}" Theme="Interaction" DefaultOpen="False">
                             <!-- Gaze click: copy passed the 6.9.4 voice sweep. -->
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_stare_to_click}">
                                 <Grid.ColumnDefinitions>
@@ -401,6 +407,7 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkVideoGazeClick_Changed" Unchecked="ChkVideoGazeClick_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
 
                             <Grid Margin="0,8,0,2">
                                 <Grid.ColumnDefinitions>
@@ -436,7 +443,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_lights_darkness}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderLightsDarkness" Minimum="0" Maximum="100" Value="50"
+                            <Slider Grid.Column="1" x:Name="SliderLightsDarkness" feat:OptionSection.Setting="LightsDownDarkness" Minimum="0" Maximum="100" Value="50"
                                     feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderLightsDarkness_Changed"/>
                             <TextBlock Grid.Column="2" x:Name="TxtLightsDarkness" Text="50%" HorizontalAlignment="Right"
@@ -451,7 +458,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_lights_dim_speed}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderLightsDimSpeed" Minimum="50" Maximum="150" Value="100"
+                            <Slider Grid.Column="1" x:Name="SliderLightsDimSpeed" feat:OptionSection.Setting="LightsDownDimSpeed" Minimum="50" Maximum="150" Value="100"
                                     feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderLightsDimSpeed_Changed"/>
                             <TextBlock Grid.Column="2" x:Name="TxtLightsDimSpeed" Text="100%" HorizontalAlignment="Right"
@@ -466,7 +473,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="{loc:Str super_lights_return_speed}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderLightsReturnSpeed" Minimum="50" Maximum="150" Value="100"
+                            <Slider Grid.Column="1" x:Name="SliderLightsReturnSpeed" feat:OptionSection.Setting="LightsDownReturnSpeed" Minimum="50" Maximum="150" Value="100"
                                     feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                     ValueChanged="SliderLightsReturnSpeed_Changed"/>
                             <TextBlock Grid.Column="2" x:Name="TxtLightsReturnSpeed" Text="100%" HorizontalAlignment="Right"

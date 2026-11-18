@@ -129,7 +129,12 @@ namespace ConditioningControlPanel.Services.Super
         private static void OnBasePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (SuperBase.EffectFor(e.PropertyName) is SuperEffect effect) Changed?.Invoke(effect);
+            // The whole map was replaced from outside SetMode (a preset or the Remember slot):
+            // any switch may have moved, so every box, corner and running add-on re-reads.
+            else if (e.PropertyName == nameof(Models.AppSettings.SuperModes) && !_inSetMode) RaiseAll();
         }
+
+        [ThreadStatic] private static bool _inSetMode;
 
         /// <summary>The player's own pick, ignoring the gate (the box draws it). Both when nothing is stored.</summary>
         public static SuperMode GetMode(SuperEffect effect)
@@ -178,7 +183,10 @@ namespace ConditioningControlPanel.Services.Super
             if (s == null) return;
             var next = SuperModeRule.With(s.SuperModes, effect, mode);
             if (s.SuperModes.TryGetValue(effect.ToString(), out var old) && old == next[effect.ToString()]) return;
-            s.SuperModes = next;
+            // SetMode raises for its one effect itself; the settings hook stays quiet meanwhile.
+            _inSetMode = true;
+            try { s.SuperModes = next; }
+            finally { _inSetMode = false; }
             Changed?.Invoke(effect);
         }
 

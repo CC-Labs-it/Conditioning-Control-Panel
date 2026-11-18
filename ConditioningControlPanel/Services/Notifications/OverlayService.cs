@@ -249,7 +249,7 @@ public class OverlayService : IDisposable
     {
         if (_pinkLayer == null)
         {
-            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!.Wake, App.Compositor!.ResortLayers);
+            _pinkLayer = new Compositor.PinkTintLayer(App.Compositor!.Wake, App.Compositor!.ResortLayers) { WearsLooks = true };
             App.Compositor!.RegisterLayer(_pinkLayer);
             PushStepAside();   // a first show under Super only starts hidden, no flash of tint
         }

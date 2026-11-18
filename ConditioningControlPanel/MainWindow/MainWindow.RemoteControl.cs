@@ -1487,6 +1487,7 @@ namespace ConditioningControlPanel
 
                 // The rest of the panic key's preamble: the welcome show, a leash task.
                 try { Services.FirstShow.FirstShowService.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
                 try { LeashOnPanicPress(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
                 // Track panic press for Relapse achievement

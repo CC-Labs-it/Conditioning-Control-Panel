@@ -15,7 +15,7 @@ public sealed class SteamDraw : IDisposable
 {
     private SKBitmap? _fog;
     private byte[] _fogPx = Array.Empty<byte>();
-    private readonly SKPaint _soft = new() { FilterQuality = SKFilterQuality.Medium };
+    private readonly SKPaint _soft = new() { FilterQuality = SKFilterQuality.Low };
 
     // The fog's texture: one small tile of smooth noise that wraps, read at three sizes that
     // slide past each other. Built once from a fixed seed so every monitor and every run match.
@@ -50,14 +50,21 @@ public sealed class SteamDraw : IDisposable
     /// <paramref name="bounds"/> is where the monitor sits on the canvas. <paramref name="maxAlpha"/>
     /// is the fog at its thickest (0..1). The words are drawn by SteamWordsDraw now;
     /// words, line and face are unused here. <paramref name="t"/> drifts the cloud.
+    /// Two-tone (shop look): with <paramref name="mix"/> and <paramref name="ramp"/> each cell takes its
+    /// colour from the ramp where the mix field says, read through the fog's own drag and roughened by
+    /// its wisps, so the second colour rides and curls with the fog. Without them: one colour, as always.
     /// </summary>
-    public void Draw(SKCanvas canvas, SKRect bounds, SteamField f, SKColor colour, double maxAlpha, IReadOnlyList<string> words, string? line, SKTypeface? face, double t)
+    public void Draw(SKCanvas canvas, SKRect bounds, SteamField f, SKColor colour, double maxAlpha, IReadOnlyList<string> words, string? line, SKTypeface? face, double t,
+        FogMixField? mix = null, IReadOnlyList<(byte R, byte G, byte B)>? ramp = null)
     {
+        bool twoTone = mix != null && ramp is { Count: > 1 };
+        int top = twoTone ? ramp!.Count - 1 : 0;
+        byte cr = colour.Red, cg = colour.Green, cb = colour.Blue;
         int n = f.W * f.H;
         if (_fog == null || _fog.Width != f.W || _fog.Height != f.H)
         {
             _fog?.Dispose();
-            var info = new SKImageInfo(f.W, f.H, SKColorType.Rgba8888, SKAlphaType.Premul);
+            var info = new SKImageInfo(f.W, f.H, SKColorType.Bgra8888, SKAlphaType.Premul);
             _fog = new SKBitmap(info);
             _fogPx = new byte[n * 4];
         }
@@ -83,8 +90,14 @@ public sealed class SteamDraw : IDisposable
                 // Piled-up fog (above 1) only thickens by half as much: a soft bank, never a bright line.
                 double thick = fog <= 1 ? fog : 1 + (fog - 1) * 0.5;
                 double a = Math.Clamp(thick * cloud * maxAlpha, 0, 1);
-                _fogPx[j] = (byte)(colour.Red * a); _fogPx[j + 1] = (byte)(colour.Green * a);
-                _fogPx[j + 2] = (byte)(colour.Blue * a); _fogPx[j + 3] = (byte)(a * 255);
+                if (twoTone)
+                {
+                    double s = mix!.At(u / f.W, v / f.H) + (mid - 0.5) * 0.55 + (fine - 0.5) * 0.25;
+                    var c = ramp![(int)(FogMix.Shape(s) * top + 0.5)];
+                    cr = c.R; cg = c.G; cb = c.B;
+                }
+                _fogPx[j] = (byte)(cb * a); _fogPx[j + 1] = (byte)(cg * a);
+                _fogPx[j + 2] = (byte)(cr * a); _fogPx[j + 3] = (byte)(a * 255);
             }
         }
         Marshal.Copy(_fogPx, 0, _fog.GetPixels(), _fogPx.Length);

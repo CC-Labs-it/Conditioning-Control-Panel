@@ -82,13 +82,17 @@ namespace ConditioningControlPanel.Services.UI
                 T("shelistening", "tab_shelistening", tier: 1),
                 T("awareness", "tab_awareness", tier: 1),
             }),
-            // Declutter wave 2 (2026-11-15): the Games pill ("play") left for the launcher's Games
+            // Declutter wave 2 (2026-11-15): the games left the Play page for the launcher's Games
             // door (LauncherDoors below). Play is Eyes, Sessions and Deeper and lands on Eyes.
+            // ccp-bugs #1633 (7.3.0 testers could not find the games): a Games pill is back, last,
+            // as a window pill. It asks first, then ShowTab("play") opens the launcher straight on
+            // its Games page (PanelDoorLink); it never lights and is never remembered.
             new NavSection(Play, "nav_door_play", "playeyes", new[]
             {
                 Z("playeyes", "nav_tab_eyes"),               // PlayTab scrolled to EYES (page order wins)
                 Z("playsessions", "nav_tab_sessions"),       // PlayTab scrolled to SESSIONS
                 T("deeper", "tab_deeper"),
+                W("play", "nav_tab_games"),                  // the launcher's Games door
                 // Pages of their own that live inside Play's zones: owned here, no pill.
                 T("gradedintake", "tab_gradedintake", hidden: true),
                 T("lockdown", "tab_lockdown_mode", tier: 1, hidden: true),

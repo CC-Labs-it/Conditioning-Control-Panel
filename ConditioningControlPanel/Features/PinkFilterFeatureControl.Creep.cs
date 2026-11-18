@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Features
                 ChkSteamWords.IsChecked = s.SteamWordsInFog;
                 SliderSteamSize.Value = s.SteamWipeSize;
                 TxtSteamSize.Text = $"{s.SteamWipeSize}%";
+                SliderSteamReach.Value = s.SteamReach;
+                TxtSteamReach.Text = $"{s.SteamReach}%";
                 SliderSteamReturn.Value = s.SteamFogReturn;
                 TxtSteamReturn.Text = $"{s.SteamFogReturn}%";
                 SliderSteamDrift.Value = s.SteamDrift;
@@ -92,6 +94,17 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             s.SteamWipeSize = (int)(Math.Round(e.NewValue / 5) * 5);
             TxtSteamSize.Text = $"{s.SteamWipeSize}%";
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost reads the reach each step: the fog eases to the new edge on its own.
+        private void SliderSteamReach_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_creepLoading || TxtSteamReach == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.SteamReach = (int)(Math.Round(e.NewValue / 5) * 5);
+            TxtSteamReach.Text = $"{s.SteamReach}%";
             App.Settings?.Save();
         }
 

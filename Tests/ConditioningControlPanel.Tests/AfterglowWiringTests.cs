@@ -21,7 +21,7 @@ public class AfterglowWiringTests
         // On the port the scheduler is Core's: the head draws one chosen phrase (FlashPhrase) and
         // clears its surfaces in TearDownSurfaces, which Stop and the run-state hook both reach.
         Assert.DoesNotContain("new Super.AfterglowDriver()", src);
-        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "internal void FlashPhrase(string text)"));
+        Assert.Contains("Compositor.AfterglowLineLayer.WordShown(text);", Body(src, "internal void FlashPhrase(string text, bool restCard = false)"));
         Assert.Contains("TearDownSurfaces();", Body(src, "public void Stop()"));
         Assert.Contains("AfterglowLineLayer.StopAll", Body(src, "private void TearDownSurfaces()"));
         Assert.Contains("_afterglow?.Stop();", Body(src, "private void TearDownSurfaces()"));
@@ -38,7 +38,7 @@ public class AfterglowWiringTests
         Assert.DoesNotContain("_afterglowBonus", src);
         Assert.DoesNotContain("PickWeighted", src);
         // The pick is Core's plain one on the port.
-        Assert.Contains("CoreSubliminal.PickPhrase()", Body(src, "public void FlashSubliminal()"));
+        Assert.Contains("CoreSubliminal.PickPhrase()", Body(src, "public void FlashSubliminal(bool restCard = false)"));
     }
 
     /// <summary>The driver tears down on the switch, rechecks every second and needs the compositor.</summary>

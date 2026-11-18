@@ -552,7 +552,8 @@ namespace ConditioningControlPanel
             // pick and the enable toggle; this head owns the flash surface and the whisper. Both
             // are lambdas, not eager reads - Subliminal is constructed in OnStartup, long after
             // this ctor runs, and until then the scheduler simply draws nothing.
-            CoreSubliminal.ShowProvider = text => Subliminal?.FlashPhrase(text);
+            // The ambient tick: the card may rest under Afterglow (FlashAmbient asks AfterglowRestsCard).
+            CoreSubliminal.ShowProvider = text => Subliminal?.FlashAmbient(text);
             CoreSubliminal.RunStateChanged = running => Subliminal?.OnRunStateChanged(running);
             Services.Super.SuperStepAside.LevelProvider = () => MotionFx.Level;
             // Super access is Core's: this head says which weekly try runs and wires the tier events.
@@ -1910,6 +1911,8 @@ namespace ConditioningControlPanel
             // The one-shot clip (the companion's Audio effect, a Deeper play-audio action). Only a
             // session pause stopped it before, so a panic with the engine off let it play out.
             try { Audio?.StopSound(); } catch { }
+            // Super Lights Down: no fade after a panic exit, in any mode.
+            try { Services.Super.LightsDownService.Panic(); } catch { }
 
             try
             {
@@ -2920,6 +2923,19 @@ namespace ConditioningControlPanel
             Services.Prizes.PrizeGrants.Attach(Ownership);
             // Rain's wardrobe reaches the Prize Counter (its Open counter door and price badges).
             Services.PrizeCounter.PrizeCounterHostService.WireRainWardrobe();
+            // Worn looks: new bubbles (and later fog, words, the Deck card) ask it what is on.
+            Services.Prizes.WornLooks.Wire();
+            // Outside the preview the looks come from the account (owned = grants, worn = /v2/equip family looks).
+            Services.Prizes.AccountLookStore.Wire();
+            // Core relay (port): the counter relay reaches the look store through this seam.
+            Services.PrizeCounter.PrizeCounterRelay.LooksProvider = Services.Prizes.AccountLookStore.ForRelay;
+#if DEBUG
+            // CCP_SHOP_PREVIEW=1: the counter answers from a local preview file and feeds the worn looks.
+            Services.PrizeCounter.ShopPreviewBackend.Wire();
+            // Core relay (port): the preview answers through the relay's DEBUG seam.
+            Services.PrizeCounter.PrizeCounterRelay.PreviewOn = () => Services.PrizeCounter.ShopPreviewBackend.Enabled;
+            Services.PrizeCounter.PrizeCounterRelay.PreviewHandle = (op, body, idem) => Services.PrizeCounter.ShopPreviewBackend.Shared.Handle(op, body, idem);
+#endif
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
             // screen. The relay is the room's own, so a reply applies its prizes block.
@@ -2942,7 +2958,7 @@ namespace ConditioningControlPanel
                     var same = string.Equals(Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
                         account, StringComparison.Ordinal);
                     if (!Services.Prizes.V2WalletAdoption.Decide(same, fromBuy, sp, s.SkillPoints, out var next)) return;
-                    s.SkillPoints = next;
+                    Services.Prizes.SparklesLedger.Write(s, next, fromBuy ? Services.Prizes.SparkleSource.CounterBuy : Services.Prizes.SparkleSource.Synced);
                     Settings.Save();
                 })));
             // Sparkles by place (B1). Pure constructor: nothing is sent until a game host claims.
