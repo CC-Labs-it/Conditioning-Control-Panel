@@ -130,6 +130,42 @@ public sealed class JustDropWindowTests
     });
 
     [Fact]
+    public void BrowserFailureClosesShopAndReplayAndRestoresThePanel() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        var shop = Open()!;
+        shop.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(shop.IsVisible);
+        Assert.Null(Open());
+
+        var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
+        Assert.Equal(global::Avalonia.Controls.WindowState.Minimized, shell.WindowState);
+        replay.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(replay.IsVisible);
+        Assert.Equal(global::Avalonia.Controls.WindowState.Normal, shell.WindowState);
+    });
+
+    [Theory]
+    [InlineData(global::Avalonia.Controls.WindowState.Normal, global::Avalonia.Controls.WindowState.Normal)]
+    [InlineData(global::Avalonia.Controls.WindowState.Maximized, global::Avalonia.Controls.WindowState.Maximized)]
+    [InlineData(global::Avalonia.Controls.WindowState.FullScreen, global::Avalonia.Controls.WindowState.Normal)]
+    public void ClosingReplayRestoresAndActivatesPanel(global::Avalonia.Controls.WindowState initial, global::Avalonia.Controls.WindowState expected) => Run(shell =>
+    {
+        shell.WindowState = initial;
+        var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
+        bool activated = false;
+        replay.JustDropActivatePanelForTests = () => { activated = true; shell.Activate(); };
+        replay.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(activated);
+        Assert.Equal(expected, shell.WindowState);
+        Assert.True(shell.IsActive);
+    });
+
+    [Fact]
     public void ShopCountsEveryOpenOnceAndUsesItsOwnChromiumProfile() => Run(shell =>
     {
         var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
