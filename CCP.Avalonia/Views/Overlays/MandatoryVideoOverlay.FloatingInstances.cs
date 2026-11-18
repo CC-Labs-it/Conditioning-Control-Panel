@@ -201,7 +201,7 @@ internal sealed partial class MandatoryVideoOverlay
         if (f.Closed || f.Playback is not { } p) { f.Watch?.Stop(); return; }
         if (_gracePaused) return;   // SetFloatingPaused holds its clocks
         // Veiled or not the holder: silent, also for an audio track LibVLC selects after the last focus pass.
-        p.SetAudioOff(!_audioFocus.HasSound(f.Window));
+        p.SetAudioOff(InstanceAudioOff(f));
         if (!f.Revealed)
             switch (MandatoryVideoPresentation.DecideFirstFrame(f.SinceReady.Elapsed.TotalSeconds, f.FrameSeen, p.IsPlaying))
             {
@@ -258,11 +258,20 @@ internal sealed partial class MandatoryVideoOverlay
         _refreshFloating?.Invoke();
     }
 
-    private static void ApplyInstanceVolume(FloatingInstance f)
+    /// <summary>LibVLC volume is shared by the whole process on Windows (one audio session for every player), so a
+    /// joined window's own mute and its reveal hold go through its audio track, like WPF ApplyPrimaryAudioTrack
+    /// (VideoService.FloatingInstances.cs:74-75, :378-401); the volume only follows Settings, the same for all.</summary>
+    private void ApplyInstanceVolume(FloatingInstance f)
     {
-        if (f.Player is { } p) p.Volume = f.UserMuted || f.Held ? 0
-            : MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
+        if (f.Player is { } p)
+            p.Volume = MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
+        if (f.Surface is null) return;   // the reveal holds the sound while the window is still being built
+        try { f.Playback?.SetAudioOff(InstanceAudioOff(f)); }
+        catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
     }
+
+    /// <summary>Silent unless it holds the focus, is not muted by its own button and is not held by its reveal.</summary>
+    private bool InstanceAudioOff(FloatingInstance f) => f.UserMuted || f.Held || !_audioFocus.HasSound(f.Window);
 
     /// <summary>WPF OnFloatingTouched (:256-260): a pressed window takes the sound.</summary>
     internal void TouchFloating(Window w)
@@ -278,7 +287,7 @@ internal sealed partial class MandatoryVideoOverlay
         catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
         foreach (var f in _floaters)
         {
-            try { if (_audioFocus.Items.Contains(f.Window)) f.Playback?.SetAudioOff(!_audioFocus.HasSound(f.Window)); }
+            try { if (_audioFocus.Items.Contains(f.Window)) f.Playback?.SetAudioOff(InstanceAudioOff(f)); }
             catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
         }
         _refreshFloating?.Invoke();

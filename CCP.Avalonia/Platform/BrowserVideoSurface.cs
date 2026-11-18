@@ -49,7 +49,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     private readonly Func<string, Task<string?>> _execute;
     private readonly string _id = Guid.NewGuid().ToString("N");
     private DispatcherTimer? _startup;
-    private bool _closed, _loaded, _primary;
+    private bool _closed, _loaded, _primary, _failed;
     private string _url = "";
     internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null) {
         _execute = execute ?? View.InvokeScriptAsync;
@@ -77,7 +77,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch { if (!_closed) Fail(); }
     }
     internal void Receive(string body) {
-        if (_closed || !_loaded) return;
+        if (_closed || _failed || !_loaded) return;
         try {
             using var json = JsonDocument.Parse(body);
             var message = json.RootElement;
@@ -85,8 +85,8 @@ internal sealed class BrowserVideoSurface : IDisposable
             switch (message.GetProperty("type").GetString())
             {
                 case "playing": Playing = true; _startup?.Stop(); break;
-                case "error": Message?.Invoke(message);
-                    Fail(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101); return;
+                case "error":
+                    FailWithMessage(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101, message); return;
             }
             Message?.Invoke(message);
         }
@@ -95,9 +95,12 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch (System.Collections.Generic.KeyNotFoundException) { }
     }
     internal string SessionId => _id;
-    private void Fail(bool mediaFailure = false) {
-        if (_closed) return;
+    private void Fail(bool mediaFailure = false) => FailWithMessage(mediaFailure, null);
+    private void FailWithMessage(bool mediaFailure, JsonElement? message) {
+        if (_closed || _failed) return;
+        _failed = true;
         _startup?.Stop();
+        if (message is { } error) Message?.Invoke(error);
         Failed?.Invoke(mediaFailure);
     }
     // WPF BrowserVideoEngine.cs:652-669: mirrors always stay muted, including after volume changes.
@@ -148,6 +151,12 @@ internal sealed class BrowserVideoSurface : IDisposable
         v.onloadedmetadata=meta; v.ondurationchange=meta;
         let started=false, lastTime=0, lastAdvance=performance.now();
         v.onplaying=()=>{started=true; lastAdvance=performance.now(); send({type:'playing'});};
+        // WPF player.js:445: played ranges exclude seeks and pauses from watch credit.
+        v.ontimeupdate=()=>{
+          let played=0;
+          for(let i=0;i<v.played.length;i++) played+=v.played.end(i)-v.played.start(i);
+          send({type:'time',ms:Math.round((v.currentTime||0)*1000),playedMs:Math.round(played*1000),paused:v.paused});
+        };
         v.onended=()=>send({type:'ended'});
         v.onerror=()=>send({type:'error',code:v.error?.code||0});
         setTimeout(()=>{if(!started) send({type:'error',code:101});},10000);

@@ -65,6 +65,7 @@ public sealed class BubbleCountSchedulerTests
 
     private sealed class VideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public readonly List<(string Path, bool Strict)> Shown = new();
         public void Show(string path, bool strict) => Shown.Add((path, strict));
         public bool BubbleCountActive => CoreEngine.BubbleCount?.IsBusy == true; // as MandatoryVideoOverlay

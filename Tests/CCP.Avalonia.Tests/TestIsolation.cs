@@ -337,6 +337,8 @@ internal sealed class ProcessStateSnapshot
             found.Add(field);
         // Toast lines are selected by the effect, not by an assignment in the tests.
         found.Add(typeof(ConditioningControlPanel.Avalonia.Possession.ToastEffect).GetField("_lastLine", AnyStatic)!);
+        foreach (var field in typeof(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow).GetFields(AnyStatic)
+                     .Where(f => f.Name.StartsWith("_web", StringComparison.Ordinal))) found.Add(field);
         // Native refusal is cached internally, without a Type.Member assignment for the scanner.
         // DWM is available on Windows headless CI, but its windows have no native input shape.
         found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay)
