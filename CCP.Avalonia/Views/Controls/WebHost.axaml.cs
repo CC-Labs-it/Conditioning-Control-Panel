@@ -254,9 +254,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
         /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
         /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
-        /// With <see cref="InjectCarrier"/> WebKitGTK installs it at document start, before the first navigation
+        /// With <see cref="InjectCarrier"/> WebKitGTK and WPE install it at document start, before the first navigation
         /// of each engine (<see cref="Platform.WebViewCarrier"/>); it also runs after every completed navigation
-        /// as the fallback on engines without that seam (WPE) or when the native install fails.
+        /// as the fallback when the native install fails.
         /// </summary>
         internal const string CarrierShim =
             "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
@@ -379,8 +379,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// (a string result arrives quoted), WebKitGTK hands back the raw value. Callers that read
         /// the result must tolerate both — see <c>EnhancementPlayerWindow.Unquote</c>.
         ///
-        /// There is no equivalent of <c>AddScriptToExecuteOnDocumentCreatedAsync</c>, so anything
-        /// that must be present before the page's own scripts run has no seam here.
+        /// Document-start scripts use the opt-in native installation paths below.
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
@@ -860,10 +859,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // Headless tests supply an engine without loading a native web view.
         internal Func<Uri, bool>? NavigationInvoker { get; set; }
 
-        // A caller sets this before the native adapter is attached. WebView2 installs it on each
-        // recreated core before the held first navigation; other engines retain the load fallback.
-        internal string? WindowsDocumentStartScript { get; set; }
+        // Set before attachment. WebView2, WebKitGTK and WPE install before the held first navigation.
         internal string? AllFramesDocumentStartScript { get; set; }
+        internal Func<string, Task<bool>>? AllFramesDocumentStartInstaller { get; set; }
+        private Task<bool>? _allFramesInstall;
+        // WebView2-only document-start hook; callers retain their own fallback on other engines.
+        internal string? WindowsDocumentStartScript { get; set; }
         internal Func<string, Task>? DocumentStartInstaller { get; set; }
 
         internal async Task PrepareScrolllerGate(int engine, bool gated)
@@ -877,11 +878,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 await BoundedNativeStep(SetEngineMutedAsync(muted), "native mute");
                 if (Stale()) return;
             }
-            // WebKitGTK: the opt-in carrier before the page's own scripts, once per engine.
+            // WebKitGTK and WPE: the opt-in carrier before the page's own scripts, once per engine.
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
                 await BoundedNativeStep(_carrierInstall, "carrier install");
+                if (Stale()) return;
+            }
+            if (AllFramesDocumentStartScript is { } frameScript)
+            {
+                _allFramesInstall ??= InstallAllFramesAsync(frameScript);
+                await BoundedNativeStep(_allFramesInstall, "all-frame document-start script");
                 if (Stale()) return;
             }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
@@ -893,18 +900,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 }
                 catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
             }
-            if (AllFramesDocumentStartScript is { } allFrames)
-            {
-                try
-                {
-                    if (DocumentStartInstaller is { } install) await install(allFrames).WaitAsync(TimeSpan.FromSeconds(5));
-                    else if (OperatingSystem.IsWindows()) await InstallWindowsDocumentStart(allFrames).WaitAsync(TimeSpan.FromSeconds(5));
-                    else await BoundedNativeStep(Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), allFrames, allFrames: true), "frame media install");
-                }
-                catch (Exception ex) { Log.Warning("WebHost: frame media script failed: {Error}", ex.Message); }
-                if (Stale()) return;
-            }
             OnScrolllerGate(engine, gated);
+        }
+
+        private async Task<bool> InstallAllFramesAsync(string script)
+        {
+            try
+            {
+                if (AllFramesDocumentStartInstaller is { } install) return await install(script);
+                if (OperatingSystem.IsWindows()) { await InstallWindowsDocumentStart(script); return true; }
+                return await Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), script, allFrames: true);
+            }
+            catch (Exception ex) { Log.Debug("WebHost: all-frame script install failed: {E}", ex.Message); return false; }
         }
 
         private int _gateReport;
@@ -959,6 +966,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ActiveNavigation = null;
             _loadedOnThisEngine = false;
             _carrierInstall = null;
+            _allFramesInstall = null;
             _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;

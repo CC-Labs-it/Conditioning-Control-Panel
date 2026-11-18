@@ -1559,6 +1559,47 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void Dtrh_ActiveRunRefusesStampedLineLink() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView();
+        var state = global::ConditioningControlPanel.Services.Fyp.Online.OnlineMeterRules.For(
+            "mixed", true, true, 10, false, global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerPlan.Free, true, true);
+        tab.PaintOnlineMeter(state, DateTime.Now, DateTime.Now.AddHours(1));
+        Assert.True(tab.OnlineMeterStamped.IsVisible);
+        var link = tab.FindControl<Button>("OnlineStampedLink")!;
+        Assert.NotNull(link);
+        var sandbox = typeof(SandboxNet).GetProperty("Active")!;
+        var oldSandbox = (bool)sandbox.GetValue(null)!;
+        var oldShell = ExternalOpener.Shell;
+        var oldStrict = CoreSettings.Current.StrictLockEnabled;
+        var opened = new List<string>();
+        try
+        {
+            sandbox.SetValue(null, false);
+            CoreSettings.Current.StrictLockEnabled = false;
+            ExternalOpener.Shell = target => { opened.Add(target); return true; };
+            var w = GameWindow.Launch("dtrh")!;
+            link.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(opened);
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            Assert.True(GameWindow.IsDtrhRunning);
+            link.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(opened);
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":0,\"durationSec\":1}");
+            Assert.False(GameWindow.IsDtrhRunning);
+            link.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, opened.Count);
+            Assert.All(opened, target => Assert.Equal(global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.HomeLink, target));
+        }
+        finally
+        {
+            ExternalOpener.Shell = oldShell;
+            CoreSettings.Current.StrictLockEnabled = oldStrict;
+            sandbox.SetValue(null, oldSandbox);
+        }
+    });
+
+    [Fact]
     public void Dtrh_BasicDoor_BootRunLifecycle_AndCloseBanks()
     {
         RunDtrh(lab: false, (_, _, _, denied) =>

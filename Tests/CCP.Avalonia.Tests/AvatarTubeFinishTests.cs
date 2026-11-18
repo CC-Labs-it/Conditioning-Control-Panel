@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
@@ -471,8 +472,23 @@ public sealed class AvatarTubeFinishTests
             Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
             SelectNow(tube, 2);
             Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
+            // WPF Windowing.cs:753-799: breath, wobble and mist; a playing clip adds shimmer and thicker mist.
+            var tick = Assert.IsType<Action<double>>(tube.FloatingFrame);
+            var motion = (global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)b.RenderTransform!).Children[0];
+            var breath = (global::Avalonia.Media.ScaleTransform)motion.Children[2]; var wobble = (global::Avalonia.Media.RotateTransform)motion.Children[3];
+            tick(100 * 0.016);
+            Assert.Equal(1 + Math.Sin(1.3) * 0.01, breath.ScaleX, 8);
+            // WPF xaml:511: about the portrait's centre; the feet-based layout scale still lands it there.
+            var layer = (global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)a.RenderTransform!).Children[0];
+            var s = ((global::Avalonia.Media.ScaleTransform)layer.Children[0]).ScaleX; Assert.True(a.Bounds.Height > 0);
+            var centre = layer.Value.Transform(new global::Avalonia.Point(0, -a.Bounds.Height / 2));
+            Assert.Equal(0, centre.X, 6); Assert.Equal(-a.Bounds.Height * s / 2, centre.Y, 6); Assert.Equal(Math.Sin(1.7) * 0.4, wobble.Angle, 8); Assert.Equal(0.15 + (Math.Sin(0.9) + 1) * 0.03, mist.Opacity, 8);
+            tube.SpeechAudioPlayer = (_, _, _, _) => { }; // the clip keeps playing
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true); tick(40 * 0.016);
+            Assert.Equal(Math.Sin(0.68) * 0.4 + Math.Sin(18) * Math.Pow(Math.Sin(1.4), 3) * 0.175, wobble.Angle, 8); Assert.Equal(0.26 + (Math.Sin(0.36) + 1) * 0.05, mist.Opacity, 8);
             change(new ModPackage(new ModManifest { Id = "other" }, null, false));
             Assert.Same(effectA, a.Effect); Assert.Same(effectB, b.Effect); Assert.False(mist.IsVisible);
+            Assert.Equal(1, breath.ScaleX); Assert.Equal(0, wobble.Angle); // WPF Avatar.cs:1117-1119
         }
         finally { Directory.Delete(root, true); }
     });
@@ -525,6 +541,87 @@ public sealed class AvatarTubeFinishTests
             Assert.Equal(TimeSpan.FromMilliseconds(500), Assert.Single(steps).Delay);
         }
         finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); Directory.Delete(root, true); }
+    });
+
+    [Fact]   // WPF Speech.cs:114,646-661: a preset line's expression leads its bubble and voice by 0.6 s.
+    public Task PortraitPresetExpressionLeadsBubbleAndVoice() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            change(mod);
+            var leads = new List<(TimeSpan Delay, Action Fire)>(); var voiced = 0;
+            tube.PortraitStepScheduler = tube.PortraitFadeScheduler = (_, _) => () => { };
+            tube.SpeechDelayScheduler = (delay, fire) => { leads.Add((delay, fire)); return () => { }; };
+            tube.SpeechAudioPlayer = (_, _, _, _) => voiced++; // the clip keeps playing
+            var bubble = tube.FindControl<Border>("SpeechBubble")!; var mist = tube.FindControl<Control>("MistOverlay")!;
+            Action Lead()
+            {
+                tube.PanicSilence(); leads.Clear(); voiced = 0;
+                tube.Giggle("preset", mood: "happy");
+                foreach (var gap in leads.ToList()) if (gap.Delay != TimeSpan.FromSeconds(0.6)) gap.Fire(); // a queued line's gap
+                Assert.Equal("happy.png", Path.GetFileName(tube.PortraitPath)); Assert.True(tube.IsSpeaking);
+                Assert.False(bubble.IsVisible); Assert.Equal(0, voiced); Assert.False(tube.SpokenAudioDone.IsCompleted);
+                tube.FloatingFrame!(40 * 0.016); // WPF Windowing.cs:769: no shimmer or thick mist before the clip plays
+                Assert.Equal(0.15 + (Math.Sin(0.36) + 1) * 0.03, mist.Opacity, 8);
+                return Assert.Single(leads, l => l.Delay == TimeSpan.FromSeconds(0.6)).Fire;
+            }
+            var fire = Lead(); var done = tube.SpokenAudioDone;
+            tube.GigglePriority("newer", aiGenerated: false); Assert.True(done.IsCompleted); Assert.Equal(1, voiced);
+            fire(); Assert.Equal(1, voiced); // the superseded line never speaks
+            fire = Lead(); done = tube.SpokenAudioDone;
+            tube.PanicSilence(); Assert.True(done.IsCompleted);
+            fire(); Assert.Equal(0, voiced); Assert.False(bubble.IsVisible);
+            Lead()(); Assert.Equal(1, voiced); Assert.True(bubble.IsVisible); // not superseded: speaks after the lead-in
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]   // WPF Windowing.cs:765-776 animates speech on an ungated timer: the CPU-path idle hold keeps it.
+    public Task PortraitSpeechStillMovesWhileTheIdleBobIsHeld() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        var s = CoreSettings.Current; var previousTime = BeatLoop.Time; var time = new SteppedTime();
+        try
+        {
+            change(mod);
+            BeatLoop.Time = time;
+            s.LighterEffects = LighterEffectsMode.On;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tube.IsFloating); Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube);
+            var wobble = (global::Avalonia.Media.RotateTransform)((global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)
+                tube.FindControl<Image>("ImgAvatar")!.RenderTransform!).Children[0]).Children[3];
+            Action? end = null;
+            tube.SpeechAudioPlayer = (_, _, _, done) => end = done; // the clip keeps playing
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true);
+            Assert.Single(BeatLoop.Running, l => l.Owner == tube);
+            time.Advance(TimeSpan.FromSeconds(40 * 0.016)); BeatLoop.StepAll();
+            Assert.Equal(Math.Sin(0.68) * 0.4 + Math.Sin(18) * Math.Pow(Math.Sin(1.4), 3) * 0.175, wobble.Angle, 8);
+            end!(); BeatLoop.StepAll();
+            Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube); Assert.Equal(0, wobble.Angle);
+
+            // Lighter effects switched on mid-clip: the bob holds, the speech keeps moving.
+            s.LighterEffects = LighterEffectsMode.Off;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(tube.IsFloating);
+            tube.PanicSilence(); end = null;
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true);
+            Assert.NotNull(end);
+            s.LighterEffects = LighterEffectsMode.On;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tube.IsFloating); Assert.Single(BeatLoop.Running, l => l.Owner == tube);
+            time.Advance(TimeSpan.FromSeconds(40 * 0.016)); BeatLoop.StepAll(); Assert.NotEqual(0, wobble.Angle);
+
+            // Leaving portrait mode mid-clip ends the speech loop instead of ticking until close.
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false)); Assert.False(tube.IsPortraitMode);
+            BeatLoop.StepAll(); Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube);
+        }
+        finally
+        {
+            BeatLoop.Time = previousTime; s.LighterEffects = LighterEffectsMode.Auto;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Directory.Delete(root, true);
+        }
     });
 
     [Fact]
