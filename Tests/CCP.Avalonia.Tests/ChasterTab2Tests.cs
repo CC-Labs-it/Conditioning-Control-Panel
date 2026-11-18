@@ -202,6 +202,29 @@ public sealed class ChasterTab2Tests
     }));
 
     [Fact]
+    public Task PanicHoldRefreshesThePageEverySecond() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _, _) =>
+    {
+        var tab = new ChasterTabView();
+        var w = new Window { Width = 1200, Height = 800, Content = tab };
+        var previous = ConditioningControlPanel.Services.Safety.PanicChasterHold.Service;
+        ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => chaster;
+        w.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "chaster-hold").Stop(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(TimeSpan.FromSeconds(1), tab.SlowTick.Interval);
+            var today = tab.FindControl<TextBlock>("TxtToday")!;
+            today.Text = "stale";
+            for (var i = 0; i < 100 && today.Text == "stale"; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+            Assert.NotEqual("stale", today.Text);
+            Assert.Contains(tab.PillTexts, text => text.StartsWith(ConditioningControlPanel.Localization.Loc.Get("chaster_stat_hold") + " "));
+        }
+        finally { w.Close(); ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = previous; }
+    }));
+
+    [Fact]
     public Task UnlinkAsksThenRevokesAndClearsTheToken() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, _) =>
     {
         var tab = new ChasterTabView();
