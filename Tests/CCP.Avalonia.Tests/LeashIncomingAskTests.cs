@@ -18,8 +18,6 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-// This suite pumps the shared dispatcher while using the process-wide leash service and ask window.
-[Collection(RunsAloneCollection.Name)]
 public sealed class LeashIncomingAskTests
 {
     private const string First = "0123456789abcdef", Second = "fedcba9876543210";

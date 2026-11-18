@@ -19,9 +19,12 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    // The cache bridge (attached when the window opens) pushes its own cache-state frames; these tests count
+    // the inbox and boot frames only.
     private static void WaitGoonReplies(List<JObject> replies, int count)
     {
-        for (var i = 0; i < 1000 && replies.Count < count; i++) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
+        bool Settled() { replies.RemoveAll(r => (string?)r["type"] == "cache-state"); return replies.Count >= count; }
+        for (var i = 0; i < 1000 && !Settled(); i++) { Thread.Sleep(10); Dispatcher.UIThread.RunJobs(); }
         Assert.Equal(count, replies.Count);
     }
 
