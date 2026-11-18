@@ -170,6 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
                         Displayed?.Invoke();
+                        ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Word();
                     }
                     barkRaised = true;
                     continue;
@@ -231,6 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
                 Displayed?.Invoke();
+                ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Word();
             }
             if (stealsFocus)
             {
