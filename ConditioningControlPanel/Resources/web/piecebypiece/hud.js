@@ -590,6 +590,10 @@ export function createHud(opts = {}) {
   invertX?.addEventListener('change', invertXChange);
   invertY?.addEventListener('change', invertYChange);
   undom.push(() => { invertX?.removeEventListener('change', invertXChange); invertY?.removeEventListener('change', invertYChange); });
+  const arrows = pick('game-arrows');
+  const arrowsChange = () => setPresentation({ arrows: arrows.checked });
+  arrows?.addEventListener('change', arrowsChange);
+  undom.push(() => arrows?.removeEventListener('change', arrowsChange));
   for (const button of root.querySelectorAll('[data-turncard]')) click(button, () => setPresentation({ turnCard: button.dataset.turncard }));
   for (const button of root.querySelectorAll('[data-amount]')) click(button, () => setPresentation(watching ? { watchAmount: button.dataset.amount } : { amount: button.dataset.amount }));
   for (const button of root.querySelectorAll('[data-ramp]')) click(button, () => setPresentation({ rampSpeed: button.dataset.ramp }));
@@ -654,6 +658,7 @@ export function createHud(opts = {}) {
     if (openIntro) openIntro.checked = p.openIntro;
     if (invertX) invertX.checked = p.invertX;
     if (invertY) invertY.checked = p.invertY;
+    if (arrows) arrows.checked = p.arrows;
     for (const button of root.querySelectorAll('[data-turncard]')) button.setAttribute('aria-pressed', String(button.dataset.turncard === p.turnCard));
     for (const button of root.querySelectorAll('[data-ramp]')) button.setAttribute('aria-pressed', String(button.dataset.ramp === p.rampSpeed));
     for (const button of root.querySelectorAll('[data-boardmotion]')) button.setAttribute('aria-pressed', String(button.dataset.boardmotion === p.boardMotion));
