@@ -58,6 +58,11 @@
       <ol class="moves-list" id="moves-list"></ol>
     </div>
 
+    <!-- Right-click arrows on or off (owner, 2026-11-18): on the HUD, not in Options, because the reach
+         for it comes mid-game, when a right drag meant for the camera drew a line. Off: every right drag
+         turns the board. -->
+    <button type="button" class="hud-btn arrows-btn on" id="game-arrows" aria-pressed="true" title="Right-click arrows and circles. Off: a right drag always turns the board.">Arrows on</button>
+
     <div class="game-settings">
       <button type="button" class="hud-btn" id="game-options" aria-expanded="false" aria-controls="game-options-panel">⚙ Options</button>
       <div id="game-options-panel" class="game-options-panel" hidden>
@@ -116,7 +121,6 @@
           <label><input type="checkbox" id="game-name-tags" checked> Name tags</label>
           <label><input type="checkbox" id="game-invert-x"> Invert left/right</label>
           <label><input type="checkbox" id="game-invert-y"> Invert up/down</label>
-          <label><input type="checkbox" id="game-arrows" checked> Right-click arrows</label>
           <div class="turncard-pick" role="group" aria-label="Turn card" data-seat-only>
             <span>Turn card</span>
             <button type="button" class="hud-btn" data-turncard="slam" aria-pressed="true">Slam</button>

@@ -1,4 +1,4 @@
-// node --test smoke/arrows-pref.test.mjs - the "Right-click arrows" switch (Options > Camera).
+// node --test smoke/arrows-pref.test.mjs - the "Arrows on / off" button on the HUD (top right).
 // On by default; off hands every right press back to the camera and wipes what was drawn.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,11 +51,16 @@ test('with the switch off a right press on a square goes to the camera and draws
   assert.deepEqual(camera, [2], 'and not this one');
 });
 
-test('the page wires it: a box in Options, the hud saves it, boot.js blocks and wipes on it', () => {
-  assert.match(read('../index.html'), /<input type="checkbox" id="game-arrows" checked> Right-click arrows</);
+test('the page wires it: a button on the HUD (not in Options), the hud saves it, boot.js blocks and wipes on it', () => {
+  const html = read('../index.html');
+  assert.match(html, /<button type="button" class="hud-btn arrows-btn on" id="game-arrows" aria-pressed="true"/);
+  assert.ok(html.indexOf('id="game-arrows"') < html.indexOf('id="game-options-panel"'), 'outside the Options panel');
+  assert.equal(html.split('id="game-arrows"').length, 2, 'one of them');
+  assert.match(read('../styles.css'), /\.arrows-btn \{ position: absolute; top: 22px; right: 101px;/);
   const hud = read('../hud.js');
-  assert.ok(hud.includes("setPresentation({ arrows: arrows.checked })"));
-  assert.ok(hud.includes('if (arrows) arrows.checked = p.arrows;'));
+  assert.ok(hud.includes("click(arrows, () => setPresentation({ arrows: !presentation().arrows }));"));
+  assert.ok(hud.includes("arrows.textContent = p.arrows ? 'Arrows on' : 'Arrows off';"));
+  assert.ok(hud.includes("arrows.setAttribute('aria-pressed', String(p.arrows));"));
   const boot = read('../boot.js');
   assert.ok(boot.includes('isBusy: () => !presentation().arrows ||'));
   assert.ok(boot.includes('if (!p.arrows && (board.annotate.size() || board.annotate.isDrawing())) board.annotate.clear();'));
