@@ -72,6 +72,22 @@ public class TestIsolationTests
     }
 
     [Fact]
+    public void VideoQuarantineIsRestored() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var field = typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost).GetField("_videoQuarantineUntilUtc",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var original = field.GetValue(null);
+        try
+        {
+            var snapshot = ProcessStateSnapshot.Take();
+            field.SetValue(null, System.DateTime.MaxValue);
+            snapshot.Restore();
+            Assert.Equal(original, field.GetValue(null));
+        }
+        finally { field.SetValue(null, original); }
+    });
+
+    [Fact]
     public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
         foreach (var family in new[] { "Segoe UI Black, Segoe UI", "Comic Sans MS, Segoe UI", "Consolas, Courier New" })

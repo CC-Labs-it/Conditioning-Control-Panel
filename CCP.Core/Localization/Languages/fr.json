@@ -1,4 +1,10 @@
 {
+  "chaos_sidebar_empty_toy": "poche de jouet vide",
+  "chaos_sidebar_empty_accessory": "poche d’accessoire vide",
+  "chaos_sidebar_empty_desc": "clique pour faire les boutiques dans la maison de poupée.",
+  "chaos_sidebar_left_behind": "laissé derrière : {0}",
+  "chaos_debug_add_sparks": "+500 étincelles",
+  "chaos_tape_snaps": "la bande se coupe",
   "chaos_bonus_first_taste": "premier goût",
   "chaos_bonus_first_snap": "premier claquement",
   "chaos_bonus_first_whisper": "premier murmure",
@@ -141,6 +147,7 @@
   "chaos_event_sin_bonus": "péché accepté (+{0:0.00}x)",
   "chaos_event_sin_shielded": "la bougie a retiré le revers",
   "chaos_event_sin_resistance": "vous avez dit oui (+1 résistance)",
+  "chaos_announce_depth": "PROFONDEUR {0}",
   "chaos_announce_resist": "+1 RÉSISTANCE",
   "chaos_first_sin_demo": "le premier péché est protégé cette fois",
   "chaos_duo_demo": "une carte dorée. tes jouets ont appris à travailler ensemble.",

@@ -71,6 +71,30 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Heavy_effect_blocks_video_spawns()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                var cfg = Cfg();
+                cfg.EnabledVariants = new() { "video" };
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.OnVideoEndedDuringRun();
+                ChaosRunHost.SpawnTick();
+                Assert.NotEmpty(BubbleOverlay.Field.Bubbles);
+                Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.VariantId == "video");
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
@@ -857,6 +881,84 @@ public sealed class ChaosRunHostTests
         if (ChaosEffectBannerOverlay.ResolveArt(sin.Id) == null)
             Assert.Equal(ChaosOverlayWindow.CurseIcon, Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions
                 .GetLogicalDescendants(ChaosAnnouncerOverlay.Active!).OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>()).Kind);
+    });
+
+    // WPF ChaosModeService.cs:1454,1588,3104-3113: announce each depth crossing once.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Act_crossing_announces_depth_once(bool drafts) => WithFreshRun(() =>
+    {
+        ChaosMeta.State.LessonsComplete.Add("silk_touch");
+        CoreSettings.Current.ChaosAnnouncerEnabled = true;
+        var cfg = Cfg(); cfg.DurationSec = 140; cfg.WaveCount = 7; cfg.BoonDraftEnabled = drafts;
+        ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+        overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+        for (int wave = 2; wave <= 6; wave++)
+        {
+            ChaosAnnouncerOverlay.CloseActive();
+            Ticks(80);
+            if (drafts) ChaosRunHost.ChooseBoon(null);
+            if (wave < 6 && drafts) overlay.FinishCountdown();
+        }
+        var queue = (ChaosAnnounceQueue)typeof(ChaosAnnouncerOverlay).GetField("Queue", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        var messages = new List<string>();
+        if (ChaosAnnouncerOverlay.Active?.Current is { } current) messages.Add(current.Text);
+        while (queue.TryDequeue(out var item)) messages.Add(item.Text);
+        Assert.Equal(2, ChaosRunHost.State!.ActIndex);
+        Assert.Single(messages.Where(x => x == "DEPTH 2"));
+        if (drafts) overlay.FinishCountdown();
+        Ticks(4);
+        Assert.False(queue.TryDequeue(out _));
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Act_crossing_uses_the_selected_language(bool drafts) => WithFreshRun(() =>
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("de");
+            ChaosMeta.State.LessonsComplete.Add("silk_touch");
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            var cfg = Cfg(); cfg.DurationSec = 140; cfg.WaveCount = 7; cfg.BoonDraftEnabled = drafts;
+            ChaosRunHost.StartRun(cfg); var overlay = ChaosRunHost.Overlay!;
+            overlay.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            for (int wave = 2; wave <= 6; wave++)
+            {
+                ChaosAnnouncerOverlay.CloseActive(); Ticks(80);
+                if (drafts) ChaosRunHost.ChooseBoon(null);
+                if (wave < 6 && drafts) overlay.FinishCountdown();
+            }
+            var queue = (ChaosAnnounceQueue)typeof(ChaosAnnouncerOverlay).GetField("Queue", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+            var messages = new List<string>();
+            if (ChaosAnnouncerOverlay.Active?.Current is { } current) messages.Add(current.Text);
+            while (queue.TryDequeue(out var item)) messages.Add(item.Text);
+            Assert.Single(messages, x => x == "TIEFE 2");
+        }
+        finally { loc.SetLanguage(previous); }
+    });
+
+    [Theory]
+    [InlineData("en", "DEPTH 2")]
+    [InlineData("de", "TIEFE 2")]
+    [InlineData("es", "PROFUNDIDAD 2")]
+    [InlineData("fr", "PROFONDEUR 2")]
+    [InlineData("it", "PROFONDITÀ 2")]
+    [InlineData("ja", "深度 2")]
+    [InlineData("ko", "깊이 2")]
+    [InlineData("pt-BR", "PROFUNDIDADE 2")]
+    [InlineData("ru", "ГЛУБИНА 2")]
+    [InlineData("zh-CN", "深度 2")]
+    public Task Depth_copy_formats_in_every_language(string language, string expected) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup(); var loc = LocalizationManager.Instance; var previous = loc.CurrentLanguage;
+        try { loc.SetLanguage(language); Assert.Equal(expected, Loc.GetF("chaos_announce_depth", 2)); }
+        finally { loc.SetLanguage(previous); }
+        return Task.CompletedTask;
     });
 
     // Hand-ported from #3541: WPF AnnounceFinalLoopIfEntering (ChaosModeService.cs:1460,1625,1639-1647).

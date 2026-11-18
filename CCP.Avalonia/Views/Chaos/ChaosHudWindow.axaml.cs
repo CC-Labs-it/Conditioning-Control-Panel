@@ -38,7 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - The window binds the real Core <see cref="ChaosRunState"/> (CCP.Core/Services/Chaos/
     ///    ChaosModels.cs) exactly as WPF does; the render proof feeds it <see cref="ChaosHudSample"/>.
     ///    Tile brushes come from ChaosBoonColors.AccentOf/BackOf. ChaosRunHost owns the live
-    ///    run and pause lifecycle. The Warren-phase sidebar commands remain unported.
+    ///    run and pause lifecycle. The Warren-phase commands route through its preview host.
     ///  - <b>Win32.</b> The WPF window P/Invoked <c>GetWindowLong</c>/<c>SetWindowLong</c> to add
     ///    <c>WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE</c>, and <c>SetWindowPos(HWND_TOPMOST)</c> via
     ///    <c>ChaosWindowZ</c>. Both map without a shim: the ex-styles are
@@ -886,14 +886,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _pauseChoiceRow.IsVisible = false;
         }
 
-        /// <summary>A pocket tile was clicked: a filled tile unequips its boon (the service ignores
-        /// it once SINK has fired); an empty "+" tile brings the Warren forward on Enhancements.
-        /// ponytail: needs ChaosModeService (UnequipFromSidebar / OpenWarrenAt), wired when the
-        /// Chaos services move to Core. The tile id is already carried on Tag, as in WPF.</summary>
+        // WPF ChaosHudWindow.xaml.cs:621-627: equipped tiles leave the loadout; + opens the shop.
         private void PocketTile_Click(object? sender, PointerPressedEventArgs e)
         {
-            var id = (sender as Control)?.Tag as string;
-            Log.Debug("ChaosHud pocket tile clicked: {Id}", string.IsNullOrEmpty(id) ? "(empty slot)" : id);
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                ChaosRunHost.SidebarPocketClicked(this, (sender as Control)?.Tag as string);
         }
 
         /// <summary>Slide the panel to <paramref name="toX"/> over 180ms, eased out.</summary>
@@ -1198,10 +1195,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF ChaosHudWindow.xaml.cs:949. In-run: pause via the run host.
-        /// ponytail: pre-run StartRunFromSidebar needs the Warren sidebar phase, not ported.</summary>
+        /// Pre-run starts through the Warren so its settings are saved.</summary>
         private void BtnHero_Click(object? sender, RoutedEventArgs e)
         {
-            if (_preRunMode) { Log.Debug("ChaosHud hero button: fall in (no sidebar phase on this head)"); return; }
+            if (_preRunMode) { ChaosRunHost.SidebarFallIn(this); return; }
             if (!ChaosRunHost.IsManuallyPaused) ChaosRunHost.ToggleManualPause();
         }
 
@@ -1221,8 +1218,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>Pre-run ✖ beside FALL IN: leave the rabbit hole entirely (Warren + sidebar).
-        /// ponytail: needs ChaosModeService (CloseWarrenPhase).</summary>
-        private void BtnCloseMode_Click(object? sender, RoutedEventArgs e) => Close();
+        /// WPF ChaosModeService.cs:645-651 closes the Warren too.</summary>
+        private void BtnCloseMode_Click(object? sender, RoutedEventArgs e) => ChaosRunHost.SidebarClose(this);
 
         /// <summary>Re-assert the HUD to the top of the topmost band without stealing focus, so it
         /// stays visible over a mandatory video that a chaos payload raised mid-run.

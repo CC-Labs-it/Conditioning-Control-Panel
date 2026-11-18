@@ -345,6 +345,10 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // Video teardown uses a wall-clock quarantine that must not leak across stepped-clock tests.
+        found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost)
+            .GetField("_videoQuarantineUntilUtc", AnyStatic)!);
+
         // The cached motion value and its timestamp are one state. Restoring only the public
         // test seam leaves a fresh timestamp paired with another test's cached result.
         found.Add(typeof(UiMotionPreference).GetField("_cached", AnyStatic)!);
