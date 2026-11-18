@@ -1,4 +1,6 @@
 {
+  "mod_art_frame_surface_railChip": "レールチップ", "mod_art_frame_surface_railCard": "レールランチャー", "mod_art_frame_surface_playCard": "プレイカードのヘッダー", "mod_art_frame_surface_playCardTall": "プレイカードのヘッダー（高）", "mod_art_frame_surface_loomStrip": "Loomストリップ", "mod_art_frame_surface_playHero": "プレイのメインバナー", "mod_art_frame_surface_pageHeader": "ページヘッダー", "mod_art_frame_surface_intakeStrip": "受付ストリップ",
+  "mod_art_frame": "フレーム", "mod_art_framed": "設定済み", "mod_art_frame_title": "画像のフレーム", "mod_art_frame_help": "ドラッグで移動、ホイールで拡大縮小、ダブルクリックでリセットします。各面に個別の切り抜きを設定できます。", "mod_art_frame_reset": "リセット", "mod_art_frame_reset_all": "すべてリセット", "mod_art_frame_fluid": "幅はウィンドウに合わせて変わります。被写体を破線の内側に置いてください。", "mod_art_frame_decode": "画像を読み取れませんでした。", "mod_art_frame_intro": "画像を選んでフレームを押すと、各面の切り抜きを調整できます。ドラッグで移動、ホイールで拡大縮小、ダブルクリックでリセットします。",
   "chaos_bonus_first_taste": "初めての味",
   "chaos_bonus_first_snap": "初めてのスナップ",
   "chaos_bonus_first_whisper": "初めてのささやき",

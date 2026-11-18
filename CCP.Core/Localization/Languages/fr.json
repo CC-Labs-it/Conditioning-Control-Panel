@@ -1,4 +1,6 @@
 {
+  "mod_art_frame_surface_railChip": "Vignette latérale", "mod_art_frame_surface_railCard": "Lanceur latéral", "mod_art_frame_surface_playCard": "En-tête de carte", "mod_art_frame_surface_playCardTall": "En-tête de carte (haut)", "mod_art_frame_surface_loomStrip": "Bande Loom", "mod_art_frame_surface_playHero": "Bannière principale de jeu", "mod_art_frame_surface_pageHeader": "En-tête de page", "mod_art_frame_surface_intakeStrip": "Bande d’admission",
+  "mod_art_frame": "Cadrer", "mod_art_framed": "Cadré", "mod_art_frame_title": "Cadrer l’image", "mod_art_frame_help": "Faites glisser pour déplacer, utilisez la molette pour zoomer ou double-cliquez pour réinitialiser. Chaque surface a son cadrage.", "mod_art_frame_reset": "Réinitialiser", "mod_art_frame_reset_all": "Tout réinitialiser", "mod_art_frame_fluid": "La largeur varie avec la fenêtre. Gardez le sujet dans la zone pointillée.", "mod_art_frame_decode": "Impossible de lire cette image.", "mod_art_frame_intro": "Choisissez une image puis Cadrer pour régler chaque surface. Glissez pour déplacer, utilisez la molette pour zoomer et double-cliquez pour réinitialiser.",
   "chaos_bonus_first_taste": "premier goût",
   "chaos_bonus_first_snap": "premier claquement",
   "chaos_bonus_first_whisper": "premier murmure",
