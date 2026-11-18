@@ -10,6 +10,8 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using System.IO.Enumeration;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -434,6 +436,74 @@ public sealed class ModCreatorBarksTests
             Assert.Equal(10, rule["conditions"]!.Value<int>("level_gte"));
         }
         else { Assert.Null(rule["mood"]); Assert.Null(rule["conditions"]); }
+    });
+
+    [Fact]
+    public void BarkAudioLabelsAndAttachmentsRoundTrip() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'Rule',trigger:'Event',variant_pool:['text',{text:'missing',audio:'rule_1.mp3'}]}]");
+        w.LoadBarksFrom(root);
+        var variants = Variants(Card(w));
+        Assert.Contains(variants.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("mod_barks_text_only"));
+        Assert.Contains(variants.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("mod_mantra_missing_fmt", "rule_1.mp3"));
+        var source = Path.Combine(root, "input.mp3"); File.WriteAllText(source, "audio");
+        var cards = (System.Collections.IList)typeof(ModCreatorWindow).GetField("_barkCards", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+        var row = (StackPanel)variants.Children[0];
+        typeof(ModCreatorWindow).GetMethod("AttachBarkAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new[] { cards[0], row, source });
+        var output = Path.Combine(root, "out");
+        var rules = Export(w, output);
+        Assert.Equal("rule_2.mp3", rules[0]["variant_pool"]![0]!["audio"]!.Value<string>());
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_2.mp3")));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_1.mp3")));
+    });
+
+    [Fact]
+    public void LoadedBarkPreviewUsesSharedPanicStop() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        var clip = Path.Combine(Path.GetDirectoryName(FileAt(root))!, "clip.mp3");
+        File.WriteAllText(clip, "audio");
+        File.WriteAllText(FileAt(root), "[{id:'rule',trigger:'Event',variant_pool:[{text:'line',audio:'clip.mp3'}]}]");
+        var old = ConditioningControlPanel.CoreAudio.PlayStoppableProvider;
+        var stops = 0; string? played = null;
+        ConditioningControlPanel.CoreAudio.PlayStoppableProvider = (path, _, _, _, _) => { played = path; return () => stops++; };
+        try
+        {
+            w.LoadBarksFrom(root);
+            var play = Variants(Card(w)).GetLogicalDescendants().OfType<Button>().Single(b => b.Content is ConditioningControlPanel.Avalonia.Controls.IconGlyph);
+            Assert.True(play.IsVisible);
+            play.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(clip, played);
+            typeof(ModCreatorWindow).GetMethod("StopPreviewsForPanic", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
+            Assert.Equal(1, stops);
+        }
+        finally { ConditioningControlPanel.CoreAudio.PlayStoppableProvider = old; }
+    });
+
+    [Fact]
+    public void BarkAttachPickerOffersEveryMp3CaseAndAttachesMixedCaseFile() => Run((w, root) =>
+    {
+        var path = Path.Combine(root, "clip.MP3"); File.WriteAllText(path, "audio");
+        var file = DispatchProxy.Create<IStorageFile, NewEnhancementSourceTests.ItemProxy>();
+        ((NewEnhancementSourceTests.ItemProxy)(object)file).PathValue = new Uri(path);
+        var provider = DispatchProxy.Create<IStorageProvider, NewEnhancementSourceTests.PickerProxy>();
+        var picker = (NewEnhancementSourceTests.PickerProxy)(object)provider; picker.Result = file;
+        using var scope = NewEnhancementSourceTests.BindStorageProvider(new NewEnhancementSourceTests.Factory(provider));
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'Rule',trigger:'Event',variant_pool:['text']}]");
+        w.Show();
+        w.LoadBarksFrom(root);
+        Click(Variants(Card(w)), "mod_event_attach");
+        Dispatcher.UIThread.RunJobs();
+        var patterns = Assert.IsType<FilePickerOpenOptions>(picker.Options).FileTypeFilter!.Single().Patterns!;
+        foreach (var name in new[] { "x.mp3", "x.mP3", "x.Mp3", "x.MP3" })
+            Assert.Contains(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false));
+        Assert.DoesNotContain(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, "x.wav", ignoreCase: false));
+        var output = Path.Combine(root, "out");
+        var rules = Export(w, output);
+        Assert.Equal("rule_1.mp3", rules[0]["variant_pool"]![0]!["audio"]!.Value<string>());
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_1.mp3")));
     });
 
 }
