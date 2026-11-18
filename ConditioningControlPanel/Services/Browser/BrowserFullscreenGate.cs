@@ -48,6 +48,7 @@ internal sealed class BrowserFullscreenGate
         _pending = null;
         _takeoverArmedUntil = long.MinValue;
         _holdUntil = long.MinValue;
+        _takeoverLive = false;
     }
 
     // ---- app-started takeover (ccp-bugs #1649) ---------------------------------------------
@@ -68,11 +69,34 @@ internal sealed class BrowserFullscreenGate
     /// <summary>How long page exits are held after a takeover's enter wish or applied enter.</summary>
     internal const long TakeoverHoldMs = 2_500;
 
+    /// <summary>How long after the takeover script says it is asking for fullscreen the enter
+    /// still counts as app-started (the enter follows the ask at once).</summary>
+    internal const long TakeoverAskMs = 5_000;
+
     private long _takeoverArmedUntil = long.MinValue;
     private long _holdUntil = long.MinValue;
+    private bool _takeoverLive;
 
     /// <summary>The next enter belongs to an app-started takeover (its script was just injected).</summary>
-    internal void ArmTakeover(long nowMs) => _takeoverArmedUntil = nowMs + TakeoverArmMs;
+    internal void ArmTakeover(long nowMs)
+    {
+        _takeoverArmedUntil = nowMs + TakeoverArmMs;
+        _takeoverLive = true;
+    }
+
+    /// <summary>
+    /// The takeover script is asking for fullscreen right now. Its ask has no deadline: a slow
+    /// page, or a player the user had to start by hand (the script then waits for playback), can
+    /// come long after the arm ran out, and that enter was undone by the reparent exactly as
+    /// before the hold existed. The ask arms again, but only for a takeover that was injected
+    /// and not ended since: after Esc, panic or teardown (Clear) a late ask arms nothing.
+    /// </summary>
+    internal bool NoteTakeoverAsk(long nowMs)
+    {
+        if (!_takeoverLive) return false;
+        if (nowMs + TakeoverAskMs > _takeoverArmedUntil) _takeoverArmedUntil = nowMs + TakeoverAskMs;
+        return true;
+    }
 
     /// <summary>A takeover asked to enter: hold page exits until the enter is applied.</summary>
     internal void NoteEnterWish(long nowMs)
@@ -86,6 +110,7 @@ internal sealed class BrowserFullscreenGate
     {
         if (nowMs > _takeoverArmedUntil) return false;
         _takeoverArmedUntil = long.MinValue;
+        _takeoverLive = false; // one enter per takeover: a later ask from the page arms nothing
         _holdUntil = nowMs + TakeoverHoldMs;
         return true;
     }
