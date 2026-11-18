@@ -4,7 +4,7 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
-// document-created scripts, media/audio-sync reporting, playlist autoplay and page fullscreen/mirroring.
+// document-created scripts, media reporting, playlist autoplay and page fullscreen/mirroring.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
+            StopBrowserAudioSync();
             ExitBrowserPopoutFullscreen();
             // Invalidate a delayed autoplay before the page is asked to stop (WPF MainWindow.Browser.cs:973-990).
             CancelVideoAutoPlay();
@@ -52,6 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
         internal void EndWebVideoTakeover()
         {
+            ExitBrowserPopoutFullscreen(); // WPF MainWindow.Browser.cs:990
             CancelVideoAutoPlay();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
             EndRemoteBrowserVideo();
@@ -274,6 +276,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelVideoAutoPlay();
             if (!PrepareBrowserNavigation(url, true, true)) return false;
+            if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
             var host = BrowserView;
             if (host == null) return false;
             // A companion link is a link (WPF NavigateToUrlInBrowser :729): 50% once the browser exists.
