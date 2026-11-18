@@ -54,7 +54,7 @@ export function presentation() {
     // Camera drag direction (ccp-bugs #1329), off by default.
     invertX: saved.invertX === true,
     invertY: saved.invertY === true,
-    // Right-click arrows and circles (board/annotations.js), on by default. Off: every right drag is the
+    // Right-click arrows and circles (board/annotations.js, the HUD's "Arrows" button), on by default. Off: every right drag is the
     // camera's again (owner, 2026-11-18: reaching to turn the board drew lines instead).
     arrows: saved.arrows !== false,
     // Distraction dials (owner, 2026-10-02): how many pictures, how strong, how fast it climbs.

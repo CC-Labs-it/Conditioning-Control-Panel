@@ -107,6 +107,28 @@ try {
   if ((await js('window.PBP.board.annotate.count()')) !== 0) bad('meshes left after the wipe');
   const s2 = await send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(join(outDir, 'arrows-wiped.png'), Buffer.from(s2.data, 'base64'));
+  // the HUD button: off hands the right drag to the camera, on takes it back
+  const label = () => js("document.getElementById('game-arrows').textContent + '/' + document.getElementById('game-arrows').getAttribute('aria-pressed')");
+  const box = await js("(() => { const r = document.getElementById('game-arrows').getBoundingClientRect(); const m = document.getElementById('moves-tab').getBoundingClientRect(); return JSON.stringify({ w: Math.round(r.width), top: Math.round(r.top), right: Math.round(r.right), movesLeft: Math.round(m.left), vw: innerWidth }); })()").then(JSON.parse);
+  console.log('  button ' + await label() + ' ' + JSON.stringify(box));
+  if (!box.w || box.top > 60 || box.right < box.vw / 2) bad('the Arrows button is not in the top right');
+  if (box.right > box.movesLeft) bad('the Arrows button overlaps the moves tab');
+  // the orbit above left the camera anywhere: from overhead every head sits over its own square again
+  await js("window.PBP.camera.preset('top'); true"); await sleep(2500);
+  await step('one arrow before the switch', "__pt('b1','pointerdown',2,2); __pt('c3','pointermove',-1,2); __pt('c3','pointerup',2,0)", ['arrow:b1-c3']);
+  await step('button off wipes it', "document.getElementById('game-arrows').click()", []);
+  if ((await label()) !== 'Arrows off/false') bad('the button does not read off: ' + await label());
+  const cam3 = await camPos();
+  await step('right drag e2 -> e4 with arrows off', "__pt('e2','pointerdown',2,2); __pt('e3','pointermove',-1,2); __pt('h5','pointermove',-1,2); __pt('h5','pointerup',2,0)", []);
+  await js("window.PBP.camera.preset('top'); true"); await sleep(2500);
+  if ((await camPos()) === cam3) bad('with arrows off the right drag did not turn the board');
+  const s3 = await send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(join(outDir, 'arrows-off.png'), Buffer.from(s3.data, 'base64'));
+  await js("document.getElementById('game-arrows').click()");
+  if ((await label()) !== 'Arrows on/true') bad('the button does not read on: ' + await label());
+  await step('right drag e2 -> e4 with arrows back on', "__pt('e2','pointerdown',2,2); __pt('e4','pointermove',-1,2); __pt('e4','pointerup',2,0)", ['arrow:e2-e4']);
+  const s4 = await send('Page.captureScreenshot', { format: 'png' });
+  writeFileSync(join(outDir, 'arrows-on.png'), Buffer.from(s4.data, 'base64'));
   console.log('  frames in ' + outDir);
   ws.close();
 } catch (e) { bad(e.message); }
