@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaster-hold", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic")),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
-            new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
+            new("leash-task", sh => { Platform.LeashSound.StopRefusal(); Platform.LeashTaskHost.OnPanicPress(sh); }),
             // Stricter than WPF: panic must not leave this modal or its delete confirmation open.
             new("personality-studio", _ => Dialogs.PersonalityStudio.CloseForPanic()),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),

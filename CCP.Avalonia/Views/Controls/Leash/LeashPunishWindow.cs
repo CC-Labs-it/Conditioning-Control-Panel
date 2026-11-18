@@ -5,6 +5,7 @@
 // injection); messages ride the engine's invokeCSharpAction string carrier (same 'leash-ended'/'leash-error'); a local
 // file plays from a page written under the user data; no HTTP status, so only no engine or a media error fail it.
 using System;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.IO;
 using System.Net;
 using Avalonia;
@@ -164,6 +165,7 @@ internal sealed class LeashPunishWindow : Window
     {
         var w = Current;
         if (w == null) return;
+        LeashSound.StopRefusal();
         w._allowClose = true;
         try { w.Close(); } catch { }
         if (ReferenceEquals(Current, w)) Current = null;
@@ -267,6 +269,7 @@ internal sealed class LeashPunishWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        LeashSound.StopRefusal();
         if (ReferenceEquals(Current, this)) Current = null;
         _refuseTimer?.Stop();
         _shake?.Stop();
@@ -289,6 +292,7 @@ internal sealed class LeashPunishWindow : Window
             (_title.Foreground, _hint.Foreground) = (F.Text, F.Muted);
         };
         _refuseTimer.Start();
+        LeashSound.RefusedClose(DateTime.UtcNow); // WPF LeashPunishWindow.cs:361
         var level = CoreSettings.Current?.MotionLevel ?? Models.MotionLevel.Full;
         if (level != Models.MotionLevel.Off) Shake(level == Models.MotionLevel.Reduced ? 7.0 : 16.0);
     }
