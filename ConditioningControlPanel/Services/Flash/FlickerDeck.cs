@@ -107,8 +107,10 @@ public static class FlickerDeck
     /// swaps at the midpoint, exactly edge-on. 0.30 s read as a squeeze; a turn with a settle needs a
     /// little longer (owner 2026-11-17, "the flip animation might be smoother"), and it still ends with the lift.</summary>
     public const double FlipSec = 0.30;
-    /// <summary>How long a flip waits edge-on for its next picture before opening on the old one.</summary>
-    public const double MaxHoldSec = 1.5;
+    /// <summary>How long a flip waits edge-on for its next picture before opening on the old one. 1.5 s read as
+    /// the deck pausing (tier-2 2026-11-18); the picture is now got ready while the card rests (DeckPrefetch),
+    /// so this is only the rare miss, and a late picture is kept for the next click.</summary>
+    public const double MaxHoldSec = 0.4;
     /// <summary>Edge-on never quite vanishes, so a held flip still reads as a card.</summary>
     public const double MinScaleX = 0.06;
 

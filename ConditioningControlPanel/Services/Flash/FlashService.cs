@@ -2734,6 +2734,9 @@ namespace ConditioningControlPanel.Services
             item.OnDeckRaise = _ => RaiseDeckWindow(window);
             item.OnDeckSwap = _ => ApplyDeckSwap(window);
             item.OnDeckGaveUp = _ => window.DeckPending = null;
+            // Get the first flip's picture ready now, so the first click never waits on a download.
+            // Local pictures only: a card nobody clicks never spends the Scrolller daily share.
+            _ = PrefetchDeckPictureAsync(window, item, localOnly: true);
         }
 
         // ---- Super on the shared stage (CCP.Core/Super): blasts, the bouncing word, the Whirlpool ----
@@ -2842,40 +2845,109 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Fetch the next picture for a flip from the same pool the flashes draw from, skipping
-        /// anything already on screen. The decode and the Skia copy run off the UI thread; the
-        /// frames wait on the item until the flip reaches its edge. No picture = the flip opens on
-        /// the old one.
+        /// Draw a picture for a card from the same pool the flashes draw from, skipping anything
+        /// already on screen or already waiting on another card. Null = nothing to flip to.
+        /// </summary>
+        private async Task<LoadedImageData?> PickDeckPictureAsync(FlashWindow window, bool localOnly = false)
+        {
+            // Prefer a picture that is not up anywhere; a small library may have nothing
+            // else, then anything but the card's own face beats a long edge-on wait.
+            // Off the UI thread: a pack draw decrypts to disk.
+            var candidates = await Task.Run(() => GetNextImages(DeckCandidates));
+            if (localOnly) candidates = candidates.Where(c => !IsRemotePath(c)).ToList();
+            List<string> order;
+            string own;
+            lock (_lockObj)
+            {
+                own = window.SourcePath;
+                var up = new HashSet<string>(_activeWindows.SelectMany(w => new[] { w.SourcePath, w.DeckReadyKey })
+                    .OfType<string>().Where(p => p.Length > 0), StringComparer.OrdinalIgnoreCase);
+                var keyed = candidates.Select(p => (Path: p, Key: SourceIdentityLocked(p))).ToList();
+                order = keyed.Where(c => !up.Contains(c.Key)).Select(c => c.Path)
+                    .Concat(keyed.Where(c => up.Contains(c.Key)
+                        && !string.Equals(c.Key, own, StringComparison.OrdinalIgnoreCase)).Select(c => c.Path))
+                    .ToList();
+            }
+            foreach (var path in order)
+            {
+                var data = await LoadImageAsync(path);
+                if (data is { Frames.Count: > 0 }) return data;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Get the card's NEXT picture ready while it rests (tier-2 report 2026-11-18: cards paused
+        /// side-on whenever the picture took longer than the 0.3 s from the click to the edge, a
+        /// Scrolller download or a GIF decode). A still is kept decoded; a GIF or clip keeps only its
+        /// path, its bytes now local, so it never holds up to 30 MB of frames while it waits
+        /// (<see cref="DeckPrefetch"/>). UI thread in, UI thread out; one at a time per card.
+        /// </summary>
+        private async Task PrefetchDeckPictureAsync(FlashWindow window, Compositor.FlashLayer.FlashItem item, bool localOnly)
+        {
+            if (window.DeckPrefetching || window.DeckReady != null || window.DeckReadyPath != null) return;
+            window.DeckPrefetching = true;
+            try
+            {
+                var data = await PickDeckPictureAsync(window, localOnly);
+                if (data == null || !ReferenceEquals(window.LayerItem, item) || item.Deck == null || window.IsFadingOut) return;
+                StashDeckPicture(window, data);
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Flicker Deck prefetch failed: {E}", ex.Message);
+            }
+            finally
+            {
+                window.DeckPrefetching = false;
+            }
+        }
+
+        /// <summary>Keep a picture for the card's next flip, decoded or as a path (<see cref="DeckPrefetch.KeepDecoded"/>).</summary>
+        private void StashDeckPicture(FlashWindow window, LoadedImageData data)
+        {
+            string key;
+            lock (_lockObj) key = SourceIdentityLocked(data.FilePath ?? "");
+            if (DeckPrefetch.KeepDecoded(data.Frames.Count, data.ClipPath != null))
+            {
+                window.DeckReady = data;
+                window.DeckReadyPath = null;
+            }
+            else
+            {
+                window.DeckReady = null;
+                window.DeckReadyPath = data.FilePath;
+            }
+            window.DeckReadyKey = key;
+        }
+
+        /// <summary>Take the card's waiting picture, if any: decoded, or loaded again from its now local path.</summary>
+        private async Task<LoadedImageData?> TakeDeckReadyAsync(FlashWindow window)
+        {
+            var ready = window.DeckReady;
+            var path = window.DeckReadyPath;
+            window.DeckReady = null;
+            window.DeckReadyPath = null;
+            window.DeckReadyKey = null;
+            if (ready != null) return ready;
+            if (string.IsNullOrEmpty(path)) return null;
+            var data = await LoadImageAsync(path);
+            return data is { Frames.Count: > 0 } ? data : null;
+        }
+
+        /// <summary>
+        /// The picture for a flip: the one the card got ready while it rested, else a fresh draw.
+        /// The Skia copy runs off the UI thread; the frames wait on the item until the flip reaches
+        /// its edge. No picture = the flip opens on the old one. Then the card starts getting the
+        /// picture after this one ready. A picture that lands after the flip gave up is kept for the
+        /// next click instead of thrown away.
         /// </summary>
         private async Task LoadDeckPictureAsync(FlashWindow window, Compositor.FlashLayer.FlashItem item)
         {
             SkiaSharp.SKImage[]? frames = null;
             try
             {
-                // Prefer a picture that is not up anywhere; a small library may have nothing
-                // else, then anything but the card's own face beats a long edge-on wait.
-                // Off the UI thread: a pack draw decrypts to disk.
-                var candidates = await Task.Run(() => GetNextImages(DeckCandidates));
-                List<string> order;
-                string own;
-                lock (_lockObj)
-                {
-                    own = window.SourcePath;
-                    var up = new HashSet<string>(_activeWindows.Select(w => w.SourcePath)
-                        .Where(p => !string.IsNullOrEmpty(p)), StringComparer.OrdinalIgnoreCase);
-                    var keyed = candidates.Select(p => (Path: p, Key: SourceIdentityLocked(p))).ToList();
-                    order = keyed.Where(c => !up.Contains(c.Key)).Select(c => c.Path)
-                        .Concat(keyed.Where(c => up.Contains(c.Key)
-                            && !string.Equals(c.Key, own, StringComparison.OrdinalIgnoreCase)).Select(c => c.Path))
-                        .ToList();
-                }
-                LoadedImageData? data = null;
-                foreach (var path in order)
-                {
-                    data = await LoadImageAsync(path);
-                    if (data is { Frames.Count: > 0 }) break;
-                    data = null;
-                }
+                var data = await TakeDeckReadyAsync(window) ?? await PickDeckPictureAsync(window);
                 if (data == null)
                 {
                     // Nothing to flip to: open on the old face at the edge, no long hold.
@@ -2893,13 +2965,19 @@ namespace ConditioningControlPanel.Services
 
                 // Back on the UI thread. The flash may have gone, the switch may be off, or the
                 // flip may have given up waiting.
-                if (!ReferenceEquals(window.LayerItem, item) || item.Deck is not { Busy: true, Swapped: false }
-                    || item.Frames == null || window.IsFadingOut)
+                if (!ReferenceEquals(window.LayerItem, item) || item.Frames == null || window.IsFadingOut || item.Deck == null)
                     return;
+                if (item.Deck is not { Busy: true, Swapped: false })
+                {
+                    // Too late for this flip: keep it for the next one (nothing waiting there yet).
+                    if (window.DeckReady == null && window.DeckReadyPath == null && !window.DeckPrefetching)
+                        StashDeckPicture(window, data);
+                    return;
+                }
                 item.DropDeckPending();
                 item.DeckPendingFrames = frames;
                 window.DeckPending = data;
-                frames = null;   // the layer owns them now
+                frames = null;   // the layer owns them now (ApplyDeckSwap starts the next prefetch)
             }
             catch (Exception ex)
             {
@@ -2929,6 +3007,8 @@ namespace ConditioningControlPanel.Services
             // A new face deserves a full look: a flip late in the flash's life would otherwise
             // fade the fresh picture a moment after it lands. BoostLifetime only ever lengthens.
             window.BoostLifetime(window.OriginalLifetimeMs);
+            // The new face is up: get the one after it ready while the card rests.
+            if (window.LayerItem is { Deck: not null } item) _ = PrefetchDeckPictureAsync(window, item, localOnly: false);
         }
 
         /// <summary>The card is in the air: it is now the topmost one, for the click test too.</summary>
@@ -2955,7 +3035,11 @@ namespace ConditioningControlPanel.Services
                     _flashLayer?.ClearDecks();
                     lock (_lockObj)
                     {
-                        foreach (var w in _activeWindows) { w.DeckPending = null; w.DeckBreak = false; }
+                        foreach (var w in _activeWindows)
+                        {
+                            w.DeckPending = null; w.DeckBreak = false;
+                            w.DeckReady = null; w.DeckReadyPath = null; w.DeckReadyKey = null;
+                        }
                     }
                 }
                 catch (Exception ex) { Diag.Swallowed(ex, "flicker deck off"); }
@@ -5777,6 +5861,15 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>Super Flicker Deck: the next picture's decode, waiting for the flip's edge.</summary>
         internal LoadedImageData? DeckPending { get; set; }
+
+        /// <summary>Super Flicker Deck: a still got ready for the NEXT click while the card rests (UI thread).</summary>
+        internal LoadedImageData? DeckReady { get; set; }
+        /// <summary>Super Flicker Deck: a GIF or clip got ready for the next click, path only (its bytes local, no frames kept).</summary>
+        internal string? DeckReadyPath { get; set; }
+        /// <summary>The waiting picture's source identity, so two cards never get the same one ready.</summary>
+        internal string? DeckReadyKey { get; set; }
+        /// <summary>A prefetch is running for this card.</summary>
+        internal bool DeckPrefetching { get; set; }
 
         /// <summary>Back Room-only interaction showcase, independent of saved ownership settings.</summary>
         public bool PreviewV2 { get; set; }
