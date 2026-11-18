@@ -7549,6 +7549,8 @@
   "friends_menu_remove": "Freund entfernen",
   "friends_menu_block": "Blockieren",
   "friends_menu_report": "Melden",
+  "friends_row_tip_dare": "Rechtsklick: Wette, Stupser stummschalten, entfernen, blockieren oder melden.",
+  "friends_row_tip": "Rechtsklick: Stupser stummschalten, entfernen, blockieren oder melden.",
   "friends_menu_report_spam": "Spam",
   "friends_menu_report_harassment": "Belästigung",
   "friends_menu_report_underage": "Wirkt minderjährig",

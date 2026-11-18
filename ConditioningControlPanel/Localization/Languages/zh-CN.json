@@ -8061,6 +8061,8 @@
   "friends_menu_remove": "删除好友",
   "friends_menu_block": "屏蔽",
   "friends_menu_report": "举报",
+  "friends_row_tip_dare": "右键：打赌、静音戳一下、删除、屏蔽、举报",
+  "friends_row_tip": "右键：静音戳一下、删除、屏蔽、举报",
   "friends_menu_report_spam": "垃圾信息",
   "friends_menu_report_harassment": "骚扰",
   "friends_menu_report_underage": "看起来未成年",

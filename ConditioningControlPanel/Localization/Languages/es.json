@@ -7549,6 +7549,8 @@
   "friends_menu_remove": "Quitar amigo",
   "friends_menu_block": "Bloquear",
   "friends_menu_report": "Denunciar",
+  "friends_row_tip_dare": "Clic derecho: reto, silenciar toques, quitar, bloquear o denunciar.",
+  "friends_row_tip": "Clic derecho: silenciar toques, quitar, bloquear o denunciar.",
   "friends_menu_report_spam": "Spam",
   "friends_menu_report_harassment": "Acoso",
   "friends_menu_report_underage": "Parece menor de edad",

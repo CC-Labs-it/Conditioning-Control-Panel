@@ -119,6 +119,13 @@ internal static class LeashLook
         b.Width = 22;
         b.Height = 22;
         b.VerticalAlignment = VerticalAlignment.Center;
+        return WireHelp(b, role);
+    }
+
+    /// <summary>What makes any button the "?" for <paramref name="role"/>: its tooltip, its tag and
+    /// the explainer on click. The friend card dresses its own square (?) with this.</summary>
+    public static Button WireHelp(Button b, LeashExplainRole role)
+    {
         b.ToolTip = Loc.Get("leash_help");
         b.Tag = "leash-help:" + role.ToString().ToLowerInvariant();
         b.Click += (_, e) => { e.Handled = true; LeashExplainHost.Show(role); };

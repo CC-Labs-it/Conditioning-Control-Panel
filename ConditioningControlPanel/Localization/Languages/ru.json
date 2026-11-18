@@ -7549,6 +7549,8 @@
   "friends_menu_remove": "Удалить из друзей",
   "friends_menu_block": "Заблокировать",
   "friends_menu_report": "Пожаловаться",
+  "friends_row_tip_dare": "Правый клик: пари, заглушить тычки, удалить, заблокировать или пожаловаться.",
+  "friends_row_tip": "Правый клик: заглушить тычки, удалить, заблокировать или пожаловаться.",
   "friends_menu_report_spam": "Спам",
   "friends_menu_report_harassment": "Травля",
   "friends_menu_report_underage": "Похоже на несовершеннолетнего",
