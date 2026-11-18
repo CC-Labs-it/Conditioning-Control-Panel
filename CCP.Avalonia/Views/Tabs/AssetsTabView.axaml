@@ -327,8 +327,10 @@
                                 <TextBlock Text="{loc:Str online_official_stamp}" FontSize="9" FontWeight="ExtraBold"
                                            Foreground="{DynamicResource PinkBrush}"/>
                             </Border>
-                            <TextBlock Text="{loc:Str online_official_stamped_line}" FontSize="11.5" Foreground="#CCCCE0"
-                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            <fx:SafeHyperlinkButton x:Name="OnlineStampedLink" Click="ScrolllerLink_Click" Padding="0"
+                                                    Foreground="#CCCCE0" VerticalAlignment="Center">
+                                <TextBlock Text="{loc:Str online_official_stamped_line}" FontSize="11.5" TextWrapping="Wrap"/>
+                            </fx:SafeHyperlinkButton>
                         </StackPanel>
                     </StackPanel>
                 </Border>

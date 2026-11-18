@@ -18,8 +18,8 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.UI;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -174,6 +174,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var window in Windows) if (window.IsVisible) raise(window);
         }
+
+        // WPF BubbleService.cs:3428-3435: flash uses the base image; sweepers try their own art first.
+        internal static Bitmap? VariantImage(EffectBubbleSpec? spec)
+        {
+            if (spec == null) return null;
+            if (spec.VariantId == "flash") return Image;
+            return (spec.IsSweeper ? ChaosArt.Resolve("bubbles", "sweeper") : null)
+                ?? ChaosArt.Resolve("bubbles", spec.VariantId);
+        }
+
+        internal static bool ShowVariantLabel(EffectBubbleSpec? spec, Bitmap? image) =>
+            spec != null && image == null && !string.IsNullOrEmpty(spec.Label);
 
         public static bool IsRunning => _running && !_chaosOpenedWindows && !_oneShotWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
@@ -1038,7 +1050,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
             GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, .7) }
         };
-        private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
         /// <summary>WPF BubbleService.cs:2533-2550, :3551-3565 (hand-ported from #4599): the glassy
         /// specular highlight on a plain chaos bubble while the Skia FX layer is on. Variant sprites
         /// bring their own art; ambient bubbles keep their bubble.png highlights.</summary>
@@ -1278,8 +1289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
-                    var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    var variantImage = BubbleOverlay.VariantImage(b.Spec);
                     var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
@@ -1304,8 +1314,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             if (HasChaosShine(b, variantImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
-                            // WPF's no-sprite path: the label carries the variant. Only the freeze pickup draws it so far.
-                            if (b.Spec is { IsFreeze: true, Label.Length: > 0 }) DrawLabel(dc, b.Spec.Label, cx, cy, size, k);
                             if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                             {
                                 var frame = face.Frames[face.Animated
@@ -1325,12 +1333,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                     }
                                 }
                             }
-                            if (b.Spec?.IsTease == true && teaseImage == null && !b.Popping)
-                            {
-                                double r = size * 0.12;
-                                dc.DrawLine(TeasePen, new Point(cx - r, cy - r), new Point(cx + r, cy + r));
-                                dc.DrawLine(TeasePen, new Point(cx + r, cy - r), new Point(cx - r, cy + r));
-                            }
+                            // WPF BubbleService.cs:4967-4975: the tease face sits under the label.
+                            if (BubbleOverlay.ShowVariantLabel(b.Spec, variantImage)) DrawLabel(dc, b.Spec!.Label, cx, cy, size, k);
                             if (!b.Popping && BubbleOverlay.IsShielded(b))
                             {
                                 using (dc.PushOpacity(b.ShieldOpacity))
