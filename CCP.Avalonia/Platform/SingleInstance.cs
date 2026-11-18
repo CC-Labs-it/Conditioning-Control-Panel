@@ -208,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
-        static bool? RequestShow(string pipe, string? payload)
+        internal static bool? RequestShow(string pipe, string? payload)
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
             if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
@@ -241,7 +241,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 c.Flush();
                 using var cts = new CancellationTokenSource(ShowAckTimeoutMs);
                 var buf = new byte[1];
-                return c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() == 1;
+                if (c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() != 1) return false;
+                // ACK can arrive before the server disposes this pipe. Keep the sender gate until
+                // disconnect so the next launch cannot connect to the old, already-served instance.
+                // Once ACKed, a delayed or broken disconnect must never trigger stale takeover.
+                using var disconnect = new CancellationTokenSource(ShowAckTimeoutMs);
+                try { c.ReadAsync(buf, disconnect.Token).AsTask().GetAwaiter().GetResult(); }
+                catch (OperationCanceledException) { }
+                catch (IOException) { }
+                return true;
             }
             catch (TimeoutException) { return null; }
             catch (OperationCanceledException) { return false; }

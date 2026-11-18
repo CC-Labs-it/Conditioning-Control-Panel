@@ -174,7 +174,9 @@ public sealed class VoiceCommandsTests
     });
 
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    // The commands below are injected directly; leave the armed mic silent so a replayed wake
+    // fixture cannot start an unrelated second voice turn during the lockdown assertion.
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(Array.Empty<byte>(), async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;
