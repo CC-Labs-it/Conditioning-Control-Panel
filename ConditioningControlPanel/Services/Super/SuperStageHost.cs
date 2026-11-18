@@ -133,9 +133,14 @@ public static class SuperStageHost
             _lastX = cur.X; _lastY = cur.Y; _haveCursor = true;
         }
 
-        double dip = 1, shortSide = 1080;
+        double dip = 1, shortSide = 1080, centreX = _lastX, centreY = _lastY;
         foreach (var s in Screens)
-            if (s.Bounds.Contains(_lastX, _lastY)) { dip = s.Dip; shortSide = Math.Min(s.Bounds.Width, s.Bounds.Height); break; }
+            if (s.Bounds.Contains(_lastX, _lastY))
+            {
+                dip = s.Dip; shortSide = Math.Min(s.Bounds.Width, s.Bounds.Height);
+                centreX = s.Bounds.Left + s.Bounds.Width / 2.0; centreY = s.Bounds.Top + s.Bounds.Height / 2.0;
+                break;
+            }
 
         bool gentle = Safety.GentleVisuals.On;
         // The gold-box options, read live so a slider moves the effect at once.
@@ -144,7 +149,11 @@ public static class SuperStageHost
         Stage.DragsPictures = set?.WhirlpoolDragsPictures != false;
         Stage.DragsBubbles = set?.WhirlpoolDragsBubbles != false;
         Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(set?.WhirlpoolSize ?? WhirlpoolOptions.SizeDefault);
-        if (Stage.PoolOn) Stage.Pool.Step(dt, _lastX, _lastY, _speedPx, dip, shortSide, gentle);
+        if (Stage.PoolOn)
+        {
+            var at = WhirlpoolOptions.Anchor(set?.WhirlpoolStayCentred == true, _lastX, _lastY, _speedPx, centreX, centreY);
+            Stage.Pool.Step(dt, at.X, at.Y, at.SpeedPx, dip, shortSide, gentle);
+        }
 
         if (Stage.SteamOn)
         {

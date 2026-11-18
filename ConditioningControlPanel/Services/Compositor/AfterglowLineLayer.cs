@@ -20,6 +20,33 @@ public sealed class AfterglowLineLayer : BaseLayer
     private readonly AfterglowLine _line = new();
     private readonly AfterglowLineDraw _draw = new();
     private static readonly SKTypeface Face = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
+
+    /// <summary>The face V2 subliminal words are drawn in: the player's Subliminal Font once they picked one
+    /// (tier-2 report, 7.3.2: the setting did not reach V2), the stock Segoe UI Bold while it is on its default.</summary>
+    internal static SKTypeface FaceNow()
+    {
+        var name = App.Settings?.Current?.SubliminalFont?.Trim();
+        if (string.IsNullOrEmpty(name) || string.Equals(name, "Arial", StringComparison.OrdinalIgnoreCase)) return Face;
+        return SubliminalLayer.ResolveFace(name);
+    }
+
+    /// <summary>
+    /// Where the line sits while it is up, in physical px, for "Ignore CCP's own windows" (the screen
+    /// reader skips hits inside it). The bottom band of the line's monitor, only while words are on it:
+    /// never a standing blind spot. Any thread.
+    /// </summary>
+    public static System.Drawing.Rectangle[] GetActiveTextRectsPx()
+    {
+        var l = _instance;
+        if (l == null || !l.IsActive) return Array.Empty<System.Drawing.Rectangle>();
+        var b = l._lastBounds;
+        if (b.IsEmpty) return Array.Empty<System.Drawing.Rectangle>();
+        return new[] { LineBand(b) };
+    }
+
+    /// <summary>The band the line is drawn in: baseline at 11 percent from the bottom, words up to 8 percent tall.</summary>
+    internal static System.Drawing.Rectangle LineBand(System.Drawing.Rectangle b)
+        => new(b.X + (int)(b.Width * 0.03), b.Bottom - (int)(b.Height * 0.25), (int)(b.Width * 0.94), (int)(b.Height * 0.23));
     private bool _dirty = true;
     private double _sinceFrame;
     private int _drawnStyle = -1;
@@ -65,6 +92,7 @@ public sealed class AfterglowLineLayer : BaseLayer
                 {
                     _instance._dirty = true;
                     _instance.SetActive(true);
+                    App.InvalidateCcpWindowRectsCache();
                 }
             }
             catch (Exception ex) { App.Logger?.Debug("Afterglow line: {E}", ex.Message); }
@@ -128,7 +156,7 @@ public sealed class AfterglowLineLayer : BaseLayer
         // lands, inside the frames the line already repaints.
         var style = Looks.WornWordStyle.Current;
         _drawnStyle = (int)style;
-        _draw.Draw(canvas, new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom), _line, Face,
+        _draw.Draw(canvas, new SKRect(boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom), _line, FaceNow(),
             new SKColor(look.R, look.G, look.B), fromX, fromY, style, Looks.WornWordStyle.Motion);
     }
 }

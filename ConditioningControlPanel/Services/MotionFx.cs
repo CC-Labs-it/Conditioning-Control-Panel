@@ -61,13 +61,74 @@ namespace ConditioningControlPanel.Services
         /// MotionLevel.Full AND a tier that permits ambient motion. Check this BEFORE starting a
         /// clock; the fallback is static art, not a slower loop.
         /// </summary>
-        public static bool AllowAmbientLoops =>
-            Level == MotionLevel.Full
-            && PerformanceProfile.AllowAmbientMotion(PerformanceProfile.CurrentTier);
+        public static bool AllowAmbientLoops => AmbientAllowedByLevel && !PanelQuiet;
 
         /// <summary>Particles (dust fields, bursts) — ambient loops plus a non-zero tier budget.</summary>
         public static bool AllowParticles =>
             AllowAmbientLoops && PerformanceProfile.MaxAmbientParticles(PerformanceProfile.CurrentTier) > 0;
+
+        /// <summary>
+        /// The ambient gate WITHOUT the panel's stand-down: motion level and tier only. For what the
+        /// show itself draws (bubbles, fog, the tube, takeover and remote HUDs) and for the launcher,
+        /// which is not on screen with the panel. Panel chrome asks <see cref="AllowAmbientLoops"/>.
+        /// </summary>
+        public static bool AmbientAllowedByLevel =>
+            Level == MotionLevel.Full
+            && PerformanceProfile.AllowAmbientMotion(PerformanceProfile.CurrentTier);
+
+        /// <summary><see cref="AllowParticles"/> without the panel's stand-down.</summary>
+        public static bool ParticlesAllowedByLevel =>
+            AmbientAllowedByLevel && PerformanceProfile.MaxAmbientParticles(PerformanceProfile.CurrentTier) > 0;
+
+        // ---- the panel stands down while the show runs ----
+
+        private static bool _showRunning;
+
+        /// <summary>The engine or a session is running: overlays are on screen.</summary>
+        public static bool ShowRunning => _showRunning;
+
+        /// <summary>
+        /// The overlay compositor records its frames on the UI dispatcher, the same thread that lays
+        /// out and renders the panel, so every ambient loop in the panel is paid out of overlay frame
+        /// time (tier-2 report on 7.3.2: effects drop frames only while the panel is up). While the
+        /// show runs the panel's ambient loops park on their static art. "Auto performance" off keeps
+        /// them (the user's opt-out); interaction motion is never touched.
+        /// </summary>
+        public static bool PanelQuiet =>
+            QuietRule(_showRunning, App.Settings?.Current?.AutoPerformanceMode ?? true);
+
+        /// <summary>The pure rule behind <see cref="PanelQuiet"/>.</summary>
+        public static bool QuietRule(bool showRunning, bool autoPerformance) => showRunning && autoPerformance;
+
+        /// <summary>
+        /// The ambient gate moved (show started or stopped, motion level or a performance switch
+        /// changed). Loops read the gate when they start, so anything that owns a Forever clock
+        /// re-reads it here. Always raised on the UI dispatcher. Subscribers unhook on Unloaded.
+        /// </summary>
+        public static event Action? AmbientChanged;
+
+        /// <summary>Called from the engine and session start/stop points (App.IsEngineRunning / IsSessionRunning).</summary>
+        public static void SetShowRunning(bool running)
+        {
+            if (_showRunning == running) return;
+            _showRunning = running;
+            RaiseAmbientChanged();
+        }
+
+        public static void RaiseAmbientChanged()
+        {
+            try
+            {
+                var d = Application.Current?.Dispatcher;
+                if (d == null || d.HasShutdownStarted) return;
+                d.BeginInvoke(new Action(() =>
+                {
+                    try { AmbientChanged?.Invoke(); }
+                    catch (Exception ex) { App.Logger?.Debug("MotionFx.AmbientChanged: {E}", ex.Message); }
+                }), System.Windows.Threading.DispatcherPriority.Normal);
+            }
+            catch (Exception ex) { App.Logger?.Debug("MotionFx.RaiseAmbientChanged: {E}", ex.Message); }
+        }
 
         // ---- interaction ----
 
@@ -153,7 +214,7 @@ namespace ConditioningControlPanel.Services
         {
             if (target == null) return;
             SetOdometerFormat(target, format);
-            if (!AllowTransitions || Math.Abs(to - from) < 0.5 || seconds <= 0)
+            if (!AllowTransitions || PanelQuiet || Math.Abs(to - from) < 0.5 || seconds <= 0)
             {
                 target.BeginAnimation(OdometerValueProperty, null);
                 SetOdometerValue(target, to);
@@ -199,7 +260,7 @@ namespace ConditioningControlPanel.Services
                                    FrameworkElement? capBloom = null, double seconds = 0.6)
         {
             if (bar == null) return;
-            if (!AllowTransitions || seconds <= 0)
+            if (!AllowTransitions || PanelQuiet || seconds <= 0)
             {
                 bar.BeginAnimation(FrameworkElement.WidthProperty, null);
                 bar.Width = Math.Max(0, toWidth);

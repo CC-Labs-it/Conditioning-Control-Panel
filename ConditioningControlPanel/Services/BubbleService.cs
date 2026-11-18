@@ -3316,7 +3316,7 @@ internal partial class Bubble
         it.Scale = (float)currentScale;
         it.Angle = (float)_angle;
         it.Opacity = (float)opacity;
-        it.RedWash = _isNatasha && !_isPopping ? (float)Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AllowAmbientLoops) : 0f;
+        it.RedWash = _isNatasha && !_isPopping ? (float)Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AmbientAllowedByLevel) : 0f;
         it.HoldRing = _isResisting && !_isPopping ? (float)_resistProgress : 0f;
         it.Bloom = _bloom;
         it.HideBody = _bloomHidden;
@@ -4582,9 +4582,9 @@ internal partial class Bubble
             // Natasha's favourite, per-window path: the halo itself flares on the blink (the
             // compositor path draws a wash over the body instead; same clock, same envelope).
             if (_natashaWash != null)
-                _natashaWash.Opacity = _isPopping ? 0 : Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AllowAmbientLoops);
+                _natashaWash.Opacity = _isPopping ? 0 : Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AmbientAllowedByLevel);
             if (_natashaGlow != null && !_isPopping)
-                _natashaGlow.Opacity = Chaster.NatashasFavourite.HaloOpacity + 2.0 * (MotionFx.AllowAmbientLoops ? Chaster.NatashasFavourite.WashAlphaAt(_timeAlive) : 0);
+                _natashaGlow.Opacity = Chaster.NatashasFavourite.HaloOpacity + 2.0 * (MotionFx.AmbientAllowedByLevel ? Chaster.NatashasFavourite.WashAlphaAt(_timeAlive) : 0);
             _fxTarget.Opacity = opacity;
             if (_useLayer)
             {

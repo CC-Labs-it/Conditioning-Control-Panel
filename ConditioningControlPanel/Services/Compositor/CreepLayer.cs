@@ -110,7 +110,7 @@ public sealed class CreepLayer : BaseLayer
         if (!IsActive || _state.Retreating) return;
         var level = MotionFx.Level;
         CreepFog.Click(_state, _fieldList, x, y, level);
-        if (MotionFx.AllowParticles) Burst(x, y, CreepFog.BurstCount(level));
+        if (MotionFx.ParticlesAllowedByLevel) Burst(x, y, CreepFog.BurstCount(level));
         _dirty = true;
     }
 
@@ -291,7 +291,7 @@ public sealed class CreepLayer : BaseLayer
 
     private void StepMotes(FieldDraw fd, double dt, MotionLevel level)
     {
-        var particles = level != MotionLevel.Off && MotionFx.AllowParticles;
+        var particles = level != MotionLevel.Off && MotionFx.ParticlesAllowedByLevel;
         var f = fd.Field;
         var drag = Math.Exp(-dt * CreepFog.MoteDrag);
         for (var i = 0; i < fd.Motes.Length; i++)

@@ -284,6 +284,20 @@
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                    FontSize="13" FontWeight="Bold"/>
                     </Grid>
+                    <!-- Stay centred: the pool keeps to the middle of the screen at full size. -->
+                    <Grid x:Name="PoolCentredRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_centred}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_centred}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                        <CheckBox Grid.Column="1" x:Name="ChkPoolCentred" feat:OptionSection.Setting="WhirlpoolStayCentred"
+                                  Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                  Checked="ChkPoolCentred_Changed" Unchecked="ChkPoolCentred_Changed"/>
+                    </Grid>
                     <!-- What the pool drags in: three switches on one row, all on by default. -->
                     <Grid x:Name="PoolDragsRow" Height="36" Background="Transparent"
                           ToolTip="{loc:Str tooltip_super_pool_drags}">

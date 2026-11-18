@@ -43,6 +43,8 @@ namespace ConditioningControlPanel.Features
                 TxtScrawlLife.Text = Loc.GetF("super_opt_seconds", s.ScrawlStampSeconds);
                 SliderScrawlCap.Value = s.ScrawlStampCap;
                 TxtScrawlCap.Text = s.ScrawlStampCap.ToString();
+                SliderScrawlSize.Value = s.ScrawlStampSize;
+                TxtScrawlSize.Text = $"{s.ScrawlStampSize}%";
                 SliderScrawlSlam.Value = s.ScrawlSlam;
                 TxtScrawlSlam.Text = SlamText(s.ScrawlSlam);
             }
@@ -69,6 +71,16 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             s.ScrawlStampCap = (int)Math.Round(e.NewValue);
             TxtScrawlCap.Text = s.ScrawlStampCap.ToString();
+            App.Settings?.Save();
+        }
+
+        private void SliderScrawlSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_scrawlLoading || TxtScrawlSize == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.ScrawlStampSize = ScrawlOptions.ClampStampSize((int)Math.Round(e.NewValue));
+            TxtScrawlSize.Text = $"{s.ScrawlStampSize}%";
             App.Settings?.Save();
         }
 

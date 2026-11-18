@@ -159,7 +159,7 @@ internal sealed class FirstShowEffects : IDisposable
         if (seconds >= 32 && !_revealed)
         {
             _revealed = true; _subliminal.Clear();
-            if (MotionFx.AllowParticles)
+            if (MotionFx.ParticlesAllowedByLevel)
             {
                 for (int i = 0; i < 6; i++) _particles.EmitBurst(new Point(Width * .5, Height * .56), i % 2 == 0 ? SKColors.HotPink : SKColors.Gold, 1.1f + i * .18f);
                 _particles.EmitRipple(new Point(Width * .5, Height * .56), Width * .25, 900, true);
@@ -200,7 +200,7 @@ internal sealed class FirstShowEffects : IDisposable
             a.Picture = a.Flash.Spawn(media.Frames.Select(SkiaWpfInterop.ToSKImage).ToArray(), 0, 0, (float)w, (float)h, 4, 14, SKColors.HotPink, 6, .65, false);
         }
         _actors.Add(a);
-        if (MotionFx.AllowParticles) _particles.EmitBurst(new Point(a.HomeX, a.HomeY), bubble ? SKColors.Cyan : SKColors.HotPink, .7f);
+        if (MotionFx.ParticlesAllowedByLevel) _particles.EmitBurst(new Point(a.HomeX, a.HomeY), bubble ? SKColors.Cyan : SKColors.HotPink, .7f);
         _cue(bubble ? "bubbles" : "flash");
     }
 
@@ -246,9 +246,9 @@ internal sealed class FirstShowEffects : IDisposable
             a.Angle += p * (a.Id % 2 == 0 ? 140 : -190) * motion;
             a.Scale = moving ? Math.Max(.01, 1 - Math.Pow(p, 1.5)) : 1; a.Alpha *= 1 - Math.Pow(p, 5);
             if (!moving) { a.X = a.GatherX; a.Y = a.GatherY; }
-            if (p >= 1) { a.Gone = true; if (MotionFx.AllowParticles) _particles.EmitBurst(new Point(a.X, a.Y), SKColors.Gold, .45f); }
+            if (p >= 1) { a.Gone = true; if (MotionFx.ParticlesAllowedByLevel) _particles.EmitBurst(new Point(a.X, a.Y), SKColors.Gold, .45f); }
         }
-        if (MotionFx.AllowParticles && time >= a.NextTrail && !a.Gone && (time >= 28 || a.Bubble != null))
+        if (MotionFx.ParticlesAllowedByLevel && time >= a.NextTrail && !a.Gone && (time >= 28 || a.Bubble != null))
         {
             _particles.EmitTrail(new Point(a.X, a.Y), time >= 28 ? .52 : .32, a.Id % 3 == 0, Width * .5 - a.X, Height * .56 - a.Y);
             a.NextTrail = time + (time >= 28 ? .045 : .16);
@@ -310,7 +310,7 @@ internal sealed class FirstShowEffects : IDisposable
         var a = _actors.LastOrDefault(a => a.Bubble != null && !a.Gone && Math.Pow(a.X - x, 2) + Math.Pow(a.Y - y, 2) < Math.Pow(a.Width * .52, 2));
         if (a == null) return;
         a.Gone = true;
-        if (MotionFx.AllowParticles)
+        if (MotionFx.ParticlesAllowedByLevel)
         {
             _particles.EmitBurst(new Point(a.X, a.Y), SKColors.HotPink, 1.3f);
             _particles.EmitRipple(new Point(a.X, a.Y), a.Width, 500, true);

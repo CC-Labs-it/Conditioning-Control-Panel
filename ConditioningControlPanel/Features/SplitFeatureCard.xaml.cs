@@ -913,6 +913,7 @@ namespace ConditioningControlPanel.Features
             _hostWindow.Activated += OnHostWindowStateish;
             _hostWindow.Deactivated += OnHostWindowStateish;
             _hostWindow.StateChanged += OnHostWindowStateish;
+            MotionFx.AmbientChanged += RefreshFx;
         }
 
         private void UnhookWindow()
@@ -921,6 +922,7 @@ namespace ConditioningControlPanel.Features
             _hostWindow.Activated -= OnHostWindowStateish;
             _hostWindow.Deactivated -= OnHostWindowStateish;
             _hostWindow.StateChanged -= OnHostWindowStateish;
+            MotionFx.AmbientChanged -= RefreshFx;
             _hostWindow = null;
         }
 

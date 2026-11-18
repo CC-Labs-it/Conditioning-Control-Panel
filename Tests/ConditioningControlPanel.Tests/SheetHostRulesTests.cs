@@ -115,7 +115,7 @@ public class SheetHostRulesTests
     {
         var view = System.IO.File.ReadAllText(Root("ConditioningControlPanel", "Controls", "CounterSheetView.cs"));
         Assert.Contains("_slot.Visibility = Visibility.Visible;", view);
-        Assert.Contains("if (_web == null) _slot.Visibility = Visibility.Collapsed;", view);
+        Assert.Contains("if (_web == null || Services.MotionFx.PanelQuiet) _slot.Visibility = Visibility.Collapsed;", view);
         Assert.Contains("HoldReveal(RevealCap)", view);
         Assert.Contains("TimeSpan.FromMilliseconds(150)", view);
         Assert.DoesNotContain("_tongue", view);

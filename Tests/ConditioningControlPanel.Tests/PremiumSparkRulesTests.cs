@@ -238,7 +238,7 @@ public class PremiumSparkRulesTests
     public void MotionChangesReachTheSpark()
     {
         var ui = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "MainWindow", "MainWindow.UiUpdates.cs"));
-        var handler = Regex.Match(ui, @"void CmbMotionLevel_SelectionChanged\(.*?\n        \}", RegexOptions.Singleline);
+        var handler = Regex.Match(ui, @"void RefreshAmbientMotion\(.*?\n        \}", RegexOptions.Singleline);
         Assert.True(handler.Success);
         Assert.Contains("RefreshPremiumSpark()", handler.Value);
     }

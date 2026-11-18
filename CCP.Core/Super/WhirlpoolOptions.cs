@@ -23,6 +23,15 @@ public static class WhirlpoolOptions
     public static int ClampSize(int pct) => Math.Clamp(pct, SizeMin, SizeMax);
     public static double ReachScale(int pct) => ClampSize(pct) / 100.0;
 
+    /// <summary>
+    /// "Stay centred" (owner 2026-11-18, tier-2 ask): the pool sits in the middle of the cursor's
+    /// monitor and counts the mouse as always resting, so it grows to full size and stays. Off = as
+    /// shipped: under the cursor, shrinking while the mouse moves. Returns what <see cref="Whirlpool.Step"/> is fed.
+    /// </summary>
+    public static (double X, double Y, double SpeedPx) Anchor(bool stayCentred, double cursorX, double cursorY,
+        double cursorSpeedPx, double centreX, double centreY)
+        => stayCentred ? (centreX, centreY, 0) : (cursorX, cursorY, cursorSpeedPx);
+
     /// <summary>"New spiral every", seconds a Loom spiral holds before it melts into the next.
     /// 18 = as shipped. Never shorter than the melt itself.</summary>
     public const int HoldMin = 8, HoldMax = 60, HoldDefault = 18;
