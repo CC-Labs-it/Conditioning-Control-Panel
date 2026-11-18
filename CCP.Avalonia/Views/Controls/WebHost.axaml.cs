@@ -394,16 +394,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>
         /// True when some adapter is both installed and able to host a native control. Probed once
-        /// per process: <see cref="WebViewAdapterInfo.GetAdapterInfo"/> shells out to the platform
-        /// (dlopen of libwebkit2gtk, a WebView2 registry lookup) and the answer cannot change while
+        /// per lifetime kind: <see cref="WebViewAdapterInfo.GetAdapterInfo"/> shells out to the platform
+        /// (dlopen of libwebkit2gtk, a WebView2 registry lookup) and installed adapters do not change while
         /// the app runs.
         /// </summary>
         public static bool IsAvailable => UnavailableReason is null;
 
-        private static readonly Lazy<string?> _reason = new(ProbeUnavailableReason);
+        private static readonly Lazy<string?> _desktopReason = new(() => ProbeUnavailableReason(headless: false));
+        private static readonly Lazy<string?> _headlessReason = new(() => ProbeUnavailableReason(headless: true));
 
         /// <summary>Null when a web view can be hosted; otherwise the platform's own explanation.</summary>
-        public static string? UnavailableReason => _reason.Value;
+        public static string? UnavailableReason => ReasonForLifetime(
+            Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime,
+            _headlessReason, _desktopReason);
+
+        // The installed adapters are stable, but a test or embedded host can change its application lifetime.
+        internal static string? ReasonForLifetime(bool headless, Lazy<string?> headlessReason, Lazy<string?> desktopReason) =>
+            headless ? headlessReason.Value : desktopReason.Value;
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(
@@ -897,7 +904,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// The Headless adapter never counts, and nothing counts outside the real desktop app, so
         /// <c>--render-all</c>, <c>--smoke</c> and the tests always draw the fallback.
         /// </summary>
-        private static string? ProbeUnavailableReason()
+        private static string? ProbeUnavailableReason(bool headless)
         {
             var adapters = new List<DetailedWebViewAdapterInfo>();
             foreach (WebViewAdapterType type in Enum.GetValues(typeof(WebViewAdapterType)))
@@ -916,7 +923,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // Only the real desktop app (StartWithClassicDesktopLifetime) hosts an engine. Tests (bare dispatcher or
             // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
             // always draw the fallback, even on a box with WPE/WebKitGTK installed.
-            var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
             var linux = OperatingSystem.IsLinux();
             var sink = AudioSinkReady(linux, headless, () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
                 Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW"));
