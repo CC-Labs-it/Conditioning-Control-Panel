@@ -76,6 +76,9 @@ public partial class MainShellWindow
         {
             if (!_seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds())) continue;
             _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id);
+            // A manual Look can precede this service binding. Do not queue the ask already on screen.
+            if (LeashAskWindow.Current?.Body is LeashAskCard card && card.Offer.From.Id == offer.From.Id
+                && card.Offer.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds()) continue;
             _waitingLeashAsks.Add(offer);
         }
         _waitingLeashAsks.RemoveAll(w => !snap.Offers.Any(o => o.From.Id == w.From.Id));
