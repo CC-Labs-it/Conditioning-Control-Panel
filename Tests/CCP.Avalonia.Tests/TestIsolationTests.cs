@@ -751,4 +751,21 @@ public class TestIsolationTests
         snapshot.Restore();
         for (int i = 0; i < seams.Length; i++) Assert.Same(before[i], seams[i]());
     });
+
+    [Fact]
+    public void ToastLastLineIsRestoredByProcessSnapshot() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var field = typeof(ConditioningControlPanel.Avalonia.Possession.ToastEffect).GetField("_lastLine",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var original = field.GetValue(null);
+        try
+        {
+            field.SetValue(null, "before");
+            var snapshot = ProcessStateSnapshot.Take();
+            field.SetValue(null, "after");
+            snapshot.Restore();
+            Assert.Equal("before", field.GetValue(null));
+        }
+        finally { field.SetValue(null, original); }
+    });
 }
