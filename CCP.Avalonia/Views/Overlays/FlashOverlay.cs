@@ -79,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// reaches <c>Screens</c>. Like WPF's _isBusy, a second press is ignored from the click
         /// until the burst's last flash has spawned. The overrides are WPF TriggerFlashOnce's
         /// (amount, duration ms, size %); null keeps the user's setting.</summary>
-        public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false)
+        public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false, bool suppressHaptic = false)
         {
             if (IsBusy) return;
             if (!OverlaysAvailable())
@@ -96,7 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 var s = CoreSettings.Current;
-                if (await TryShowRemix(s, screens, durationMs, ambient && amount == null, generation)) return;
+                if (await TryShowRemix(s, screens, durationMs, ambient && amount == null, generation, suppressHaptic)) return;
                 if (generation != _generation || _closed) return;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
@@ -132,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
                 Schedule(flashes, 0, StaggerMs, generation, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
-                    done: () => FinishBurst(generation), timing: timing);
+                    done: () => FinishBurst(generation), timing: timing, suppressHaptic: suppressHaptic);
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
@@ -299,7 +299,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
         internal static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
-            FlashMotionStyle? inheritMotion = null, BurstLifetime? timing = null)
+            FlashMotionStyle? inheritMotion = null, BurstLifetime? timing = null, bool suppressHaptic = false)
         {
             // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
             if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
@@ -315,7 +315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         // WPF FlashService.cs:1705-1711 reads the current cap at each spawn.
                         if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient)) { Drop(bmp); return; }
-                        refused = !Show(bmp, rect, path, screen, alpha, fade, timing?.Current ?? lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify: !notified, timing: timing);
+                        refused = !Show(bmp, rect, path, screen, alpha, fade, timing?.Current ?? lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify: !notified, timing: timing, suppressHaptic: suppressHaptic);
                         notified |= !refused;
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
@@ -327,7 +327,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>One flash on screen plus what WPF SpawnFlashWindow pays for it: the lucky roll
         /// before the show (FlashService.cs:1851) and its glow (1881-1967).</summary>
         internal static bool Show(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
-            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null, bool notify = true, BurstLifetime? timing = null)
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null, bool notify = true, BurstLifetime? timing = null, bool suppressHaptic = false)
         {
             var s = CoreSettings.Current;
             if (Active.Count >= Cap(s, ambient)) { Drop(bmp); return false; }
@@ -349,8 +349,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Animate(gif.Frames, GifFrameDelay(gif.Delay, s.FlashGifSpeedMultiplier));
             }
             if (!Spawn(w, rect, screen.Bounds, screen.Scaling, glow, alpha, fade, lifetime, MouseClickable(s, clickable))) return false;
+            if (!suppressHaptic)
+            {
+                ApplyLuminance(bmp, path, lifetime);
+                _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2143-2155
+            }
             timing?.Track(w.SetVoiceLifetime);
-            _ = CoreHaptics.Service?.FlashDecayVibeAsync(); // WPF FlashService.cs:2140
             if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
             return true;
