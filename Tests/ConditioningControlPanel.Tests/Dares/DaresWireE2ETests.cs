@@ -346,4 +346,53 @@ public class DaresWireE2ETests
         }
         finally { await Door("/__flag", new JObject { ["mode"] = "on" }); }
     }
+
+    [Fact]
+    public async Task An_uncovered_Sparkles_stake_is_refused_short_at_make_and_at_accept()
+    {
+        await Start();
+        var ann = Make(Ann); var bea = Make(Bea);
+        await Door("/__user", new JObject { ["uid"] = Bea, ["patch"] = new JObject { ["skill_points"] = 40 } });
+        var mine = await bea.Svc.CreateAsync(Ann, Slip(DareType.Cant, DareKind.Pics, "250", new DareStake(DareStakeKind.Sp, 50), new DareStake(DareStakeKind.Sp, 50)));
+        Assert.Equal(DareCreateStatus.Short, mine.Status);
+        var sent = await ann.Svc.CreateAsync(Bea, Slip(DareType.Cant, DareKind.Pics, "250", new DareStake(DareStakeKind.Sp, 50), new DareStake(DareStakeKind.Sp, 50)));
+        Assert.Equal(DareCreateStatus.Sent, sent.Status);
+        await bea.Svc.TickAsync();
+        Assert.Equal(DareActResult.Short, await bea.Svc.ActAsync(sent.Id!, DareOp.Accept));
+        await Door("/__user", new JObject { ["uid"] = Bea, ["patch"] = new JObject { ["skill_points"] = 50 } });
+        Assert.Equal(DareActResult.Done, await bea.Svc.ActAsync(sent.Id!, DareOp.Accept));
+    }
+
+    [Fact]
+    public async Task A_camera_bet_carries_my_camera_share_and_passes_at_sixty_percent()
+    {
+        await Start();
+        var ann = Make(Ann); var bea = Make(Bea);
+        var slip = Slip(DareType.Cant, DareKind.Pics, "250", new DareStake(DareStakeKind.Sp, 50), new DareStake(DareStakeKind.Sp, 50)) with { Camera = true };
+        var sent = await ann.Svc.CreateAsync(Bea, slip);
+        Assert.Equal(DareCreateStatus.Sent, sent.Status);
+        await bea.Svc.TickAsync();
+        Assert.Equal(DareActResult.Done, await bea.Svc.ActAsync(sent.Id!, DareOp.Accept));
+        await Advance(TimeSpan.FromMinutes(20));
+        // The wire the meter sends: the count plus the camera sums. 41% seen: no early settle.
+        async Task Report(int count, int seen, int counted)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"{Base}/v2/dares/report")
+            {
+                Content = new StringContent(new JObject { ["unified_id"] = Bea, ["id"] = sent.Id, ["count"] = count, ["seen_s"] = seen, ["counted_s"] = counted }.ToString(), Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Add("X-Auth-Token", "tok-" + Bea);
+            using var res = await Http.SendAsync(req);
+            Assert.True(res.IsSuccessStatusCode);
+        }
+        await Report(300, 410, 1000);
+        await bea.Svc.TickAsync();
+        var mine = BetOf(bea, sent.Id!);
+        Assert.Equal(DareState.Running, mine.State);
+        Assert.Equal(41, mine.MyCameraSeen);
+        await Report(300, 650, 1050);   // 61%: over the bar, made it
+        await bea.Svc.TickAsync();
+        Assert.Equal(DareState.Settled, BetOf(bea, sent.Id!).State);
+        Assert.Equal(DareSide.To, BetOf(bea, sent.Id!).Winner);
+    }
 }
