@@ -935,6 +935,13 @@ namespace ConditioningControlPanel.Avalonia
             settings.PendingPresetReinstalls.Clear();
         }
 
+        internal static void InitializeChaos()
+        {
+            // WPF App.xaml.cs:2427,2827. Settings must be loaded before selecting the save slot.
+            Services.Chaos.ChaosCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+            Services.Chaos.ChaosMeta.Init();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -972,6 +979,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
