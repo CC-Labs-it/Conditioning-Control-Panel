@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             internal Window? GraceHost { get; set; }
             internal global::Avalonia.Platform.Screen? Screen { get; init; }
             internal EventHandler<KeyEventArgs>? PanicTunnel { get; init; }
+            internal Action<KeyEventArgs>? OnKey { get; init; }
         }
 
         private readonly List<Surface> _surfaces = new();
@@ -202,6 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
+            _forceLibVlc = false;   // each clip gets one browser attempt
             _capSpent = 0;
             // WPF VideoService.cs:3082-3085: a cached remote clip keeps its URL identity (credit, remote guards).
             _source = Scheduler.ShowingPath ?? path;
@@ -254,9 +256,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
             if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
             foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
+            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            // WPF VideoService.cs:3207: the browser engine first, before the duck so its own audio is never swept.
+            var browser = TryStartBrowser(path);
 
             var vlc = LibVlcAudio.Shared;
-            if (vlc == null)
+            if (vlc == null && !browser)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
                 Dispatcher.UIThread.Post(Scheduler.End);
@@ -266,10 +271,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // bouncing text, and arm the attention checks.
             if (s.AudioDuckingEnabled && !_didDuck) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
-            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
+            if (browser) { StartBrowserClocks(path); return; }
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
-            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
+            _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
@@ -400,6 +405,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (_player is { } p) ApplyVolume(p);
             foreach (var f in _floaters) ApplyInstanceVolume(f);
+            _browser?.SetVolume(PlayerVolume = EffectivePlayerVolume);
             _refreshFloating?.Invoke();
         }
 
@@ -410,21 +416,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// deliberately paused output is never mistaken for a stalled decoder.</summary>
         internal void PausePrimary()
         {
-            if (_player == null || _closing || PrimaryPaused) return;
+            if (_playback == null || _closing || PrimaryPaused) return;
             PrimaryPaused = true;
-            _player.SetPause(true);
+            _playback.SetPause(true);
             _sinceShow.Stop();
             _sinceFrame.Stop();
         }
 
         internal void PlayPrimary()
         {
-            if (_gracePaused || !PrimaryPaused || _player == null || _closing) return;
+            if (_gracePaused || !PrimaryPaused || _playback == null || _closing) return;
             PrimaryPaused = false;
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
-            _player.SetPause(false);
+            _playback.SetPause(false);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -557,7 +563,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.FullScreen;
                 w.Activate();
             }
-            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel };
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons, picture, reveal) { Screen = screen, PanicTunnel = PanicTunnel, OnKey = OnKey };
         }
 
         /// <summary>WPF ChaosModeService.cs:816-828 and VideoService.cs:5810-5822:
@@ -706,6 +712,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             SafetyDeadline.PauseForGrace(now);
             _lastGraceUtc = _gracePausedAt = now;
             _playback?.SetPause(true);
+            _browser?.ShowViews(false);   // the grace card sits under the native web view otherwise
             PausePlaybackClocks();   // freezes the ready budget as well as the show and frame clocks
             SetFloatingPaused(true);   // WPF FloatingInstances.cs:368: the grace pause holds every window
 
@@ -801,6 +808,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ResumePlaybackClocks();
             FrameTs = Stopwatch.GetTimestamp();
             _cutClock?.ResetPosition();
+            _browser?.ShowViews(true);
             _playback?.SetPause(false);
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
@@ -837,6 +845,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             }
             if (PrimaryPaused) return;
+            if (_browser != null) FrameTs = Stopwatch.GetTimestamp();   // the page's own stall check (code 100) owns a lost picture
             SampleCutPlayback();
             var framed = FirstFrameMs >= 0;
             // A playing clip with no frame is revealed at the budget, as WPF FloatingFirstFrame.
@@ -1371,6 +1380,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try { _playback.Dispose(); } catch { }
                 }
                 _playback = null;
+                _browser = null;
+                CloseControlHosts();
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
