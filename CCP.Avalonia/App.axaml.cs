@@ -17,6 +17,44 @@ namespace ConditioningControlPanel.Avalonia
     {
         internal static Action? PostCodeInputsChanged;
 
+        private static bool _shutdownAfterGazePending;
+        private static bool _shutdownAfterGazeReady;
+
+        // The pending teardown retains its player, media and sink if native Stop wedges.
+        internal static Task ShutdownAfterGazeCleanupAsync(Action shutdown) =>
+            ShutdownAfterGazeCleanupAsync(StopHapticsBeforeGazeWait,
+                Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync, shutdown,
+                TimeSpan.FromMilliseconds(500));
+
+        internal static async Task ShutdownAfterGazeCleanupAsync(Action safety, Func<Task> prepare, Action shutdown, TimeSpan budget)
+        {
+            safety();
+            var cleanup = prepare();
+            await Task.WhenAny(cleanup, Task.Delay(budget));
+            shutdown();
+        }
+
+        internal static void StopHapticsBeforeGazeWait()
+        {
+            try { CoreHaptics.Service?.PanicStop(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics early stop failed"); }
+        }
+
+        internal static void StopHapticsForExit()
+        {
+            try { CoreHaptics.Service?.ShutdownStop(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+        }
+
+        internal static async void RequestDesktopShutdown(IClassicDesktopStyleApplicationLifetime desktop, int exitCode = 0)
+        {
+            if (_shutdownAfterGazePending) return;
+            _shutdownAfterGazePending = true;
+            try { await ShutdownAfterGazeCleanupAsync(() => { _shutdownAfterGazeReady = true; desktop.Shutdown(exitCode); }); }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Desktop shutdown failed"); }
+            finally { _shutdownAfterGazeReady = false; _shutdownAfterGazePending = false; }
+        }
+
         // Shared by daily rotation and provider tier changes, as in WPF MainWindow.xaml.cs:465.
         internal static Action WireDailyRepaints(DailyFreeService dailyFree, Views.Windows.MainShellWindow shell)
         {
@@ -935,6 +973,17 @@ namespace ConditioningControlPanel.Avalonia
                 // while Core's unseeded providers remain the contract for renders and tests.
                 _desktopDispatch = new AvaloniaCoreDispatch(Dispatcher.UIThread);
                 _desktopDispatch.Attach();
+                desktop.ShutdownRequested += (_, e) =>
+                {
+                    if (_shutdownAfterGazeReady) return;
+                    StopHapticsBeforeGazeWait();
+                    var cleanup = Views.Lab.GazeMinigame.GazeMinigameWindow.PrepareForShutdownAsync();
+                    if (!cleanup.IsCompleted)
+                    {
+                        e.Cancel = true;
+                        RequestDesktopShutdown(desktop);
+                    }
+                };
                 desktop.Exit += OnDesktopExit;
                 RecoverEngineCrash(() => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("crashRecovered", null));
                 Platform.EntitlementRefresh.Install();
@@ -1871,12 +1920,14 @@ namespace ConditioningControlPanel.Avalonia
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
             Services.Haptics.Core.MockProviderV2.Toast = null;
-            try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+            StopHapticsForExit();
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
             try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
+            // Gaze round players still stopping off-thread finish before exit continues (bounded).
+            Views.Lab.GazeMinigame.GazeMinigameWindow.WaitForRoundCleanupOnExit(TimeSpan.FromSeconds(2));
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
