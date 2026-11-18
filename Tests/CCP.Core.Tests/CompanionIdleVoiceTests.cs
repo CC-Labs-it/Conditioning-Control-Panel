@@ -13,7 +13,7 @@ public sealed class CompanionIdleVoiceTests
             root = System.IO.Directory.GetParent(root)!.FullName;
         string Read(string path) => System.IO.File.ReadAllText(System.IO.Path.Combine(root, "CCP.Avalonia", path));
         var reactions = Read("Views/AvatarTube/AvatarTubeWindow.Reactions.cs");
-        Assert.Equal(4, reactions.Split("unprompted: true").Length - 1);
+        Assert.Equal(5, reactions.Split("unprompted: true").Length - 1);   // + v2 SpeakAwarenessLine (WPF #1490)
         var speech = Read("Views/AvatarTube/AvatarTubeWindow.axaml.cs");
         Assert.Contains("bool heldIdle = !MayVoice(unprompted)", speech); Assert.Contains("!IsMuted && !heldIdle", speech); Assert.Contains("text, mood, heldIdle)", speech);
         Assert.Contains("unprompted: line.Unprompted", Read("Views/AvatarTube/AvatarTubeWindow.SpeechQueue.cs"));

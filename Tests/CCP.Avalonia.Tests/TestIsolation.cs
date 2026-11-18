@@ -363,9 +363,11 @@ internal sealed class ProcessStateSnapshot
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);
         var assign = new Regex(@"(?<![\w.])(?:global::)?((?:\w+\.)*\w+)\.(\w+)\s*=(?![=>])");
+        // Plus every seam BarkHead.Seed writes: tests seed it and must not each restore the real desk and tube.
         foreach (var file in Directory.EnumerateFiles(SourceDir(), "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")))
+                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                     .Append(Path.Combine(SourceDir(), "..", "..", "CCP.Avalonia", "Platform", "BarkHead.cs")))
         {
             var text = File.ReadAllText(file);
             var aliases = alias.Matches(text).ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);
