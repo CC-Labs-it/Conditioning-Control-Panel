@@ -1212,10 +1212,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static DispatcherTimer? _pendingTimer;
         private static readonly Queue<(string Type, Action Run)> _pending = new();
         private static bool _replaying;
+        private static bool _webSession, _webClaim, _webPlaying, _webNavigating, _webTakeover;
+        private static long _webDeadline;
+        // WPF BrowserMediaService.cs:158-180, 225-260: the WebVideo slot is independent of protection.
+        internal static bool WebVideoClaimed => _webClaim && Environment.TickCount64 < _webDeadline
+            && (!_webPlaying || Tabs.SettingsTabView.BrowserMediaRecent);
+        internal static void BeginWebVideoTakeover()
+        {
+            var available = WebVideoClaimed || !OtherInteractionActive;
+            _webSession = _webNavigating = _webTakeover = true; _webPlaying = false; _webClaim = available;
+            _webDeadline = Environment.TickCount64 + 60_000;
+        }
+        internal static void NoteWebVideo(bool playing)
+        {
+            if (!playing) { if (_webPlaying) EndWebVideo(); return; }
+            if (!_webSession || Environment.TickCount64 >= _webDeadline)
+            { _webSession = true; _webTakeover = false; _webClaim = !OtherInteractionActive; }
+            _webPlaying = true; _webNavigating = false; _webDeadline = Environment.TickCount64 + 20_000;
+        }
+        internal static void NavigateWebVideo() { if (!_webNavigating) EndWebVideo(); }
+        internal static void CompleteWebVideoNavigation(bool success) { _webNavigating = false; if (!success) EndWebVideo(); }
+        internal static void CancelWebVideoTakeover() { if (_webTakeover && !_webPlaying) EndWebVideo(); }
+        internal static void EndWebVideo() { _webSession = _webClaim = _webPlaying = _webNavigating = _webTakeover = false; _webDeadline = 0; }
 
         private static bool OtherInteractionActive => IsAnyOpen() || PopQuizWindow.IsAnyOpen()
             || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
-            || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0;
+            || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0 || WebVideoClaimed;
 
         internal static bool InteractionBusy => !_replaying && (OtherInteractionActive || _pending.Count != 0);
         internal static bool DeferQuiz(Action run) => Dispatcher.UIThread.Invoke(() => Defer("quiz", run));
@@ -1227,7 +1249,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_pending.Count == 0) { _pendingTimer?.Stop(); _pendingTimer = null; }
         });
 
-        internal static bool DeferVideo(Action run) => Dispatcher.UIThread.Invoke(() => Defer("video", run));
+        internal static bool DeferVideo(Action run) => Dispatcher.UIThread.Invoke(() =>
+            CoreEngine.Video?.IsRequestingFloatingJoin != true && Defer("video", run));
         internal static bool DeferBubble(Action run) => Dispatcher.UIThread.Invoke(() => Defer("bubble", run));
 
         private static bool Defer(string type, Action run)

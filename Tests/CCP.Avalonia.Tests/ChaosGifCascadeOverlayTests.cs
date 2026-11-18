@@ -1096,6 +1096,7 @@ public sealed class ChaosGifCascadeOverlayTests
     // mid-run keeps the heavy gate shut 3 s more, never shortens a floor, and a dropped detonation says so.
     private sealed class GateVideoHost : global::ConditioningControlPanel.Services.IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(global::ConditioningControlPanel.Services.AttentionVerdict verdict, int ms, Action then) => then();
