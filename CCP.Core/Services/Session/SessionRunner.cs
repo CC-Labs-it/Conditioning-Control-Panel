@@ -102,6 +102,15 @@ namespace ConditioningControlPanel.Services
         /// <summary>A session ended; the bool is completed. Raised after the runner is idle again.</summary>
         public event Action<Session, bool>? Stopped;
 
+        /// <summary>WPF SessionEngine.SessionStarted, PhaseChanged (index), ProgressUpdated (timer ticks only),
+        /// SessionPaused (pause count) and SessionResumed (time paused): the head's companion barks.</summary>
+        public event Action? Started;
+        public event Action<int>? PhaseChanged;
+        public event Action? Progressed;
+        public event Action<int>? Paused;
+        public event Action<TimeSpan>? Resumed;
+        private DateTime _pauseStartTime;
+
         /// <summary>Seeds IsSessionRunning: one runner per head. The pool delegates are the head's
         /// (PhrasePoolCustody.Seed at startup, CCP.Avalonia/Program.cs).</summary>
         public SessionRunner(SessionLogService sessionLog)
@@ -194,6 +203,9 @@ namespace ConditioningControlPanel.Services
 
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
+            // WPF SessionEngine.cs:246 then :310 (first phase announced).
+            Step("start:started", () => Started?.Invoke());
+            if (session.Phases.Count > 0) Step("start:phase", () => PhaseChanged?.Invoke(0));
             CoreDiscord.Service?.SetSessionActivity(session.Name); // WPF SessionEngine:260, after feature starts
             Log.Information("Session started: {Name}", session.Name);
         }
@@ -344,6 +356,8 @@ namespace ConditioningControlPanel.Services
             CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             CoreEngine.StopBrainDrain?.Invoke();   // WPF SessionEngine.cs:529
             Step("pause:clocks", () => Ticked?.Invoke());
+            _pauseStartTime = DateTime.Now;   // WPF SessionEngine.cs:510
+            Step("pause:paused", () => Paused?.Invoke(PauseCount));   // WPF :512
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
@@ -379,6 +393,8 @@ namespace ConditioningControlPanel.Services
                 Step("corner-gif", () => ShowCornerGif(ss));
             Step("clocks", () => Ticked?.Invoke());
             Log.Information("Session resumed");
+            var pausedFor = DateTime.Now - _pauseStartTime;   // WPF SessionEngine.cs:602-604
+            Step("resumed", () => Resumed?.Invoke(pausedFor < TimeSpan.Zero ? TimeSpan.Zero : pausedFor));
         }
 
         // A user START brought global features back. Restore the session's pending starts and
@@ -431,6 +447,7 @@ namespace ConditioningControlPanel.Services
                 {
                     CurrentPhaseIndex = phase;
                     Log.Information("Phase changed: {Phase}", session.Phases[phase].Name);
+                    PhaseChanged?.Invoke(phase);   // WPF SessionEngine.cs:730
                 }
             });
             Step("tick:ramp", () => UpdateRamps(session, minutes));
@@ -469,6 +486,7 @@ namespace ConditioningControlPanel.Services
             Step("tick:brain-drain", () => TickBrainDrain(session.Settings, minutes));
             Step("tick:corner-gif", () => TickCornerGif(session.Settings, minutes));
             Step("tick:progress", () => Ticked?.Invoke());
+            Step("tick:progressed", () => Progressed?.Invoke());
         }
 
         /// <summary>SessionEngine.UpdateRampingValues (SessionEngine.cs:699), flash trio + pink.</summary>

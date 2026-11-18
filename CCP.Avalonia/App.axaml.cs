@@ -453,8 +453,13 @@ namespace ConditioningControlPanel.Avalonia
             var mods = Mods;
             mods.ModChanged += (_, _) =>
             {
-                if (Dispatcher.UIThread.CheckAccess()) Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
-                else Dispatcher.UIThread.Post(() => Controls.AmbientFxCanvas.Env.ApplyPalette(mods));
+                void RefreshModAppearance()
+                {
+                    Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
+                    LocalizationManager.Instance.NotifyVocabChanged();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) RefreshModAppearance();
+                else Dispatcher.UIThread.Post(RefreshModAppearance);
             };
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
@@ -1499,9 +1504,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF decides with `Welcomed && !FirstRunClaimedThisLaunch`: the shell's constructor
                 // claims Welcomed on a fresh install, so read it before the shell exists.
                 bool welcomed = Settings.Current.Welcomed;
-                desktop.MainWindow = sessions is null
-                    ? new Views.Windows.MainShellWindow()
-                    : new Views.Windows.MainShellWindow(sessions);
+                desktop.MainWindow = Views.Windows.MainShellWindow.CreateForLaunch(sessions);
                 // WPF CenterOnPrimaryScreen, with the Linux default size (Views/Windows/MainShellWindow.WorkAreaFit.cs).
                 (desktop.MainWindow as Views.Windows.MainShellWindow)?.PlaceForFirstShow();
                 if (global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.Panel>(desktop.MainWindow, "NotificationHost") is { } toastHost)

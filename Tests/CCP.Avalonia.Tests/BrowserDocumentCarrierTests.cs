@@ -57,6 +57,30 @@ public sealed class BrowserDocumentCarrierTests
     }
 
     [Fact]
+    public Task MotionScriptIsInstalledBeforeNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var host = new WebHost { HostedPageMotion = true };
+        var pending = new TaskCompletionSource<bool>();
+        string? script = null;
+        host.MotionScriptInstaller = value => { script = value; return pending.Task; };
+        host.NewScrolllerEngine()(true);
+        if (!OperatingSystem.IsLinux())
+        {
+            // WebView2 takes --force-prefers-* instead (GameWindowTests.EveryHostSetsMotionArgumentAndJustDropKeepsAutoplay).
+            Assert.Null(script);
+            Assert.True(host.ScrolllerGate);
+            return;
+        }
+        Assert.Null(host.ScrolllerGate);
+        Assert.Contains("prefers-reduced-motion", script);
+        Assert.DoesNotContain("__REDUCE__", script);
+        pending.SetResult(true);
+        await Task.Yield();
+        Assert.True(host.ScrolllerGate);
+    });
+
+    [Fact]
     public Task CarrierIsInstalledBeforeNavigationAndOnEachEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         ChatThresholdLinksTests.Setup();
